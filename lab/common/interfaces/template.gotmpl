@@ -1,0 +1,27 @@
+{{ $target := index .Vars .TargetName }}
+{{ $vars := .Vars }}
+
+updates:
+{{- range $interface := $vars.interfaces }}
+- path: /interface[name={{ $interface.name }}]
+  encoding: json_ietf
+  value:
+    admin-state: enable
+    vlan-tagging: true
+{{- end }}
+
+{{- range $interface := $vars.interfaces }}
+- path: "/interface[name={{ $interface.name }}]"
+  encoding: "json_ietf"
+  value:
+    subinterface:
+  {{- range $idx := seq 0 $interface.num_subinterfaces }}
+      - index: {{ $idx }}
+        admin-state: enable
+        type: bridged
+        vlan:
+          encap:
+            single-tagged:
+              vlan-id: {{ add $idx 1 }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,45 @@
+grpc-server:
+  address: ":56000"
+  #tls:
+  datastore-server: true
+  max-send-msg-size: 25165824 # (24MB) = 24 * 1024 * 1024
+
+# data server config
+## known data stores
+datastores: # this creates MAIN datastores
+  - name: srl1
+    schema: 
+      name: srl
+      vendor: Nokia
+      version: 22.11.1
+    sbi:
+      type: gnmi # noop, nc, nats, redis
+      address: "clab-schema-srl1:57400"
+      credentials:
+        username: admin
+        password: NokiaSrl1!
+      tls:
+        skip-verify: true
+  - name: srl1
+    schema: 
+      name: SRL-Native
+      vendor: Nokia
+      version: 22.11.1
+    sbi:
+      type: gnmi # noop, nc, nats, redis
+      address: "clab-schema-srl2:57400"
+      credentials:
+        username: admin
+        password: NokiaSrl1!
+      tls:
+        skip-verify: true
+        
+# remote schema server details
+schema-server:
+  # schema server remote address
+  address: clab-distributed-schema-server:55000
+  # tls config to connect to the schema server
+  # tls:
+
+prometheus:
+  address: :56090

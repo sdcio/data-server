@@ -1,0 +1,193 @@
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+import "schema.proto";
+
+package data.proto;
+
+option go_package = ".;schema_server";
+
+service DataServer {
+    // datastore
+    rpc GetDataStore(GetDataStoreRequest)       returns (GetDataStoreResponse);
+    rpc CreateDataStore(CreateDataStoreRequest) returns (CreateDataStoreResponse);
+    rpc DeleteDataStore(DeleteDataStoreRequest) returns (DeleteDataStoreResponse);
+    rpc Commit(CommitRequest)                   returns (CommitResponse);
+    rpc Discard(DiscardRequest)                 returns (DiscardResponse);
+    // data
+    rpc GetData(GetDataRequest)             returns (GetDataResponse);
+    rpc SetData(SetDataRequest)             returns (SetDataResponse);
+    rpc Diff(DiffRequest)                   returns (DiffResponse);
+    rpc Subscribe(SubscribeRequest)         returns (stream SubscribeResponse);
+}
+
+// messages
+message GetDataRequest {
+    string      name                    = 1;
+    DataStore   data_store              = 2;
+    repeated    schema.proto.Path path  = 3;
+}
+message GetDataResponse {
+    repeated Notification notification = 1;   // Data values.
+}
+
+message SetDataRequest {
+    string                      name                    = 1;
+    DataStore                   data_store              = 2;
+    repeated Update             update                  = 10;
+    repeated Update             replace                 = 11;
+    repeated schema.proto.Path  delete                  = 12;
+}
+message SetDataResponse {
+    repeated UpdateResult response = 2;  // A set of responses specifying the result of the operations specified in
+                                         //  the SetRequest.
+    int64 timestamp = 4;                 // Timestamp of transaction (ns since epoch).
+}
+
+message DiffRequest {}
+message DiffResponse {}
+
+message SubscribeRequest {}
+message SubscribeResponse {}
+
+// DS
+message GetDataStoreRequest {
+    string name = 1;
+}
+message GetDataStoreResponse {
+    string name = 1;
+    repeated DataStore datastore = 2;
+    Target target =3;
+    schema.proto.Schema schema =4;
+}
+
+message CreateDataStoreRequest {
+    string    name      = 1;
+    DataStore datastore = 2;
+    schema.proto.Schema schema = 3;
+    Target target =4;
+}
+message CreateDataStoreResponse {}
+
+message DeleteDataStoreRequest {
+    string    name      = 1;
+    DataStore datastore = 2;
+}
+message DeleteDataStoreResponse {}
+
+message CommitRequest {
+    string      name        = 1;
+    DataStore   datastore   = 2;
+    bool        rebase      = 3;
+    bool        stay        = 4;
+}
+message CommitResponse {}
+
+message DiscardRequest {
+    string name         = 1;
+    DataStore datastore = 2;
+    bool       stay     = 3;
+}
+
+message DiscardResponse {}
+
+// sub messages
+message Update {
+    schema.proto.Path path  = 1;
+    TypedValue        value = 2;
+}
+
+message TypedValue {
+    // One of the fields within the val oneof is populated with the value
+    // of the update. The type of the value being included in the Update
+    // determines which field should be populated. In the case that the
+    // encoding is a particular form of the base protobuf type, a specific
+    // field is used to store the value (e.g., json_val).
+    oneof value
+    {
+        string string_val = 1;            // String value.
+        int64 int_val = 2;                // Integer value.
+        uint64 uint_val = 3;              // Unsigned integer value.
+        bool bool_val = 4;                // Bool value.
+        bytes bytes_val = 5;              // Arbitrary byte sequence value.
+        float float_val = 6;              // Floating point value.
+        Decimal64 decimal_val = 7;        // Decimal64 encoded value.
+        ScalarArray leaflist_val = 8;     // Mixed type scalar array value.
+        google.protobuf.Any any_val = 9;  // protobuf.Any encoded bytes.
+        bytes json_val = 10;              // JSON-encoded text. (mgmt_server assumes PROTO_JSON encoding)
+        bytes json_ietf_val = 11;         // JSON-encoded text per RFC7951.
+        string ascii_val = 12;            // Arbitrary ASCII text.
+        // Protobuf binary encoded bytes. The message type is not included.
+        // See the specification at
+        // github.com/openconfig/reference/blob/master/rpc/gnmi/protobuf-vals.md
+        // for a complete specification.
+        bytes proto_bytes = 13;
+    }
+}
+
+message UpdateResult {
+  // The operation that was associated with the schema.proto.Path specified.
+  enum Operation {
+    INVALID = 0;
+    DELETE = 1;           // The result relates to a delete of schema.proto.Path.
+    REPLACE = 2;          // The result relates to a replace of schema.proto.Path.
+    UPDATE = 3;           // The result relates to an update of schema.proto.Path.
+  }
+  schema.proto.Path path = 2;                            // schema.proto.Path associated with the update.
+  Operation op = 4;                         // Update operation type.
+}
+
+message Notification {
+    int64 timestamp = 1;          // Timestamp in nanoseconds since Epoch.
+    schema.proto.Path prefix = 2;              // Prefix used for paths in the message.
+    // string alias = 3;             // An alias for the path specified in the prefix field.
+    repeated Update update = 4;   // Data elements that have changed values.
+    repeated schema.proto.Path delete = 5;     // Data elements that have been deleted.
+}
+
+enum Type {
+    MAIN      = 0;
+    CANDIDATE = 1;
+}
+
+message DataStore {
+    Type  type = 1;
+    string name = 2;
+}
+
+// Decimal64 is used to encode a fixed precision decimal number. The value
+// is expressed as a set of digits with the precision specifying the
+// number of digits following the decimal point in the digit set.
+message Decimal64 {
+  int64 digits = 1;         // Set of digits.
+  uint32 precision = 2;     // Number of digits following the decimal point.
+}
+
+// ScalarArray is used to encode a mixed-type array of values.
+message ScalarArray {
+  // The set of elements within the array. Each TypedValue message should
+  // specify only elements that have a field identifier of 1-7 (i.e., the
+  // values are scalar values).
+  repeated TypedValue element = 1;
+}
+
+message Target {
+    string type = 1;
+    string address = 2;
+    TLS tls  =3;
+    Credentials credentials =4;
+}
+
+
+message TLS {
+    string ca = 1;
+    string cert =2;
+    string key =3;
+    bool skip_verify =4;
+}
+
+message Credentials {
+    string username =1;
+    string password =2;
+    string token =3;
+}

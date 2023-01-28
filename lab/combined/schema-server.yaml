@@ -1,0 +1,76 @@
+grpc-server:
+  address: ":55000"
+  #tls:
+  schema-server: true
+  datastore-server: true
+  max-send-msg-size: 25165824 # (24MB) = 24 * 1024 * 1024
+
+# schema-server
+schemas:
+  - name: srl
+    vendor: Nokia
+    version: 22.11.1
+    files:
+      - ./yang/srl-latest-yang-models/srl_nokia/models
+    directories:
+      - ./yang/srl-latest-yang-models/ietf
+    excludes:
+      - .*tools.*
+  
+  - name: srloc
+    vendor: Nokia
+    version: 22.11.1
+    files:
+      - ./yang/srl-latest-yang-models/openconfig
+    directories:
+      - ./yang/srl-latest-yang-models/ietf
+      - ./yang/srl-latest-yang-models/iana
+
+  - name: sros
+    vendor: Nokia
+    version: 22.10
+    files:
+      - ./yang/latest_sros_22.10/nokia-combined
+    directories:
+      - ./yang/latest_sros_22.10/ietf
+      - ./yang/latest_sros_22.10/nokia-sros-yang-extensions.yang
+
+# data server config
+## known data stores
+datastores: # this creates MAIN datastores
+  - name: srl1
+    schema: 
+      name: srl
+      vendor: Nokia
+      version: 22.11.1
+    sbi:
+      type: gnmi # noop, nc, nats, redis
+      address: "clab-combined-srl1:57400"
+      credentials:
+        username: admin
+        password: NokiaSrl1!
+      tls:
+        skip-verify: true
+  - name: srl2
+    schema: 
+      name: SRL-Native
+      vendor: Nokia
+      version: 22.11.1
+    sbi:
+      type: gnmi # noop, nc, nats, redis
+      address: "clab-combined-srl2:57400"
+      credentials:
+        username: admin
+        password: NokiaSrl1!
+      tls:
+        skip-verify: true
+        
+# remote schema server details
+schema-server:
+  # schema server remote address
+  address: 127.0.0.1:55000
+  # tls config to connect to the schema server
+  # tls:
+
+prometheus:
+  address: :55090

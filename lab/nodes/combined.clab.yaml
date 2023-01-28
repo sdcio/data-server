@@ -1,0 +1,12 @@
+name: schema
+
+topology:
+  defaults:
+    kind: srl
+    image: ghcr.io/nokia/srlinux:latest
+  nodes:
+    srl1:
+    srl2:
+  links:
+    - endpoints: ["srl1:e1-1", "srl2:e1-1"]
+        

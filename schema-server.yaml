@@ -1,0 +1,44 @@
+grpc-server:
+  address: ":55000"
+  # tls:
+  #   ca:
+  #   cert:
+  #   key:
+  #   skip-verify:
+  schema-server:
+  data-server:
+
+  
+schemas:
+  - name: srl
+    vendor: Nokia
+    version: 22.11.1
+    files:
+      - ./lab/common/yang/srl-latest-yang-models/srl_nokia/models
+    directories:
+      - ./lab/common/yang/srl-latest-yang-models/ietf
+    excludes:
+      - .*tools.*
+  - name: srloc
+    vendor: Nokia
+    version: 22.11.1
+    files:
+      - ./lab/common/yang/srl-latest-yang-models/openconfig
+    directories:
+      - ./lab/common/yang/srl-latest-yang-models/ietf
+      - ./lab/common/yang/srl-latest-yang-models/iana
+
+datastores: # this specifies MAIN datastores
+  - name: srl1
+    schema: 
+      name: SRL-Native
+      vendor: Nokia
+      version: 22.11.1
+    sbi:
+      type: gnmi # nc, nats, redis
+      address: clab-schema-srl1:57400
+      credentials:
+        username: admin
+        password: NokiaSrl1!
+      tls:
+        skip-verify: true

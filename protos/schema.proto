@@ -1,0 +1,275 @@
+syntax = "proto3";
+
+package schema.proto;
+
+option go_package = ".;schema_server";
+
+service SchemaServer {
+    // returns schema name, vendor, version, and files path(s)
+    rpc GetSchemaDetails(GetSchemaDetailsRequest)   returns (GetSchemaDetailsResponse);
+    // lists known schemas with name, vendor, version and status
+    rpc ListSchema(ListSchemaRequest)               returns (ListSchemaResponse);
+    // returns the schema of an item identified by a gNMI-like path
+    rpc GetSchema(GetSchemaRequest)                 returns (GetSchemaResponse);
+    // creates a schema
+    rpc CreateSchema(CreateSchemaRequest)           returns (CreateSchemaResponse);
+    // trigger schema reload
+    rpc ReloadSchema(ReloadSchemaRequest)           returns (ReloadSchemaResponse);
+    // delete a schema
+    rpc DeleteSchema(DeleteSchemaRequest)           returns (DeleteSchemaResponse);
+    // client stream RPC to upload yang files to the server:
+    // - uses CreateSchema as a first message
+    // - then N intermediate UploadSchemaFile, initial, bytes, hash for each file
+    // - and ends with an UploadSchemaFinalize{}
+    rpc UploadSchema(stream UploadSchemaRequest)    returns (UploadSchemaResponse);
+    //
+    rpc ToPath(ToPathRequest) returns (ToPathResponse);
+    rpc ExpandPath(ExpandPathRequest) returns (ExpandPathResponse);
+}
+
+message Schema {
+    // string type = 1;
+    string name = 2;
+    string vendor = 3;
+    string version = 4;
+    SchemaStatus status = 5;
+}
+
+// RPC messages
+message GetSchemaDetailsRequest{
+    Schema schema = 1;
+}
+
+message GetSchemaDetailsResponse{
+    Schema schema = 1; // with status
+    repeated string file = 2;
+    repeated string directory = 3;
+}
+
+message ListSchemaRequest {}
+message ListSchemaResponse {
+    repeated Schema schema = 1;
+}
+
+message GetSchemaRequest {
+    Path   path = 1;
+    Schema schema = 2;
+}
+
+message GetSchemaResponse {
+    oneof schema {
+        ContainerSchema container = 1;
+        LeafSchema      field = 2;
+        LeafListSchema  leaflist = 3;
+    }
+}
+
+message CreateSchemaRequest {
+    Schema schema = 1; // status unset
+    repeated string file = 2;
+    repeated string directory = 3;
+}
+
+message CreateSchemaResponse {
+    Schema schema = 1; // status should be intializing
+}
+
+message ReloadSchemaRequest {
+    Schema schema = 1;
+}
+
+message ReloadSchemaResponse {}
+
+message DeleteSchemaRequest {
+     Schema schema = 1;
+}
+
+message DeleteSchemaResponse {}
+
+message UploadSchemaRequest{
+    oneof upload {
+        CreateSchemaRequest create_schema = 1;
+        UploadSchemaFile    schema_file = 2;
+        UploadSchemaFinalize finalize = 3;
+    }
+}
+
+message UploadSchemaFile {
+    string  file_name   = 1;  // file name with path
+    bytes   contents    = 2;  // raw bytes to be appended to the file
+    Hash    hash        = 3;  // if present marks the last message for that file
+}
+
+
+message ToPathRequest {
+    repeated string path_element = 1;
+    schema.proto.Schema  schema        = 2;
+}
+message ToPathResponse {
+    schema.proto.Path path =1;
+}
+
+message ExpandPathRequest {
+    schema.proto.Path       path        = 1;
+    schema.proto.Schema     schema      = 2;
+    DataType                data_type   = 3;
+    bool                    xpath       = 4;
+}
+message ExpandPathResponse {
+    repeated schema.proto.Path  path  = 1;
+    repeated string             xpath = 2;
+}
+
+message Hash {
+  enum HashMethod {
+    UNSPECIFIED = 0; // Error
+    SHA256 = 1;
+    SHA512 = 2;
+    MD5 = 3;
+  }
+  HashMethod method = 1;
+  bytes hash = 2;
+}
+
+message UploadSchemaFinalize{}
+
+message UploadSchemaResponse{}
+
+// sub messages
+message ContainerSchema {
+    string name = 1;
+    string description = 2;
+    string owner = 3;
+    string namespace = 4;
+    string prefix = 5;
+    
+    repeated LeafSchema keys = 6;
+    repeated LeafSchema fields = 7;
+    repeated LeafListSchema leaflists = 8;
+    repeated string children = 9;
+
+    repeated MustStatement must_statements = 11;
+
+    uint64 max_elements = 13;
+    uint64 min_elements = 14;
+    
+    bool is_presence = 20;
+    bool is_state = 21;
+    bool is_user_ordered = 22;
+    string if_feature = 23;
+}
+
+message LeafListSchema {
+    string name = 1;
+    string description = 2;
+    string owner = 3;
+    string namespace = 4;
+    string prefix = 5;
+
+    SchemaLeafType type = 6;
+    bool encrypted = 7;
+
+    string units = 9;
+    repeated MustStatement must_statements = 11;
+    repeated string defaults = 12;
+    uint64 max_elements = 13;
+    uint64 min_elements = 14;
+
+    bool is_state = 21;
+    bool is_user_ordered = 22;
+    string if_feature = 23;
+}
+
+message LeafSchema {
+    string name = 1;
+    string description = 2;
+    string owner = 3;
+    string namespace = 4;
+    string prefix = 5;
+    SchemaLeafType type = 6;
+    bool encrypted = 7;
+
+    bool is_mandatory = 8;
+    string units = 9;
+    
+    repeated MustStatement must_statements = 11;
+    string default = 12;
+
+    bool is_state = 21;
+    string if_feature = 23;
+}
+
+message SchemaLeafType {
+    string type = 1;
+    string range = 2;
+    repeated string values = 3;
+    string units = 4; // currently only single units value for the whole leaf (not per type as yang spec allows)
+    string type_name = 5;
+    string leafref = 6;
+    repeated SchemaPattern patterns = 7;
+    repeated SchemaLeafType union_types = 9;
+}
+
+message MustStatement {
+    string statement = 1;
+    string error = 2;
+}
+
+////////////
+message PathElem {
+    string name = 1;                    // The name of the element in the path.
+    map<string, string> key = 2;        // Map of key (attribute) name to value.
+}
+
+message Path {
+    string origin = 2;                                        
+    repeated PathElem elem = 3; 
+    string target = 4;          
+}
+
+message SchemaPattern {
+    string pattern = 1;
+    bool inverted = 2;
+}
+
+enum LeafType {
+    BINARY = 0;
+    BITS = 1;
+    BOOLEAN = 2;
+    DECIMAL64 = 3;
+    EMPTY = 4;
+    ENUM = 5;
+    IDENTITYREF = 6;
+    INSTANCE_IDENTIFIER = 7;
+    INT16 = 8;
+    INT32 = 9;
+    INT64 = 10;
+    INT8 = 11;
+    INTERFACE_NAME = 12;
+    IP_ADDRESS = 13;
+    IP_ADDRESS_WITH_ZONE = 14;
+    IP_PREFIX = 15;
+    MAC_ADDRESS = 16;
+    STRING = 17;
+    SUBINTERFACE_NAME = 18;
+    UINT16 = 19;
+    UINT32 = 20;
+    UINT64 = 21;
+    UINT8 = 22;
+    UNION = 23;
+    // new additions (since 20.6 release)
+    ROUTE_DISTINGUISHER = 24;
+}
+
+enum SchemaStatus {
+    OK              = 0; // all good
+    RELOADING       = 1; // reloading YANG, should be locked
+    INITIALIZING    = 2; // initial state after creation
+    FAILED          = 3; // chema files parsing failed, yang load failed
+}
+
+enum DataType {
+    ALL = 0;
+    CONFIG = 1;
+    STATE = 2;
+}

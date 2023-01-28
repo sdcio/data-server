@@ -1,0 +1,38 @@
+grpc-server:
+  address: ":55000"
+  #tls:
+  schema-server: true
+  max-send-msg-size: 25165824 # (24MB) = 24 * 1024 * 1024
+
+# schema-server
+schemas:
+  - name: srl
+    vendor: Nokia
+    version: 22.11.1
+    files:
+      - ./yang/srl-latest-yang-models/srl_nokia/models
+    directories:
+      - ./yang/srl-latest-yang-models/ietf
+    excludes:
+      - .*tools.*
+  
+  - name: srloc
+    vendor: Nokia
+    version: 22.11.1
+    files:
+      - ./yang/srl-latest-yang-models/openconfig
+    directories:
+      - ./yang/srl-latest-yang-models/ietf
+      - ./yang/srl-latest-yang-models/iana
+
+  - name: sros
+    vendor: Nokia
+    version: 22.10
+    files:
+      - ./yang/latest_sros_22.10/nokia-combined
+    directories:
+      - ./yang/latest_sros_22.10/ietf
+      - ./yang/latest_sros_22.10/nokia-sros-yang-extensions.yang
+
+prometheus:
+  address: :55090

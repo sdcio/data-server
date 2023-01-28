@@ -1,0 +1,1092 @@
+module srl_nokia-sync-ptp {
+  yang-version 1.1;
+  namespace "urn:srl_nokia/sync-ptp";
+  prefix srl_nokia-sync-ptp;
+
+  import srl_nokia-common {
+    prefix srl_nokia-comm;
+  }
+  import srl_nokia-features {
+    prefix srl_nokia-feat;
+  }
+  import srl_nokia-sync-types {
+    prefix srl_nokia-sync-types;
+  }
+  import ietf-yang-types {
+    prefix yang;
+  }
+
+  revision 2022-11-30 {
+    description
+      "SRLinux 22.11.1";
+  }
+  revision 2022-06-30 {
+    description
+      "SRLinux 22.6.1";
+  }
+  revision 2022-03-31 {
+    description
+      "SRLinux 22.3.1";
+  }
+  revision 2021-11-30 {
+    description
+      "SRLinux 21.11.1";
+  }
+
+  grouping clock-quality-grouping {
+    description
+      "Quality of a PTP Instance, which contains IEEE Std 1588
+       clockClass, clockAccuracy and offsetScaledLogVariance.";
+    leaf clock-class {
+      type uint8;
+      default "248";
+      config false;
+      description
+        "PLM Note: SROS MIB object = tmnxPtpClockClass, tmnxPtpMasterClockGMClockClass
+         The clockClass denotes the traceability of the time
+         or frequency distributed by the clock.";
+    }
+    leaf clock-accuracy {
+      type uint8;
+      config false;
+      description
+        "PLM Note: SROS MIB object = tmnxPtpClockAccuracy, tmnxPtpMasterClockGMAccuracy
+         The clockAccuracy indicates the expected accuracy
+         of the clock.";
+    }
+    leaf offset-scaled-log-variance {
+      type uint16;
+      config false;
+      description
+        "PLM Note: SROS MIB object = tmnxPtpClockVariance, tmnxPtpMasterClockGMVariance
+         The offsetScaledLogVariance provides an estimate of
+         the variations of the clock from a linear timescale
+         when it is not synchronized to another clock
+         using the protocol.";
+    }
+  }
+
+  grouping ptp-time-grouping {
+    description
+      "Time include seconds and nanoseconds";
+    leaf time-seconds {
+      type srl_nokia-sync-types:time-seconds-type;
+      config false;
+      description
+        "PLM Note: SROS MIB object = tmnxPtpTimeInfoCurrentTime
+         Seconds of time";
+    }
+    leaf time-nano-seconds {
+      type srl_nokia-sync-types:time-nanoseconds-type;
+      config false;
+      description
+        "PLM Note: SROS MIB object = tmnxPtpTimeInfoCurrentTime
+         Nano-seconds of time";
+    }
+  }
+
+  grouping port-address {
+    description
+      "The IEEE Std 1588 PortAddress type represents the
+       protocol address of a PTP Port.";
+    leaf network-protocol {
+      type enumeration {
+        enum ieee802-3 {
+          description
+            "Use Ethernet encapsulation for PTP";
+        }
+      }
+      default "ieee802-3";
+      description
+        "PLM Note: SROS MIB object = tmnxPtpMasterClockTransportType
+         Protocol used by a PTP Instance to transport PTP messages";
+    }
+    leaf address-length {
+      type uint16;
+      description
+        "Number of octets in address-field.";
+    }
+    leaf address-field {
+      type srl_nokia-comm:mac-address;
+      description
+        "PLM Note: SROS MIB object = tmnxPtpMasterClockEthernetPor
+         The protocol address of a PTP Port in the format
+         defined by the mapping annex of the protocol as
+         identified by the network-protocol leaf.
+         The most significant octet of the address-field
+         is mapped into the octet of the address-field
+         member with index 0.
+         Each octet is represented in YANG as a pair of
+         hexadecimal characters, using uppercase for a letter.
+         Each octet in the array is separated by the dash
+         character.";
+    }
+  }
+
+  grouping ptp-default-ds-top {
+    description
+      "Grouping for ptp default data set configuration";
+    container default-ds {
+      description
+        "The default data set of the PTP Instance.
+         In the context of the protocol, this data set is required
+         for an Ordinary Clock or Boundary Clock";
+      leaf instance-type {
+        type enumeration {
+          enum oc {
+            value 0;
+            description
+              "Telecom Time Ordinary Clock (Slave Clock) for G.8275.1 profile";
+          }
+          enum bc {
+            value 5;
+            description
+              "Telecom Boundary Clock for G.8275.1 profile";
+          }
+        }
+        description
+          "PLM Note: SROS MIB object = TmnxPtpClockType
+           The type of PTP Instance. oc for T-SC, bc for T-BC";
+      }
+      leaf instance-enable {
+        type boolean;
+        default "false";
+        description
+          "PLM Note: SROS MIB object = tmnxPtpClockAdminState
+           Enable PTP clock";
+      }
+      leaf clock-identity {
+        type srl_nokia-sync-types:clock-identity-type;
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpClockIdentity
+           The clockIdentity of the local clock.";
+      }
+      leaf number-ports {
+        type uint16;
+        description
+          "The number of PTP ports on the instance.";
+        config false;
+      }
+      container clock-quality {
+        description
+          "The clockQuality of the local clock.";
+        config false;
+        uses clock-quality-grouping;
+      }
+      leaf priority1 {
+        type uint8 {
+          range "0..255";
+        }
+        default "128";
+        description
+          "PLM Note: SROS MIB object = tmnxPtpClockPriority1
+           The IEEE Std 1588 priority1 of the PTP Instance.
+           Since priority1 is one of the first comparisons
+           performed by the Best Master Clock Algorithm (BMCA).
+           Range is 0-255.";
+      }
+      leaf priority2 {
+        type uint8 {
+          range "0..255";
+        }
+        default "128";
+        description
+          "PLM Note: SROS MIB object = tmnxPtpClockPriority2
+           The IEEE Std 1588 priority2 of the PTP Instance.
+           The priority2 member is compared by the Best Master
+           Clock Algorithm (BMCA) after priority1 and clockQuality.
+           Lower values take precedence.";
+      }
+      leaf domain-number {
+        type uint8 {
+          range "24..43";
+        }
+        default "24";
+        description
+          "PLM Note: SROS MIB object = tmnxPtpClockDomain
+           The IEEE Std 1588 domainNumber of the PTP Instance.
+           A domain consists of one or more PTP Instances
+           communicating with each other as defined by the
+           protocol. A domain shall define the scope of PTP message
+           communication, state, operations, data sets, and
+           timescale. Therefore, each domain represents a distinct
+           time.";
+      }
+      leaf slave-only {
+        type boolean;
+        default "false";
+        config false;
+        description
+          "The value of slave-only shall be true if the
+           PTP Instance is a slave-only PTP Instance";
+      }
+      container current-time {
+        description
+          "The current time in the current Dataset.";
+        config false;
+        uses ptp-time-grouping;
+      }
+      leaf local-priority {
+        type uint8 {
+          range "1..255";
+        }
+        default "128";
+        description
+          "PLM Note: SROS MIB object = tmnxPtpClockLocalPriority
+           The IEEE Std 1588 priority2 of the PTP Instance.
+           The priority2 member is compared by the Best Master
+           Clock Algorithm (BMCA) after priority1 and clockQuality.
+           Lower values take precedence.";
+      }
+      leaf two-step-flag {
+        type boolean;
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpClockStepType
+           When set to true, the clock is a two-step clock
+           otherwise,the clock is a one-step clock.";
+      }
+      container statistics {
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpClkPktStatsDirection with
+           tmnxPtpClkPktStatsAnnounce, tmnxPtpClkPktStatsSync,
+           tmnxPtpClkPktStatsDelayRequest, tmnxPtpClkPktStatsDelayResp,
+           tmnxPtpClkPktStatsFollowUp, tmnxPtpClkPktStatsOther
+           Aggregate statistics for the PTP clock.";
+        leaf anno-msg-tx {
+          type uint32;
+          description
+            "Specifies the number of announce messages transmitted out the ptp clock.";
+        }
+        leaf anno-msg-rx {
+          type uint32;
+          description
+            "Specifies the number of announce messages received on the ptp clock.";
+        }
+        leaf sync-msg-tx {
+          type uint32;
+          description
+            "Specifies the number of sync messages transmitted out the ptp clock.";
+        }
+        leaf sync-msg-rx {
+          type uint32;
+          description
+            "Specifies the number of sync messages received on the ptp clock.";
+        }
+        leaf del-req-msg-tx {
+          type uint32;
+          description
+            "Specifies the number of delay-req messages transmitted out the ptp clock.";
+        }
+        leaf del-req-msg-rx {
+          type uint32;
+          description
+            "Specifies the number of delay-req messages received on the ptp clock.";
+        }
+        leaf del-resp-msg-tx {
+          type uint32;
+          description
+            "Specifies the number of delay-resp messages transmitted out the ptp clock.";
+        }
+        leaf del-resp-msg-rx {
+          type uint32;
+          description
+            "Specifies the number of delay-resp messages received on the ptp clock.";
+        }
+        leaf follow-up-msg-tx {
+          type uint32;
+          description
+            "Specifies the number of follow-up messages transmitted out the ptp clock.";
+        }
+        leaf follow-up-msg-rx {
+          type uint32;
+          description
+            "Specifies the number of follow-up messages received on the ptp clock.";
+        }
+        leaf other-rx {
+          type uint32;
+          description
+            "Specifies the number of other messages received on the ptp clock.";
+        }
+        container discards {
+          description
+            "PLM Note: SROS MIB object = tmnxPtpClkPktStatsDropBadDomain,
+             tmnxPtpClkPktStatsDropAltMaster, tmnxPtpClkPktStatsDropOutOfSeq,
+             tmnxPtpClkPktStatsDropPeerShut, tmnxPtpClkPktStatsDropOther
+             Aggregate discard statistics for the PTP clock.";
+          leaf bad-domain {
+            type uint32;
+            description
+              "Specifies the number of bad domain messages messages that were discarded.";
+          }
+          leaf alternate-master {
+            type uint32;
+            description
+              "Specifies the number of alternate master messages that were discarded.";
+          }
+          leaf out-of-sequence {
+            type uint32;
+            description
+              "Specifies the number of out of sequence messages that were discarded.";
+          }
+          leaf peer-disabled {
+            type uint32;
+            description
+              "Specifies the number of out of sequence messages that were discarded.";
+          }
+          leaf other {
+            type uint32;
+            description
+              "Specifies the number of other messages that were discarded.";
+          }
+        }
+        container multicast-msg-rate {
+          description
+            "PLM Note: SROS MIB object = tmnxPtpPacketRateStatsAnnounce,
+             tmnxPtpPacketRateStatsSync, tmnxPtpPacketRateStatsDelayReq,
+             tmnxPtpPacketRateStatsDelayResp, tmnxPtpPacketRateStatsFollowUp,
+             tmnxPtpPacketRateStatsOther
+             Aggregate multicast message rate for the PTP clock.";
+          leaf anno-msg-rate-tx {
+            type uint32;
+            description
+              "Specifies the rate of messages of announce messages transmitted out the ptp clock.";
+          }
+          leaf anno-msg-rate-rx {
+            type uint32;
+            description
+              "Specifies the rate of messages of announce messages received on the ptp clock.";
+          }
+          leaf sync-msg-rate-tx {
+            type uint32;
+            description
+              "Specifies the rate of messages of sync messages transmitted out the ptp clock.";
+          }
+          leaf sync-msg-rate-rx {
+            type uint32;
+            description
+              "Specifies the rate of messages of sync messages received on the ptp clock.";
+          }
+          leaf del-req-msg-rate-tx {
+            type uint32;
+            description
+              "Specifies the rate of messages of delay-req messages transmitted out the ptp clock.";
+          }
+          leaf del-req-msg-rate-rx {
+            type uint32;
+            description
+              "Specifies the rate of messages of delay-req messages received on the ptp clock.";
+          }
+          leaf del-resp-msg-rate-tx {
+            type uint32;
+            description
+              "Specifies the rate of messages of delay-resp messages transmitted out the ptp clock.";
+          }
+          leaf del-resp-msg-rate-rx {
+            type uint32;
+            description
+              "Specifies the rate of messages of delay-resp messages received on the ptp clock.";
+          }
+          leaf follow-up-msg-rate-tx {
+            type uint32;
+            description
+              "Specifies the rate of messages of follow-up messages transmitted out the ptp clock.";
+          }
+          leaf follow-up-msg-rate-rx {
+            type uint32;
+            description
+              "Specifies the rate of messages of follow-up messages received on the ptp clock.";
+          }
+          leaf other-rate-rx {
+            type uint32;
+            description
+              "Specifies the rate of messages of other messages received on the ptp clock.";
+          }
+        }
+      }
+      container time-recovery-engine {
+        config false;
+        leaf algorithm-state {
+          type enumeration {
+            enum not-applicable {
+              value 0;
+              description
+                "Not applicable to time recovery.";
+            }
+            enum initial {
+              value 1;
+              description
+                "Initiatizing state.";
+            }
+            enum acquiring {
+              value 2;
+              description
+                "Acquiring state.";
+            }
+            enum phase-tracking {
+              value 3;
+              description
+                "Phase Tracking state.";
+            }
+            enum holdover {
+              value 4;
+              description
+                "Holdover state.";
+            }
+            enum locked {
+              value 5;
+              description
+                "Locked state.";
+            }
+          }
+          description
+            "PLM Note: SROS MIB object = tmnxPtpTimeRecoveryState
+             Specifies the current state of the time recovery engine in the PTP clock.";
+        }
+        leaf state-last-changed {
+          type yang:date-and-time;
+          description
+            "PLM Note: SROS MIB object = tmnxPtpTimeRecoveryStateLastChg
+             Specifies the last occurance of a ptp state change for the time recovery engine
+             in the PTP clock.";
+        }
+        container statistics {
+          description
+            "PLM Note: SROS MIB object = tmnxPtpClockRecStatsInitial,
+             tmnxPtpClockRecStatsAcquiring, tmnxPtpClockRecStatsPhaseTrack
+             tmnxPtpClockRecStatsHoldover, tmnxPtpClockRecStatsLocked
+             Time recovery engine state statistics for the PTP clock.";
+          leaf time-in-initial {
+            type uint32;
+            units "seconds";
+            description
+              "Specifies the number of seconds while in Initializatizing state";
+          }
+          leaf time-in-acquiring {
+            type uint32;
+            units "seconds";
+            description
+              "Specifies the number of seconds while in Acquring state";
+          }
+          leaf time-in-phase-tracking {
+            type uint32;
+            units "seconds";
+            description
+              "Specifies the number of seconds while in Phase Tracking state";
+          }
+          leaf time-in-holdover {
+            type uint32;
+            units "seconds";
+            description
+              "Specifies the number of seconds while in Holdver state";
+          }
+          leaf time-in-locked {
+            type uint32;
+            units "seconds";
+            description
+              "Specifies the number of seconds while in Locked state";
+          }
+        }
+        container events {
+          leaf packet-loss {
+            type uint32;
+            description
+              "TBD";
+          }
+          leaf excessive-packet-loss {
+            type uint32;
+            description
+              "TBD";
+          }
+          leaf excessive-phase-shift {
+            type uint32;
+            description
+              "TBD";
+          }
+          leaf too-much-pdv {
+            type uint32;
+            description
+              "TBD";
+          }
+        }
+      }
+    }
+  }
+
+  grouping ptp-current-ds-top {
+    container current-ds {
+      description
+        "Provides current data from operation
+         of the protocol.";
+      config false;
+      leaf steps-removed {
+        type uint16;
+        default "0";
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpPeerMasterClockStepsRemvd
+           The number of PTP Communication Paths traversed
+           between this PTP Instance and the Grandmaster
+           PTP Instance.";
+      }
+      leaf offset-from-master {
+        type srl_nokia-sync-types:time-interval-type;
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpTimeInfoOffsetFromMaster
+           The current value of the time difference between
+           a Master PTP Instance and a Slave PTP Instance as
+           computed by the Slave PTP Instance.";
+      }
+      leaf mean-delay {
+        type srl_nokia-sync-types:time-interval-type;
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpTimeInfoMeanPathDelay
+           The current value of the mean propagation time between
+           a master port and a slave port as computed by the
+           slave port.";
+      }
+    }
+  }
+
+  grouping ptp-parent-ds-top {
+    description
+      "Grouping for ptp parent data set configuration";
+    container parent-ds {
+      description
+        "The parent data set of the clock (see IEEE Std 1588-2008
+         subclause 8.2.3).";
+      reference
+        "IEEE Std 1588-2008: 8.2.3";
+      config false;
+      container parent-port-identity {
+        description
+          "The portIdentity of the port on the master, it
+           contains two members: clockIdentity and portNumber.";
+        reference
+          "IEEE Std 1588-2008: 5.3.5";
+        config false;
+        leaf clock-identity {
+          type srl_nokia-sync-types:clock-identity-type;
+          config false;
+          description
+            "PLM Note: SROS MIB object = tmnxPtpMasterClockGMClockId
+             Identity of the parent clock.";
+        }
+        leaf port-number {
+          type uint16;
+          config false;
+          description
+            "PLM Note: SROS MIB object = tmnxPtpMasterClockParentPortNum
+             Port number of the parent clock.
+             The value of 1021 refers to the ToD1 port while the value of 1022 refers to the ToD2 port.";
+        }
+      }
+      leaf grandmaster-identity {
+        type srl_nokia-sync-types:clock-identity-type;
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpMasterClockGMClockId
+           The clockIdentity of the grandmaster clock.";
+      }
+      container grandmaster-clock-quality {
+        description
+          "The clockQuality of the grandmaster clock.";
+        config false;
+        uses clock-quality-grouping;
+      }
+      leaf grandmaster-priority1 {
+        type uint8;
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpMasterClockGMClockPrio1
+           The priority1 attribute of the grandmaster clock.";
+      }
+      leaf grandmaster-priority2 {
+        type uint8;
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpMasterClockGMClockPrio2
+           The priority2 attribute of the grandmaster clock.";
+      }
+      container protocol-address {
+        description
+          "
+           The protocol address of the PTP Port
+           that issues the Sync messages used in synchronizing
+           this PTP Instance.";
+        uses port-address;
+      }
+    }
+  }
+
+  grouping ptp-time-ds-top {
+    description
+      "Grouping for ptp parent data set configuration";
+    container time-properties-ds {
+      description
+        "The timeProperties data set of the clock (see
+         IEEE Std 1588-2008 subclause 8.2.4).";
+      reference
+        "IEEE Std 1588-2008: 8.2.4";
+      config false;
+      leaf current-utc-offset-valid {
+        type boolean;
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpTimeInfoUtcOffsetValid
+           When set to true, the current UTC offset is valid.";
+      }
+      leaf current-utc-offset {
+        when "../current-utc-offset-valid='true'";
+        type int16;
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpTimeInfoCurrentUtcOffset
+           The offset between TAI and UTC when the epoch of the
+           PTP system is the PTP epoch in units of seconds, i.e.,
+           when ptp-timescale is TRUE; otherwise, the value has
+           no meaning.";
+      }
+      leaf leap59 {
+        type boolean;
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpTimeInfoLeap59
+           When set to true, the last minute of the current UTC
+           day contains 59 seconds.";
+      }
+      leaf leap61 {
+        type boolean;
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpTimeInfoLeap61
+           When set to true, the last minute of the current UTC
+           day contains 61 seconds.";
+      }
+      leaf time-traceable {
+        type boolean;
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpTimeInfoTimeTraceable
+           When set to true, the timescale and the
+           currentUtcOffset are traceable to a primary
+           reference.";
+      }
+      leaf frequency-traceable {
+        type boolean;
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpTimeInfoFreqTraceable
+           When set to true, the frequency determining the
+           timescale is traceable to a primary reference.";
+      }
+      leaf ptp-timescale {
+        type boolean;
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpTimeInfoTimescale
+           When set to true, the clock timescale of the
+           grandmaster clock is PTP; otherwise, the timescale is
+           ARB (arbitrary).";
+      }
+      leaf time-source {
+        type enumeration {
+          enum atomic-clock {
+            value 16;
+          }
+          enum gps {
+            value 32;
+          }
+          enum terrestrial-radio {
+            value 48;
+          }
+          enum ptp {
+            value 64;
+          }
+          enum ntp {
+            value 80;
+          }
+          enum hand-set {
+            value 96;
+          }
+          enum other {
+            value 144;
+          }
+          enum internal-oscillator {
+            value 160;
+          }
+          enum reserved {
+            value 255;
+          }
+        }
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpTimeInfoTimeSource
+           The source of time used by the grandmaster clock.";
+      }
+    }
+  }
+
+  grouping ptp-port-ds-top {
+    description
+      "Grouping for ptp port data set configuration";
+    list port-ds-list {
+      key "port-number";
+      description
+        "List of port data sets of the clock (see IEEE Std
+         1588-2008 subclause 8.2.5).";
+      reference
+        "IEEE Std 1588-2008: 8.2.5";
+      leaf port-number {
+        type uint16;
+        description
+          "PLM Note: SROS MIB object = TmnxPtpPortNumber
+           Port number.
+           The data sets (i.e., information model) of IEEE Std
+           1588-2008 specify a member portDS.portIdentity, which
+           uses a typed struct with members clockIdentity and
+           portNumber.
+
+           In this YANG data model, portIdentity is not modeled
+           in the port-ds.  However, its members are provided
+           as follows:
+           portIdentity.portNumber is provided as this
+           port-number leaf in port-ds, and
+           portIdentity.clockIdentity is provided as the
+           clock-identity leaf in default-ds of the instance
+           (i.e., ../../default-ds/clock-identity).";
+      }
+      leaf admin-state {
+        type srl_nokia-comm:admin-state;
+        default "disable";
+        description
+          "PLM Note: SROS MIB object = tmnxPtpPortAdminState
+           The administrative state of the ptp port.";
+      }
+      leaf port-state {
+        type srl_nokia-sync-types:port-state;
+        config false;
+        default "initializing";
+        description
+          "PLM Note: SROS MIB object = tmnxPtpPortState
+           Current state associated with the port.";
+      }
+      leaf underlying-interface {
+        type srl_nokia-sync-types:interface-ptp;
+        description
+          "Reference to the configured underlying interface that
+           is used by this PTP port (see RFC 8343).";
+        reference
+          "RFC 8343: A YANG Data Model for Interface Management";
+      }
+      leaf log-min-delay-req-interval {
+        type int8 {
+          range "-6..0";
+        }
+        default "-4";
+        description
+          "PLM Note: SROS MIB object = tmnxPtpPortDelayInterval
+           The base-2 logarithm of the minDelayReqInterval
+           (the minimum permitted mean time interval between
+            successive Delay_Req messages).";
+      }
+      leaf log-announce-interval {
+        type int8 {
+          range "-3..4";
+        }
+        default "-3";
+        description
+          "PLM Note: SROS MIB object = tmnxPtpClockAnnounceInterval
+           The base-2 logarithm of the mean
+           announceInterval (mean time interval between
+           successive Announce messages).";
+      }
+      leaf announce-receipt-timeout {
+        type uint8 {
+          range "2..10";
+        }
+        default "3";
+        description
+          "PLM Note: SROS MIB object = tmnxPtpClockAnnoRxTimeout
+           The number of announceIntervals that have to pass
+           without receipt of an Announce message before the
+           occurrence of the event ANNOUNCE_RECEIPT_TIMEOUT_
+           EXPIRES.";
+      }
+      leaf log-sync-interval {
+        type int8 {
+          range "-6..0";
+        }
+        default "-4";
+        description
+          "PLM Note: SROS MIB object = tmnxPtpPortSyncInterval
+           The base-2 logarithm of the mean SyncInterval
+           for multicast messages.  The rates for unicast
+           transmissions are negotiated separately on a per-port
+           basis and are not constrained by this attribute.";
+      }
+      leaf major-version-number {
+        type uint8;
+        config false;
+        description
+          "The PTP majort version number in use on the port.";
+      }
+      leaf minor-version-number {
+        type uint8;
+        config false;
+        description
+          "The PTP minor version number in use on the port.";
+      }
+      leaf local-priority {
+        type uint8 {
+          range "1..255";
+        }
+        default "128";
+        description
+          "PLM Note: SROS MIB object = tmnxPtpPortLocalPriority
+           Specifies the local priority of the ptp port.";
+      }
+      leaf master-only {
+        type boolean;
+        default "true";
+        description
+          "PLM Note: SROS MIB object = tmnxPtpPortMasterOnly
+           Specifies the masterOnly attribute of the ptp port.";
+      }
+      leaf asym-correction {
+        type int32 {
+          range "-100000000..100000000";
+        }
+        config false;
+        units "nanoseconds";
+        description
+          "Specifies the asymmetry correction value (integer ns) currently used.
+           Configuration my be configure under interface>ethernet";
+      }
+      leaf encap-type {
+        type enumeration {
+          enum ethernet {
+            value 0;
+            description
+              "The clock uses Ethernet (IEEE Std 802.3) encapsulaton.";
+          }
+        }
+        default "ethernet";
+        config false;
+        description
+          "PLM Note: Only Etheret is support initially
+           Encapsulation type used for ptp on this port.";
+      }
+      leaf dest-mac {
+        type enumeration {
+          enum forwardable {
+            value 0;
+            description
+              "The clock uses the forwardable MAC address: 01-1B-19-00-00-00.";
+          }
+          enum non-forwardable {
+            value 1;
+            description
+              "The clock uses the non-forwardable MAC address: 01-80-C2-00-00-0E.";
+          }
+        }
+        default "forwardable";
+        description
+          "PLM Note: SROS MIB object = tmnxPtpPortMulticastAddress
+           Configure the MAC address associated with forwardable or non-forwardable.";
+      }
+      container statistics {
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpPortStatAnnounce,
+           tmnxPtpPortStatSync, tmnxPtpPortStatDelayRequest,
+           tmnxPtpPortStatDelayResponse, tmnxPtpPortStatFollowUp,
+           tmnxPtpPortStatOther
+           Total messages for a specific PTP port.";
+        leaf anno-msg-tx {
+          type uint32;
+          description
+            "Specifies the number of announce messages transmitted out the ptp port.";
+        }
+        leaf anno-msg-rx {
+          type uint32;
+          description
+            "Specifies the number of announce messages received on the ptp port.";
+        }
+        leaf sync-msg-tx {
+          type uint32;
+          description
+            "Specifies the number of sync messages transmitted out the ptp port.";
+        }
+        leaf sync-msg-rx {
+          type uint32;
+          description
+            "Specifies the number of sync messages received on the ptp port.";
+        }
+        leaf del-req-msg-tx {
+          type uint32;
+          description
+            "Specifies the number of delay-req messages transmitted out the ptp port.";
+        }
+        leaf del-req-msg-rx {
+          type uint32;
+          description
+            "Specifies the number of delay-req messages received on the ptp port.";
+        }
+        leaf del-resp-msg-tx {
+          type uint32;
+          description
+            "Specifies the number of delay-resp messages transmitted out the ptp port.";
+        }
+        leaf del-resp-msg-rx {
+          type uint32;
+          description
+            "Specifies the number of delay-resp messages received on the ptp port.";
+        }
+        leaf follow-up-msg-tx {
+          type uint32;
+          description
+            "Specifies the number of follow-up messages transmitted out the ptp port.";
+        }
+        leaf follow-up-msg-rx {
+          type uint32;
+          description
+            "Specifies the number of follow-up messages received on the ptp port.";
+        }
+        leaf other-rx {
+          type uint32;
+          description
+            "Specifies the number of other messages received on the ptp port.";
+        }
+        container discards {
+          description
+            "PLM Note: SROS MIB object = tmnxPtpPortStatDropBadDomain,
+             tmnxPtpPortStatDropAltMaster, tmnxPtpPortStatDropOutOfSeq,
+             tmnxPtpPortStatDropOther
+             Total messages discarded for a specific PTP port.";
+          leaf bad-domain {
+            type uint32;
+            description
+              "Specifies the number of bad domain messages messages that were discarded.";
+          }
+          leaf alternate-master {
+            type uint32;
+            description
+              "Specifies the number of alternate master messages that were discarded.";
+          }
+          leaf out-of-sequence {
+            type uint32;
+            description
+              "Specifies the number of out of sequence messages that were discarded.";
+          }
+          leaf other {
+            type uint32;
+            description
+              "Specifies the number of other messages that were discarded.";
+          }
+        }
+      }
+      leaf neighbor-count {
+        type uint32;
+        config false;
+        description
+          "PLM Note: SROS MIB object = tmnxPtpPortNeighbors
+           The number of neigbors for the port.";
+      }
+      list neighbor-list {
+        key "clock-identity port-number";
+        config false;
+        description
+          "List of MAC address of all the neighbors of this port.";
+        leaf clock-identity {
+          type srl_nokia-sync-types:clock-identity-type;
+          config false;
+          description
+            "PLM Note: SROS MIB object = tmnxPtpPortNeighborClockId
+             The clockIdentity of this neigbor clock.";
+        }
+        leaf port-number {
+          type uint16;
+          description
+            "PLM Note: SROS MIB object = tmnxPtpPortNeighborPtpPortNumber
+             The port number of this neigbor clock.";
+          config false;
+        }
+        leaf mac-address {
+          type srl_nokia-comm:mac-address;
+          description
+            "PLM Note: SROS MIB object = tmnxPtpPortNeighborMacAddress
+             Specifies the MAC address of this neighbor.";
+        }
+        leaf rx-message-rate {
+          type uint16;
+          description
+            "PLM Note: SROS MIB object = tmnxPtpPortNeighborRxPacketRate
+             The receive message rate from this neigbor clock.";
+          config false;
+        }
+      }
+    }
+  }
+
+  grouping ptp-instance-top {
+    description
+      "The PTP struct containing all attributes of PTP data set,
+       other optional PTP attributes can be augmented as well.";
+    leaf ptp-profile {
+      type enumeration {
+        enum itug8275dot1 {
+          value 1;
+          description
+            "ITU-T G.8275.1 (2014)Profile.";
+        }
+      }
+      default "itug8275dot1";
+      description
+        "PLM note: SROS MIB oject = tmnxPtpClockProfile.
+         Specifies the PTP profile mode for the PTP clock.";
+    }
+    list instance {
+      key "instance-index";
+      description
+        "List of one or more PTP Instances in the product (PTP Node).
+         Each PTP Instance represents a distinct instance of PTP
+         implementation (i.e. distinct Ordinary Clock, Boundary Clock,
+         or Transparent Clock), maintaining a distinct time.";
+      leaf instance-index {
+        type uint32 {
+          range "1..2";
+        }
+        description
+          "The instance index of the current PTP instance.
+           This instance index is used for management purposes
+           only.  This instance index does not represent the PTP
+           domain number and is not used in PTP messages.";
+      }
+      uses ptp-default-ds-top;
+      uses ptp-current-ds-top;
+      uses ptp-parent-ds-top;
+      uses ptp-time-ds-top;
+      uses ptp-port-ds-top;
+    }
+  }
+
+  grouping time-clock-top {
+    description
+      "This struct containing all attributes for time clock.";
+    leaf time-ref {
+      type enumeration {
+        enum ptp {
+          value 1;
+          description
+            "the time clock aligns the time via PTP from an external PTP grandmaster";
+        }
+      }
+      default "ptp";
+    }
+  }
+}
