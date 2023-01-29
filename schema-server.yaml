@@ -5,9 +5,8 @@ grpc-server:
   #   cert:
   #   key:
   #   skip-verify:
-  schema-server:
-  data-server:
-
+  schema-server: true
+  data-server: true
   
 schemas:
   - name: srl
@@ -31,7 +30,7 @@ schemas:
 datastores: # this specifies MAIN datastores
   - name: srl1
     schema: 
-      name: SRL-Native
+      name: srl
       vendor: Nokia
       version: 22.11.1
     sbi:
@@ -42,3 +41,6 @@ datastores: # this specifies MAIN datastores
         password: NokiaSrl1!
       tls:
         skip-verify: true
+
+schema-server:
+  address: :55000

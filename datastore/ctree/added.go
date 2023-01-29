@@ -1,14 +1,17 @@
 package ctree
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-
-	"github.com/openconfig/gnmi/path"
-	"github.com/openconfig/gnmi/proto/gnmi"
+	"time"
 
 	"github.com/iptecharch/schema-server/config"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	"github.com/iptecharch/schema-server/utils"
+	"github.com/openconfig/gnmi/path"
+	"github.com/openconfig/gnmi/proto/gnmi"
+	log "github.com/sirupsen/logrus"
 )
 
 func (t *Tree) PrettyJSON() ([]byte, error) {
@@ -49,14 +52,17 @@ func (t *Tree) AddGNMIUpdate(n *gnmi.Notification) error {
 			return err
 		}
 		r := t.Delete(items)
-		fmt.Printf("deleted :%#v\n", r)
+		log.Debugf("deleted :%#v", r)
 	}
 	for _, upd := range n.GetUpdate() {
 		items, err := path.CompletePath(n.GetPrefix(), upd.GetPath())
 		if err != nil {
 			return err
 		}
-		err = t.Add(items, upd.GetVal().Value)
+		if upd.GetVal().GetValue() == nil {
+			continue
+		}
+		err = t.Add(items, upd.GetVal().GetValue())
 		if err != nil {
 			return err
 		}
@@ -71,20 +77,22 @@ func (t *Tree) AddSchemaUpdate(n *schemapb.Notification) error {
 	}
 
 	for _, del := range n.GetDelete() {
-		items, err := CompletePath(n.GetPrefix(), del)
+		items, err := utils.CompletePath(n.GetPrefix(), del)
 		if err != nil {
 			return err
 		}
 		r := t.Delete(items)
-		fmt.Printf("deleted :%#v\n", r)
+		log.Debugf("deleted %v", r)
 	}
 
 	for _, upd := range n.GetUpdate() {
-		items, err := CompletePath(n.GetPrefix(), upd.GetPath())
+		items, err := utils.CompletePath(n.GetPrefix(), upd.GetPath())
 		if err != nil {
 			return err
 		}
-		err = t.Add(items, upd.GetValue().Value)
+		v := utils.ToGNMITypedValue(upd.GetValue().GetValue())
+		fmt.Printf("adding value: %T, %v\n", upd.GetValue().GetValue(), upd.GetValue().GetValue())
+		err = t.Add(items, v)
 		if err != nil {
 			return err
 		}
@@ -104,9 +112,57 @@ func (t *Tree) AddUpdate(n any) error {
 	}
 }
 
-func (t *Tree) GetPath(p *schemapb.Path, schemaClient schemapb.SchemaServerClient, sc *config.SchemaConfig) ([]*schemapb.Notification, error) {
-	return nil, nil
+func (t *Tree) GetPath(ctx context.Context, p *schemapb.Path, schemaClient schemapb.SchemaServerClient, sc *config.SchemaConfig) ([]*schemapb.Notification, error) {
+	cp, err := utils.CompletePath(nil, p)
+	if err != nil {
+		return nil, err
+	}
+	ns := make([]*schemapb.Notification, 0)
+	err = t.Query(cp,
+		func(path []string, l *Leaf, val interface{}) error {
+			req := &schemapb.ToPathRequest{
+				PathElement: path,
+				Schema: &schemapb.Schema{
+					Name:    sc.Name,
+					Vendor:  sc.Vendor,
+					Version: sc.Version,
+				},
+			}
+			fmt.Println("GetPath, Query, ToPath", req)
+			rsp, err := schemaClient.ToPath(ctx, req)
+			if err != nil {
+				return err
+			}
+			fmt.Println(rsp)
+			n := &schemapb.Notification{
+				Timestamp: time.Now().UnixNano(),
+				Update: []*schemapb.Update{{
+					Path:  rsp.GetPath(),
+					Value: utils.ToSchemaTypedValue(val),
+				}},
+			}
+			ns = append(ns, n)
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+	return ns, nil
 }
 
-func (t *Tree) DeletePath(p *schemapb.Path) error { return nil } // TODO2:
-func (t *Tree) Insert(upd *schemapb.Update) error { return nil } // TODO2:
+func (t *Tree) DeletePath(p *schemapb.Path) error {
+	cp, err := utils.CompletePath(nil, p)
+	if err != nil {
+		return err
+	}
+	t.Delete(cp)
+	return nil
+}
+
+func (t *Tree) Insert(upd *schemapb.Update) error {
+	cp, err := utils.CompletePath(nil, upd.GetPath())
+	if err != nil {
+		return err
+	}
+	return t.Add(cp, upd.GetValue().GetValue())
+}

@@ -30,7 +30,7 @@ func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sch
 		log.Infof("reading from candidate")
 		for _, p := range req.GetPath() {
 			log.Infof("from head path %v", p)
-			n, err := cand.head.GetPath(p, d.schemaClient, d.config.Schema)
+			n, err := cand.head.GetPath(ctx, p, d.schemaClient, d.config.Schema)
 			if err != nil {
 				log.Errorf("get from head err: %v", err)
 				return nil, err
@@ -42,14 +42,20 @@ func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sch
 					return nil, err
 				}
 			}
+			// bbbb, err := tempTree.PrettyJSON()
+			// if err != nil {
+			// 	panic(err)
+			// }
+			// fmt.Println("head\n", string(bbbb))
 			if len(n) > 0 {
 				continue
 			}
 			log.Infof("from base path %v", p)
-			bn, err := cand.base.GetPath(p, d.schemaClient, d.config.Schema)
+			bn, err := cand.base.GetPath(ctx, p, d.schemaClient, d.config.Schema)
 			if err != nil {
 				return nil, err
 			}
+
 			log.Infof("from base result %v", bn)
 			for _, nn := range bn {
 				err = tempTree.AddSchemaUpdate(nn)
@@ -57,9 +63,14 @@ func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sch
 					return nil, err
 				}
 			}
+			// bbbb, err = tempTree.PrettyJSON()
+			// if err != nil {
+			// 	panic(err)
+			// }
+			// fmt.Println("after head\n", string(bbbb))
 		}
 		for _, p := range req.GetPath() {
-			n, err := tempTree.GetPath(p, d.schemaClient, d.config.Schema)
+			n, err := tempTree.GetPath(ctx, p, d.schemaClient, d.config.Schema)
 			if err != nil {
 				return nil, err
 			}
@@ -79,7 +90,7 @@ func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sch
 			}}
 		}
 		for _, p := range reqPaths {
-			n, err := d.main.GetPath(p, d.schemaClient, d.config.Schema)
+			n, err := d.main.GetPath(ctx, p, d.schemaClient, d.config.Schema)
 			if err != nil {
 				return nil, err
 			}

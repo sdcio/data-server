@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/json"
+	"fmt"
 
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/openconfig/gnmi/proto/gnmi"
@@ -101,15 +102,22 @@ func GetSchemaValue(updValue *schemapb.TypedValue) (interface{}, error) {
 }
 
 func ToSchemaTypedValue(v any) *schemapb.TypedValue {
-	log.Infof("value %T, %v", v, v)
+	log.Infof("to schema value %T, %v", v, v) //TODO2: Writing in schemapb typedValue, need to change to gNMI ?
 	switch v := v.(type) {
-	case *schemapb.TypedValue_AsciiVal:
+	case *gnmi.TypedValue:
+		return ToSchemaTypedValue(v.GetValue())
+	case *gnmi.TypedValue_AsciiVal:
 		return &schemapb.TypedValue{
-			Value: v,
+			Value: &schemapb.TypedValue_AsciiVal{
+				AsciiVal: v.AsciiVal,
+			},
 		}
-	case *schemapb.TypedValue_StringVal:
+	case *gnmi.TypedValue_StringVal:
+		fmt.Println(v.StringVal)
 		return &schemapb.TypedValue{
-			Value: v,
+			Value: &schemapb.TypedValue_StringVal{
+				StringVal: v.StringVal,
+			},
 		}
 	case string:
 		return &schemapb.TypedValue{
@@ -121,6 +129,27 @@ func ToSchemaTypedValue(v any) *schemapb.TypedValue {
 	return nil
 }
 
-func ToGNMITypedValue(v any) *schemapb.TypedValue {
+func ToGNMITypedValue(v any) *gnmi.TypedValue {
+	log.Infof("to gNMI value %T, %v", v, v)
+	switch v := v.(type) {
+	case *schemapb.TypedValue_AsciiVal:
+		return &gnmi.TypedValue{
+			Value: &gnmi.TypedValue_AsciiVal{
+				AsciiVal: v.AsciiVal,
+			},
+		}
+	case *schemapb.TypedValue_StringVal:
+		return &gnmi.TypedValue{
+			Value: &gnmi.TypedValue_StringVal{
+				StringVal: v.StringVal,
+			},
+		}
+	case string:
+		return &gnmi.TypedValue{
+			Value: &gnmi.TypedValue_AsciiVal{
+				AsciiVal: v,
+			},
+		}
+	}
 	return nil
 }

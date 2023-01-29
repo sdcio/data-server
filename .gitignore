@@ -2,3 +2,6 @@ yang
 schema-server
 bin*
 client/client
+lab/*/clab-*
+lab/*/*.bak
+client/bin*

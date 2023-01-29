@@ -7,34 +7,24 @@ import (
 
 	"github.com/iptecharch/schema-server/config"
 	"github.com/iptecharch/schema-server/server"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
 
 var configFile string
+var debug bool
 
 func main() {
 	pflag.StringVarP(&configFile, "config", "c", "schema-server.yaml", "config file path")
+	pflag.BoolVarP(&debug, "debug", "d", false, "enable debug")
 	pflag.Parse()
-
+	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 START:
 	cfg, err := config.New(configFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to read config: %v\n", err)
 		os.Exit(1)
 	}
-	// serverConfig := &server.ServerConfig{
-	// 	Address: cfg.Address,
-	// 	Secure:  false,
-	// 	Schemas: make([]*config.SchemaConfig, 0, len(cfg.Schemas)),
-	// }
-	// for _, sc := range cfg.Schemas {
-	// 	scc, err := schema.NewSchema(sc)
-	// 	if err != nil {
-	// 		panic(err)
-	// 	}
-	// 	serverConfig.Schemas = append(serverConfig.Schemas, scc)
-	// }
-	// TODO: Add TLS
 
 	s, err := server.NewServer(cfg)
 	if err != nil {

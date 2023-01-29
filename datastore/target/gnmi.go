@@ -23,9 +23,10 @@ type gnmiTarget struct {
 func newGNMITarget(ctx context.Context, name string, cfg *config.SBI, main *ctree.Tree) (*gnmiTarget, error) {
 	gt := &gnmiTarget{main: main}
 	tc := &types.TargetConfig{
-		Name:    name,
-		Address: cfg.Address,
-		Timeout: 10 * time.Second,
+		Name:       name,
+		Address:    cfg.Address,
+		Timeout:    10 * time.Second,
+		RetryTimer: 2 * time.Second,
 	}
 	if cfg.Credentials != nil {
 		tc.Username = &cfg.Credentials.Username
@@ -44,12 +45,43 @@ func newGNMITarget(ctx context.Context, name string, cfg *config.SBI, main *ctre
 	if err != nil {
 		return nil, err
 	}
-
+	go gt.Sync(ctx)
 	return gt, nil
 }
 
 func (t *gnmiTarget) Get(ctx context.Context, req *schemapb.GetDataRequest) (*schemapb.GetDataResponse, error) {
-	return nil, nil
+	gnmiReq := &gnmi.GetRequest{
+		Path:     make([]*gnmi.Path, 0, len(req.GetPath())),
+		Encoding: gnmi.Encoding_ASCII,
+	}
+	for _, p := range req.GetPath() {
+		gnmiReq.Path = append(gnmiReq.Path, toGNMIPath(p))
+	}
+	gnmiRsp, err := t.target.Get(ctx, gnmiReq)
+	if err != nil {
+		return nil, err
+	}
+	schemaRsp := &schemapb.GetDataResponse{
+		Notification: make([]*schemapb.Notification, 0, len(gnmiRsp.GetNotification())),
+	}
+	for _, n := range gnmiRsp.GetNotification() {
+		sn := &schemapb.Notification{
+			Timestamp: n.GetTimestamp(),
+			Update:    make([]*schemapb.Update, 0, len(n.GetUpdate())),
+			Delete:    make([]*schemapb.Path, 0, len(n.GetDelete())),
+		}
+		for _, upd := range n.GetUpdate() {
+			sn.Update = append(sn.Update, &schemapb.Update{
+				Path:  fromGNMIPath(upd.GetPath()),
+				Value: fromGNMITypedValue(upd.GetVal()),
+			})
+		}
+		for _, del := range n.GetDelete() {
+			sn.Delete = append(sn.Delete, fromGNMIPath(del))
+		}
+		schemaRsp.Notification = append(schemaRsp.Notification, sn)
+	}
+	return schemaRsp, nil
 }
 
 func (t *gnmiTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error) {
@@ -109,7 +141,6 @@ START:
 			},
 		},
 	}, "sync")
-	defer t.target.StopSubscription("sync")
 	rspch, errCh := t.target.ReadSubscriptions()
 	// log.Info("reading target subs")
 	for {

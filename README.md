@@ -22,11 +22,16 @@ go build
 ./client datastore get --ds srl1
 ## create a candidate datastore
 ./client datastore create --ds srl1 --candidate default
+./client datastore create --ds srl1 --candidate temp
+./client datastore get --ds srl1
+# delete candidate "temp" datastore
+./client datastore delete --ds srl1 --candidate temp
 ./client datastore get --ds srl1
 
 # data
 ## state
 ./client data get --ds srl1 --path interface[name=*]/subinterface[index=0]/statistics/in-octets
+./client data get --ds srl1 --path interface[name=*]/subinterface[index=0]/statistics/in-octets --candidate default
 ## configure
 ./client data set --ds srl1 --candidate default --update interface[name=ethernet-1/1]/admin-state:::disable
 ./client data set --ds srl1 --candidate default --update interface[name=ethernet-1/1]/description:::desc1

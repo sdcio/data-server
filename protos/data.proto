@@ -44,8 +44,12 @@ message SetDataResponse {
     int64 timestamp = 4;                 // Timestamp of transaction (ns since epoch).
 }
 
-message DiffRequest {}
-message DiffResponse {}
+message DiffRequest {
+     string                      name                    = 1;
+}
+message DiffResponse {
+     string                      name                    = 1;
+}
 
 message SubscribeRequest {}
 message SubscribeResponse {}

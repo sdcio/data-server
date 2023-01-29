@@ -1,15 +1,14 @@
 package server
 
 import (
-	"fmt"
 	"net"
-	"os"
 	"sync"
 
 	"github.com/iptecharch/schema-server/config"
 	"github.com/iptecharch/schema-server/datastore"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/schema"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
@@ -25,17 +24,9 @@ type Server struct {
 	srv *grpc.Server
 	schemapb.UnimplementedSchemaServerServer
 	schemapb.UnimplementedDataServerServer
-	//
 
+	schemaClient schemapb.SchemaServerClient
 }
-
-// type ServerConfig struct {
-// 	Address string
-// 	Secure  bool
-// 	//
-// 	Schemas    []*config.SchemaConfig
-// 	Datastores []*config.DatastoreConfig
-// }
 
 func NewServer(c *config.Config) (*Server, error) {
 	var s = &Server{
@@ -47,14 +38,18 @@ func NewServer(c *config.Config) (*Server, error) {
 		md:         &sync.RWMutex{},
 		datastores: make(map[string]*datastore.Datastore),
 	}
+
 	for _, sCfg := range c.Schemas {
 		sc, err := schema.NewSchema(sCfg)
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 		s.schemas[sc.UniqueName()] = sc
 	}
-
+	for _, dsCfg := range c.Datastores {
+		ds := datastore.New(dsCfg, c.SchemaServer)
+		s.datastores[dsCfg.Name] = ds
+	}
 	opts := []grpc.ServerOption{}
 	// todo: options
 	s.srv = grpc.NewServer(opts...)
@@ -68,7 +63,7 @@ func (s *Server) Serve() error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "running server on %s\n", s.config.GRPCServer.Address)
+	log.Infof("running server on %s\n", s.config.GRPCServer.Address)
 
 	err = s.srv.Serve(l)
 	if err != nil {
