@@ -41,6 +41,8 @@ go build
 ### get from main
 ./client data get --ds srl1 --path interface[name=ethernet-1/1]/admin-state
 ./client data get --ds srl1 --path interface[name=ethernet-1/1]/description
+# diff
+./client data diff --ds srl1 --candidate default
 ### commit
 ./client datastore commit --ds srl1 --candidate default
 ./client datastore get --ds srl1

@@ -4,14 +4,13 @@ import (
 	"context"
 
 	"github.com/iptecharch/schema-server/config"
-	"github.com/iptecharch/schema-server/datastore/ctree"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	log "github.com/sirupsen/logrus"
 )
 
 type redisTarget struct{}
 
-func newRedisTarget(ctx context.Context, cfg *config.SBI, main *ctree.Tree) (*redisTarget, error) {
+func newRedisTarget(ctx context.Context, cfg *config.SBI) (*redisTarget, error) {
 	return &redisTarget{}, nil
 }
 
@@ -22,7 +21,7 @@ func (t *redisTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*s
 	return nil, nil
 }
 func (t *redisTarget) Subscribe() {}
-func (t *redisTarget) Sync(ctx context.Context) {
+func (t *redisTarget) Sync(ctx context.Context, syncCh chan *schemapb.Notification) {
 	<-ctx.Done()
 	log.Infof("sync stopped: %v", ctx.Err())
 }

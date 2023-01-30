@@ -4,14 +4,13 @@ import (
 	"context"
 
 	"github.com/iptecharch/schema-server/config"
-	"github.com/iptecharch/schema-server/datastore/ctree"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	log "github.com/sirupsen/logrus"
 )
 
 type natsTarget struct{}
 
-func newNATSTarget(ctx context.Context, cfg *config.SBI, main *ctree.Tree) (*natsTarget, error) {
+func newNATSTarget(ctx context.Context, cfg *config.SBI) (*natsTarget, error) {
 	return &natsTarget{}, nil
 }
 
@@ -22,7 +21,7 @@ func (t *natsTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sc
 	return nil, nil
 }
 func (t *natsTarget) Subscribe() {}
-func (t *natsTarget) Sync(ctx context.Context) {
+func (t *natsTarget) Sync(ctx context.Context, syncCh chan *schemapb.Notification) {
 	<-ctx.Done()
 	log.Infof("sync stopped: %v", ctx.Err())
 }

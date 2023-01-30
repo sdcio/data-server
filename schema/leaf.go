@@ -14,7 +14,7 @@ func leafFromYEntry(e *yang.Entry) *schemapb.LeafSchema {
 		Type:           toSchemaType(e.Type),
 		IsMandatory:    e.Mandatory.Value(),
 		Units:          e.Units,
-		MustStatements: []*schemapb.MustStatement{},
+		MustStatements: getMustStatement(e),
 		IsState:        isState(e),
 	}
 	if v, ok := e.SingleDefaultValue(); ok {
@@ -23,17 +23,17 @@ func leafFromYEntry(e *yang.Entry) *schemapb.LeafSchema {
 	if e.Prefix != nil {
 		l.Prefix = e.Prefix.Name
 	}
-	if mustStatements, ok := e.Extra["must"]; ok {
-		for _, m := range mustStatements {
-			if m, ok := m.(*yang.Must); ok {
-				l.MustStatements = append(l.MustStatements, &schemapb.MustStatement{
-					Statement: m.Name,
-					Error:     m.ErrorMessage.Name,
-				})
-			}
+	// if mustStatements, ok := e.Extra["must"]; ok {
+	// 	for _, m := range mustStatements {
+	// 		if m, ok := m.(*yang.Must); ok {
+	// 			l.MustStatements = append(l.MustStatements, &schemapb.MustStatement{
+	// 				Statement: m.Name,
+	// 				Error:     m.ErrorMessage.Name,
+	// 			})
+	// 		}
 
-		}
-	}
+	// 	}
+	// }
 	return l
 }
 
@@ -70,4 +70,24 @@ func toSchemaType(yt *yang.YangType) *schemapb.SchemaLeafType {
 		}
 	}
 	return slt
+}
+
+func getMustStatement(e *yang.Entry) []*schemapb.MustStatement {
+	mustStatements, ok := e.Extra["must"]
+	if !ok {
+		return nil
+	}
+	rs := make([]*schemapb.MustStatement, 0, len(mustStatements))
+	for _, m := range mustStatements {
+		if m, ok := m.(*yang.Must); ok {
+			ms := &schemapb.MustStatement{
+				Statement: m.Name,
+			}
+			if m.ErrorMessage != nil {
+				ms.Error = m.ErrorMessage.Name
+			}
+			rs = append(rs, ms)
+		}
+	}
+	return rs
 }

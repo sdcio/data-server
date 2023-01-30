@@ -169,26 +169,93 @@ func ToSchemaTypedValue(v any) *schemapb.TypedValue {
 	return nil
 }
 
-func ToGNMITypedValue(v any) *gnmi.TypedValue {
-	log.Infof("to gNMI value %T, %v", v, v)
-	switch v := v.(type) {
+// func ToGNMITypedValue(v any) *gnmi.TypedValue {
+// 	log.Infof("to gNMI value %T, %v", v, v)
+// 	switch v := v.(type) {
+// 	case *schemapb.TypedValue_AsciiVal:
+// 		return &gnmi.TypedValue{
+// 			Value: &gnmi.TypedValue_AsciiVal{
+// 				AsciiVal: v.AsciiVal,
+// 			},
+// 		}
+// 	case *schemapb.TypedValue_StringVal:
+// 		return &gnmi.TypedValue{
+// 			Value: &gnmi.TypedValue_StringVal{
+// 				StringVal: v.StringVal,
+// 			},
+// 		}
+// 	case string:
+// 		return &gnmi.TypedValue{
+// 			Value: &gnmi.TypedValue_AsciiVal{
+// 				AsciiVal: v,
+// 			},
+// 		}
+// 	}
+// 	return nil
+// }
+
+func ToGNMITypedValue(v *schemapb.TypedValue) *gnmi.TypedValue {
+	if v == nil {
+		return nil
+	}
+	switch v.GetValue().(type) {
+	case *schemapb.TypedValue_AnyVal:
+		return &gnmi.TypedValue{
+			Value: &gnmi.TypedValue_AnyVal{AnyVal: v.GetAnyVal()},
+		}
 	case *schemapb.TypedValue_AsciiVal:
 		return &gnmi.TypedValue{
-			Value: &gnmi.TypedValue_AsciiVal{
-				AsciiVal: v.AsciiVal,
-			},
+			Value: &gnmi.TypedValue_AsciiVal{AsciiVal: v.GetAsciiVal()},
+		}
+	case *schemapb.TypedValue_BoolVal:
+		return &gnmi.TypedValue{
+			Value: &gnmi.TypedValue_BoolVal{BoolVal: v.GetBoolVal()},
+		}
+	case *schemapb.TypedValue_BytesVal:
+		return &gnmi.TypedValue{
+			Value: &gnmi.TypedValue_BytesVal{BytesVal: v.GetBytesVal()},
+		}
+	// case *schemapb.TypedValue_DecimalVal:
+	// 	return &gnmi.TypedValue{
+	// 		Value: &gnmi.TypedValue_DecimalVal{DecimalVal: v.GetDecimalVal()},
+	// 	}
+	// case *schemapb.TypedValue_FloatVal:
+	// 	return &gnmi.TypedValue{
+	// 		Value: &gnmi.TypedValue_FloatVal{FloatVal: v.GetFloatVal()},
+	// 	}
+	case *schemapb.TypedValue_IntVal:
+		return &gnmi.TypedValue{
+			Value: &gnmi.TypedValue_IntVal{IntVal: v.GetIntVal()},
+		}
+	case *schemapb.TypedValue_JsonIetfVal:
+		return &gnmi.TypedValue{
+			Value: &gnmi.TypedValue_JsonIetfVal{JsonIetfVal: v.GetJsonIetfVal()},
+		}
+	case *schemapb.TypedValue_JsonVal:
+		return &gnmi.TypedValue{
+			Value: &gnmi.TypedValue_JsonVal{JsonVal: v.GetJsonVal()},
+		}
+	case *schemapb.TypedValue_LeaflistVal:
+		gnmilf := &gnmi.ScalarArray{
+			Element: make([]*gnmi.TypedValue, 0, len(v.GetLeaflistVal().GetElement())),
+		}
+		for _, e := range v.GetLeaflistVal().GetElement() {
+			gnmilf.Element = append(gnmilf.Element, ToGNMITypedValue(e))
+		}
+		return &gnmi.TypedValue{
+			Value: &gnmi.TypedValue_LeaflistVal{LeaflistVal: gnmilf},
+		}
+	case *schemapb.TypedValue_ProtoBytes:
+		return &gnmi.TypedValue{
+			Value: &gnmi.TypedValue_ProtoBytes{ProtoBytes: v.GetProtoBytes()},
 		}
 	case *schemapb.TypedValue_StringVal:
 		return &gnmi.TypedValue{
-			Value: &gnmi.TypedValue_StringVal{
-				StringVal: v.StringVal,
-			},
+			Value: &gnmi.TypedValue_StringVal{StringVal: v.GetStringVal()},
 		}
-	case string:
+	case *schemapb.TypedValue_UintVal:
 		return &gnmi.TypedValue{
-			Value: &gnmi.TypedValue_AsciiVal{
-				AsciiVal: v,
-			},
+			Value: &gnmi.TypedValue_UintVal{UintVal: v.GetUintVal()},
 		}
 	}
 	return nil

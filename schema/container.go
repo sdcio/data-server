@@ -18,9 +18,9 @@ func containerFromYEntry(e *yang.Entry) *schemapb.ContainerSchema {
 		Fields:         []*schemapb.LeafSchema{},
 		Leaflists:      []*schemapb.LeafListSchema{},
 		Children:       []string{},
-		MustStatements: []*schemapb.MustStatement{},
+		MustStatements: getMustStatement(e),
 		IsState:        isState(e),
-		IsPresence:     false,
+		IsPresence:     isPresence(e),
 	}
 	if e.ListAttr != nil {
 		c.MaxElements = e.ListAttr.MaxElements
@@ -57,27 +57,6 @@ func containerFromYEntry(e *yang.Entry) *schemapb.ContainerSchema {
 		}
 	}
 	sort.Strings(c.Children)
-	if mustStatements, ok := e.Extra["must"]; ok {
-		for _, m := range mustStatements {
-			if m, ok := m.(*yang.Must); ok {
-				// fmt.Printf("%s: %T: %v\n", e.Name, m, m)
-				c.MustStatements = append(c.MustStatements, &schemapb.MustStatement{
-					Statement: m.Name,
-					Error:     m.ErrorMessage.Name,
-				})
-			}
-
-		}
-	}
-	if presence, ok := e.Extra["presence"]; ok {
-		for _, m := range presence {
-			// fmt.Printf("presence: %s: %T: %v\n", e.Name, m, m)
-			if _, ok := m.(*yang.Value); ok {
-				c.IsPresence = ok
-			}
-
-		}
-	}
 	return c
 }
 
@@ -87,6 +66,19 @@ func isState(e *yang.Entry) bool {
 	}
 	if e.Parent != nil {
 		return isState(e.Parent)
+	}
+	return false
+}
+
+func isPresence(e *yang.Entry) bool {
+	if presence, ok := e.Extra["presence"]; ok {
+		for _, m := range presence {
+
+			if _, ok := m.(*yang.Value); ok {
+				return ok
+			}
+		}
+		return false
 	}
 	return false
 }

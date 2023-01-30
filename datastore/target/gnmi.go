@@ -6,8 +6,8 @@ import (
 
 	"github.com/AlekSi/pointer"
 	"github.com/iptecharch/schema-server/config"
-	"github.com/iptecharch/schema-server/datastore/ctree"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	"github.com/iptecharch/schema-server/utils"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	gtarget "github.com/openconfig/gnmic/target"
 	"github.com/openconfig/gnmic/types"
@@ -17,11 +17,9 @@ import (
 
 type gnmiTarget struct {
 	target *gtarget.Target
-	main   *ctree.Tree
 }
 
-func newGNMITarget(ctx context.Context, name string, cfg *config.SBI, main *ctree.Tree) (*gnmiTarget, error) {
-	gt := &gnmiTarget{main: main}
+func newGNMITarget(ctx context.Context, name string, cfg *config.SBI) (*gnmiTarget, error) {
 	tc := &types.TargetConfig{
 		Name:       name,
 		Address:    cfg.Address,
@@ -40,12 +38,15 @@ func newGNMITarget(ctx context.Context, name string, cfg *config.SBI, main *ctre
 	} else {
 		tc.Insecure = pointer.ToBool(true)
 	}
-	gt.target = gtarget.NewTarget(tc)
+	gt := &gnmiTarget{
+		target: gtarget.NewTarget(tc),
+		// syncCh: syncCh,
+	}
 	err := gt.target.CreateGNMIClient(ctx)
 	if err != nil {
 		return nil, err
 	}
-	go gt.Sync(ctx)
+	// go gt.Sync(ctx, syncCh)
 	return gt, nil
 }
 
@@ -55,7 +56,7 @@ func (t *gnmiTarget) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sc
 		Encoding: gnmi.Encoding_ASCII,
 	}
 	for _, p := range req.GetPath() {
-		gnmiReq.Path = append(gnmiReq.Path, toGNMIPath(p))
+		gnmiReq.Path = append(gnmiReq.Path, utils.ToGNMIPath(p))
 	}
 	gnmiRsp, err := t.target.Get(ctx, gnmiReq)
 	if err != nil {
@@ -72,12 +73,12 @@ func (t *gnmiTarget) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sc
 		}
 		for _, upd := range n.GetUpdate() {
 			sn.Update = append(sn.Update, &schemapb.Update{
-				Path:  fromGNMIPath(upd.GetPath()),
-				Value: fromGNMITypedValue(upd.GetVal()),
+				Path:  utils.FromGNMIPath(n.GetPrefix(), upd.GetPath()),
+				Value: utils.FromGNMITypedValue(upd.GetVal()),
 			})
 		}
 		for _, del := range n.GetDelete() {
-			sn.Delete = append(sn.Delete, fromGNMIPath(del))
+			sn.Delete = append(sn.Delete, utils.FromGNMIPath(n.GetPrefix(), del))
 		}
 		schemaRsp.Notification = append(schemaRsp.Notification, sn)
 	}
@@ -91,18 +92,18 @@ func (t *gnmiTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sc
 		Update:  make([]*gnmi.Update, 0, len(req.GetUpdate())),
 	}
 	for _, del := range req.GetDelete() {
-		setReq.Delete = append(setReq.Delete, toGNMIPath(del))
+		setReq.Delete = append(setReq.Delete, utils.ToGNMIPath(del))
 	}
 	for _, repl := range req.GetReplace() {
 		setReq.Replace = append(setReq.Replace, &gnmi.Update{
-			Path: toGNMIPath(repl.GetPath()),
-			Val:  toGNMITypedValue(repl.GetValue()),
+			Path: utils.ToGNMIPath(repl.GetPath()),
+			Val:  utils.ToGNMITypedValue(repl.GetValue()),
 		})
 	}
 	for _, upd := range req.GetUpdate() {
 		setReq.Update = append(setReq.Update, &gnmi.Update{
-			Path: toGNMIPath(upd.GetPath()),
-			Val:  toGNMITypedValue(upd.GetValue()),
+			Path: utils.ToGNMIPath(upd.GetPath()),
+			Val:  utils.ToGNMITypedValue(upd.GetValue()),
 		})
 	}
 	rsp, err := t.target.Set(ctx, setReq)
@@ -115,7 +116,7 @@ func (t *gnmiTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sc
 	}
 	for _, updr := range rsp.GetResponse() {
 		schemaSetRsp.Response = append(schemaSetRsp.Response, &schemapb.UpdateResult{
-			Path: fromGNMIPath(updr.GetPath()),
+			Path: utils.FromGNMIPath(rsp.GetPrefix(), updr.GetPath()),
 			Op:   schemapb.UpdateResult_Operation(updr.GetOp()),
 		})
 	}
@@ -124,7 +125,7 @@ func (t *gnmiTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sc
 
 func (t *gnmiTarget) Subscribe() {}
 
-func (t *gnmiTarget) Sync(ctx context.Context) {
+func (t *gnmiTarget) Sync(ctx context.Context, syncCh chan *schemapb.Notification) {
 	log.Infof("starting target %s sync", t.target.Config.Name)
 START:
 	go t.target.Subscribe(ctx, &gnmi.SubscribeRequest{
@@ -151,12 +152,7 @@ START:
 		case rsp := <-rspch:
 			switch rsp := rsp.Response.Response.(type) {
 			case *gnmi.SubscribeResponse_Update:
-				err := t.main.AddGNMINotification(rsp.Update)
-				if err != nil {
-					log.Errorf("failed to insert gNMI update into main DS: %v", err)
-					log.Errorf("failed to insert gNMI update into main DS: %v", rsp.Update)
-					goto START
-				}
+				syncCh <- utils.ToSchemaNotification(rsp.Update)
 			}
 		case err := <-errCh:
 			if err.Err != nil {
@@ -169,174 +165,4 @@ START:
 
 func (t *gnmiTarget) Close() {
 	t.target.Close()
-}
-
-func toGNMIPath(p *schemapb.Path) *gnmi.Path {
-	if p == nil {
-		return nil
-	}
-	r := &gnmi.Path{
-		Origin: p.GetOrigin(),
-		Elem:   make([]*gnmi.PathElem, 0, len(p.GetElem())),
-		Target: p.GetTarget(),
-	}
-	for _, pe := range p.GetElem() {
-		r.Elem = append(r.Elem, &gnmi.PathElem{
-			Name: pe.GetName(),
-			Key:  pe.GetKey(),
-		})
-	}
-	return r
-}
-
-func fromGNMIPath(p *gnmi.Path) *schemapb.Path {
-	if p == nil {
-		return nil
-	}
-	r := &schemapb.Path{
-		Origin: p.GetOrigin(),
-		Elem:   make([]*schemapb.PathElem, 0, len(p.GetElem())),
-		Target: p.GetTarget(),
-	}
-	for _, pe := range p.GetElem() {
-		r.Elem = append(r.Elem, &schemapb.PathElem{
-			Name: pe.GetName(),
-			Key:  pe.GetKey(),
-		})
-	}
-	return r
-}
-
-func toGNMITypedValue(v *schemapb.TypedValue) *gnmi.TypedValue {
-	if v == nil {
-		return nil
-	}
-	switch v.GetValue().(type) {
-	case *schemapb.TypedValue_AnyVal:
-		return &gnmi.TypedValue{
-			Value: &gnmi.TypedValue_AnyVal{AnyVal: v.GetAnyVal()},
-		}
-	case *schemapb.TypedValue_AsciiVal:
-		return &gnmi.TypedValue{
-			Value: &gnmi.TypedValue_AsciiVal{AsciiVal: v.GetAsciiVal()},
-		}
-	case *schemapb.TypedValue_BoolVal:
-		return &gnmi.TypedValue{
-			Value: &gnmi.TypedValue_BoolVal{BoolVal: v.GetBoolVal()},
-		}
-	case *schemapb.TypedValue_BytesVal:
-		return &gnmi.TypedValue{
-			Value: &gnmi.TypedValue_BytesVal{BytesVal: v.GetBytesVal()},
-		}
-	// case *schemapb.TypedValue_DecimalVal:
-	// 	return &gnmi.TypedValue{
-	// 		Value: &gnmi.TypedValue_DecimalVal{DecimalVal: v.GetDecimalVal()},
-	// 	}
-	// case *schemapb.TypedValue_FloatVal:
-	// 	return &gnmi.TypedValue{
-	// 		Value: &gnmi.TypedValue_FloatVal{FloatVal: v.GetFloatVal()},
-	// 	}
-	case *schemapb.TypedValue_IntVal:
-		return &gnmi.TypedValue{
-			Value: &gnmi.TypedValue_IntVal{IntVal: v.GetIntVal()},
-		}
-	case *schemapb.TypedValue_JsonIetfVal:
-		return &gnmi.TypedValue{
-			Value: &gnmi.TypedValue_JsonIetfVal{JsonIetfVal: v.GetJsonIetfVal()},
-		}
-	case *schemapb.TypedValue_JsonVal:
-		return &gnmi.TypedValue{
-			Value: &gnmi.TypedValue_JsonVal{JsonVal: v.GetJsonVal()},
-		}
-	case *schemapb.TypedValue_LeaflistVal:
-		gnmilf := &gnmi.ScalarArray{
-			Element: make([]*gnmi.TypedValue, 0, len(v.GetLeaflistVal().GetElement())),
-		}
-		for _, e := range v.GetLeaflistVal().GetElement() {
-			gnmilf.Element = append(gnmilf.Element, toGNMITypedValue(e))
-		}
-		return &gnmi.TypedValue{
-			Value: &gnmi.TypedValue_LeaflistVal{LeaflistVal: gnmilf},
-		}
-	case *schemapb.TypedValue_ProtoBytes:
-		return &gnmi.TypedValue{
-			Value: &gnmi.TypedValue_ProtoBytes{ProtoBytes: v.GetProtoBytes()},
-		}
-	case *schemapb.TypedValue_StringVal:
-		return &gnmi.TypedValue{
-			Value: &gnmi.TypedValue_StringVal{StringVal: v.GetStringVal()},
-		}
-	case *schemapb.TypedValue_UintVal:
-		return &gnmi.TypedValue{
-			Value: &gnmi.TypedValue_UintVal{UintVal: v.GetUintVal()},
-		}
-	}
-	return nil
-}
-
-func fromGNMITypedValue(v *gnmi.TypedValue) *schemapb.TypedValue {
-	if v == nil {
-		return nil
-	}
-	switch v.GetValue().(type) {
-	case *gnmi.TypedValue_AnyVal:
-		return &schemapb.TypedValue{
-			Value: &schemapb.TypedValue_AnyVal{AnyVal: v.GetAnyVal()},
-		}
-	case *gnmi.TypedValue_AsciiVal:
-		return &schemapb.TypedValue{
-			Value: &schemapb.TypedValue_AsciiVal{AsciiVal: v.GetAsciiVal()},
-		}
-	case *gnmi.TypedValue_BoolVal:
-		return &schemapb.TypedValue{
-			Value: &schemapb.TypedValue_BoolVal{BoolVal: v.GetBoolVal()},
-		}
-	case *gnmi.TypedValue_BytesVal:
-		return &schemapb.TypedValue{
-			Value: &schemapb.TypedValue_BytesVal{BytesVal: v.GetBytesVal()},
-		}
-	// case *schemapb.TypedValue_DecimalVal:
-	// 	return &schemapb.TypedValue{
-	// 		Value: &schemapb.TypedValue_DecimalVal{DecimalVal: v.GetDecimalVal()},
-	// 	}
-	// case *schemapb.TypedValue_FloatVal:
-	// 	return &schemapb.TypedValue{
-	// 		Value: &schemapb.TypedValue_FloatVal{FloatVal: v.GetFloatVal()},
-	// 	}
-	case *gnmi.TypedValue_IntVal:
-		return &schemapb.TypedValue{
-			Value: &schemapb.TypedValue_IntVal{IntVal: v.GetIntVal()},
-		}
-	case *gnmi.TypedValue_JsonIetfVal:
-		return &schemapb.TypedValue{
-			Value: &schemapb.TypedValue_JsonIetfVal{JsonIetfVal: v.GetJsonIetfVal()},
-		}
-	case *gnmi.TypedValue_JsonVal:
-		return &schemapb.TypedValue{
-			Value: &schemapb.TypedValue_JsonVal{JsonVal: v.GetJsonVal()},
-		}
-	case *gnmi.TypedValue_LeaflistVal:
-		schemalf := &schemapb.ScalarArray{
-			Element: make([]*schemapb.TypedValue, 0, len(v.GetLeaflistVal().GetElement())),
-		}
-		for _, e := range v.GetLeaflistVal().GetElement() {
-			schemalf.Element = append(schemalf.Element, fromGNMITypedValue(e))
-		}
-		return &schemapb.TypedValue{
-			Value: &schemapb.TypedValue_LeaflistVal{LeaflistVal: schemalf},
-		}
-	case *gnmi.TypedValue_ProtoBytes:
-		return &schemapb.TypedValue{
-			Value: &schemapb.TypedValue_ProtoBytes{ProtoBytes: v.GetProtoBytes()},
-		}
-	case *gnmi.TypedValue_StringVal:
-		return &schemapb.TypedValue{
-			Value: &schemapb.TypedValue_StringVal{StringVal: v.GetStringVal()},
-		}
-	case *gnmi.TypedValue_UintVal:
-		return &schemapb.TypedValue{
-			Value: &schemapb.TypedValue_UintVal{UintVal: v.GetUintVal()},
-		}
-	}
-	return nil
 }

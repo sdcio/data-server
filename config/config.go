@@ -14,11 +14,11 @@ import (
 )
 
 type Config struct {
-	GRPCServer   *GRPCServer        `yaml:"grpc-server,omitempty" json:"grpc-server,omitempty"`
-	Schemas      []*SchemaConfig    `yaml:"schemas,omitempty" json:"schemas,omitempty"`
-	Datastores   []*DatastoreConfig `yaml:"datastores,omitempty" json:"datastores,omitempty"`
-	SchemaServer *SchemaServer      `yaml:"schema-server,omitempty" json:"schema-server,omitempty"`
-	Prometheus   *PromConfig        `yaml:"prometheus,omitempty" json:"prometheus,omitempty"`
+	GRPCServer   *GRPCServer         `yaml:"grpc-server,omitempty" json:"grpc-server,omitempty"`
+	Schemas      []*SchemaConfig     `yaml:"schemas,omitempty" json:"schemas,omitempty"`
+	Datastores   []*DatastoreConfig  `yaml:"datastores,omitempty" json:"datastores,omitempty"`
+	SchemaServer *RemoteSchemaServer `yaml:"schema-server,omitempty" json:"schema-server,omitempty"`
+	Prometheus   *PromConfig         `yaml:"prometheus,omitempty" json:"prometheus,omitempty"`
 }
 
 type TLS struct {
@@ -55,17 +55,17 @@ func (c *Config) validateSetDefaults() error {
 	return nil
 }
 
-type SchemaServer struct {
+type RemoteSchemaServer struct {
 	Address string `yaml:"address,omitempty" json:"address,omitempty"`
 	TLS     *TLS   `yaml:"tls,omitempty" json:"tls,omitempty"`
 }
 
 type GRPCServer struct {
-	Address        string `yaml:"address,omitempty" json:"address,omitempty"`
-	TLS            *TLS   `yaml:"tls,omitempty" json:"tls,omitempty"`
-	SchemaServer   bool   `yaml:"schema-server,omitempty" json:"schema-server,omitempty"`
-	DataServer     bool   `yaml:"data-server,omitempty" json:"data-server,omitempty"`
-	MaxRecvMsgSize int    `yaml:"max-recv-msg-size,omitempty" json:"max-recv-msg-size,omitempty"`
+	Address        string        `yaml:"address,omitempty" json:"address,omitempty"`
+	TLS            *TLS          `yaml:"tls,omitempty" json:"tls,omitempty"`
+	SchemaServer   *SchemaServer `yaml:"schema-server,omitempty" json:"schema-server,omitempty"`
+	DataServer     *DataServer   `yaml:"data-server,omitempty" json:"data-server,omitempty"`
+	MaxRecvMsgSize int           `yaml:"max-recv-msg-size,omitempty" json:"max-recv-msg-size,omitempty"`
 }
 
 func (t *TLS) NewConfig(ctx context.Context) (*tls.Config, error) {
@@ -96,4 +96,14 @@ func (t *TLS) NewConfig(ctx context.Context) (*tls.Config, error) {
 		tlsCfg.GetCertificate = certWatcher.GetCertificate
 	}
 	return tlsCfg, nil
+}
+
+type SchemaServer struct {
+	Enabled          bool   `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	SchemasDirectory string `yaml:"schemas-directory,omitempty" json:"schemas-directory,omitempty"`
+}
+
+type DataServer struct {
+	Enabled       bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	MaxCandidates int  `yaml:"max-candidates,omitempty" json:"max-candidates,omitempty"`
 }

@@ -113,7 +113,7 @@ func (t *Tree) AddSchemaUpdate(upd *schemapb.Update) error {
 	if err != nil {
 		return err
 	}
-	log.Debugf("adding value: %T, %v", upd.GetValue(), upd.GetValue())
+	log.Debugf("adding value: %T, %v into path %v", upd.GetValue(), upd.GetValue(), items)
 	err = t.Add(items, upd.GetValue())
 	return err
 }

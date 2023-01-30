@@ -47,7 +47,13 @@ func (s *Server) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schemapb
 	if name == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "missing datastore name")
 	}
-	return nil, status.Errorf(codes.Unimplemented, "method Diff not implemented")
+	s.md.RLock()
+	defer s.md.RUnlock()
+	ds, ok := s.datastores[name]
+	if !ok {
+		return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %s", name)
+	}
+	return ds.Diff(ctx, req)
 }
 
 func (s *Server) Subscribe(req *schemapb.SubscribeRequest, stream schemapb.DataServer_SubscribeServer) error {

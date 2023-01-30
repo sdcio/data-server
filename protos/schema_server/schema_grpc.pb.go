@@ -39,8 +39,9 @@ type SchemaServerClient interface {
 	// - then N intermediate UploadSchemaFile, initial, bytes, hash for each file
 	// - and ends with an UploadSchemaFinalize{}
 	UploadSchema(ctx context.Context, opts ...grpc.CallOption) (SchemaServer_UploadSchemaClient, error)
-	//
+	// ToPath converts a list of items into a schema.proto.Path
 	ToPath(ctx context.Context, in *ToPathRequest, opts ...grpc.CallOption) (*ToPathResponse, error)
+	// ExpandPath returns a list of sub paths given a single path
 	ExpandPath(ctx context.Context, in *ExpandPathRequest, opts ...grpc.CallOption) (*ExpandPathResponse, error)
 }
 
@@ -179,8 +180,9 @@ type SchemaServerServer interface {
 	// - then N intermediate UploadSchemaFile, initial, bytes, hash for each file
 	// - and ends with an UploadSchemaFinalize{}
 	UploadSchema(SchemaServer_UploadSchemaServer) error
-	//
+	// ToPath converts a list of items into a schema.proto.Path
 	ToPath(context.Context, *ToPathRequest) (*ToPathResponse, error)
+	// ExpandPath returns a list of sub paths given a single path
 	ExpandPath(context.Context, *ExpandPathRequest) (*ExpandPathResponse, error)
 	mustEmbedUnimplementedSchemaServerServer()
 }

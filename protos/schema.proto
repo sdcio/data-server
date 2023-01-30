@@ -22,8 +22,9 @@ service SchemaServer {
     // - then N intermediate UploadSchemaFile, initial, bytes, hash for each file
     // - and ends with an UploadSchemaFinalize{}
     rpc UploadSchema(stream UploadSchemaRequest)    returns (UploadSchemaResponse);
-    //
+    // ToPath converts a list of items into a schema.proto.Path
     rpc ToPath(ToPathRequest) returns (ToPathResponse);
+    // ExpandPath returns a list of sub paths given a single path
     rpc ExpandPath(ExpandPathRequest) returns (ExpandPathResponse);
 }
 
@@ -88,16 +89,21 @@ message DeleteSchemaResponse {}
 
 message UploadSchemaRequest{
     oneof upload {
-        CreateSchemaRequest create_schema = 1;
-        UploadSchemaFile    schema_file = 2;
-        UploadSchemaFinalize finalize = 3;
+        CreateSchemaRequest  create_schema   = 1;
+        UploadSchemaFile     schema_file     = 2;
+        UploadSchemaFinalize finalize        = 3;
     }
 }
 
 message UploadSchemaFile {
+    enum FileType {
+        MODULE      = 0;
+        DEPENDENCY  = 1;
+    }
     string  file_name   = 1;  // file name with path
-    bytes   contents    = 2;  // raw bytes to be appended to the file
-    Hash    hash        = 3;  // if present marks the last message for that file
+    FileType file_type  = 2;  // file
+    bytes   contents    = 3;  // raw bytes to be appended to the file
+    Hash    hash        = 4;  // if present marks the last message for that file
 }
 
 

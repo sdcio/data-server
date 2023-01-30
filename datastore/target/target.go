@@ -2,9 +2,10 @@ package target
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/iptecharch/schema-server/config"
-	"github.com/iptecharch/schema-server/datastore/ctree"
+
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 )
 
@@ -13,19 +14,19 @@ type Target interface {
 	Set(ctx context.Context, req *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error)
 	Subscribe()
 	//
-	Sync(ctx context.Context)
+	Sync(ctx context.Context, syncCh chan *schemapb.Notification)
 }
 
-func New(ctx context.Context, name string, cfg *config.SBI, main *ctree.Tree) (Target, error) {
+func New(ctx context.Context, name string, cfg *config.SBI) (Target, error) {
 	switch cfg.Type {
 	case "gnmi":
-		return newGNMITarget(ctx, name, cfg, main)
+		return newGNMITarget(ctx, name, cfg)
 	case "nc":
-		return newNCTarget(ctx, cfg, main)
+		return newNCTarget(ctx, cfg)
 	case "redis":
-		return newRedisTarget(ctx, cfg, main)
+		return newRedisTarget(ctx, cfg)
 	case "nats":
-		return newNATSTarget(ctx, cfg, main)
+		return newNATSTarget(ctx, cfg)
 	}
-	return nil, nil
+	return nil, fmt.Errorf("unknown DS target type %q", cfg.Type)
 }

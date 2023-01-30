@@ -17,6 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
+	_ "google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -78,7 +79,7 @@ func NewServer(c *config.Config) (*Server, error) {
 	}
 
 	s.srv = grpc.NewServer(opts...)
-	if c.GRPCServer.SchemaServer {
+	if c.GRPCServer.SchemaServer != nil && c.GRPCServer.SchemaServer.Enabled {
 		for _, sCfg := range c.Schemas {
 			sc, err := schema.NewSchema(sCfg)
 			if err != nil {
@@ -88,11 +89,18 @@ func NewServer(c *config.Config) (*Server, error) {
 		}
 		schemapb.RegisterSchemaServerServer(s.srv, s)
 	}
-	if c.GRPCServer.DataServer {
-		for _, dsCfg := range c.Datastores {
-			ds := datastore.New(dsCfg, c.SchemaServer)
-			s.datastores[dsCfg.Name] = ds
-		}
+	// if c.GRPCServer.DataServer != nil && c.GRPCServer.DataServer.Enabled {
+	// 	for _, dsCfg := range c.Datastores {
+	// 		ds := datastore.New(dsCfg, c.SchemaServer)
+	// 		s.datastores[dsCfg.Name] = ds
+	// 	}
+	// 	schemapb.RegisterDataServerServer(s.srv, s)
+	// }
+	if c.GRPCServer.DataServer != nil && c.GRPCServer.DataServer.Enabled {
+		// for _, dsCfg := range c.Datastores {
+		// 	ds := datastore.New(dsCfg, c.SchemaServer)
+		// 	s.datastores[dsCfg.Name] = ds
+		// }
 		schemapb.RegisterDataServerServer(s.srv, s)
 	}
 	return s, nil
@@ -103,10 +111,19 @@ func (s *Server) Serve() error {
 	if err != nil {
 		return err
 	}
-	log.Infof("running server on %s\n", s.config.GRPCServer.Address)
+	log.Infof("running server on %s", s.config.GRPCServer.Address)
 	if s.config.Prometheus != nil {
 		go s.ServeHTTP()
 	}
+	go func() {
+		if s.config.GRPCServer.DataServer != nil && s.config.GRPCServer.DataServer.Enabled {
+			for _, dsCfg := range s.config.Datastores {
+				ds := datastore.New(dsCfg, s.config.SchemaServer)
+				s.datastores[dsCfg.Name] = ds
+			}
+			// schemapb.RegisterDataServerServer(s.srv, s)
+		}
+	}()
 	err = s.srv.Serve(l)
 	if err != nil {
 		return err
@@ -129,8 +146,8 @@ func (s *Server) ServeHTTP() {
 	if err != nil {
 		log.Errorf("HTTP server stopped: %v", err)
 	}
-
 }
+
 func (s *Server) Stop() {
 	s.srv.Stop()
 	for _, ds := range s.datastores {

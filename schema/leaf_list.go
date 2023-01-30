@@ -13,7 +13,7 @@ func leafListFromYEntry(e *yang.Entry) *schemapb.LeafListSchema {
 		Namespace:      e.Namespace().Name,
 		Type:           toSchemaType(e.Type),
 		Units:          e.Units,
-		MustStatements: []*schemapb.MustStatement{},
+		MustStatements: getMustStatement(e),
 		IsState:        isState(e),
 		IsUserOrdered:  false,
 	}

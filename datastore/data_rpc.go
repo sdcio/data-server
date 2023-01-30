@@ -1,6 +1,7 @@
 package datastore
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strconv"
@@ -80,11 +81,16 @@ func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sch
 			}}
 		}
 		for _, p := range reqPaths {
-			n, err := d.main.GetPath(ctx, p, d.schemaClient, d.config.Schema)
+			nc, err := d.main.config.GetPath(ctx, p, d.schemaClient, d.config.Schema)
 			if err != nil {
 				return nil, err
 			}
-			rsp.Notification = append(rsp.Notification, n...)
+			rsp.Notification = append(rsp.Notification, nc...)
+			ns, err := d.main.state.GetPath(ctx, p, d.schemaClient, d.config.Schema)
+			if err != nil {
+				return nil, err
+			}
+			rsp.Notification = append(rsp.Notification, ns...)
 		}
 		return rsp, nil
 	}
@@ -176,8 +182,95 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 	}
 }
 
-func (d *Datastore) Diff(ctx context.Context, req *schemapb.DiffRequest, dsType *schemapb.DataStore) (*schemapb.DiffResponse, error) {
-	return nil, nil
+func (d *Datastore) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schemapb.DiffResponse, error) {
+	switch req.GetDataStore().GetType() {
+	case schemapb.Type_MAIN:
+		return nil, status.Errorf(codes.InvalidArgument, "must set a candidate datastore")
+	case schemapb.Type_CANDIDATE:
+		d.m.RLock()
+		defer d.m.RUnlock()
+		cand, ok := d.candidates[req.GetDataStore().GetName()]
+		if !ok {
+			return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDataStore().GetName())
+		}
+		diffRsp := &schemapb.DiffResponse{
+			Name:      req.GetName(),
+			DataStore: req.GetDataStore(),
+			Diff:      []*schemapb.DiffUpdate{},
+		}
+		for _, del := range cand.deletes {
+			n, err := cand.base.GetPath(ctx, del, d.schemaClient, d.Schema())
+			if err != nil {
+				return nil, err
+			}
+			if len(n) == 0 {
+				continue
+			}
+			if len(n[0].GetUpdate()) == 0 {
+				continue
+			}
+
+			diffup := &schemapb.DiffUpdate{
+				Path:      del,
+				MainValue: n[0].GetUpdate()[0].GetValue(),
+			}
+			diffRsp.Diff = append(diffRsp.Diff, diffup)
+		}
+		for _, rep := range cand.replaces {
+			n, err := cand.base.GetPath(ctx, rep.GetPath(), d.schemaClient, d.Schema())
+			if err != nil {
+				return nil, err
+			}
+			if len(n) == 0 || len(n[0].GetUpdate()) == 0 {
+				diffup := &schemapb.DiffUpdate{
+					Path:           rep.GetPath(),
+					MainValue:      nil,
+					CandidateValue: rep.GetValue(),
+				}
+				diffRsp.Diff = append(diffRsp.Diff, diffup)
+				continue
+			}
+			if len(n) != 0 && len(n[0].GetUpdate()) != 0 {
+				if EqualTypedValues(n[0].GetUpdate()[0].GetValue(), rep.GetValue()) {
+					continue
+				}
+				diffup := &schemapb.DiffUpdate{
+					Path:           rep.GetPath(),
+					MainValue:      n[0].GetUpdate()[0].GetValue(),
+					CandidateValue: rep.GetValue(),
+				}
+				diffRsp.Diff = append(diffRsp.Diff, diffup)
+			}
+		}
+		for _, upd := range cand.updates {
+			n, err := cand.base.GetPath(ctx, upd.GetPath(), d.schemaClient, d.Schema())
+			if err != nil {
+				return nil, err
+			}
+			if len(n) == 0 || len(n[0].GetUpdate()) == 0 {
+				diffup := &schemapb.DiffUpdate{
+					Path:           upd.GetPath(),
+					MainValue:      nil,
+					CandidateValue: upd.GetValue(),
+				}
+				diffRsp.Diff = append(diffRsp.Diff, diffup)
+				continue
+			}
+			if len(n) != 0 && len(n[0].GetUpdate()) != 0 {
+				if EqualTypedValues(n[0].GetUpdate()[0].GetValue(), upd.GetValue()) {
+					continue
+				}
+				diffup := &schemapb.DiffUpdate{
+					Path:           upd.GetPath(),
+					MainValue:      n[0].GetUpdate()[0].GetValue(),
+					CandidateValue: upd.GetValue(),
+				}
+				diffRsp.Diff = append(diffRsp.Diff, diffup)
+			}
+		}
+		return diffRsp, nil
+	}
+	return nil, status.Errorf(codes.InvalidArgument, "unknown datastore type %s", req.GetDataStore().GetType())
 }
 
 func (d *Datastore) Subscribe() {}
@@ -374,4 +467,205 @@ func validateLeafTypeValue(lt *schemapb.SchemaLeafType, v any) error {
 func validateLeafListValue(ll *schemapb.LeafListSchema, v any) error {
 	// TODO: validate Leaflist
 	return validateLeafTypeValue(ll.GetType(), v)
+}
+
+func EqualTypedValues(v1, v2 *schemapb.TypedValue) bool {
+	if v1 == nil {
+		return v2 == nil
+	}
+	if v2 == nil {
+		return v1 == nil
+	}
+
+	switch v1 := v1.GetValue().(type) {
+	case *schemapb.TypedValue_AnyVal:
+		switch v2 := v2.GetValue().(type) {
+		case *schemapb.TypedValue_AnyVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			if v1.AnyVal == nil && v2.AnyVal == nil {
+				return true
+			}
+			if v1.AnyVal == nil || v2.AnyVal == nil {
+				return false
+			}
+			if v1.AnyVal.GetTypeUrl() != v2.AnyVal.GetTypeUrl() {
+				return false
+			}
+			return bytes.Equal(v1.AnyVal.GetValue(), v2.AnyVal.GetValue())
+		default:
+			return false
+		}
+	case *schemapb.TypedValue_AsciiVal:
+		switch v2 := v2.GetValue().(type) {
+		case *schemapb.TypedValue_AsciiVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return v1.AsciiVal == v2.AsciiVal
+		default:
+			return false
+		}
+	case *schemapb.TypedValue_BoolVal:
+		switch v2 := v2.GetValue().(type) {
+		case *schemapb.TypedValue_BoolVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return v1.BoolVal == v2.BoolVal
+		default:
+			return false
+		}
+	case *schemapb.TypedValue_BytesVal:
+		switch v2 := v2.GetValue().(type) {
+		case *schemapb.TypedValue_BytesVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return bytes.Equal(v1.BytesVal, v2.BytesVal)
+		default:
+			return false
+		}
+	case *schemapb.TypedValue_DecimalVal:
+		switch v2 := v2.GetValue().(type) {
+		case *schemapb.TypedValue_DecimalVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			if v1.DecimalVal.GetDigits() != v2.DecimalVal.GetDigits() {
+				return false
+			}
+			return v1.DecimalVal.GetPrecision() == v2.DecimalVal.GetPrecision()
+		default:
+			return false
+		}
+	case *schemapb.TypedValue_FloatVal:
+		switch v2 := v2.GetValue().(type) {
+		case *schemapb.TypedValue_FloatVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return v1.FloatVal == v2.FloatVal
+		default:
+			return false
+		}
+	case *schemapb.TypedValue_IntVal:
+		switch v2 := v2.GetValue().(type) {
+		case *schemapb.TypedValue_IntVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return v1.IntVal == v2.IntVal
+		default:
+			return false
+		}
+	case *schemapb.TypedValue_JsonIetfVal:
+		switch v2 := v2.GetValue().(type) {
+		case *schemapb.TypedValue_JsonIetfVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return bytes.Equal(v1.JsonIetfVal, v2.JsonIetfVal)
+		default:
+			return false
+		}
+	case *schemapb.TypedValue_JsonVal:
+		switch v2 := v2.GetValue().(type) {
+		case *schemapb.TypedValue_JsonVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return bytes.Equal(v1.JsonVal, v2.JsonVal)
+		default:
+			return false
+		}
+	case *schemapb.TypedValue_LeaflistVal:
+		switch v2 := v2.GetValue().(type) {
+		case *schemapb.TypedValue_LeaflistVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			if len(v1.LeaflistVal.GetElement()) != len(v2.LeaflistVal.GetElement()) {
+				return false
+			}
+			for i := range v1.LeaflistVal.GetElement() {
+				if !EqualTypedValues(v1.LeaflistVal.Element[i], v2.LeaflistVal.Element[i]) {
+					return false
+				}
+			}
+		default:
+			return false
+		}
+	case *schemapb.TypedValue_ProtoBytes:
+		switch v2 := v2.GetValue().(type) {
+		case *schemapb.TypedValue_ProtoBytes:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return bytes.Equal(v1.ProtoBytes, v2.ProtoBytes)
+		default:
+			return false
+		}
+	case *schemapb.TypedValue_StringVal:
+		switch v2 := v2.GetValue().(type) {
+		case *schemapb.TypedValue_StringVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return v1.StringVal == v2.StringVal
+		default:
+			return false
+		}
+	case *schemapb.TypedValue_UintVal:
+		switch v2 := v2.GetValue().(type) {
+		case *schemapb.TypedValue_UintVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return v1.UintVal == v2.UintVal
+		default:
+			return false
+		}
+	}
+	return true
 }

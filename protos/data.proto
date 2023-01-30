@@ -15,10 +15,10 @@ service DataServer {
     rpc Commit(CommitRequest)                   returns (CommitResponse);
     rpc Discard(DiscardRequest)                 returns (DiscardResponse);
     // data
-    rpc GetData(GetDataRequest)             returns (GetDataResponse);
-    rpc SetData(SetDataRequest)             returns (SetDataResponse);
-    rpc Diff(DiffRequest)                   returns (DiffResponse);
-    rpc Subscribe(SubscribeRequest)         returns (stream SubscribeResponse);
+    rpc GetData(GetDataRequest)                 returns (GetDataResponse);
+    rpc SetData(SetDataRequest)                 returns (SetDataResponse);
+    rpc Diff(DiffRequest)                       returns (DiffResponse);
+    rpc Subscribe(SubscribeRequest)             returns (stream SubscribeResponse);
 }
 
 // messages
@@ -45,10 +45,13 @@ message SetDataResponse {
 }
 
 message DiffRequest {
-     string                      name                    = 1;
+    string                      name                    = 1;
+    DataStore                   data_store              = 2;
 }
 message DiffResponse {
-     string                      name                    = 1;
+    string                      name                    = 1;
+    DataStore                   data_store              = 2;
+    repeated DiffUpdate         diff                    = 3;
 }
 
 message SubscribeRequest {}
@@ -99,6 +102,12 @@ message DiscardResponse {}
 message Update {
     schema.proto.Path path  = 1;
     TypedValue        value = 2;
+}
+
+message DiffUpdate {
+    schema.proto.Path path              = 1;
+    TypedValue        main_value        = 2;
+    TypedValue        candidate_value   = 3;
 }
 
 message TypedValue {
