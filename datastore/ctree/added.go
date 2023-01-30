@@ -41,7 +41,7 @@ func (t *Tree) Merge(nt *Tree) error {
 	})
 }
 
-func (t *Tree) AddGNMIUpdate(n *gnmi.Notification) error {
+func (t *Tree) AddGNMINotification(n *gnmi.Notification) error {
 	if n == nil {
 		return nil
 	}
@@ -62,7 +62,9 @@ func (t *Tree) AddGNMIUpdate(n *gnmi.Notification) error {
 		if upd.GetVal().GetValue() == nil {
 			continue
 		}
-		err = t.Add(items, upd.GetVal().GetValue())
+		// convert gnmi.TypedValue to schemapb.TypedValue
+		scVal := utils.ToSchemaTypedValue(upd.GetVal())
+		err = t.Add(items, scVal)
 		if err != nil {
 			return err
 		}
@@ -71,7 +73,7 @@ func (t *Tree) AddGNMIUpdate(n *gnmi.Notification) error {
 	return nil
 }
 
-func (t *Tree) AddSchemaUpdate(n *schemapb.Notification) error {
+func (t *Tree) AddSchemaNotification(n *schemapb.Notification) error {
 	if n == nil {
 		return nil
 	}
@@ -86,13 +88,7 @@ func (t *Tree) AddSchemaUpdate(n *schemapb.Notification) error {
 	}
 
 	for _, upd := range n.GetUpdate() {
-		items, err := utils.CompletePath(n.GetPrefix(), upd.GetPath())
-		if err != nil {
-			return err
-		}
-		v := utils.ToGNMITypedValue(upd.GetValue().GetValue())
-		fmt.Printf("adding value: %T, %v\n", upd.GetValue().GetValue(), upd.GetValue().GetValue())
-		err = t.Add(items, v)
+		err := t.AddSchemaUpdate(upd)
 		if err != nil {
 			return err
 		}
@@ -101,15 +97,25 @@ func (t *Tree) AddSchemaUpdate(n *schemapb.Notification) error {
 	return nil
 }
 
-func (t *Tree) AddUpdate(n any) error {
+func (t *Tree) AddNotification(n any) error {
 	switch n := n.(type) {
 	case *gnmi.Notification:
-		return t.AddGNMIUpdate(n)
+		return t.AddGNMINotification(n)
 	case *schemapb.Notification:
-		return t.AddSchemaUpdate(n)
+		return t.AddSchemaNotification(n)
 	default:
-		return fmt.Errorf("unknown update type %T", n)
+		return fmt.Errorf("unknown notification type %T", n)
 	}
+}
+
+func (t *Tree) AddSchemaUpdate(upd *schemapb.Update) error {
+	items, err := utils.CompletePath(nil, upd.GetPath())
+	if err != nil {
+		return err
+	}
+	log.Debugf("adding value: %T, %v", upd.GetValue(), upd.GetValue())
+	err = t.Add(items, upd.GetValue())
+	return err
 }
 
 func (t *Tree) GetPath(ctx context.Context, p *schemapb.Path, schemaClient schemapb.SchemaServerClient, sc *config.SchemaConfig) ([]*schemapb.Notification, error) {
@@ -128,12 +134,10 @@ func (t *Tree) GetPath(ctx context.Context, p *schemapb.Path, schemaClient schem
 					Version: sc.Version,
 				},
 			}
-			fmt.Println("GetPath, Query, ToPath", req)
 			rsp, err := schemaClient.ToPath(ctx, req)
 			if err != nil {
 				return err
 			}
-			fmt.Println(rsp)
 			n := &schemapb.Notification{
 				Timestamp: time.Now().UnixNano(),
 				Update: []*schemapb.Update{{
@@ -157,12 +161,4 @@ func (t *Tree) DeletePath(p *schemapb.Path) error {
 	}
 	t.Delete(cp)
 	return nil
-}
-
-func (t *Tree) Insert(upd *schemapb.Update) error {
-	cp, err := utils.CompletePath(nil, upd.GetPath())
-	if err != nil {
-		return err
-	}
-	return t.Add(cp, upd.GetValue().GetValue())
 }

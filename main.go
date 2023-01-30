@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"encoding/json"
 	"os"
 	"time"
 
@@ -19,21 +19,33 @@ func main() {
 	pflag.BoolVarP(&debug, "debug", "d", false, "enable debug")
 	pflag.Parse()
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
+	if debug {
+		log.SetLevel(log.DebugLevel)
+	}
+	var s *server.Server
 START:
+	if s != nil {
+		s.Stop()
+	}
 	cfg, err := config.New(configFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to read config: %v\n", err)
+		log.Errorf("failed to read config: %v", err)
 		os.Exit(1)
 	}
-
-	s, err := server.NewServer(cfg)
+	b, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create a server: %v\n", err)
+		log.Errorf("failed to marshal config: %v", err)
+		os.Exit(1)
+	}
+	log.Infof("read config:\n%s", string(b))
+	s, err = server.NewServer(cfg)
+	if err != nil {
+		log.Errorf("failed to create a server: %v", err)
 		os.Exit(1)
 	}
 	err = s.Serve()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to run server: %v", err)
+		log.Errorf("failed to run server: %v", err)
 		time.Sleep(time.Second)
 		goto START
 	}

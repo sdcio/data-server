@@ -53,7 +53,7 @@ func NewSchema(sCfg *config.SchemaConfig) (*Schema, error) {
 		sc.root.Dir[e.Name] = e
 	}
 	sc.status = "ok"
-	log.Printf("%s parsed in %s", sc.config.Name, time.Since(now))
+	log.Infof("%s parsed in %s", sc.config.Name, time.Since(now))
 	return sc, nil
 }
 

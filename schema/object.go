@@ -53,7 +53,7 @@ func (sc *Schema) GetEntry(pe []string) (*yang.Entry, error) {
 }
 
 func getEntry(e *yang.Entry, pe []string) (*yang.Entry, error) {
-	logrus.Infof("getEntry %s Dir=%v, Choice=%v, Case=%v, %v",
+	logrus.Debugf("getEntry %s Dir=%v, Choice=%v, Case=%v, %v",
 		e.Name,
 		e.IsDir(),
 		e.IsChoice(),

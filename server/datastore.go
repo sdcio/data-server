@@ -152,7 +152,7 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *schemapb.DeleteDataSt
 		switch req.GetDatastore().GetType() {
 		case *schemapb.Type_CANDIDATE.Enum():
 			ds.DeleteCandidate(req.GetDatastore().GetName())
-			log.Infof("datastore %s deleted candidate %s", req.GetDatastore().GetName())
+			log.Infof("datastore %s deleted candidate %s", name, req.GetDatastore().GetName())
 		case *schemapb.Type_MAIN.Enum():
 			s.md.Lock()
 			defer s.md.Unlock()

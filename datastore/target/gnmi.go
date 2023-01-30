@@ -151,7 +151,7 @@ START:
 		case rsp := <-rspch:
 			switch rsp := rsp.Response.Response.(type) {
 			case *gnmi.SubscribeResponse_Update:
-				err := t.main.AddGNMIUpdate(rsp.Update)
+				err := t.main.AddGNMINotification(rsp.Update)
 				if err != nil {
 					log.Errorf("failed to insert gNMI update into main DS: %v", err)
 					log.Errorf("failed to insert gNMI update into main DS: %v", rsp.Update)
@@ -188,6 +188,7 @@ func toGNMIPath(p *schemapb.Path) *gnmi.Path {
 	}
 	return r
 }
+
 func fromGNMIPath(p *gnmi.Path) *schemapb.Path {
 	if p == nil {
 		return nil

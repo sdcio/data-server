@@ -37,16 +37,11 @@ func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sch
 			}
 			log.Infof("from head result %v", n)
 			for _, nn := range n {
-				err = tempTree.AddSchemaUpdate(nn)
+				err = tempTree.AddSchemaNotification(nn)
 				if err != nil {
 					return nil, err
 				}
 			}
-			// bbbb, err := tempTree.PrettyJSON()
-			// if err != nil {
-			// 	panic(err)
-			// }
-			// fmt.Println("head\n", string(bbbb))
 			if len(n) > 0 {
 				continue
 			}
@@ -58,16 +53,11 @@ func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sch
 
 			log.Infof("from base result %v", bn)
 			for _, nn := range bn {
-				err = tempTree.AddSchemaUpdate(nn)
+				err = tempTree.AddSchemaNotification(nn)
 				if err != nil {
 					return nil, err
 				}
 			}
-			// bbbb, err = tempTree.PrettyJSON()
-			// if err != nil {
-			// 	panic(err)
-			// }
-			// fmt.Println("after head\n", string(bbbb))
 		}
 		for _, p := range req.GetPath() {
 			n, err := tempTree.GetPath(ctx, p, d.schemaClient, d.config.Schema)
@@ -139,6 +129,7 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 			Response: make([]*schemapb.UpdateResult, 0,
 				len(req.GetDelete())+len(req.GetReplace())+len(req.GetUpdate())),
 		}
+		// deletes start
 		for _, del := range req.GetDelete() {
 			err = cand.head.DeletePath(del)
 			if err != nil {
@@ -151,9 +142,11 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 
 		}
 		cand.deletes = append(cand.deletes, req.GetDelete()...)
+		// deletes end
 
+		// replaces start
 		for _, rep := range req.GetReplace() {
-			err = cand.head.Insert(rep)
+			err = cand.head.AddSchemaUpdate(rep)
 			if err != nil {
 				return nil, err
 			}
@@ -163,9 +156,10 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 			})
 		}
 		cand.replaces = append(cand.replaces, req.GetReplace()...)
-
+		// replaces end
+		// updates start
 		for _, upd := range req.GetUpdate() {
-			err = cand.head.Insert(upd)
+			err = cand.head.AddSchemaUpdate(upd)
 			if err != nil {
 				return nil, err
 			}
@@ -175,6 +169,7 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 			})
 		}
 		cand.updates = append(cand.updates, req.GetUpdate()...)
+		// updates end
 		return rsp, nil
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %v", req.GetDataStore().GetType())
@@ -193,7 +188,6 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *schemapb.Update) er
 
 	// 1. validate the path
 	rsp, err := d.validatePath(ctx, upd.GetPath())
-	fmt.Println(err)
 	if err != nil {
 		return err
 	}
@@ -214,7 +208,10 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *schemapb.Update) er
 			return err
 		}
 	case *schemapb.GetSchemaResponse_Leaflist:
-		_ = obj
+		err = validateLeafListValue(obj.Leaflist, val)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -372,4 +369,9 @@ func validateLeafTypeValue(lt *schemapb.SchemaLeafType, v any) error {
 	default:
 		return fmt.Errorf("unhandled type %v", lt.GetType())
 	}
+}
+
+func validateLeafListValue(ll *schemapb.LeafListSchema, v any) error {
+	// TODO: validate Leaflist
+	return validateLeafTypeValue(ll.GetType(), v)
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/iptecharch/schema-server/datastore/ctree"
 	"github.com/iptecharch/schema-server/datastore/target"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -20,6 +20,7 @@ import (
 type Datastore struct {
 	config     *config.DatastoreConfig
 	main       *ctree.Tree
+	state      *ctree.Tree
 	m          *sync.RWMutex
 	candidates map[string]*Candidate
 
@@ -33,6 +34,7 @@ func New(c *config.DatastoreConfig, schemaServer *config.SchemaServer) *Datastor
 	ds := &Datastore{
 		config:     c,
 		main:       &ctree.Tree{},
+		state:      &ctree.Tree{},
 		m:          &sync.RWMutex{},
 		candidates: map[string]*Candidate{},
 	}
@@ -40,7 +42,6 @@ func New(c *config.DatastoreConfig, schemaServer *config.SchemaServer) *Datastor
 	ds.cfn = cancel
 	go func() {
 	SCHEMA_CONNECT:
-		// TODO: create grpc client and schema client
 		cc, err := grpc.DialContext(ctx, schemaServer.Address,
 			grpc.WithBlock(),
 			grpc.WithTransportCredentials(
@@ -48,19 +49,19 @@ func New(c *config.DatastoreConfig, schemaServer *config.SchemaServer) *Datastor
 			),
 		)
 		if err != nil {
-			logrus.Errorf("failed to connect DS to schema server :%v", err)
+			log.Errorf("failed to connect DS to schema server :%v", err)
 			time.Sleep(time.Second)
 			goto SCHEMA_CONNECT
 		}
 		ds.schemaClient = schemapb.NewSchemaServerClient(cc)
 	}()
-	var err error
 
 	go func() {
+		var err error
 	CONNECT:
 		ds.sbi, err = target.New(ctx, c.Name, c.SBI, ds.main)
 		if err != nil {
-			logrus.Errorf("failed to create DS target :%v", err)
+			log.Errorf("failed to create DS target: %v", err)
 			time.Sleep(time.Second)
 			goto CONNECT
 		}
@@ -109,19 +110,44 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 	if !ok {
 		return fmt.Errorf("unknown candidate %s", name)
 	}
+	if req.GetRebase() {
+		cand.base = d.main
+	}
 	resTree, err := cand.base.Clone()
 	if err != nil {
 		return err
 	}
-	_ = resTree
-	for _, upd := range cand.updates {
-		err = resTree.AddUpdate(upd)
+	for _, repl := range cand.replaces {
+		err = resTree.AddSchemaUpdate(repl)
 		if err != nil {
 			return err
 		}
 	}
-	// TODO: validate tree
+	for _, upd := range cand.updates {
+		err = resTree.AddSchemaUpdate(upd)
+		if err != nil {
+			return err
+		}
+	}
+
+	// TODO: 1. validate resTree
+	// TODO: 1.1 validate added/removed leafrefs ?
+
 	// push updates to sbi
+	sbiSet := &schemapb.SetDataRequest{
+		Update:  cand.updates,
+		Replace: cand.replaces,
+		Delete:  cand.deletes,
+	}
+	rsp, err := d.sbi.Set(ctx, sbiSet)
+	if err != nil {
+		return err
+	}
+	log.Debugf("DS=%s/%s, SetResponse from SBI: %v", d.config.Name, name, rsp)
+	if req.GetStay() {
+		return nil
+	}
+	delete(d.candidates, name)
 	return nil
 }
 

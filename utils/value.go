@@ -2,7 +2,6 @@ package utils
 
 import (
 	"encoding/json"
-	"fmt"
 
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/openconfig/gnmi/proto/gnmi"
@@ -102,10 +101,18 @@ func GetSchemaValue(updValue *schemapb.TypedValue) (interface{}, error) {
 }
 
 func ToSchemaTypedValue(v any) *schemapb.TypedValue {
-	log.Infof("to schema value %T, %v", v, v) //TODO2: Writing in schemapb typedValue, need to change to gNMI ?
+	log.Debugf("to schema value %T, %#v", v, v) //TODO2: Writing in schemapb typedValue, need to change to gNMI ?
 	switch v := v.(type) {
+	case *schemapb.TypedValue:
+		return v
 	case *gnmi.TypedValue:
 		return ToSchemaTypedValue(v.GetValue())
+	case *gnmi.TypedValue_AnyVal:
+		return &schemapb.TypedValue{
+			Value: &schemapb.TypedValue_AnyVal{
+				AnyVal: v.AnyVal,
+			},
+		}
 	case *gnmi.TypedValue_AsciiVal:
 		return &schemapb.TypedValue{
 			Value: &schemapb.TypedValue_AsciiVal{
@@ -113,17 +120,50 @@ func ToSchemaTypedValue(v any) *schemapb.TypedValue {
 			},
 		}
 	case *gnmi.TypedValue_StringVal:
-		fmt.Println(v.StringVal)
 		return &schemapb.TypedValue{
 			Value: &schemapb.TypedValue_StringVal{
 				StringVal: v.StringVal,
 			},
 		}
-	case string:
+	case *gnmi.TypedValue_BoolVal:
 		return &schemapb.TypedValue{
-			Value: &schemapb.TypedValue_AsciiVal{
-				AsciiVal: v,
+			Value: &schemapb.TypedValue_BoolVal{
+				BoolVal: v.BoolVal,
 			},
+		}
+	case *gnmi.TypedValue_BytesVal:
+		return &schemapb.TypedValue{
+			Value: &schemapb.TypedValue_BytesVal{
+				BytesVal: v.BytesVal,
+			},
+		}
+	case *gnmi.TypedValue_IntVal:
+		return &schemapb.TypedValue{
+			Value: &schemapb.TypedValue_IntVal{
+				IntVal: v.IntVal,
+			},
+		}
+	case *gnmi.TypedValue_UintVal:
+		return &schemapb.TypedValue{
+			Value: &schemapb.TypedValue_UintVal{
+				UintVal: v.UintVal,
+			},
+		}
+	case *gnmi.TypedValue_ProtoBytes:
+		return &schemapb.TypedValue{
+			Value: &schemapb.TypedValue_ProtoBytes{
+				ProtoBytes: v.ProtoBytes,
+			},
+		}
+	case *gnmi.TypedValue_LeaflistVal:
+		schemalf := &schemapb.ScalarArray{
+			Element: make([]*schemapb.TypedValue, 0, len(v.LeaflistVal.GetElement())),
+		}
+		for _, e := range v.LeaflistVal.GetElement() {
+			schemalf.Element = append(schemalf.Element, ToSchemaTypedValue(e))
+		}
+		return &schemapb.TypedValue{
+			Value: &schemapb.TypedValue_LeaflistVal{LeaflistVal: schemalf},
 		}
 	}
 	return nil
