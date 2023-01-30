@@ -47,9 +47,9 @@ func (s *Server) GetDataStore(ctx context.Context, req *schemapb.GetDataStoreReq
 		// Credentials: &schemapb.Credentials{},
 	}
 	rsp.Schema = &schemapb.Schema{
-		Name:    ds.Schema().Name,
-		Vendor:  ds.Schema().Vendor,
-		Version: ds.Schema().Version,
+		Name:    ds.Config().Schema.Name,
+		Vendor:  ds.Config().Schema.Vendor,
+		Version: ds.Config().Schema.Version,
 	}
 	for _, cand := range cands {
 		rsp.Datastore = append(rsp.Datastore,

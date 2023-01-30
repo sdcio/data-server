@@ -13,6 +13,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
@@ -42,12 +43,27 @@ func New(c *config.DatastoreConfig, schemaServer *config.SchemaServer) *Datastor
 	ds.cfn = cancel
 	go func() {
 	SCHEMA_CONNECT:
-		cc, err := grpc.DialContext(ctx, schemaServer.Address,
+		opts := []grpc.DialOption{
 			grpc.WithBlock(),
-			grpc.WithTransportCredentials(
-				insecure.NewCredentials(),
-			),
-		)
+		}
+		switch schemaServer.TLS {
+		case nil:
+			opts = append(opts,
+				grpc.WithTransportCredentials(
+					insecure.NewCredentials(),
+				))
+		default:
+			tlsCfg, err := schemaServer.TLS.NewConfig(ctx)
+			if err != nil {
+				log.Errorf("DS: %s: failed to read schema server TLS config: %v", c.Name, err)
+				time.Sleep(time.Second)
+				goto SCHEMA_CONNECT
+			}
+			opts = append(opts,
+				grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
+			)
+		}
+		cc, err := grpc.DialContext(ctx, schemaServer.Address, opts...)
 		if err != nil {
 			log.Errorf("failed to connect DS to schema server :%v", err)
 			time.Sleep(time.Second)

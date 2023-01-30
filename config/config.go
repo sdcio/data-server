@@ -1,11 +1,16 @@
 package config
 
 import (
+	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
+	"fmt"
 	"os"
 
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
+	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 )
 
 type Config struct {
@@ -52,6 +57,7 @@ func (c *Config) validateSetDefaults() error {
 
 type SchemaServer struct {
 	Address string `yaml:"address,omitempty" json:"address,omitempty"`
+	TLS     *TLS   `yaml:"tls,omitempty" json:"tls,omitempty"`
 }
 
 type GRPCServer struct {
@@ -62,7 +68,32 @@ type GRPCServer struct {
 	MaxRecvMsgSize int    `yaml:"max-recv-msg-size,omitempty" json:"max-recv-msg-size,omitempty"`
 }
 
-func (t *TLS) NewConfig() (*tls.Config, error) {
+func (t *TLS) NewConfig(ctx context.Context) (*tls.Config, error) {
 	tlsCfg := &tls.Config{InsecureSkipVerify: t.SkipVerify}
+	if t.CA != "" {
+		ca, err := os.ReadFile(t.CA)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read client CA cert: %w", err)
+		}
+		if len(ca) != 0 {
+			caCertPool := x509.NewCertPool()
+			caCertPool.AppendCertsFromPEM(ca)
+			tlsCfg.RootCAs = caCertPool
+		}
+	}
+
+	if t.Cert != "" && t.Key != "" {
+		certWatcher, err := certwatcher.New(t.Cert, t.Key)
+		if err != nil {
+			return nil, err
+		}
+
+		go func() {
+			if err := certWatcher.Start(ctx); err != nil {
+				log.Errorf("certificate watcher error: %v", err)
+			}
+		}()
+		tlsCfg.GetCertificate = certWatcher.GetCertificate
+	}
 	return tlsCfg, nil
 }

@@ -66,6 +66,12 @@ datastores: # this specifies MAIN datastores
         
 schema-server:
   address: :55000
-
+  # TLS config
+  # tls:
+  #   ca:
+  #   cert:
+  #   key:
+  #   skip-verify:
+  
 prometheus:
   address: ":55090"

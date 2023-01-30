@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"sync"
@@ -18,10 +19,13 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 type Server struct {
 	config *config.Config
+
+	cfn context.CancelFunc
 
 	ms      *sync.RWMutex
 	schemas map[string]*schema.Schema
@@ -39,8 +43,10 @@ type Server struct {
 }
 
 func NewServer(c *config.Config) (*Server, error) {
+	ctx, cancel := context.WithCancel(context.TODO())
 	var s = &Server{
 		config: c,
+		cfn:    cancel,
 
 		ms:      &sync.RWMutex{},
 		schemas: make(map[string]*schema.Schema, len(c.Schemas)),
@@ -63,7 +69,14 @@ func NewServer(c *config.Config) (*Server, error) {
 		)
 		s.reg.MustRegister(grpcMetrics)
 	}
-	// todo: options
+	if c.GRPCServer.TLS != nil {
+		tlsCfg, err := c.GRPCServer.TLS.NewConfig(ctx)
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, grpc.Creds(credentials.NewTLS(tlsCfg)))
+	}
+
 	s.srv = grpc.NewServer(opts...)
 	if c.GRPCServer.SchemaServer {
 		for _, sCfg := range c.Schemas {
@@ -123,4 +136,5 @@ func (s *Server) Stop() {
 	for _, ds := range s.datastores {
 		ds.Stop()
 	}
+	s.cfn()
 }

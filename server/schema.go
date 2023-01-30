@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/iptecharch/schema-server/config"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
@@ -23,8 +24,7 @@ func (s *Server) GetSchema(ctx context.Context, req *schemapb.GetSchemaRequest) 
 	if !ok {
 		return nil, status.Errorf(codes.InvalidArgument, "unknown schema %v", reqSchema)
 	}
-
-	pes := PathToStrings(req.GetPath())
+	pes := utils.ToStrings(req.GetPath(), false, true)
 	e, err := sc.GetEntry(pes)
 	if err != nil {
 		return nil, err
@@ -250,6 +250,7 @@ func (s *Server) ExpandPath(ctx context.Context, req *schemapb.ExpandPathRequest
 		for _, p := range paths {
 			xpaths = append(xpaths, utils.ToXPath(p, false))
 		}
+		sort.Strings(xpaths)
 		rsp := &schemapb.ExpandPathResponse{
 			Xpath: xpaths,
 		}
