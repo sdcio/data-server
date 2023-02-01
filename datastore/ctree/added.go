@@ -2,8 +2,8 @@ package ctree
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/iptecharch/schema-server/config"
@@ -13,19 +13,6 @@ import (
 	"github.com/openconfig/gnmi/proto/gnmi"
 	log "github.com/sirupsen/logrus"
 )
-
-func (t *Tree) PrettyJSON() ([]byte, error) {
-	if t == nil || t.leafBranch == nil {
-		return nil, nil
-	}
-	var o interface{}
-	err := json.Unmarshal([]byte(t.String()), &o)
-	if err != nil {
-		return nil, err
-	}
-	return json.MarshalIndent(o, "", "  ")
-
-}
 
 func (t *Tree) Clone() (*Tree, error) {
 	nt := &Tree{}
@@ -161,4 +148,17 @@ func (t *Tree) DeletePath(p *schemapb.Path) error {
 	}
 	t.Delete(cp)
 	return nil
+}
+
+func (t *Tree) PrintTree() string {
+	sb := strings.Builder{}
+	t.WalkSorted(
+		func(path []string, _ *Leaf, val interface{}) error {
+			sb.WriteString(strings.Join(path, "/"))
+			sb.WriteString(": ")
+			sb.WriteString(fmt.Sprintf("%T: %s", val, val))
+			sb.WriteString("\n")
+			return nil
+		})
+	return sb.String()
 }

@@ -80,7 +80,7 @@ func (s *Server) CreateDataStore(ctx context.Context, req *schemapb.CreateDataSt
 		}
 		switch req.GetDatastore().GetType() {
 		case schemapb.Type_CANDIDATE:
-			err := ds.NewCandidate(req.GetDatastore().GetName())
+			err := ds.CreateCandidate(req.GetDatastore().GetName())
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "%v", err)
 			}
@@ -181,6 +181,25 @@ func (s *Server) Commit(ctx context.Context, req *schemapb.CommitRequest) (*sche
 		return nil, status.Errorf(codes.Internal, "%v", err)
 	}
 	return &schemapb.CommitResponse{}, nil
+}
+
+func (s *Server) Rebase(ctx context.Context, req *schemapb.RebaseRequest) (*schemapb.RebaseResponse, error) {
+	log.Debugf("Received RebaseDataStoreRequest: %v", req)
+	name := req.GetName()
+	if name == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing name attribute")
+	}
+	s.md.RLock()
+	ds, ok := s.datastores[name]
+	s.md.RUnlock()
+	if !ok {
+		return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %s", name)
+	}
+	err := ds.Rebase(ctx, req)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "%v", err)
+	}
+	return &schemapb.RebaseResponse{}, nil
 }
 
 func (s *Server) Discard(ctx context.Context, req *schemapb.DiscardRequest) (*schemapb.DiscardResponse, error) {

@@ -5,3 +5,4 @@ client/client
 lab/*/clab-*
 lab/*/*.bak
 client/bin*
+tests/bulk/bulk

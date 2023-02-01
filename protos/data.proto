@@ -9,93 +9,157 @@ option go_package = ".;schema_server";
 
 service DataServer {
     // datastore
+    // return a datastore details
     rpc GetDataStore(GetDataStoreRequest)       returns (GetDataStoreResponse);
+    // creates a new datastore, either a MAIN or a CANDIDATE datastore
     rpc CreateDataStore(CreateDataStoreRequest) returns (CreateDataStoreResponse);
+    // deletes a datastore, either a MAIN or a CANDIDATE datastore
     rpc DeleteDataStore(DeleteDataStoreRequest) returns (DeleteDataStoreResponse);
+    // commits changes in a CANDIDATE datastore to the datastore Target
     rpc Commit(CommitRequest)                   returns (CommitResponse);
+    // rebases a CANDIDATE datastore
+    rpc Rebase(RebaseRequest)                   returns (RebaseResponse);
+    // discards changes made to a CANDIDATE datastore
     rpc Discard(DiscardRequest)                 returns (DiscardResponse);
     // data
+    // retrieve data from a MAIN or CANDIDATE datastore, the data is specified 
+    // with a set of schema.prot.Path
     rpc GetData(GetDataRequest)                 returns (GetDataResponse);
+    // writes changes to a CANDIDATE datastore,
+    // validates the values written against the datastore schema.
     rpc SetData(SetDataRequest)                 returns (SetDataResponse);
+    // returns a list of difference between a CANDIDATE datastore and its base
     rpc Diff(DiffRequest)                       returns (DiffResponse);
+    // subscribes for notification from a MAIN datastore,
+    // the client specified a list of paths it is interested on as well as a
+    // subscription mode and its parameters.
     rpc Subscribe(SubscribeRequest)             returns (stream SubscribeResponse);
 }
 
 // messages
 message GetDataRequest {
-    string      name                    = 1;
-    DataStore   data_store              = 2;
-    repeated    schema.proto.Path path  = 3;
+    string                  name                    = 1;
+    DataStore               data_store              = 2;
+    repeated                schema.proto.Path path  = 3;
+    schema.proto.DataType   data_type               = 4;
 }
 message GetDataResponse {
-    repeated Notification notification = 1;   // Data values.
+    // list of paths and values
+    repeated Notification notification = 1;
 }
 
 message SetDataRequest {
+    // datastore name
     string                      name                    = 1;
+    // datastore type and name
     DataStore                   data_store              = 2;
+    // list of updates
     repeated Update             update                  = 10;
+    // list of replaces
     repeated Update             replace                 = 11;
+    // list of deltes
     repeated schema.proto.Path  delete                  = 12;
 }
 message SetDataResponse {
-    repeated UpdateResult response = 2;  // A set of responses specifying the result of the operations specified in
-                                         //  the SetRequest.
-    int64 timestamp = 4;                 // Timestamp of transaction (ns since epoch).
+    // A set of responses specifying the result of the operations specified in
+    // the SetRequest.
+    repeated UpdateResult response = 2;  
+    // Timestamp of transaction (ns since epoch).                  
+    int64 timestamp = 4;                 
 }
 
 message DiffRequest {
-    string                      name                    = 1;
-    DataStore                   data_store              = 2;
+    // datastore name
+    string    name       = 1;
+    // CANDIDATE datastore name
+    DataStore data_store = 2;
 }
 message DiffResponse {
-    string                      name                    = 1;
-    DataStore                   data_store              = 2;
-    repeated DiffUpdate         diff                    = 3;
+    // datastore name
+    string              name        = 1;
+    // CANDIDATE datastore name
+    DataStore           data_store  = 2;
+    // list of paths and values that differ between MAIN and CANDIDATE
+    repeated DiffUpdate diff        = 3;
 }
 
-message SubscribeRequest {}
-message SubscribeResponse {}
+message SubscribeRequest {
+    // datastore name
+    string           name       = 1;
+    SubscriptionList subscribe  = 2;
+}
+message SubscribeResponse {
+    oneof response {
+        Notification update = 1;  // Changed or sampled value for a path.
+        bool sync_response = 3;   // everything sent at least once
+    }
+}
 
 // DS
 message GetDataStoreRequest {
+    // datastore name
     string name = 1;
 }
 message GetDataStoreResponse {
-    string name = 1;
-    repeated DataStore datastore = 2;
-    Target target =3;
-    schema.proto.Schema schema =4;
+    // datastore name
+    string              name        = 1;
+    // list of candidates in this datastore
+    repeated DataStore  datastore   = 2;
+    // the schema this datastore should comply with
+    schema.proto.Schema schema      = 3;
+    // south bound interface target of this datastore
+    Target              target      = 4;
 }
 
 message CreateDataStoreRequest {
-    string    name      = 1;
-    DataStore datastore = 2;
-    schema.proto.Schema schema = 3;
-    Target target =4;
+    // datastore name
+    string              name        = 1;
+    // datastore type to be created
+    DataStore           datastore   = 2;
+    // the schema this datastore should comply with
+    schema.proto.Schema schema      = 3;
+     // south bound interface target of this datastore
+    Target              target      = 4;
 }
 message CreateDataStoreResponse {}
 
 message DeleteDataStoreRequest {
+    // datastore name
     string    name      = 1;
+    // datastore (to be deleted) type and name
     DataStore datastore = 2;
 }
 message DeleteDataStoreResponse {}
 
 message CommitRequest {
-    string      name        = 1;
-    DataStore   datastore   = 2;
-    bool        rebase      = 3;
-    bool        stay        = 4;
+    // datastore name
+    string      name      = 1;
+    // candidate name
+    DataStore   datastore = 2;
+    // rebase before commiting 
+    bool        rebase    = 3;
+    // do not delete the candidate after commiting
+    // reset changes and rebase after commiting
+    bool        stay      = 4;
 }
 message CommitResponse {}
 
-message DiscardRequest {
-    string name         = 1;
-    DataStore datastore = 2;
-    bool       stay     = 3;
+message RebaseRequest{
+    // datastore name
+    string      name      = 1;
+    // candidate name
+    DataStore   datastore = 2;
 }
+message RebaseResponse{}
 
+message DiscardRequest {
+    // datastore name
+    string    name      = 1;
+    // candidate name to discard
+    DataStore datastore = 2;
+    // do not delete candidate after discarding changes
+    bool      stay      = 3;
+}
 message DiscardResponse {}
 
 // sub messages
@@ -111,11 +175,6 @@ message DiffUpdate {
 }
 
 message TypedValue {
-    // One of the fields within the val oneof is populated with the value
-    // of the update. The type of the value being included in the Update
-    // determines which field should be populated. In the case that the
-    // encoding is a particular form of the base protobuf type, a specific
-    // field is used to store the value (e.g., json_val).
     oneof value
     {
         string string_val = 1;            // String value.
@@ -130,10 +189,6 @@ message TypedValue {
         bytes json_val = 10;              // JSON-encoded text. (mgmt_server assumes PROTO_JSON encoding)
         bytes json_ietf_val = 11;         // JSON-encoded text per RFC7951.
         string ascii_val = 12;            // Arbitrary ASCII text.
-        // Protobuf binary encoded bytes. The message type is not included.
-        // See the specification at
-        // github.com/openconfig/reference/blob/master/rpc/gnmi/protobuf-vals.md
-        // for a complete specification.
         bytes proto_bytes = 13;
     }
 }
@@ -142,20 +197,23 @@ message UpdateResult {
   // The operation that was associated with the schema.proto.Path specified.
   enum Operation {
     INVALID = 0;
-    DELETE = 1;           // The result relates to a delete of schema.proto.Path.
-    REPLACE = 2;          // The result relates to a replace of schema.proto.Path.
-    UPDATE = 3;           // The result relates to an update of schema.proto.Path.
+    DELETE  = 1; // The result relates to a delete of schema.proto.Path.
+    REPLACE = 2; // The result relates to a replace of schema.proto.Path.
+    UPDATE  = 3; // The result relates to an update of schema.proto.Path.
   }
-  schema.proto.Path path = 2;                            // schema.proto.Path associated with the update.
-  Operation op = 4;                         // Update operation type.
+  schema.proto.Path path = 2; // schema.proto.Path associated with the update.
+  Operation         op   = 4; // Update operation type.
 }
 
 message Notification {
-    int64 timestamp = 1;          // Timestamp in nanoseconds since Epoch.
-    schema.proto.Path prefix = 2;              // Prefix used for paths in the message.
-    // string alias = 3;             // An alias for the path specified in the prefix field.
-    repeated Update update = 4;   // Data elements that have changed values.
-    repeated schema.proto.Path delete = 5;     // Data elements that have been deleted.
+    // Timestamp in nanoseconds since Epoch.
+    int64                                timestamp  = 1;
+    // Prefix used for paths in the message. NOT IN USE
+    schema.proto.Path                    prefix     = 2;
+    // Data elements that have changed values.
+    repeated           Update            update     = 4;
+    // Data elements that have been deleted.
+    repeated           schema.proto.Path delete     = 5;     
 }
 
 enum Type {
@@ -164,7 +222,9 @@ enum Type {
 }
 
 message DataStore {
-    Type  type = 1;
+    // datastore type, MAIN or CANDIDATE
+    Type  type  = 1;
+    // name of the datastore (candidate)
     string name = 2;
 }
 
@@ -184,23 +244,50 @@ message ScalarArray {
   repeated TypedValue element = 1;
 }
 
+// Southbound interface of the datastore
 message Target {
-    string type = 1;
-    string address = 2;
-    TLS tls  =3;
-    Credentials credentials =4;
+    string      type        = 1;
+    string      address     = 2;
+    TLS         tls         = 3;
+    Credentials credentials = 4;
 }
 
-
+// TLS Config
 message TLS {
-    string ca = 1;
-    string cert =2;
-    string key =3;
-    bool skip_verify =4;
+    string ca           = 1;
+    string cert         = 2;
+    string key          = 3;
+    bool   skip_verify  = 4;
 }
 
+// Target Credentials
 message Credentials {
-    string username =1;
-    string password =2;
-    string token =3;
+    string username = 1;
+    string password = 2;
+    string token    = 3;
+}
+
+// WIP
+message SubscriptionList {
+    repeated Subscription subscription  = 2;
+    SubscriptionListMode  mode          = 5;
+}
+
+message Subscription {
+    schema.proto.Path path                = 1;
+    SubscriptionMode  mode                = 2;   
+    uint64            sample_interval     = 3;  
+    bool              suppress_redundant  = 4;
+    uint64            heartbeat_interval  = 5;
+}
+enum SubscriptionMode {
+    TARGET_DEFINED = 0;
+    ON_CHANGE      = 1;
+    SAMPLE         = 2;
+}
+
+enum SubscriptionListMode {
+    STREAM  = 0;
+    ONCE    = 1;
+    // POLL    = 2;
 }

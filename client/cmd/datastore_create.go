@@ -9,8 +9,6 @@ import (
 
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/prototext"
 )
 
@@ -24,16 +22,10 @@ var datastoreCreateCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx, cancel := context.WithCancel(cmd.Context())
 		defer cancel()
-		cc, err := grpc.DialContext(ctx, addr,
-			grpc.WithBlock(),
-			grpc.WithTransportCredentials(
-				insecure.NewCredentials(),
-			),
-		)
+		dataClient, err := createDataClient(ctx, addr)
 		if err != nil {
 			return err
 		}
-		dataClient := schemapb.NewDataServerClient(cc)
 		var req *schemapb.CreateDataStoreRequest
 		switch {
 		// create a candidate datastore
@@ -56,10 +48,13 @@ var datastoreCreateCmd = &cobra.Command{
 				},
 			}
 		}
+		fmt.Println("request:")
+		fmt.Println(prototext.Format(req))
 		rsp, err := dataClient.CreateDataStore(ctx, req)
 		if err != nil {
 			return err
 		}
+		fmt.Println("response:")
 		fmt.Println(prototext.Format(rsp))
 		return nil
 	},

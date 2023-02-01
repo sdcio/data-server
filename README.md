@@ -35,12 +35,18 @@ go build
 ## configure
 ./client data set --ds srl1 --candidate default --update interface[name=ethernet-1/1]/admin-state:::disable
 ./client data set --ds srl1 --candidate default --update interface[name=ethernet-1/1]/description:::desc1
+./client data set --ds srl1 --candidate default --update interface[name=ethernet-1/1]/subinterface[index=0]/admin-state:::enable
+./client data set --ds srl1 --candidate default --update interface[name=ethernet-1/1]/subinterface[index=0]/description:::desc1
 ### get fom candidate
 ./client data get --ds srl1 --candidate default --path interface[name=ethernet-1/1]/admin-state
 ./client data get --ds srl1 --candidate default --path interface[name=ethernet-1/1]/description
+./client data get --ds srl1 --candidate default --path interface[name=ethernet-1/1]/subinterface[index=0]/admin-state
+./client data get --ds srl1 --candidate default --path interface[name=ethernet-1/1]/subinterface[index=0]/description
 ### get from main
 ./client data get --ds srl1 --path interface[name=ethernet-1/1]/admin-state
 ./client data get --ds srl1 --path interface[name=ethernet-1/1]/description
+./client data get --ds srl1 --path interface[name=ethernet-1/1]/subinterface[index=0]/admin-state
+./client data get --ds srl1 --path interface[name=ethernet-1/1]/subinterface[index=0]/description
 # diff
 ./client data diff --ds srl1 --candidate default
 ### commit

@@ -12,13 +12,11 @@ import (
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/prototext"
 )
 
-// expandPathCmd represents the expand-path command
-var expandPathCmd = &cobra.Command{
+// schemaExpandPathCmd represents the expand-path command
+var schemaExpandPathCmd = &cobra.Command{
 	Use:          "expand-path",
 	Aliases:      []string{"expand"},
 	Short:        "given a path returns all sub-paths",
@@ -27,23 +25,16 @@ var expandPathCmd = &cobra.Command{
 		if configOnly && stateOnly {
 			return errors.New("either --config-only or --state-only can be set")
 		}
-		ctx, cancel := context.WithCancel(cmd.Context())
-		defer cancel()
-		cc, err := grpc.DialContext(ctx, addr,
-			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(24*1024*1024)),
-			grpc.WithBlock(),
-			grpc.WithTransportCredentials(
-				insecure.NewCredentials(),
-			),
-		)
-		if err != nil {
-			return err
-		}
 		p, err := utils.ParsePath(xpath)
 		if err != nil {
 			return err
 		}
-		schemaClient := schemapb.NewSchemaServerClient(cc)
+		ctx, cancel := context.WithCancel(cmd.Context())
+		defer cancel()
+		schemaClient, err := createSchemaClient(ctx, addr)
+		if err != nil {
+			return err
+		}
 		dt := schemapb.DataType_ALL
 		if configOnly {
 			dt = schemapb.DataType_CONFIG
@@ -75,11 +66,11 @@ var expandPathCmd = &cobra.Command{
 }
 
 func init() {
-	schemaCmd.AddCommand(expandPathCmd)
-	expandPathCmd.Flags().StringVarP(&xpath, "path", "", "", "xpath to expand")
-	expandPathCmd.Flags().BoolVarP(&asXpath, "xpath", "", false, "return paths in xpath format")
-	expandPathCmd.Flags().BoolVarP(&configOnly, "config-only", "", false, "return paths from the config tree only")
-	expandPathCmd.Flags().BoolVarP(&stateOnly, "state-only", "", false, "return paths from the config tree only")
+	schemaCmd.AddCommand(schemaExpandPathCmd)
+	schemaExpandPathCmd.Flags().StringVarP(&xpath, "path", "", "", "xpath to expand")
+	schemaExpandPathCmd.Flags().BoolVarP(&asXpath, "xpath", "", false, "return paths in xpath format")
+	schemaExpandPathCmd.Flags().BoolVarP(&configOnly, "config-only", "", false, "return paths from the config tree only")
+	schemaExpandPathCmd.Flags().BoolVarP(&stateOnly, "state-only", "", false, "return paths from the config tree only")
 }
 
 var asXpath bool

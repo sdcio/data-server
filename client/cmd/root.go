@@ -4,9 +4,14 @@ Copyright © 2023 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"context"
 	"os"
+	"time"
 
+	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -42,4 +47,34 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+}
+
+func createSchemaClient(ctx context.Context, addr string) (schemapb.SchemaServerClient, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	cc, err := grpc.DialContext(ctx, addr,
+		grpc.WithBlock(),
+		grpc.WithTransportCredentials(
+			insecure.NewCredentials(),
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return schemapb.NewSchemaServerClient(cc), nil
+}
+
+func createDataClient(ctx context.Context, addr string) (schemapb.DataServerClient, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	cc, err := grpc.DialContext(ctx, addr,
+		grpc.WithBlock(),
+		grpc.WithTransportCredentials(
+			insecure.NewCredentials(),
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return schemapb.NewDataServerClient(cc), nil
 }

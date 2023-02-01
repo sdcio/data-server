@@ -9,8 +9,6 @@ import (
 
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/prototext"
 )
 
@@ -22,27 +20,24 @@ var dataDiffCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx, cancel := context.WithCancel(cmd.Context())
 		defer cancel()
-		cc, err := grpc.DialContext(ctx, addr,
-			grpc.WithBlock(),
-			grpc.WithTransportCredentials(
-				insecure.NewCredentials(),
-			),
-		)
+		dataClient, err := createDataClient(ctx, addr)
 		if err != nil {
 			return err
 		}
-		dataClient := schemapb.NewDataServerClient(cc)
-		diffReq := &schemapb.DiffRequest{
+		req := &schemapb.DiffRequest{
 			Name: datastoreName,
 			DataStore: &schemapb.DataStore{
 				Type: schemapb.Type_CANDIDATE,
 				Name: candidate,
 			},
 		}
-		rsp, err := dataClient.Diff(ctx, diffReq)
+		fmt.Println("request:")
+		fmt.Println(prototext.Format(req))
+		rsp, err := dataClient.Diff(ctx, req)
 		if err != nil {
 			return err
 		}
+		fmt.Println("response:")
 		fmt.Println(prototext.Format(rsp))
 		return nil
 	},

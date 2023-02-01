@@ -79,11 +79,7 @@ func main() {
 			panic(err)
 		}
 	}
-	b1, err := tr1.PrettyJSON()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(string(b1))
+	fmt.Println(tr1.PrintTree())
 	tr2 := &ctree.Tree{}
 	for _, e := range data2 {
 		err = tr2.Add(e.path, e.value)
@@ -91,29 +87,19 @@ func main() {
 			panic(err)
 		}
 	}
-	b2, err := tr2.PrettyJSON()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(string(b2))
+	fmt.Println(tr2.PrintTree())
 
 	nt, err := tr1.Clone()
 	if err != nil {
 		panic(err)
 	}
-	bb, err := nt.PrettyJSON()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(string(bb))
+
+	fmt.Println(nt.PrintTree())
 	err = tr1.Merge(tr2)
 	if err != nil {
 		panic(err)
 	}
-	bbb, err := tr1.PrettyJSON()
-	if err != nil {
-		panic(err)
-	}
+
 	fmt.Println("merge:")
-	fmt.Println(string(bbb))
+	fmt.Println(tr1.PrintTree())
 }

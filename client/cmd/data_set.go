@@ -5,14 +5,13 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/prototext"
 )
 
@@ -26,18 +25,9 @@ var dataSetCmd = &cobra.Command{
 	Short:        "set data",
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		ctx, cancel := context.WithCancel(cmd.Context())
-		defer cancel()
-		cc, err := grpc.DialContext(ctx, addr,
-			grpc.WithBlock(),
-			grpc.WithTransportCredentials(
-				insecure.NewCredentials(),
-			),
-		)
-		if err != nil {
-			return err
+		if candidate == "" {
+			return errors.New("a candidate datastore name must be specified with --candidate")
 		}
-		dataClient := schemapb.NewDataServerClient(cc)
 		req := &schemapb.SetDataRequest{
 			Name: datastoreName,
 			DataStore: &schemapb.DataStore{
@@ -75,8 +65,8 @@ var dataSetCmd = &cobra.Command{
 			req.Replace = append(req.Replace, &schemapb.Update{
 				Path: repPath,
 				Value: &schemapb.TypedValue{
-					Value: &schemapb.TypedValue_AsciiVal{
-						AsciiVal: repSplit[1],
+					Value: &schemapb.TypedValue_StringVal{
+						StringVal: repSplit[1],
 					},
 				},
 			})
@@ -87,6 +77,12 @@ var dataSetCmd = &cobra.Command{
 				return err
 			}
 			req.Delete = append(req.Delete, delPath)
+		}
+		ctx, cancel := context.WithCancel(cmd.Context())
+		defer cancel()
+		dataClient, err := createDataClient(ctx, addr)
+		if err != nil {
+			return err
 		}
 		fmt.Println("request:")
 		fmt.Println(prototext.Format(req))

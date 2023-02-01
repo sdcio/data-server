@@ -1,7 +1,7 @@
 grpc-server:
   # gRPC listening address
   address: ":55000"
-  
+
   ## TLS config
   # tls:
   #   ca:
@@ -22,7 +22,7 @@ grpc-server:
     max-candidates: 16
   # max message size in bytes the server can receive. 
   # If this is not set, it defaults to 4 * 1024 * 1024 (4MB)
-  max-recv-msg-size: 
+  max-recv-msg-size: 25165824
   
 schemas:
   - name: srl
@@ -72,7 +72,7 @@ datastores: # this specifies MAIN datastores
         skip-verify: true
         
 schema-server:
-  address: :55000
+  address: localhost:55000
   # TLS config
   # tls:
   #   ca:

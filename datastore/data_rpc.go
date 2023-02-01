@@ -3,6 +3,7 @@ package datastore
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -27,6 +28,8 @@ func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sch
 		rsp := &schemapb.GetDataResponse{
 			Notification: make([]*schemapb.Notification, 0, len(req.GetPath())),
 		}
+		cand.m.RLock()
+		defer cand.m.RUnlock()
 		tempTree := &ctree.Tree{}
 		log.Infof("reading from candidate")
 		for _, p := range req.GetPath() {
@@ -71,26 +74,53 @@ func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sch
 
 		return rsp, nil
 	case schemapb.Type_MAIN:
-		rsp := &schemapb.GetDataResponse{
-			Notification: make([]*schemapb.Notification, 0, len(req.GetPath())),
-		}
 		reqPaths := req.GetPath()
-		if reqPaths == nil {
-			reqPaths = []*schemapb.Path{{
-				Elem: []*schemapb.PathElem{{Name: ""}},
-			}}
+		if len(reqPaths) == 0 {
+			reqPaths = []*schemapb.Path{
+				{
+					Elem: []*schemapb.PathElem{{}},
+				},
+			}
 		}
-		for _, p := range reqPaths {
-			nc, err := d.main.config.GetPath(ctx, p, d.schemaClient, d.config.Schema)
-			if err != nil {
-				return nil, err
+		rsp := &schemapb.GetDataResponse{
+			Notification: make([]*schemapb.Notification, 0, len(reqPaths)),
+		}
+
+		switch req.GetDataType() {
+		case schemapb.DataType_ALL:
+			for _, p := range reqPaths {
+				nc, err := d.main.config.GetPath(ctx, p, d.schemaClient, d.config.Schema)
+				if err != nil {
+					return nil, err
+				}
+				rsp.Notification = append(rsp.Notification, nc...)
+
+				ns, err := d.main.state.GetPath(ctx, p, d.schemaClient, d.config.Schema)
+				if err != nil {
+					return nil, err
+				}
+				rsp.Notification = append(rsp.Notification, ns...)
 			}
-			rsp.Notification = append(rsp.Notification, nc...)
-			ns, err := d.main.state.GetPath(ctx, p, d.schemaClient, d.config.Schema)
-			if err != nil {
-				return nil, err
+		case schemapb.DataType_CONFIG:
+			for _, p := range reqPaths {
+				if req.GetDataType() != schemapb.DataType_STATE {
+					nc, err := d.main.config.GetPath(ctx, p, d.schemaClient, d.config.Schema)
+					if err != nil {
+						return nil, err
+					}
+					rsp.Notification = append(rsp.Notification, nc...)
+				}
 			}
-			rsp.Notification = append(rsp.Notification, ns...)
+		case schemapb.DataType_STATE:
+			for _, p := range reqPaths {
+				if req.GetDataType() != schemapb.DataType_CONFIG {
+					ns, err := d.main.state.GetPath(ctx, p, d.schemaClient, d.config.Schema)
+					if err != nil {
+						return nil, err
+					}
+					rsp.Notification = append(rsp.Notification, ns...)
+				}
+			}
 		}
 		return rsp, nil
 	}
@@ -108,8 +138,24 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 		if !ok {
 			return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDataStore().GetName())
 		}
-		// validate individual updates
 		var err error
+		// replaces := make([]*schemapb.Update, 0, len(req.GetReplace()))
+		// updates := make([]*schemapb.Update, 0, len(req.GetUpdate()))
+		// TODO: expand json/json_ietf values
+		// for _, upd := range req.GetReplace() {
+		// 	err = d.validateUpdate(ctx, upd)
+		// 	if err != nil {
+		// 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+		// 	}
+		// }
+		// for _, upd := range req.GetUpdate() {
+		// 	err = d.validateUpdate(ctx, upd)
+		// 	if err != nil {
+		// 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+		// 	}
+		// }
+
+		// validate individual updates
 		for _, del := range req.GetDelete() {
 			_, err = d.validatePath(ctx, del)
 			if err != nil {
@@ -119,13 +165,13 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 		for _, upd := range req.GetReplace() {
 			err = d.validateUpdate(ctx, upd)
 			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "%w", err)
+				return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 			}
 		}
 		for _, upd := range req.GetUpdate() {
 			err = d.validateUpdate(ctx, upd)
 			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "%w", err)
+				return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 			}
 		}
 
@@ -147,7 +193,7 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 			})
 
 		}
-		cand.deletes = append(cand.deletes, req.GetDelete()...)
+
 		// deletes end
 
 		// replaces start
@@ -161,7 +207,6 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 				Op:   schemapb.UpdateResult_REPLACE,
 			})
 		}
-		cand.replaces = append(cand.replaces, req.GetReplace()...)
 		// replaces end
 		// updates start
 		for _, upd := range req.GetUpdate() {
@@ -174,8 +219,12 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 				Op:   schemapb.UpdateResult_UPDATE,
 			})
 		}
-		cand.updates = append(cand.updates, req.GetUpdate()...)
 		// updates end
+		cand.m.Lock()
+		cand.deletes = append(cand.deletes, req.GetDelete()...)
+		cand.replaces = append(cand.replaces, req.GetReplace()...)
+		cand.updates = append(cand.updates, req.GetUpdate()...)
+		cand.m.Unlock()
 		return rsp, nil
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %v", req.GetDataStore().GetType())
@@ -273,7 +322,9 @@ func (d *Datastore) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schem
 	return nil, status.Errorf(codes.InvalidArgument, "unknown datastore type %s", req.GetDataStore().GetType())
 }
 
-func (d *Datastore) Subscribe() {}
+func (d *Datastore) Subscribe(req *schemapb.SubscribeRequest, stream schemapb.DataServer_SubscribeServer) error {
+	return nil
+}
 
 func (d *Datastore) validateUpdate(ctx context.Context, upd *schemapb.Update) error {
 	// 1.validate the path i.e check that the path exists
@@ -291,6 +342,11 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *schemapb.Update) er
 	}
 	switch obj := rsp.GetSchema().(type) {
 	case *schemapb.GetSchemaResponse_Container:
+		// switch tv := upd.GetValue().GetValue().(type) {
+		// case *schemapb.TypedValue_JsonIetfVal:
+		// case *schemapb.TypedValue_JsonVal:
+
+		// }
 		return fmt.Errorf("cannot set value on container object")
 	case *schemapb.GetSchemaResponse_Field:
 		if obj.Field.IsState {
@@ -459,6 +515,18 @@ func validateLeafTypeValue(lt *schemapb.SchemaLeafType, v any) error {
 			return fmt.Errorf("value %v does not match union type %v", v, lt.TypeName)
 		}
 		return nil
+	case "identityref":
+		valid := false
+		for _, vv := range lt.Values {
+			if fmt.Sprintf("%s", v) == vv {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return fmt.Errorf("value %q does not match identityRef type %q, must be one of [%s]", v, lt.TypeName, strings.Join(lt.Values, ", "))
+		}
+		return nil
 	default:
 		return fmt.Errorf("unhandled type %v", lt.GetType())
 	}
@@ -466,6 +534,10 @@ func validateLeafTypeValue(lt *schemapb.SchemaLeafType, v any) error {
 
 func validateLeafListValue(ll *schemapb.LeafListSchema, v any) error {
 	// TODO: validate Leaflist
+	// TODO: eval must statements
+	for _, must := range ll.MustStatements {
+		_ = must
+	}
 	return validateLeafTypeValue(ll.GetType(), v)
 }
 
@@ -668,4 +740,26 @@ func EqualTypedValues(v1, v2 *schemapb.TypedValue) bool {
 		}
 	}
 	return true
+}
+
+func (d *Datastore) expandUpdate(ctx context.Context, upd *schemapb.Update, containerSchema *schemapb.GetSchemaResponse_Container) ([]*schemapb.Update, error) {
+	switch upd.GetValue().GetValue().(type) {
+	case *schemapb.TypedValue_JsonIetfVal:
+
+	case *schemapb.TypedValue_JsonVal:
+		var v any
+		err := json.Unmarshal(upd.GetValue().GetJsonIetfVal(), v)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Printf("jsonVal: %T, %v\n", v, v)
+		switch v.(type) {
+		case string:
+		case map[string]any:
+		case []any:
+		}
+	default:
+		return []*schemapb.Update{upd}, nil
+	}
+	return nil, nil
 }

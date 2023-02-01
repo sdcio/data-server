@@ -10,15 +10,13 @@ import (
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/prototext"
 )
 
 var xpath string
 
-// getCmd represents the get command
-var getCmd = &cobra.Command{
+// schemaGetCmd represents the get command
+var schemaGetCmd = &cobra.Command{
 	Use:   "get",
 	Short: "get schema",
 	// SilenceErrors: true,
@@ -30,34 +28,32 @@ var getCmd = &cobra.Command{
 		}
 		ctx, cancel := context.WithCancel(cmd.Context())
 		defer cancel()
-		cc, err := grpc.DialContext(ctx, addr,
-			grpc.WithBlock(),
-			grpc.WithTransportCredentials(
-				insecure.NewCredentials(),
-			),
-		)
+		schemaClient, err := createSchemaClient(ctx, addr)
 		if err != nil {
 			return err
 		}
-		schemaClient := schemapb.NewSchemaServerClient(cc)
-		rsp, err := schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
+		req := &schemapb.GetSchemaRequest{
 			Path: p,
 			Schema: &schemapb.Schema{
 				Name:    schemaName,
 				Vendor:  schemaVendor,
 				Version: schemaVersion,
 			},
-		})
+		}
+		fmt.Println("request:")
+		fmt.Println(prototext.Format(req))
+		rsp, err := schemaClient.GetSchema(ctx, req)
 		if err != nil {
 			return err
 		}
+		fmt.Println("response:")
 		fmt.Println(prototext.Format(rsp))
 		return nil
 	},
 }
 
 func init() {
-	schemaCmd.AddCommand(getCmd)
+	schemaCmd.AddCommand(schemaGetCmd)
 
-	getCmd.PersistentFlags().StringVarP(&xpath, "path", "p", "", "xpath")
+	schemaGetCmd.PersistentFlags().StringVarP(&xpath, "path", "p", "", "xpath")
 }

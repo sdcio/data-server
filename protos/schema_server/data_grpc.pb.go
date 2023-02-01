@@ -23,15 +23,30 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DataServerClient interface {
 	// datastore
+	// return a datastore details
 	GetDataStore(ctx context.Context, in *GetDataStoreRequest, opts ...grpc.CallOption) (*GetDataStoreResponse, error)
+	// creates a new datastore, either a MAIN or a CANDIDATE datastore
 	CreateDataStore(ctx context.Context, in *CreateDataStoreRequest, opts ...grpc.CallOption) (*CreateDataStoreResponse, error)
+	// deletes a datastore, either a MAIN or a CANDIDATE datastore
 	DeleteDataStore(ctx context.Context, in *DeleteDataStoreRequest, opts ...grpc.CallOption) (*DeleteDataStoreResponse, error)
+	// commits changes in a CANDIDATE datastore to the datastore Target
 	Commit(ctx context.Context, in *CommitRequest, opts ...grpc.CallOption) (*CommitResponse, error)
+	// rebases a CANDIDATE datastore
+	Rebase(ctx context.Context, in *RebaseRequest, opts ...grpc.CallOption) (*RebaseResponse, error)
+	// discards changes made to a CANDIDATE datastore
 	Discard(ctx context.Context, in *DiscardRequest, opts ...grpc.CallOption) (*DiscardResponse, error)
 	// data
+	// retrieve data from a MAIN or CANDIDATE datastore, the data is specified
+	// with a set of schema.prot.Path
 	GetData(ctx context.Context, in *GetDataRequest, opts ...grpc.CallOption) (*GetDataResponse, error)
+	// writes changes to a CANDIDATE datastore,
+	// validates the values written against the datastore schema.
 	SetData(ctx context.Context, in *SetDataRequest, opts ...grpc.CallOption) (*SetDataResponse, error)
+	// returns a list of difference between a CANDIDATE datastore and its base
 	Diff(ctx context.Context, in *DiffRequest, opts ...grpc.CallOption) (*DiffResponse, error)
+	// subscribes for notification from a MAIN datastore,
+	// the client specified a list of paths it is interested on as well as a
+	// subscription mode and its parameters.
 	Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (DataServer_SubscribeClient, error)
 }
 
@@ -73,6 +88,15 @@ func (c *dataServerClient) DeleteDataStore(ctx context.Context, in *DeleteDataSt
 func (c *dataServerClient) Commit(ctx context.Context, in *CommitRequest, opts ...grpc.CallOption) (*CommitResponse, error) {
 	out := new(CommitResponse)
 	err := c.cc.Invoke(ctx, "/data.proto.DataServer/Commit", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dataServerClient) Rebase(ctx context.Context, in *RebaseRequest, opts ...grpc.CallOption) (*RebaseResponse, error) {
+	out := new(RebaseResponse)
+	err := c.cc.Invoke(ctx, "/data.proto.DataServer/Rebase", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -152,15 +176,30 @@ func (x *dataServerSubscribeClient) Recv() (*SubscribeResponse, error) {
 // for forward compatibility
 type DataServerServer interface {
 	// datastore
+	// return a datastore details
 	GetDataStore(context.Context, *GetDataStoreRequest) (*GetDataStoreResponse, error)
+	// creates a new datastore, either a MAIN or a CANDIDATE datastore
 	CreateDataStore(context.Context, *CreateDataStoreRequest) (*CreateDataStoreResponse, error)
+	// deletes a datastore, either a MAIN or a CANDIDATE datastore
 	DeleteDataStore(context.Context, *DeleteDataStoreRequest) (*DeleteDataStoreResponse, error)
+	// commits changes in a CANDIDATE datastore to the datastore Target
 	Commit(context.Context, *CommitRequest) (*CommitResponse, error)
+	// rebases a CANDIDATE datastore
+	Rebase(context.Context, *RebaseRequest) (*RebaseResponse, error)
+	// discards changes made to a CANDIDATE datastore
 	Discard(context.Context, *DiscardRequest) (*DiscardResponse, error)
 	// data
+	// retrieve data from a MAIN or CANDIDATE datastore, the data is specified
+	// with a set of schema.prot.Path
 	GetData(context.Context, *GetDataRequest) (*GetDataResponse, error)
+	// writes changes to a CANDIDATE datastore,
+	// validates the values written against the datastore schema.
 	SetData(context.Context, *SetDataRequest) (*SetDataResponse, error)
+	// returns a list of difference between a CANDIDATE datastore and its base
 	Diff(context.Context, *DiffRequest) (*DiffResponse, error)
+	// subscribes for notification from a MAIN datastore,
+	// the client specified a list of paths it is interested on as well as a
+	// subscription mode and its parameters.
 	Subscribe(*SubscribeRequest, DataServer_SubscribeServer) error
 	mustEmbedUnimplementedDataServerServer()
 }
@@ -180,6 +219,9 @@ func (UnimplementedDataServerServer) DeleteDataStore(context.Context, *DeleteDat
 }
 func (UnimplementedDataServerServer) Commit(context.Context, *CommitRequest) (*CommitResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Commit not implemented")
+}
+func (UnimplementedDataServerServer) Rebase(context.Context, *RebaseRequest) (*RebaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Rebase not implemented")
 }
 func (UnimplementedDataServerServer) Discard(context.Context, *DiscardRequest) (*DiscardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Discard not implemented")
@@ -277,6 +319,24 @@ func _DataServer_Commit_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(DataServerServer).Commit(ctx, req.(*CommitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DataServer_Rebase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RebaseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServerServer).Rebase(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/data.proto.DataServer/Rebase",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServerServer).Rebase(ctx, req.(*RebaseRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -396,6 +456,10 @@ var DataServer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Commit",
 			Handler:    _DataServer_Commit_Handler,
+		},
+		{
+			MethodName: "Rebase",
+			Handler:    _DataServer_Rebase_Handler,
 		},
 		{
 			MethodName: "Discard",

@@ -9,47 +9,43 @@ import (
 
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/prototext"
 )
 
-// toPathCmd represents the to-path command
-var toPathCmd = &cobra.Command{
+// schemaToPathCmd represents the to-path command
+var schemaToPathCmd = &cobra.Command{
 	Use:   "to-path",
-	Short: "A brief description of your command",
+	Short: "convert a list of path elements and key values to a valid path",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx, cancel := context.WithCancel(cmd.Context())
 		defer cancel()
-		cc, err := grpc.DialContext(ctx, addr,
-			grpc.WithBlock(),
-			grpc.WithTransportCredentials(
-				insecure.NewCredentials(),
-			),
-		)
+		schemaClient, err := createSchemaClient(ctx, addr)
 		if err != nil {
 			return err
 		}
-		schemaClient := schemapb.NewSchemaServerClient(cc)
-		rsp, err := schemaClient.ToPath(ctx, &schemapb.ToPathRequest{
+		req := &schemapb.ToPathRequest{
 			PathElement: pathItems,
 			Schema: &schemapb.Schema{
 				Name:    schemaName,
 				Vendor:  schemaVendor,
 				Version: schemaVersion,
 			},
-		})
+		}
+		fmt.Println("request:")
+		fmt.Println(prototext.Format(req))
+		rsp, err := schemaClient.ToPath(ctx, req)
 		if err != nil {
 			return err
 		}
+		fmt.Println("response:")
 		fmt.Println(prototext.Format(rsp))
 		return nil
 	},
 }
 
 func init() {
-	schemaCmd.AddCommand(toPathCmd)
-	toPathCmd.Flags().StringSliceVarP(&pathItems, "cp", "", nil, "path items")
+	schemaCmd.AddCommand(schemaToPathCmd)
+	schemaToPathCmd.Flags().StringSliceVarP(&pathItems, "cp", "", nil, "path items")
 }
 
 var pathItems []string
