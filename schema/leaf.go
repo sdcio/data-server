@@ -1,7 +1,10 @@
 package schema
 
 import (
+	"strings"
+
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	"github.com/iptecharch/schema-server/utils"
 	"github.com/openconfig/goyang/pkg/yang"
 )
 
@@ -16,6 +19,7 @@ func leafFromYEntry(e *yang.Entry) *schemapb.LeafSchema {
 		Units:          e.Units,
 		MustStatements: getMustStatement(e),
 		IsState:        isState(e),
+		Reference:      make([]string, 0),
 	}
 	if v, ok := e.SingleDefaultValue(); ok {
 		l.Default = v
@@ -23,17 +27,18 @@ func leafFromYEntry(e *yang.Entry) *schemapb.LeafSchema {
 	if e.Prefix != nil {
 		l.Prefix = e.Prefix.Name
 	}
-	// if mustStatements, ok := e.Extra["must"]; ok {
-	// 	for _, m := range mustStatements {
-	// 		if m, ok := m.(*yang.Must); ok {
-	// 			l.MustStatements = append(l.MustStatements, &schemapb.MustStatement{
-	// 				Statement: m.Name,
-	// 				Error:     m.ErrorMessage.Name,
-	// 			})
-	// 		}
+	for k, v := range e.Annotation {
+		// fmt.Println("annotation:", k)
+		if !strings.HasPrefix(k, "REF_") {
+			continue
+		}
+		switch v := v.(type) {
+		case *yang.Entry:
+			// l.Reference = append(l.Reference, v.Path())
+			l.Reference = append(l.Reference, utils.ToXPath(buildPathUpFromEntry(v), true))
+		}
+	}
 
-	// 	}
-	// }
 	return l
 }
 

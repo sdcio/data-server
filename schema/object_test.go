@@ -1,10 +1,13 @@
 package schema
 
 import (
+	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/iptecharch/schema-server/config"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	"github.com/openconfig/goyang/pkg/yang"
 )
 
 func TestSchema_BuildPath(t *testing.T) {
@@ -405,4 +408,245 @@ func comparePaths(p1, p2 *schemapb.Path) bool {
 		}
 	}
 	return true
+}
+
+func Test_getChildren(t *testing.T) {
+	type args struct {
+		e *yang.Entry
+	}
+	tests := []struct {
+		name string
+		args args
+		want []*yang.Entry
+	}{
+		{
+			name: "leaf",
+			args: args{
+				e: &yang.Entry{
+					Node:        &yang.Leaf{},
+					Name:        "",
+					Description: "",
+					Default:     []string{},
+					Units:       "",
+					Errors:      []error{},
+					Kind:        0,
+					Config:      0,
+					Prefix:      &yang.Value{},
+					Mandatory:   0,
+					Dir:         map[string]*yang.Entry{},
+					Key:         "",
+					Type:        &yang.YangType{},
+					Exts:        []*yang.Statement{},
+					ListAttr:    &yang.ListAttr{},
+					RPC:         &yang.RPCEntry{},
+					Identities:  []*yang.Identity{},
+					Augments:    []*yang.Entry{},
+					Augmented:   []*yang.Entry{},
+					Deviations:  []*yang.DeviatedEntry{},
+					//Deviate:     map[yang.deviationType][]*yang.Entry{},
+					Uses:       []*yang.UsesStmt{},
+					Extra:      map[string][]interface{}{},
+					Annotation: map[string]interface{}{},
+				},
+			},
+			want: []*yang.Entry{},
+		},
+		{
+			name: "leaflist",
+			args: args{
+				e: &yang.Entry{
+					Node:        &yang.LeafList{},
+					Name:        "",
+					Description: "",
+					Default:     []string{},
+					Units:       "",
+					Errors:      []error{},
+					Kind:        0,
+					Config:      0,
+					Prefix:      &yang.Value{},
+					Mandatory:   0,
+					Dir:         map[string]*yang.Entry{},
+					Key:         "",
+					Type:        &yang.YangType{},
+					Exts:        []*yang.Statement{},
+					ListAttr:    &yang.ListAttr{},
+					RPC:         &yang.RPCEntry{},
+					Identities:  []*yang.Identity{},
+					Augments:    []*yang.Entry{},
+					Augmented:   []*yang.Entry{},
+					Deviations:  []*yang.DeviatedEntry{},
+					//Deviate:     map[yang.deviationType][]*yang.Entry{},
+					Uses:       []*yang.UsesStmt{},
+					Extra:      map[string][]interface{}{},
+					Annotation: map[string]interface{}{},
+				},
+			},
+			want: []*yang.Entry{},
+		},
+		{
+			name: "container",
+			args: args{
+				e: &yang.Entry{
+					Node:        &yang.Container{},
+					Name:        "",
+					Description: "",
+					Default:     []string{},
+					Units:       "",
+					Errors:      []error{},
+					Kind:        0,
+					Config:      0,
+					Prefix:      &yang.Value{},
+					Mandatory:   0,
+					Dir: map[string]*yang.Entry{
+						"l1": {Node: &yang.Leaf{}, Name: "l1"},
+						"l2": {Node: &yang.Leaf{}, Name: "l2"},
+						"c1": {Node: &yang.Container{}, Kind: yang.DirectoryEntry, Name: "c1"},
+					},
+					Key:        "",
+					Type:       &yang.YangType{},
+					Exts:       []*yang.Statement{},
+					ListAttr:   &yang.ListAttr{},
+					RPC:        &yang.RPCEntry{},
+					Identities: []*yang.Identity{},
+					Augments:   []*yang.Entry{},
+					Augmented:  []*yang.Entry{},
+					Deviations: []*yang.DeviatedEntry{},
+					//Deviate:     map[yang.deviationType][]*yang.Entry{},
+					Uses:       []*yang.UsesStmt{},
+					Extra:      map[string][]interface{}{},
+					Annotation: map[string]interface{}{},
+				},
+			},
+			want: []*yang.Entry{
+				{Node: &yang.Leaf{}, Name: "l1"},
+				{Node: &yang.Leaf{}, Name: "l2"},
+				{Node: &yang.Container{}, Kind: yang.DirectoryEntry, Name: "c1"},
+			},
+		},
+		{
+			name: "container with choice",
+			args: args{
+				e: &yang.Entry{
+					Node:        &yang.Container{},
+					Name:        "",
+					Description: "",
+					Default:     []string{},
+					Units:       "",
+					Errors:      []error{},
+					Kind:        yang.DirectoryEntry,
+					Config:      0,
+					Prefix:      &yang.Value{},
+					Mandatory:   0,
+					Dir: map[string]*yang.Entry{
+						"l1": {Node: &yang.Leaf{}, Name: "l1"},
+						"l2": {Node: &yang.Leaf{}, Name: "l2"},
+						"c1": {
+							Node: &yang.Container{},
+							Kind: yang.DirectoryEntry,
+							Name: "c1",
+						},
+						"ch1": {Node: &yang.Choice{}, Name: "ch1", Kind: yang.ChoiceEntry, Dir: map[string]*yang.Entry{
+							"c2": {
+								Node: &yang.Container{},
+								Kind: yang.DirectoryEntry,
+								Name: "c2",
+							},
+						}},
+					},
+					Key:        "",
+					Type:       &yang.YangType{},
+					Exts:       []*yang.Statement{},
+					ListAttr:   nil,
+					RPC:        &yang.RPCEntry{},
+					Identities: []*yang.Identity{},
+					Augments:   []*yang.Entry{},
+					Augmented:  []*yang.Entry{},
+					Deviations: []*yang.DeviatedEntry{},
+					//Deviate:     map[yang.deviationType][]*yang.Entry{},
+					Uses:       []*yang.UsesStmt{},
+					Extra:      map[string][]interface{}{},
+					Annotation: map[string]interface{}{},
+				},
+			},
+			want: []*yang.Entry{
+				{Node: &yang.Leaf{}, Name: "l1"},
+				{Node: &yang.Leaf{}, Name: "l2"},
+				{Node: &yang.Container{}, Kind: yang.DirectoryEntry, Name: "c1"},
+				{Node: &yang.Container{}, Kind: yang.DirectoryEntry, Name: "c2"},
+			},
+		},
+		{
+			name: "container with choice and case",
+			args: args{
+				e: &yang.Entry{
+					Node:        &yang.Container{},
+					Name:        "",
+					Description: "",
+					Default:     []string{},
+					Units:       "",
+					Errors:      []error{},
+					Kind:        yang.DirectoryEntry,
+					Config:      0,
+					Prefix:      &yang.Value{},
+					Mandatory:   0,
+					Dir: map[string]*yang.Entry{
+						"l1": {Node: &yang.Leaf{}, Name: "l1"},
+						"l2": {Node: &yang.Leaf{}, Name: "l2"},
+						"c3": {
+							Node: &yang.Container{},
+							Kind: yang.DirectoryEntry,
+							Name: "c3",
+						},
+						"ch1": {Node: &yang.Choice{}, Name: "ch1", Kind: yang.ChoiceEntry, Dir: map[string]*yang.Entry{
+							"case1": {
+								Node: &yang.Container{},
+								Kind: yang.CaseEntry,
+								Name: "c1",
+							},
+							"case2": {
+								Node: &yang.Container{},
+								Kind: yang.CaseEntry,
+								Name: "c2",
+							},
+						}},
+					},
+					Key:        "",
+					Type:       &yang.YangType{},
+					Exts:       []*yang.Statement{},
+					ListAttr:   nil,
+					RPC:        &yang.RPCEntry{},
+					Identities: []*yang.Identity{},
+					Augments:   []*yang.Entry{},
+					Augmented:  []*yang.Entry{},
+					Deviations: []*yang.DeviatedEntry{},
+					//Deviate:     map[yang.deviationType][]*yang.Entry{},
+					Uses:       []*yang.UsesStmt{},
+					Extra:      map[string][]interface{}{},
+					Annotation: map[string]interface{}{},
+				},
+			},
+			want: []*yang.Entry{
+				{Node: &yang.Leaf{}, Name: "l1"},
+				{Node: &yang.Leaf{}, Name: "l2"},
+				{Node: &yang.Container{}, Kind: yang.CaseEntry, Name: "c1"},
+				{Node: &yang.Container{}, Kind: yang.CaseEntry, Name: "c2"},
+				{Node: &yang.Container{}, Kind: yang.DirectoryEntry, Name: "c3"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := getChildren(tt.args.e)
+			sort.Slice(got, sortFn(got))
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getChildren() = %v, want %v", got, tt.want)
+				for _, g := range got {
+					t.Errorf("got : %T | %s", g.Node, g.Name)
+				}
+				for _, w := range tt.want {
+					t.Errorf("want: %T | %s", w.Node, w.Name)
+				}
+			}
+		})
+	}
 }

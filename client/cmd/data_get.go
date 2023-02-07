@@ -45,7 +45,7 @@ var dataGetCmd = &cobra.Command{
 			req.Path = append(req.Path, xp)
 		}
 		if candidate != "" {
-			req.DataStore = &schemapb.DataStore{
+			req.Datastore = &schemapb.DataStore{
 				Type: schemapb.Type_CANDIDATE,
 				Name: candidate,
 			}

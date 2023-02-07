@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -52,6 +53,9 @@ func (c *Config) validateSetDefaults() error {
 	if c.GRPCServer.MaxRecvMsgSize <= 0 {
 		c.GRPCServer.MaxRecvMsgSize = 4 * 1024 * 1024
 	}
+	if c.GRPCServer.RPCTimeout <= 0 {
+		c.GRPCServer.RPCTimeout = time.Minute
+	}
 	return nil
 }
 
@@ -66,6 +70,7 @@ type GRPCServer struct {
 	SchemaServer   *SchemaServer `yaml:"schema-server,omitempty" json:"schema-server,omitempty"`
 	DataServer     *DataServer   `yaml:"data-server,omitempty" json:"data-server,omitempty"`
 	MaxRecvMsgSize int           `yaml:"max-recv-msg-size,omitempty" json:"max-recv-msg-size,omitempty"`
+	RPCTimeout     time.Duration `yaml:"rpc-timeout,omitempty" json:"rpc-timeout,omitempty"`
 }
 
 func (t *TLS) NewConfig(ctx context.Context) (*tls.Config, error) {

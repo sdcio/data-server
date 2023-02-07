@@ -37,16 +37,15 @@ func containerFromYEntry(e *yang.Entry) *schemapb.ContainerSchema {
 	for _, key := range strings.Fields(e.Key) {
 		keys[key] = struct{}{}
 	}
-
-	for k, v := range e.Dir {
+	for _, child := range getChildren(e) {
 		switch {
-		case v.IsDir():
-			c.Children = append(c.Children, k)
-		case v.IsLeaf(), v.IsLeafList():
-			o := ObjectFromYEntry(v)
+		case child.IsDir():
+			c.Children = append(c.Children, child.Name)
+		case child.IsLeaf(), child.IsLeafList():
+			o := ObjectFromYEntry(child)
 			switch o := o.(type) {
 			case *schemapb.LeafSchema:
-				if _, ok := keys[k]; ok {
+				if _, ok := keys[child.Name]; ok {
 					c.Keys = append(c.Keys, o)
 					continue
 				}
@@ -73,7 +72,6 @@ func isState(e *yang.Entry) bool {
 func isPresence(e *yang.Entry) bool {
 	if presence, ok := e.Extra["presence"]; ok {
 		for _, m := range presence {
-
 			if _, ok := m.(*yang.Value); ok {
 				return ok
 			}

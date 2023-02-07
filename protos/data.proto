@@ -39,7 +39,7 @@ service DataServer {
 // messages
 message GetDataRequest {
     string                  name                    = 1;
-    DataStore               data_store              = 2;
+    DataStore               datastore               = 2;
     repeated                schema.proto.Path path  = 3;
     schema.proto.DataType   data_type               = 4;
 }
@@ -52,7 +52,7 @@ message SetDataRequest {
     // datastore name
     string                      name                    = 1;
     // datastore type and name
-    DataStore                   data_store              = 2;
+    DataStore                   datastore              = 2;
     // list of updates
     repeated Update             update                  = 10;
     // list of replaces
@@ -72,13 +72,13 @@ message DiffRequest {
     // datastore name
     string    name       = 1;
     // CANDIDATE datastore name
-    DataStore data_store = 2;
+    DataStore datastore = 2;
 }
 message DiffResponse {
     // datastore name
     string              name        = 1;
     // CANDIDATE datastore name
-    DataStore           data_store  = 2;
+    DataStore           datastore  = 2;
     // list of paths and values that differ between MAIN and CANDIDATE
     repeated DiffUpdate diff        = 3;
 }

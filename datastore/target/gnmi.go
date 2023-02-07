@@ -137,11 +137,29 @@ START:
 						Mode: gnmi.SubscriptionMode_ON_CHANGE,
 					},
 				},
+				Mode: gnmi.SubscriptionList_STREAM,
+				// Encoding: gnmi.Encoding_ASCII,
+				Encoding: 45, // ascii_config_only
+			},
+		},
+	}, "sync_config")
+	go t.target.Subscribe(ctx, &gnmi.SubscribeRequest{
+		Request: &gnmi.SubscribeRequest_Subscribe{
+			Subscribe: &gnmi.SubscriptionList{
+				// Prefix: &gnmi.Path{},
+				Subscription: []*gnmi.Subscription{
+					{
+						Mode:           gnmi.SubscriptionMode_SAMPLE,
+						SampleInterval: uint64(10 * time.Second),
+					},
+				},
+
 				Mode:     gnmi.SubscriptionList_STREAM,
 				Encoding: gnmi.Encoding_ASCII,
 			},
 		},
-	}, "sync")
+	}, "sync_state")
+	defer t.target.StopSubscriptions()
 	rspch, errCh := t.target.ReadSubscriptions()
 	// log.Info("reading target subs")
 	for {

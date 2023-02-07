@@ -19,7 +19,7 @@ func (s *Server) GetData(ctx context.Context, req *schemapb.GetDataRequest) (*sc
 	}
 	switch req.GetDataType() {
 	case schemapb.DataType_STATE:
-		if req.GetDataStore().GetType() == schemapb.Type_CANDIDATE {
+		if req.GetDatastore().GetType() == schemapb.Type_CANDIDATE {
 			return nil, status.Errorf(codes.InvalidArgument, "a candidate datastore does not store state data")
 		}
 	}

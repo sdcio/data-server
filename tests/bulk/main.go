@@ -20,6 +20,7 @@ var conc int64
 var numVlan int
 var cleanup bool
 var interfaces []string
+var candidate string
 
 func main() {
 	pflag.StringVarP(&addr, "address", "a", "localhost:55000", "schema/data server address")
@@ -28,20 +29,22 @@ func main() {
 	pflag.StringSliceVarP(&interfaces, "interface", "", []string{"ethernet-1/1"}, "list of interfaces to provision")
 	pflag.IntVarP(&numVlan, "vlans", "", 10, "number of vlans to configure")
 	pflag.BoolVarP(&cleanup, "cleanup", "", false, "cleanup after creation")
+	pflag.StringVarP(&candidate, "candidate", "", "default", "candidate name")
 	pflag.Parse()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	dataClient, err := createDataClient(ctx, addr)
+	cc, dataClient, err := createDataClient(ctx, addr)
 	if err != nil {
 		panic(err)
 	}
+	defer cc.Close()
 	crDsRsp, err := dataClient.CreateDataStore(ctx, &schemapb.CreateDataStoreRequest{
 		Name: ds,
 		Datastore: &schemapb.DataStore{
 			Type: schemapb.Type_CANDIDATE,
-			Name: "default",
+			Name: candidate,
 		},
 	})
 	if err != nil {
@@ -66,9 +69,9 @@ func main() {
 				vlanID := strconv.Itoa(i + 1)
 				setRsp, err := dataClient.SetData(ctx, &schemapb.SetDataRequest{
 					Name: ds,
-					DataStore: &schemapb.DataStore{
+					Datastore: &schemapb.DataStore{
 						Type: schemapb.Type_CANDIDATE,
-						Name: "default",
+						Name: candidate,
 					},
 					Update: []*schemapb.Update{
 						// interface enable
@@ -239,7 +242,7 @@ func main() {
 		Name: ds,
 		Datastore: &schemapb.DataStore{
 			Type: schemapb.Type_CANDIDATE,
-			Name: "default",
+			Name: candidate,
 		},
 		Rebase: false,
 		Stay:   false,
@@ -255,7 +258,7 @@ func main() {
 		Name: ds,
 		Datastore: &schemapb.DataStore{
 			Type: schemapb.Type_CANDIDATE,
-			Name: "default",
+			Name: candidate,
 		},
 	})
 	if err != nil {
@@ -280,9 +283,9 @@ func main() {
 				index := strconv.Itoa(i)
 				setRsp, err := dataClient.SetData(ctx, &schemapb.SetDataRequest{
 					Name: ds,
-					DataStore: &schemapb.DataStore{
+					Datastore: &schemapb.DataStore{
 						Type: schemapb.Type_CANDIDATE,
-						Name: "default",
+						Name: candidate,
 					},
 					Delete: []*schemapb.Path{
 						{Elem: []*schemapb.PathElem{
@@ -294,25 +297,6 @@ func main() {
 							},
 							{Name: "subinterface", Key: map[string]string{"index": index}},
 						}},
-					},
-					Update: []*schemapb.Update{
-						// interface enable
-						{
-							Path: &schemapb.Path{Elem: []*schemapb.PathElem{
-								{
-									Name: "interface",
-									Key: map[string]string{
-										"name": iface,
-									},
-								},
-								{
-									Name: "admin-state",
-								},
-							}},
-							Value: &schemapb.TypedValue{
-								Value: &schemapb.TypedValue_StringVal{StringVal: "enable"},
-							},
-						},
 					},
 				},
 				)
@@ -330,7 +314,7 @@ func main() {
 		Name: ds,
 		Datastore: &schemapb.DataStore{
 			Type: schemapb.Type_CANDIDATE,
-			Name: "default",
+			Name: candidate,
 		},
 		Rebase: false,
 		Stay:   false,
@@ -342,7 +326,7 @@ func main() {
 	fmt.Println("deletes commit ok    :", time.Since(now))
 }
 
-func createDataClient(ctx context.Context, addr string) (schemapb.DataServerClient, error) {
+func createDataClient(ctx context.Context, addr string) (*grpc.ClientConn, schemapb.DataServerClient, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, addr,
@@ -352,7 +336,7 @@ func createDataClient(ctx context.Context, addr string) (schemapb.DataServerClie
 		),
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return schemapb.NewDataServerClient(cc), nil
+	return cc, schemapb.NewDataServerClient(cc), nil
 }

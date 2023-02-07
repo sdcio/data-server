@@ -30,7 +30,7 @@ var dataSetCmd = &cobra.Command{
 		}
 		req := &schemapb.SetDataRequest{
 			Name: datastoreName,
-			DataStore: &schemapb.DataStore{
+			Datastore: &schemapb.DataStore{
 				Type: schemapb.Type_CANDIDATE,
 				Name: candidate,
 			},

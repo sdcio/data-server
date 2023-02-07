@@ -17,13 +17,13 @@ import (
 )
 
 func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest) (*schemapb.GetDataResponse, error) {
-	switch req.GetDataStore().GetType() {
+	switch req.GetDatastore().GetType() {
 	case schemapb.Type_CANDIDATE:
 		d.m.RLock()
 		defer d.m.RUnlock()
-		cand, ok := d.candidates[req.GetDataStore().GetName()]
+		cand, ok := d.candidates[req.GetDatastore().GetName()]
 		if !ok {
-			return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDataStore().GetName())
+			return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDatastore().GetName())
 		}
 		rsp := &schemapb.GetDataResponse{
 			Notification: make([]*schemapb.Notification, 0, len(req.GetPath())),
@@ -124,19 +124,19 @@ func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sch
 		}
 		return rsp, nil
 	}
-	return nil, fmt.Errorf("unknown datastore type: %v", req.GetDataStore().GetType())
+	return nil, fmt.Errorf("unknown datastore type: %v", req.GetDatastore().GetType())
 }
 
 func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error) {
-	switch req.GetDataStore().GetType() {
+	switch req.GetDatastore().GetType() {
 	case schemapb.Type_MAIN:
 		return nil, status.Error(codes.InvalidArgument, "cannot set fields in MAIN datastore")
 	case schemapb.Type_CANDIDATE:
 		d.m.RLock()
 		defer d.m.RUnlock()
-		cand, ok := d.candidates[req.GetDataStore().GetName()]
+		cand, ok := d.candidates[req.GetDatastore().GetName()]
 		if !ok {
-			return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDataStore().GetName())
+			return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDatastore().GetName())
 		}
 		var err error
 		// replaces := make([]*schemapb.Update, 0, len(req.GetReplace()))
@@ -227,24 +227,24 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 		cand.m.Unlock()
 		return rsp, nil
 	default:
-		return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %v", req.GetDataStore().GetType())
+		return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %v", req.GetDatastore().GetType())
 	}
 }
 
 func (d *Datastore) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schemapb.DiffResponse, error) {
-	switch req.GetDataStore().GetType() {
+	switch req.GetDatastore().GetType() {
 	case schemapb.Type_MAIN:
 		return nil, status.Errorf(codes.InvalidArgument, "must set a candidate datastore")
 	case schemapb.Type_CANDIDATE:
 		d.m.RLock()
 		defer d.m.RUnlock()
-		cand, ok := d.candidates[req.GetDataStore().GetName()]
+		cand, ok := d.candidates[req.GetDatastore().GetName()]
 		if !ok {
-			return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDataStore().GetName())
+			return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDatastore().GetName())
 		}
 		diffRsp := &schemapb.DiffResponse{
 			Name:      req.GetName(),
-			DataStore: req.GetDataStore(),
+			Datastore: req.GetDatastore(),
 			Diff:      []*schemapb.DiffUpdate{},
 		}
 		for _, del := range cand.deletes {
@@ -319,7 +319,7 @@ func (d *Datastore) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schem
 		}
 		return diffRsp, nil
 	}
-	return nil, status.Errorf(codes.InvalidArgument, "unknown datastore type %s", req.GetDataStore().GetType())
+	return nil, status.Errorf(codes.InvalidArgument, "unknown datastore type %s", req.GetDatastore().GetType())
 }
 
 func (d *Datastore) Subscribe(req *schemapb.SubscribeRequest, stream schemapb.DataServer_SubscribeServer) error {

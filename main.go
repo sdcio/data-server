@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"time"
@@ -40,10 +41,12 @@ START:
 	log.Infof("read config:\n%s", string(b))
 	s, err = server.NewServer(cfg)
 	if err != nil {
-		log.Errorf("failed to create a server: %v", err)
+		log.Errorf("failed to create server: %v", err)
 		os.Exit(1)
 	}
-	err = s.Serve()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	err = s.Serve(ctx)
 	if err != nil {
 		log.Errorf("failed to run server: %v", err)
 		time.Sleep(time.Second)

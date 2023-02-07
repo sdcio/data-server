@@ -204,6 +204,8 @@ message LeafSchema {
 
     bool is_state       = 21;
     string if_feature   = 23;
+    
+    repeated string reference = 25;
 }
 
 message SchemaLeafType {

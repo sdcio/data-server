@@ -52,6 +52,11 @@ func NewSchema(sCfg *config.SchemaConfig) (*Schema, error) {
 		e := yang.ToEntry(m)
 		sc.root.Dir[e.Name] = e
 	}
+	log.Infof("schema %s building references", sc.UniqueName())
+	err = sc.buildReferencesAnnotation()
+	if err != nil {
+		return nil, err
+	}
 	sc.status = "ok"
 	log.Infof("schema %s parsed in %s", sc.UniqueName(), time.Since(now))
 	return sc, nil

@@ -1,7 +1,11 @@
 grpc-server:
   address: ":56000"
   #tls:
-  datastore-server: true
+  data-server:
+    # if true, enables datastore and data RPCs
+    enabled: true
+    # max number of candidates per DS
+    max-candidates: 16
   max-send-msg-size: 25165824 # (24MB) = 24 * 1024 * 1024
 
 # data server config
@@ -14,20 +18,33 @@ datastores: # this creates MAIN datastores
       version: 22.11.1
     sbi:
       type: gnmi # noop, nc, nats, redis
-      address: "clab-schema-srl1:57400"
+      address: "clab-distributed-srl1:57400"
       credentials:
         username: admin
         password: NokiaSrl1!
       tls:
         skip-verify: true
-  - name: srl1
+  - name: srl2
     schema: 
-      name: SRL-Native
+      name: srl
       vendor: Nokia
       version: 22.11.1
     sbi:
       type: gnmi # noop, nc, nats, redis
-      address: "clab-schema-srl2:57400"
+      address: "clab-distributed-srl2:57400"
+      credentials:
+        username: admin
+        password: NokiaSrl1!
+      tls:
+        skip-verify: true
+  - name: srl3
+    schema: 
+      name: srl
+      vendor: Nokia
+      version: 22.11.1
+    sbi:
+      type: gnmi # noop, nc, nats, redis
+      address: "clab-distributed-srl3:57400"
       credentials:
         username: admin
         password: NokiaSrl1!

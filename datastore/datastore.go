@@ -11,9 +11,6 @@ import (
 	"github.com/iptecharch/schema-server/datastore/target"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 type Datastore struct {
@@ -59,7 +56,8 @@ type candidate struct {
 }
 
 // New creates a new datastore, its schema server client and initializes the SBI target
-func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Datastore {
+// func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Datastore {
+func New(c *config.DatastoreConfig, scc schemapb.SchemaServerClient) *Datastore {
 	ds := &Datastore{
 		config: c,
 		main: &main{
@@ -74,38 +72,38 @@ func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Da
 	ds.cfn = cancel
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go func() {
-		// defer wg.Done()
-	SCHEMA_CONNECT:
-		opts := []grpc.DialOption{
-			grpc.WithBlock(),
-		}
-		switch schemaServer.TLS {
-		case nil:
-			opts = append(opts,
-				grpc.WithTransportCredentials(
-					insecure.NewCredentials(),
-				))
-		default:
-			tlsCfg, err := schemaServer.TLS.NewConfig(ctx)
-			if err != nil {
-				log.Errorf("DS: %s: failed to read schema server TLS config: %v", c.Name, err)
-				time.Sleep(time.Second)
-				goto SCHEMA_CONNECT
-			}
-			opts = append(opts,
-				grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
-			)
-		}
-		cc, err := grpc.DialContext(ctx, schemaServer.Address, opts...)
-		if err != nil {
-			log.Errorf("failed to connect DS to schema server :%v", err)
-			time.Sleep(time.Second)
-			goto SCHEMA_CONNECT
-		}
-		ds.schemaClient = schemapb.NewSchemaServerClient(cc)
-	}()
-
+	// go func() {
+	// 	// defer wg.Done()
+	// SCHEMA_CONNECT:
+	// 	opts := []grpc.DialOption{
+	// 		grpc.WithBlock(),
+	// 	}
+	// 	switch schemaServer.TLS {
+	// 	case nil:
+	// 		opts = append(opts,
+	// 			grpc.WithTransportCredentials(
+	// 				insecure.NewCredentials(),
+	// 			))
+	// 	default:
+	// 		tlsCfg, err := schemaServer.TLS.NewConfig(ctx)
+	// 		if err != nil {
+	// 			log.Errorf("DS: %s: failed to read schema server TLS config: %v", c.Name, err)
+	// 			time.Sleep(time.Second)
+	// 			goto SCHEMA_CONNECT
+	// 		}
+	// 		opts = append(opts,
+	// 			grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
+	// 		)
+	// 	}
+	// 	cc, err := grpc.DialContext(ctx, schemaServer.Address, opts...)
+	// 	if err != nil {
+	// 		log.Errorf("failed to connect DS to schema server :%v", err)
+	// 		time.Sleep(time.Second)
+	// 		goto SCHEMA_CONNECT
+	// 	}
+	// 	ds.schemaClient = schemapb.NewSchemaServerClient(cc)
+	// }()
+	ds.schemaClient = scc
 	go func() {
 		defer wg.Done()
 		var err error
@@ -178,6 +176,7 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 			return err
 		}
 	}
+	// fmt.Println(resTree.PrintTree())
 	// resTree.Print("")
 	// TODO: 1. validate resTree
 	// TODO: 1.1 validate added/removed leafrefs ?
@@ -188,7 +187,7 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 		Replace: cand.replaces,
 		Delete:  cand.deletes,
 	}
-	log.Infof("commit: sending a setDataRequest with %d updates, %d replaces and %d deletes", len(sbiSet.GetUpdate()), len(sbiSet.GetReplace()), len(sbiSet.GetDelete()))
+	log.Infof("datastore %s/%s commit: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d", d.config.Name, name, len(sbiSet.GetUpdate()), len(sbiSet.GetReplace()), len(sbiSet.GetDelete()))
 	rsp, err := d.sbi.Set(ctx, sbiSet)
 	if err != nil {
 		return err
@@ -288,7 +287,7 @@ func (d *Datastore) Sync(ctx context.Context) {
 					},
 				})
 				if err != nil {
-					log.Errorf("datastore %s failed to get schema for path %v: %v", d.config.Name, del, err)
+					log.Errorf("datastore %s failed to get schema for delete path %v: %v", d.config.Name, del, err)
 					continue
 				}
 				switch {
@@ -319,7 +318,7 @@ func (d *Datastore) Sync(ctx context.Context) {
 					},
 				})
 				if err != nil {
-					log.Errorf("datastore %s failed to get schema for path %v: %v", d.config.Name, upd.GetPath(), err)
+					log.Errorf("datastore %s failed to get schema for update path %v: %v", d.config.Name, upd.GetPath(), err)
 					continue
 				}
 				switch {

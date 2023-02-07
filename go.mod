@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/AlekSi/pointer v1.2.0
 	github.com/gorilla/mux v1.8.0
+	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/kylelemons/godebug v1.1.0
 	github.com/mitchellh/go-homedir v1.1.0

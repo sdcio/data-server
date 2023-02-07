@@ -26,7 +26,7 @@ var dataDiffCmd = &cobra.Command{
 		}
 		req := &schemapb.DiffRequest{
 			Name: datastoreName,
-			DataStore: &schemapb.DataStore{
+			Datastore: &schemapb.DataStore{
 				Type: schemapb.Type_CANDIDATE,
 				Name: candidate,
 			},

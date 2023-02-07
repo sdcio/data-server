@@ -48,6 +48,8 @@ type DataServerClient interface {
 	// the client specified a list of paths it is interested on as well as a
 	// subscription mode and its parameters.
 	Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (DataServer_SubscribeClient, error)
+	//
+	GetReferences(ctx context.Context, in *GetReferencesRequest, opts ...grpc.CallOption) (*GetReferencesResponse, error)
 }
 
 type dataServerClient struct {
@@ -171,6 +173,15 @@ func (x *dataServerSubscribeClient) Recv() (*SubscribeResponse, error) {
 	return m, nil
 }
 
+func (c *dataServerClient) GetReferences(ctx context.Context, in *GetReferencesRequest, opts ...grpc.CallOption) (*GetReferencesResponse, error) {
+	out := new(GetReferencesResponse)
+	err := c.cc.Invoke(ctx, "/data.proto.DataServer/GetReferences", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DataServerServer is the server API for DataServer service.
 // All implementations must embed UnimplementedDataServerServer
 // for forward compatibility
@@ -201,6 +212,8 @@ type DataServerServer interface {
 	// the client specified a list of paths it is interested on as well as a
 	// subscription mode and its parameters.
 	Subscribe(*SubscribeRequest, DataServer_SubscribeServer) error
+	//
+	GetReferences(context.Context, *GetReferencesRequest) (*GetReferencesResponse, error)
 	mustEmbedUnimplementedDataServerServer()
 }
 
@@ -237,6 +250,9 @@ func (UnimplementedDataServerServer) Diff(context.Context, *DiffRequest) (*DiffR
 }
 func (UnimplementedDataServerServer) Subscribe(*SubscribeRequest, DataServer_SubscribeServer) error {
 	return status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
+}
+func (UnimplementedDataServerServer) GetReferences(context.Context, *GetReferencesRequest) (*GetReferencesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetReferences not implemented")
 }
 func (UnimplementedDataServerServer) mustEmbedUnimplementedDataServerServer() {}
 
@@ -434,6 +450,24 @@ func (x *dataServerSubscribeServer) Send(m *SubscribeResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _DataServer_GetReferences_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetReferencesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServerServer).GetReferences(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/data.proto.DataServer/GetReferences",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServerServer).GetReferences(ctx, req.(*GetReferencesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DataServer_ServiceDesc is the grpc.ServiceDesc for DataServer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -476,6 +510,10 @@ var DataServer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Diff",
 			Handler:    _DataServer_Diff_Handler,
+		},
+		{
+			MethodName: "GetReferences",
+			Handler:    _DataServer_GetReferences_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
