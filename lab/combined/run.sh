@@ -1,5 +1,7 @@
 #!/bin/bash
 
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+
 echo $1
 sudo clab des -c
 
@@ -10,10 +12,12 @@ then
     docker build . -t schema-server:latest
 fi
 
-cd lab/combined
+cd $SCRIPTPATH/lab/combined
 sudo clab dep -c
-cd ../common
-./configure.sh combined
+
+cd -
+$SCRIPTPATH/../common/configure.sh combined
+
 if [[ "$1" == "build" ]];
 then
     docker image prune -f
