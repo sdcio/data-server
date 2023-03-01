@@ -2,23 +2,30 @@
 
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
-echo $1
-sudo clab des -c
+CLAB_BASE=$SCRIPTPATH/../clab-base/
 
-cd ../../
+echo $1
+
+ACTUALDIR=$(pwd)
+
+cd $SCRIPTPATH
+sudo CLAB_LABDIR_BASE=${CLAB_BASE} clab destroy -c
+
 if [[ "$1" == "build" ]];
 then
+    cd ../../
     docker image prune -f
     docker build . -t schema-server:latest
 fi
 
-cd $SCRIPTPATH/lab/combined
-sudo clab dep -c
+cd $SCRIPTPATH
+sudo CLAB_LABDIR_BASE=${CLAB_BASE} clab deploy -c
 
-cd -
 $SCRIPTPATH/../common/configure.sh combined
 
 if [[ "$1" == "build" ]];
 then
     docker image prune -f
 fi
+
+cd ${ACTUALDIR}
