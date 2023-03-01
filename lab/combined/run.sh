@@ -4,8 +4,6 @@ SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
 CLAB_BASE=$SCRIPTPATH/../clab-base/
 
-echo $1
-
 ACTUALDIR=$(pwd)
 
 cd $SCRIPTPATH

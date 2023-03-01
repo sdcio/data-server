@@ -1,1 +1,3 @@
 lab/
+tests/
+proto/*proto
