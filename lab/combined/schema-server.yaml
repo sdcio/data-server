@@ -1,9 +1,17 @@
 grpc-server:
   address: ":55000"
   #tls:
-  schema-server: true
-  datastore-server: true
   max-send-msg-size: 25165824 # (24MB) = 24 * 1024 * 1024
+  schema-server: 
+    # if true, enables schema RPCs
+    enabled: true
+    # directory to store teh uploaded schemas
+    schemas-directory: ./schemas
+  data-server:
+    # if true, enables datastore and data RPCs
+    enabled: true
+    # max number of candidates per DS
+    max-candidates: 16
 
 # schema-server
 schemas:
@@ -11,29 +19,20 @@ schemas:
     vendor: Nokia
     version: 22.11.1
     files:
-      - ./yang/srl-latest-yang-models/srl_nokia/models
+      - /app/yang/srl-22.11.1/srl_nokia/models
     directories:
-      - ./yang/srl-latest-yang-models/ietf
+      - /app/yang/srl-22.11.1/ietf
     excludes:
       - .*tools.*
-  
-  - name: srloc
-    vendor: Nokia
-    version: 22.11.1
-    files:
-      - ./yang/srl-latest-yang-models/openconfig
-    directories:
-      - ./yang/srl-latest-yang-models/ietf
-      - ./yang/srl-latest-yang-models/iana
 
-  - name: sros
-    vendor: Nokia
-    version: 22.10
-    files:
-      - ./yang/latest_sros_22.10/nokia-combined
-    directories:
-      - ./yang/latest_sros_22.10/ietf
-      - ./yang/latest_sros_22.10/nokia-sros-yang-extensions.yang
+  # - name: sros
+  #   vendor: Nokia
+  #   version: 22.10
+  #   files:
+  #     - ./yang/latest_sros_22.10/nokia-combined
+  #   directories:
+  #     - ./yang/latest_sros_22.10/ietf
+  #     - ./yang/latest_sros_22.10/nokia-sros-yang-extensions.yang
 
 # data server config
 ## known data stores

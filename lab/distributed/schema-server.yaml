@@ -14,36 +14,36 @@ schemas:
     vendor: Nokia
     version: 22.11.1
     files:
-      - ./yang/srl-22.11.1/srl_nokia/models
+      - /app/yang/srl-22.11.1/srl_nokia/models
     directories:
-      - ./yang/srl-22.11.1/ietf
+      - /app/yang/srl-22.11.1/ietf
     excludes:
       - .*tools.*
   - name: srl
     vendor: Nokia
     version: 22.6.4
     files:
-      - ./yang/srl-22.6.4/srl_nokia/models
+      - /app/yang/srl-22.6.4/srl_nokia/models
     directories:
-      - ./yang/srl-22.6.4/ietf
+      - /app/yang/srl-22.6.4/ietf
     excludes:
       - .*tools.*
   - name: srl
     vendor: Nokia
     version: 22.3.2
     files:
-      - ./yang/srl-22.3.2/srl_nokia/models
+      - /app/yang/srl-22.3.2/srl_nokia/models
     directories:
-      - ./yang/srl-22.3.2/ietf
+      - /app/yang/srl-22.3.2/ietf
     excludes:
       - .*tools.*
   - name: srl
     vendor: Nokia
     version: 21.11.3
     files:
-      - ./yang/srl-21.11.3/srl_nokia/models
+      - /app/yang/srl-21.11.3/srl_nokia/models
     directories:
-      - ./yang/srl-21.11.3/ietf
+      - /app/yang/srl-21.11.3/ietf
     excludes:
       - .*tools.*
   
