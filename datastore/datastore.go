@@ -108,7 +108,11 @@ func New(c *config.DatastoreConfig, scc schemapb.SchemaServerClient) *Datastore 
 		defer wg.Done()
 		var err error
 	CONNECT:
-		ds.sbi, err = target.New(ctx, c.Name, c.SBI)
+		ds.sbi, err = target.New(ctx, c.Name, c.SBI, scc, &schemapb.Schema{
+			Name:    ds.config.Schema.Name,
+			Vendor:  ds.config.Schema.Vendor,
+			Version: ds.config.Schema.Version,
+		})
 		if err != nil {
 			log.Errorf("failed to create DS target: %v", err)
 			time.Sleep(time.Second)

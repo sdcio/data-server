@@ -61,6 +61,13 @@ schemas:
       - ./lab/common/yang/srl-21.11.3/ietf
     excludes:
       - .*tools.*
+  - name: junos
+    vendor: Juniper
+    version: 22.3R1
+    files:
+      - ./lab/common/yang/junos-22.3R1/models
+    directories:
+      - ./lab/common/yang/junos-22.3R1/common
 
 datastores: # this specifies MAIN datastores
   - name: srl1
@@ -94,7 +101,18 @@ datastores: # this specifies MAIN datastores
         password: NokiaSrl1!
       tls:
         skip-verify: true
-        
+  - name: crpd1
+    schema:
+      name: junos
+      vendor: Juniper
+      version: 22.3R1
+    sbi:
+      type: nc
+      address: clab-crpd-crpd1
+      credentials:
+        username: root
+        password: clab123
+
 schema-server:
   address: localhost:55000
   # TLS config

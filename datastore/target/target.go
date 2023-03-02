@@ -17,12 +17,12 @@ type Target interface {
 	Sync(ctx context.Context, syncCh chan *schemapb.Notification)
 }
 
-func New(ctx context.Context, name string, cfg *config.SBI) (Target, error) {
+func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemapb.SchemaServerClient, schema *schemapb.Schema) (Target, error) {
 	switch cfg.Type {
 	case "gnmi":
 		return newGNMITarget(ctx, name, cfg)
 	case "nc":
-		return newNCTarget(ctx, cfg)
+		return newNCTarget(ctx, cfg, schemaClient, schema)
 	case "redis":
 		return newRedisTarget(ctx, cfg)
 	case "nats":
