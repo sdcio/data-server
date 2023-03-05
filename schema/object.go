@@ -11,14 +11,14 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func ObjectFromYEntry(e *yang.Entry) any {
+func ObjectFromYEntry(e *yang.Entry, withDesc bool) any {
 	switch {
 	case e.IsLeaf():
-		return leafFromYEntry(e)
+		return leafFromYEntry(e, withDesc)
 	case e.IsLeafList():
-		return leafListFromYEntry(e)
+		return leafListFromYEntry(e, withDesc)
 	default:
-		return containerFromYEntry(e)
+		return containerFromYEntry(e, withDesc)
 	}
 }
 
@@ -53,7 +53,7 @@ func (sc *Schema) GetEntry(pe []string) (*yang.Entry, error) {
 }
 
 func getEntry(e *yang.Entry, pe []string) (*yang.Entry, error) {
-	log.Debugf("getEntry %s Dir=%v, Choice=%v, Case=%v, %v",
+	log.Tracef("getEntry %s Dir=%v, Choice=%v, Case=%v, %v",
 		e.Name,
 		e.IsDir(),
 		e.IsChoice(),
@@ -299,5 +299,82 @@ func sortFn(rs []*yang.Entry) func(i, j int) bool {
 		default:
 			return false
 		}
+	}
+}
+
+// ch
+
+func (sc *Schema) GetEntryCh(pe []string, ch chan *yang.Entry) error {
+	defer close(ch)
+	if len(pe) == 0 {
+		ch <- sc.root
+		return nil
+	}
+	first := pe[0]
+	offset := 1
+	index := strings.Index(pe[0], ":")
+	if index > 0 {
+		first = pe[0][:index]
+		pe[0] = pe[0][index+1:]
+		offset = 0
+	}
+
+	sc.m.RLock()
+	defer sc.m.RUnlock()
+	if e, ok := sc.root.Dir[first]; ok {
+		if e == nil {
+			return fmt.Errorf("module %q not found", first)
+		}
+		return getEntryCh(e, pe[offset:], ch)
+	}
+	// skip first level modules and try their children
+	for _, child := range sc.root.Dir {
+		if cc, ok := child.Dir[first]; ok {
+			ch <- cc
+			return getEntryCh(cc, pe[offset:], ch)
+		}
+	}
+	return fmt.Errorf("entry %q not found", pe[0])
+}
+
+func getEntryCh(e *yang.Entry, pe []string, ch chan *yang.Entry) error {
+	log.Tracef("getEntryCh: %v ", pe)
+	log.Tracef("getEntryCh %s Dir=%v, Choice=%v, Case=%v, %v",
+		e.Name,
+		e.IsDir(),
+		e.IsChoice(),
+		e.IsCase(),
+		pe)
+	switch len(pe) {
+	case 0:
+		switch {
+		case e.IsCase(), e.IsChoice():
+			if ee := e.Dir[e.Name]; ee != nil {
+				ch <- ee
+				return nil
+			}
+		case e.IsContainer():
+			if ee := e.Dir[e.Name]; ee != nil {
+				if ee.IsCase() || ee.IsChoice() {
+					ch <- ee
+					return nil
+				}
+			}
+		}
+		ch <- e
+		return nil
+	default:
+		if e.Dir == nil {
+			return errors.New("not found")
+		}
+		for _, ee := range getChildren(e) {
+			// fmt.Printf("entry %s, child %s | %s\n", e.Name, ee.Name, pe)
+			if ee.Name != pe[0] {
+				continue
+			}
+			return getEntryCh(ee, pe[1:], ch)
+		}
+		// fmt.Println("entry name", e.Name, pe)
+		return fmt.Errorf("%q not found", pe[0])
 	}
 }

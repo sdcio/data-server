@@ -193,9 +193,7 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 			})
 
 		}
-
 		// deletes end
-
 		// replaces start
 		for _, rep := range req.GetReplace() {
 			err = cand.head.AddSchemaUpdate(rep)
@@ -742,23 +740,68 @@ func EqualTypedValues(v1, v2 *schemapb.TypedValue) bool {
 	return true
 }
 
-func (d *Datastore) expandUpdate(ctx context.Context, upd *schemapb.Update, containerSchema *schemapb.GetSchemaResponse_Container) ([]*schemapb.Update, error) {
-	switch upd.GetValue().GetValue().(type) {
-	case *schemapb.TypedValue_JsonIetfVal:
+// WIP
+func (d *Datastore) expandUpdate(ctx context.Context, upd *schemapb.Update) ([]*schemapb.Update, error) {
+	rsp, err := d.schemaClient.GetSchema(ctx,
+		&schemapb.GetSchemaRequest{
+			Path: upd.GetPath(),
+			Schema: &schemapb.Schema{
+				Name:    d.config.Schema.Name,
+				Vendor:  d.config.Schema.Vendor,
+				Version: d.config.Schema.Version,
+			},
+		})
+	if err != nil {
+		return nil, err
+	}
+	switch obj := rsp.GetSchema().(type) {
+	case *schemapb.GetSchemaResponse_Container:
+		upds := make([]*schemapb.Update, 0)
+		switch upd.GetValue().GetValue().(type) {
+		case *schemapb.TypedValue_JsonIetfVal:
+		case *schemapb.TypedValue_JsonVal:
+			var v any
+			err := json.Unmarshal(upd.GetValue().GetJsonVal(), v)
+			if err != nil {
+				return nil, err
+			}
+			fmt.Printf("jsonVal: %T, %v\n", v, v)
+			switch v := v.(type) {
+			case string:
+			case map[string]any:
+				rs := make([]*schemapb.Update, 0, len(v))
+				// validate keys
+				for _, ks := range obj.Container.GetKeys() {
+					if kv, ok := v[ks.Name]; ok {
+						err = validateLeafTypeValue(ks.GetType(), kv)
+						if err != nil {
+							return nil, err
+						}
+						continue
+					}
+					return nil, fmt.Errorf("missing key %q", ks.Name)
+				}
+				// validate fields
+				for _, lf := range obj.Container.GetFields() {
+					if fv, ok := v[lf.Name]; ok {
+						err = validateLeafTypeValue(lf.GetType(), fv)
+						if err != nil {
+							return nil, err
+						}
+					}
+				}
+				// containers
 
-	case *schemapb.TypedValue_JsonVal:
-		var v any
-		err := json.Unmarshal(upd.GetValue().GetJsonIetfVal(), v)
-		if err != nil {
-			return nil, err
+				return rs, nil
+			case []any:
+			}
+		default:
+			return []*schemapb.Update{upd}, nil
 		}
-		fmt.Printf("jsonVal: %T, %v\n", v, v)
-		switch v.(type) {
-		case string:
-		case map[string]any:
-		case []any:
-		}
-	default:
+		return upds, nil
+	case *schemapb.GetSchemaResponse_Field:
+		return []*schemapb.Update{upd}, nil
+	case *schemapb.GetSchemaResponse_Leaflist:
 		return []*schemapb.Update{upd}, nil
 	}
 	return nil, nil

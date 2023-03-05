@@ -46,15 +46,21 @@ schemas:
       - /app/yang/srl-21.11.3/ietf
     excludes:
       - .*tools.*
-  
-  # - name: sros
-  #   vendor: Nokia
-  #   version: 22.10
-  #   files:
-  #     - ./yang/latest_sros_22.10/nokia-combined
-  #   directories:
-  #     - ./yang/latest_sros_22.10/ietf
-  #     - ./yang/latest_sros_22.10/nokia-sros-yang-extensions.yang
+  - name: sros
+    vendor: Nokia
+    version: 22.10
+    files:
+      - /app/yang/sros_22.10/YANG/nokia-combined
+    directories:
+      - /app/yang/sros_22.10/YANG/ietf
+      - /app/yang/sros_22.10/YANG/nokia-sros-yang-extensions.yang
+  - name: junos
+    vendor: Juniper
+    version: 22.3R1
+    files:
+      - /app/yang/junos-22.3R1/models
+    directories:
+      - /app/yang/junos-22.3R1/common
 
 prometheus:
   address: :55090

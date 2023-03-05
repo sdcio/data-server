@@ -8,10 +8,10 @@ import (
 	"github.com/openconfig/goyang/pkg/yang"
 )
 
-func containerFromYEntry(e *yang.Entry) *schemapb.ContainerSchema {
+func containerFromYEntry(e *yang.Entry, withDesc bool) *schemapb.ContainerSchema {
 	c := &schemapb.ContainerSchema{
-		Name:           e.Name,
-		Description:    e.Description,
+		Name: e.Name,
+		// Description:    e.Description,
 		Owner:          "", // TODO:
 		Namespace:      e.Namespace().Name,
 		Keys:           []*schemapb.LeafSchema{},
@@ -21,6 +21,9 @@ func containerFromYEntry(e *yang.Entry) *schemapb.ContainerSchema {
 		MustStatements: getMustStatement(e),
 		IsState:        isState(e),
 		IsPresence:     isPresence(e),
+	}
+	if withDesc {
+		c.Description = e.Description
 	}
 	if e.ListAttr != nil {
 		c.MaxElements = e.ListAttr.MaxElements
@@ -42,7 +45,7 @@ func containerFromYEntry(e *yang.Entry) *schemapb.ContainerSchema {
 		case child.IsDir():
 			c.Children = append(c.Children, child.Name)
 		case child.IsLeaf(), child.IsLeafList():
-			o := ObjectFromYEntry(child)
+			o := ObjectFromYEntry(child, withDesc)
 			switch o := o.(type) {
 			case *schemapb.LeafSchema:
 				if _, ok := keys[child.Name]; ok {

@@ -115,7 +115,7 @@ func (x *XMLConfigBuilder) AddElement(ctx context.Context, p *schemapb.Path) (*e
 	return elem, nil
 }
 
-func (x *XMLConfigBuilder) ResolveNamespace(ctx context.Context, p *schemapb.Path, peIdx int) (namespaceUri string, err error) {
+func (x *XMLConfigBuilder) ResolveNamespace(ctx context.Context, p *schemapb.Path, peIdx int) (string, error) {
 	// Perform schema queries
 	sr, err := x.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
 		Path: &schemapb.Path{

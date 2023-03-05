@@ -5,10 +5,10 @@ import (
 	"github.com/openconfig/goyang/pkg/yang"
 )
 
-func leafListFromYEntry(e *yang.Entry) *schemapb.LeafListSchema {
+func leafListFromYEntry(e *yang.Entry, withDesc bool) *schemapb.LeafListSchema {
 	ll := &schemapb.LeafListSchema{
-		Name:           e.Name,
-		Description:    e.Description,
+		Name: e.Name,
+		// Description:    e.Description,
 		Owner:          "",
 		Namespace:      e.Namespace().Name,
 		Type:           toSchemaType(e.Type),
@@ -16,6 +16,9 @@ func leafListFromYEntry(e *yang.Entry) *schemapb.LeafListSchema {
 		MustStatements: getMustStatement(e),
 		IsState:        isState(e),
 		IsUserOrdered:  false,
+	}
+	if withDesc {
+		ll.Description = e.Description
 	}
 	if e.ListAttr != nil {
 		ll.MaxElements = e.ListAttr.MaxElements

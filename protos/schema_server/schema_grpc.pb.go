@@ -43,6 +43,8 @@ type SchemaServerClient interface {
 	ToPath(ctx context.Context, in *ToPathRequest, opts ...grpc.CallOption) (*ToPathResponse, error)
 	// ExpandPath returns a list of sub paths given a single path
 	ExpandPath(ctx context.Context, in *ExpandPathRequest, opts ...grpc.CallOption) (*ExpandPathResponse, error)
+	// GetSchemaElements returns the schema of each path element
+	GetSchemaElements(ctx context.Context, in *GetSchemaRequest, opts ...grpc.CallOption) (SchemaServer_GetSchemaElementsClient, error)
 }
 
 type schemaServerClient struct {
@@ -159,6 +161,38 @@ func (c *schemaServerClient) ExpandPath(ctx context.Context, in *ExpandPathReque
 	return out, nil
 }
 
+func (c *schemaServerClient) GetSchemaElements(ctx context.Context, in *GetSchemaRequest, opts ...grpc.CallOption) (SchemaServer_GetSchemaElementsClient, error) {
+	stream, err := c.cc.NewStream(ctx, &SchemaServer_ServiceDesc.Streams[1], "/schema.proto.SchemaServer/GetSchemaElements", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &schemaServerGetSchemaElementsClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type SchemaServer_GetSchemaElementsClient interface {
+	Recv() (*GetSchemaResponse, error)
+	grpc.ClientStream
+}
+
+type schemaServerGetSchemaElementsClient struct {
+	grpc.ClientStream
+}
+
+func (x *schemaServerGetSchemaElementsClient) Recv() (*GetSchemaResponse, error) {
+	m := new(GetSchemaResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // SchemaServerServer is the server API for SchemaServer service.
 // All implementations must embed UnimplementedSchemaServerServer
 // for forward compatibility
@@ -184,6 +218,8 @@ type SchemaServerServer interface {
 	ToPath(context.Context, *ToPathRequest) (*ToPathResponse, error)
 	// ExpandPath returns a list of sub paths given a single path
 	ExpandPath(context.Context, *ExpandPathRequest) (*ExpandPathResponse, error)
+	// GetSchemaElements returns the schema of each path element
+	GetSchemaElements(*GetSchemaRequest, SchemaServer_GetSchemaElementsServer) error
 	mustEmbedUnimplementedSchemaServerServer()
 }
 
@@ -217,6 +253,9 @@ func (UnimplementedSchemaServerServer) ToPath(context.Context, *ToPathRequest) (
 }
 func (UnimplementedSchemaServerServer) ExpandPath(context.Context, *ExpandPathRequest) (*ExpandPathResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExpandPath not implemented")
+}
+func (UnimplementedSchemaServerServer) GetSchemaElements(*GetSchemaRequest, SchemaServer_GetSchemaElementsServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetSchemaElements not implemented")
 }
 func (UnimplementedSchemaServerServer) mustEmbedUnimplementedSchemaServerServer() {}
 
@@ -401,6 +440,27 @@ func _SchemaServer_ExpandPath_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SchemaServer_GetSchemaElements_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetSchemaRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(SchemaServerServer).GetSchemaElements(m, &schemaServerGetSchemaElementsServer{stream})
+}
+
+type SchemaServer_GetSchemaElementsServer interface {
+	Send(*GetSchemaResponse) error
+	grpc.ServerStream
+}
+
+type schemaServerGetSchemaElementsServer struct {
+	grpc.ServerStream
+}
+
+func (x *schemaServerGetSchemaElementsServer) Send(m *GetSchemaResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // SchemaServer_ServiceDesc is the grpc.ServiceDesc for SchemaServer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -446,6 +506,11 @@ var SchemaServer_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "UploadSchema",
 			Handler:       _SchemaServer_UploadSchema_Handler,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "GetSchemaElements",
+			Handler:       _SchemaServer_GetSchemaElements_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "schema.proto",

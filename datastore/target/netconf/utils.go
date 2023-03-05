@@ -10,16 +10,16 @@ import (
 	"github.com/beevik/etree"
 )
 
-func getNamespaceFromGetSchemaResponse(sr *schemapb.GetSchemaResponse) (namespace string) {
+func getNamespaceFromGetSchemaResponse(sr *schemapb.GetSchemaResponse) string {
 	switch sr.Schema.(type) {
 	case *schemapb.GetSchemaResponse_Container:
-		namespace = sr.GetContainer().Namespace
+		return sr.GetContainer().GetNamespace()
 	case *schemapb.GetSchemaResponse_Field:
-		namespace = sr.GetField().Namespace
+		return sr.GetField().GetNamespace()
 	case *schemapb.GetSchemaResponse_Leaflist:
-		namespace = sr.GetLeaflist().Namespace
+		return sr.GetLeaflist().GetNamespace()
 	}
-	return namespace
+	return ""
 }
 
 func valueAsString(v *schemapb.TypedValue) (string, error) {
@@ -64,10 +64,9 @@ func pathElem2Xpath(pe *schemapb.PathElem, namespace string) (etree.Path, error)
 		keyString = "[" + strings.Join(keys, ",") + "]"
 	}
 
-	name := pe.Name
 	//name := toNamespacedName(pe.Name, namespace)
 
 	// build the final xpath
-	filterString := fmt.Sprintf("./%s%s", name, keyString)
+	filterString := fmt.Sprintf("./%s%s", pe.Name, keyString)
 	return etree.CompilePath(filterString)
 }

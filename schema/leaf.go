@@ -8,10 +8,10 @@ import (
 	"github.com/openconfig/goyang/pkg/yang"
 )
 
-func leafFromYEntry(e *yang.Entry) *schemapb.LeafSchema {
+func leafFromYEntry(e *yang.Entry, withDesc bool) *schemapb.LeafSchema {
 	l := &schemapb.LeafSchema{
-		Name:           e.Name,
-		Description:    e.Description,
+		Name: e.Name,
+		// Description:    e.Description,
 		Owner:          "",
 		Namespace:      e.Namespace().Name,
 		Type:           toSchemaType(e.Type),
@@ -20,6 +20,9 @@ func leafFromYEntry(e *yang.Entry) *schemapb.LeafSchema {
 		MustStatements: getMustStatement(e),
 		IsState:        isState(e),
 		Reference:      make([]string, 0),
+	}
+	if withDesc {
+		l.Description = e.Description
 	}
 	if v, ok := e.SingleDefaultValue(); ok {
 		l.Default = v

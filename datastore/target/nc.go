@@ -17,7 +17,7 @@ type ncTarget struct {
 	sbi          *config.SBI
 }
 
-func newNCTarget(ctx context.Context, cfg *config.SBI, schemaClient schemapb.SchemaServerClient, schema *schemapb.Schema) (*ncTarget, error) {
+func newNCTarget(_ context.Context, cfg *config.SBI, schemaClient schemapb.SchemaServerClient, schema *schemapb.Schema) (*ncTarget, error) {
 
 	// create a new
 	d, err := scrapligo.NewScrapligoNetconfTarget(cfg)
@@ -121,7 +121,7 @@ func (t *ncTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sche
 }
 
 func (t *ncTarget) Subscribe() {}
-func (t *ncTarget) Sync(ctx context.Context, syncCh chan *schemapb.Notification) {
+func (t *ncTarget) Sync(ctx context.Context, syncCh chan *SyncUpdate) {
 	log.Infof("starting target %s sync", t.sbi.Address)
 	log.Infof("sync still is a NOOP on netconf targets")
 	<-ctx.Done()

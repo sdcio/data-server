@@ -4,8 +4,6 @@ Copyright © 2023 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 )
 
@@ -16,11 +14,7 @@ var schemaVersion string
 // schemaCmd represents the schema command
 var schemaCmd = &cobra.Command{
 	Use:   "schema",
-	Short: "A brief description of your command",
-
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("schema called")
-	},
+	Short: "query/change schema(s)",
 }
 
 func init() {

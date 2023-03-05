@@ -26,6 +26,8 @@ service SchemaServer {
     rpc ToPath(ToPathRequest) returns (ToPathResponse);
     // ExpandPath returns a list of sub paths given a single path
     rpc ExpandPath(ExpandPathRequest) returns (ExpandPathResponse);
+    // GetSchemaElements returns the schema of each path element
+    rpc GetSchemaElements(GetSchemaRequest) returns (stream GetSchemaResponse);
 }
 
 message Schema {
@@ -53,15 +55,17 @@ message ListSchemaResponse {
 }
 
 message GetSchemaRequest {
-    Path   path = 1;
-    Schema schema = 2;
+    Path   path             = 1;
+    Schema schema           = 2;
+    bool   validate_keys    = 3; // TODO
+    bool   with_description = 4; // TODO
 }
 
 message GetSchemaResponse {
     oneof schema {
         ContainerSchema container = 1;
-        LeafSchema      field = 2;
-        LeafListSchema  leaflist = 3;
+        LeafSchema      field     = 2;
+        LeafListSchema  leaflist  = 3;
     }
 }
 
