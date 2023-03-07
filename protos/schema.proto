@@ -215,12 +215,13 @@ message LeafSchema {
 message SchemaLeafType {
     string                  type        = 1;
     string                  range       = 2;
-    repeated string         values      = 3;
-    string                  units       = 4;
-    string                  type_name   = 5;
-    string                  leafref     = 6;
-    repeated SchemaPattern  patterns    = 7;
-    repeated SchemaLeafType union_types = 9;
+    string                  length      = 3;
+    repeated string         values      = 4;
+    string                  units       = 5;
+    string                  type_name   = 6;
+    string                  leafref     = 7;
+    repeated SchemaPattern  patterns    = 9;
+    repeated SchemaLeafType union_types = 10;
 }
 
 message MustStatement {

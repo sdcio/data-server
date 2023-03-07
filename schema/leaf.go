@@ -47,13 +47,13 @@ func leafFromYEntry(e *yang.Entry, withDesc bool) *schemapb.LeafSchema {
 
 func toSchemaType(yt *yang.YangType) *schemapb.SchemaLeafType {
 	var values []string
-	// yt := e.Type
 	if yt.Enum != nil {
 		values = yt.Enum.Names()
 	}
 	slt := &schemapb.SchemaLeafType{
 		Type:       yang.TypeKind(yt.Kind).String(),
 		Range:      yt.Range.String(),
+		Length:     yt.Length.String(),
 		Values:     values,
 		Units:      yt.Units,
 		TypeName:   yt.Name,
