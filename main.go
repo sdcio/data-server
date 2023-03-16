@@ -14,14 +14,20 @@ import (
 
 var configFile string
 var debug bool
+var trace bool
 
 func main() {
 	pflag.StringVarP(&configFile, "config", "c", "schema-server.yaml", "config file path")
-	pflag.BoolVarP(&debug, "debug", "d", false, "enable debug")
+	pflag.BoolVarP(&debug, "debug", "d", false, "set log level to DEBUG")
+	pflag.BoolVarP(&trace, "trace", "t", false, "set log level to TRACE")
 	pflag.Parse()
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
+	log.SetLevel(log.InfoLevel)
 	if debug {
 		log.SetLevel(log.DebugLevel)
+	}
+	if trace {
+		log.SetLevel(log.TraceLevel)
 	}
 	var s *server.Server
 START:

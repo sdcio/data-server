@@ -40,7 +40,6 @@ func newGNMITarget(ctx context.Context, name string, cfg *config.SBI) (*gnmiTarg
 	}
 	gt := &gnmiTarget{
 		target: gtarget.NewTarget(tc),
-		// syncCh: syncCh,
 	}
 	err := gt.target.CreateGNMIClient(ctx)
 	if err != nil {
@@ -125,7 +124,7 @@ func (t *gnmiTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sc
 
 func (t *gnmiTarget) Subscribe() {}
 
-func (t *gnmiTarget) Sync(ctx context.Context, syncCh chan *schemapb.Notification) {
+func (t *gnmiTarget) Sync(ctx context.Context, syncCh chan *SyncUpdate) {
 	log.Infof("starting target %s sync", t.target.Config.Name)
 START:
 	go t.target.Subscribe(ctx, &gnmi.SubscribeRequest{
@@ -142,7 +141,7 @@ START:
 				Encoding: 45, // ascii_config_only
 			},
 		},
-	}, "sync_config")
+	}, "config")
 	go t.target.Subscribe(ctx, &gnmi.SubscribeRequest{
 		Request: &gnmi.SubscribeRequest_Subscribe{
 			Subscribe: &gnmi.SubscriptionList{
@@ -158,19 +157,21 @@ START:
 				Encoding: gnmi.Encoding_ASCII,
 			},
 		},
-	}, "sync_state")
+	}, "state")
 	defer t.target.StopSubscriptions()
 	rspch, errCh := t.target.ReadSubscriptions()
-	// log.Info("reading target subs")
 	for {
 		select {
 		case <-ctx.Done():
 			log.Infof("target %s sync stopped: %v", t.target.Config.Name, ctx.Err())
 			return
 		case rsp := <-rspch:
-			switch rsp := rsp.Response.Response.(type) {
+			switch r := rsp.Response.Response.(type) {
 			case *gnmi.SubscribeResponse_Update:
-				syncCh <- utils.ToSchemaNotification(rsp.Update)
+				syncCh <- &SyncUpdate{
+					Tree:   rsp.SubscriptionName,
+					Update: utils.ToSchemaNotification(r.Update),
+				}
 			}
 		case err := <-errCh:
 			if err.Err != nil {

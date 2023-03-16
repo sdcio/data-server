@@ -50,7 +50,6 @@ func (tc *TransformationContext) String() (result string, err error) {
 	result = "TransformationContext\n"
 	for k, v := range tc.leafLists {
 		vals := []string{}
-		_ = vals
 		for _, val := range v {
 			sval, err := valueAsString(val)
 			if err != nil {

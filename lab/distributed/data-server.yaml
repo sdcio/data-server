@@ -24,6 +24,8 @@ datastores: # this creates MAIN datastores
         password: NokiaSrl1!
       tls:
         skip-verify: true
+    sync:
+      validate: false
   - name: srl2
     schema: 
       name: srl
@@ -37,6 +39,8 @@ datastores: # this creates MAIN datastores
         password: NokiaSrl1!
       tls:
         skip-verify: true
+    sync:
+      validate: false    
   - name: srl3
     schema: 
       name: srl
@@ -50,7 +54,8 @@ datastores: # this creates MAIN datastores
         password: NokiaSrl1!
       tls:
         skip-verify: true
-        
+    sync:
+      validate: false
 # remote schema server details
 schema-server:
   # schema server remote address

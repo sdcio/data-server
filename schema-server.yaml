@@ -12,7 +12,7 @@ grpc-server:
   schema-server: 
     # if true, enables schema RPCs
     enabled: true
-    # directory to store teh uploaded schemas
+    # directory to store the uploaded schemas
     schemas-directory: ./schemas
   
   data-server:
@@ -83,11 +83,19 @@ datastores: # this specifies MAIN datastores
         password: NokiaSrl1!
       tls:
         skip-verify: true
-    # sync:
-    #   - path:
-    #     - /
-    #     mode: on-change
-    #     encoding: 46
+    sync:
+      validate: true
+      gnmi:
+        - path:
+          - /
+          name: config
+          mode: on-change
+          encoding: 46
+        - path:
+          - /
+          name: state
+          mode: sample
+          encoding: 46
   - name: srl2
     schema: 
       name: srl

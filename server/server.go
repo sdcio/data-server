@@ -179,11 +179,7 @@ SCHEMA_CONNECT:
 		goto SCHEMA_CONNECT
 	}
 	s.remoteSchemaClient = schemapb.NewSchemaServerClient(cc)
-	// close(wait)
-	// }()
-	//
-	//	go func() {
-	//		<-wait
+
 	for _, dsCfg := range s.config.Datastores {
 		ds := datastore.New(dsCfg, s.remoteSchemaClient)
 		s.datastores[dsCfg.Name] = ds

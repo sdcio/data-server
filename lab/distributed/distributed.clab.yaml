@@ -12,13 +12,15 @@ topology:
       binds:
         - "./schema-server.yaml:/app/schema-server.yaml"
         - "../common/yang:/app/yang"
+      cmd: "-t"
       ports:
         - "55000:55000/tcp"
       cpu-set: 0-3
-      memory: 1Gb
+      memory: 6Gb
     data-server:
       kind: linux
       image: schema-server:latest
+      cmd: "-t"
       binds:
         - "./data-server.yaml:/app/schema-server.yaml"
       ports:

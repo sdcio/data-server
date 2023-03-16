@@ -30,7 +30,7 @@ type Datastore struct {
 	schemaClient schemapb.SchemaServerClient
 
 	// sync channel, to be passed to the SBI Sync method
-	synCh chan *schemapb.Notification
+	synCh chan *target.SyncUpdate
 
 	// stop cancel func
 	cfn context.CancelFunc
@@ -59,69 +59,45 @@ type candidate struct {
 // func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Datastore {
 func New(c *config.DatastoreConfig, scc schemapb.SchemaServerClient) *Datastore {
 	ds := &Datastore{
-		config: c,
-		main: &main{
-			config: &ctree.Tree{},
-			state:  &ctree.Tree{},
-		},
-		m:          &sync.RWMutex{},
-		candidates: map[string]*candidate{},
-		synCh:      make(chan *schemapb.Notification),
+		config:       c,
+		main:         &main{config: &ctree.Tree{}, state: &ctree.Tree{}},
+		m:            &sync.RWMutex{},
+		candidates:   map[string]*candidate{},
+		schemaClient: scc,
+		synCh:        make(chan *target.SyncUpdate),
 	}
 	ctx, cancel := context.WithCancel(context.TODO())
 	ds.cfn = cancel
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	// go func() {
-	// 	// defer wg.Done()
-	// SCHEMA_CONNECT:
-	// 	opts := []grpc.DialOption{
-	// 		grpc.WithBlock(),
-	// 	}
-	// 	switch schemaServer.TLS {
-	// 	case nil:
-	// 		opts = append(opts,
-	// 			grpc.WithTransportCredentials(
-	// 				insecure.NewCredentials(),
-	// 			))
-	// 	default:
-	// 		tlsCfg, err := schemaServer.TLS.NewConfig(ctx)
-	// 		if err != nil {
-	// 			log.Errorf("DS: %s: failed to read schema server TLS config: %v", c.Name, err)
-	// 			time.Sleep(time.Second)
-	// 			goto SCHEMA_CONNECT
-	// 		}
-	// 		opts = append(opts,
-	// 			grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
-	// 		)
-	// 	}
-	// 	cc, err := grpc.DialContext(ctx, schemaServer.Address, opts...)
-	// 	if err != nil {
-	// 		log.Errorf("failed to connect DS to schema server :%v", err)
-	// 		time.Sleep(time.Second)
-	// 		goto SCHEMA_CONNECT
-	// 	}
-	// 	ds.schemaClient = schemapb.NewSchemaServerClient(cc)
-	// }()
-	ds.schemaClient = scc
-	go func() {
-		defer wg.Done()
-		var err error
-	CONNECT:
-		ds.sbi, err = target.New(ctx, c.Name, c.SBI, scc, &schemapb.Schema{
-			Name:    ds.config.Schema.Name,
-			Vendor:  ds.config.Schema.Vendor,
-			Version: ds.config.Schema.Version,
-		})
-		if err != nil {
-			log.Errorf("failed to create DS target: %v", err)
-			time.Sleep(time.Second)
-			goto CONNECT
-		}
-	}()
-	wg.Wait()
+
+	ds.connectSBI(ctx, c)
+
 	go ds.Sync(ctx)
 	return ds
+}
+
+func (d *Datastore) connectSBI(ctx context.Context, c *config.DatastoreConfig) {
+	var err error
+	sc := &schemapb.Schema{
+		Name:    d.Schema().Name,
+		Vendor:  d.Schema().Vendor,
+		Version: d.Schema().Version,
+	}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+OUT:
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			d.sbi, err = target.New(ctx, c.Name, c.SBI, d.schemaClient, sc)
+			if err != nil {
+				log.Errorf("failed to create DS %s target: %v", c.Name, err)
+				continue
+			}
+			break OUT
+		}
+	}
 }
 
 func (d *Datastore) Name() string {
@@ -280,22 +256,25 @@ func (d *Datastore) Sync(ctx context.Context) {
 		case <-ctx.Done():
 			log.Errorf("datastore %s sync stopped: %v", d.config.Name, ctx.Err())
 			return
-		case n := <-d.synCh:
-			for _, del := range n.GetDelete() {
-				scRsp, err := d.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
-					Path: del,
-					Schema: &schemapb.Schema{
-						Name:    d.config.Schema.Name,
-						Vendor:  d.config.Schema.Vendor,
-						Version: d.config.Schema.Version,
-					},
-				})
-				if err != nil {
-					log.Errorf("datastore %s failed to get schema for delete path %v: %v", d.config.Name, del, err)
-					continue
+		case syncup := <-d.synCh:
+			for _, del := range syncup.Update.GetDelete() {
+				if d.config.Sync != nil && d.config.Sync.Validate {
+					scRsp, err := d.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
+						Path: del,
+						Schema: &schemapb.Schema{
+							Name:    d.config.Schema.Name,
+							Vendor:  d.config.Schema.Vendor,
+							Version: d.config.Schema.Version,
+						},
+					})
+					if err != nil {
+						log.Errorf("datastore %s failed to get schema for delete path %v: %v", d.config.Name, del, err)
+						continue
+					}
+					_ = scRsp
 				}
-				switch {
-				case isState(scRsp):
+				switch syncup.Tree {
+				case "state":
 					err := d.main.state.DeletePath(del)
 					if err != nil {
 						log.Errorf("failed to delete schema path from main state DS: %v", err)
@@ -303,7 +282,7 @@ func (d *Datastore) Sync(ctx context.Context) {
 						continue
 					}
 				default:
-					err = d.main.config.DeletePath(del)
+					err := d.main.config.DeletePath(del)
 					if err != nil {
 						log.Errorf("failed to delete schema path from main config DS: %v", err)
 						// log.Errorf("failed to delete schema path from main config DS: %v", n)
@@ -312,21 +291,24 @@ func (d *Datastore) Sync(ctx context.Context) {
 				}
 			}
 
-			for _, upd := range n.GetUpdate() {
-				scRsp, err := d.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
-					Path: upd.GetPath(),
-					Schema: &schemapb.Schema{
-						Name:    d.config.Schema.Name,
-						Vendor:  d.config.Schema.Vendor,
-						Version: d.config.Schema.Version,
-					},
-				})
-				if err != nil {
-					log.Errorf("datastore %s failed to get schema for update path %v: %v", d.config.Name, upd.GetPath(), err)
-					continue
+			for _, upd := range syncup.Update.GetUpdate() {
+				if d.config.Sync != nil && d.config.Sync.Validate {
+					scRsp, err := d.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
+						Path: upd.GetPath(),
+						Schema: &schemapb.Schema{
+							Name:    d.config.Schema.Name,
+							Vendor:  d.config.Schema.Vendor,
+							Version: d.config.Schema.Version,
+						},
+					})
+					if err != nil {
+						log.Errorf("datastore %s failed to get schema for update path %v: %v", d.config.Name, upd.GetPath(), err)
+						continue
+					}
+					_ = scRsp // TODO validate value
 				}
-				switch {
-				case isState(scRsp):
+				switch syncup.Tree {
+				case "state":
 					err := d.main.state.AddSchemaUpdate(upd)
 					if err != nil {
 						log.Errorf("failed to insert schema update into main state DS: %v", err)
@@ -334,7 +316,7 @@ func (d *Datastore) Sync(ctx context.Context) {
 						continue
 					}
 				default:
-					err = d.main.config.AddSchemaUpdate(upd)
+					err := d.main.config.AddSchemaUpdate(upd)
 					if err != nil {
 						log.Errorf("failed to insert schema update into main config DS: %v", err)
 						// log.Errorf("failed to insert schema update into main config DS: %v", n)

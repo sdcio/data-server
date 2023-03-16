@@ -13,11 +13,13 @@ import (
 	"os"
 	"path"
 	"sort"
+	"sync"
 
 	"github.com/iptecharch/schema-server/config"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/schema"
 	"github.com/iptecharch/schema-server/utils"
+	"github.com/openconfig/goyang/pkg/yang"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -40,7 +42,7 @@ func (s *Server) GetSchema(ctx context.Context, req *schemapb.GetSchemaRequest) 
 		return nil, err
 	}
 
-	o := schema.ObjectFromYEntry(e)
+	o := schema.ObjectFromYEntry(e, req.GetWithDescription())
 	switch o := o.(type) {
 	case *schemapb.ContainerSchema:
 		return &schemapb.GetSchemaResponse{
@@ -430,4 +432,70 @@ LOOP:
 	defer s.ms.Unlock()
 	s.schemas[sc.UniqueName()] = sc
 	return nil
+}
+
+func (s *Server) GetSchemaElements(req *schemapb.GetSchemaRequest, stream schemapb.SchemaServer_GetSchemaElementsServer) error {
+	s.ms.RLock()
+	defer s.ms.RUnlock()
+	reqSchema := req.GetSchema()
+	if reqSchema == nil {
+		return status.Error(codes.InvalidArgument, "missing schema details")
+	}
+	sc, ok := s.schemas[fmt.Sprintf("%s@%s@%s", reqSchema.Name, reqSchema.Vendor, reqSchema.Version)]
+	if !ok {
+		return status.Errorf(codes.InvalidArgument, "unknown schema %v", reqSchema)
+	}
+	ctx := stream.Context()
+	pes := utils.ToStrings(req.GetPath(), false, true)
+
+	ych := make(chan *yang.Entry)
+	wg := new(sync.WaitGroup)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var err error
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case e, ok := <-ych:
+				if !ok {
+					return
+				}
+				o := schema.ObjectFromYEntry(e, req.GetWithDescription())
+				switch o := o.(type) {
+				case *schemapb.ContainerSchema:
+					o.Description = ""
+					err = stream.Send(
+						&schemapb.GetSchemaResponse{
+							Schema: &schemapb.GetSchemaResponse_Container{
+								Container: o,
+							},
+						})
+				case *schemapb.LeafListSchema:
+					o.Description = ""
+					err = stream.Send(&schemapb.GetSchemaResponse{
+						Schema: &schemapb.GetSchemaResponse_Leaflist{
+							Leaflist: o,
+						},
+					})
+				case *schemapb.LeafSchema:
+					o.Description = ""
+					err = stream.Send(&schemapb.GetSchemaResponse{
+						Schema: &schemapb.GetSchemaResponse_Field{
+							Field: o,
+						},
+					})
+				}
+				if err != nil {
+					log.Errorf("%v", err)
+					return
+				}
+				// return nil, fmt.Errorf("unknown schema item: %T", o)
+			}
+		}
+	}()
+	err := sc.GetEntryCh(pes, ych)
+	wg.Wait()
+	return err
 }

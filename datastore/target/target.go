@@ -14,7 +14,7 @@ type Target interface {
 	Set(ctx context.Context, req *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error)
 	Subscribe()
 	//
-	Sync(ctx context.Context, syncCh chan *schemapb.Notification)
+	Sync(ctx context.Context, syncCh chan *SyncUpdate)
 }
 
 func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemapb.SchemaServerClient, schema *schemapb.Schema) (Target, error) {
@@ -29,4 +29,9 @@ func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemap
 		return newNATSTarget(ctx, cfg)
 	}
 	return nil, fmt.Errorf("unknown DS target type %q", cfg.Type)
+}
+
+type SyncUpdate struct {
+	Tree   string
+	Update *schemapb.Notification
 }
