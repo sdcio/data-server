@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"strings"
 
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
-
 	"github.com/beevik/etree"
+	"github.com/iptecharch/schema-server/datastore/target/netconf/conversion"
+	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 )
 
 func getNamespaceFromGetSchemaResponse(sr *schemapb.GetSchemaResponse) string {
@@ -23,7 +23,6 @@ func getNamespaceFromGetSchemaResponse(sr *schemapb.GetSchemaResponse) string {
 }
 
 func valueAsString(v *schemapb.TypedValue) (string, error) {
-
 	switch v.Value.(type) {
 	case *schemapb.TypedValue_StringVal:
 		return v.GetStringVal(), nil
@@ -42,12 +41,30 @@ func valueAsString(v *schemapb.TypedValue) (string, error) {
 	case *schemapb.TypedValue_AsciiVal:
 		return v.GetAsciiVal(), nil
 	case *schemapb.TypedValue_LeaflistVal:
+		sArr := []string{}
+		// iterate through list elements
+		for _, elem := range v.GetLeaflistVal().Element {
+			val, err := valueAsString(elem)
+			if err != nil {
+				return "", err
+			}
+			sArr = append(sArr, val)
+		}
+		return fmt.Sprintf("[ %s ]", strings.Join(sArr, ", ")), nil
 	case *schemapb.TypedValue_AnyVal:
+		return string(v.GetAnyVal().Value), nil
 	case *schemapb.TypedValue_JsonVal:
+		return string(v.GetJsonVal()), nil
 	case *schemapb.TypedValue_JsonIetfVal:
+		return string(v.GetJsonIetfVal()), nil
 	case *schemapb.TypedValue_ProtoBytes:
+		return "PROTOBYTES", nil
 	}
 	return "", fmt.Errorf("TypedValue to String failed")
+}
+
+func StringElementToTypedValue(s string, ls *schemapb.LeafSchema) (*schemapb.TypedValue, error) {
+	return conversion.Convert(s, ls.Type)
 }
 
 func pathElem2Xpath(pe *schemapb.PathElem, namespace string) (etree.Path, error) {

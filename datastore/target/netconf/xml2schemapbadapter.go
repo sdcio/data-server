@@ -58,7 +58,7 @@ func (x *XML2SchemapbConfigAdapter) transformRecursive(ctx context.Context, e *e
 	case *schemapb.GetSchemaResponse_Field:
 		// retrieved schema describes a yang Field
 		log.Tracef("transforming field %q", e.Tag)
-		err = x.transformField(ctx, e, pelems, result)
+		err = x.transformField(ctx, e, pelems, sr.GetField(), result)
 		if err != nil {
 			return err
 		}
@@ -77,8 +77,8 @@ func (x *XML2SchemapbConfigAdapter) transformRecursive(ctx context.Context, e *e
 
 // transformContainer transforms an etree.element of a configuration as an update into the provided *schemapb.Notification.
 func (x *XML2SchemapbConfigAdapter) transformContainer(ctx context.Context, e *etree.Element, sr *schemapb.GetSchemaResponse, pelems []*schemapb.PathElem, result *schemapb.Notification) error {
-	c := sr.GetContainer()
-	for _, ls := range c.Keys {
+	cs := sr.GetContainer()
+	for _, ls := range cs.Keys {
 		pelem := pelems[len(pelems)-1]
 		if pelem.Key == nil {
 			pelem.Key = map[string]string{}
@@ -103,16 +103,21 @@ func (x *XML2SchemapbConfigAdapter) transformContainer(ctx context.Context, e *e
 }
 
 // transformField transforms an etree.element of a configuration as an update into the provided *schemapb.Notification.
-func (x *XML2SchemapbConfigAdapter) transformField(ctx context.Context, e *etree.Element, pelems []*schemapb.PathElem, result *schemapb.Notification) error {
+func (x *XML2SchemapbConfigAdapter) transformField(ctx context.Context, e *etree.Element, pelems []*schemapb.PathElem, ls *schemapb.LeafSchema, result *schemapb.Notification) error {
 	// process terminal values
-	data := strings.TrimSpace(e.Text())
+	//data := strings.TrimSpace(e.Text())
+
+	tv, err := StringElementToTypedValue(e.Text(), ls)
+	if err != nil {
+		return err
+	}
 
 	// create schemapb.update
 	u := &schemapb.Update{
 		Path: &schemapb.Path{
 			Elem: pelems,
 		},
-		Value: &schemapb.TypedValue{Value: &schemapb.TypedValue_StringVal{StringVal: data}},
+		Value: tv,
 	}
 	result.Update = append(result.Update, u)
 	return nil

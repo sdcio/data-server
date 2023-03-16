@@ -2,6 +2,7 @@ package target
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/iptecharch/schema-server/config"
 	"github.com/iptecharch/schema-server/datastore/target/netconf"
@@ -34,7 +35,14 @@ func newNCTarget(_ context.Context, cfg *config.SBI, schemaClient schemapb.Schem
 }
 
 func (t *ncTarget) Get(ctx context.Context, req *schemapb.GetDataRequest) (*schemapb.GetDataResponse, error) {
-	source := "running"
+	var source string
+
+	switch req.Datastore.Type {
+	case schemapb.Type_MAIN:
+		source = "running"
+	case schemapb.Type_CANDIDATE:
+		source = "candidate"
+	}
 
 	// init a new XMLConfigBuilder for the pathfilter
 	pathfilterXmlBuilder := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, false)
@@ -79,40 +87,54 @@ func (t *ncTarget) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sche
 
 func (t *ncTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error) {
 
-	xmlCB := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, false)
-
-	// iterate over the update array
-	for _, u := range req.Update {
-		xmlCB.Add(ctx, u.Path, u.Value)
-	}
+	xmlCBDelete := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, false)
 
 	// iterate over the delete array
 	for _, d := range req.Delete {
-		xmlCB.Delete(ctx, d)
+		xmlCBDelete.Delete(ctx, d)
 	}
 
 	// iterate over the replace array
-	for _, r := range req.Replace {
-		// TODO: Needs Implementation
-		_ = r
+	// ATTENTION: This is not implemented intentionally, since it is expected,
+	//  	that the datastore will only come up with deletes and updates.
+	// 		actual replaces will be resolved to deletes and updates by the datastore
+	// 		also replaces would only really make sense with jsonIETF encoding, where
+	// 		an entire branch is replaces, on single values this is covered via an
+	// 		update.
+	//
+	// for _, r := range req.Replace {
+	// }
+	//
+
+	xmlCBAdd := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, false)
+
+	// iterate over the update array
+	for _, u := range req.Update {
+		xmlCBAdd.Add(ctx, u.Path, u.Value)
 	}
 
-	// TODO: take care on interferrance of Delete vs. Update
+	// first apply the deletes before the adds
+	for _, xml := range []*netconf.XMLConfigBuilder{xmlCBDelete, xmlCBAdd} {
+		// finally retrieve the xml config as string
+		xdoc, err := xml.GetDoc()
+		if err != nil {
+			return nil, err
+		}
 
-	// finally retrieve the xml config as string
-	xdoc, err := xmlCB.GetDoc()
-	if err != nil {
-		return nil, err
-	}
-
-	// edit the config
-	_, err = t.driver.EditConfig("candidate", xdoc)
-	if err != nil {
-		return nil, err
+		// edit the config
+		_, err = t.driver.EditConfig("candidate", xdoc)
+		if err != nil {
+			ecerr := err
+			err = t.driver.Discard()
+			if err != nil {
+				return nil, fmt.Errorf("failed with %v while discarding pending changes after error %v", err, ecerr)
+			}
+			return nil, err
+		}
 	}
 
 	// commit the config
-	err = t.driver.Commit()
+	err := t.driver.Commit()
 	if err != nil {
 		return nil, err
 	}

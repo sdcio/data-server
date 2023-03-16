@@ -58,7 +58,11 @@ func main() {
 		Path: []*schemapb.Path{
 			//{Elem: []*schemapb.PathElem{{Name: "configuration"}, {Name: "system"}}},
 			//{Elem: []*schemapb.PathElem{{Name: "configuration"}, {Name: "interfaces"}, {Name: "interface", Key: map[string]string{"name": "ge5"}}, {Name: "mtu"}}},
-			{Elem: []*schemapb.PathElem{{Name: "configuration"}, {Name: "interfaces"}, {Name: "interface", Key: map[string]string{"name": "ge5"}}}},
+			//{Elem: []*schemapb.PathElem{{Name: "configuration"}, {Name: "interfaces"}, {Name: "interface", Key: map[string]string{"name": "ge5"}}}},
+			// {Elem: []*schemapb.PathElem{{Name: "configuration"}, {Name: "interfaces"}, {Name: "interface", Key: map[string]string{"name": "ge5"}}}},
+		},
+		Datastore: &schemapb.DataStore{
+			Type: schemapb.Type_MAIN,
 		},
 	})
 	if err != nil {

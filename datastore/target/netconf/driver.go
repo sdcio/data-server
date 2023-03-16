@@ -11,4 +11,6 @@ type Driver interface {
 	Commit() error
 	// Close the connection to the device
 	Close() error
+	// discard a candidate config
+	Discard() error
 }

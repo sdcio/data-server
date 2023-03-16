@@ -125,6 +125,17 @@ func (snt *ScrapligoNetconfTarget) Commit() error {
 	return nil
 }
 
+func (snt *ScrapligoNetconfTarget) Discard() error {
+	resp, err := snt.driver.Discard()
+	if err != nil {
+		return err
+	}
+	if resp.Failed != nil {
+		return resp.Failed
+	}
+	return nil
+}
+
 // createFilterOption is a helper function that populates the Filter field for the internal Scrapligo RPC instantiation
 func createFilterOption(filter string) util.Option {
 	return func(x interface{}) error {
