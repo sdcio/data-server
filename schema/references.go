@@ -62,6 +62,9 @@ func normalizePath(p string, e *yang.Entry) []string {
 	if hasRelativePathElem(scp) {
 		scp = relativeToAbsPath(scp, e)
 	}
+	if hasRelativeKeys(scp) {
+		relativeToAbsPathKeys(scp, e)
+	}
 	for _, pe := range scp.GetElem() {
 		if spe := strings.SplitN(pe.Name, ":", 2); len(spe) == 2 {
 			pe.Name = spe[1]
@@ -69,6 +72,58 @@ func normalizePath(p string, e *yang.Entry) []string {
 	}
 	pe := utils.ToStrings(scp, false, true)
 	return pe
+}
+
+func relativeToAbsPathKeys(p *schemapb.Path, e *yang.Entry) {
+	// go through the Path elements
+	for _, pe := range p.GetElem() {
+
+		// check all keys in the path element
+		for k, v := range pe.GetKey() {
+			// if the actual path element does not contain a relative ref
+			// continue with next pe otherwise go on
+			if !strings.Contains(v, "..") {
+				continue
+			}
+
+			// split path into its elements
+			keyPathElems := strings.Split(strings.TrimSpace(v), "/")
+
+			// current yang entry will be forwarded via key path elements
+			ce := e
+
+			// iterate over the Key referenced path elements
+			// forward the cye accordingly.
+			// cye will finally contain the yang entry that the key referres to
+			for _, kpe := range keyPathElems {
+				switch kpe {
+				case "current()":
+					for (ce.IsCase() || ce.IsChoice()) && ce.Parent != nil {
+						ce = ce.Parent
+					}
+				case "..":
+					for (ce.IsCase() || ce.IsChoice()) && ce.Parent != nil {
+						ce = ce.Parent
+					}
+					ce = ce.Parent
+				default:
+					// remove module name from PathElement
+					kpeParts := strings.Split(kpe, ":")
+					// default to [0]
+					kpe = kpeParts[0]
+					// if module name present len will be 2
+					// MODULENAME:ELEMENTNAME -> so [1] is to be used
+					if len(kpeParts) == 2 {
+						kpe = kpeParts[1]
+					}
+					// forward the current yang entry "pointer"
+					ce = ce.Dir[kpe]
+				}
+			}
+			// replace the PathElements Key with the Absolute Path to the Key Value
+			pe.Key[k] = ce.Path()
+		}
+	}
 }
 
 func relativeToAbsPath(p *schemapb.Path, e *yang.Entry) *schemapb.Path {
@@ -82,12 +137,8 @@ func relativeToAbsPath(p *schemapb.Path, e *yang.Entry) *schemapb.Path {
 		}
 		if pe.Name == ".." {
 			// fmt.Println("relative path @E", ce.Name, e.IsCase(), e.IsChoice())
-			if ce.IsCase() || ce.IsChoice() {
-				for (ce.IsCase() || ce.IsChoice()) && ce.Parent != nil {
-					ce = ce.Parent.Parent
-				}
-				ce = ce.Parent
-				continue
+			for (ce.IsCase() || ce.IsChoice()) && ce.Parent != nil {
+				ce = ce.Parent.Parent
 			}
 			ce = ce.Parent
 			continue
