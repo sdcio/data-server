@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 type DatastoreConfig struct {
 	Name   string        `yaml:"name,omitempty" json:"name,omitempty"`
 	Schema *SchemaConfig `yaml:"schema,omitempty" json:"schema,omitempty"`
@@ -21,18 +23,18 @@ type Creds struct {
 }
 
 type Sync struct {
-	Validate bool
-	// GNMI     *[]GNMISync
+	Validate bool        `yaml:"validate,omitempty" json:"validate,omitempty"`
+	GNMI     []*GNMISync `yaml:"gnmi,omitempty" json:"gnmi,omitempty"`
 	// NATS     *NATSSync
 }
 
-// type GNMISync struct {
-// 	Name           string
-// 	Paths          []string
-// 	Mode           string
-// 	SampleInterval time.Duration
-// 	Encoding       string
-// }
+type GNMISync struct {
+	Name           string        `yaml:"name,omitempty" json:"name,omitempty"`
+	Paths          []string      `yaml:"paths,omitempty" json:"paths,omitempty"`
+	Mode           string        `yaml:"mode,omitempty" json:"mode,omitempty"`
+	SampleInterval time.Duration `yaml:"sample-interval,omitempty" json:"sample-interval,omitempty"`
+	Encoding       string        `yaml:"encoding,omitempty" json:"encoding,omitempty"`
+}
 
 // type NATSSync struct {
 // 	Address string

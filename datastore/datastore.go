@@ -250,7 +250,7 @@ func (d *Datastore) Stop() {
 }
 
 func (d *Datastore) Sync(ctx context.Context) {
-	go d.sbi.Sync(ctx, d.synCh)
+	go d.sbi.Sync(ctx, d.config.Sync, d.synCh)
 	for {
 		select {
 		case <-ctx.Done():

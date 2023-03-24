@@ -143,7 +143,7 @@ func (t *ncTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sche
 }
 
 func (t *ncTarget) Subscribe() {}
-func (t *ncTarget) Sync(ctx context.Context, syncCh chan *SyncUpdate) {
+func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
 	log.Infof("starting target %s sync", t.sbi.Address)
 	log.Infof("sync still is a NOOP on netconf targets")
 	<-ctx.Done()

@@ -121,6 +121,14 @@ func FromGNMITypedValue(v *gnmi.TypedValue) *schemapb.TypedValue {
 		return &schemapb.TypedValue{
 			Value: &schemapb.TypedValue_UintVal{UintVal: v.GetUintVal()},
 		}
+	case *gnmi.TypedValue_DecimalVal:
+		return &schemapb.TypedValue{
+			Value: &schemapb.TypedValue_DoubleVal{DoubleVal: v.GetDoubleVal()},
+		}
+	case *gnmi.TypedValue_FloatVal:
+		return &schemapb.TypedValue{
+			Value: &schemapb.TypedValue_DoubleVal{DoubleVal: float64(v.GetFloatVal())},
+		}
 	default:
 		log.Errorf("FromGNMITypedValue unhandled type: %T: %v", v, v)
 		return nil

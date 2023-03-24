@@ -4,7 +4,10 @@ topology:
   defaults:
     kind: srl
     image: ghcr.io/nokia/srlinux:latest
-  
+  kinds:
+    vr-sros:
+      image: registry.kmrd.dev/iptecharch/vr-sros:22.10.R1
+      license: ../common/license.lic
   nodes:
     schema-server:
       kind: linux
@@ -12,7 +15,7 @@ topology:
       binds:
         - "./schema-server.yaml:/app/schema-server.yaml"
         - "../common/yang:/app/yang"
-      cmd: "-t"
+      #cmd: "-t"
       ports:
         - "55000:55000/tcp"
       cpu-set: 0-3
@@ -20,7 +23,7 @@ topology:
     data-server:
       kind: linux
       image: schema-server:latest
-      cmd: "-t"
+      #cmd: "-t"
       binds:
         - "./data-server.yaml:/app/schema-server.yaml"
       ports:
@@ -56,6 +59,13 @@ topology:
     srl2:
     srl3:
 
+    sr1:
+      kind: vr-sros
+    sr2:
+      kind: vr-sros
+
   links:
     - endpoints: ["srl3:e1-1", "srl1:e1-1"]
     - endpoints: ["srl3:e1-2", "srl2:e1-2"]
+    - endpoints: ["sr1:eth1", "sr2:eth1"]
+        
