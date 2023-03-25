@@ -24,7 +24,7 @@ func NewScrapligoNetconfTarget(cfg *config.SBI) (*ScrapligoNetconfTarget, error)
 			options.WithAuthUsername(cfg.Credentials.Username),
 			options.WithAuthPassword(cfg.Credentials.Password),
 			options.WithTransportType("standard"),
-			options.WithPort(830),
+			options.WithPort(cfg.Port),
 		)
 	}
 

@@ -73,7 +73,7 @@ func (t *ncTarget) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sche
 	// init an XML2SchemapbConfigAdapter used to convert the netconf xml config to a schemapb.Notification
 	data := netconf.NewXML2SchemapbConfigAdapter(t.schemaClient, t.schema)
 
-	// start transformation, which yields the schemapb_Notificatio
+	// start transformation, which yields the schemapb_Notification
 	noti := data.Transform(ctx, ncResponse.Doc)
 
 	// building the resulting schemapb.GetDataResponse struct
