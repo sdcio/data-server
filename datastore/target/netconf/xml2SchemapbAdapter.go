@@ -10,7 +10,7 @@ import (
 )
 
 // XML2SchemapbConfigAdapter is used to transform the provided XML configuration data into the gnmi-like schemapb.Notifications.
-// This transformation is done via schema information aquired throughout the SchemaServerClient throughout the transformation process.
+// This transformation is done via schema information acquired throughout the SchemaServerClient throughout the transformation process.
 type XML2SchemapbConfigAdapter struct {
 	schemaClient schemapb.SchemaServerClient
 	schema       *schemapb.Schema

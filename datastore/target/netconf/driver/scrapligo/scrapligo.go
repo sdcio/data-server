@@ -136,6 +136,82 @@ func (snt *ScrapligoNetconfTarget) Discard() error {
 	return nil
 }
 
+func (snt *ScrapligoNetconfTarget) Get(filter string) (*types.NetconfResponse, error) {
+	resp, err := snt.driver.Get(filter)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Failed != nil {
+		return nil, resp.Failed
+	}
+	x := etree.NewDocument()
+	err = x.ReadFromString(resp.Result)
+	if err != nil {
+		return nil, err
+	}
+
+	newRootXpath := "/rpc-reply/data/*"
+	r := x.FindElement(newRootXpath)
+	if r == nil {
+		return nil, fmt.Errorf("unable to find %q in %s", newRootXpath, resp.Result)
+	}
+
+	x.SetRoot(r)
+
+	return types.NewNetconfResponse(x), nil
+}
+
+func (snt *ScrapligoNetconfTarget) Lock(target string) (*types.NetconfResponse, error) {
+	resp, err := snt.driver.Lock(target)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Failed != nil {
+		return nil, resp.Failed
+	}
+	x := etree.NewDocument()
+	err = x.ReadFromString(resp.Result)
+	if err != nil {
+		return nil, err
+	}
+
+	return types.NewNetconfResponse(x), nil
+}
+
+func (snt *ScrapligoNetconfTarget) Unlock(target string) (*types.NetconfResponse, error) {
+	resp, err := snt.driver.Unlock(target)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Failed != nil {
+		return nil, resp.Failed
+	}
+	x := etree.NewDocument()
+	err = x.ReadFromString(resp.Result)
+	if err != nil {
+		return nil, err
+	}
+
+	return types.NewNetconfResponse(x), nil
+}
+
+func (snt *ScrapligoNetconfTarget) Validate(source string) (*types.NetconfResponse, error) {
+	resp, err := snt.driver.Validate(source)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Failed != nil {
+		return nil, resp.Failed
+	}
+	x := etree.NewDocument()
+	err = x.ReadFromString(resp.Result)
+	if err != nil {
+		return nil, err
+	}
+
+	return types.NewNetconfResponse(x), nil
+}
+
 // createFilterOption is a helper function that populates the Filter field for the internal Scrapligo RPC instantiation
 func createFilterOption(filter string) util.Option {
 	return func(x interface{}) error {
