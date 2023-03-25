@@ -56,6 +56,17 @@ func (c *Config) validateSetDefaults() error {
 	if c.GRPCServer.RPCTimeout <= 0 {
 		c.GRPCServer.RPCTimeout = time.Minute
 	}
+	var err error
+	for _, ds := range c.Datastores {
+		if err = ds.validateSetDefaults(); err != nil {
+			return err
+		}
+	}
+	for _, sc := range c.Schemas {
+		if err := sc.validateSetDefaults(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

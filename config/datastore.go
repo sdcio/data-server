@@ -1,6 +1,9 @@
 package config
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 type DatastoreConfig struct {
 	Name   string        `yaml:"name,omitempty" json:"name,omitempty"`
@@ -10,8 +13,10 @@ type DatastoreConfig struct {
 }
 
 type SBI struct {
-	Type        string `yaml:"type,omitempty" json:"type,omitempty"`
-	Address     string `yaml:"address,omitempty" json:"address,omitempty"`
+	Type    string `yaml:"type,omitempty" json:"type,omitempty"`
+	Address string `yaml:"address,omitempty" json:"address,omitempty"`
+	// netconf port
+	Port        int    `yaml:"port,omitempty" json:"port,omitempty"`
 	TLS         *TLS   `yaml:"tls,omitempty" json:"tls,omitempty"`
 	Credentials *Creds `yaml:"credentials,omitempty" json:"credentials,omitempty"`
 }
@@ -40,3 +45,38 @@ type GNMISync struct {
 // 	Address string
 // 	Subject string
 // }
+
+func (ds *DatastoreConfig) validateSetDefaults() error {
+	var err error
+	if err = ds.Schema.validateSetDefaults(); err != nil {
+		return err
+	}
+	if err = ds.SBI.validateSetDefaults(); err != nil {
+		return err
+	}
+	if err = ds.Sync.validateSetDefaults(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *SBI) validateSetDefaults() error {
+	if s.Address == "" {
+		return errors.New("missing SBI address")
+	}
+	switch s.Type {
+	case "gnmi":
+		return nil
+	case "nc":
+		if s.Port == 0 {
+			s.Port = 830
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
+func (s *Sync) validateSetDefaults() error {
+	return nil
+}
