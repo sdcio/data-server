@@ -106,6 +106,7 @@ datastores: # this creates MAIN datastores
         password: admin
       # tls:
       #   insecure: true
+      include-ns: true
     sync:
       validate: false
       gnmi:
@@ -120,87 +121,6 @@ datastores: # this creates MAIN datastores
           mode: sample
           sample-interval: 10s
           encoding: bytes
-  - name: srl1
-    schema: 
-      name: srl
-      vendor: Nokia
-      version: 22.11.1
-    sbi:
-      type: gnmi # noop, nc, nats, redis
-      address: "clab-distributed-srl1:57400"
-      credentials:
-        username: admin
-        password: NokiaSrl1!
-      tls:
-        skip-verify: true
-    sync:
-      validate: false
-      gnmi:
-        - name: config
-          paths:
-            - /
-          mode: on_change
-          encoding: 45
-        - name: state
-          paths:
-            - /
-          mode: sample
-          sample-interval: 10s
-          encoding: ascii
-  - name: srl2
-    schema: 
-      name: srl
-      vendor: Nokia
-      version: 22.11.1
-    sbi:
-      type: gnmi # noop, nc, nats, redis
-      address: "clab-distributed-srl2:57400"
-      credentials:
-        username: admin
-        password: NokiaSrl1!
-      tls:
-        skip-verify: true
-    sync:
-      validate: false
-      gnmi:
-        - name: config
-          paths:
-            - /
-          mode: on_change
-          encoding: 45
-        - name: state
-          paths:
-            - /
-          mode: sample
-          sample-interval: 10s
-          encoding: ascii 
-  - name: srl3
-    schema: 
-      name: srl
-      vendor: Nokia
-      version: 22.11.1
-    sbi:
-      type: gnmi # noop, nc, nats, redis
-      address: "clab-distributed-srl3:57400"
-      credentials:
-        username: admin
-        password: NokiaSrl1!
-      tls:
-        skip-verify: true
-    sync:
-      validate: false
-      gnmi:
-        - name: config
-          paths:
-            - /
-          mode: on_change
-          encoding: 45
-        - name: state
-          paths:
-            - /
-          mode: sample
-          sample-interval: 10s
-          encoding: ascii
   - name: sr2
     schema: 
       name: sros
@@ -216,6 +136,7 @@ datastores: # this creates MAIN datastores
         password: admin
       # tls:
       #   insecure: true
+      include-ns: true
     sync:
       validate: false
       gnmi:
