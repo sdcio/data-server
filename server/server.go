@@ -180,8 +180,16 @@ SCHEMA_CONNECT:
 	}
 	s.remoteSchemaClient = schemapb.NewSchemaServerClient(cc)
 
+	wg := new(sync.WaitGroup)
+	wg.Add(len(s.config.Datastores))
 	for _, dsCfg := range s.config.Datastores {
-		ds := datastore.New(dsCfg, s.remoteSchemaClient)
-		s.datastores[dsCfg.Name] = ds
+		go func(dsCfg *config.DatastoreConfig) {
+			defer wg.Done()
+			ds := datastore.New(dsCfg, s.remoteSchemaClient)
+			s.md.Lock()
+			defer s.md.Unlock()
+			s.datastores[dsCfg.Name] = ds
+		}(dsCfg)
 	}
+	wg.Wait()
 }

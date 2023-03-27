@@ -4,6 +4,7 @@ bin*
 client/client
 lab/*/clab-*
 lab/*/*.bak
+lab/*/license.*
 client/bin*
 tests/bulk/bulk
 notes.txt

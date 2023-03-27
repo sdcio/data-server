@@ -36,8 +36,8 @@ func valueAsString(v *schemapb.TypedValue) (string, error) {
 		return string(v.GetBytesVal()), nil
 	case *schemapb.TypedValue_FloatVal:
 		return string(strconv.FormatFloat(float64(v.GetFloatVal()), 'b', -1, 32)), nil
-	case *schemapb.TypedValue_DecimalVal:
-		return fmt.Sprintf("%d", v.GetDecimalVal().Digits), nil
+	// case *schemapb.TypedValue_DecimalVal:
+	// 	return fmt.Sprintf("%d", v.GetDecimalVal().Digits), nil
 	case *schemapb.TypedValue_AsciiVal:
 		return v.GetAsciiVal(), nil
 	case *schemapb.TypedValue_LeaflistVal:

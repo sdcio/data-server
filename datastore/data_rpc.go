@@ -525,6 +525,9 @@ func validateLeafTypeValue(lt *schemapb.SchemaLeafType, v any) error {
 			return fmt.Errorf("value %q does not match identityRef type %q, must be one of [%s]", v, lt.TypeName, strings.Join(lt.Values, ", "))
 		}
 		return nil
+	case "leafref":
+		// TODO: does this need extra validation?
+		return nil
 	default:
 		return fmt.Errorf("unhandled type %v", lt.GetType())
 	}

@@ -17,22 +17,24 @@ type ScrapligoNetconfTarget struct {
 
 // NewScrapligoNetconfTarget inits a new ScrapligoNetconfTarget which is already connected to the target node
 func NewScrapligoNetconfTarget(cfg *config.SBI) (*ScrapligoNetconfTarget, error) {
-	var opts []util.Option
+	opts := []util.Option{
+		options.WithAuthNoStrictKey(),
+		options.WithNetconfForceSelfClosingTags(),
+		options.WithTransportType("standard"),
+		options.WithPort(cfg.Port),
+	}
 
 	if cfg.Credentials != nil {
 		opts = append(opts,
 			options.WithAuthUsername(cfg.Credentials.Username),
 			options.WithAuthPassword(cfg.Credentials.Password),
-			options.WithTransportType("standard"),
-			options.WithPort(830),
 		)
 	}
-
-	opts = append(opts,
-		options.WithAuthNoStrictKey(),
-		options.WithNetconfForceSelfClosingTags(),
-	)
-
+	if cfg.PreferredNCVersion != "" {
+		opts = append(opts,
+			options.WithNetconfPreferredVersion(cfg.PreferredNCVersion),
+		)
+	}
 	// init the netconf driver
 	d, err := scraplinetconf.NewDriver(cfg.Address, opts...)
 	if err != nil {
@@ -59,7 +61,7 @@ func (snt *ScrapligoNetconfTarget) EditConfig(target string, config string) (*ty
 	xdoc := fmt.Sprintf("<config>%s</config>", config)
 
 	// send the edit config rpc
-	resp, err := snt.driver.EditConfig("candidate", xdoc)
+	resp, err := snt.driver.EditConfig(target, xdoc)
 	if err != nil {
 		return nil, err
 	}
@@ -134,6 +136,99 @@ func (snt *ScrapligoNetconfTarget) Discard() error {
 		return resp.Failed
 	}
 	return nil
+}
+
+func (snt *ScrapligoNetconfTarget) Get(filter string) (*types.NetconfResponse, error) {
+	resp, err := snt.driver.Get(filter)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Failed != nil {
+		return nil, resp.Failed
+	}
+	x := etree.NewDocument()
+	err = x.ReadFromString(resp.Result)
+	if err != nil {
+		return nil, err
+	}
+
+	newRootXpath := "/rpc-reply/data/*"
+	r := x.FindElement(newRootXpath)
+	if r == nil {
+		return nil, fmt.Errorf("unable to find %q in %s", newRootXpath, resp.Result)
+	}
+
+	x.SetRoot(r)
+
+	return types.NewNetconfResponse(x), nil
+}
+
+func (snt *ScrapligoNetconfTarget) Lock(target string) (*types.NetconfResponse, error) {
+	resp, err := snt.driver.Lock(target)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Failed != nil {
+		return nil, resp.Failed
+	}
+	x := etree.NewDocument()
+	err = x.ReadFromString(resp.Result)
+	if err != nil {
+		return nil, err
+	}
+
+	return types.NewNetconfResponse(x), nil
+}
+
+func (snt *ScrapligoNetconfTarget) Unlock(target string) (*types.NetconfResponse, error) {
+	resp, err := snt.driver.Unlock(target)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Failed != nil {
+		return nil, resp.Failed
+	}
+	x := etree.NewDocument()
+	err = x.ReadFromString(resp.Result)
+	if err != nil {
+		return nil, err
+	}
+
+	return types.NewNetconfResponse(x), nil
+}
+
+func (snt *ScrapligoNetconfTarget) Validate(source string) (*types.NetconfResponse, error) {
+	resp, err := snt.driver.Validate(source)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Failed != nil {
+		return nil, resp.Failed
+	}
+	x := etree.NewDocument()
+	err = x.ReadFromString(resp.Result)
+	if err != nil {
+		return nil, err
+	}
+
+	return types.NewNetconfResponse(x), nil
+}
+
+func (snt *ScrapligoNetconfTarget) CopyConfig(source, target string) (*types.NetconfResponse, error) {
+	resp, err := snt.driver.CopyConfig(source, target)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Failed != nil {
+		return nil, resp.Failed
+	}
+	x := etree.NewDocument()
+	err = x.ReadFromString(resp.Result)
+	if err != nil {
+		return nil, err
+	}
+
+	return types.NewNetconfResponse(x), nil
 }
 
 // createFilterOption is a helper function that populates the Filter field for the internal Scrapligo RPC instantiation

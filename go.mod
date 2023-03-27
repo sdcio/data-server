@@ -14,7 +14,7 @@ require (
 	github.com/openconfig/gnmic v0.29.0
 	github.com/openconfig/goyang v1.2.0
 	github.com/prometheus/client_golang v1.14.0
-	github.com/scrapli/scrapligo v1.1.6
+	github.com/scrapli/scrapligo v1.1.7
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/pflag v1.0.5
 	golang.org/x/sync v0.1.0
@@ -133,6 +133,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/run v1.1.0 // indirect
+	github.com/openconfig/grpctunnel v0.0.0-20220524190229-125331eabdde // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pkg/sftp v1.13.4 // indirect

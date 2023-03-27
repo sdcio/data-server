@@ -2,6 +2,8 @@ package target
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/AlekSi/pointer"
@@ -9,9 +11,9 @@ import (
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
 	"github.com/openconfig/gnmi/proto/gnmi"
+	gapi "github.com/openconfig/gnmic/api"
 	gtarget "github.com/openconfig/gnmic/target"
 	"github.com/openconfig/gnmic/types"
-
 	log "github.com/sirupsen/logrus"
 )
 
@@ -124,40 +126,62 @@ func (t *gnmiTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sc
 
 func (t *gnmiTarget) Subscribe() {}
 
-func (t *gnmiTarget) Sync(ctx context.Context, syncCh chan *SyncUpdate) {
+func (t *gnmiTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
 	log.Infof("starting target %s sync", t.target.Config.Name)
 START:
-	go t.target.Subscribe(ctx, &gnmi.SubscribeRequest{
-		Request: &gnmi.SubscribeRequest_Subscribe{
-			Subscribe: &gnmi.SubscriptionList{
-				// Prefix: &gnmi.Path{},
-				Subscription: []*gnmi.Subscription{
-					{
-						Mode: gnmi.SubscriptionMode_ON_CHANGE,
-					},
-				},
-				Mode: gnmi.SubscriptionList_STREAM,
-				// Encoding: gnmi.Encoding_ASCII,
-				Encoding: 45, // ascii_config_only
-			},
-		},
-	}, "config")
-	go t.target.Subscribe(ctx, &gnmi.SubscribeRequest{
-		Request: &gnmi.SubscribeRequest_Subscribe{
-			Subscribe: &gnmi.SubscriptionList{
-				// Prefix: &gnmi.Path{},
-				Subscription: []*gnmi.Subscription{
-					{
-						Mode:           gnmi.SubscriptionMode_SAMPLE,
-						SampleInterval: uint64(10 * time.Second),
-					},
-				},
+	for _, gnmiSync := range syncConfig.GNMI {
+		opts := make([]gapi.GNMIOption, 0)
+		subscriptionOpts := make([]gapi.GNMIOption, 0)
+		for _, p := range gnmiSync.Paths {
+			subscriptionOpts = append(subscriptionOpts, gapi.Path(p))
+		}
+		subscriptionOpts = append(subscriptionOpts, gapi.SubscriptionMode(gnmiSync.Mode))
+		subscriptionOpts = append(subscriptionOpts, gapi.SampleInterval(gnmiSync.SampleInterval))
+		opts = append(opts,
+			gapi.EncodingCustom(encoding(gnmiSync.Encoding)),
+			gapi.SubscriptionListModeSTREAM(),
+			gapi.Subscription(
+				subscriptionOpts...,
+			),
+		)
+		subReq, err := gapi.NewSubscribeRequest(opts...)
+		if err != nil {
+			panic(err)
+		}
+		go t.target.Subscribe(ctx, subReq, gnmiSync.Name)
+	}
 
-				Mode:     gnmi.SubscriptionList_STREAM,
-				Encoding: gnmi.Encoding_ASCII,
-			},
-		},
-	}, "state")
+	// go t.target.Subscribe(ctx, &gnmi.SubscribeRequest{
+	// 	Request: &gnmi.SubscribeRequest_Subscribe{
+	// 		Subscribe: &gnmi.SubscriptionList{
+	// 			// Prefix: &gnmi.Path{},
+	// 			Subscription: []*gnmi.Subscription{
+	// 				{
+	// 					Mode: gnmi.SubscriptionMode_ON_CHANGE,
+	// 				},
+	// 			},
+	// 			Mode: gnmi.SubscriptionList_STREAM,
+	// 			// Encoding: gnmi.Encoding_ASCII,
+	// 			Encoding: 45, // ascii_config_only
+	// 		},
+	// 	},
+	// }, "config")
+	// go t.target.Subscribe(ctx, &gnmi.SubscribeRequest{
+	// 	Request: &gnmi.SubscribeRequest_Subscribe{
+	// 		Subscribe: &gnmi.SubscriptionList{
+	// 			// Prefix: &gnmi.Path{},
+	// 			Subscription: []*gnmi.Subscription{
+	// 				{
+	// 					Mode:           gnmi.SubscriptionMode_SAMPLE,
+	// 					SampleInterval: uint64(10 * time.Second),
+	// 				},
+	// 			},
+
+	// 			Mode:     gnmi.SubscriptionList_STREAM,
+	// 			Encoding: gnmi.Encoding_ASCII,
+	// 		},
+	// 	},
+	// }, "state")
 	defer t.target.StopSubscriptions()
 	rspch, errCh := t.target.ReadSubscriptions()
 	for {
@@ -175,7 +199,9 @@ START:
 			}
 		case err := <-errCh:
 			if err.Err != nil {
-				log.Errorf("sync subscription failed: %v", err)
+				t.target.StopSubscriptions()
+				log.Errorf("%s: sync subscription failed: %v", t.target.Config.Name, err)
+				time.Sleep(time.Second)
 				goto START
 			}
 		}
@@ -184,4 +210,16 @@ START:
 
 func (t *gnmiTarget) Close() {
 	t.target.Close()
+}
+
+func encoding(e string) int {
+	enc, ok := gnmi.Encoding_value[strings.ToUpper(e)]
+	if ok {
+		return int(enc)
+	}
+	en, err := strconv.Atoi(e)
+	if err != nil {
+		return 0
+	}
+	return en
 }

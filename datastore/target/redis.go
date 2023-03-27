@@ -21,7 +21,7 @@ func (t *redisTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*s
 	return nil, nil
 }
 func (t *redisTarget) Subscribe() {}
-func (t *redisTarget) Sync(ctx context.Context, syncCh chan *SyncUpdate) {
+func (t *redisTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
 	<-ctx.Done()
 	log.Infof("sync stopped: %v", ctx.Err())
 }
