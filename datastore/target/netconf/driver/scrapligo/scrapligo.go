@@ -61,7 +61,7 @@ func (snt *ScrapligoNetconfTarget) EditConfig(target string, config string) (*ty
 	xdoc := fmt.Sprintf("<config>%s</config>", config)
 
 	// send the edit config rpc
-	resp, err := snt.driver.EditConfig("candidate", xdoc)
+	resp, err := snt.driver.EditConfig(target, xdoc)
 	if err != nil {
 		return nil, err
 	}
