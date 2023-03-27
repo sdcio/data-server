@@ -21,7 +21,7 @@ func (t *natsTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sc
 	return nil, nil
 }
 func (t *natsTarget) Subscribe() {}
-func (t *natsTarget) Sync(ctx context.Context, syncCh chan *SyncUpdate) {
+func (t *natsTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
 	<-ctx.Done()
 	log.Infof("sync stopped: %v", ctx.Err())
 }

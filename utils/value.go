@@ -68,10 +68,10 @@ func GetSchemaValue(updValue *schemapb.TypedValue) (interface{}, error) {
 		value = updValue.GetBoolVal()
 	case *schemapb.TypedValue_BytesVal:
 		value = updValue.GetBytesVal()
-	case *schemapb.TypedValue_DecimalVal:
-		value = updValue.GetDecimalVal()
-	case *schemapb.TypedValue_FloatVal:
-		value = updValue.GetFloatVal()
+	// case *schemapb.TypedValue_DecimalVal:
+	// 	value = updValue.GetDecimalVal()
+	// case *schemapb.TypedValue_FloatVal:
+	// 	value = updValue.GetFloatVal()
 	// case *schemapb.TypedValue_DoubleVal:
 	// 	value = updValue.GetDoubleVal()
 	case *schemapb.TypedValue_IntVal:

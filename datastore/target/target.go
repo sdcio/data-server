@@ -14,7 +14,7 @@ type Target interface {
 	Set(ctx context.Context, req *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error)
 	Subscribe()
 	//
-	Sync(ctx context.Context, syncCh chan *SyncUpdate)
+	Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate)
 }
 
 func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemapb.SchemaServerClient, schema *schemapb.Schema) (Target, error) {
@@ -22,7 +22,7 @@ func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemap
 	case "gnmi":
 		return newGNMITarget(ctx, name, cfg)
 	case "nc":
-		return newNCTarget(ctx, cfg, schemaClient, schema)
+		return newNCTarget(ctx, name, cfg, schemaClient, schema)
 	case "redis":
 		return newRedisTarget(ctx, cfg)
 	case "nats":

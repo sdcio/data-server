@@ -2,7 +2,7 @@ package target
 
 import (
 	"context"
-	"fmt"
+	"time"
 
 	"github.com/iptecharch/schema-server/config"
 	"github.com/iptecharch/schema-server/datastore/target/netconf"
@@ -12,13 +12,14 @@ import (
 )
 
 type ncTarget struct {
+	name         string
 	driver       netconf.Driver
 	schemaClient schemapb.SchemaServerClient
 	schema       *schemapb.Schema
 	sbi          *config.SBI
 }
 
-func newNCTarget(_ context.Context, cfg *config.SBI, schemaClient schemapb.SchemaServerClient, schema *schemapb.Schema) (*ncTarget, error) {
+func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient schemapb.SchemaServerClient, schema *schemapb.Schema) (*ncTarget, error) {
 
 	// create a new
 	d, err := scrapligo.NewScrapligoNetconfTarget(cfg)
@@ -27,6 +28,7 @@ func newNCTarget(_ context.Context, cfg *config.SBI, schemaClient schemapb.Schem
 	}
 
 	return &ncTarget{
+		name:         name,
 		driver:       d,
 		schemaClient: schemaClient,
 		schema:       schema,
@@ -45,7 +47,7 @@ func (t *ncTarget) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sche
 	}
 
 	// init a new XMLConfigBuilder for the pathfilter
-	pathfilterXmlBuilder := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, false)
+	pathfilterXmlBuilder := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, t.sbi.IncludeNS)
 
 	// add all the requested paths to the document
 	for _, p := range req.Path {
@@ -73,7 +75,7 @@ func (t *ncTarget) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sche
 	// init an XML2SchemapbConfigAdapter used to convert the netconf xml config to a schemapb.Notification
 	data := netconf.NewXML2SchemapbConfigAdapter(t.schemaClient, t.schema)
 
-	// start transformation, which yields the schemapb_Notificatio
+	// start transformation, which yields the schemapb_Notification
 	noti := data.Transform(ctx, ncResponse.Doc)
 
 	// building the resulting schemapb.GetDataResponse struct
@@ -87,7 +89,7 @@ func (t *ncTarget) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sche
 
 func (t *ncTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error) {
 
-	xmlCBDelete := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, false)
+	xmlCBDelete := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, t.sbi.IncludeNS)
 
 	// iterate over the delete array
 	for _, d := range req.Delete {
@@ -106,7 +108,7 @@ func (t *ncTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sche
 	// }
 	//
 
-	xmlCBAdd := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, false)
+	xmlCBAdd := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, t.sbi.IncludeNS)
 
 	// iterate over the update array
 	for _, u := range req.Update {
@@ -120,30 +122,35 @@ func (t *ncTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sche
 		if err != nil {
 			return nil, err
 		}
+		log.Debugf("datastore %s XML:\n%s\n", t.name, xdoc)
 
 		// edit the config
 		_, err = t.driver.EditConfig("candidate", xdoc)
 		if err != nil {
-			ecerr := err
-			err = t.driver.Discard()
+			log.Errorf("datastore %s failed edit-config: %v", t.name, err)
+			err2 := t.driver.Discard()
 			if err != nil {
-				return nil, fmt.Errorf("failed with %v while discarding pending changes after error %v", err, ecerr)
+				// log failed discard
+				log.Errorf("failed with %v while discarding pending changes after error %v", err2, err)
 			}
 			return nil, err
 		}
-	}
 
+	}
+	log.Infof("datastore %s: committing changes on target", t.name)
 	// commit the config
 	err := t.driver.Commit()
 	if err != nil {
 		return nil, err
 	}
-
-	return nil, nil
+	return &schemapb.SetDataResponse{
+		Timestamp: time.Now().UnixNano(),
+	}, nil
 }
 
 func (t *ncTarget) Subscribe() {}
-func (t *ncTarget) Sync(ctx context.Context, syncCh chan *SyncUpdate) {
+
+func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
 	log.Infof("starting target %s sync", t.sbi.Address)
 	log.Infof("sync still is a NOOP on netconf targets")
 	<-ctx.Done()

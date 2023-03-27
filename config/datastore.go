@@ -1,5 +1,10 @@
 package config
 
+import (
+	"errors"
+	"time"
+)
+
 type DatastoreConfig struct {
 	Name   string        `yaml:"name,omitempty" json:"name,omitempty"`
 	Schema *SchemaConfig `yaml:"schema,omitempty" json:"schema,omitempty"`
@@ -8,10 +13,20 @@ type DatastoreConfig struct {
 }
 
 type SBI struct {
-	Type        string `yaml:"type,omitempty" json:"type,omitempty"`
-	Address     string `yaml:"address,omitempty" json:"address,omitempty"`
-	TLS         *TLS   `yaml:"tls,omitempty" json:"tls,omitempty"`
+	// Southbound interface type, one of: gnmi, netconf
+	Type string `yaml:"type,omitempty" json:"type,omitempty"`
+	// gNMI or netconf address
+	Address string `yaml:"address,omitempty" json:"address,omitempty"`
+	// netconf port
+	Port int `yaml:"port,omitempty" json:"port,omitempty"`
+	// TLS config
+	TLS *TLS `yaml:"tls,omitempty" json:"tls,omitempty"`
+	// Target SBI credentials
 	Credentials *Creds `yaml:"credentials,omitempty" json:"credentials,omitempty"`
+	// if true, the namespace is included as an `xmlns` attribute in the netconf payloads
+	IncludeNS bool `yaml:"include-ns,omitempty" json:"include-ns,omitempty"`
+	// sets the preferred NC version: 1.0 or 1.1
+	PreferredNCVersion string `yaml:"preferred-nc-version,omitempty" json:"preferred-nc-version,omitempty"`
 }
 
 type Creds struct {
@@ -21,20 +36,55 @@ type Creds struct {
 }
 
 type Sync struct {
-	Validate bool
-	// GNMI     *[]GNMISync
+	Validate bool        `yaml:"validate,omitempty" json:"validate,omitempty"`
+	GNMI     []*GNMISync `yaml:"gnmi,omitempty" json:"gnmi,omitempty"`
 	// NATS     *NATSSync
 }
 
-// type GNMISync struct {
-// 	Name           string
-// 	Paths          []string
-// 	Mode           string
-// 	SampleInterval time.Duration
-// 	Encoding       string
-// }
+type GNMISync struct {
+	Name           string        `yaml:"name,omitempty" json:"name,omitempty"`
+	Paths          []string      `yaml:"paths,omitempty" json:"paths,omitempty"`
+	Mode           string        `yaml:"mode,omitempty" json:"mode,omitempty"`
+	SampleInterval time.Duration `yaml:"sample-interval,omitempty" json:"sample-interval,omitempty"`
+	Encoding       string        `yaml:"encoding,omitempty" json:"encoding,omitempty"`
+}
 
 // type NATSSync struct {
 // 	Address string
 // 	Subject string
 // }
+
+func (ds *DatastoreConfig) validateSetDefaults() error {
+	var err error
+	if err = ds.Schema.validateSetDefaults(); err != nil {
+		return err
+	}
+	if err = ds.SBI.validateSetDefaults(); err != nil {
+		return err
+	}
+	if err = ds.Sync.validateSetDefaults(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *SBI) validateSetDefaults() error {
+	if s.Address == "" {
+		return errors.New("missing SBI address")
+	}
+	switch s.Type {
+	case "gnmi":
+		return nil
+	case "nc":
+		if s.Port == 0 {
+			s.Port = 830
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
+func (s *Sync) validateSetDefaults() error {
+	return nil
+}

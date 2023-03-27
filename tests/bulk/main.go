@@ -40,7 +40,7 @@ func main() {
 		panic(err)
 	}
 	defer cc.Close()
-	crDsRsp, err := dataClient.CreateDataStore(ctx, &schemapb.CreateDataStoreRequest{
+	_, err = dataClient.CreateDataStore(ctx, &schemapb.CreateDataStoreRequest{
 		Name: ds,
 		Datastore: &schemapb.DataStore{
 			Type: schemapb.Type_CANDIDATE,
@@ -50,7 +50,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	_ = crDsRsp
+	// _ = crDsRsp
 	wg := sync.WaitGroup{}
 	wg.Add(numVlan * len(interfaces))
 	sem := semaphore.NewWeighted(conc)
@@ -254,7 +254,7 @@ func main() {
 
 	fmt.Println("commit ack after     :", time.Since(now))
 	wg.Add(numVlan * len(interfaces))
-	crDsRsp, err = dataClient.CreateDataStore(ctx, &schemapb.CreateDataStoreRequest{
+	_, err = dataClient.CreateDataStore(ctx, &schemapb.CreateDataStoreRequest{
 		Name: ds,
 		Datastore: &schemapb.DataStore{
 			Type: schemapb.Type_CANDIDATE,
@@ -264,7 +264,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	_ = crDsRsp
 	if !cleanup {
 		return
 	}

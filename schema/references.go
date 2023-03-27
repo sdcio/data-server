@@ -6,6 +6,7 @@ import (
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
 	"github.com/openconfig/goyang/pkg/yang"
+	log "github.com/sirupsen/logrus"
 )
 
 func (sc *Schema) buildReferencesAnnotation() error {
@@ -75,56 +76,57 @@ func normalizePath(p string, e *yang.Entry) []string {
 }
 
 func relativeToAbsPathKeys(p *schemapb.Path, e *yang.Entry) {
-	ce := e
 	// go through the Path elements
 	for _, pe := range p.GetElem() {
-		if ce == nil {
-			break
-		}
+
 		// check all keys in the path element
 		for k, v := range pe.GetKey() {
 			// if the actual path element does not contain a relative ref
 			// continue with next pe otherwise go on
-			if !strings.Contains(v, "..") {
+			if !strings.Contains(v, "current()") && !strings.Contains(v, "..") {
 				continue
 			}
 
 			// split path into its elements
-			keyPathElems := strings.Split(strings.TrimSpace(v), "/")
+			keyPath, err := utils.ParsePath(strings.TrimSpace(v))
+			if err != nil {
+				log.Error(err)
+			}
 
 			// current yang entry will be forwarded via key path elements
-			cye := e
+			ce := e
 
 			// iterate over the Key referenced path elements
 			// forward the cye accordingly.
 			// cye will finally contain the yang entry that the key referres to
-			for _, kpe := range keyPathElems {
-				switch kpe {
+			for _, kpe := range keyPath.Elem {
+				switch kpe.Name {
 				case "current()":
-					for (cye.IsCase() || cye.IsChoice()) && cye.Parent != nil {
-						cye = cye.Parent
+					for (ce.IsCase() || ce.IsChoice()) && ce.Parent != nil {
+						ce = ce.Parent
 					}
 				case "..":
-					for (cye.IsCase() || cye.IsChoice()) && cye.Parent != nil {
-						cye = cye.Parent
+					for (ce.IsCase() || ce.IsChoice()) && ce.Parent != nil {
+						ce = ce.Parent
 					}
-					cye = cye.Parent
+					ce = ce.Parent
 				default:
 					// remove module name from PathElement
-					kpeParts := strings.Split(kpe, ":")
+					kpeParts := strings.SplitN(kpe.Name, ":", 2)
 					// default to [0]
-					kpe = kpeParts[0]
+					kpeName := kpeParts[0]
 					// if module name present len will be 2
 					// MODULENAME:ELEMENTNAME -> so [1] is to be used
 					if len(kpeParts) == 2 {
-						kpe = kpeParts[1]
+						kpeName = kpeParts[1]
 					}
 					// forward the current yang entry "pointer"
-					cye = cye.Dir[kpe]
+					ce = ce.Dir[kpeName]
 				}
 			}
+
 			// replace the PathElements Key with the Absolute Path to the Key Value
-			pe.Key[k] = cye.Path()
+			pe.Key[k] = ce.Path()
 		}
 	}
 }

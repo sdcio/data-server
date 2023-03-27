@@ -43,27 +43,31 @@ func (s *Server) GetSchema(ctx context.Context, req *schemapb.GetSchemaRequest) 
 	}
 
 	o := schema.ObjectFromYEntry(e, req.GetWithDescription())
+	var resp *schemapb.GetSchemaResponse
 	switch o := o.(type) {
 	case *schemapb.ContainerSchema:
-		return &schemapb.GetSchemaResponse{
+		resp = &schemapb.GetSchemaResponse{
 			Schema: &schemapb.GetSchemaResponse_Container{
 				Container: o,
 			},
-		}, nil
+		}
 	case *schemapb.LeafListSchema:
-		return &schemapb.GetSchemaResponse{
+		resp = &schemapb.GetSchemaResponse{
 			Schema: &schemapb.GetSchemaResponse_Leaflist{
 				Leaflist: o,
 			},
-		}, nil
+		}
 	case *schemapb.LeafSchema:
-		return &schemapb.GetSchemaResponse{
+		resp = &schemapb.GetSchemaResponse{
 			Schema: &schemapb.GetSchemaResponse_Field{
 				Field: o,
 			},
-		}, nil
+		}
+	default:
+		return nil, fmt.Errorf("unknown schema item: %T", o)
 	}
-	return nil, fmt.Errorf("unknown schema item: %T", o)
+	log.Tracef("schema response: %v", resp)
+	return resp, nil
 }
 
 func (s *Server) ListSchema(ctx context.Context, req *schemapb.ListSchemaRequest) (*schemapb.ListSchemaResponse, error) {
