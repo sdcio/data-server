@@ -22,7 +22,7 @@ func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemap
 	case "gnmi":
 		return newGNMITarget(ctx, name, cfg)
 	case "nc":
-		return newNCTarget(ctx, cfg, schemaClient, schema)
+		return newNCTarget(ctx, name, cfg, schemaClient, schema)
 	case "redis":
 		return newRedisTarget(ctx, cfg)
 	case "nats":

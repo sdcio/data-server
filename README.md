@@ -55,15 +55,17 @@ go build
 ./bin/client -a clab-distributed-data-server:56000 datastore get --ds srl1
 ```
 
-#####
+##### SROS
 
 ```shell
-
 ./bin/client -a clab-distributed-data-server:56000 datastore create --ds sr1 --candidate default
 ./bin/client -a clab-distributed-data-server:56000 datastore get --ds sr1 
-./bin/client -a clab-distributed-data-server:56000 data set --ds sr1 --update /configure/system/name:::sr123 --candidate default
+./bin/client -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default --update /configure/system/name:::sr123 
+./bin/client -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default --update /configure/service/vprn[service-name=vprn1]/customer:::1
+./bin/client -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default --update /configure/service/vprn[service-name=vprn1]/service-id:::100
+./bin/client -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default --update /configure/service/vprn[service-name=vprn1]/admin-state:::enable
+##
 ./bin/client -a clab-distributed-data-server:56000 data get --ds sr1 --path /configure/system/name
-./bin/client -a clab-distributed-data-server:56000 data get --ds sr1 --path /configure/system/name --candidate default
+./bin/client -a clab-distributed-data-server:56000 data get --ds sr1 --candidate default --path /configure/system/name 
 ./bin/client -a clab-distributed-data-server:56000 datastore commit --ds sr1 --candidate default
-
 ```

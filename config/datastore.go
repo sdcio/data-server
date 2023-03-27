@@ -13,12 +13,20 @@ type DatastoreConfig struct {
 }
 
 type SBI struct {
-	Type    string `yaml:"type,omitempty" json:"type,omitempty"`
+	// Southbound interface type, one of: gnmi, netconf
+	Type string `yaml:"type,omitempty" json:"type,omitempty"`
+	// gNMI or netconf address
 	Address string `yaml:"address,omitempty" json:"address,omitempty"`
 	// netconf port
-	Port        int    `yaml:"port,omitempty" json:"port,omitempty"`
-	TLS         *TLS   `yaml:"tls,omitempty" json:"tls,omitempty"`
+	Port int `yaml:"port,omitempty" json:"port,omitempty"`
+	// TLS config
+	TLS *TLS `yaml:"tls,omitempty" json:"tls,omitempty"`
+	// Target SBI credentials
 	Credentials *Creds `yaml:"credentials,omitempty" json:"credentials,omitempty"`
+	// if true, the namespace is included as an `xmlns` attribute in the netconf payloads
+	IncludeNS bool `yaml:"include-ns,omitempty" json:"include-ns,omitempty"`
+	// sets the preferred NC version: 1.0 or 1.1
+	PreferredNCVersion string `yaml:"preferred-nc-version,omitempty" json:"preferred-nc-version,omitempty"`
 }
 
 type Creds struct {
