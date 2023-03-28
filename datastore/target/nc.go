@@ -122,6 +122,12 @@ func (t *ncTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sche
 		if err != nil {
 			return nil, err
 		}
+
+		// if there was no data in the xml document, continue
+		if len(xdoc) == 0 {
+			continue
+		}
+
 		log.Debugf("datastore %s XML:\n%s\n", t.name, xdoc)
 
 		// edit the config
