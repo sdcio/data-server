@@ -55,7 +55,7 @@ go build
 ./bin/client -a clab-distributed-data-server:56000 datastore get --ds srl1
 ```
 
-##### SROS
+### SROS
 
 ```shell
 ./bin/client -a clab-distributed-data-server:56000 datastore create --ds sr1 --candidate default
@@ -65,7 +65,38 @@ go build
 ./bin/client -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default --update /configure/service/vprn[service-name=vprn1]/service-id:::100
 ./bin/client -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default --update /configure/service/vprn[service-name=vprn1]/admin-state:::enable
 ##
-./bin/client -a clab-distributed-data-server:56000 data get --ds sr1 --path /configure/system/name
+# ./bin/client -a clab-distributed-data-server:56000 data get --ds sr1 --path /configure/system/name
 ./bin/client -a clab-distributed-data-server:56000 data get --ds sr1 --candidate default --path /configure/system/name 
+./bin/client -a clab-distributed-data-server:56000 data get --ds sr1 --candidate default --path /configure/service/vprn[service-name=vprn1]
 ./bin/client -a clab-distributed-data-server:56000 datastore commit --ds sr1 --candidate default
+```
+
+```shell
+./bin/client -a clab-distributed-data-server:56000 datastore create --ds sr1 --candidate default
+
+./bin/client -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default  \
+             --update-path /configure/router[router-name=Base]/interface[interface-name=system] \
+             --update-file lab/common/configs/sros_interface_base.json
+./bin/client -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default  \
+             --update-path configure/service/vprn[service-name=vprn1] \
+             --update-file lab/common/configs/sros_vprn.json
+./bin/client -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default  \
+             --update-path /configure/router[router-name=Base]/interface \
+             --update-file lab/common/configs/sros_interfaces_base.json
+./bin/client -a clab-distributed-data-server:56000 datastore commit --ds sr1 --candidate default
+```
+
+### SRL JSON VALUE
+
+```shell
+./bin/client -a clab-distributed-data-server:56000 datastore create --ds srl1 --candidate default
+
+./bin/client -a clab-distributed-data-server:56000 data set --ds srl1 --candidate default  \
+             --update-path / \
+             --update-file lab/common/configs/srl_interface.json
+./bin/client -a clab-distributed-data-server:56000 data set --ds srl1 --candidate default \
+             --update-path / \
+             --update-file lab/common/configs/srl_interfaces.json
+
+./bin/client -a clab-distributed-data-server:56000 datastore commit --ds srl1 --candidate default
 ```
