@@ -159,11 +159,13 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 			updates = append(updates, rs...)
 		}
 		// debugging
-		for _, upd := range replaces {
-			fmt.Println(prototext.Format(upd))
-		}
-		for _, upd := range updates {
-			fmt.Println(prototext.Format(upd))
+		if log.GetLevel() >= log.DebugLevel {
+			for _, upd := range replaces {
+				log.Debugf("expanded replace:\n", prototext.Format(upd))
+			}
+			for _, upd := range updates {
+				log.Debugf("expanded update:\n", prototext.Format(upd))
+			}
 		}
 		//
 
@@ -815,9 +817,10 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *schemapb.Path, 
 		if numElems := len(p.GetElem()); numElems > 0 {
 			keysInPath = p.GetElem()[numElems-1].GetKey()
 		}
+		// handling keys in last element of the path or in the json value
 		for _, k := range cs.Container.GetKeys() {
 			if v, ok := jv[k.Name]; ok {
-				fmt.Println("!! handling key", k.Name)
+				log.Debugf("handling key %s", k.Name)
 				if _, ok := keysInPath[k.Name]; ok {
 					return nil, fmt.Errorf("key %q is present in both the path and value", k.Name)
 				}
@@ -832,6 +835,7 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *schemapb.Path, 
 				return nil, fmt.Errorf("missing key %q from container %q", k.Name, cs.Container.Name)
 			}
 		}
+
 		for k, v := range jv {
 			if isKey(k, cs) {
 				continue
@@ -842,10 +846,9 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *schemapb.Path, 
 			}
 			switch item := item.(type) {
 			case *schemapb.LeafSchema: // field
-				fmt.Println("!! handling field", item.Name)
+				log.Debugf("handling field %s", item.Name)
 				np := proto.Clone(p).(*schemapb.Path)
 				np.Elem = append(np.Elem, &schemapb.PathElem{Name: item.Name})
-				fmt.Println("!!", np)
 				upd := &schemapb.Update{
 					Path: np,
 					Value: &schemapb.TypedValue{
@@ -854,15 +857,13 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *schemapb.Path, 
 						},
 					},
 				}
-				fmt.Println("!!!", upd)
 				upds = append(upds, upd)
 			case *schemapb.LeafListSchema: // leaflist
-				fmt.Println("!! handling leafList", item.Name)
+				log.Debugf("TODO: handling leafList", item.Name)
 			case string: // child container
+				log.Debugf("handling child container %s", item)
 				np := proto.Clone(p).(*schemapb.Path)
-				fmt.Println("!! handling child container", item)
 				np.Elem = append(np.Elem, &schemapb.PathElem{Name: item})
-				fmt.Println("!!", np)
 				rsp, err := d.schemaClient.GetSchema(ctx,
 					&schemapb.GetSchemaRequest{
 						Path: np,
@@ -875,7 +876,6 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *schemapb.Path, 
 				if err != nil {
 					return nil, err
 				}
-				// fmt.Println(rsp)
 				switch rsp := rsp.GetSchema().(type) {
 				case *schemapb.GetSchemaResponse_Container:
 					rs, err := d.expandContainerValue(ctx, np, v, rsp)
@@ -891,61 +891,6 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *schemapb.Path, 
 				return nil, fmt.Errorf("unknown object %q under container %q", k, cs.Container.Name)
 			}
 		}
-		// // append present fields as new updates
-		// for _, fl := range cs.Container.GetFields() {
-		// 	if v, ok := jv[fl.Name]; ok {
-		// 		fmt.Println("!! handling field", fl.Name)
-		// 		np := proto.Clone(p).(*schemapb.Path)
-		// 		np.Elem = append(np.Elem, &schemapb.PathElem{Name: fl.Name})
-		// 		fmt.Println("!!", np)
-		// 		upd := &schemapb.Update{
-		// 			Path: np,
-		// 			Value: &schemapb.TypedValue{
-		// 				Value: &schemapb.TypedValue_AsciiVal{
-		// 					AsciiVal: fmt.Sprintf("%v", v),
-		// 				},
-		// 			},
-		// 		}
-		// 		fmt.Println("!!!", upd)
-		// 		upds = append(upds, upd)
-		// 	}
-		// }
-		// for _, lfl := range cs.Container.GetLeaflists() {
-		// 	fmt.Println("!! handling leafList", lfl.Name)
-		// 	_ = lfl
-		// }
-		// for _, childName := range cs.Container.GetChildren() {
-		// 	if v, ok := jv[childName]; ok {
-		// 		np := proto.Clone(p).(*schemapb.Path)
-		// 		fmt.Println("!! handling child container", childName)
-		// 		np.Elem = append(np.Elem, &schemapb.PathElem{Name: childName})
-		// 		fmt.Println("!!", np)
-		// 		rsp, err := d.schemaClient.GetSchema(ctx,
-		// 			&schemapb.GetSchemaRequest{
-		// 				Path: np,
-		// 				Schema: &schemapb.Schema{
-		// 					Name:    d.config.Schema.Name,
-		// 					Vendor:  d.config.Schema.Vendor,
-		// 					Version: d.config.Schema.Version,
-		// 				},
-		// 			})
-		// 		if err != nil {
-		// 			return nil, err
-		// 		}
-		// 		// fmt.Println(rsp)
-		// 		switch rsp := rsp.GetSchema().(type) {
-		// 		case *schemapb.GetSchemaResponse_Container:
-		// 			rs, err := d.expandContainerValue2(ctx, np, v, rsp)
-		// 			if err != nil {
-		// 				return nil, err
-		// 			}
-		// 			upds = append(upds, rs...)
-		// 		default:
-		// 			// should not happen
-		// 			return nil, fmt.Errorf("object %q is not a container", childName)
-		// 		}
-		// 	}
-		// }
 		return upds, nil
 	case []any:
 		upds := make([]*schemapb.Update, 0)

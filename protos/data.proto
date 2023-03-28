@@ -187,7 +187,7 @@ message TypedValue {
         double Double_val = 8;            // Double encoded value.
         ScalarArray leaflist_val = 9;     // Mixed type scalar array value.
         google.protobuf.Any any_val = 10;  // protobuf.Any encoded bytes.
-        bytes json_val = 11;              // JSON-encoded text. (mgmt_server assumes PROTO_JSON encoding)
+        bytes json_val = 11;              // JSON-encoded text.
         bytes json_ietf_val = 12;         // JSON-encoded text per RFC7951.
         string ascii_val = 13;            // Arbitrary ASCII text.
         bytes proto_bytes = 14;
