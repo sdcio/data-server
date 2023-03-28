@@ -159,7 +159,7 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 	// fmt.Println(resTree.PrintTree())
 	// resTree.Print("")
 	// TODO: 1. validate resTree
-	// TODO: 1.1 validate added/removed leafrefs ?
+	// TODO: 2. validate added/removed leafrefs ?
 
 	// push updates to sbi
 	sbiSet := &schemapb.SetDataRequest{
@@ -167,12 +167,14 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 		Replace: cand.replaces,
 		Delete:  cand.deletes,
 	}
-	log.Infof("datastore %s/%s commit: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d", d.config.Name, name, len(sbiSet.GetUpdate()), len(sbiSet.GetReplace()), len(sbiSet.GetDelete()))
+	log.Debugf("datastore %s/%s commit: %v", d.config.Name, name, sbiSet)
+	log.Infof("datastore %s/%s commit: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d",
+		d.config.Name, name, len(sbiSet.GetUpdate()), len(sbiSet.GetReplace()), len(sbiSet.GetDelete()))
 	rsp, err := d.sbi.Set(ctx, sbiSet)
 	if err != nil {
 		return err
 	}
-	log.Debugf("DS=%s/%s, SetResponse from SBI: %v", d.config.Name, name, rsp)
+	log.Infof("datastore %s/%s SetResponse from SBI: %v", d.config.Name, name, rsp)
 	if req.GetStay() {
 		// reset candidate changes and rebase
 		cand.updates = make([]*schemapb.Update, 0)

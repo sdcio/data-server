@@ -14,6 +14,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 )
 
 func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest) (*schemapb.GetDataResponse, error) {
@@ -139,21 +141,31 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 			return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDatastore().GetName())
 		}
 		var err error
-		// replaces := make([]*schemapb.Update, 0, len(req.GetReplace()))
-		// updates := make([]*schemapb.Update, 0, len(req.GetUpdate()))
-		// TODO: expand json/json_ietf values
-		// for _, upd := range req.GetReplace() {
-		// 	err = d.validateUpdate(ctx, upd)
-		// 	if err != nil {
-		// 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
-		// 	}
-		// }
-		// for _, upd := range req.GetUpdate() {
-		// 	err = d.validateUpdate(ctx, upd)
-		// 	if err != nil {
-		// 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
-		// 	}
-		// }
+		replaces := make([]*schemapb.Update, 0, len(req.GetReplace()))
+		updates := make([]*schemapb.Update, 0, len(req.GetUpdate()))
+		// expand json/json_ietf values
+		for _, upd := range req.GetReplace() {
+			rs, err := d.expandUpdate(ctx, upd)
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+			}
+			replaces = append(replaces, rs...)
+		}
+		for _, upd := range req.GetUpdate() {
+			rs, err := d.expandUpdate(ctx, upd)
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+			}
+			updates = append(updates, rs...)
+		}
+		// debugging
+		for _, upd := range replaces {
+			fmt.Println(prototext.Format(upd))
+		}
+		for _, upd := range updates {
+			fmt.Println(prototext.Format(upd))
+		}
+		//
 
 		// validate individual updates
 		for _, del := range req.GetDelete() {
@@ -162,13 +174,15 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 				return nil, status.Errorf(codes.InvalidArgument, "%w", err)
 			}
 		}
-		for _, upd := range req.GetReplace() {
+
+		for _, upd := range replaces {
 			err = d.validateUpdate(ctx, upd)
 			if err != nil {
 				return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 			}
 		}
-		for _, upd := range req.GetUpdate() {
+
+		for _, upd := range updates {
 			err = d.validateUpdate(ctx, upd)
 			if err != nil {
 				return nil, status.Errorf(codes.InvalidArgument, "%v", err)
@@ -191,15 +205,16 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 				Path: del,
 				Op:   schemapb.UpdateResult_DELETE,
 			})
-
 		}
 		// deletes end
 		// replaces start
-		for _, rep := range req.GetReplace() {
+		for _, rep := range replaces {
 			err = cand.head.AddSchemaUpdate(rep)
 			if err != nil {
 				return nil, err
 			}
+		}
+		for _, rep := range req.GetReplace() {
 			rsp.Response = append(rsp.Response, &schemapb.UpdateResult{
 				Path: rep.GetPath(),
 				Op:   schemapb.UpdateResult_REPLACE,
@@ -207,11 +222,13 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 		}
 		// replaces end
 		// updates start
-		for _, upd := range req.GetUpdate() {
+		for _, upd := range updates {
 			err = cand.head.AddSchemaUpdate(upd)
 			if err != nil {
 				return nil, err
 			}
+		}
+		for _, upd := range req.GetUpdate() {
 			rsp.Response = append(rsp.Response, &schemapb.UpdateResult{
 				Path: upd.GetPath(),
 				Op:   schemapb.UpdateResult_UPDATE,
@@ -220,8 +237,8 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 		// updates end
 		cand.m.Lock()
 		cand.deletes = append(cand.deletes, req.GetDelete()...)
-		cand.replaces = append(cand.replaces, req.GetReplace()...)
-		cand.updates = append(cand.updates, req.GetUpdate()...)
+		cand.replaces = append(cand.replaces, replaces...)
+		cand.updates = append(cand.updates, updates...)
 		cand.m.Unlock()
 		return rsp, nil
 	default:
@@ -278,7 +295,7 @@ func (d *Datastore) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schem
 				continue
 			}
 			if len(n) != 0 && len(n[0].GetUpdate()) != 0 {
-				if EqualTypedValues(n[0].GetUpdate()[0].GetValue(), rep.GetValue()) {
+				if equalTypedValues(n[0].GetUpdate()[0].GetValue(), rep.GetValue()) {
 					continue
 				}
 				diffup := &schemapb.DiffUpdate{
@@ -304,7 +321,7 @@ func (d *Datastore) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schem
 				continue
 			}
 			if len(n) != 0 && len(n[0].GetUpdate()) != 0 {
-				if EqualTypedValues(n[0].GetUpdate()[0].GetValue(), upd.GetValue()) {
+				if equalTypedValues(n[0].GetUpdate()[0].GetValue(), upd.GetValue()) {
 					continue
 				}
 				diffup := &schemapb.DiffUpdate{
@@ -340,12 +357,7 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *schemapb.Update) er
 	}
 	switch obj := rsp.GetSchema().(type) {
 	case *schemapb.GetSchemaResponse_Container:
-		// switch tv := upd.GetValue().GetValue().(type) {
-		// case *schemapb.TypedValue_JsonIetfVal:
-		// case *schemapb.TypedValue_JsonVal:
-
-		// }
-		return fmt.Errorf("cannot set value on container object")
+		return fmt.Errorf("cannot set value on container %q object", obj.Container.Name)
 	case *schemapb.GetSchemaResponse_Field:
 		if obj.Field.IsState {
 			return fmt.Errorf("cannot set state field: %v", obj.Field.Name)
@@ -484,6 +496,8 @@ func validateLeafTypeValue(lt *schemapb.SchemaLeafType, v any) error {
 			default:
 				return fmt.Errorf("value %v must be a boolean", v)
 			}
+		case bool:
+			return nil
 		default:
 			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
 		}
@@ -542,7 +556,7 @@ func validateLeafListValue(ll *schemapb.LeafListSchema, v any) error {
 	return validateLeafTypeValue(ll.GetType(), v)
 }
 
-func EqualTypedValues(v1, v2 *schemapb.TypedValue) bool {
+func equalTypedValues(v1, v2 *schemapb.TypedValue) bool {
 	if v1 == nil {
 		return v2 == nil
 	}
@@ -693,7 +707,7 @@ func EqualTypedValues(v1, v2 *schemapb.TypedValue) bool {
 				return false
 			}
 			for i := range v1.LeaflistVal.GetElement() {
-				if !EqualTypedValues(v1.LeaflistVal.Element[i], v2.LeaflistVal.Element[i]) {
+				if !equalTypedValues(v1.LeaflistVal.Element[i], v2.LeaflistVal.Element[i]) {
 					return false
 				}
 			}
@@ -743,7 +757,6 @@ func EqualTypedValues(v1, v2 *schemapb.TypedValue) bool {
 	return true
 }
 
-// WIP
 func (d *Datastore) expandUpdate(ctx context.Context, upd *schemapb.Update) ([]*schemapb.Update, error) {
 	rsp, err := d.schemaClient.GetSchema(ctx,
 		&schemapb.GetSchemaRequest{
@@ -757,55 +770,274 @@ func (d *Datastore) expandUpdate(ctx context.Context, upd *schemapb.Update) ([]*
 	if err != nil {
 		return nil, err
 	}
-	switch obj := rsp.GetSchema().(type) {
+	switch rsp := rsp.GetSchema().(type) {
 	case *schemapb.GetSchemaResponse_Container:
-		upds := make([]*schemapb.Update, 0)
-		switch upd.GetValue().GetValue().(type) {
-		case *schemapb.TypedValue_JsonIetfVal:
-		case *schemapb.TypedValue_JsonVal:
-			var v any
-			err := json.Unmarshal(upd.GetValue().GetJsonVal(), v)
-			if err != nil {
-				return nil, err
-			}
-			fmt.Printf("jsonVal: %T, %v\n", v, v)
-			switch v := v.(type) {
-			case string:
-			case map[string]any:
-				rs := make([]*schemapb.Update, 0, len(v))
-				// validate keys
-				for _, ks := range obj.Container.GetKeys() {
-					if kv, ok := v[ks.Name]; ok {
-						err = validateLeafTypeValue(ks.GetType(), kv)
-						if err != nil {
-							return nil, err
-						}
-						continue
-					}
-					return nil, fmt.Errorf("missing key %q", ks.Name)
-				}
-				// validate fields
-				for _, lf := range obj.Container.GetFields() {
-					if fv, ok := v[lf.Name]; ok {
-						err = validateLeafTypeValue(lf.GetType(), fv)
-						if err != nil {
-							return nil, err
-						}
-					}
-				}
-				// containers
-
-				return rs, nil
-			case []any:
-			}
-		default:
-			return []*schemapb.Update{upd}, nil
+		log.Debugf("datastore %s: expanding update %v on container %q", d.config.Name, upd, rsp.Container.Name)
+		var v interface{}
+		err := json.Unmarshal(upd.GetValue().GetJsonVal(), &v)
+		if err != nil {
+			return nil, err
 		}
-		return upds, nil
+		log.Debugf("datastore %s: update has jsonVal: %T, %v\n", d.config.Name, v, v)
+		rs, err := d.expandContainerValue(ctx, upd.GetPath(), v, rsp)
+		if err != nil {
+			return nil, err
+		}
+		return rs, nil
 	case *schemapb.GetSchemaResponse_Field:
+		// TODO: Check if value is json and convert to String ?
 		return []*schemapb.Update{upd}, nil
 	case *schemapb.GetSchemaResponse_Leaflist:
+		// TODO: Check if value is json and convert to String ?
 		return []*schemapb.Update{upd}, nil
 	}
 	return nil, nil
+}
+
+func (d *Datastore) expandContainerValue(ctx context.Context, p *schemapb.Path, jv any, cs *schemapb.GetSchemaResponse_Container) ([]*schemapb.Update, error) {
+	log.Debugf("expanding jsonVal %T | %v | %v", jv, jv, p)
+	switch jv := jv.(type) {
+	case string:
+		v := strings.Trim(jv, "\"")
+		return []*schemapb.Update{
+			{
+				Path: p,
+				Value: &schemapb.TypedValue{
+					Value: &schemapb.TypedValue_StringVal{StringVal: v},
+				},
+			},
+		}, nil
+	case map[string]any:
+		upds := make([]*schemapb.Update, 0)
+		// make sure all keys are present
+		// and append them to path
+		var keysInPath map[string]string
+		if numElems := len(p.GetElem()); numElems > 0 {
+			keysInPath = p.GetElem()[numElems-1].GetKey()
+		}
+		for _, k := range cs.Container.GetKeys() {
+			if v, ok := jv[k.Name]; ok {
+				fmt.Println("!! handling key", k.Name)
+				if _, ok := keysInPath[k.Name]; ok {
+					return nil, fmt.Errorf("key %q is present in both the path and value", k.Name)
+				}
+				if p.GetElem()[len(p.GetElem())-1].Key == nil {
+					p.GetElem()[len(p.GetElem())-1].Key = make(map[string]string)
+				}
+				p.GetElem()[len(p.GetElem())-1].Key[k.Name] = fmt.Sprintf("%v", v)
+				continue
+			}
+			// if key is not in the value it must be set in the path
+			if _, ok := keysInPath[k.Name]; !ok {
+				return nil, fmt.Errorf("missing key %q from container %q", k.Name, cs.Container.Name)
+			}
+		}
+		for k, v := range jv {
+			if isKey(k, cs) {
+				continue
+			}
+			item, ok := d.getItem(ctx, k, cs)
+			if !ok {
+				return nil, fmt.Errorf("unknown object %q under container %q", k, cs.Container.Name)
+			}
+			switch item := item.(type) {
+			case *schemapb.LeafSchema: // field
+				fmt.Println("!! handling field", item.Name)
+				np := proto.Clone(p).(*schemapb.Path)
+				np.Elem = append(np.Elem, &schemapb.PathElem{Name: item.Name})
+				fmt.Println("!!", np)
+				upd := &schemapb.Update{
+					Path: np,
+					Value: &schemapb.TypedValue{
+						Value: &schemapb.TypedValue_StringVal{
+							StringVal: fmt.Sprintf("%v", v),
+						},
+					},
+				}
+				fmt.Println("!!!", upd)
+				upds = append(upds, upd)
+			case *schemapb.LeafListSchema: // leaflist
+				fmt.Println("!! handling leafList", item.Name)
+			case string: // child container
+				np := proto.Clone(p).(*schemapb.Path)
+				fmt.Println("!! handling child container", item)
+				np.Elem = append(np.Elem, &schemapb.PathElem{Name: item})
+				fmt.Println("!!", np)
+				rsp, err := d.schemaClient.GetSchema(ctx,
+					&schemapb.GetSchemaRequest{
+						Path: np,
+						Schema: &schemapb.Schema{
+							Name:    d.config.Schema.Name,
+							Vendor:  d.config.Schema.Vendor,
+							Version: d.config.Schema.Version,
+						},
+					})
+				if err != nil {
+					return nil, err
+				}
+				// fmt.Println(rsp)
+				switch rsp := rsp.GetSchema().(type) {
+				case *schemapb.GetSchemaResponse_Container:
+					rs, err := d.expandContainerValue(ctx, np, v, rsp)
+					if err != nil {
+						return nil, err
+					}
+					upds = append(upds, rs...)
+				default:
+					// should not happen
+					return nil, fmt.Errorf("object %q is not a container", item)
+				}
+			default:
+				return nil, fmt.Errorf("unknown object %q under container %q", k, cs.Container.Name)
+			}
+		}
+		// // append present fields as new updates
+		// for _, fl := range cs.Container.GetFields() {
+		// 	if v, ok := jv[fl.Name]; ok {
+		// 		fmt.Println("!! handling field", fl.Name)
+		// 		np := proto.Clone(p).(*schemapb.Path)
+		// 		np.Elem = append(np.Elem, &schemapb.PathElem{Name: fl.Name})
+		// 		fmt.Println("!!", np)
+		// 		upd := &schemapb.Update{
+		// 			Path: np,
+		// 			Value: &schemapb.TypedValue{
+		// 				Value: &schemapb.TypedValue_AsciiVal{
+		// 					AsciiVal: fmt.Sprintf("%v", v),
+		// 				},
+		// 			},
+		// 		}
+		// 		fmt.Println("!!!", upd)
+		// 		upds = append(upds, upd)
+		// 	}
+		// }
+		// for _, lfl := range cs.Container.GetLeaflists() {
+		// 	fmt.Println("!! handling leafList", lfl.Name)
+		// 	_ = lfl
+		// }
+		// for _, childName := range cs.Container.GetChildren() {
+		// 	if v, ok := jv[childName]; ok {
+		// 		np := proto.Clone(p).(*schemapb.Path)
+		// 		fmt.Println("!! handling child container", childName)
+		// 		np.Elem = append(np.Elem, &schemapb.PathElem{Name: childName})
+		// 		fmt.Println("!!", np)
+		// 		rsp, err := d.schemaClient.GetSchema(ctx,
+		// 			&schemapb.GetSchemaRequest{
+		// 				Path: np,
+		// 				Schema: &schemapb.Schema{
+		// 					Name:    d.config.Schema.Name,
+		// 					Vendor:  d.config.Schema.Vendor,
+		// 					Version: d.config.Schema.Version,
+		// 				},
+		// 			})
+		// 		if err != nil {
+		// 			return nil, err
+		// 		}
+		// 		// fmt.Println(rsp)
+		// 		switch rsp := rsp.GetSchema().(type) {
+		// 		case *schemapb.GetSchemaResponse_Container:
+		// 			rs, err := d.expandContainerValue2(ctx, np, v, rsp)
+		// 			if err != nil {
+		// 				return nil, err
+		// 			}
+		// 			upds = append(upds, rs...)
+		// 		default:
+		// 			// should not happen
+		// 			return nil, fmt.Errorf("object %q is not a container", childName)
+		// 		}
+		// 	}
+		// }
+		return upds, nil
+	case []any:
+		upds := make([]*schemapb.Update, 0)
+		for _, v := range jv {
+			np := proto.Clone(p).(*schemapb.Path)
+			r, err := d.expandContainerValue(ctx, np, v, cs)
+			if err != nil {
+				return nil, err
+			}
+			upds = append(upds, r...)
+		}
+		return upds, nil
+	default:
+		log.Warnf("unexpected json type cast %T", jv)
+		return nil, nil
+	}
+}
+
+func (d *Datastore) getItem(ctx context.Context, s string, cs *schemapb.GetSchemaResponse_Container) (any, bool) {
+	f, ok := getField(s, cs)
+	if ok {
+		return f, true
+	}
+	lfl, ok := getLeafList(s, cs)
+	if ok {
+		return lfl, true
+	}
+	c, ok := d.getChild(ctx, s, cs)
+	if ok {
+		return c, true
+	}
+	return nil, false
+}
+
+func isKey(s string, cs *schemapb.GetSchemaResponse_Container) bool {
+	for _, k := range cs.Container.GetKeys() {
+		if k.Name == s {
+			return true
+		}
+	}
+	return false
+}
+
+func getField(s string, cs *schemapb.GetSchemaResponse_Container) (*schemapb.LeafSchema, bool) {
+	for _, f := range cs.Container.GetFields() {
+		if f.Name == s {
+			return f, true
+		}
+	}
+	return nil, false
+}
+
+func getLeafList(s string, cs *schemapb.GetSchemaResponse_Container) (*schemapb.LeafListSchema, bool) {
+	for _, lfl := range cs.Container.GetLeaflists() {
+		if lfl.Name == s {
+			return lfl, true
+		}
+	}
+	return nil, false
+}
+
+func (d *Datastore) getChild(ctx context.Context, s string, cs *schemapb.GetSchemaResponse_Container) (string, bool) {
+	for _, c := range cs.Container.GetChildren() {
+		if c == s {
+			return c, true
+		}
+	}
+	if cs.Container.Name == "root" {
+		for _, c := range cs.Container.GetChildren() {
+			rsp, err := d.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
+				Path: &schemapb.Path{Elem: []*schemapb.PathElem{{Name: c}}},
+				Schema: &schemapb.Schema{
+					Name:    d.Schema().Name,
+					Vendor:  d.Schema().Vendor,
+					Version: d.Schema().Version,
+				},
+			})
+			if err != nil {
+				log.Errorf("Failed to get schema object %s: %v", c, err)
+				return "", false
+			}
+			switch rsp := rsp.Schema.(type) {
+			case *schemapb.GetSchemaResponse_Container:
+				for _, child := range rsp.Container.GetChildren() {
+					if child == s {
+						return child, true
+					}
+				}
+			default:
+				continue
+			}
+		}
+	}
+	return "", false
 }
