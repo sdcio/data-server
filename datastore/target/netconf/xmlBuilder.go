@@ -7,6 +7,9 @@ import (
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 )
 
+// XMLConfigBuilder is used to builds XML configuration or XML Filter documents
+// Via the use of a schemapb.SchemaServerClient and the *schemapb.Schema Namespace, Key and Type information
+// and a valid configuration or filter document can be crafted.
 type XMLConfigBuilder struct {
 	doc            *etree.Document
 	schemaClient   schemapb.SchemaServerClient
@@ -14,6 +17,7 @@ type XMLConfigBuilder struct {
 	honorNamespace bool
 }
 
+// NewXMLConfigBuilder returns a new XMLConfigBuilder instance
 func NewXMLConfigBuilder(ssc schemapb.SchemaServerClient, schema *schemapb.Schema, honorNamespace bool) *XMLConfigBuilder {
 	return &XMLConfigBuilder{
 		doc:            etree.NewDocument(),
@@ -23,8 +27,8 @@ func NewXMLConfigBuilder(ssc schemapb.SchemaServerClient, schema *schemapb.Schem
 	}
 }
 
+// GetDoc returns the XMLConfigBuilder generated XML document in string format.
 func (x *XMLConfigBuilder) GetDoc() (string, error) {
-	//x.addNamespaceDefs()
 	x.doc.Indent(2)
 	xdoc, err := x.doc.WriteToString()
 	if err != nil {
@@ -33,21 +37,26 @@ func (x *XMLConfigBuilder) GetDoc() (string, error) {
 	return xdoc, nil
 }
 
+// Delete adds the given path to the XMLConfigDocument and adds the delete operation
+// attribute ( operation="delete" ) to the last element of path p.
 func (x *XMLConfigBuilder) Delete(ctx context.Context, p *schemapb.Path) error {
-
+	// fastForward the XML to the element defined in the path p
 	elem, err := x.fastForward(ctx, p)
 	if err != nil {
 		return err
 	}
-	// add the delete operation
+	// add the delete operation attribute
 	elem.CreateAttr("operation", "delete")
 
 	return nil
 }
 
+// fastForward takes the *schemapb.Path p and iterates through the xml document along this path.
+// It will create all the missing elements along the path in the document, as well as creating the provided
+// key elements. Finally the element that represents the last part of the path is returned to the caller.
+// If x.honorNamespace is set to true, it will also add "xmlns" attributes.
 func (x *XMLConfigBuilder) fastForward(ctx context.Context, p *schemapb.Path) (*etree.Element, error) {
-	elem := &x.doc.Element
-
+	parent := &x.doc.Element
 	actualNamespace := ""
 
 	for peIdx, pe := range p.Elem {
@@ -60,8 +69,8 @@ func (x *XMLConfigBuilder) fastForward(ctx context.Context, p *schemapb.Path) (*
 		if err != nil {
 			return nil, err
 		}
-		var nextElem *etree.Element
-		if nextElem = elem.FindElementPath(path); nextElem == nil {
+		var newChild *etree.Element
+		if newChild = parent.FindElementPath(path); newChild == nil {
 
 			namespaceUri, err := x.ResolveNamespace(ctx, p, peIdx)
 			if err != nil {
@@ -70,44 +79,51 @@ func (x *XMLConfigBuilder) fastForward(ctx context.Context, p *schemapb.Path) (*
 
 			// if there is no such element, create it
 			//elemName := toNamespacedName(pe.Name, namespace)
-			nextElem = elem.CreateElement(pe.Name)
+			newChild = parent.CreateElement(pe.Name)
 			if x.honorNamespace && namespaceUri != actualNamespace {
-				nextElem.CreateAttr("xmlns", namespaceUri)
+				newChild.CreateAttr("xmlns", namespaceUri)
 			}
 			// with all its keys
 			for k, v := range pe.Key {
 				//keyNamespaced := toNamespacedName(k, namespace)
-				keyElem := nextElem.CreateElement(k)
+				keyElem := newChild.CreateElement(k)
 				keyElem.CreateText(v)
 			}
 		}
-		// prepare next iteration
-		elem = nextElem
-		xmlns := elem.SelectAttrValue("xmlns", "")
-		if xmlns != "" {
-			actualNamespace = elem.Space
-		}
+		//// prepare next iteration
+		// get default namespace definition of actual element, if unset default to actualNamespace
+		actualNamespace = newChild.SelectAttrValue("xmlns", actualNamespace)
+
+		// newChild will be parent in next iteration
+		parent = newChild
 	}
-	return elem, nil
+	return parent, nil
 }
 
+// Add adds the given *schemapb.TypedValue v under the given *schemapb.Path p into the xml document
 func (x *XMLConfigBuilder) Add(ctx context.Context, p *schemapb.Path, v *schemapb.TypedValue) error {
-
+	// fastForward the XML to the element defined in the path p
 	elem, err := x.fastForward(ctx, p)
 	if err != nil {
 		return err
 	}
-
+	// get the string representation of the value
+	// cause xml is all string
 	value, err := valueAsString(v)
 	if err != nil {
 		return err
 	}
+	// set the respective value
 	elem.CreateText(value)
 
 	return nil
 }
 
+// AddElement add a given *schemapb.Path p to the xml document. This will not define a terminal value
+// under the given path. This is usefull when creating Netconf Filters where you provide an xml document
+// pointing to branches that you're intrested in receiving.
 func (x *XMLConfigBuilder) AddElement(ctx context.Context, p *schemapb.Path) (*etree.Element, error) {
+	// fastForward the XML to the element defined in the path p
 	elem, err := x.fastForward(ctx, p)
 	if err != nil {
 		return nil, err
@@ -115,6 +131,8 @@ func (x *XMLConfigBuilder) AddElement(ctx context.Context, p *schemapb.Path) (*e
 	return elem, nil
 }
 
+// ResolveNamespace takes a *schemapb.Path and a pathElementIndex (peIdx). It returns the namespace of
+// the element on position peIdx of the *schemapb.path p
 func (x *XMLConfigBuilder) ResolveNamespace(ctx context.Context, p *schemapb.Path, peIdx int) (string, error) {
 	// Perform schema queries
 	sr, err := x.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
