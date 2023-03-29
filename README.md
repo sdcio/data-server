@@ -100,3 +100,28 @@ go build
 
 ./bin/client -a clab-distributed-data-server:56000 datastore commit --ds srl1 --candidate default
 ```
+
+### leafref exp1: leafref as key
+
+```shell
+./bin/client -a clab-distributed-data-server:56000 datastore create --ds srl1 --candidate default
+./bin/client -a clab-distributed-data-server:56000 data set --ds srl1 --candidate default  \
+             --update /system/gnmi-server/network-instance[name=default]/admin-state:::enable
+./bin/client -a clab-distributed-data-server:56000 data set --ds srl1 --candidate default  \
+             --update /system/gnmi-server/network-instance[name=default]/tls-profile:::clab-profile
+./bin/client -a clab-distributed-data-server:56000 datastore commit --ds srl1 --candidate default
+```
+
+### leafref exp2: leafref as leaf (not key)
+
+```shell
+# create candidate
+./bin/client -a clab-distributed-data-server:56000 datastore create --ds srl1 --candidate default
+
+./bin/client -a clab-distributed-data-server:56000 data set --ds srl1 --candidate default  \
+             --update /system/gnmi-server/network-instance[name=mgmt]/admin-state:::enable
+./bin/client -a clab-distributed-data-server:56000 data set --ds srl1 --candidate default  \
+             --update /system/gnmi-server/network-instance[name=mgmt]/tls-profile:::dummy-profile
+# commit
+./bin/client -a clab-distributed-data-server:56000 datastore commit --ds srl1 --candidate default
+```

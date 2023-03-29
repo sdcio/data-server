@@ -353,15 +353,14 @@ func getEntryCh(e *yang.Entry, pe []string, ch chan *yang.Entry) error {
 				ch <- ee
 				return nil
 			}
-		case e.IsContainer():
-			if ee := e.Dir[e.Name]; ee != nil {
-				if ee.IsCase() || ee.IsChoice() {
-					ch <- ee
-					return nil
-				}
-			}
+			// case e.IsContainer():
+			// 	if ee := e.Dir[e.Name]; ee != nil {
+			// 		if ee.IsCase() || ee.IsChoice() {
+			// 			//ch <- ee
+			// 			return nil
+			// 		}
+			// 	}
 		}
-		ch <- e
 		return nil
 	default:
 		if e.Dir == nil {
@@ -372,6 +371,13 @@ func getEntryCh(e *yang.Entry, pe []string, ch chan *yang.Entry) error {
 			if ee.Name != pe[0] {
 				continue
 			}
+			log.Debugf("%v , %q | Dir=%v,Cont=%v Choice=%v, Case=%v\n", pe, ee.Name,
+				e.IsDir(),
+				e.IsContainer(),
+				e.IsChoice(),
+				e.IsCase())
+
+			ch <- ee
 			return getEntryCh(ee, pe[1:], ch)
 		}
 		// fmt.Println("entry name", e.Name, pe)

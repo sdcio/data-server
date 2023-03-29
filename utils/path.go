@@ -165,7 +165,7 @@ func parseXPathKeys(s string) (map[string]string, error) {
 	return kvs, nil
 }
 
-// /////////
+///////////
 
 // ToStrings converts gnmi.Path to index strings. When index strings are generated,
 // gnmi.Path will be irreversibly lost. Index strings will be built by using name field
@@ -245,6 +245,14 @@ func CompletePath(prefix, path *schemapb.Path) ([]string, error) {
 	return append(fullPrefix, ToStrings(path, false, false)...), nil
 }
 
+func CompletePathFromString(s string) ([]string, error) {
+	p, err := ParsePath(s)
+	if err != nil {
+		return nil, err
+	}
+	return CompletePath(nil, p)
+}
+
 func ToXPath(p *schemapb.Path, noKeys bool) string {
 	if p == nil {
 		return ""
@@ -272,4 +280,17 @@ func ToXPath(p *schemapb.Path, noKeys bool) string {
 		}
 	}
 	return sb.String()
+}
+
+func StripPathElemPrefix(p string) (string, error) {
+	sp, err := ParsePath(p)
+	if err != nil {
+		return "", err
+	}
+	for _, pe := range sp.GetElem() {
+		if i := strings.Index(pe.Name, ":"); i > 0 {
+			pe.Name = pe.Name[i+1:]
+		}
+	}
+	return ToXPath(sp, false), nil
 }

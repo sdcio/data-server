@@ -2,7 +2,9 @@ package datastore
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/iptecharch/schema-server/datastore/ctree"
 	"github.com/iptecharch/schema-server/datastore/target"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	"github.com/iptecharch/schema-server/utils"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -140,9 +143,17 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 		}
 		cand.base = newBase
 	}
+
+	// close base and apply changes
 	resTree, err := cand.base.Clone()
 	if err != nil {
 		return err
+	}
+	for _, del := range cand.deletes {
+		err = resTree.DeletePath(del)
+		if err != nil {
+			return err
+		}
 	}
 	for _, repl := range cand.replaces {
 		err = resTree.AddSchemaUpdate(repl)
@@ -156,10 +167,20 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 			return err
 		}
 	}
-	// fmt.Println(resTree.PrintTree())
-	// resTree.Print("")
-	// TODO: 1. validate resTree
-	// TODO: 2. validate added/removed leafrefs ?
+
+	// validate leaf references
+	for _, repl := range cand.replaces {
+		err = d.validateLeafRef(ctx, resTree, repl)
+		if err != nil {
+			return err
+		}
+	}
+	for _, upd := range cand.updates {
+		err = d.validateLeafRef(ctx, resTree, upd)
+		if err != nil {
+			return err
+		}
+	}
 
 	// push updates to sbi
 	sbiSet := &schemapb.SetDataRequest{
@@ -261,14 +282,7 @@ func (d *Datastore) Sync(ctx context.Context) {
 		case syncup := <-d.synCh:
 			for _, del := range syncup.Update.GetDelete() {
 				if d.config.Sync != nil && d.config.Sync.Validate {
-					scRsp, err := d.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
-						Path: del,
-						Schema: &schemapb.Schema{
-							Name:    d.config.Schema.Name,
-							Vendor:  d.config.Schema.Vendor,
-							Version: d.config.Schema.Version,
-						},
-					})
+					scRsp, err := d.getSchema(ctx, del)
 					if err != nil {
 						log.Errorf("datastore %s failed to get schema for delete path %v: %v", d.config.Name, del, err)
 						continue
@@ -295,14 +309,7 @@ func (d *Datastore) Sync(ctx context.Context) {
 
 			for _, upd := range syncup.Update.GetUpdate() {
 				if d.config.Sync != nil && d.config.Sync.Validate {
-					scRsp, err := d.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
-						Path: upd.GetPath(),
-						Schema: &schemapb.Schema{
-							Name:    d.config.Schema.Name,
-							Vendor:  d.config.Schema.Vendor,
-							Version: d.config.Schema.Version,
-						},
-					})
+					scRsp, err := d.getSchema(ctx, upd.GetPath())
 					if err != nil {
 						log.Errorf("datastore %s failed to get schema for update path %v: %v", d.config.Name, upd.GetPath(), err)
 						continue
@@ -340,4 +347,138 @@ func isState(r *schemapb.GetSchemaResponse) bool {
 		return r.Leaflist.IsState
 	}
 	return false
+}
+
+func (d *Datastore) validateLeafRef(ctx context.Context, t *ctree.Tree, upd *schemapb.Update) error {
+	done := make(chan struct{})
+	ch, err := d.getSchemaElements(ctx, upd.GetPath(), done)
+	if err != nil {
+		return err
+	}
+	defer close(done)
+	//
+	peIndex := 0
+	var pe *schemapb.PathElem
+	numPE := len(upd.GetPath().GetElem())
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case sch, ok := <-ch:
+			if !ok {
+				return nil
+			}
+			if numPE < peIndex+1 {
+				// should not happen if the path has been properly validated
+				return fmt.Errorf("received more schema elements than pathElem")
+			}
+			pe = upd.GetPath().GetElem()[peIndex]
+			peIndex++
+			switch sch := sch.Schema.(type) {
+			case *schemapb.GetSchemaResponse_Container:
+				for _, keySchema := range sch.Container.GetKeys() {
+					if keySchema.GetType().GetType() != "leafref" {
+						continue
+					}
+					leafRefPath, err := utils.StripPathElemPrefix(keySchema.GetType().GetLeafref())
+					if err != nil {
+						return err
+					}
+					log.Debugf("validating leafRef key %q: %q", keySchema.Name, leafRefPath)
+					cp, err := utils.CompletePathFromString(leafRefPath)
+					if err != nil {
+						return err
+					}
+					pLen := len(cp)
+					if pLen == 0 {
+						return fmt.Errorf("could not determine reference path for ContainerKey %q: got %q", keySchema.Name, leafRefPath)
+					}
+					keyValue := pe.GetKey()[cp[pLen-1]]
+					tr := t.Get(cp[:pLen-1])
+					if tr == nil {
+						return fmt.Errorf("missing leaf reference %q: %q", leafRefPath, keyValue)
+					}
+					if _, ok := tr.Children()[keyValue]; !ok {
+						return fmt.Errorf("missing leaf reference %q: %q", leafRefPath, keyValue)
+					}
+				}
+			case *schemapb.GetSchemaResponse_Field:
+				if sch.Field.GetType().GetType() != "leafref" {
+					continue
+				}
+				leafRefPath, err := utils.StripPathElemPrefix(sch.Field.GetType().GetLeafref())
+				if err != nil {
+					return err
+				}
+				cp, err := utils.CompletePathFromString(leafRefPath)
+				if err != nil {
+					return err
+				}
+				pLen := len(cp)
+				if pLen == 0 {
+					return fmt.Errorf("could not determine reference path for field %q: got %q", sch.Field.Name, leafRefPath)
+				}
+				tr := t.Get(cp[:pLen-1])
+				if _, ok := tr.Children()[upd.GetValue().GetStringVal()]; !ok { // TODO: update when stored values are not stringVal anymore
+					return fmt.Errorf("missing leaf reference %q: %q", leafRefPath, upd.GetValue().GetStringVal())
+				}
+			case *schemapb.GetSchemaResponse_Leaflist:
+				if sch.Leaflist.GetType().GetType() != "leafref" {
+					continue
+				}
+				leafRefPath, err := utils.StripPathElemPrefix(sch.Leaflist.GetType().GetLeafref())
+				if err != nil {
+					return err
+				}
+				fmt.Println("!! found leafref leaflist", sch.Leaflist.Name, leafRefPath)
+			}
+		}
+	}
+}
+
+// helper for GetSchema
+
+func (d *Datastore) getSchema(ctx context.Context, p *schemapb.Path) (*schemapb.GetSchemaResponse, error) {
+	return d.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
+		Path: p,
+		Schema: &schemapb.Schema{
+			Name:    d.Schema().Name,
+			Vendor:  d.Schema().Vendor,
+			Version: d.Schema().Version,
+		},
+	})
+}
+
+func (d *Datastore) getSchemaElements(ctx context.Context, p *schemapb.Path, done chan struct{}) (chan *schemapb.GetSchemaResponse, error) {
+	stream, err := d.schemaClient.GetSchemaElements(ctx, &schemapb.GetSchemaRequest{
+		Path: p,
+		Schema: &schemapb.Schema{
+			Name:    d.Schema().Name,
+			Vendor:  d.Schema().Vendor,
+			Version: d.Schema().Version,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	ch := make(chan *schemapb.GetSchemaResponse)
+	go func() {
+		defer close(ch)
+		for {
+			r, err := stream.Recv()
+			if errors.Is(err, io.EOF) {
+				return
+			}
+			if err != nil {
+				log.Errorf("GetSchemaElements stream err: %v", err)
+				return
+			}
+			select {
+			case <-done:
+				return
+			case ch <- r:
+			}
+		}
+	}()
+	return ch, nil
 }
