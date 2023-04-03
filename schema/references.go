@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"fmt"
 	"strings"
 
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
@@ -75,12 +76,49 @@ func normalizePath(p string, e *yang.Entry) []string {
 	return pe
 }
 
+func YangEntryPathToString(e *yang.Entry) string {
+
+	keyData := ""
+	if e.Key != "" {
+		keyData = "[" + e.Key + "]"
+	}
+	parent := ""
+	if e.Parent != nil {
+		parent = YangEntryPathToString(e.Parent)
+	}
+
+	return fmt.Sprintf("%s/%s%s", parent, e.Name, keyData)
+}
+
+func PrintPElem(pelems []*schemapb.PathElem) string {
+	sb := &strings.Builder{}
+	for _, pe := range pelems {
+		sb.WriteString("/" + pe.Name)
+		if len(pe.Key) > 0 {
+			sb.WriteString("[")
+			for k, v := range pe.Key {
+				sb.WriteString(strings.TrimSpace(k) + "=" + strings.TrimSpace(v))
+			}
+			sb.WriteString("]")
+		}
+	}
+	return sb.String()
+}
+
 func relativeToAbsPathKeys(p *schemapb.Path, e *yang.Entry) {
+	foo := e.Path()
+	_ = foo
+	fmt.Printf("SchemaElementPath: %s\n", e.Path())
+	fmt.Printf("YangEntryPathToString: %s\n", YangEntryPathToString(e))
+	fmt.Printf("InstancePath: %s\n", utils.ToXPath(p, false))
+	fmt.Printf("PELEM: %s\n", PrintPElem(p.Elem))
+
 	// go through the Path elements
 	for _, pe := range p.GetElem() {
 
 		// check all keys in the path element
 		for k, v := range pe.GetKey() {
+			fmt.Printf("KeyPath: %s\n", v)
 			// if the actual path element does not contain a relative ref
 			// continue with next pe otherwise go on
 			if !strings.Contains(v, "current()") && !strings.Contains(v, "..") {
@@ -127,8 +165,13 @@ func relativeToAbsPathKeys(p *schemapb.Path, e *yang.Entry) {
 
 			// replace the PathElements Key with the Absolute Path to the Key Value
 			pe.Key[k] = ce.Path()
+			_ = k
+
+			fmt.Printf("NewKeyPath: %s\n", ce.Path())
 		}
 	}
+	fmt.Printf("FINAL: %s\n", PrintPElem(p.Elem))
+	fmt.Println()
 }
 
 func relativeToAbsPath(p *schemapb.Path, e *yang.Entry) *schemapb.Path {
@@ -173,7 +216,7 @@ func hasRelativePathElem(p *schemapb.Path) bool {
 func hasRelativeKeys(p *schemapb.Path) bool {
 	for _, pe := range p.GetElem() {
 		for _, v := range pe.GetKey() {
-			if strings.Contains(v, "..") {
+			if strings.Contains(v, "..") || strings.Contains(v, "current()") {
 				return true
 			}
 		}
