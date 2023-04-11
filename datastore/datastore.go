@@ -274,6 +274,7 @@ func (d *Datastore) Stop() {
 
 func (d *Datastore) Sync(ctx context.Context) {
 	go d.sbi.Sync(ctx, d.config.Sync, d.synCh)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -306,7 +307,6 @@ func (d *Datastore) Sync(ctx context.Context) {
 					}
 				}
 			}
-
 			for _, upd := range syncup.Update.GetUpdate() {
 				if d.config.Sync != nil && d.config.Sync.Validate {
 					scRsp, err := d.getSchema(ctx, upd.GetPath())
@@ -437,7 +437,6 @@ func (d *Datastore) validateLeafRef(ctx context.Context, t *ctree.Tree, upd *sch
 }
 
 // helper for GetSchema
-
 func (d *Datastore) getSchema(ctx context.Context, p *schemapb.Path) (*schemapb.GetSchemaResponse, error) {
 	return d.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
 		Path: p,
