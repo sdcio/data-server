@@ -5,10 +5,11 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     go mod download
 ADD . /build
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o schema-server .
+    make build
+
 
 FROM alpine
-COPY --from=builder /build/schema-server /app/
+COPY --from=builder /build/bin/* /app/bin/
 COPY ./tests /app/tests/
 WORKDIR /app
 RUN --mount=type=cache,target=/root/.cache \

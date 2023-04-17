@@ -14,9 +14,13 @@ GO_BIN := $(shell if [ "$$(which $(TARGET_GO_VERSION))" != "" ]; then echo $$(wh
 
 build:
 	mkdir -p bin
-	${GO_BIN} build -o bin/client client/main.go 
-	${GO_BIN} build -o bin/server main.go
-	${GO_BIN} build -o bin/bulk tests/bulk/main.go
+	CGO_ENABLED=0 ${GO_BIN} build -o bin/client client/main.go 
+	CGO_ENABLED=0 ${GO_BIN} build -o bin/server main.go
+	CGO_ENABLED=0 ${GO_BIN} build -o bin/bulk tests/bulk/main.go
+
+test:
+	robot tests/robot
+	go test ./...
 
 docker-build:
 	docker build . -t $(IMAGE)
