@@ -7,7 +7,10 @@ ADD . /build
 RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -ldflags="-s -w" -o schema-server .
 
-FROM scratch AS app
+FROM alpine
 COPY --from=builder /build/schema-server /app/
+COPY ./tests /app/tests/
 WORKDIR /app
-ENTRYPOINT [ "/app/schema-server" ]
+RUN --mount=type=cache,target=/root/.cache \
+    apk add py3-pip ;\
+    pip3 install -r tests/robot/requirements.txt

@@ -1,4 +1,4 @@
 bin/
 lab/
-tests/
 proto/*proto
+schema-server
