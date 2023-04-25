@@ -1,0 +1,32 @@
+grpc-server:
+  address: ":56000"
+  # tls:
+  data-server:
+    # if true, enables datastore and data RPCs
+    enabled: true
+    # max number of candidates per DS
+    max-candidates: 16
+  max-send-msg-size: 25165824 # (24MB) = 24 * 1024 * 1024
+
+# data server config
+## known data stores
+datastores: # this creates MAIN datastores
+  - name: srl1
+    schema: 
+      name: srl
+      vendor: Nokia
+      version: 22.11.2
+    sbi:
+      type: noop #, nc, nats, redis
+      address: "127.0.0.1"
+
+
+# remote schema server details
+schema-server:
+  # schema server remote address
+  address: 127.0.0.1:55000
+  # tls config to connect to the schema server
+  # tls:
+
+prometheus:
+  address: :56090

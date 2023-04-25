@@ -27,6 +27,8 @@ func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemap
 		return newRedisTarget(ctx, cfg)
 	case "nats":
 		return newNATSTarget(ctx, cfg)
+	case "noop":
+		return newNoopTarget(ctx, name)
 	}
 	return nil, fmt.Errorf("unknown DS target type %q", cfg.Type)
 }

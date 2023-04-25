@@ -5,9 +5,13 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     go mod download
 ADD . /build
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o schema-server .
+    make build
 
-FROM scratch
-COPY --from=builder /build/schema-server /app/
+
+FROM alpine
+COPY --from=builder /build/bin/* /app/bin/
+COPY ./tests /app/tests/
 WORKDIR /app
-ENTRYPOINT [ "/app/schema-server" ]
+RUN --mount=type=cache,target=/root/.cache \
+    apk add py3-pip ;\
+    pip3 install -r tests/robot/requirements.txt
