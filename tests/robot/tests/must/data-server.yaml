@@ -11,14 +11,15 @@ grpc-server:
 # data server config
 ## known data stores
 datastores: # this creates MAIN datastores
-  - name: must_dev
+  - name: srl1
     schema: 
-      name: test
-      vendor: must
-      version: 0.1
+      name: srl
+      vendor: Nokia
+      version: 22.11.2
     sbi:
-      type: noop # noop, nc, nats, redis
+      type: noop #, nc, nats, redis
       address: "127.0.0.1"
+
 
 # remote schema server details
 schema-server:

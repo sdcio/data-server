@@ -10,11 +10,15 @@ grpc-server:
 
 # schema-server
 schemas:
-  - name: test
-    vendor: must
-    version: 0.1
+  - name: srl
+    vendor: Nokia
+    version: 22.11.2
     files:
-      - ./tests/robot/tests/must.yang
+      - ./schema/testdata/srl-latest-yang-models/srl_nokia/models
+    directories:
+      - ./schema/testdata/srl-latest-yang-models/ietf
+    excludes:
+      - .*tools.*
 
 prometheus:
   address: :55090

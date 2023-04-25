@@ -1,6 +1,6 @@
 *** Settings ***
-Resource          ../keywords/server.robot
-Resource          ../keywords/client.robot
+Resource          ../../keywords/server.robot
+Resource          ../../keywords/client.robot
 Library           OperatingSystem
 Library           String
 Library           Process
@@ -10,8 +10,8 @@ Suite Teardown    Teardown
 *** Variables ***
 ${server-bin}    ./bin/server
 ${client-bin}    ./bin/client
-${schema-server-config}    ./lab/distributed/schema-server.yaml
-${data-server-config}    ./lab/distributed/data-server.yaml
+${schema-server-config}    ./tests/robot/tests/must/schema-server.yaml
+${data-server-config}    ./tests/robot/tests/must/data-server.yaml
 ${schema-server-ip}    127.0.0.1
 ${schema-server-port}    55000
 ${data-server-ip}    127.0.0.1
@@ -37,7 +37,7 @@ ${data-server-stderr}    /tmp/ds-out
 Check Server State
     CheckServerState    ${schema-server-process-alias}    ${data-server-process-alias}
 
-Set system0 admin-state disable
+Set system0 admin-state disable -> Fail
     LogMustStatements    ${srlinux1-schema-name}    ${srlinux1-schema-version}    ${srlinux1-schema-vendor}    interface[name=system0]/admin-state
 
     CreateCandidate    ${srlinux1-name}    ${srlinux1-candidate}
@@ -45,6 +45,26 @@ Set system0 admin-state disable
 
     Should Contain    ${result.stderr}    admin-state must be enable
     Should Be Equal As Integers    ${result.rc}    1
+
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+Set system0 admin-state enable -> Pass
+    LogMustStatements    ${srlinux1-schema-name}    ${srlinux1-schema-version}    ${srlinux1-schema-vendor}    interface[name=system0]/admin-state
+
+    CreateCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+    ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=system0]/admin-state:::enable
+
+    Should Be Equal As Integers    ${result.rc}    0
+
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+Set ethernet-1/1 admin-state disable -> Pass
+    LogMustStatements    ${srlinux1-schema-name}    ${srlinux1-schema-version}    ${srlinux1-schema-vendor}    interface[name=system0]/admin-state
+
+    CreateCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+    ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=ethernet-1/1]/admin-state:::disable
+
+    Should Be Equal As Integers    ${result.rc}    0
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
 
@@ -118,10 +138,9 @@ Set breakout-port num to 2 and port-speed to 100G
 
     ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=ethernet-1/1]/breakout-mode/num-breakout-ports:::2
     Should Be Equal As Integers    ${result.rc}    1
-        Should Contain    ${result.stderr}    breakout-port-speed must be 100G when num-breakout-ports is 2
+    Should Contain    ${result.stderr}    breakout-port-speed must be 100G when num-breakout-ports is 2
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
-
 
 
 Set interface ethernet l2cp-transparency lldp tunnel true
@@ -131,5 +150,30 @@ Set interface ethernet l2cp-transparency lldp tunnel true
     
     ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=ethernet-1/1]/ethernet/l2cp-transparency/lldp/tunnel:::true
     Should Be Equal As Integers    ${result.rc}    0
+
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+Set interface ethernet l2cp-transparency lldp tunnel true on lldp true interface
+    LogMustStatements    ${srlinux1-schema-name}    ${srlinux1-schema-version}    ${srlinux1-schema-vendor}    interface[name=ethernet-1/1]/ethernet/l2cp-transparency/lldp/tunnel
+
+    CreateCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+    
+    ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    /system/lldp/interface[name=ethernet-1/1]/admin-state:::enable
+    Should Be Equal As Integers    ${result.rc}    0
+
+    ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    /interface[name=ethernet-1/1]/ethernet/l2cp-transparency/lldp/tunnel:::true
+    Should Be Equal As Integers    ${result.rc}    1
+    Should Contain    ${result.stderr}    this interface must not have lldp enabled
+
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+Set bfd for non existing subinterface
+    LogMustStatements    ${srlinux1-schema-name}    ${srlinux1-schema-version}    ${srlinux1-schema-vendor}    /bfd/subinterface/id
+
+    CreateCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+    
+    ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    /bfd/subinterface/id:::ethernet-1/1.26
+    Should Be Equal As Integers    ${result.rc}    1
+    Should Contain    ${result.stderr}    Must be an existing subinterface name
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
