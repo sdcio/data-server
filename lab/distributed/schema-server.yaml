@@ -10,11 +10,57 @@ grpc-server:
 
 # schema-server
 schemas:
-  - name: test
-    vendor: must
-    version: 0.1
+  - name: srl
+    vendor: Nokia
+    version: 22.11.1
     files:
-      - ./tests/robot/tests/must.yang
+      - /app/yang/srl-22.11.1/srl_nokia/models
+    directories:
+      - /app/yang/srl-22.11.1/ietf
+    excludes:
+      - .*tools.*
+  - name: srl
+    vendor: Nokia
+    version: 22.6.4
+    files:
+      - /app/yang/srl-22.6.4/srl_nokia/models
+    directories:
+      - /app/yang/srl-22.6.4/ietf
+    excludes:
+      - .*tools.*
+  - name: srl
+    vendor: Nokia
+    version: 22.3.2
+    files:
+      - /app/yang/srl-22.3.2/srl_nokia/models
+    directories:
+      - /app/yang/srl-22.3.2/ietf
+    excludes:
+      - .*tools.*
+  - name: srl
+    vendor: Nokia
+    version: 21.11.3
+    files:
+      - /app/yang/srl-21.11.3/srl_nokia/models
+    directories:
+      - /app/yang/srl-21.11.3/ietf
+    excludes:
+      - .*tools.*
+  - name: sros
+    vendor: Nokia
+    version: 22.10
+    files:
+      - /app/yang/sros_22.10/YANG/nokia-combined
+    directories:
+      - /app/yang/sros_22.10/YANG/ietf
+      - /app/yang/sros_22.10/YANG/nokia-sros-yang-extensions.yang
+  - name: junos
+    vendor: Juniper
+    version: 22.3R1
+    files:
+      - /app/yang/junos-22.3R1/models
+    directories:
+      - /app/yang/junos-22.3R1/common
 
 prometheus:
   address: :55090

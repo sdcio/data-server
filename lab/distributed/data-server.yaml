@@ -11,19 +11,151 @@ grpc-server:
 # data server config
 ## known data stores
 datastores: # this creates MAIN datastores
-  - name: must_dev
+  - name: srl1
     schema: 
-      name: test
-      vendor: must
-      version: 0.1
+      name: srl
+      vendor: Nokia
+      version: 22.11.1
     sbi:
-      type: noop # noop, nc, nats, redis
-      address: "127.0.0.1"
+      type: gnmi # noop, nc, nats, redis
+      address: "clab-distributed-srl1:57400"
+      credentials:
+        username: admin
+        password: NokiaSrl1!
+      tls:
+        skip-verify: true
+    sync:
+      validate: false
+      gnmi:
+        - name: config
+          paths:
+            - /
+          mode: on_change
+          encoding: 45
+        - name: state
+          paths:
+            - /
+          mode: sample
+          sample-interval: 10s
+          encoding: ascii
+  - name: srl2
+    schema: 
+      name: srl
+      vendor: Nokia
+      version: 22.11.1
+    sbi:
+      type: gnmi # noop, nc, nats, redis
+      address: "clab-distributed-srl2:57400"
+      credentials:
+        username: admin
+        password: NokiaSrl1!
+      tls:
+        skip-verify: true
+    sync:
+      validate: false
+      gnmi:
+        - name: config
+          paths:
+            - /
+          mode: on_change
+          encoding: 45
+        - name: state
+          paths:
+            - /
+          mode: sample
+          sample-interval: 10s
+          encoding: ascii 
+  - name: srl3
+    schema: 
+      name: srl
+      vendor: Nokia
+      version: 22.11.1
+    sbi:
+      type: gnmi # noop, nc, nats, redis
+      address: "clab-distributed-srl3:57400"
+      credentials:
+        username: admin
+        password: NokiaSrl1!
+      tls:
+        skip-verify: true
+    sync:
+      validate: false
+      gnmi:
+        - name: config
+          paths:
+            - /
+          mode: on_change
+          encoding: 45
+        - name: state
+          paths:
+            - /
+          mode: sample
+          sample-interval: 10s
+          encoding: ascii
+  - name: sr1
+    schema: 
+      name: sros
+      vendor: Nokia
+      version: 22.10
+    sbi:
+      type: nc # noop, nc, nats, redis
+      address: clab-distributed-sr1
+      port: 830
+      credentials:
+        username: admin
+        password: admin
+      # tls:
+      #   insecure: true
+      include-ns: true
+    sync:
+      validate: false
+      gnmi:
+        - name: config
+          paths:
+            - /configure
+          mode: on_change
+          encoding: bytes
+        - name: state
+          paths:
+            - /state
+          mode: sample
+          sample-interval: 10s
+          encoding: bytes
+  - name: sr2
+    schema: 
+      name: sros
+      vendor: Nokia
+      version: 22.10
+    sbi:
+      type: nc # noop, nc, nats, redis
+      # address: "clab-distributed-sr1:57400"
+      address: clab-distributed-sr2
+      port: 830
+      credentials:
+        username: admin
+        password: admin
+      # tls:
+      #   insecure: true
+      include-ns: true
+    sync:
+      validate: false
+      gnmi:
+        - name: config
+          paths:
+            - /configure
+          mode: on_change
+          encoding: bytes
+        - name: state
+          paths:
+            - /state
+          mode: sample
+          sample-interval: 10s
+          encoding: bytes
 
 # remote schema server details
 schema-server:
   # schema server remote address
-  address: 127.0.0.1:55000
+  address: clab-distributed-schema-server:55000
   # tls config to connect to the schema server
   # tls:
 
