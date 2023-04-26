@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"fmt"
 	"strings"
 
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
@@ -82,7 +81,6 @@ func relativeToAbsPathKeys(p *schemapb.Path, e *yang.Entry) {
 
 		// check all keys in the path element
 		for k, v := range pe.GetKey() {
-			fmt.Printf("KeyPath: %s\n", v)
 			// if the actual path element does not contain a relative ref
 			// continue with next pe otherwise go on
 			if !strings.Contains(v, "current()") && !strings.Contains(v, "..") {

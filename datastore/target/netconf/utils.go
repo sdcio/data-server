@@ -72,7 +72,7 @@ func pathElem2Xpath(pe *schemapb.PathElem, namespace string) (etree.Path, error)
 
 	// prepare the keys -> "k=v"
 	for k, v := range pe.Key {
-		keys = append(keys, fmt.Sprintf("%s='%s'", k, v))
+		keys = append(keys, fmt.Sprintf("%s=%s", k, v))
 	}
 
 	keyString := ""

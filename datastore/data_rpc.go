@@ -12,6 +12,9 @@ import (
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
 	log "github.com/sirupsen/logrus"
+	"github.com/steiler/yang-parser/xpath"
+	"github.com/steiler/yang-parser/xpath/grammars/expr"
+
 	"google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -161,19 +164,18 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 		// debugging
 		if log.GetLevel() >= log.DebugLevel {
 			for _, upd := range replaces {
-				log.Debugf("expanded replace:\n", prototext.Format(upd))
+				log.Debugf("expanded replace:\n%s", prototext.Format(upd))
 			}
 			for _, upd := range updates {
-				log.Debugf("expanded update:\n", prototext.Format(upd))
+				log.Debugf("expanded update:\n%s", prototext.Format(upd))
 			}
 		}
-		//
 
 		// validate individual updates
 		for _, del := range req.GetDelete() {
 			_, err = d.validatePath(ctx, del)
 			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "%w", err)
+				return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 			}
 		}
 
@@ -236,12 +238,30 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 				Op:   schemapb.UpdateResult_UPDATE,
 			})
 		}
+
 		// updates end
 		cand.m.Lock()
 		cand.deletes = append(cand.deletes, req.GetDelete()...)
 		cand.replaces = append(cand.replaces, replaces...)
 		cand.updates = append(cand.updates, updates...)
 		cand.m.Unlock()
+
+		// validate MUST statements
+		for _, upd := range req.GetUpdate() {
+
+			// TODO these schema responses have been requested already
+			// we should somehow store / cache them?!?!
+			rsp, err := d.validatePath(ctx, upd.GetPath())
+			if err != nil {
+				return nil, err
+			}
+
+			validMusts, err := validateMustStatement(ctx, d, upd.Path, cand.head, rsp)
+			if err != nil {
+				return nil, err
+			}
+			_ = validMusts
+		}
 		return rsp, nil
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %v", req.GetDatastore().GetType())
@@ -389,11 +409,52 @@ func (d *Datastore) validatePath(ctx context.Context, p *schemapb.Path) (*schema
 		})
 }
 
+func validateMustStatement(ctx context.Context, d *Datastore, p *schemapb.Path, headTree *ctree.Tree, rsp *schemapb.GetSchemaResponse) (bool, error) {
+
+	var mustStatements []*schemapb.MustStatement
+	switch rsp.GetSchema().(type) {
+	case *schemapb.GetSchemaResponse_Container:
+		mustStatements = rsp.GetContainer().GetMustStatements()
+	case *schemapb.GetSchemaResponse_Leaflist:
+		mustStatements = rsp.GetLeaflist().GetMustStatements()
+	case *schemapb.GetSchemaResponse_Field:
+		mustStatements = rsp.GetField().GetMustStatements()
+	}
+
+	for _, must := range mustStatements {
+		// extract actual must statement
+		exprStr := must.Statement
+		// init a ProgramBuilder
+		prgbuilder := xpath.NewProgBuilder(exprStr)
+		// init an ExpressionLexer
+		lexer := expr.NewExprLex(exprStr, prgbuilder, nil)
+		// parse the provided Must-Expression
+		lexer.Parse()
+		prog, err := lexer.CreateProgram(exprStr)
+		if err != nil {
+			return false, err
+		}
+
+		machine := xpath.NewMachine(exprStr, prog, exprStr)
+		// create a context that takes the machine, but also also the references to the actual yang entrity.
+		schema := &schemapb.Schema{Name: d.config.Schema.Name, Version: d.config.Schema.Version, Vendor: d.config.Schema.Vendor}
+		// run the must statement evaluation virtual machine
+		res1 := xpath.NewCtxFromCurrent(machine, p.Elem, headTree, schema, d.schemaClient, ctx).EnableValidation().Run()
+
+		// retrieve the boolean result of the execution
+		result, err := res1.GetBoolResult()
+		if !result || err != nil {
+			if err == nil {
+				err = fmt.Errorf(must.Error)
+			}
+			return result, err
+		}
+	}
+	return true, nil
+}
+
 func validateFieldValue(f *schemapb.LeafSchema, v any) error {
 	// TODO: eval must statements
-	for _, must := range f.MustStatements {
-		_ = must
-	}
 	return validateLeafTypeValue(f.GetType(), v)
 }
 
@@ -859,7 +920,7 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *schemapb.Path, 
 				}
 				upds = append(upds, upd)
 			case *schemapb.LeafListSchema: // leaflist
-				log.Debugf("TODO: handling leafList", item.Name)
+				log.Debugf("TODO: handling leafList %s", item.Name)
 			case string: // child container
 				log.Debugf("handling child container %s", item)
 				np := proto.Clone(p).(*schemapb.Path)
