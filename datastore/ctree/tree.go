@@ -133,7 +133,17 @@ func (t *Tree) slowAdd(path []string, value interface{}) error {
 	if t.leafBranch == nil {
 		t.leafBranch = branch{}
 	}
+
 	switch b := t.leafBranch.(type) {
+	case Leaf:
+		nb := branch{}
+		t.leafBranch = nb
+		br := nb[path[0]]
+		if br == nil {
+			br = newBranch(path[1:], value)
+			nb[path[0]] = br
+		}
+		return br.Add(path[1:], value)
 	case branch:
 		// Verify the branch was not added by another routine during the
 		// reader/writer lock exchange.
@@ -144,7 +154,9 @@ func (t *Tree) slowAdd(path []string, value interface{}) error {
 		}
 		return br.Add(path[1:], value)
 	default:
-		return fmt.Errorf("attempted to add value %#v at path %q which is already a leaf with value %#v", value, path, t.leafBranch)
+		return nil
+		// CHANGED: presence container
+		// return fmt.Errorf("attempted to add value %#v at path %q which is already a leaf with value %#v", value, path, t.leafBranch)
 	}
 }
 
@@ -152,7 +164,9 @@ func (t *Tree) terminalAdd(value interface{}) error {
 	defer t.mu.Unlock()
 	t.mu.Lock()
 	if _, ok := t.leafBranch.(branch); ok {
-		return fmt.Errorf("attempted to add a leaf in place of a branch")
+		// CHANGED: presence container case, ignore the update.
+		// return fmt.Errorf("attempted to add a leaf in place of a branch")
+		return nil
 	}
 	t.leafBranch = value
 	return nil
@@ -172,7 +186,8 @@ func (t *Tree) intermediateAdd(path []string, value interface{}) error {
 	case branch:
 		br = b[path[0]]
 	default:
-		return fmt.Errorf("attempted to add value %#v at path %q which is already a leaf with value %#v", value, path, t.leafBranch)
+		// CHANGED: to handle presence containers
+		// return fmt.Errorf("attempted to add value %#v at path %q which is already a leaf with value %#v", value, path, t.leafBranch)
 	}
 	if br == nil {
 		// Exchange the reader lock on t for a writer lock to add new node(s) to the
