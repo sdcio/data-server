@@ -62,8 +62,12 @@ var dataGetCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+
 		fmt.Println("response:")
+
 		fmt.Println(prototext.Format(rsp))
+
+		fmt.Println("num notifications:", len(rsp.GetNotification()))
 		return nil
 	},
 }

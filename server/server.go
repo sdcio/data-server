@@ -43,6 +43,8 @@ type Server struct {
 	router             *mux.Router
 	reg                *prometheus.Registry
 	remoteSchemaClient schemapb.SchemaServerClient
+
+	gnmiOpts []grpc.DialOption
 }
 
 func NewServer(c *config.Config) (*Server, error) {
@@ -57,31 +59,42 @@ func NewServer(c *config.Config) (*Server, error) {
 		md:         &sync.RWMutex{},
 		datastores: make(map[string]*datastore.Datastore),
 
-		router: mux.NewRouter(),
-		reg:    prometheus.NewRegistry(),
+		router:   mux.NewRouter(),
+		reg:      prometheus.NewRegistry(),
+		gnmiOpts: make([]grpc.DialOption, 0, 2),
 	}
 
+	// gRPC server options
 	opts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(c.GRPCServer.MaxRecvMsgSize),
 	}
 
-	unaryInterceptors := []grpc.UnaryServerInterceptor{
-		func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-			ctx, cfn := context.WithTimeout(ctx, c.GRPCServer.RPCTimeout)
-			defer cfn()
-			return handler(ctx, req)
-		},
-	}
-
 	if c.Prometheus != nil {
+		// add gRPC client interceptors for gNMI
+		grpcClientMetrics := grpc_prometheus.NewClientMetrics()
+		s.gnmiOpts = append(s.gnmiOpts,
+			grpc.WithUnaryInterceptor(grpcClientMetrics.UnaryClientInterceptor()),
+			grpc.WithStreamInterceptor(grpcClientMetrics.StreamClientInterceptor()),
+		)
+		s.reg.MustRegister(grpcClientMetrics)
+
+		// add gRPC server interceptors for the Schema/Data server
 		grpcMetrics := grpc_prometheus.NewServerMetrics()
 		opts = append(opts,
 			grpc.StreamInterceptor(grpcMetrics.StreamServerInterceptor()),
 		)
+		unaryInterceptors := []grpc.UnaryServerInterceptor{
+			func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+				ctx, cfn := context.WithTimeout(ctx, c.GRPCServer.RPCTimeout)
+				defer cfn()
+				return handler(ctx, req)
+			},
+		}
 		unaryInterceptors = append(unaryInterceptors, grpcMetrics.UnaryServerInterceptor())
+		opts = append(opts, grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)))
 		s.reg.MustRegister(grpcMetrics)
 	}
-	opts = append(opts, grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)))
+
 	if c.GRPCServer.TLS != nil {
 		tlsCfg, err := c.GRPCServer.TLS.NewConfig(ctx)
 		if err != nil {
@@ -89,7 +102,9 @@ func NewServer(c *config.Config) (*Server, error) {
 		}
 		opts = append(opts, grpc.Creds(credentials.NewTLS(tlsCfg)))
 	}
+
 	s.srv = grpc.NewServer(opts...)
+	// register Schema server gRPC Methods
 	if c.GRPCServer.SchemaServer != nil && c.GRPCServer.SchemaServer.Enabled {
 		for _, sCfg := range c.Schemas {
 			sc, err := schema.NewSchema(sCfg)
@@ -100,6 +115,7 @@ func NewServer(c *config.Config) (*Server, error) {
 		}
 		schemapb.RegisterSchemaServerServer(s.srv, s)
 	}
+	// register Data server gRPC Methods
 	if c.GRPCServer.DataServer != nil && c.GRPCServer.DataServer.Enabled {
 		schemapb.RegisterDataServerServer(s.srv, s)
 	}
@@ -185,7 +201,7 @@ SCHEMA_CONNECT:
 	for _, dsCfg := range s.config.Datastores {
 		go func(dsCfg *config.DatastoreConfig) {
 			defer wg.Done()
-			ds := datastore.New(dsCfg, s.remoteSchemaClient)
+			ds := datastore.New(dsCfg, s.remoteSchemaClient, s.gnmiOpts...)
 			s.md.Lock()
 			defer s.md.Unlock()
 			s.datastores[dsCfg.Name] = ds

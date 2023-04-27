@@ -15,18 +15,20 @@ import (
 	gtarget "github.com/openconfig/gnmic/target"
 	"github.com/openconfig/gnmic/types"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 )
 
 type gnmiTarget struct {
 	target *gtarget.Target
 }
 
-func newGNMITarget(ctx context.Context, name string, cfg *config.SBI) (*gnmiTarget, error) {
+func newGNMITarget(ctx context.Context, name string, cfg *config.SBI, opts ...grpc.DialOption) (*gnmiTarget, error) {
 	tc := &types.TargetConfig{
 		Name:       name,
 		Address:    cfg.Address,
 		Timeout:    10 * time.Second,
 		RetryTimer: 2 * time.Second,
+		BufferSize: 100,
 	}
 	if cfg.Credentials != nil {
 		tc.Username = &cfg.Credentials.Username
@@ -43,7 +45,7 @@ func newGNMITarget(ctx context.Context, name string, cfg *config.SBI) (*gnmiTarg
 	gt := &gnmiTarget{
 		target: gtarget.NewTarget(tc),
 	}
-	err := gt.target.CreateGNMIClient(ctx)
+	err := gt.target.CreateGNMIClient(ctx, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -128,60 +130,59 @@ func (t *gnmiTarget) Subscribe() {}
 
 func (t *gnmiTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
 	log.Infof("starting target %s sync", t.target.Config.Name)
+
 START:
 	for _, gnmiSync := range syncConfig.GNMI {
 		opts := make([]gapi.GNMIOption, 0)
-		subscriptionOpts := make([]gapi.GNMIOption, 0)
-		for _, p := range gnmiSync.Paths {
-			subscriptionOpts = append(subscriptionOpts, gapi.Path(p))
+		switch gnmiSync.Mode {
+		case "once":
+			subscriptionOpts := make([]gapi.GNMIOption, 0)
+			for _, p := range gnmiSync.Paths {
+				subscriptionOpts = append(subscriptionOpts, gapi.Path(p))
+			}
+			opts = append(opts,
+				gapi.EncodingCustom(encoding(gnmiSync.Encoding)),
+				gapi.SubscriptionListModeONCE(),
+				gapi.Subscription(subscriptionOpts...),
+			)
+			subReq, err := gapi.NewSubscribeRequest(opts...)
+			if err != nil {
+				panic(err)
+			}
+			go t.target.Subscribe(ctx, subReq, gnmiSync.Name)
+			go func(gnmiSync *config.GNMISync) {
+				ticker := time.NewTicker(gnmiSync.Period)
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-ticker.C:
+						t.target.Subscribe(ctx, subReq, gnmiSync.Name)
+					}
+				}
+			}(gnmiSync)
+		default:
+			subscriptionOpts := make([]gapi.GNMIOption, 0)
+			for _, p := range gnmiSync.Paths {
+				subscriptionOpts = append(subscriptionOpts, gapi.Path(p))
+			}
+			subscriptionOpts = append(subscriptionOpts, gapi.SubscriptionMode(gnmiSync.Mode))
+			if gnmiSync.SampleInterval > 0 {
+				subscriptionOpts = append(subscriptionOpts, gapi.SampleInterval(gnmiSync.SampleInterval))
+			}
+			opts = append(opts,
+				gapi.EncodingCustom(encoding(gnmiSync.Encoding)),
+				gapi.SubscriptionListModeSTREAM(),
+				gapi.Subscription(subscriptionOpts...),
+			)
+			subReq, err := gapi.NewSubscribeRequest(opts...)
+			if err != nil {
+				panic(err)
+			}
+			go t.target.Subscribe(ctx, subReq, gnmiSync.Name)
 		}
-		subscriptionOpts = append(subscriptionOpts, gapi.SubscriptionMode(gnmiSync.Mode))
-		subscriptionOpts = append(subscriptionOpts, gapi.SampleInterval(gnmiSync.SampleInterval))
-		opts = append(opts,
-			gapi.EncodingCustom(encoding(gnmiSync.Encoding)),
-			gapi.SubscriptionListModeSTREAM(),
-			gapi.Subscription(
-				subscriptionOpts...,
-			),
-		)
-		subReq, err := gapi.NewSubscribeRequest(opts...)
-		if err != nil {
-			panic(err)
-		}
-		go t.target.Subscribe(ctx, subReq, gnmiSync.Name)
 	}
 
-	// go t.target.Subscribe(ctx, &gnmi.SubscribeRequest{
-	// 	Request: &gnmi.SubscribeRequest_Subscribe{
-	// 		Subscribe: &gnmi.SubscriptionList{
-	// 			// Prefix: &gnmi.Path{},
-	// 			Subscription: []*gnmi.Subscription{
-	// 				{
-	// 					Mode: gnmi.SubscriptionMode_ON_CHANGE,
-	// 				},
-	// 			},
-	// 			Mode: gnmi.SubscriptionList_STREAM,
-	// 			// Encoding: gnmi.Encoding_ASCII,
-	// 			Encoding: 45, // ascii_config_only
-	// 		},
-	// 	},
-	// }, "config")
-	// go t.target.Subscribe(ctx, &gnmi.SubscribeRequest{
-	// 	Request: &gnmi.SubscribeRequest_Subscribe{
-	// 		Subscribe: &gnmi.SubscriptionList{
-	// 			// Prefix: &gnmi.Path{},
-	// 			Subscription: []*gnmi.Subscription{
-	// 				{
-	// 					Mode:           gnmi.SubscriptionMode_SAMPLE,
-	// 					SampleInterval: uint64(10 * time.Second),
-	// 				},
-	// 			},
-
-	// 			Mode:     gnmi.SubscriptionList_STREAM,
-	// 			Encoding: gnmi.Encoding_ASCII,
-	// 		},
-	// 	},
-	// }, "state")
 	defer t.target.StopSubscriptions()
 	rspch, errCh := t.target.ReadSubscriptions()
 	for {

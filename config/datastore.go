@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+const (
+	defaultBufferSize = 1000
+)
+
 type DatastoreConfig struct {
 	Name   string        `yaml:"name,omitempty" json:"name,omitempty"`
 	Schema *SchemaConfig `yaml:"schema,omitempty" json:"schema,omitempty"`
@@ -37,8 +41,8 @@ type Creds struct {
 
 type Sync struct {
 	Validate bool        `yaml:"validate,omitempty" json:"validate,omitempty"`
+	Buffer   int64       `yaml:"buffer,omitempty" json:"buffer,omitempty"`
 	GNMI     []*GNMISync `yaml:"gnmi,omitempty" json:"gnmi,omitempty"`
-	// NATS     *NATSSync
 }
 
 type GNMISync struct {
@@ -46,13 +50,9 @@ type GNMISync struct {
 	Paths          []string      `yaml:"paths,omitempty" json:"paths,omitempty"`
 	Mode           string        `yaml:"mode,omitempty" json:"mode,omitempty"`
 	SampleInterval time.Duration `yaml:"sample-interval,omitempty" json:"sample-interval,omitempty"`
+	Period         time.Duration `yaml:"period,omitempty" json:"period,omitempty"`
 	Encoding       string        `yaml:"encoding,omitempty" json:"encoding,omitempty"`
 }
-
-// type NATSSync struct {
-// 	Address string
-// 	Subject string
-// }
 
 func (ds *DatastoreConfig) validateSetDefaults() error {
 	var err error
@@ -86,5 +86,11 @@ func (s *SBI) validateSetDefaults() error {
 }
 
 func (s *Sync) validateSetDefaults() error {
+	if s == nil {
+		return nil
+	}
+	if s.Buffer <= 0 {
+		s.Buffer = defaultBufferSize
+	}
 	return nil
 }

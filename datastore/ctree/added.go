@@ -162,3 +162,13 @@ func (t *Tree) PrintTree() string {
 		})
 	return sb.String()
 }
+
+func (t *Tree) Count() uint64 {
+	var c uint64
+	t.Walk(
+		func(_ []string, _ *Leaf, _ interface{}) error {
+			c++
+			return nil
+		})
+	return c
+}

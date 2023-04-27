@@ -12,7 +12,7 @@ import (
 // data
 
 func (s *Server) GetData(ctx context.Context, req *schemapb.GetDataRequest) (*schemapb.GetDataResponse, error) {
-	log.Debugf("received GetDataRequest: %v", req)
+	log.Infof("received GetDataRequest: %v", req)
 	name := req.GetName()
 	if name == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "missing datastore name")
@@ -33,7 +33,7 @@ func (s *Server) GetData(ctx context.Context, req *schemapb.GetDataRequest) (*sc
 }
 
 func (s *Server) SetData(ctx context.Context, req *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error) {
-	log.Debugf("received SetDataRequest: %v", req)
+	log.Infof("received SetDataRequest: %v", req)
 	name := req.GetName()
 	if name == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "missing datastore name")
@@ -48,7 +48,7 @@ func (s *Server) SetData(ctx context.Context, req *schemapb.SetDataRequest) (*sc
 }
 
 func (s *Server) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schemapb.DiffResponse, error) {
-	log.Debugf("received DiffRequest: %v", req)
+	log.Infof("received DiffRequest: %v", req)
 	name := req.GetName()
 	if name == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "missing datastore name")
@@ -63,7 +63,7 @@ func (s *Server) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schemapb
 }
 
 func (s *Server) Subscribe(req *schemapb.SubscribeRequest, stream schemapb.DataServer_SubscribeServer) error {
-	log.Debugf("received SubscribeRequest: %v", req)
+	log.Infof("received SubscribeRequest: %v", req)
 	name := req.GetName()
 	if name == "" {
 		return status.Errorf(codes.InvalidArgument, "missing datastore name")

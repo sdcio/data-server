@@ -48,7 +48,7 @@ func main() {
 		Version: "22.3R1",
 	}
 
-	t, err := target.New(ctx, targetName, sbi, ssc, schema)
+	t, err := target.New(ctx, targetName, sbi, ssc, schema, nil)
 	if err != nil {
 		fmt.Printf("ERROR: %v", err)
 	}

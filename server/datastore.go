@@ -121,7 +121,7 @@ func (s *Server) CreateDataStore(ctx context.Context, req *schemapb.CreateDataSt
 						Token:    req.GetTarget().GetCredentials().GetToken(),
 					},
 				},
-			}, s.remoteSchemaClient)
+			}, s.remoteSchemaClient, s.gnmiOpts...)
 		return &schemapb.CreateDataStoreResponse{}, nil
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "schema or datastore must be set")

@@ -1,4 +1,8 @@
 bin/
 lab/
 proto/*proto
+keys
+*.md
+*.txt
 schema-server
+

@@ -14,6 +14,8 @@ import (
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sync/semaphore"
+	"google.golang.org/grpc"
 )
 
 type Datastore struct {
@@ -60,25 +62,27 @@ type candidate struct {
 
 // New creates a new datastore, its schema server client and initializes the SBI target
 // func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Datastore {
-func New(c *config.DatastoreConfig, scc schemapb.SchemaServerClient) *Datastore {
+func New(c *config.DatastoreConfig, scc schemapb.SchemaServerClient, opts ...grpc.DialOption) *Datastore {
 	ds := &Datastore{
 		config:       c,
 		main:         &main{config: &ctree.Tree{}, state: &ctree.Tree{}},
 		m:            &sync.RWMutex{},
 		candidates:   map[string]*candidate{},
 		schemaClient: scc,
-		synCh:        make(chan *target.SyncUpdate),
+	}
+	if c.Sync != nil {
+		ds.synCh = make(chan *target.SyncUpdate, c.Sync.Buffer)
 	}
 	ctx, cancel := context.WithCancel(context.TODO())
 	ds.cfn = cancel
 
-	ds.connectSBI(ctx, c)
+	ds.connectSBI(ctx, c, opts...)
 
 	go ds.Sync(ctx)
 	return ds
 }
 
-func (d *Datastore) connectSBI(ctx context.Context, c *config.DatastoreConfig) {
+func (d *Datastore) connectSBI(ctx context.Context, c *config.DatastoreConfig, opts ...grpc.DialOption) {
 	var err error
 	sc := &schemapb.Schema{
 		Name:    d.Schema().Name,
@@ -87,18 +91,18 @@ func (d *Datastore) connectSBI(ctx context.Context, c *config.DatastoreConfig) {
 	}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
-OUT:
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			d.sbi, err = target.New(ctx, c.Name, c.SBI, d.schemaClient, sc)
+		case <-ticker.C: // kicks in after the timer
+			d.sbi, err = target.New(ctx, c.Name, c.SBI, d.schemaClient, sc, opts...)
 			if err != nil {
 				log.Errorf("failed to create DS %s target: %v", c.Name, err)
 				continue
 			}
-			break OUT
+			return
 		}
 	}
 }
@@ -273,66 +277,24 @@ func (d *Datastore) Stop() {
 }
 
 func (d *Datastore) Sync(ctx context.Context) {
+	// this semaphore controls the number of concurrent writes to the tree
+	// this can be made a config knob, number of concurrent writes
+	sem := semaphore.NewWeighted(1)
 	go d.sbi.Sync(ctx, d.config.Sync, d.synCh)
-
+	var err error
 	for {
 		select {
 		case <-ctx.Done():
 			log.Errorf("datastore %s sync stopped: %v", d.config.Name, ctx.Err())
 			return
 		case syncup := <-d.synCh:
-			for _, del := range syncup.Update.GetDelete() {
-				if d.config.Sync != nil && d.config.Sync.Validate {
-					scRsp, err := d.getSchema(ctx, del)
-					if err != nil {
-						log.Errorf("datastore %s failed to get schema for delete path %v: %v", d.config.Name, del, err)
-						continue
-					}
-					_ = scRsp
-				}
-				switch syncup.Tree {
-				case "state":
-					err := d.main.state.DeletePath(del)
-					if err != nil {
-						log.Errorf("failed to delete schema path from main state DS: %v", err)
-						// log.Errorf("failed to delete schema path from main state DS: %v", n)
-						continue
-					}
-				default:
-					err := d.main.config.DeletePath(del)
-					if err != nil {
-						log.Errorf("failed to delete schema path from main config DS: %v", err)
-						// log.Errorf("failed to delete schema path from main config DS: %v", n)
-						continue
-					}
-				}
+			err = sem.Acquire(ctx, 1)
+			if err != nil {
+				log.Errorf("failed to acquire semaphore: %v", err)
+				continue
 			}
-			for _, upd := range syncup.Update.GetUpdate() {
-				if d.config.Sync != nil && d.config.Sync.Validate {
-					scRsp, err := d.getSchema(ctx, upd.GetPath())
-					if err != nil {
-						log.Errorf("datastore %s failed to get schema for update path %v: %v", d.config.Name, upd.GetPath(), err)
-						continue
-					}
-					_ = scRsp // TODO validate value
-				}
-				switch syncup.Tree {
-				case "state":
-					err := d.main.state.AddSchemaUpdate(upd)
-					if err != nil {
-						log.Errorf("failed to insert schema update into main state DS: %v", err)
-						// log.Errorf("failed to insert schema update into main state DS: %v", n)
-						continue
-					}
-				default:
-					err := d.main.config.AddSchemaUpdate(upd)
-					if err != nil {
-						log.Errorf("failed to insert schema update into main config DS: %v", err)
-						// log.Errorf("failed to insert schema update into main config DS: %v", n)
-						continue
-					}
-				}
-			}
+			// go
+			d.storeSyncMsg(ctx, syncup, sem)
 		}
 	}
 }
@@ -431,6 +393,70 @@ func (d *Datastore) validateLeafRef(ctx context.Context, t *ctree.Tree, upd *sch
 					return err
 				}
 				fmt.Println("!! found leafref leaflist", sch.Leaflist.Name, leafRefPath)
+			}
+		}
+	}
+}
+
+func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate, sem *semaphore.Weighted) {
+	defer sem.Release(1)
+	for _, del := range syncup.Update.GetDelete() {
+		if d.config.Sync != nil && d.config.Sync.Validate {
+			scRsp, err := d.getSchema(ctx, del)
+			if err != nil {
+				log.Errorf("datastore %s failed to get schema for delete path %v: %v", d.config.Name, del, err)
+				continue
+			}
+			_ = scRsp
+		}
+		switch syncup.Tree {
+		case "state":
+			err := d.main.state.DeletePath(del)
+			if err != nil {
+				log.Errorf("failed to delete schema path from main state DS: %v", err)
+				// log.Errorf("failed to delete schema path from main state DS: %v", n)
+				continue
+			}
+		default:
+			err := d.main.config.DeletePath(del)
+			if err != nil {
+				log.Errorf("failed to delete schema path from main config DS: %v", err)
+				// log.Errorf("failed to delete schema path from main config DS: %v", n)
+				continue
+			}
+		}
+	}
+
+	for _, upd := range syncup.Update.GetUpdate() {
+		if d.config.Sync != nil && d.config.Sync.Validate {
+			scRsp, err := d.getSchema(ctx, upd.GetPath())
+			if err != nil {
+				log.Errorf("datastore %s failed to get schema for update path %v: %v", d.config.Name, upd.GetPath(), err)
+				continue
+			}
+			// workaround, skip presence containers
+			switch r := scRsp.Schema.(type) {
+			case *schemapb.GetSchemaResponse_Container:
+				if r.Container.IsPresence {
+					continue
+				}
+			}
+			// _ = scRsp // TODO validate value
+		}
+		switch syncup.Tree {
+		case "state":
+			err := d.main.state.AddSchemaUpdate(upd)
+			if err != nil {
+				log.Errorf("failed to insert schema update into main state DS: %v", err)
+				// log.Errorf("failed to insert schema update into main state DS: %v", n)
+				continue
+			}
+		default:
+			err := d.main.config.AddSchemaUpdate(upd)
+			if err != nil {
+				log.Errorf("failed to insert schema update into main config DS: %v", err)
+				// log.Errorf("failed to insert schema update into main config DS: %v", n)
+				continue
 			}
 		}
 	}
