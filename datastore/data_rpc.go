@@ -11,9 +11,9 @@ import (
 	"github.com/iptecharch/schema-server/datastore/ctree"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
+	"github.com/iptecharch/yang-parser/xpath"
+	"github.com/iptecharch/yang-parser/xpath/grammars/expr"
 	log "github.com/sirupsen/logrus"
-	"github.com/steiler/yang-parser/xpath"
-	"github.com/steiler/yang-parser/xpath/grammars/expr"
 
 	"google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
