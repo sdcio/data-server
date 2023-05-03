@@ -1,6 +1,10 @@
 package config
 
-import "errors"
+import (
+	"errors"
+
+	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+)
 
 type SchemaConfig struct {
 	Name        string   `json:"name,omitempty"`
@@ -16,4 +20,12 @@ func (sc *SchemaConfig) validateSetDefaults() error {
 		return errors.New("schema name, vendor and version should be set")
 	}
 	return nil
+}
+
+func (sc *SchemaConfig) GetSchema() *schemapb.Schema {
+	return &schemapb.Schema{
+		Name:    sc.Name,
+		Vendor:  sc.Vendor,
+		Version: sc.Version,
+	}
 }

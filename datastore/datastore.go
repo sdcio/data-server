@@ -84,11 +84,7 @@ func New(c *config.DatastoreConfig, scc schemapb.SchemaServerClient, opts ...grp
 
 func (d *Datastore) connectSBI(ctx context.Context, c *config.DatastoreConfig, opts ...grpc.DialOption) {
 	var err error
-	sc := &schemapb.Schema{
-		Name:    d.Schema().Name,
-		Vendor:  d.Schema().Vendor,
-		Version: d.Schema().Version,
-	}
+	sc := d.Schema().GetSchema()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
@@ -465,23 +461,15 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 // helper for GetSchema
 func (d *Datastore) getSchema(ctx context.Context, p *schemapb.Path) (*schemapb.GetSchemaResponse, error) {
 	return d.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
-		Path: p,
-		Schema: &schemapb.Schema{
-			Name:    d.Schema().Name,
-			Vendor:  d.Schema().Vendor,
-			Version: d.Schema().Version,
-		},
+		Path:   p,
+		Schema: d.Schema().GetSchema(),
 	})
 }
 
 func (d *Datastore) getSchemaElements(ctx context.Context, p *schemapb.Path, done chan struct{}) (chan *schemapb.GetSchemaResponse, error) {
 	stream, err := d.schemaClient.GetSchemaElements(ctx, &schemapb.GetSchemaRequest{
-		Path: p,
-		Schema: &schemapb.Schema{
-			Name:    d.Schema().Name,
-			Vendor:  d.Schema().Vendor,
-			Version: d.Schema().Version,
-		},
+		Path:   p,
+		Schema: d.Schema().GetSchema(),
 	})
 	if err != nil {
 		return nil, err

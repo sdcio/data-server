@@ -199,6 +199,7 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 			Response: make([]*schemapb.UpdateResult, 0,
 				len(req.GetDelete())+len(req.GetReplace())+len(req.GetUpdate())),
 		}
+
 		// deletes start
 		for _, del := range req.GetDelete() {
 			err = cand.head.DeletePath(del)
@@ -400,12 +401,8 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *schemapb.Update) er
 func (d *Datastore) validatePath(ctx context.Context, p *schemapb.Path) (*schemapb.GetSchemaResponse, error) {
 	return d.schemaClient.GetSchema(ctx,
 		&schemapb.GetSchemaRequest{
-			Path: p,
-			Schema: &schemapb.Schema{
-				Name:    d.config.Schema.Name,
-				Vendor:  d.config.Schema.Vendor,
-				Version: d.config.Schema.Version,
-			},
+			Path:   p,
+			Schema: d.Schema().GetSchema(),
 		})
 }
 
@@ -823,12 +820,8 @@ func equalTypedValues(v1, v2 *schemapb.TypedValue) bool {
 func (d *Datastore) expandUpdate(ctx context.Context, upd *schemapb.Update) ([]*schemapb.Update, error) {
 	rsp, err := d.schemaClient.GetSchema(ctx,
 		&schemapb.GetSchemaRequest{
-			Path: upd.GetPath(),
-			Schema: &schemapb.Schema{
-				Name:    d.config.Schema.Name,
-				Vendor:  d.config.Schema.Vendor,
-				Version: d.config.Schema.Version,
-			},
+			Path:   upd.GetPath(),
+			Schema: d.Schema().GetSchema(),
 		})
 	if err != nil {
 		return nil, err
@@ -927,12 +920,8 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *schemapb.Path, 
 				np.Elem = append(np.Elem, &schemapb.PathElem{Name: item})
 				rsp, err := d.schemaClient.GetSchema(ctx,
 					&schemapb.GetSchemaRequest{
-						Path: np,
-						Schema: &schemapb.Schema{
-							Name:    d.config.Schema.Name,
-							Vendor:  d.config.Schema.Vendor,
-							Version: d.config.Schema.Version,
-						},
+						Path:   np,
+						Schema: d.Schema().GetSchema(),
 					})
 				if err != nil {
 					return nil, err
@@ -1022,12 +1011,8 @@ func (d *Datastore) getChild(ctx context.Context, s string, cs *schemapb.GetSche
 	if cs.Container.Name == "root" {
 		for _, c := range cs.Container.GetChildren() {
 			rsp, err := d.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
-				Path: &schemapb.Path{Elem: []*schemapb.PathElem{{Name: c}}},
-				Schema: &schemapb.Schema{
-					Name:    d.Schema().Name,
-					Vendor:  d.Schema().Vendor,
-					Version: d.Schema().Version,
-				},
+				Path:   &schemapb.Path{Elem: []*schemapb.PathElem{{Name: c}}},
+				Schema: d.Schema().GetSchema(),
 			})
 			if err != nil {
 				log.Errorf("Failed to get schema object %s: %v", c, err)

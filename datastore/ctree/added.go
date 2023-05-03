@@ -115,11 +115,7 @@ func (t *Tree) GetPath(ctx context.Context, p *schemapb.Path, schemaClient schem
 		func(path []string, l *Leaf, val interface{}) error {
 			req := &schemapb.ToPathRequest{
 				PathElement: path,
-				Schema: &schemapb.Schema{
-					Name:    sc.Name,
-					Vendor:  sc.Vendor,
-					Version: sc.Version,
-				},
+				Schema:      sc.GetSchema(),
 			}
 			rsp, err := schemaClient.ToPath(ctx, req)
 			if err != nil {
