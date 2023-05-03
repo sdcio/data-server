@@ -25,7 +25,6 @@ ${srlinux1-schema-version}    22.11.2
 ${srlinux1-schema-Vendor}    Nokia
 
 
-
 # internal vars
 ${schema-server-process-alias}    ssa
 ${schema-server-stderr}    /tmp/ss-out

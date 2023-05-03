@@ -8,7 +8,7 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/iptecharch/yang-parser v0.0.0-20230502065101-dad17a8c6995
+	github.com/iptecharch/yang-parser v0.0.0-20230503085118-fc796afc7a7b
 	github.com/kylelemons/godebug v1.1.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/openconfig/gnmi v0.9.1
@@ -25,7 +25,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.14.6
 )
 
-//replace github.com/iptecharch/yang-parser v0.0.0-20230425071446-c32251f7798e => /home/mava/projects/yang-parser
+//replace github.com/iptecharch/yang-parser v0.0.0-20230503085118-fc796afc7a7b => /home/mava/projects/yang-parser
 
 require (
 	cloud.google.com/go v0.110.0 // indirect
