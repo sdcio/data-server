@@ -90,7 +90,7 @@ datastores: # this specifies MAIN datastores
           - /
           name: config
           mode: on-change
-          encoding: 46
+          encoding: 45
         - path:
           - /
           name: state

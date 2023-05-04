@@ -11,7 +11,7 @@ topology:
   nodes:
     schema-server:
       kind: linux
-      image: schema-server:latest
+      image: registry.kmrd.dev/iptecharch/schema-server:latest
       binds:
         - "./schema-server.yaml:/app/schema-server.yaml"
         - "../common/yang:/app/yang"
@@ -22,7 +22,7 @@ topology:
       memory: 6Gb
     data-server:
       kind: linux
-      image: schema-server:latest
+      image: registry.kmrd.dev/iptecharch/schema-server:latest
       #cmd: "-t"
       binds:
         - "./data-server.yaml:/app/schema-server.yaml"
@@ -31,7 +31,18 @@ topology:
         - "56090:56090/tcp"
       cpu-set: 10-11
       memory: 1Gb
-    
+    cache:
+      kind: linux
+      image: registry.kmrd.dev/iptecharch/cache:latest
+      binds:
+        - "./cache.yaml:/app/cache.yaml"
+        - ./cached:/cached
+      ports:
+        - "50100:50100/tcp"
+        - "50190:50190/tcp"
+      cpu-set: 20-23
+      memory: 8Gb
+      #cmd: -d
     prometheus:
       kind: linux
       image: prom/prometheus:latest

@@ -14,7 +14,7 @@ GO_BIN := $(shell if [ "$$(which $(TARGET_GO_VERSION))" != "" ]; then echo $$(wh
 
 build:
 	mkdir -p bin
-	CGO_ENABLED=0 ${GO_BIN} build -o bin/client client/main.go 
+	CGO_ENABLED=0 ${GO_BIN} build -o bin/schemac client/main.go 
 	CGO_ENABLED=0 ${GO_BIN} build -o bin/server main.go
 	CGO_ENABLED=0 ${GO_BIN} build -o bin/bulk tests/bulk/main.go
 
@@ -24,6 +24,7 @@ test:
 
 docker-build:
 	docker build . -t $(IMAGE)
+	docker tag $(IMAGE) $(REMOTE_REGISTRY):latest
 
 docker-push: docker-build
 	docker tag $(IMAGE) $(REMOTE_REGISTRY):latest

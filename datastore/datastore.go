@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sync"
 	"time"
 
+	"github.com/iptecharch/cache/proto/cachepb"
+	"github.com/iptecharch/schema-server/cache"
 	"github.com/iptecharch/schema-server/config"
-	"github.com/iptecharch/schema-server/datastore/ctree"
 	"github.com/iptecharch/schema-server/datastore/target"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
@@ -21,12 +21,8 @@ import (
 type Datastore struct {
 	// datastore config
 	config *config.DatastoreConfig
-	// main config+state trees
-	main *main
 
-	// map of candidates
-	m          *sync.RWMutex
-	candidates map[string]*candidate
+	cacheClient cache.Client
 
 	// SBI target of this datastore
 	sbi target.Target
@@ -41,34 +37,13 @@ type Datastore struct {
 	cfn context.CancelFunc
 }
 
-type main struct {
-	config *ctree.Tree
-	state  *ctree.Tree
-}
-
-// candidate is a "fork" of Datastore main config tree,
-// it holds the list of changes (deletes, replaces, updates) sent towards it,
-// a clone of the main config tree when the candidate was created as well as a
-// "head" tree.
-type candidate struct {
-	base *ctree.Tree
-	head *ctree.Tree
-
-	m        *sync.RWMutex
-	updates  []*schemapb.Update
-	replaces []*schemapb.Update
-	deletes  []*schemapb.Path
-}
-
 // New creates a new datastore, its schema server client and initializes the SBI target
 // func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Datastore {
-func New(c *config.DatastoreConfig, scc schemapb.SchemaServerClient, opts ...grpc.DialOption) *Datastore {
+func New(c *config.DatastoreConfig, scc schemapb.SchemaServerClient, cc cache.Client, opts ...grpc.DialOption) *Datastore {
 	ds := &Datastore{
 		config:       c,
-		main:         &main{config: &ctree.Tree{}, state: &ctree.Tree{}},
-		m:            &sync.RWMutex{},
-		candidates:   map[string]*candidate{},
 		schemaClient: scc,
+		cacheClient:  cc,
 	}
 	if c.Sync != nil {
 		ds.synCh = make(chan *target.SyncUpdate, c.Sync.Buffer)
@@ -76,13 +51,42 @@ func New(c *config.DatastoreConfig, scc schemapb.SchemaServerClient, opts ...grp
 	ctx, cancel := context.WithCancel(context.TODO())
 	ds.cfn = cancel
 
-	ds.connectSBI(ctx, c, opts...)
+	// create cache instance if needed
+	// this is a blocking  call
+	ds.initCache(ctx)
 
+	// init sbi, this is a blocking call
+	ds.connectSBI(ctx, opts...)
+
+	// start syncing goroutine
 	go ds.Sync(ctx)
 	return ds
 }
 
-func (d *Datastore) connectSBI(ctx context.Context, c *config.DatastoreConfig, opts ...grpc.DialOption) {
+func (d *Datastore) initCache(ctx context.Context) {
+START:
+	ok, err := d.cacheClient.Exists(ctx, d.config.Name)
+	if err != nil {
+		log.Errorf("failed to check cache instance %s", d.config.Name)
+		time.Sleep(time.Second)
+		goto START
+	}
+	if ok {
+		log.Debugf("cache %q already exists", d.config.Name)
+		return
+	}
+
+	log.Infof("cache %s does not exist creating it", d.config.Name)
+CREATE:
+	err = d.cacheClient.Create(ctx, d.config.Name, false, false)
+	if err != nil {
+		log.Errorf("failed to create cache %s: %v", d.config.Name, err)
+		time.Sleep(time.Second)
+		goto CREATE
+	}
+}
+
+func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) {
 	var err error
 	sc := d.Schema().GetSchema()
 	ticker := time.NewTicker(time.Second)
@@ -92,10 +96,10 @@ func (d *Datastore) connectSBI(ctx context.Context, c *config.DatastoreConfig, o
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C: // kicks in after the timer
-			d.sbi, err = target.New(ctx, c.Name, c.SBI, d.schemaClient, sc, opts...)
+		case <-ticker.C:
+			d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, sc, opts...)
 			if err != nil {
-				log.Errorf("failed to create DS %s target: %v", c.Name, err)
+				log.Errorf("failed to create DS %s target: %v", d.config.Name, err)
 				continue
 			}
 			return
@@ -115,14 +119,8 @@ func (d *Datastore) Config() *config.DatastoreConfig {
 	return d.config
 }
 
-func (d *Datastore) Candidates() []string {
-	d.m.RLock()
-	defer d.m.RUnlock()
-	rs := make([]string, 0)
-	for c := range d.candidates {
-		rs = append(rs, c)
-	}
-	return rs
+func (d *Datastore) Candidates(ctx context.Context) ([]string, error) {
+	return d.cacheClient.GetCandidates(ctx, d.Name())
 }
 
 func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) error {
@@ -130,63 +128,49 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 	if name == "" {
 		return fmt.Errorf("missing candidate name")
 	}
-	d.m.Lock()
-	defer d.m.Unlock()
-	cand, ok := d.candidates[name]
-	if !ok {
-		return fmt.Errorf("unknown candidate name %q", name)
-	}
 	if req.GetRebase() {
-		newBase, err := d.main.config.Clone()
-		if err != nil {
-			return fmt.Errorf("failed to rebase: %v", err)
-		}
-		cand.base = newBase
+		fmt.Println("TODO: implement candidate base in cache")
 	}
-
-	// close base and apply changes
-	resTree, err := cand.base.Clone()
+	changes, err := d.cacheClient.GetChanges(ctx, d.Config().Name, req.GetDatastore().GetName())
 	if err != nil {
 		return err
 	}
-	for _, del := range cand.deletes {
-		err = resTree.DeletePath(del)
+	notification, err := d.changesToUpdates(ctx, changes)
+	if err != nil {
+		return err
+	}
+
+	// TODO: consider if leafref validation
+	// needs to run before must statements validation
+
+	// validate MUST statements
+	for _, upd := range notification.GetUpdate() {
+		rsp, err := d.validatePath(ctx, upd.GetPath())
 		if err != nil {
 			return err
 		}
-	}
-	for _, repl := range cand.replaces {
-		err = resTree.AddSchemaUpdate(repl)
-		if err != nil {
-			return err
-		}
-	}
-	for _, upd := range cand.updates {
-		err = resTree.AddSchemaUpdate(upd)
+		// TODO: headTree not needed anymore,
+		// now that validateMustStatement is a method of datastore,
+		// it has access to the cacheClient
+		_, err = d.validateMustStatement(ctx, upd.GetPath(), nil, rsp)
 		if err != nil {
 			return err
 		}
 	}
 
-	// validate leaf references
-	for _, repl := range cand.replaces {
-		err = d.validateLeafRef(ctx, resTree, repl)
+	for _, upd := range notification.GetUpdate() {
+		err = d.validateLeafRef(ctx, upd, name)
 		if err != nil {
 			return err
-		}
-	}
-	for _, upd := range cand.updates {
-		err = d.validateLeafRef(ctx, resTree, upd)
-		if err != nil {
-			return err
+
 		}
 	}
 
 	// push updates to sbi
 	sbiSet := &schemapb.SetDataRequest{
-		Update:  cand.updates,
-		Replace: cand.replaces,
-		Delete:  cand.deletes,
+		Update: notification.GetUpdate(),
+		// Replace
+		Delete: notification.GetDelete(),
 	}
 	log.Debugf("datastore %s/%s commit: %v", d.config.Name, name, sbiSet)
 	log.Infof("datastore %s/%s commit: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d",
@@ -197,85 +181,53 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 	}
 	log.Infof("datastore %s/%s SetResponse from SBI: %v", d.config.Name, name, rsp)
 	if req.GetStay() {
-		// reset candidate changes and rebase
-		cand.updates = make([]*schemapb.Update, 0)
-		cand.replaces = make([]*schemapb.Update, 0)
-		cand.deletes = make([]*schemapb.Path, 0)
-		cand.base, err = d.main.config.Clone()
-		return err
+		// reset candidate changes and (TODO) rebase
+		return d.cacheClient.Discard(ctx, d.config.Name, name)
 	}
-	delete(d.candidates, name)
-	return nil
+	// delete candidate
+	return d.cacheClient.DeleteCandidate(ctx, d.Name(), name)
 }
 
 func (d *Datastore) Rebase(ctx context.Context, req *schemapb.RebaseRequest) error {
-	name := req.GetDatastore().GetName()
-	if name == "" {
-		return fmt.Errorf("missing candidate name")
-	}
-	d.m.Lock()
-	defer d.m.Unlock()
-	cand, ok := d.candidates[name]
-	if !ok {
-		return fmt.Errorf("unknown candidate name %q", name)
-	}
+	// name := req.GetDatastore().GetName()
+	// if name == "" {
+	// 	return fmt.Errorf("missing candidate name")
+	// }
+	// d.m.Lock()
+	// defer d.m.Unlock()
+	// cand, ok := d.candidates[name]
+	// if !ok {
+	// 	return fmt.Errorf("unknown candidate name %q", name)
+	// }
 
-	newBase, err := d.main.config.Clone()
-	if err != nil {
-		return fmt.Errorf("failed to rebase: %v", err)
-	}
-	cand.base = newBase
+	// newBase, err := d.main.config.Clone()
+	// if err != nil {
+	// 	return fmt.Errorf("failed to rebase: %v", err)
+	// }
+	// cand.base = newBase
 	return nil
 }
 
 func (d *Datastore) Discard(ctx context.Context, req *schemapb.DiscardRequest) error {
-	d.m.Lock()
-	defer d.m.Unlock()
-	cand, ok := d.candidates[req.GetDatastore().GetName()]
-	if !ok {
-		return fmt.Errorf("unknown candidate %s", req.GetDatastore().GetName())
-	}
-	cand.m.Lock()
-	defer cand.m.Unlock()
-	cand.updates = make([]*schemapb.Update, 0)
-	cand.replaces = make([]*schemapb.Update, 0)
-	cand.deletes = make([]*schemapb.Path, 0)
-	return nil
+	return d.cacheClient.Discard(ctx, req.GetName(), req.Datastore.GetName())
 }
 
-func (d *Datastore) CreateCandidate(name string) error {
-	d.m.Lock()
-	defer d.m.Unlock()
-	base, err := d.main.config.Clone()
-	if err != nil {
-		return err
-	}
-	d.candidates[name] = &candidate{
-		m:        new(sync.RWMutex),
-		base:     base,
-		updates:  []*schemapb.Update{},
-		replaces: []*schemapb.Update{},
-		deletes:  []*schemapb.Path{},
-		head:     &ctree.Tree{},
-	}
-	return nil
+func (d *Datastore) CreateCandidate(ctx context.Context, name string) error {
+	return d.cacheClient.CreateCandidate(ctx, d.Name(), name)
 }
 
-func (d *Datastore) DeleteCandidate(name string) error {
-	d.m.Lock()
-	defer d.m.Unlock()
-	delete(d.candidates, name)
-	return nil
+func (d *Datastore) DeleteCandidate(ctx context.Context, name string) error {
+	return d.cacheClient.DeleteCandidate(ctx, d.Name(), name)
 }
 
 func (d *Datastore) Stop() {
 	d.cfn()
+	d.cacheClient.Close()
 }
 
 func (d *Datastore) Sync(ctx context.Context) {
-	// this semaphore controls the number of concurrent writes to the tree
-	// this can be made a config knob, number of concurrent writes
-	sem := semaphore.NewWeighted(1)
+	// this semaphore controls the number of concurrent writes to the cache
+	sem := semaphore.NewWeighted(d.config.Sync.WriteWorkers)
 	go d.sbi.Sync(ctx, d.config.Sync, d.synCh)
 	var err error
 	for {
@@ -290,24 +242,24 @@ func (d *Datastore) Sync(ctx context.Context) {
 				continue
 			}
 			// go
-			d.storeSyncMsg(ctx, syncup, sem)
+			go d.storeSyncMsg(ctx, syncup, sem)
 		}
 	}
 }
 
-func isState(r *schemapb.GetSchemaResponse) bool {
-	switch r := r.Schema.(type) {
-	case *schemapb.GetSchemaResponse_Container:
-		return r.Container.IsState
-	case *schemapb.GetSchemaResponse_Field:
-		return r.Field.IsState
-	case *schemapb.GetSchemaResponse_Leaflist:
-		return r.Leaflist.IsState
-	}
-	return false
-}
+// func isState(r *schemapb.GetSchemaResponse) bool {
+// 	switch r := r.Schema.(type) {
+// 	case *schemapb.GetSchemaResponse_Container:
+// 		return r.Container.IsState
+// 	case *schemapb.GetSchemaResponse_Field:
+// 		return r.Field.IsState
+// 	case *schemapb.GetSchemaResponse_Leaflist:
+// 		return r.Leaflist.IsState
+// 	}
+// 	return false
+// }
 
-func (d *Datastore) validateLeafRef(ctx context.Context, t *ctree.Tree, upd *schemapb.Update) error {
+func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, candidate string) error {
 	done := make(chan struct{})
 	ch, err := d.getSchemaElements(ctx, upd.GetPath(), done)
 	if err != nil {
@@ -318,6 +270,11 @@ func (d *Datastore) validateLeafRef(ctx context.Context, t *ctree.Tree, upd *sch
 	peIndex := 0
 	var pe *schemapb.PathElem
 	numPE := len(upd.GetPath().GetElem())
+	cacheName := d.config.Name
+	if candidate != "" {
+		cacheName = fmt.Sprintf("%s/%s", d.config.Name, candidate)
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -334,10 +291,12 @@ func (d *Datastore) validateLeafRef(ctx context.Context, t *ctree.Tree, upd *sch
 			peIndex++
 			switch sch := sch.Schema.(type) {
 			case *schemapb.GetSchemaResponse_Container:
+				// check if container keys are leafrefs
 				for _, keySchema := range sch.Container.GetKeys() {
 					if keySchema.GetType().GetType() != "leafref" {
 						continue
 					}
+					//
 					leafRefPath, err := utils.StripPathElemPrefix(keySchema.GetType().GetLeafref())
 					if err != nil {
 						return err
@@ -351,12 +310,11 @@ func (d *Datastore) validateLeafRef(ctx context.Context, t *ctree.Tree, upd *sch
 					if pLen == 0 {
 						return fmt.Errorf("could not determine reference path for ContainerKey %q: got %q", keySchema.Name, leafRefPath)
 					}
+
 					keyValue := pe.GetKey()[cp[pLen-1]]
-					tr := t.Get(cp[:pLen-1])
-					if tr == nil {
-						return fmt.Errorf("missing leaf reference %q: %q", leafRefPath, keyValue)
-					}
-					if _, ok := tr.Children()[keyValue]; !ok {
+					referencePath := append(cp[:pLen-1], keyValue)
+					updates := d.cacheClient.Read(ctx, cacheName, cachepb.Store_CONFIG, [][]string{referencePath})
+					if updates == nil {
 						return fmt.Errorf("missing leaf reference %q: %q", leafRefPath, keyValue)
 					}
 				}
@@ -376,8 +334,10 @@ func (d *Datastore) validateLeafRef(ctx context.Context, t *ctree.Tree, upd *sch
 				if pLen == 0 {
 					return fmt.Errorf("could not determine reference path for field %q: got %q", sch.Field.Name, leafRefPath)
 				}
-				tr := t.Get(cp[:pLen-1])
-				if _, ok := tr.Children()[upd.GetValue().GetStringVal()]; !ok { // TODO: update when stored values are not stringVal anymore
+				// TODO: update when stored values are not stringVal anymore
+				referencePath := append(cp, upd.GetValue().GetStringVal())
+				updates := d.cacheClient.Read(ctx, cacheName, cachepb.Store_CONFIG, [][]string{referencePath})
+				if updates == nil {
 					return fmt.Errorf("missing leaf reference %q: %q", leafRefPath, upd.GetValue().GetStringVal())
 				}
 			case *schemapb.GetSchemaResponse_Leaflist:
@@ -396,6 +356,14 @@ func (d *Datastore) validateLeafRef(ctx context.Context, t *ctree.Tree, upd *sch
 
 func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate, sem *semaphore.Weighted) {
 	defer sem.Release(1)
+	dels := make([][]string, 0, len(syncup.Update.GetDelete()))
+	upds := make([]cache.Update, 0, len(syncup.Update.GetUpdate()))
+
+	store := cachepb.Store_CONFIG
+
+	if syncup.Tree == "state" {
+		store = cachepb.Store_STATE
+	}
 	for _, del := range syncup.Update.GetDelete() {
 		if d.config.Sync != nil && d.config.Sync.Validate {
 			scRsp, err := d.getSchema(ctx, del)
@@ -405,22 +373,7 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 			}
 			_ = scRsp
 		}
-		switch syncup.Tree {
-		case "state":
-			err := d.main.state.DeletePath(del)
-			if err != nil {
-				log.Errorf("failed to delete schema path from main state DS: %v", err)
-				// log.Errorf("failed to delete schema path from main state DS: %v", n)
-				continue
-			}
-		default:
-			err := d.main.config.DeletePath(del)
-			if err != nil {
-				log.Errorf("failed to delete schema path from main config DS: %v", err)
-				// log.Errorf("failed to delete schema path from main config DS: %v", n)
-				continue
-			}
-		}
+		dels = append(dels, utils.ToStrings(del, false, false))
 	}
 
 	for _, upd := range syncup.Update.GetUpdate() {
@@ -439,22 +392,19 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 			}
 			// _ = scRsp // TODO validate value
 		}
-		switch syncup.Tree {
-		case "state":
-			err := d.main.state.AddSchemaUpdate(upd)
-			if err != nil {
-				log.Errorf("failed to insert schema update into main state DS: %v", err)
-				// log.Errorf("failed to insert schema update into main state DS: %v", n)
-				continue
-			}
-		default:
-			err := d.main.config.AddSchemaUpdate(upd)
-			if err != nil {
-				log.Errorf("failed to insert schema update into main config DS: %v", err)
-				// log.Errorf("failed to insert schema update into main config DS: %v", n)
-				continue
-			}
+
+		cUpd, err := d.cacheClient.NewUpdate(upd)
+		if err != nil {
+			log.Errorf("failed to create update from %v: %v", upd, err)
+			continue
 		}
+		upds = append(upds, cUpd)
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Minute) // TODO:
+	defer cancel()
+	err := d.cacheClient.Modify(ctx, d.Config().Name, store, dels, upds)
+	if err != nil {
+		log.Errorf("failed to send modify request to cache: %v", err)
 	}
 }
 
@@ -494,4 +444,51 @@ func (d *Datastore) getSchemaElements(ctx context.Context, p *schemapb.Path, don
 		}
 	}()
 	return ch, nil
+}
+
+func (d *Datastore) toPath(ctx context.Context, p []string) (*schemapb.Path, error) {
+	rsp, err := d.schemaClient.ToPath(ctx, &schemapb.ToPathRequest{
+		PathElement: p,
+		Schema: &schemapb.Schema{
+			Name:    d.Schema().Name,
+			Vendor:  d.Schema().Vendor,
+			Version: d.Schema().Version,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return rsp.GetPath(), nil
+}
+
+func (d *Datastore) changesToUpdates(ctx context.Context, changes []*cache.Change) (*schemapb.Notification, error) {
+	notif := &schemapb.Notification{
+		Update: make([]*schemapb.Update, 0, len(changes)),
+		Delete: make([]*schemapb.Path, 0, len(changes)),
+	}
+	for _, change := range changes {
+		switch {
+		case len(change.Delete) != 0:
+			p, err := d.toPath(ctx, change.Delete)
+			if err != nil {
+				return nil, err
+			}
+			notif.Delete = append(notif.Delete, p)
+		default:
+			tv, err := change.Update.Value()
+			if err != nil {
+				return nil, err
+			}
+			p, err := d.toPath(ctx, change.Update.GetPath())
+			if err != nil {
+				return nil, err
+			}
+			upd := &schemapb.Update{
+				Path:  p,
+				Value: tv,
+			}
+			notif.Update = append(notif.Update, upd)
+		}
+	}
+	return notif, nil
 }

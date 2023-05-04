@@ -33,15 +33,10 @@ func (t *noopTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sc
 	return result, nil
 }
 
-func (t *noopTarget) Subscribe() {
-	return
-}
+func (t *noopTarget) Subscribe() {}
 
 func (t *noopTarget) Sync(ctx context.Context, _ *config.Sync, syncCh chan *SyncUpdate) {
 	log.Infof("starting target %s sync", t.name)
-	return
 }
 
-func (t *noopTarget) Close() {
-	return
-}
+func (t *noopTarget) Close() {}

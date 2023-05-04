@@ -24,7 +24,10 @@ func (s *Server) GetDataStore(ctx context.Context, req *schemapb.GetDataStoreReq
 	if !ok {
 		return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %s", name)
 	}
-	cands := ds.Candidates()
+	cands, err := ds.Candidates(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rsp := &schemapb.GetDataStoreResponse{
 		Name:      name,
 		Datastore: make([]*schemapb.DataStore, 0, len(cands)+1),
@@ -80,7 +83,7 @@ func (s *Server) CreateDataStore(ctx context.Context, req *schemapb.CreateDataSt
 		}
 		switch req.GetDatastore().GetType() {
 		case schemapb.Type_CANDIDATE:
-			err := ds.CreateCandidate(req.GetDatastore().GetName())
+			err := ds.CreateCandidate(ctx, req.GetDatastore().GetName())
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "%v", err)
 			}
@@ -96,32 +99,33 @@ func (s *Server) CreateDataStore(ctx context.Context, req *schemapb.CreateDataSt
 		if ok {
 			return nil, status.Errorf(codes.InvalidArgument, "datastore %s already exists", name)
 		}
+		dsConfig := &config.DatastoreConfig{
+			Name: name,
+			Schema: &config.SchemaConfig{
+				Name:    req.GetSchema().GetName(),
+				Vendor:  req.GetSchema().GetVendor(),
+				Version: req.GetSchema().GetVersion(),
+			},
+			SBI: &config.SBI{
+				Type:    req.GetTarget().GetType(),
+				Address: req.GetTarget().GetAddress(),
+				TLS: &config.TLS{
+					CA:         req.GetTarget().GetTls().GetCa(),
+					Cert:       req.GetTarget().GetTls().GetCert(),
+					Key:        req.GetTarget().GetTls().GetKey(),
+					SkipVerify: req.GetTarget().GetTls().GetSkipVerify(),
+				},
+				Credentials: &config.Creds{
+					Username: req.GetTarget().GetCredentials().GetUsername(),
+					Password: req.GetTarget().GetCredentials().GetPassword(),
+					Token:    req.GetTarget().GetCredentials().GetToken(),
+				},
+			},
+		}
 		s.md.Lock()
 		defer s.md.Unlock()
 		s.datastores[req.GetName()] = datastore.New(
-			&config.DatastoreConfig{
-				Name: name,
-				Schema: &config.SchemaConfig{
-					Name:    req.GetSchema().GetName(),
-					Vendor:  req.GetSchema().GetVendor(),
-					Version: req.GetSchema().GetVersion(),
-				},
-				SBI: &config.SBI{
-					Type:    req.GetTarget().GetType(),
-					Address: req.GetTarget().GetAddress(),
-					TLS: &config.TLS{
-						CA:         req.GetTarget().GetTls().GetCa(),
-						Cert:       req.GetTarget().GetTls().GetCert(),
-						Key:        req.GetTarget().GetTls().GetKey(),
-						SkipVerify: req.GetTarget().GetTls().GetSkipVerify(),
-					},
-					Credentials: &config.Creds{
-						Username: req.GetTarget().GetCredentials().GetUsername(),
-						Password: req.GetTarget().GetCredentials().GetPassword(),
-						Token:    req.GetTarget().GetCredentials().GetToken(),
-					},
-				},
-			}, s.remoteSchemaClient, s.gnmiOpts...)
+			dsConfig, s.remoteSchemaClient, s.cacheClient, s.gnmiOpts...)
 		return &schemapb.CreateDataStoreResponse{}, nil
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "schema or datastore must be set")
@@ -151,7 +155,7 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *schemapb.DeleteDataSt
 	default:
 		switch req.GetDatastore().GetType() {
 		case *schemapb.Type_CANDIDATE.Enum():
-			ds.DeleteCandidate(req.GetDatastore().GetName())
+			ds.DeleteCandidate(ctx, req.GetDatastore().GetName())
 			log.Infof("datastore %s deleted candidate %s", name, req.GetDatastore().GetName())
 		case *schemapb.Type_MAIN.Enum():
 			s.md.Lock()

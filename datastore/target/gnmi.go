@@ -130,7 +130,8 @@ func (t *gnmiTarget) Subscribe() {}
 
 func (t *gnmiTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
 	log.Infof("starting target %s sync", t.target.Config.Name)
-
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 START:
 	for _, gnmiSync := range syncConfig.GNMI {
 		opts := make([]gapi.GNMIOption, 0)
