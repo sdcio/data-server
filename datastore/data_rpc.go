@@ -11,7 +11,6 @@ import (
 
 	"github.com/iptecharch/cache/proto/cachepb"
 	"github.com/iptecharch/schema-server/cache"
-	"github.com/iptecharch/schema-server/datastore/ctree"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
 	"github.com/iptecharch/yang-parser/xpath"
@@ -30,7 +29,7 @@ func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest, nCh c
 	var err error
 	// validate that path(s) exist in the schema
 	for _, p := range req.GetPath() {
-		_, err = d.validatePath(ctx, p)
+		err = d.validatePath(ctx, p)
 		if err != nil {
 			return err
 		}
@@ -127,7 +126,7 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 
 		// validate individual updates
 		for _, del := range req.GetDelete() {
-			_, err = d.validatePath(ctx, del)
+			err = d.validatePath(ctx, del)
 			if err != nil {
 				return nil, status.Errorf(codes.InvalidArgument, "delete path: %q validation failed: %v", del, err)
 			}
@@ -308,7 +307,7 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *schemapb.Update) er
 	// 2.validate that the value is compliant with the schema
 
 	// 1. validate the path
-	rsp, err := d.validatePath(ctx, upd.GetPath())
+	rsp, err := d.getSchema(ctx, upd.GetPath())
 	if err != nil {
 		return err
 	}
@@ -337,15 +336,12 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *schemapb.Update) er
 	return nil
 }
 
-func (d *Datastore) validatePath(ctx context.Context, p *schemapb.Path) (*schemapb.GetSchemaResponse, error) {
-	return d.schemaClient.GetSchema(ctx,
-		&schemapb.GetSchemaRequest{
-			Path:   p,
-			Schema: d.Schema().GetSchema(),
-		})
-}
+func (d *Datastore) validateMustStatement(ctx context.Context, p *schemapb.Path) (bool, error) {
 
-func (d *Datastore) validateMustStatement(ctx context.Context, p *schemapb.Path, headTree *ctree.Tree, rsp *schemapb.GetSchemaResponse) (bool, error) {
+	rsp, err := d.getSchema(ctx, p)
+	if err != nil {
+		return false, err
+	}
 
 	var mustStatements []*schemapb.MustStatement
 	switch rsp.GetSchema().(type) {
@@ -356,6 +352,9 @@ func (d *Datastore) validateMustStatement(ctx context.Context, p *schemapb.Path,
 	case *schemapb.GetSchemaResponse_Field:
 		mustStatements = rsp.GetField().GetMustStatements()
 	}
+
+	// create a validation client for the must statement parser
+	validationClient := NewMustValidationClientImpl(d.Name(), d.cacheClient, d.Schema().GetSchema(), d.schemaClient)
 
 	for _, must := range mustStatements {
 		// extract actual must statement
@@ -372,10 +371,9 @@ func (d *Datastore) validateMustStatement(ctx context.Context, p *schemapb.Path,
 		}
 
 		machine := xpath.NewMachine(exprStr, prog, exprStr)
-		// create a context that takes the machine, but also also the references to the actual yang entrity.
-		schema := &schemapb.Schema{Name: d.config.Schema.Name, Version: d.config.Schema.Version, Vendor: d.config.Schema.Vendor}
+
 		// run the must statement evaluation virtual machine
-		res1 := xpath.NewCtxFromCurrent(machine, p.Elem, headTree, schema, d.schemaClient, ctx).EnableValidation().Run()
+		res1 := xpath.NewCtxFromCurrent(ctx, machine, p.Elem, validationClient).EnableValidation().Run()
 
 		// retrieve the boolean result of the execution
 		result, err := res1.GetBoolResult()
@@ -390,7 +388,6 @@ func (d *Datastore) validateMustStatement(ctx context.Context, p *schemapb.Path,
 }
 
 func validateFieldValue(f *schemapb.LeafSchema, v any) error {
-	// TODO: eval must statements
 	return validateLeafTypeValue(f.GetType(), v)
 }
 

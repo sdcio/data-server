@@ -67,7 +67,7 @@ func (d *Datastore) initCache(ctx context.Context) {
 START:
 	ok, err := d.cacheClient.Exists(ctx, d.config.Name)
 	if err != nil {
-		log.Errorf("failed to check cache instance %s", d.config.Name)
+		log.Errorf("failed to check cache instance %s, %s", d.config.Name, err)
 		time.Sleep(time.Second)
 		goto START
 	}
@@ -145,14 +145,7 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 
 	// validate MUST statements
 	for _, upd := range notification.GetUpdate() {
-		rsp, err := d.validatePath(ctx, upd.GetPath())
-		if err != nil {
-			return err
-		}
-		// TODO: headTree not needed anymore,
-		// now that validateMustStatement is a method of datastore,
-		// it has access to the cacheClient
-		_, err = d.validateMustStatement(ctx, upd.GetPath(), nil, rsp)
+		_, err = d.validateMustStatement(ctx, upd.GetPath())
 		if err != nil {
 			return err
 		}
@@ -414,6 +407,11 @@ func (d *Datastore) getSchema(ctx context.Context, p *schemapb.Path) (*schemapb.
 		Path:   p,
 		Schema: d.Schema().GetSchema(),
 	})
+}
+
+func (d *Datastore) validatePath(ctx context.Context, p *schemapb.Path) error {
+	_, err := d.getSchema(ctx, p)
+	return err
 }
 
 func (d *Datastore) getSchemaElements(ctx context.Context, p *schemapb.Path, done chan struct{}) (chan *schemapb.GetSchemaResponse, error) {

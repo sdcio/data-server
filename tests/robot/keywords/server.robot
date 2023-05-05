@@ -9,14 +9,15 @@ Library           OperatingSystem
 #####
 Setup
     [Documentation]    Starts schema and data server. Waits for the dataserver to begin sync before returning
-    [Arguments]    ${doBuild}    ${server-bin}    ${schema-server-config}    ${schema-server-process-alias}    ${schema-server-stderr}    ${data-server-config}    ${data-server-process-alias}    ${data-server-stderr}
+    [Arguments]    ${doBuild}    ${server-bin}    ${cache-bin}    ${schema-server-config}    ${schema-server-process-alias}    ${schema-server-stderr}    ${data-server-config}    ${data-server-process-alias}    ${data-server-stderr}    ${cache-server-config}    ${cache-server-process-alias}    ${cache-server-stderr}
     IF    ${doBuild} == $True
         ${result} =     Run Process    make     build
         Log Many	stdout: ${result.stdout}	stderr: ${result.stderr}
     END
     Start Process    ${server-bin}  -c     ${schema-server-config}    alias=${schema-server-process-alias}        stderr=${schema-server-stderr}
     Start Process    ${server-bin}  -c     ${data-server-config}    alias=${data-server-process-alias}    stderr=${data-server-stderr}
-    WaitForOutput    ${data-server-stderr}    sync    180x    3s
+    Start Process    ${cache-bin}  -c     ${cache-server-config}    alias=${cache-server-process-alias}    stderr=${cache-server-stderr}
+    WaitForOutput    ${data-server-stderr}    sync    3x    3s
 
 Teardown
     [Documentation]    Stop all the started schema-server, data-server and client processes 
@@ -42,6 +43,7 @@ _CheckOutput
     
 CheckServerState
     [Documentation]    Check that schema-server and data-server are still running
-    [Arguments]    ${schema-server-process-alias}    ${data-server-process-alias} 
+    [Arguments]    ${schema-server-process-alias}    ${data-server-process-alias}    ${cache-server-process-alias} 
     Process Should Be Running    handle=${schema-server-process-alias}    error_message="schema-server failed"
     Process Should Be Running    handle=${data-server-process-alias}    error_message="data-server failed"
+    Process Should Be Running    handle=${cache-server-process-alias}    error_message="cache-server failed"

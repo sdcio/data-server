@@ -4,14 +4,16 @@ Resource          ../../keywords/client.robot
 Library           OperatingSystem
 Library           String
 Library           Process
-Suite Setup       Setup    True    ${server-bin}    ${schema-server-config}    ${schema-server-process-alias}    ${schema-server-stderr}    ${data-server-config}    ${data-server-process-alias}    ${data-server-stderr}   
-Suite Teardown    Teardown
+#Suite Setup       Setup    True    ${server-bin}    ${cache-bin}    ${schema-server-config}    ${schema-server-process-alias}    ${schema-server-stderr}    ${data-server-config}    ${data-server-process-alias}    ${data-server-stderr}    ${cache-server-config}    ${cache-server-process-alias}    ${cache-server-stderr}
+#Suite Teardown    Teardown
 
 *** Variables ***
 ${server-bin}    ./bin/server
 ${client-bin}    ./bin/client
+${cache-bin}    ../cache/bin/cached
 ${schema-server-config}    ./tests/robot/tests/must/schema-server.yaml
 ${data-server-config}    ./tests/robot/tests/must/data-server.yaml
+${cache-server-config}    ./tests/robot/tests/must/cache.yaml
 ${schema-server-ip}    127.0.0.1
 ${schema-server-port}    55000
 ${data-server-ip}    127.0.0.1
@@ -30,18 +32,22 @@ ${schema-server-process-alias}    ssa
 ${schema-server-stderr}    /tmp/ss-out
 ${data-server-process-alias}    dsa
 ${data-server-stderr}    /tmp/ds-out
+${cache-server-process-alias}    csa
+${cache-server-stderr}    /tmp/cs-out
 
 
 *** Test Cases ***
 Check Server State
-    CheckServerState    ${schema-server-process-alias}    ${data-server-process-alias}
+    CheckServerState    ${schema-server-process-alias}    ${data-server-process-alias}    ${cache-server-process-alias}
 
 Set system0 admin-state disable -> Fail
     LogMustStatements    ${srlinux1-schema-name}    ${srlinux1-schema-version}    ${srlinux1-schema-vendor}    interface[name=system0]/admin-state
 
     CreateCandidate    ${srlinux1-name}    ${srlinux1-candidate}
-    ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=system0]/admin-state:::disable
+    ${result} =    Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=system0]/admin-state:::disable
+    Should Be Equal As Integers    ${result.rc}    0
 
+    ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
     Should Contain    ${result.stderr}    admin-state must be enable
     Should Be Equal As Integers    ${result.rc}    1
 
@@ -52,7 +58,9 @@ Set system0 admin-state enable -> Pass
 
     CreateCandidate    ${srlinux1-name}    ${srlinux1-candidate}
     ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=system0]/admin-state:::enable
-
+    Should Be Equal As Integers    ${result.rc}    0
+    
+    ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
     Should Be Equal As Integers    ${result.rc}    0
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}

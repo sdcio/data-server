@@ -7,6 +7,7 @@ grpc-server:
     # max number of candidates per DS
     max-candidates: 16
   max-send-msg-size: 25165824 # (24MB) = 24 * 1024 * 1024
+  rpc-timeout: 9000000000000
 
 # data server config
 ## known data stores
@@ -19,6 +20,8 @@ datastores: # this creates MAIN datastores
     sbi:
       type: noop #, nc, nats, redis
       address: "127.0.0.1"
+    sync:
+      write-workers: 5
 
 
 # remote schema server details
@@ -27,6 +30,10 @@ schema-server:
   address: 127.0.0.1:55000
   # tls config to connect to the schema server
   # tls:
+
+cache:
+  type: remote
+  address: 127.0.0.1:50100
 
 prometheus:
   address: :56090
