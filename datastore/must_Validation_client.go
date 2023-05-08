@@ -10,18 +10,20 @@ import (
 )
 
 type MustValidationClientImpl struct {
-	cacheClient  cache.Client
-	schema       *schemapb.Schema
-	schemaClient schemapb.SchemaServerClient
-	name         string
+	cacheClient   cache.Client
+	schema        *schemapb.Schema
+	schemaClient  schemapb.SchemaServerClient
+	name          string
+	candidateName string
 }
 
-func NewMustValidationClientImpl(name string, c cache.Client, s *schemapb.Schema, sc schemapb.SchemaServerClient) *MustValidationClientImpl {
+func NewMustValidationClientImpl(name string, c cache.Client, s *schemapb.Schema, sc schemapb.SchemaServerClient, candidateName string) *MustValidationClientImpl {
 	return &MustValidationClientImpl{
-		cacheClient:  c,
-		schema:       s,
-		schemaClient: sc,
-		name:         name, // the datastore name
+		cacheClient:   c,
+		schema:        s,
+		schemaClient:  sc,
+		name:          name, // the datastore name
+		candidateName: candidateName,
 	}
 }
 
@@ -43,7 +45,7 @@ func (vc *MustValidationClientImpl) GetValue(ctx context.Context, path *schemapb
 	if err != nil {
 		return nil, err
 	}
-	cacheupds := vc.cacheClient.Read(ctx, vc.name, cachepb.Store_CONFIG, [][]string{spath})
+	cacheupds := vc.cacheClient.Read(ctx, vc.name+"/"+vc.candidateName, cachepb.Store_CONFIG, [][]string{spath})
 	if len(cacheupds) == 0 {
 		return nil, nil
 	}

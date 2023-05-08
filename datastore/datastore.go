@@ -145,7 +145,7 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 
 	// validate MUST statements
 	for _, upd := range notification.GetUpdate() {
-		_, err = d.validateMustStatement(ctx, upd.GetPath())
+		_, err = d.validateMustStatement(ctx, upd.GetPath(), req.GetDatastore().GetName())
 		if err != nil {
 			return err
 		}

@@ -336,7 +336,14 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *schemapb.Update) er
 	return nil
 }
 
-func (d *Datastore) validateMustStatement(ctx context.Context, p *schemapb.Path) (bool, error) {
+func (d *Datastore) validateMustStatement(ctx context.Context, p *schemapb.Path, candidateName string) (bool, error) {
+	if len(p.Elem[len(p.Elem)-1].Key) > 0 {
+		prevp := p
+		p = proto.Clone(p).(*schemapb.Path)
+		for k, _ := range prevp.Elem[len(prevp.Elem)-1].Key {
+			p.Elem = append(p.Elem, &schemapb.PathElem{Name: k})
+		}
+	}
 
 	rsp, err := d.getSchema(ctx, p)
 	if err != nil {
@@ -354,7 +361,7 @@ func (d *Datastore) validateMustStatement(ctx context.Context, p *schemapb.Path)
 	}
 
 	// create a validation client for the must statement parser
-	validationClient := NewMustValidationClientImpl(d.Name(), d.cacheClient, d.Schema().GetSchema(), d.schemaClient)
+	validationClient := NewMustValidationClientImpl(d.Name(), d.cacheClient, d.Schema().GetSchema(), d.schemaClient, candidateName)
 
 	for _, must := range mustStatements {
 		// extract actual must statement

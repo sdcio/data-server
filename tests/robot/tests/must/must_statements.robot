@@ -70,7 +70,9 @@ Set ethernet-1/1 admin-state disable -> Pass
 
     CreateCandidate    ${srlinux1-name}    ${srlinux1-candidate}
     ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=ethernet-1/1]/admin-state:::disable
+    Should Be Equal As Integers    ${result.rc}    0
 
+    ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
     Should Be Equal As Integers    ${result.rc}    0
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
@@ -80,7 +82,9 @@ Set lag-type without 'interface[name=xyz]/lag/lacp' existence
 
     CreateCandidate    ${srlinux1-name}    ${srlinux1-candidate}
     ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=lag1]/lag/lag-type:::lacp
+    Should Be Equal As Integers    ${result.rc}    0
 
+    ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
     Should Contain    ${result.stderr}    lacp container must be configured when lag-type is lacp
     Should Be Equal As Integers    ${result.rc}    1
 
@@ -97,6 +101,9 @@ Set lag-type with 'interface[name=xyz]/lag/lacp' existence
     ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=lag1]/lag/lag-type:::lacp
     Should Be Equal As Integers    ${result.rc}    0
 
+    ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
+    Should Be Equal As Integers    ${result.rc}    0
+
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
 
 Set auto-negotiate on non allowed interface
@@ -105,6 +112,9 @@ Set auto-negotiate on non allowed interface
     CreateCandidate    ${srlinux1-name}    ${srlinux1-candidate}
 
     ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=ethernet-0/1]/ethernet/auto-negotiate:::true
+    Should Be Equal As Integers    ${result.rc}    0
+
+    ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
     Should Contain    ${result.stderr}    auto-negotiation not supported on this interface
     Should Be Equal As Integers    ${result.rc}    1
 
@@ -118,6 +128,9 @@ Set auto-negotiate on allowed interface
     ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=ethernet-1/1]/ethernet/auto-negotiate:::true
     Should Be Equal As Integers    ${result.rc}    0
 
+    ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
+    Should Be Equal As Integers    ${result.rc}    0
+
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
 
 Set auto-negotiation on breakout-mode port
@@ -129,6 +142,9 @@ Set auto-negotiation on breakout-mode port
     ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=ethernet-1/1]/breakout-mode/num-breakout-ports:::4
     Should Be Equal As Integers    ${result.rc}    0
     ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=ethernet-1/1]/ethernet/auto-negotiate:::true
+    Should Be Equal As Integers    ${result.rc}    0
+
+    ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
     Should Contain    ${result.stderr}    auto-negotiate not configurable when breakout-mode is enabled
     Should Be Equal As Integers    ${result.rc}    1
 
@@ -144,6 +160,9 @@ Set breakout-port num to 2 and port-speed to 100G
     Should Be Equal As Integers    ${result.rc}    0
 
     ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=ethernet-1/1]/breakout-mode/num-breakout-ports:::2
+    Should Be Equal As Integers    ${result.rc}    0
+
+    ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
     Should Be Equal As Integers    ${result.rc}    1
     Should Contain    ${result.stderr}    breakout-port-speed must be 100G when num-breakout-ports is 2
 
@@ -158,6 +177,9 @@ Set interface ethernet l2cp-transparency lldp tunnel true
     ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=ethernet-1/1]/ethernet/l2cp-transparency/lldp/tunnel:::true
     Should Be Equal As Integers    ${result.rc}    0
 
+    ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
+    Should Be Equal As Integers    ${result.rc}    0
+
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
 
 Set interface ethernet l2cp-transparency lldp tunnel true on lldp true interface
@@ -169,6 +191,9 @@ Set interface ethernet l2cp-transparency lldp tunnel true on lldp true interface
     Should Be Equal As Integers    ${result.rc}    0
 
     ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    /interface[name=ethernet-1/1]/ethernet/l2cp-transparency/lldp/tunnel:::true
+    Should Be Equal As Integers    ${result.rc}    0 
+
+    ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
     Should Be Equal As Integers    ${result.rc}    1
     Should Contain    ${result.stderr}    this interface must not have lldp enabled
 
@@ -180,6 +205,9 @@ Set bfd for non existing subinterface
     CreateCandidate    ${srlinux1-name}    ${srlinux1-candidate}
     
     ${result} =     Set    ${srlinux1-name}    ${srlinux1-candidate}    /bfd/subinterface/id:::ethernet-1/1.26
+    Should Be Equal As Integers    ${result.rc}    0 
+
+    ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
     Should Be Equal As Integers    ${result.rc}    1
     Should Contain    ${result.stderr}    Must be an existing subinterface name
 
