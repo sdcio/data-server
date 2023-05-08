@@ -59,7 +59,9 @@ func New(c *config.DatastoreConfig, scc schemapb.SchemaServerClient, cc cache.Cl
 	ds.connectSBI(ctx, opts...)
 
 	// start syncing goroutine
-	go ds.Sync(ctx)
+	if c.Sync != nil {
+		go ds.Sync(ctx)
+	}
 	return ds
 }
 

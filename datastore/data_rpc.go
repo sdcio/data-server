@@ -58,7 +58,8 @@ func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest, nCh c
 	for _, p := range req.GetPath() {
 		paths = append(paths, utils.ToStrings(p, false, false))
 	}
-
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	for _, store := range stores {
 		for upd := range d.cacheClient.ReadCh(ctx, name, store, paths) {
 			scp, err := d.toPath(ctx, upd.GetPath())
@@ -76,8 +77,13 @@ func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest, nCh c
 					Value: tv,
 				}},
 			}
-			nCh <- &schemapb.GetDataResponse{
+			rsp := &schemapb.GetDataResponse{
 				Notification: []*schemapb.Notification{notification},
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case nCh <- rsp:
 			}
 		}
 	}
