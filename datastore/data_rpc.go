@@ -337,58 +337,74 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *schemapb.Update) er
 }
 
 func (d *Datastore) validateMustStatement(ctx context.Context, p *schemapb.Path, candidateName string) (bool, error) {
+	// normalizedPaths will contain the provided path. If the last path.elems contins one or more keys, these will be
+	// taken and appended to the path. The must statements have to be checked for all of the key elements.
+	var normalizedPaths []*schemapb.Path
+
+	// this is to massage for instance
+	// /bfd/subinterface[id=ethernet-1.25] -> /bfd/subinterface[id=ethernet-1.25]/id
+	// because we need to resolve down to id, to retrieve the relevant must statements
+	// further there can be more then just a single key.
 	if len(p.Elem[len(p.Elem)-1].Key) > 0 {
-		prevp := p
-		p = proto.Clone(p).(*schemapb.Path)
-		for k, _ := range prevp.Elem[len(prevp.Elem)-1].Key {
-			p.Elem = append(p.Elem, &schemapb.PathElem{Name: k})
+		for k, _ := range p.Elem[len(p.Elem)-1].Key {
+			// clone p as new path
+			newPath := proto.Clone(p).(*schemapb.Path)
+			// take the key attribute name and add it as the new path.elem
+			newPath.Elem = append(newPath.Elem, &schemapb.PathElem{Name: k})
+			// add the result to the normalized Paths
+			normalizedPaths = append(normalizedPaths, newPath)
 		}
+	} else {
+		// no keys attached to last path.elem, simply add the path
+		normalizedPaths = append(normalizedPaths, p)
 	}
 
-	rsp, err := d.getSchema(ctx, p)
-	if err != nil {
-		return false, err
-	}
-
-	var mustStatements []*schemapb.MustStatement
-	switch rsp.GetSchema().(type) {
-	case *schemapb.GetSchemaResponse_Container:
-		mustStatements = rsp.GetContainer().GetMustStatements()
-	case *schemapb.GetSchemaResponse_Leaflist:
-		mustStatements = rsp.GetLeaflist().GetMustStatements()
-	case *schemapb.GetSchemaResponse_Field:
-		mustStatements = rsp.GetField().GetMustStatements()
-	}
-
-	// create a validation client for the must statement parser
-	validationClient := NewMustValidationClientImpl(d.Name(), d.cacheClient, d.Schema().GetSchema(), d.schemaClient, candidateName)
-
-	for _, must := range mustStatements {
-		// extract actual must statement
-		exprStr := must.Statement
-		// init a ProgramBuilder
-		prgbuilder := xpath.NewProgBuilder(exprStr)
-		// init an ExpressionLexer
-		lexer := expr.NewExprLex(exprStr, prgbuilder, nil)
-		// parse the provided Must-Expression
-		lexer.Parse()
-		prog, err := lexer.CreateProgram(exprStr)
+	for _, checkPath := range normalizedPaths {
+		rsp, err := d.getSchema(ctx, checkPath)
 		if err != nil {
 			return false, err
 		}
 
-		machine := xpath.NewMachine(exprStr, prog, exprStr)
+		var mustStatements []*schemapb.MustStatement
+		switch rsp.GetSchema().(type) {
+		case *schemapb.GetSchemaResponse_Container:
+			mustStatements = rsp.GetContainer().GetMustStatements()
+		case *schemapb.GetSchemaResponse_Leaflist:
+			mustStatements = rsp.GetLeaflist().GetMustStatements()
+		case *schemapb.GetSchemaResponse_Field:
+			mustStatements = rsp.GetField().GetMustStatements()
+		}
 
-		// run the must statement evaluation virtual machine
-		res1 := xpath.NewCtxFromCurrent(ctx, machine, p.Elem, validationClient).EnableValidation().Run()
+		// create a validation client for the must statement parser
+		validationClient := NewMustValidationClientImpl(d.Name(), d.cacheClient, d.Schema().GetSchema(), d.schemaClient, candidateName)
 
-		// retrieve the boolean result of the execution
-		result, err := res1.GetBoolResult()
-		if !result || err != nil {
-			if err == nil {
-				err = fmt.Errorf(must.Error)
+		for _, must := range mustStatements {
+			// extract actual must statement
+			exprStr := must.Statement
+			// init a ProgramBuilder
+			prgbuilder := xpath.NewProgBuilder(exprStr)
+			// init an ExpressionLexer
+			lexer := expr.NewExprLex(exprStr, prgbuilder, nil)
+			// parse the provided Must-Expression
+			lexer.Parse()
+			prog, err := lexer.CreateProgram(exprStr)
+			if err != nil {
+				return false, err
 			}
-			return result, err
+
+			machine := xpath.NewMachine(exprStr, prog, exprStr)
+
+			// run the must statement evaluation virtual machine
+			res1 := xpath.NewCtxFromCurrent(ctx, machine, p.Elem, validationClient).EnableValidation().Run()
+
+			// retrieve the boolean result of the execution
+			result, err := res1.GetBoolResult()
+			if !result || err != nil {
+				if err == nil {
+					err = fmt.Errorf(must.Error)
+				}
+				return result, err
+			}
 		}
 	}
 	return true, nil

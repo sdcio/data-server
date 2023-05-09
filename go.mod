@@ -26,7 +26,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.14.6
 )
 
-//replace github.com/iptecharch/yang-parser v0.0.0-20230505144957-fb9693dd9d07 => /home/mava/projects/yang-parser
+replace github.com/iptecharch/yang-parser v0.0.0-20230505144957-fb9693dd9d07 => /home/mava/projects/yang-parser
 
 require (
 	cloud.google.com/go v0.110.0 // indirect
