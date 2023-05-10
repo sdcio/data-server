@@ -9,7 +9,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/iptecharch/cache v0.0.6
-	github.com/iptecharch/yang-parser v0.0.0-20230505144957-fb9693dd9d07
+	github.com/iptecharch/yang-parser v0.0.0-20230510140343-01977cb31a31
 	github.com/kylelemons/godebug v1.1.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/openconfig/gnmi v0.9.1
@@ -26,7 +26,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.14.6
 )
 
-replace github.com/iptecharch/yang-parser v0.0.0-20230505144957-fb9693dd9d07 => /home/mava/projects/yang-parser
+//replace github.com/iptecharch/yang-parser v0.0.0-20230510140343-01977cb31a31 => /home/mava/projects/yang-parser
 
 require (
 	cloud.google.com/go v0.110.0 // indirect
@@ -189,7 +189,7 @@ require (
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/spf13/cobra v1.7.0
-	golang.org/x/net v0.9.0 // indirect
+	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/sys v0.8.0 // indirect
 	golang.org/x/text v0.9.0 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect

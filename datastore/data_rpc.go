@@ -336,7 +336,7 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *schemapb.Update) er
 	return nil
 }
 
-func (d *Datastore) validateMustStatement(ctx context.Context, p *schemapb.Path, candidateName string) (bool, error) {
+func (d *Datastore) validateMustStatement(ctx context.Context, candidateName string, p *schemapb.Path) (bool, error) {
 	// normalizedPaths will contain the provided path. If the last path.elems contins one or more keys, these will be
 	// taken and appended to the path. The must statements have to be checked for all of the key elements.
 	var normalizedPaths []*schemapb.Path
@@ -375,9 +375,6 @@ func (d *Datastore) validateMustStatement(ctx context.Context, p *schemapb.Path,
 			mustStatements = rsp.GetField().GetMustStatements()
 		}
 
-		// create a validation client for the must statement parser
-		validationClient := NewMustValidationClientImpl(d.Name(), d.cacheClient, d.Schema().GetSchema(), d.schemaClient, candidateName)
-
 		for _, must := range mustStatements {
 			// extract actual must statement
 			exprStr := must.Statement
@@ -395,7 +392,7 @@ func (d *Datastore) validateMustStatement(ctx context.Context, p *schemapb.Path,
 			machine := xpath.NewMachine(exprStr, prog, exprStr)
 
 			// run the must statement evaluation virtual machine
-			res1 := xpath.NewCtxFromCurrent(ctx, machine, p.Elem, validationClient).EnableValidation().Run()
+			res1 := xpath.NewCtxFromCurrent(ctx, machine, p.Elem, d.getValidationClient(), candidateName).EnableValidation().Run()
 
 			// retrieve the boolean result of the execution
 			result, err := res1.GetBoolResult()

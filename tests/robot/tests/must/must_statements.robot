@@ -48,6 +48,7 @@ Set system0 admin-state disable -> Fail
     Should Be Equal As Integers    ${result.rc}    0
 
     ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
+    Log    ${result.stderr}
     Should Contain    ${result.stderr}    admin-state must be enable
     Should Be Equal As Integers    ${result.rc}    1
 
@@ -61,6 +62,7 @@ Set system0 admin-state enable -> Pass
     Should Be Equal As Integers    ${result.rc}    0
     
     ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
+    Log    ${result.stderr}
     Should Be Equal As Integers    ${result.rc}    0
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
@@ -73,6 +75,7 @@ Set ethernet-1/1 admin-state disable -> Pass
     Should Be Equal As Integers    ${result.rc}    0
 
     ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
+    Log    ${result.stderr}
     Should Be Equal As Integers    ${result.rc}    0
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
@@ -85,6 +88,7 @@ Set lag-type without 'interface[name=xyz]/lag/lacp' existence
     Should Be Equal As Integers    ${result.rc}    0
 
     ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
+    Log    ${result.stderr}
     Should Contain    ${result.stderr}    lacp container must be configured when lag-type is lacp
     Should Be Equal As Integers    ${result.rc}    1
 
@@ -102,6 +106,7 @@ Set lag-type with 'interface[name=xyz]/lag/lacp' existence
     Should Be Equal As Integers    ${result.rc}    0
 
     ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
+    Log    ${result.stderr}
     Should Be Equal As Integers    ${result.rc}    0
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
@@ -115,6 +120,7 @@ Set auto-negotiate on non allowed interface
     Should Be Equal As Integers    ${result.rc}    0
 
     ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
+    Log    ${result.stderr}
     Should Contain    ${result.stderr}    auto-negotiation not supported on this interface
     Should Be Equal As Integers    ${result.rc}    1
 
@@ -129,6 +135,7 @@ Set auto-negotiate on allowed interface
     Should Be Equal As Integers    ${result.rc}    0
 
     ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
+    Log    ${result.stderr}
     Should Be Equal As Integers    ${result.rc}    0
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
@@ -145,6 +152,7 @@ Set auto-negotiation on breakout-mode port
     Should Be Equal As Integers    ${result.rc}    0
 
     ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
+    Log    ${result.stderr}
     Should Contain    ${result.stderr}    auto-negotiate not configurable when breakout-mode is enabled
     Should Be Equal As Integers    ${result.rc}    1
 
@@ -163,6 +171,7 @@ Set breakout-port num to 2 and port-speed to 100G
     Should Be Equal As Integers    ${result.rc}    0
 
     ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
+    Log    ${result.stderr}
     Should Be Equal As Integers    ${result.rc}    1
     Should Contain    ${result.stderr}    breakout-port-speed must be 100G when num-breakout-ports is 2
 
@@ -178,6 +187,7 @@ Set interface ethernet l2cp-transparency lldp tunnel true
     Should Be Equal As Integers    ${result.rc}    0
 
     ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
+    Log    ${result.stderr}
     Should Be Equal As Integers    ${result.rc}    0
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
@@ -194,6 +204,7 @@ Set interface ethernet l2cp-transparency lldp tunnel true on lldp true interface
     Should Be Equal As Integers    ${result.rc}    0 
 
     ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
+    Log    ${result.stderr}
     Should Be Equal As Integers    ${result.rc}    1
     Should Contain    ${result.stderr}    this interface must not have lldp enabled
 
@@ -208,7 +219,40 @@ Set bfd for non existing subinterface
     Should Be Equal As Integers    ${result.rc}    0 
 
     ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
+    Log    ${result.stderr}
     Should Be Equal As Integers    ${result.rc}    1
     Should Contain    ${result.stderr}    Must be an existing subinterface name
+
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+Check LAG interface member speed is set
+    LogMustStatements    ${srlinux1-schema-name}    ${srlinux1-schema-version}    ${srlinux1-schema-vendor}    interface[name=ethernet-1/1]/ethernet/aggregate-id
+
+    CreateCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+    ${result} =    Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=ethernet-1/1]/ethernet/aggregate-id:::lag1
+    Should Be Equal As Integers    ${result.rc}    0
+
+    ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
+    Log    ${result.stderr}
+    Should Contain    ${result.stderr}    member-speed must be configured on associated aggregate-id interface
+    Should Be Equal As Integers    ${result.rc}    1
+
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+Check LAG interface vlan-tagging not set on member
+    LogMustStatements    ${srlinux1-schema-name}    ${srlinux1-schema-version}    ${srlinux1-schema-vendor}    interface[name=ethernet-1/1]/ethernet/aggregate-id
+
+    CreateCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+    ${result} =    Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=ethernet-1/1]/vlan-tagging:::true
+    Should Be Equal As Integers    ${result.rc}    0
+    ${result} =    Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=ethernet-1/1]/ethernet/port-speed:::10G
+    Should Be Equal As Integers    ${result.rc}    0
+    ${result} =    Set    ${srlinux1-name}    ${srlinux1-candidate}    interface[name=ethernet-1/1]/ethernet/aggregate-id:::lag1
+    Should Be Equal As Integers    ${result.rc}    0
+
+    ${result} =    Commit    ${srlinux1-name}    ${srlinux1-candidate}
+    Log    ${result.stderr}
+    Should Contain    ${result.stderr}    vlan-tagging and aggregate-id can not be configured together
+    Should Be Equal As Integers    ${result.rc}    1
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
