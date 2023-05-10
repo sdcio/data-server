@@ -77,9 +77,3 @@ BGP export-policy existing
     Should Be Equal As Integers    ${result.rc}    0
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
-
-    # network-instance default {
-    #     protocols {
-    #         bgp {
-    #             group headquarters1 {
-    #                 export-policy policy02

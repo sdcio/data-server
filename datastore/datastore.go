@@ -300,7 +300,6 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, c
 				if err != nil {
 					return err
 				}
-				leafRefPath = "/" + leafRefPath
 
 				return d.resolveLeafref(ctx, candidate, leafRefPath, upd.GetValue().GetStringVal())
 
