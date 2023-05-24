@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"strings"
 
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	log "github.com/sirupsen/logrus"
@@ -45,8 +46,8 @@ func (s *Server) GetData(req *schemapb.GetDataRequest, stream schemapb.DataServe
 					return
 				}
 				err := stream.Send(rsp)
-				if err != nil {
-					log.Errorf("stream send err :%v", err)
+				if err != nil && !strings.Contains(err.Error(), "context canceled") {
+					log.Errorf("GetData stream send err :%v", err)
 				}
 			}
 		}

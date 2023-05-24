@@ -119,9 +119,14 @@ func (c *remoteCache) ReadCh(ctx context.Context, name string, store cachepb.Sto
 				if !ok {
 					return
 				}
-				outCh <- &remoteUpdate{
+				rUpd := &remoteUpdate{
 					path:  upd.GetPath(),
 					bytes: upd.GetValue().GetValue(),
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case outCh <- rUpd:
 				}
 			}
 		}

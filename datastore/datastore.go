@@ -137,11 +137,12 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 	if err != nil {
 		return err
 	}
+	log.Infof("%s:%s changes: %v", d.Name(), name, changes)
 	notification, err := d.changesToUpdates(ctx, changes)
 	if err != nil {
 		return err
 	}
-
+	log.Infof("%s:%s notification: %v", d.Name(), name, notification)
 	// TODO: consider if leafref validation
 	// needs to run before must statements validation
 
@@ -151,13 +152,18 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 		if err != nil {
 			return err
 		}
+
+		log.Debugf("commit ds=%s path valid: %v", d.Name(), rsp)
 		// TODO: headTree not needed anymore,
 		// now that validateMustStatement is a method of datastore,
 		// it has access to the cacheClient
-		_, err = d.validateMustStatement(ctx, upd.GetPath(), nil, rsp)
-		if err != nil {
-			return err
-		}
+
+		// TODO: put back
+		// _, err = d.validateMustStatement(ctx, upd.GetPath(), nil, rsp)
+		// if err != nil {
+		// 	return err
+		// }
+		// TODO: end
 	}
 
 	for _, upd := range notification.GetUpdate() {
@@ -167,7 +173,6 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 
 		}
 	}
-
 	// push updates to sbi
 	sbiSet := &schemapb.SetDataRequest{
 		Update: notification.GetUpdate(),
