@@ -8,6 +8,8 @@ grpc-server:
   #   skip-verify:
   max-recv-msg-size: 0
   rpc-timeout: 60s
+  # buffer-size: 1000000 # default 100k
+  # write-workers: 32 # default 16
 
 cache:
   store-type: badgerdb

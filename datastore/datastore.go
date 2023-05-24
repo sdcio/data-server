@@ -62,7 +62,9 @@ func New(c *config.DatastoreConfig, scc schemapb.SchemaServerClient, cc cache.Cl
 	ds.connectSBI(ctx, opts...)
 
 	// start syncing goroutine
-	go ds.Sync(ctx)
+	if c.Sync != nil {
+		go ds.Sync(ctx)
+	}
 	return ds
 }
 
@@ -138,11 +140,12 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 	if err != nil {
 		return err
 	}
+	log.Infof("%s:%s changes: %v", d.Name(), name, changes)
 	notification, err := d.changesToUpdates(ctx, changes)
 	if err != nil {
 		return err
 	}
-
+	log.Infof("%s:%s notification: %v", d.Name(), name, notification)
 	// TODO: consider if leafref validation
 	// needs to run before must statements validation
 
@@ -158,10 +161,8 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 		err = d.validateLeafRef(ctx, upd, name)
 		if err != nil {
 			return err
-
 		}
 	}
-
 	// push updates to sbi
 	sbiSet := &schemapb.SetDataRequest{
 		Update: notification.GetUpdate(),

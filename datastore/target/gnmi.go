@@ -128,11 +128,16 @@ func (t *gnmiTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sc
 
 func (t *gnmiTarget) Subscribe() {}
 
-func (t *gnmiTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
+func (t *gnmiTarget) Sync(octx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
 	log.Infof("starting target %s sync", t.target.Config.Name)
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	var cancel context.CancelFunc
+	var ctx context.Context
 START:
+	if cancel != nil {
+		cancel()
+	}
+	ctx, cancel = context.WithCancel(octx)
+	defer cancel()
 	for _, gnmiSync := range syncConfig.GNMI {
 		opts := make([]gapi.GNMIOption, 0)
 		switch gnmiSync.Mode {
@@ -150,9 +155,12 @@ START:
 			if err != nil {
 				panic(err)
 			}
+			// initial subscribe ONCE
 			go t.target.Subscribe(ctx, subReq, gnmiSync.Name)
+			// periodic subscribe ONCE
 			go func(gnmiSync *config.GNMISync) {
 				ticker := time.NewTicker(gnmiSync.Period)
+				defer ticker.Stop()
 				for {
 					select {
 					case <-ctx.Done():
@@ -183,8 +191,8 @@ START:
 			go t.target.Subscribe(ctx, subReq, gnmiSync.Name)
 		}
 	}
-
 	defer t.target.StopSubscriptions()
+
 	rspch, errCh := t.target.ReadSubscriptions()
 	for {
 		select {

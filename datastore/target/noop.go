@@ -12,21 +12,21 @@ type noopTarget struct {
 	name string
 }
 
-func newNoopTarget(ctx context.Context, name string) (*noopTarget, error) {
+func newNoopTarget(_ context.Context, name string) (*noopTarget, error) {
 	nt := &noopTarget{
 		name: name,
 	}
 	return nt, nil
 }
 
-func (t *noopTarget) Get(ctx context.Context, req *schemapb.GetDataRequest) (*schemapb.GetDataResponse, error) {
+func (t *noopTarget) Get(_ context.Context, _ *schemapb.GetDataRequest) (*schemapb.GetDataResponse, error) {
 	result := &schemapb.GetDataResponse{
 		Notification: []*schemapb.Notification{},
 	}
 	return result, nil
 }
 
-func (t *noopTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error) {
+func (t *noopTarget) Set(_ context.Context, _ *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error) {
 	result := &schemapb.SetDataResponse{
 		Response: []*schemapb.UpdateResult{},
 	}

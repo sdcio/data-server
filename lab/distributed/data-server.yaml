@@ -60,15 +60,12 @@ datastores: # this creates MAIN datastores
             - /
           mode: on_change
           encoding: 45
-        - name: state
-          paths:
-            - /
-          mode: sample
-          sample-interval: 10s
-          encoding: ascii 
-    cache:
-      type: remote
-      address: clab-distributed-cache:50100
+        # - name: state
+        #   paths:
+        #     - /
+        #   mode: sample
+        #   sample-interval: 10s
+        #   encoding: ascii 
   - name: srl3
     schema: 
       name: srl
@@ -90,15 +87,12 @@ datastores: # this creates MAIN datastores
             - /
           mode: on_change
           encoding: 45
-        - name: state
-          paths:
-            - /
-          mode: sample
-          sample-interval: 10s
-          encoding: ascii
-    cache:
-      type: remote
-      address: clab-distributed-cache:50100
+        # - name: state
+        #   paths:
+        #     - /
+        #   mode: sample
+        #   sample-interval: 10s
+        #   encoding: ascii
   - name: sr1
     schema: 
       name: sros
@@ -126,9 +120,6 @@ datastores: # this creates MAIN datastores
           mode: sample
           sample-interval: 10s
           encoding: bytes
-    cache:
-      type: remote
-      address: clab-distributed-cache:50100
   - name: sr2
     schema: 
       name: sros
@@ -157,9 +148,6 @@ datastores: # this creates MAIN datastores
           mode: sample
           sample-interval: 10s
           encoding: bytes
-    cache:
-      type: remote
-      address: clab-distributed-cache:50100
 
 # remote schema server details
 schema-server:
