@@ -8,18 +8,18 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/iptecharch/cache v0.0.6
+	github.com/iptecharch/cache v0.0.7
 	github.com/iptecharch/yang-parser v0.0.0-20230510140343-01977cb31a31
 	github.com/kylelemons/godebug v1.1.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/openconfig/gnmi v0.9.1
-	github.com/openconfig/gnmic v0.30.0
-	github.com/openconfig/goyang v1.2.0
+	github.com/openconfig/gnmic v0.31.0
+	github.com/openconfig/goyang v1.4.0
 	github.com/prometheus/client_golang v1.15.1
-	github.com/scrapli/scrapligo v1.1.7
-	github.com/sirupsen/logrus v1.9.0
+	github.com/scrapli/scrapligo v1.1.8
+	github.com/sirupsen/logrus v1.9.2
 	github.com/spf13/pflag v1.0.5
-	golang.org/x/sync v0.1.0
+	golang.org/x/sync v0.2.0
 	google.golang.org/grpc v1.55.0
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -119,6 +119,7 @@ require (
 	github.com/hashicorp/serf v0.10.1 // indirect
 	github.com/hashicorp/vault/api v1.9.1 // indirect
 	github.com/imdario/mergo v0.3.15 // indirect
+	github.com/iptecharch/store v0.0.0-20230509214132-e21d2d5f765e // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jhump/protoreflect v1.15.1 // indirect
 	github.com/jlaffaye/ftp v0.1.0 // indirect

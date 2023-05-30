@@ -131,7 +131,7 @@ func (c *localCache) ReadCh(ctx context.Context, name string, store cachepb.Stor
 	outCh := make(chan Update)
 	for _, p := range paths {
 		go func(p []string) { // TODO: limit num of goroutines ?
-			ch, err := c.c.ReadValueCh(ctx, name, cStore, p)
+			ch, err := c.c.ReadValue(ctx, name, cStore, p)
 			if err != nil {
 				log.Errorf("failed to read path %v: %v", p, err)
 				return

@@ -212,7 +212,7 @@ SCHEMA_CONNECT:
 	defer cancel()
 	cc, err := grpc.DialContext(dialCtx, s.config.SchemaServer.Address, opts...)
 	if err != nil {
-		log.Errorf("failed to connect DS to schema server :%v", err)
+		log.Errorf("failed to connect DS to schema server: %v", err)
 		time.Sleep(time.Second)
 		goto SCHEMA_CONNECT
 	}
