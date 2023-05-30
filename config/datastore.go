@@ -2,11 +2,8 @@ package config
 
 import (
 	"errors"
+	"net"
 	"time"
-)
-
-const (
-	defaultBufferSize = 1000
 )
 
 type DatastoreConfig struct {
@@ -40,9 +37,10 @@ type Creds struct {
 }
 
 type Sync struct {
-	Validate bool        `yaml:"validate,omitempty" json:"validate,omitempty"`
-	Buffer   int64       `yaml:"buffer,omitempty" json:"buffer,omitempty"`
-	GNMI     []*GNMISync `yaml:"gnmi,omitempty" json:"gnmi,omitempty"`
+	Validate     bool        `yaml:"validate,omitempty" json:"validate,omitempty"`
+	Buffer       int64       `yaml:"buffer,omitempty" json:"buffer,omitempty"`
+	WriteWorkers int64       `yaml:"write-workers,omitempty" json:"write-workers,omitempty"`
+	GNMI         []*GNMISync `yaml:"gnmi,omitempty" json:"gnmi,omitempty"`
 }
 
 type GNMISync struct {
@@ -54,6 +52,16 @@ type GNMISync struct {
 	Encoding       string        `yaml:"encoding,omitempty" json:"encoding,omitempty"`
 }
 
+type CacheConfig struct {
+	// cache type: "local" or "remote"
+	Type string `yaml:"type,omitempty" json:"type,omitempty"`
+	// Local cache attr
+	StoreType string `yaml:"store-type,omitempty" json:"store-type,omitempty"`
+	Dir       string `yaml:"dir,omitempty" json:"dir,omitempty"`
+	// Remote cache attr
+	Address string `yaml:"address,omitempty" json:"address,omitempty"`
+}
+
 func (ds *DatastoreConfig) validateSetDefaults() error {
 	var err error
 	if err = ds.Schema.validateSetDefaults(); err != nil {
@@ -62,8 +70,10 @@ func (ds *DatastoreConfig) validateSetDefaults() error {
 	if err = ds.SBI.validateSetDefaults(); err != nil {
 		return err
 	}
-	if err = ds.Sync.validateSetDefaults(); err != nil {
-		return err
+	if ds.Sync != nil {
+		if err = ds.Sync.validateSetDefaults(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -76,8 +86,8 @@ func (s *SBI) validateSetDefaults() error {
 	case "gnmi":
 		return nil
 	case "nc":
-		if s.Port == 0 {
-			s.Port = 830
+		if s.Port <= 0 {
+			s.Port = defaultNCPort
 		}
 		return nil
 	default:
@@ -86,11 +96,38 @@ func (s *SBI) validateSetDefaults() error {
 }
 
 func (s *Sync) validateSetDefaults() error {
-	if s == nil {
+	if s == nil || len(s.GNMI) == 0 {
 		return nil
 	}
 	if s.Buffer <= 0 {
 		s.Buffer = defaultBufferSize
+	}
+	if s.WriteWorkers <= 0 {
+		s.WriteWorkers = defaultWriteWorkers
+	}
+	return nil
+}
+
+func (c *CacheConfig) validateSetDefaults() error {
+	switch c.Type {
+	case "remote":
+		if c.Address == "" {
+			c.Address = defaultRemoteCacheAddress
+		}
+		_, _, err := net.SplitHostPort(c.Address)
+		if err != nil {
+			return err
+		}
+	default:
+		if c.Type != defaultCacheType {
+			c.Type = defaultCacheType
+		}
+		if c.StoreType == "" {
+			c.StoreType = defaultStoreType
+		}
+		if c.Dir == "" {
+			c.Dir = defaultCacheDir
+		}
 	}
 	return nil
 }

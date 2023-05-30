@@ -110,9 +110,13 @@ func (t *Tree) GetPath(ctx context.Context, p *schemapb.Path, schemaClient schem
 	if err != nil {
 		return nil, err
 	}
+	return t.GetNotifications(ctx, cp, schemaClient, sc)
+}
+
+func (t *Tree) GetNotifications(ctx context.Context, p []string, schemaClient schemapb.SchemaServerClient, sc *config.SchemaConfig) ([]*schemapb.Notification, error) {
 	ns := make([]*schemapb.Notification, 0)
-	err = t.Query(cp,
-		func(path []string, l *Leaf, val interface{}) error {
+	err := t.Query(p,
+		func(path []string, _ *Leaf, val interface{}) error {
 			req := &schemapb.ToPathRequest{
 				PathElement: path,
 				Schema:      sc.GetSchema(),
@@ -131,10 +135,7 @@ func (t *Tree) GetPath(ctx context.Context, p *schemapb.Path, schemaClient schem
 			ns = append(ns, n)
 			return nil
 		})
-	if err != nil {
-		return nil, err
-	}
-	return ns, nil
+	return ns, err
 }
 
 func (t *Tree) DeletePath(p *schemapb.Path) error {

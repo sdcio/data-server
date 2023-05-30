@@ -24,7 +24,7 @@ service DataServer {
     // data
     // retrieve data from a MAIN or CANDIDATE datastore, the data is specified 
     // with a set of schema.prot.Path
-    rpc GetData(GetDataRequest)                 returns (GetDataResponse);
+    rpc GetData(GetDataRequest)                 returns (stream GetDataResponse);
     // writes changes to a CANDIDATE datastore,
     // validates the values written against the datastore schema.
     rpc SetData(SetDataRequest)                 returns (SetDataResponse);

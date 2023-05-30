@@ -1,0 +1,19 @@
+grpc-server:
+  address: :50100
+  # TLS config
+  # tls:
+  #   ca:
+  #   cert:
+  #   key:
+  #   skip-verify:
+  max-recv-msg-size: 0
+  rpc-timeout: 60s
+
+cache:
+  store-type: badgerdb
+  dir: /tmp/caches
+  max-caches: 16
+  # max-candidate-per-cache: 100
+
+prometheus:
+  address: :50190

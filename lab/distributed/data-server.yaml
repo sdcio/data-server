@@ -32,12 +32,13 @@ datastores: # this creates MAIN datastores
             - /
           mode: on_change
           encoding: 45
-        - name: state
-          paths:
-            - /
-          mode: sample
-          sample-interval: 10s
-          encoding: ascii
+        # - name: state
+        #   paths:
+        #     - /
+        #   mode: sample
+        #   sample-interval: 10s
+        #   encoding: ascii
+
   - name: srl2
     schema: 
       name: srl
@@ -59,12 +60,12 @@ datastores: # this creates MAIN datastores
             - /
           mode: on_change
           encoding: 45
-        - name: state
-          paths:
-            - /
-          mode: sample
-          sample-interval: 10s
-          encoding: ascii 
+        # - name: state
+        #   paths:
+        #     - /
+        #   mode: sample
+        #   sample-interval: 10s
+        #   encoding: ascii 
   - name: srl3
     schema: 
       name: srl
@@ -86,27 +87,25 @@ datastores: # this creates MAIN datastores
             - /
           mode: on_change
           encoding: 45
-        - name: state
-          paths:
-            - /
-          mode: sample
-          sample-interval: 10s
-          encoding: ascii
+        # - name: state
+        #   paths:
+        #     - /
+        #   mode: sample
+        #   sample-interval: 10s
+        #   encoding: ascii
   - name: sr1
     schema: 
       name: sros
       vendor: Nokia
       version: 22.10
     sbi:
-      type: nc # noop, nc, nats, redis
-      address: clab-distributed-sr1
-      port: 830
+      type: gnmi # noop, nc, nats, redis
+      address: clab-distributed-sr1:57400
+      # port: 830
       credentials:
         username: admin
         password: admin
-      # tls:
-      #   insecure: true
-      include-ns: true
+      # include-ns: true
     sync:
       validate: false
       gnmi:
@@ -127,16 +126,14 @@ datastores: # this creates MAIN datastores
       vendor: Nokia
       version: 22.10
     sbi:
-      type: nc # noop, nc, nats, redis
+      type: gnmi # noop, gnmi, nc, nats, redis
       # address: "clab-distributed-sr1:57400"
-      address: clab-distributed-sr2
-      port: 830
+      address: clab-distributed-sr2:57400
+      # port: 830
       credentials:
         username: admin
         password: admin
-      # tls:
-      #   insecure: true
-      include-ns: true
+      # include-ns: true
     sync:
       validate: false
       gnmi:
@@ -158,6 +155,10 @@ schema-server:
   address: clab-distributed-schema-server:55000
   # tls config to connect to the schema server
   # tls:
+
+cache:
+  type: remote
+  address: clab-distributed-cache:50100
 
 prometheus:
   address: :56090

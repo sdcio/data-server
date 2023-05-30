@@ -38,7 +38,7 @@ type DataServerClient interface {
 	// data
 	// retrieve data from a MAIN or CANDIDATE datastore, the data is specified
 	// with a set of schema.prot.Path
-	GetData(ctx context.Context, in *GetDataRequest, opts ...grpc.CallOption) (*GetDataResponse, error)
+	GetData(ctx context.Context, in *GetDataRequest, opts ...grpc.CallOption) (DataServer_GetDataClient, error)
 	// writes changes to a CANDIDATE datastore,
 	// validates the values written against the datastore schema.
 	SetData(ctx context.Context, in *SetDataRequest, opts ...grpc.CallOption) (*SetDataResponse, error)
@@ -112,13 +112,36 @@ func (c *dataServerClient) Discard(ctx context.Context, in *DiscardRequest, opts
 	return out, nil
 }
 
-func (c *dataServerClient) GetData(ctx context.Context, in *GetDataRequest, opts ...grpc.CallOption) (*GetDataResponse, error) {
-	out := new(GetDataResponse)
-	err := c.cc.Invoke(ctx, "/data.proto.DataServer/GetData", in, out, opts...)
+func (c *dataServerClient) GetData(ctx context.Context, in *GetDataRequest, opts ...grpc.CallOption) (DataServer_GetDataClient, error) {
+	stream, err := c.cc.NewStream(ctx, &DataServer_ServiceDesc.Streams[0], "/data.proto.DataServer/GetData", opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &dataServerGetDataClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type DataServer_GetDataClient interface {
+	Recv() (*GetDataResponse, error)
+	grpc.ClientStream
+}
+
+type dataServerGetDataClient struct {
+	grpc.ClientStream
+}
+
+func (x *dataServerGetDataClient) Recv() (*GetDataResponse, error) {
+	m := new(GetDataResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func (c *dataServerClient) SetData(ctx context.Context, in *SetDataRequest, opts ...grpc.CallOption) (*SetDataResponse, error) {
@@ -140,7 +163,7 @@ func (c *dataServerClient) Diff(ctx context.Context, in *DiffRequest, opts ...gr
 }
 
 func (c *dataServerClient) Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (DataServer_SubscribeClient, error) {
-	stream, err := c.cc.NewStream(ctx, &DataServer_ServiceDesc.Streams[0], "/data.proto.DataServer/Subscribe", opts...)
+	stream, err := c.cc.NewStream(ctx, &DataServer_ServiceDesc.Streams[1], "/data.proto.DataServer/Subscribe", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +214,7 @@ type DataServerServer interface {
 	// data
 	// retrieve data from a MAIN or CANDIDATE datastore, the data is specified
 	// with a set of schema.prot.Path
-	GetData(context.Context, *GetDataRequest) (*GetDataResponse, error)
+	GetData(*GetDataRequest, DataServer_GetDataServer) error
 	// writes changes to a CANDIDATE datastore,
 	// validates the values written against the datastore schema.
 	SetData(context.Context, *SetDataRequest) (*SetDataResponse, error)
@@ -226,8 +249,8 @@ func (UnimplementedDataServerServer) Rebase(context.Context, *RebaseRequest) (*R
 func (UnimplementedDataServerServer) Discard(context.Context, *DiscardRequest) (*DiscardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Discard not implemented")
 }
-func (UnimplementedDataServerServer) GetData(context.Context, *GetDataRequest) (*GetDataResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetData not implemented")
+func (UnimplementedDataServerServer) GetData(*GetDataRequest, DataServer_GetDataServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetData not implemented")
 }
 func (UnimplementedDataServerServer) SetData(context.Context, *SetDataRequest) (*SetDataResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetData not implemented")
@@ -359,22 +382,25 @@ func _DataServer_Discard_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
-func _DataServer_GetData_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetDataRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+func _DataServer_GetData_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetDataRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(DataServerServer).GetData(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/data.proto.DataServer/GetData",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DataServerServer).GetData(ctx, req.(*GetDataRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(DataServerServer).GetData(m, &dataServerGetDataServer{stream})
+}
+
+type DataServer_GetDataServer interface {
+	Send(*GetDataResponse) error
+	grpc.ServerStream
+}
+
+type dataServerGetDataServer struct {
+	grpc.ServerStream
+}
+
+func (x *dataServerGetDataServer) Send(m *GetDataResponse) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _DataServer_SetData_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -466,10 +492,6 @@ var DataServer_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _DataServer_Discard_Handler,
 		},
 		{
-			MethodName: "GetData",
-			Handler:    _DataServer_GetData_Handler,
-		},
-		{
 			MethodName: "SetData",
 			Handler:    _DataServer_SetData_Handler,
 		},
@@ -479,6 +501,11 @@ var DataServer_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "GetData",
+			Handler:       _DataServer_GetData_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "Subscribe",
 			Handler:       _DataServer_Subscribe_Handler,

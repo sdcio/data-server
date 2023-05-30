@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/iptecharch/schema-server/datastore/ctree"
+	"github.com/iptecharch/cache/proto/cachepb"
+	"github.com/iptecharch/schema-server/cache"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
 	"github.com/iptecharch/yang-parser/xpath"
@@ -21,115 +23,70 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest) (*schemapb.GetDataResponse, error) {
-	switch req.GetDatastore().GetType() {
-	case schemapb.Type_CANDIDATE:
-		d.m.RLock()
-		defer d.m.RUnlock()
-		cand, ok := d.candidates[req.GetDatastore().GetName()]
-		if !ok {
-			return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDatastore().GetName())
-		}
-		rsp := &schemapb.GetDataResponse{
-			Notification: make([]*schemapb.Notification, 0, len(req.GetPath())),
-		}
-		cand.m.RLock()
-		defer cand.m.RUnlock()
-		tempTree := &ctree.Tree{}
-		log.Infof("reading from candidate")
-		for _, p := range req.GetPath() {
-			log.Infof("from head path %v", p)
-			n, err := cand.head.GetPath(ctx, p, d.schemaClient, d.config.Schema)
-			if err != nil {
-				log.Errorf("get from head err: %v", err)
-				return nil, err
-			}
-			log.Infof("from head result %v", n)
-			for _, nn := range n {
-				err = tempTree.AddSchemaNotification(nn)
-				if err != nil {
-					return nil, err
-				}
-			}
-			if len(n) > 0 {
-				continue
-			}
-			log.Infof("from base path %v", p)
-			bn, err := cand.base.GetPath(ctx, p, d.schemaClient, d.config.Schema)
-			if err != nil {
-				return nil, err
-			}
+func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest, nCh chan *schemapb.GetDataResponse) error {
+	defer close(nCh)
 
-			log.Infof("from base result %v", bn)
-			for _, nn := range bn {
-				err = tempTree.AddSchemaNotification(nn)
-				if err != nil {
-					return nil, err
-				}
-			}
+	var err error
+	// validate that path(s) exist in the schema
+	for _, p := range req.GetPath() {
+		err = d.validatePath(ctx, p)
+		if err != nil {
+			return err
 		}
-		for _, p := range req.GetPath() {
-			n, err := tempTree.GetPath(ctx, p, d.schemaClient, d.config.Schema)
-			if err != nil {
-				return nil, err
-			}
-			log.Infof("from tempTree result %v", n)
-			rsp.Notification = append(rsp.Notification, n...)
-		}
-
-		return rsp, nil
-	case schemapb.Type_MAIN:
-		reqPaths := req.GetPath()
-		if len(reqPaths) == 0 {
-			reqPaths = []*schemapb.Path{
-				{
-					Elem: []*schemapb.PathElem{{}},
-				},
-			}
-		}
-		rsp := &schemapb.GetDataResponse{
-			Notification: make([]*schemapb.Notification, 0, len(reqPaths)),
-		}
-
-		switch req.GetDataType() {
-		case schemapb.DataType_ALL:
-			for _, p := range reqPaths {
-				nc, err := d.main.config.GetPath(ctx, p, d.schemaClient, d.config.Schema)
-				if err != nil {
-					return nil, err
-				}
-				rsp.Notification = append(rsp.Notification, nc...)
-
-				ns, err := d.main.state.GetPath(ctx, p, d.schemaClient, d.config.Schema)
-				if err != nil {
-					return nil, err
-				}
-				rsp.Notification = append(rsp.Notification, ns...)
-			}
-		case schemapb.DataType_CONFIG:
-			for _, p := range reqPaths {
-				if req.GetDataType() != schemapb.DataType_STATE {
-					nc, err := d.main.config.GetPath(ctx, p, d.schemaClient, d.config.Schema)
-					if err != nil {
-						return nil, err
-					}
-					rsp.Notification = append(rsp.Notification, nc...)
-				}
-			}
-		case schemapb.DataType_STATE:
-			for _, p := range reqPaths {
-				if req.GetDataType() != schemapb.DataType_CONFIG {
-					ns, err := d.main.state.GetPath(ctx, p, d.schemaClient, d.config.Schema)
-					if err != nil {
-						return nil, err
-					}
-					rsp.Notification = append(rsp.Notification, ns...)
-				}
-			}
-		}
-		return rsp, nil
 	}
-	return nil, fmt.Errorf("unknown datastore type: %v", req.GetDatastore().GetType())
+
+	// choose store(s)
+	var stores []cachepb.Store
+	switch req.GetDataType() {
+	case schemapb.DataType_ALL:
+		stores = []cachepb.Store{cachepb.Store_CONFIG, cachepb.Store_STATE}
+	case schemapb.DataType_CONFIG:
+		stores = []cachepb.Store{cachepb.Store_CONFIG}
+	case schemapb.DataType_STATE:
+		stores = []cachepb.Store{cachepb.Store_STATE}
+	}
+
+	// build target cache name
+	name := req.GetName()
+	if req.GetDatastore().GetName() != "" {
+		name = fmt.Sprintf("%s/%s", req.GetName(), req.GetDatastore().GetName())
+	}
+
+	// convert schemapb paths to a string list
+	paths := make([][]string, 0, len(req.GetPath()))
+	for _, p := range req.GetPath() {
+		paths = append(paths, utils.ToStrings(p, false, false))
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	for _, store := range stores {
+		for upd := range d.cacheClient.ReadCh(ctx, name, store, paths) {
+			scp, err := d.toPath(ctx, upd.GetPath())
+			if err != nil {
+				return err
+			}
+			tv, err := upd.Value()
+			if err != nil {
+				return err
+			}
+			notification := &schemapb.Notification{
+				Timestamp: time.Now().UnixNano(),
+				Update: []*schemapb.Update{{
+					Path:  scp,
+					Value: tv,
+				}},
+			}
+			rsp := &schemapb.GetDataResponse{
+				Notification: []*schemapb.Notification{notification},
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case nCh <- rsp:
+			}
+		}
+	}
+	return nil
 }
 
 func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error) {
@@ -137,13 +94,15 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 	case schemapb.Type_MAIN:
 		return nil, status.Error(codes.InvalidArgument, "cannot set fields in MAIN datastore")
 	case schemapb.Type_CANDIDATE:
-		d.m.RLock()
-		defer d.m.RUnlock()
-		cand, ok := d.candidates[req.GetDatastore().GetName()]
+		//
+		ok, err := d.cacheClient.HasCandidate(ctx, req.GetName(), req.GetDatastore().GetName())
+		if err != nil {
+			return nil, err
+		}
 		if !ok {
 			return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDatastore().GetName())
 		}
-		var err error
+
 		replaces := make([]*schemapb.Update, 0, len(req.GetReplace()))
 		updates := make([]*schemapb.Update, 0, len(req.GetUpdate()))
 		// expand json/json_ietf values
@@ -173,23 +132,25 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 
 		// validate individual updates
 		for _, del := range req.GetDelete() {
-			_, err = d.validatePath(ctx, del)
+			err = d.validatePath(ctx, del)
 			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+				return nil, status.Errorf(codes.InvalidArgument, "delete path: %q validation failed: %v", del, err)
 			}
 		}
 
 		for _, upd := range replaces {
 			err = d.validateUpdate(ctx, upd)
 			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+				log.Debugf("replace %v validation failed: %v", upd, err)
+				return nil, status.Errorf(codes.InvalidArgument, "replace: validation failed: %v", err)
 			}
 		}
 
 		for _, upd := range updates {
 			err = d.validateUpdate(ctx, upd)
 			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+				log.Debugf("update %v validation failed: %v", upd, err)
+				return nil, status.Errorf(codes.InvalidArgument, "update: validation failed: %v", err)
 			}
 		}
 
@@ -200,12 +161,29 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 				len(req.GetDelete())+len(req.GetReplace())+len(req.GetUpdate())),
 		}
 
+		name := fmt.Sprintf("%s/%s", req.GetName(), req.GetDatastore().GetName())
+		dels := make([][]string, 0, len(req.GetDelete()))
+		upds := make([]cache.Update, 0, len(req.GetUpdate())+len(req.GetReplace()))
 		// deletes start
 		for _, del := range req.GetDelete() {
-			err = cand.head.DeletePath(del)
-			if err != nil {
-				return nil, err
+			dels = append(dels, utils.ToStrings(del, false, false))
+		}
+		for _, changes := range [][]*schemapb.Update{replaces, updates} {
+			for _, upd := range changes {
+				cUpd, err := d.cacheClient.NewUpdate(upd)
+				if err != nil {
+					return nil, err
+				}
+				upds = append(upds, cUpd)
 			}
+		}
+		err = d.cacheClient.Modify(ctx, name, cachepb.Store_CONFIG, dels, upds)
+		if err != nil {
+			return nil, err
+		}
+
+		// deletes start
+		for _, del := range req.GetDelete() {
 			rsp.Response = append(rsp.Response, &schemapb.UpdateResult{
 				Path: del,
 				Op:   schemapb.UpdateResult_DELETE,
@@ -213,12 +191,6 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 		}
 		// deletes end
 		// replaces start
-		for _, rep := range replaces {
-			err = cand.head.AddSchemaUpdate(rep)
-			if err != nil {
-				return nil, err
-			}
-		}
 		for _, rep := range req.GetReplace() {
 			rsp.Response = append(rsp.Response, &schemapb.UpdateResult{
 				Path: rep.GetPath(),
@@ -227,42 +199,13 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 		}
 		// replaces end
 		// updates start
-		for _, upd := range updates {
-			err = cand.head.AddSchemaUpdate(upd)
-			if err != nil {
-				return nil, err
-			}
-		}
 		for _, upd := range req.GetUpdate() {
 			rsp.Response = append(rsp.Response, &schemapb.UpdateResult{
 				Path: upd.GetPath(),
 				Op:   schemapb.UpdateResult_UPDATE,
 			})
 		}
-
 		// updates end
-		cand.m.Lock()
-		cand.deletes = append(cand.deletes, req.GetDelete()...)
-		cand.replaces = append(cand.replaces, replaces...)
-		cand.updates = append(cand.updates, updates...)
-		cand.m.Unlock()
-
-		// validate MUST statements
-		for _, upd := range req.GetUpdate() {
-
-			// TODO these schema responses have been requested already
-			// we should somehow store / cache them?!?!
-			rsp, err := d.validatePath(ctx, upd.GetPath())
-			if err != nil {
-				return nil, err
-			}
-
-			validMusts, err := validateMustStatement(ctx, d, upd.Path, cand.head, rsp)
-			if err != nil {
-				return nil, err
-			}
-			_ = validMusts
-		}
 		return rsp, nil
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %v", req.GetDatastore().GetType())
@@ -274,83 +217,84 @@ func (d *Datastore) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schem
 	case schemapb.Type_MAIN:
 		return nil, status.Errorf(codes.InvalidArgument, "must set a candidate datastore")
 	case schemapb.Type_CANDIDATE:
-		d.m.RLock()
-		defer d.m.RUnlock()
-		cand, ok := d.candidates[req.GetDatastore().GetName()]
-		if !ok {
-			return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDatastore().GetName())
+		changes, err := d.cacheClient.GetChanges(ctx, req.GetName(), req.GetDatastore().GetName())
+		if err != nil {
+			return nil, err
 		}
 		diffRsp := &schemapb.DiffResponse{
 			Name:      req.GetName(),
 			Datastore: req.GetDatastore(),
-			Diff:      []*schemapb.DiffUpdate{},
+			Diff:      make([]*schemapb.DiffUpdate, 0, len(changes)),
 		}
-		for _, del := range cand.deletes {
-			n, err := cand.base.GetPath(ctx, del, d.schemaClient, d.Schema())
-			if err != nil {
-				return nil, err
-			}
-			if len(n) == 0 {
-				continue
-			}
-			if len(n[0].GetUpdate()) == 0 {
-				continue
-			}
+		for _, change := range changes {
+			switch {
+			case change.Update != nil:
+				candVal, err := change.Update.Value()
+				if err != nil {
+					return nil, err
+				}
 
-			diffup := &schemapb.DiffUpdate{
-				Path:      del,
-				MainValue: n[0].GetUpdate()[0].GetValue(),
-			}
-			diffRsp.Diff = append(diffRsp.Diff, diffup)
-		}
-		for _, rep := range cand.replaces {
-			n, err := cand.base.GetPath(ctx, rep.GetPath(), d.schemaClient, d.Schema())
-			if err != nil {
-				return nil, err
-			}
-			if len(n) == 0 || len(n[0].GetUpdate()) == 0 {
-				diffup := &schemapb.DiffUpdate{
-					Path:           rep.GetPath(),
-					MainValue:      nil,
-					CandidateValue: rep.GetValue(),
-				}
-				diffRsp.Diff = append(diffRsp.Diff, diffup)
-				continue
-			}
-			if len(n) != 0 && len(n[0].GetUpdate()) != 0 {
-				if equalTypedValues(n[0].GetUpdate()[0].GetValue(), rep.GetValue()) {
+				// read value from main
+				values := d.cacheClient.Read(ctx, req.GetName(), cachepb.Store_CONFIG, [][]string{change.Update.GetPath()})
+				if len(values) == 0 {
 					continue
 				}
-				diffup := &schemapb.DiffUpdate{
-					Path:           rep.GetPath(),
-					MainValue:      n[0].GetUpdate()[0].GetValue(),
-					CandidateValue: rep.GetValue(),
+				mainVal, err := values[0].Value()
+				if err != nil {
+					return nil, err
 				}
-				diffRsp.Diff = append(diffRsp.Diff, diffup)
-			}
-		}
-		for _, upd := range cand.updates {
-			n, err := cand.base.GetPath(ctx, upd.GetPath(), d.schemaClient, d.Schema())
-			if err != nil {
-				return nil, err
-			}
-			if len(n) == 0 || len(n[0].GetUpdate()) == 0 {
-				diffup := &schemapb.DiffUpdate{
-					Path:           upd.GetPath(),
-					MainValue:      nil,
-					CandidateValue: upd.GetValue(),
-				}
-				diffRsp.Diff = append(diffRsp.Diff, diffup)
-				continue
-			}
-			if len(n) != 0 && len(n[0].GetUpdate()) != 0 {
-				if equalTypedValues(n[0].GetUpdate()[0].GetValue(), upd.GetValue()) {
+
+				// compare values
+				if equalTypedValues(mainVal, candVal) {
 					continue
 				}
+				// get path from schema server
+				p, err := d.schemaClient.ToPath(ctx,
+					&schemapb.ToPathRequest{
+						PathElement: change.Update.GetPath(),
+						Schema: &schemapb.Schema{
+							Name:    d.config.Schema.Name,
+							Vendor:  d.config.Schema.Vendor,
+							Version: d.config.Schema.Version,
+						},
+					})
+				if err != nil {
+					return nil, err
+				}
 				diffup := &schemapb.DiffUpdate{
-					Path:           upd.GetPath(),
-					MainValue:      n[0].GetUpdate()[0].GetValue(),
-					CandidateValue: upd.GetValue(),
+					Path:           p.GetPath(),
+					MainValue:      mainVal,
+					CandidateValue: candVal,
+				}
+				diffRsp.Diff = append(diffRsp.Diff, diffup)
+			case len(change.Delete) != 0:
+				// read value from main
+				values := d.cacheClient.Read(ctx, req.GetName(), cachepb.Store_CONFIG, [][]string{change.Delete})
+				if len(values) == 0 {
+					continue
+				}
+				val, err := values[0].Value()
+				if err != nil {
+					return nil, err
+				}
+
+				// get path from schema server
+				p, err := d.schemaClient.ToPath(ctx,
+					&schemapb.ToPathRequest{
+						PathElement: change.Delete,
+						Schema: &schemapb.Schema{
+							Name:    d.config.Schema.Name,
+							Vendor:  d.config.Schema.Vendor,
+							Version: d.config.Schema.Version,
+						},
+					})
+				if err != nil {
+					return nil, err
+				}
+
+				diffup := &schemapb.DiffUpdate{
+					Path:      p.GetPath(),
+					MainValue: val,
 				}
 				diffRsp.Diff = append(diffRsp.Diff, diffup)
 			}
@@ -369,7 +313,7 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *schemapb.Update) er
 	// 2.validate that the value is compliant with the schema
 
 	// 1. validate the path
-	rsp, err := d.validatePath(ctx, upd.GetPath())
+	rsp, err := d.getSchema(ctx, upd.GetPath())
 	if err != nil {
 		return err
 	}
@@ -398,60 +342,78 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *schemapb.Update) er
 	return nil
 }
 
-func (d *Datastore) validatePath(ctx context.Context, p *schemapb.Path) (*schemapb.GetSchemaResponse, error) {
-	return d.schemaClient.GetSchema(ctx,
-		&schemapb.GetSchemaRequest{
-			Path:   p,
-			Schema: d.Schema().GetSchema(),
-		})
-}
+func (d *Datastore) validateMustStatement(ctx context.Context, candidateName string, p *schemapb.Path) (bool, error) {
+	// normalizedPaths will contain the provided path. If the last path.elems contins one or more keys, these will be
+	// taken and appended to the path. The must statements have to be checked for all of the key elements.
+	var normalizedPaths []*schemapb.Path
 
-func validateMustStatement(ctx context.Context, d *Datastore, p *schemapb.Path, headTree *ctree.Tree, rsp *schemapb.GetSchemaResponse) (bool, error) {
-
-	var mustStatements []*schemapb.MustStatement
-	switch rsp.GetSchema().(type) {
-	case *schemapb.GetSchemaResponse_Container:
-		mustStatements = rsp.GetContainer().GetMustStatements()
-	case *schemapb.GetSchemaResponse_Leaflist:
-		mustStatements = rsp.GetLeaflist().GetMustStatements()
-	case *schemapb.GetSchemaResponse_Field:
-		mustStatements = rsp.GetField().GetMustStatements()
+	// this is to massage for instance
+	// /bfd/subinterface[id=ethernet-1.25] -> /bfd/subinterface[id=ethernet-1.25]/id
+	// because we need to resolve down to id, to retrieve the relevant must statements
+	// further there can be more then just a single key.
+	if len(p.Elem[len(p.Elem)-1].Key) > 0 {
+		for k, _ := range p.Elem[len(p.Elem)-1].Key {
+			// clone p as new path
+			newPath := proto.Clone(p).(*schemapb.Path)
+			// take the key attribute name and add it as the new path.elem
+			newPath.Elem = append(newPath.Elem, &schemapb.PathElem{Name: k})
+			// add the result to the normalized Paths
+			normalizedPaths = append(normalizedPaths, newPath)
+		}
+	} else {
+		// no keys attached to last path.elem, simply add the path
+		normalizedPaths = append(normalizedPaths, p)
 	}
 
-	for _, must := range mustStatements {
-		// extract actual must statement
-		exprStr := must.Statement
-		// init a ProgramBuilder
-		prgbuilder := xpath.NewProgBuilder(exprStr)
-		// init an ExpressionLexer
-		lexer := expr.NewExprLex(exprStr, prgbuilder, nil)
-		// parse the provided Must-Expression
-		lexer.Parse()
-		prog, err := lexer.CreateProgram(exprStr)
+	for _, checkPath := range normalizedPaths {
+		rsp, err := d.getSchema(ctx, checkPath)
 		if err != nil {
 			return false, err
 		}
 
-		machine := xpath.NewMachine(exprStr, prog, exprStr)
-		// create a context that takes the machine, but also also the references to the actual yang entrity.
-		schema := &schemapb.Schema{Name: d.config.Schema.Name, Version: d.config.Schema.Version, Vendor: d.config.Schema.Vendor}
-		// run the must statement evaluation virtual machine
-		res1 := xpath.NewCtxFromCurrent(machine, p.Elem, headTree, schema, d.schemaClient, ctx).EnableValidation().Run()
+		var mustStatements []*schemapb.MustStatement
+		switch rsp.GetSchema().(type) {
+		case *schemapb.GetSchemaResponse_Container:
+			mustStatements = rsp.GetContainer().GetMustStatements()
+		case *schemapb.GetSchemaResponse_Leaflist:
+			mustStatements = rsp.GetLeaflist().GetMustStatements()
+		case *schemapb.GetSchemaResponse_Field:
+			mustStatements = rsp.GetField().GetMustStatements()
+		}
 
-		// retrieve the boolean result of the execution
-		result, err := res1.GetBoolResult()
-		if !result || err != nil {
-			if err == nil {
-				err = fmt.Errorf(must.Error)
+		for _, must := range mustStatements {
+			// extract actual must statement
+			exprStr := must.Statement
+			// init a ProgramBuilder
+			prgbuilder := xpath.NewProgBuilder(exprStr)
+			// init an ExpressionLexer
+			lexer := expr.NewExprLex(exprStr, prgbuilder, nil)
+			// parse the provided Must-Expression
+			lexer.Parse()
+			prog, err := lexer.CreateProgram(exprStr)
+			if err != nil {
+				return false, err
 			}
-			return result, err
+
+			machine := xpath.NewMachine(exprStr, prog, exprStr)
+
+			// run the must statement evaluation virtual machine
+			res1 := xpath.NewCtxFromCurrent(ctx, machine, p.Elem, d.getValidationClient(), candidateName).EnableValidation().Run()
+
+			// retrieve the boolean result of the execution
+			result, err := res1.GetBoolResult()
+			if !result || err != nil {
+				if err == nil {
+					err = fmt.Errorf(must.Error)
+				}
+				return result, err
+			}
 		}
 	}
 	return true, nil
 }
 
 func validateFieldValue(f *schemapb.LeafSchema, v any) error {
-	// TODO: eval must statements
 	return validateLeafTypeValue(f.GetType(), v)
 }
 

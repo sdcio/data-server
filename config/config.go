@@ -19,6 +19,7 @@ type Config struct {
 	Schemas      []*SchemaConfig     `yaml:"schemas,omitempty" json:"schemas,omitempty"`
 	Datastores   []*DatastoreConfig  `yaml:"datastores,omitempty" json:"datastores,omitempty"`
 	SchemaServer *RemoteSchemaServer `yaml:"schema-server,omitempty" json:"schema-server,omitempty"`
+	Cache        *CacheConfig        `yaml:"cache,omitempty" json:"cache,omitempty"`
 	Prometheus   *PromConfig         `yaml:"prometheus,omitempty" json:"prometheus,omitempty"`
 }
 
@@ -66,6 +67,12 @@ func (c *Config) validateSetDefaults() error {
 		if err := sc.validateSetDefaults(); err != nil {
 			return err
 		}
+	}
+	if c.Cache == nil {
+		c.Cache = &CacheConfig{}
+	}
+	if err = c.Cache.validateSetDefaults(); err != nil {
+		return err
 	}
 	return nil
 }
