@@ -64,9 +64,6 @@ type CacheConfig struct {
 
 func (ds *DatastoreConfig) validateSetDefaults() error {
 	var err error
-	if err = ds.Schema.validateSetDefaults(); err != nil {
-		return err
-	}
 	if err = ds.SBI.validateSetDefaults(); err != nil {
 		return err
 	}

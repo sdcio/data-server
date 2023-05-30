@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -12,11 +13,10 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	cconfig "github.com/iptecharch/cache/config"
-	"github.com/iptecharch/schema-server/cache"
-	"github.com/iptecharch/schema-server/config"
-	"github.com/iptecharch/schema-server/datastore"
+	"github.com/iptecharch/data-server/cache"
+	"github.com/iptecharch/data-server/config"
+	"github.com/iptecharch/data-server/datastore"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
-	"github.com/iptecharch/schema-server/schema"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -36,14 +36,10 @@ type Server struct {
 
 	cfn context.CancelFunc
 
-	ms      *sync.RWMutex
-	schemas map[string]*schema.Schema
-
 	md         *sync.RWMutex
 	datastores map[string]*datastore.Datastore // datastore group with sbi
 
 	srv *grpc.Server
-	schemapb.UnimplementedSchemaServerServer
 	schemapb.UnimplementedDataServerServer
 
 	router *mux.Router
@@ -60,9 +56,6 @@ func NewServer(c *config.Config) (*Server, error) {
 	var s = &Server{
 		config: c,
 		cfn:    cancel,
-
-		ms:      &sync.RWMutex{},
-		schemas: make(map[string]*schema.Schema, len(c.Schemas)),
 
 		md:         &sync.RWMutex{},
 		datastores: make(map[string]*datastore.Datastore),
@@ -112,17 +105,7 @@ func NewServer(c *config.Config) (*Server, error) {
 	}
 
 	s.srv = grpc.NewServer(opts...)
-	// register Schema server gRPC Methods
-	if c.GRPCServer.SchemaServer != nil && c.GRPCServer.SchemaServer.Enabled {
-		for _, sCfg := range c.Schemas {
-			sc, err := schema.NewSchema(sCfg)
-			if err != nil {
-				return nil, fmt.Errorf("schema %s parsing failed: %v", sCfg.Name, err)
-			}
-			s.schemas[sc.UniqueName()] = sc
-		}
-		schemapb.RegisterSchemaServerServer(s.srv, s)
-	}
+
 	// register Data server gRPC Methods
 	if c.GRPCServer.DataServer != nil && c.GRPCServer.DataServer.Enabled {
 		schemapb.RegisterDataServerServer(s.srv, s)
@@ -220,39 +203,47 @@ SCHEMA_CONNECT:
 }
 
 func (s *Server) CreateCacheClient(ctx context.Context) {
+START:
+	var err error
 	switch s.config.Cache.Type {
-	// default:
-	// 	return fmt.Errorf("unknown cache type %q", s.config.Cache.StoreType)
+	default:
+		fmt.Fprintf(os.Stderr, "unknown cache type: %s", s.config.Cache.Type)
+		os.Exit(1)
 	case "local":
-		log.Infof("initializing local cache client")
-		s.cacheClient = cache.NewLocalCache(&cconfig.CacheConfig{
-			MaxCaches: -1,
-			StoreType: s.config.Cache.StoreType,
-			Dir:       s.config.Cache.Dir,
-		})
-
-	case "remote":
-		log.Infof("initializing remote cache client")
-		var err error
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				log.Errorf("failed to connect to cache: %v", err)
-				return
-			case <-ticker.C:
-				s.cacheClient, err = cache.NewRemoteCache(ctx, s.config.Cache.Address)
-				if err != nil {
-					log.Errorf("failed to connect to cache: %v", err)
-					continue
-				}
-				log.Infof("connected to remote cache")
-				return
-			}
+		err = s.createLocalCacheClient(ctx)
+		if err != nil {
+			log.Errorf("failed to initialize a local cache client: %v", err)
+			time.Sleep(time.Second)
+			goto START
 		}
+		log.Infof("local cache created")
+	case "remote":
+		err = s.createRemoteCacheClient(ctx)
+		if err != nil {
+			log.Errorf("failed to initialize a remote cache client: %v", err)
+			time.Sleep(time.Second)
+			goto START
+		}
+		log.Infof("connected to remote cache")
 	}
+}
+
+func (s *Server) createLocalCacheClient(ctx context.Context) error {
+	var err error
+	log.Infof("initializing local cache client")
+	s.cacheClient, err = cache.NewLocalCache(&cconfig.CacheConfig{
+		MaxCaches: -1,
+		StoreType: s.config.Cache.StoreType,
+		Dir:       s.config.Cache.Dir,
+	})
+	return err
+}
+
+func (s *Server) createRemoteCacheClient(ctx context.Context) error {
+	log.Infof("initializing remote cache client")
+	var err error
+	s.cacheClient, err = cache.NewRemoteCache(ctx, s.config.Cache.Address)
+	return err
 }
 
 func (s *Server) createDatastores() {

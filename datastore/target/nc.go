@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/iptecharch/schema-server/config"
-	"github.com/iptecharch/schema-server/datastore/target/netconf"
-	"github.com/iptecharch/schema-server/datastore/target/netconf/driver/scrapligo"
+	"github.com/iptecharch/data-server/config"
+	"github.com/iptecharch/data-server/datastore/target/netconf"
+	"github.com/iptecharch/data-server/datastore/target/netconf/driver/scrapligo"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	log "github.com/sirupsen/logrus"
 )

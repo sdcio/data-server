@@ -1,6 +1,6 @@
 package netconf
 
-import "github.com/iptecharch/schema-server/datastore/target/netconf/types"
+import "github.com/iptecharch/data-server/datastore/target/netconf/types"
 
 type Driver interface {
 	// Get config or state

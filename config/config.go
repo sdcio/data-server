@@ -16,7 +16,6 @@ import (
 
 type Config struct {
 	GRPCServer   *GRPCServer         `yaml:"grpc-server,omitempty" json:"grpc-server,omitempty"`
-	Schemas      []*SchemaConfig     `yaml:"schemas,omitempty" json:"schemas,omitempty"`
 	Datastores   []*DatastoreConfig  `yaml:"datastores,omitempty" json:"datastores,omitempty"`
 	SchemaServer *RemoteSchemaServer `yaml:"schema-server,omitempty" json:"schema-server,omitempty"`
 	Cache        *CacheConfig        `yaml:"cache,omitempty" json:"cache,omitempty"`
@@ -63,11 +62,6 @@ func (c *Config) validateSetDefaults() error {
 			return err
 		}
 	}
-	for _, sc := range c.Schemas {
-		if err := sc.validateSetDefaults(); err != nil {
-			return err
-		}
-	}
 	if c.Cache == nil {
 		c.Cache = &CacheConfig{}
 	}
@@ -85,7 +79,6 @@ type RemoteSchemaServer struct {
 type GRPCServer struct {
 	Address        string        `yaml:"address,omitempty" json:"address,omitempty"`
 	TLS            *TLS          `yaml:"tls,omitempty" json:"tls,omitempty"`
-	SchemaServer   *SchemaServer `yaml:"schema-server,omitempty" json:"schema-server,omitempty"`
 	DataServer     *DataServer   `yaml:"data-server,omitempty" json:"data-server,omitempty"`
 	MaxRecvMsgSize int           `yaml:"max-recv-msg-size,omitempty" json:"max-recv-msg-size,omitempty"`
 	RPCTimeout     time.Duration `yaml:"rpc-timeout,omitempty" json:"rpc-timeout,omitempty"`
@@ -119,11 +112,6 @@ func (t *TLS) NewConfig(ctx context.Context) (*tls.Config, error) {
 		tlsCfg.GetCertificate = certWatcher.GetCertificate
 	}
 	return tlsCfg, nil
-}
-
-type SchemaServer struct {
-	Enabled          bool   `yaml:"enabled,omitempty" json:"enabled,omitempty"`
-	SchemasDirectory string `yaml:"schemas-directory,omitempty" json:"schemas-directory,omitempty"`
 }
 
 type DataServer struct {

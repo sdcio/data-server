@@ -1,9 +1,9 @@
 package clients
 
 import (
-	"github.com/iptecharch/schema-server/cache"
-	CacheClient "github.com/iptecharch/schema-server/datastore/clients/cache"
-	SchemaClient "github.com/iptecharch/schema-server/datastore/clients/schema"
+	"github.com/iptecharch/data-server/cache"
+	CacheClient "github.com/iptecharch/data-server/datastore/clients/cache"
+	SchemaClient "github.com/iptecharch/data-server/datastore/clients/schema"
 	"github.com/iptecharch/schema-server/protos/schema_server"
 )
 

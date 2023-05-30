@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/AlekSi/pointer"
-	"github.com/iptecharch/schema-server/config"
+	"github.com/iptecharch/data-server/config"
+	"github.com/iptecharch/data-server/utils"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
-	"github.com/iptecharch/schema-server/utils"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	gapi "github.com/openconfig/gnmic/api"
 	gtarget "github.com/openconfig/gnmic/target"

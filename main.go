@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/iptecharch/schema-server/config"
-	"github.com/iptecharch/schema-server/server"
+	"github.com/iptecharch/data-server/config"
+	"github.com/iptecharch/data-server/server"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
@@ -17,7 +17,7 @@ var debug bool
 var trace bool
 
 func main() {
-	pflag.StringVarP(&configFile, "config", "c", "schema-server.yaml", "config file path")
+	pflag.StringVarP(&configFile, "config", "c", "data-server.yaml", "config file path")
 	pflag.BoolVarP(&debug, "debug", "d", false, "set log level to DEBUG")
 	pflag.BoolVarP(&trace, "trace", "t", false, "set log level to TRACE")
 	pflag.Parse()

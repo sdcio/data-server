@@ -9,12 +9,6 @@ grpc-server:
   #   key:
   #   skip-verify:
  
-  schema-server: 
-    # if true, enables schema RPCs
-    enabled: true
-    # directory to store the uploaded schemas
-    schemas-directory: ./schemas
-  
   data-server:
     # if true, enables datastore and data RPCs
     enabled: true
@@ -23,51 +17,6 @@ grpc-server:
   # max message size in bytes the server can receive. 
   # If this is not set, it defaults to 4 * 1024 * 1024 (4MB)
   max-recv-msg-size: 25165824
-  
-schemas:
-  - name: srl
-    vendor: Nokia
-    version: 22.11.1
-    files:
-      - ./lab/common/yang/srl-22.11.1/srl_nokia/models
-    directories:
-      - ./lab/common/yang/srl-22.11.1/ietf
-    excludes:
-      - .*tools.*
-  - name: srl
-    vendor: Nokia
-    version: 22.6.4
-    files:
-      - ./lab/common/yang/srl-22.6.4/srl_nokia/models
-    directories:
-      - ./lab/common/yang/srl-22.6.4/ietf
-    excludes:
-      - .*tools.*
-  - name: srl
-    vendor: Nokia
-    version: 22.3.2
-    files:
-      - ./lab/common/yang/srl-22.3.2/srl_nokia/models
-    directories:
-      - ./lab/common/yang/srl-22.3.2/ietf
-    excludes:
-      - .*tools.*
-  - name: srl
-    vendor: Nokia
-    version: 21.11.3
-    files:
-      - ./lab/common/yang/srl-21.11.3/srl_nokia/models
-    directories:
-      - ./lab/common/yang/srl-21.11.3/ietf
-    excludes:
-      - .*tools.*
-  - name: junos
-    vendor: Juniper
-    version: 22.3R1
-    files:
-      - ./lab/common/yang/junos-22.3R1/models
-    directories:
-      - ./lab/common/yang/junos-22.3R1/common
 
 datastores: # this specifies MAIN datastores
   - name: srl1

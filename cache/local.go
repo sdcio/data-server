@@ -17,13 +17,18 @@ type localCache struct {
 	c cache.Cache[*schemapb.TypedValue]
 }
 
-func NewLocalCache(cfg *config.CacheConfig) Client {
-	return &localCache{
+func NewLocalCache(cfg *config.CacheConfig) (Client, error) {
+	lc := &localCache{
 		c: cache.New(cfg,
 			func() *schemapb.TypedValue {
 				return &schemapb.TypedValue{}
 			}),
 	}
+	err := lc.c.Init(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+	return lc, nil
 }
 
 func (c *localCache) Create(ctx context.Context, name string, _ bool, _ bool) error {

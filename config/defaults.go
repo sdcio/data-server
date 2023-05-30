@@ -6,6 +6,6 @@ const (
 	defaultRemoteCacheAddress = "localhost:50100"
 	defaultBufferSize         = 1000
 	defaultStoreType          = "badgerdb"
-	defaultCacheDir           = "/cached/caches"
+	defaultCacheDir           = "./cached/caches"
 	defaultWriteWorkers       = 16
 )

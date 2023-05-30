@@ -3,7 +3,7 @@ package target
 import (
 	"context"
 
-	"github.com/iptecharch/schema-server/config"
+	"github.com/iptecharch/data-server/config"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	log "github.com/sirupsen/logrus"
 )

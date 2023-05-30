@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/iptecharch/cache/proto/cachepb"
-	"github.com/iptecharch/schema-server/cache"
+	"github.com/iptecharch/data-server/cache"
+	"github.com/iptecharch/data-server/utils"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
-	"github.com/iptecharch/schema-server/utils"
 	"github.com/iptecharch/yang-parser/xpath"
 	"github.com/iptecharch/yang-parser/xpath/grammars/expr"
 	log "github.com/sirupsen/logrus"

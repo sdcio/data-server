@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/iptecharch/schema-server/config"
+	"github.com/iptecharch/data-server/config"
 	"google.golang.org/grpc"
 
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"

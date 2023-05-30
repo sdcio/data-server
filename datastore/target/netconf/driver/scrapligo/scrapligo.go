@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/beevik/etree"
-	"github.com/iptecharch/schema-server/config"
-	"github.com/iptecharch/schema-server/datastore/target/netconf/types"
+	"github.com/iptecharch/data-server/config"
+	"github.com/iptecharch/data-server/datastore/target/netconf/types"
 	scraplinetconf "github.com/scrapli/scrapligo/driver/netconf"
 	"github.com/scrapli/scrapligo/driver/options"
 	"github.com/scrapli/scrapligo/util"
