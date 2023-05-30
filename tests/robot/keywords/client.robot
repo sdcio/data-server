@@ -66,8 +66,23 @@ LogMustStatements
         Log    ${item}
     END
 
+LogLeafRefStatements
+    [Documentation]    Takes vendor, name, version and a path, retrieves the schema for the given path, extracts the returned leafref_statements and logs them.
+    [Arguments]    ${name}    ${version}    ${vendor}    ${path}
+    ${schema} =     GetSchema     ${name}    ${version}    ${vendor}    ${path}
+    ${lref} =    _ExtractLeafRefStatements    ${schema.stdout}
+    FOR    ${item}    IN    @{lref}
+        Log    ${item}
+    END
+
 _ExtractMustStatements
     [Documentation]    Takes a GetSchema response and extracts the must_statements of the response. Returns an array with all the must_statements as a string array.
     [Arguments]    ${input}
     ${matches} =	Get Regexp Matches	${input}    must_statements:\\s*\{[\\s\\S]*?\}    flags=MULTILINE | IGNORECASE
+    RETURN    ${matches}
+
+_ExtractLeafRefStatements
+    [Documentation]    Takes a GetSchema response and extracts the leafref_statements of the response.
+    [Arguments]    ${input}
+    ${matches} =	Get Regexp Matches	${input}    leafref:\\s*".*"    flags=IGNORECASE
     RETURN    ${matches}

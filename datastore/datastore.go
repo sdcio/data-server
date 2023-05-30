@@ -2,14 +2,13 @@ package datastore
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/iptecharch/cache/proto/cachepb"
 	"github.com/iptecharch/schema-server/cache"
 	"github.com/iptecharch/schema-server/config"
+	"github.com/iptecharch/schema-server/datastore/clients"
 	"github.com/iptecharch/schema-server/datastore/target"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
@@ -29,6 +28,10 @@ type Datastore struct {
 
 	// schema server client
 	schemaClient schemapb.SchemaServerClient
+
+	// client, bound to schema and version on the schema side and to datastore name on the cache side
+	// do not use directly use getValidationClient()
+	_validationClientBound *clients.ValidationClient
 
 	// sync channel, to be passed to the SBI Sync method
 	synCh chan *target.SyncUpdate
@@ -69,7 +72,7 @@ func (d *Datastore) initCache(ctx context.Context) {
 START:
 	ok, err := d.cacheClient.Exists(ctx, d.config.Name)
 	if err != nil {
-		log.Errorf("failed to check cache instance %s", d.config.Name)
+		log.Errorf("failed to check cache instance %s, %s", d.config.Name, err)
 		time.Sleep(time.Second)
 		goto START
 	}
@@ -148,29 +151,16 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 
 	// validate MUST statements
 	for _, upd := range notification.GetUpdate() {
-		rsp, err := d.validatePath(ctx, upd.GetPath())
+		_, err = d.validateMustStatement(ctx, req.GetDatastore().GetName(), upd.GetPath())
 		if err != nil {
 			return err
 		}
-
-		log.Debugf("commit ds=%s path valid: %v", d.Name(), rsp)
-		// TODO: headTree not needed anymore,
-		// now that validateMustStatement is a method of datastore,
-		// it has access to the cacheClient
-
-		// TODO: put back
-		// _, err = d.validateMustStatement(ctx, upd.GetPath(), nil, rsp)
-		// if err != nil {
-		// 	return err
-		// }
-		// TODO: end
 	}
 
 	for _, upd := range notification.GetUpdate() {
 		err = d.validateLeafRef(ctx, upd, name)
 		if err != nil {
 			return err
-
 		}
 	}
 	// push updates to sbi
@@ -268,20 +258,14 @@ func (d *Datastore) Sync(ctx context.Context) {
 
 func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, candidate string) error {
 	done := make(chan struct{})
-	ch, err := d.getSchemaElements(ctx, upd.GetPath(), done)
+	ch, err := d.getValidationClient().GetSchemaElements(ctx, upd.GetPath(), done)
 	if err != nil {
 		return err
 	}
 	defer close(done)
 	//
 	peIndex := 0
-	var pe *schemapb.PathElem
 	numPE := len(upd.GetPath().GetElem())
-	cacheName := d.config.Name
-	if candidate != "" {
-		cacheName = fmt.Sprintf("%s/%s", d.config.Name, candidate)
-	}
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -294,7 +278,6 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, c
 				// should not happen if the path has been properly validated
 				return fmt.Errorf("received more schema elements than pathElem")
 			}
-			pe = upd.GetPath().GetElem()[peIndex]
 			peIndex++
 			switch sch := sch.Schema.(type) {
 			case *schemapb.GetSchemaResponse_Container:
@@ -303,50 +286,42 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, c
 					if keySchema.GetType().GetType() != "leafref" {
 						continue
 					}
-					//
 					leafRefPath, err := utils.StripPathElemPrefix(keySchema.GetType().GetLeafref())
 					if err != nil {
 						return err
 					}
-					log.Debugf("validating leafRef key %q: %q", keySchema.Name, leafRefPath)
-					cp, err := utils.CompletePathFromString(leafRefPath)
-					if err != nil {
-						return err
-					}
-					pLen := len(cp)
-					if pLen == 0 {
-						return fmt.Errorf("could not determine reference path for ContainerKey %q: got %q", keySchema.Name, leafRefPath)
-					}
-
-					keyValue := pe.GetKey()[cp[pLen-1]]
-					referencePath := append(cp[:pLen-1], keyValue)
-					updates := d.cacheClient.Read(ctx, cacheName, cachepb.Store_CONFIG, [][]string{referencePath})
-					if updates == nil {
-						return fmt.Errorf("missing leaf reference %q: %q", leafRefPath, keyValue)
-					}
+					return d.resolveLeafref(ctx, candidate, leafRefPath, upd.GetValue().GetStringVal())
 				}
 			case *schemapb.GetSchemaResponse_Field:
 				if sch.Field.GetType().GetType() != "leafref" {
 					continue
 				}
+				// remove namespace elements from path /foo:interface/bar:subinterface -> /interface/subinterface
 				leafRefPath, err := utils.StripPathElemPrefix(sch.Field.GetType().GetLeafref())
 				if err != nil {
 					return err
 				}
-				cp, err := utils.CompletePathFromString(leafRefPath)
-				if err != nil {
-					return err
-				}
-				pLen := len(cp)
-				if pLen == 0 {
-					return fmt.Errorf("could not determine reference path for field %q: got %q", sch.Field.Name, leafRefPath)
-				}
-				// TODO: update when stored values are not stringVal anymore
-				referencePath := append(cp, upd.GetValue().GetStringVal())
-				updates := d.cacheClient.Read(ctx, cacheName, cachepb.Store_CONFIG, [][]string{referencePath})
-				if updates == nil {
-					return fmt.Errorf("missing leaf reference %q: %q", leafRefPath, upd.GetValue().GetStringVal())
-				}
+
+				return d.resolveLeafref(ctx, candidate, leafRefPath, upd.GetValue().GetStringVal())
+
+				// prgbuilder := xpath.NewProgBuilder(leafRefPath)
+				// // init an ExpressionLexer
+				// lexer := expr.NewExprLex(leafRefPath, prgbuilder, nil)
+				// // parse the provided Must-Expression
+				// lexer.Parse()
+				// prog, err := lexer.CreateProgram(leafRefPath)
+				// if err != nil {
+				// 	return err
+				// }
+
+				// machine := xpath.NewMachine(leafRefPath, prog, leafRefPath)
+
+				// // run the must statement evaluation virtual machine
+				// res1 := xpath.NewCtxFromCurrent(ctx, machine, upd.Path.Elem, d.getValidationClient(), candidate).EnableValidation().Run()
+
+				// resu, err := res1.GetLiteralResult()
+				// _ = resu
+
 			case *schemapb.GetSchemaResponse_Leaflist:
 				if sch.Leaflist.GetType().GetType() != "leafref" {
 					continue
@@ -359,6 +334,43 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, c
 			}
 		}
 	}
+}
+
+func (d *Datastore) resolveLeafref(ctx context.Context, candidate, leafRefPath string, value string) error {
+	// parse the string into a *schemapb.Path
+	p, err := utils.ParsePath(leafRefPath)
+	if err != nil {
+		return err
+	}
+
+	// Subsequent Process:
+	// now we remove the last element of the referenced path
+	// adding its name to the one before last element as a key
+	// with the value of the item that we're validating the leafref for
+
+	pLen := len(p.Elem)
+	// extract one before the last path elements element
+	keyAddedLastElem := p.Elem[pLen-2]
+	// add the Key map
+	if keyAddedLastElem.Key == nil {
+		keyAddedLastElem.Key = map[string]string{}
+	}
+	// add the updates value as the value under the key, which is the initial last element of the leafref path
+	keyAddedLastElem.Key[p.Elem[pLen-1].Name] = value
+	// reconstruct the path, the leafref points to, with the path except for the last two elements
+	// and the altered penultimate element
+	p.Elem = append(p.Elem[:pLen-2], keyAddedLastElem)
+
+	// TODO: update when stored values are not stringVal anymore
+	data, err := d.getValidationClient().GetValue(ctx, candidate, p)
+	if err != nil {
+		return err
+	}
+
+	if data == nil {
+		return fmt.Errorf("missing leaf reference %q: %q", leafRefPath, value)
+	}
+	return nil
 }
 
 func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate, sem *semaphore.Weighted) {
@@ -423,34 +435,9 @@ func (d *Datastore) getSchema(ctx context.Context, p *schemapb.Path) (*schemapb.
 	})
 }
 
-func (d *Datastore) getSchemaElements(ctx context.Context, p *schemapb.Path, done chan struct{}) (chan *schemapb.GetSchemaResponse, error) {
-	stream, err := d.schemaClient.GetSchemaElements(ctx, &schemapb.GetSchemaRequest{
-		Path:   p,
-		Schema: d.Schema().GetSchema(),
-	})
-	if err != nil {
-		return nil, err
-	}
-	ch := make(chan *schemapb.GetSchemaResponse)
-	go func() {
-		defer close(ch)
-		for {
-			r, err := stream.Recv()
-			if errors.Is(err, io.EOF) {
-				return
-			}
-			if err != nil {
-				log.Errorf("GetSchemaElements stream err: %v", err)
-				return
-			}
-			select {
-			case <-done:
-				return
-			case ch <- r:
-			}
-		}
-	}()
-	return ch, nil
+func (d *Datastore) validatePath(ctx context.Context, p *schemapb.Path) error {
+	_, err := d.getSchema(ctx, p)
+	return err
 }
 
 func (d *Datastore) toPath(ctx context.Context, p []string) (*schemapb.Path, error) {
@@ -498,4 +485,15 @@ func (d *Datastore) changesToUpdates(ctx context.Context, changes []*cache.Chang
 		}
 	}
 	return notif, nil
+}
+
+// getValidationClient will create a ValidationClient instance if not already existing
+// save it as part of the datastore and return a valid *clients.ValidationClient
+func (d *Datastore) getValidationClient() *clients.ValidationClient {
+	// if not initialized, init it, cache it
+	if d._validationClientBound == nil {
+		d._validationClientBound = clients.NewValidationClient(d.Name(), d.cacheClient, d.Schema().GetSchema(), d.schemaClient)
+	}
+	// return the bound validation client
+	return d._validationClientBound
 }

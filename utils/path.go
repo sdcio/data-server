@@ -291,6 +291,17 @@ func StripPathElemPrefix(p string) (string, error) {
 		if i := strings.Index(pe.Name, ":"); i > 0 {
 			pe.Name = pe.Name[i+1:]
 		}
+		// delete prefix from keys
+		for k, v := range pe.Key {
+			if i := strings.Index(k, ":"); i > 0 {
+				delete(pe.Key, k)
+				pe.Key[k[i+1:]] = v
+			}
+		}
 	}
-	return ToXPath(sp, false), nil
+	prefix := ""
+	if strings.HasPrefix(strings.TrimSpace(p), "/") {
+		prefix = "/"
+	}
+	return prefix + ToXPath(sp, false), nil
 }
