@@ -17,7 +17,7 @@ var datastoreDiscardCmd = &cobra.Command{
 	Use:          "discard",
 	Short:        "discard changes made to a candidate datastore",
 	SilenceUsage: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx, cancel := context.WithCancel(cmd.Context())
 		defer cancel()
 		dataClient, err := createDataClient(ctx, addr)

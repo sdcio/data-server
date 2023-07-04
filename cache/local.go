@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/iptecharch/cache/cache"
 	"github.com/iptecharch/cache/config"
@@ -134,8 +135,18 @@ func (c *localCache) ReadCh(ctx context.Context, name string, store cachepb.Stor
 		cStore = cache.StoreState
 	}
 	outCh := make(chan Update)
+
+	wg := new(sync.WaitGroup)
+	wg.Add(len(paths))
+
+	go func() {
+		wg.Wait()
+		close(outCh)
+	}()
+
 	for _, p := range paths {
 		go func(p []string) { // TODO: limit num of goroutines ?
+			defer wg.Done()
 			ch, err := c.c.ReadValue(ctx, name, cStore, p)
 			if err != nil {
 				log.Errorf("failed to read path %v: %v", p, err)
@@ -145,7 +156,13 @@ func (c *localCache) ReadCh(ctx context.Context, name string, store cachepb.Stor
 				select {
 				case <-ctx.Done():
 					return
-				case upd := <-ch:
+				case upd, ok := <-ch:
+					if !ok {
+						return
+					}
+					if upd == nil {
+						continue
+					}
 					outCh <- &localUpdate{
 						path: upd.P,
 						tv:   upd.V,

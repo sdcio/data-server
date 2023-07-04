@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/iptecharch/data-server/config"
+	"github.com/iptecharch/data-server/schema"
 	"google.golang.org/grpc"
 
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
@@ -18,7 +19,7 @@ type Target interface {
 	Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate)
 }
 
-func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemapb.SchemaServerClient, schema *schemapb.Schema, opts ...grpc.DialOption) (Target, error) {
+func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schema.Client, schema *schemapb.Schema, opts ...grpc.DialOption) (Target, error) {
 	switch cfg.Type {
 	case "gnmi":
 		return newGNMITarget(ctx, name, cfg, opts...)

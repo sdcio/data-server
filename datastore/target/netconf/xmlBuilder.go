@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/beevik/etree"
+	"github.com/iptecharch/data-server/schema"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 )
 
@@ -12,13 +13,13 @@ import (
 // and a valid configuration or filter document can be crafted.
 type XMLConfigBuilder struct {
 	doc            *etree.Document
-	schemaClient   schemapb.SchemaServerClient
+	schemaClient   schema.Client
 	schema         *schemapb.Schema
 	honorNamespace bool
 }
 
 // NewXMLConfigBuilder returns a new XMLConfigBuilder instance
-func NewXMLConfigBuilder(ssc schemapb.SchemaServerClient, schema *schemapb.Schema, honorNamespace bool) *XMLConfigBuilder {
+func NewXMLConfigBuilder(ssc schema.Client, schema *schemapb.Schema, honorNamespace bool) *XMLConfigBuilder {
 	return &XMLConfigBuilder{
 		doc:            etree.NewDocument(),
 		schemaClient:   ssc,

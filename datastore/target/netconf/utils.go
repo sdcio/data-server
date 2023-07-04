@@ -6,18 +6,18 @@ import (
 	"strings"
 
 	"github.com/beevik/etree"
-	"github.com/iptecharch/schema-server/datastore/target/netconf/conversion"
+	"github.com/iptecharch/data-server/datastore/target/netconf/conversion"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 )
 
 func getNamespaceFromGetSchemaResponse(sr *schemapb.GetSchemaResponse) string {
-	switch sr.Schema.(type) {
-	case *schemapb.GetSchemaResponse_Container:
-		return sr.GetContainer().GetNamespace()
-	case *schemapb.GetSchemaResponse_Field:
-		return sr.GetField().GetNamespace()
-	case *schemapb.GetSchemaResponse_Leaflist:
-		return sr.GetLeaflist().GetNamespace()
+	switch sr.GetSchema().Schema.(type) {
+	case *schemapb.SchemaElem_Container:
+		return sr.Schema.GetContainer().GetNamespace()
+	case *schemapb.SchemaElem_Field:
+		return sr.Schema.GetField().GetNamespace()
+	case *schemapb.SchemaElem_Leaflist:
+		return sr.Schema.GetLeaflist().GetNamespace()
 	}
 	return ""
 }

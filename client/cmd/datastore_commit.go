@@ -17,7 +17,7 @@ var datastoreCommitCmd = &cobra.Command{
 	Use:          "commit",
 	Short:        "commit candidate datastore to target",
 	SilenceUsage: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx, cancel := context.WithCancel(cmd.Context())
 		defer cancel()
 		dataClient, err := createDataClient(ctx, addr)

@@ -9,17 +9,19 @@ import (
 	"os"
 	"time"
 
+	schemaConfig "github.com/iptecharch/schema-server/config"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 )
 
 type Config struct {
-	GRPCServer   *GRPCServer         `yaml:"grpc-server,omitempty" json:"grpc-server,omitempty"`
-	Datastores   []*DatastoreConfig  `yaml:"datastores,omitempty" json:"datastores,omitempty"`
-	SchemaServer *RemoteSchemaServer `yaml:"schema-server,omitempty" json:"schema-server,omitempty"`
-	Cache        *CacheConfig        `yaml:"cache,omitempty" json:"cache,omitempty"`
-	Prometheus   *PromConfig         `yaml:"prometheus,omitempty" json:"prometheus,omitempty"`
+	GRPCServer   *GRPCServer                  `yaml:"grpc-server,omitempty" json:"grpc-server,omitempty"`
+	Schemas      []*schemaConfig.SchemaConfig `yaml:"schemas,omitempty" json:"schemas,omitempty"`
+	Datastores   []*DatastoreConfig           `yaml:"datastores,omitempty" json:"datastores,omitempty"`
+	SchemaServer *RemoteSchemaServer          `yaml:"schema-server,omitempty" json:"schema-server,omitempty"`
+	Cache        *CacheConfig                 `yaml:"cache,omitempty" json:"cache,omitempty"`
+	Prometheus   *PromConfig                  `yaml:"prometheus,omitempty" json:"prometheus,omitempty"`
 }
 
 type TLS struct {
@@ -56,6 +58,13 @@ func (c *Config) validateSetDefaults() error {
 	if c.GRPCServer.RPCTimeout <= 0 {
 		c.GRPCServer.RPCTimeout = time.Minute
 	}
+	// make sure either local or remote schema stores are enabled
+	if c.Schemas != nil && c.SchemaServer != nil {
+		return errors.New("cannot define local schemas and a remote schema server at the same time")
+	}
+	if (c.Schemas == nil && c.SchemaServer == nil) && (c.GRPCServer.SchemaServer == nil || !c.GRPCServer.SchemaServer.Enabled) {
+		return errors.New("schema-server RPCs must be exposed if no schemas are defined at startup")
+	}
 	var err error
 	for _, ds := range c.Datastores {
 		if err = ds.validateSetDefaults(); err != nil {
@@ -79,6 +88,7 @@ type RemoteSchemaServer struct {
 type GRPCServer struct {
 	Address        string        `yaml:"address,omitempty" json:"address,omitempty"`
 	TLS            *TLS          `yaml:"tls,omitempty" json:"tls,omitempty"`
+	SchemaServer   *SchemaServer `yaml:"schema-server,omitempty" json:"schema-server,omitempty"`
 	DataServer     *DataServer   `yaml:"data-server,omitempty" json:"data-server,omitempty"`
 	MaxRecvMsgSize int           `yaml:"max-recv-msg-size,omitempty" json:"max-recv-msg-size,omitempty"`
 	RPCTimeout     time.Duration `yaml:"rpc-timeout,omitempty" json:"rpc-timeout,omitempty"`
@@ -115,6 +125,11 @@ func (t *TLS) NewConfig(ctx context.Context) (*tls.Config, error) {
 }
 
 type DataServer struct {
-	Enabled       bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
-	MaxCandidates int  `yaml:"max-candidates,omitempty" json:"max-candidates,omitempty"`
+	// Enabled       bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	MaxCandidates int `yaml:"max-candidates,omitempty" json:"max-candidates,omitempty"`
+}
+
+type SchemaServer struct {
+	Enabled          bool   `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	SchemasDirectory string `yaml:"schemas-directory,omitempty" json:"schemas-directory,omitempty"`
 }
