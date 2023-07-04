@@ -7,6 +7,7 @@ import (
 	"github.com/iptecharch/data-server/config"
 	"github.com/iptecharch/data-server/datastore/target/netconf"
 	"github.com/iptecharch/data-server/datastore/target/netconf/driver/scrapligo"
+	"github.com/iptecharch/data-server/schema"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	log "github.com/sirupsen/logrus"
 )
@@ -14,12 +15,12 @@ import (
 type ncTarget struct {
 	name         string
 	driver       netconf.Driver
-	schemaClient schemapb.SchemaServerClient
+	schemaClient schema.Client
 	schema       *schemapb.Schema
 	sbi          *config.SBI
 }
 
-func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient schemapb.SchemaServerClient, schema *schemapb.Schema) (*ncTarget, error) {
+func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient schema.Client, schema *schemapb.Schema) (*ncTarget, error) {
 
 	// create a new
 	d, err := scrapligo.NewScrapligoNetconfTarget(cfg)

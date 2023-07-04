@@ -10,6 +10,7 @@ import (
 	"github.com/iptecharch/data-server/config"
 	"github.com/iptecharch/data-server/datastore/clients"
 	"github.com/iptecharch/data-server/datastore/target"
+	"github.com/iptecharch/data-server/schema"
 	"github.com/iptecharch/data-server/utils"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	log "github.com/sirupsen/logrus"
@@ -27,7 +28,8 @@ type Datastore struct {
 	sbi target.Target
 
 	// schema server client
-	schemaClient schemapb.SchemaServerClient
+	// schemaClient schemapb.SchemaServerClient
+	schemaClient schema.Client
 
 	// client, bound to schema and version on the schema side and to datastore name on the cache side
 	// do not use directly use getValidationClient()
@@ -42,7 +44,7 @@ type Datastore struct {
 
 // New creates a new datastore, its schema server client and initializes the SBI target
 // func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Datastore {
-func New(c *config.DatastoreConfig, scc schemapb.SchemaServerClient, cc cache.Client, opts ...grpc.DialOption) *Datastore {
+func New(c *config.DatastoreConfig, scc schema.Client, cc cache.Client, opts ...grpc.DialOption) *Datastore {
 	ds := &Datastore{
 		config:       c,
 		schemaClient: scc,
@@ -140,17 +142,18 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 	if err != nil {
 		return err
 	}
-	log.Infof("%s:%s changes: %v", d.Name(), name, changes)
+	log.Debugf("%s:%s changes: %v", d.Name(), name, changes)
 	notification, err := d.changesToUpdates(ctx, changes)
 	if err != nil {
 		return err
 	}
-	log.Infof("%s:%s notification: %v", d.Name(), name, notification)
+	log.Debugf("%s:%s notification: %v", d.Name(), name, notification)
 	// TODO: consider if leafref validation
 	// needs to run before must statements validation
 
 	// validate MUST statements
 	for _, upd := range notification.GetUpdate() {
+		log.Debugf("%s:%s validating must statement on path: %v", d.Name(), name, upd.GetPath())
 		_, err = d.validateMustStatement(ctx, req.GetDatastore().GetName(), upd.GetPath())
 		if err != nil {
 			return err
@@ -158,6 +161,7 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 	}
 
 	for _, upd := range notification.GetUpdate() {
+		log.Debugf("%s:%s validating leafRef on update: %v", d.Name(), name, upd)
 		err = d.validateLeafRef(ctx, upd, name)
 		if err != nil {
 			return err
@@ -176,7 +180,7 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 	if err != nil {
 		return err
 	}
-	log.Infof("datastore %s/%s SetResponse from SBI: %v", d.config.Name, name, rsp)
+	log.Debugf("datastore %s/%s SetResponse from SBI: %v", d.config.Name, name, rsp)
 	if req.GetStay() {
 		// reset candidate changes and (TODO) rebase
 		return d.cacheClient.Discard(ctx, d.config.Name, name)
@@ -262,6 +266,7 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, c
 	if err != nil {
 		return err
 	}
+
 	defer close(done)
 	//
 	peIndex := 0
@@ -279,8 +284,8 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, c
 				return fmt.Errorf("received more schema elements than pathElem")
 			}
 			peIndex++
-			switch sch := sch.Schema.(type) {
-			case *schemapb.GetSchemaResponse_Container:
+			switch sch := sch.GetSchema().Schema.(type) {
+			case *schemapb.SchemaElem_Container:
 				// check if container keys are leafrefs
 				for _, keySchema := range sch.Container.GetKeys() {
 					if keySchema.GetType().GetType() != "leafref" {
@@ -292,7 +297,7 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, c
 					}
 					return d.resolveLeafref(ctx, candidate, leafRefPath, upd.GetValue().GetStringVal())
 				}
-			case *schemapb.GetSchemaResponse_Field:
+			case *schemapb.SchemaElem_Field:
 				if sch.Field.GetType().GetType() != "leafref" {
 					continue
 				}
@@ -322,7 +327,7 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, c
 				// resu, err := res1.GetLiteralResult()
 				// _ = resu
 
-			case *schemapb.GetSchemaResponse_Leaflist:
+			case *schemapb.SchemaElem_Leaflist:
 				if sch.Leaflist.GetType().GetType() != "leafref" {
 					continue
 				}
@@ -403,8 +408,8 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 				continue
 			}
 			// workaround, skip presence containers
-			switch r := scRsp.Schema.(type) {
-			case *schemapb.GetSchemaResponse_Container:
+			switch r := scRsp.GetSchema().Schema.(type) {
+			case *schemapb.SchemaElem_Container:
 				if r.Container.IsPresence {
 					continue
 				}

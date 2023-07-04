@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/iptecharch/schema-server/datastore/ctree"
+	"github.com/iptecharch/data-server/datastore/ctree"
 )
 
 var data1 = []struct {

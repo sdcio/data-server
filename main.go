@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/iptecharch/data-server/config"
@@ -15,12 +18,14 @@ import (
 var configFile string
 var debug bool
 var trace bool
+var stop bool
 
 func main() {
 	pflag.StringVarP(&configFile, "config", "c", "data-server.yaml", "config file path")
 	pflag.BoolVarP(&debug, "debug", "d", false, "set log level to DEBUG")
 	pflag.BoolVarP(&trace, "trace", "t", false, "set log level to TRACE")
 	pflag.Parse()
+
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	log.SetLevel(log.InfoLevel)
 	if debug {
@@ -29,6 +34,7 @@ func main() {
 	if trace {
 		log.SetLevel(log.TraceLevel)
 	}
+
 	var s *server.Server
 START:
 	if s != nil {
@@ -45,17 +51,35 @@ START:
 		os.Exit(1)
 	}
 	log.Infof("read config:\n%s", string(b))
-	s, err = server.NewServer(cfg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	setupCloseHandler(cancel)
+	s, err = server.New(ctx, cfg)
 	if err != nil {
 		log.Errorf("failed to create server: %v", err)
 		os.Exit(1)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+
 	err = s.Serve(ctx)
 	if err != nil {
+		if stop {
+			return
+		}
 		log.Errorf("failed to run server: %v", err)
 		time.Sleep(time.Second)
 		goto START
 	}
+}
+
+func setupCloseHandler(cancelFn context.CancelFunc) {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		sig := <-c
+		fmt.Fprintf(os.Stderr, "\nreceived signal '%s'. terminating...\n", sig.String())
+		stop = true
+		cancelFn()
+		time.Sleep(500 * time.Millisecond)
+		os.Exit(0)
+	}()
 }

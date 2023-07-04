@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/iptecharch/schema-server/config"
-	"github.com/iptecharch/schema-server/datastore/target"
+	"github.com/iptecharch/data-server/config"
+	"github.com/iptecharch/data-server/datastore/target"
+	"github.com/iptecharch/data-server/schema"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -41,7 +42,7 @@ func main() {
 		fmt.Printf("ERROR: %v", err)
 	}
 
-	ssc := schemapb.NewSchemaServerClient(cc)
+	ssc := schema.NewRemoteClient(cc)
 	schema := &schemapb.Schema{
 		Name:    "junos",
 		Vendor:  "Juniper",

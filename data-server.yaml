@@ -1,6 +1,6 @@
 grpc-server:
   # gRPC listening address
-  address: ":55000"
+  address: ":56000"
 
   ## TLS config
   # tls:
@@ -8,22 +8,30 @@ grpc-server:
   #   cert:
   #   key:
   #   skip-verify:
- 
-  data-server:
-    # if true, enables datastore and data RPCs
+  #   client-auth:
+
+  # expose local schema store over gRPC
+  schema-server:
+    # enables the schema gRPC server
     enabled: true
+    # directory to store the uploaded schemas
+    schemas-directory: ./schemas
+  
+  # data-server attributes
+  data-server:
     # max number of candidates per DS
     max-candidates: 16
+
   # max message size in bytes the server can receive. 
   # If this is not set, it defaults to 4 * 1024 * 1024 (4MB)
-  max-recv-msg-size: 25165824
+  max-recv-msg-size: 25165824 # 24 * 1024 * 1024 (24MB)
 
 datastores: # this specifies MAIN datastores
   - name: srl1
     schema: 
       name: srl
       vendor: Nokia
-      version: 22.11.1
+      version: 22.11.2
     sbi:
       type: gnmi # nc, nats, redis
       address: clab-schema-srl1:57400
@@ -40,16 +48,16 @@ datastores: # this specifies MAIN datastores
           name: config
           mode: on-change
           encoding: 45
-        - path:
-          - /
-          name: state
-          mode: sample
-          encoding: 46
+        # - path:
+        #   - /
+        #   name: state
+        #   mode: sample
+        #   encoding: 46
   - name: srl2
     schema: 
       name: srl
       vendor: Nokia
-      version: 22.11.1
+      version: 22.11.2
     sbi:
       type: gnmi # nc, nats, redis
       address: clab-schema-srl2:57400
@@ -58,26 +66,112 @@ datastores: # this specifies MAIN datastores
         password: NokiaSrl1!
       tls:
         skip-verify: true
-  - name: crpd1
-    schema:
-      name: junos
-      vendor: Juniper
-      version: 22.3R1
-    sbi:
-      type: nc
-      address: clab-crpd-crpd1
-      credentials:
-        username: root
-        password: clab123
+    sync:
+      validate: true
+      gnmi:
+        - path:
+          - /
+          name: config
+          mode: on-change
+          encoding: 45
+        # - path:
+        #   - /
+        #   name: state
+        #   mode: sample
+        #   encoding: 46
+  # - name: crpd1
+  #   schema:
+  #     name: junos
+  #     vendor: Juniper
+  #     version: 22.3R1
+  #   sbi:
+  #     type: nc
+  #     address: clab-crpd-crpd1
+  #     credentials:
+  #       username: root
+  #       password: clab123
 
-schema-server:
-  address: localhost:55000
+# schemas definitions
+# for local schema store only
+
+schemas:
+  - name: sros
+    vendor: Nokia
+    version: 22.10
+    files:
+      - ./lab/common/yang/sros_22.10/YANG/nokia-combined
+    directories:
+      - ./lab/common/yang/sros_22.10/YANG/ietf
+      - ./lab/common/yang/sros_22.10/YANG/nokia-sros-yang-extensions.yang
+  - name: srl
+    vendor: Nokia
+    version: 22.11.2
+    files:
+      - ./lab/common/yang/srl-22.11.2/srl_nokia/models
+    directories:
+      - ./lab/common/yang/srl-22.11.2/ietf
+    excludes:
+      - .*tools.*
+  - name: srl
+    vendor: Nokia
+    version: 22.11.1
+    files:
+      - ./lab/common/yang/srl-22.11.1/srl_nokia/models
+    directories:
+      - ./lab/common/yang/srl-22.11.1/ietf
+    excludes:
+      - .*tools.*
+  - name: srl
+    vendor: Nokia
+    version: 22.6.4
+    files:
+      - ./lab/common/yang/srl-22.6.4/srl_nokia/models
+    directories:
+      - ./lab/common/yang/srl-22.6.4/ietf
+    excludes:
+      - .*tools.*
+  - name: srl
+    vendor: Nokia
+    version: 22.3.2
+    files:
+      - ./lab/common/yang/srl-22.3.2/srl_nokia/models
+    directories:
+      - ./lab/common/yang/srl-22.3.2/ietf
+    excludes:
+      - .*tools.*
+  - name: srl
+    vendor: Nokia
+    version: 21.11.3
+    files:
+      - ./lab/common/yang/srl-21.11.3/srl_nokia/models
+    directories:
+      - ./lab/common/yang/srl-21.11.3/ietf
+    excludes:
+      - .*tools.*
+
+# remote schema server
+# schema-server:
+#   address: localhost:55000
   # TLS config
   # tls:
   #   ca:
   #   cert:
   #   key:
   #   skip-verify:
-  
+
+# cache config, defaults to
+# type: local
+# store-type: badgerdb
+# dir: ./cached/caches
+# cache:
+#   type: local
+#   # store-type if type == local
+#   store-type: badgerdb
+#   # local directory for caches if type == local
+#   dir: "./cached/caches"
+#   # remote cache address, if type == remotes
+#   # address: 
+
+# expose a prometheus server with cpu, mem and grpc metrics
 prometheus:
-  address: ":55090"
+  address: ":56090"

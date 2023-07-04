@@ -2,28 +2,26 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	cconfig "github.com/iptecharch/cache/config"
 	"github.com/iptecharch/data-server/cache"
 	"github.com/iptecharch/data-server/config"
 	"github.com/iptecharch/data-server/datastore"
+	"github.com/iptecharch/data-server/schema"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 	_ "google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
 )
 
@@ -41,18 +39,21 @@ type Server struct {
 
 	srv *grpc.Server
 	schemapb.UnimplementedDataServerServer
+	schemapb.UnimplementedSchemaServerServer
 
 	router *mux.Router
 	reg    *prometheus.Registry
 
-	remoteSchemaClient schemapb.SchemaServerClient
-	cacheClient        cache.Client
+	// remoteSchemaClient schemapb.SchemaServerClient
+
+	schemaClient schema.Client
+	cacheClient  cache.Client
 
 	gnmiOpts []grpc.DialOption
 }
 
-func NewServer(c *config.Config) (*Server, error) {
-	ctx, cancel := context.WithCancel(context.TODO())
+func New(ctx context.Context, c *config.Config) (*Server, error) {
+	ctx, cancel := context.WithCancel(ctx)
 	var s = &Server{
 		config: c,
 		cfn:    cancel,
@@ -107,9 +108,13 @@ func NewServer(c *config.Config) (*Server, error) {
 	s.srv = grpc.NewServer(opts...)
 
 	// register Data server gRPC Methods
-	if c.GRPCServer.DataServer != nil && c.GRPCServer.DataServer.Enabled {
-		schemapb.RegisterDataServerServer(s.srv, s)
+	schemapb.RegisterDataServerServer(s.srv, s)
+
+	// register Schema server gRPC Methods
+	if s.config.GRPCServer.SchemaServer != nil && s.config.GRPCServer.SchemaServer.Enabled {
+		schemapb.RegisterSchemaServerServer(s.srv, s)
 	}
+
 	return s, nil
 }
 
@@ -118,13 +123,14 @@ func (s *Server) Serve(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	log.Infof("running server on %s", s.config.GRPCServer.Address)
+
 	if s.config.Prometheus != nil {
 		go s.ServeHTTP()
 	}
-	if s.config.GRPCServer.DataServer != nil && s.config.GRPCServer.DataServer.Enabled {
-		go s.startDataServer(ctx)
-	}
+
+	go s.startDataServer(ctx)
+
+	log.Infof("starting server on %s", s.config.GRPCServer.Address)
 	err = s.srv.Serve(l)
 	if err != nil {
 		return err
@@ -158,105 +164,29 @@ func (s *Server) Stop() {
 }
 
 func (s *Server) startDataServer(ctx context.Context) {
-	// create schemaClient
-	s.CreateSchemaClient(ctx)
+	// create schemaClient, local or remote, based on config
+	s.createSchemaClient(ctx)
 
-	// create cacheClient
-	s.CreateCacheClient(ctx)
+	// create cacheClient, local or remote, based on config
+	s.createCacheClient(ctx)
 
-	// create datastores
+	// init datastores
 	s.createDatastores()
-}
-
-func (s *Server) CreateSchemaClient(ctx context.Context) {
-SCHEMA_CONNECT:
-	opts := []grpc.DialOption{
-		grpc.WithBlock(),
-	}
-	switch s.config.SchemaServer.TLS {
-	case nil:
-		opts = append(opts,
-			grpc.WithTransportCredentials(
-				insecure.NewCredentials(),
-			))
-	default:
-		tlsCfg, err := s.config.SchemaServer.TLS.NewConfig(ctx)
-		if err != nil {
-			log.Errorf("failed to read schema server TLS config: %v", err)
-			time.Sleep(time.Second)
-			goto SCHEMA_CONNECT
-		}
-		opts = append(opts,
-			grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
-		)
-	}
-
-	dialCtx, cancel := context.WithTimeout(ctx, schemaServerConnectRetry)
-	defer cancel()
-	cc, err := grpc.DialContext(dialCtx, s.config.SchemaServer.Address, opts...)
-	if err != nil {
-		log.Errorf("failed to connect DS to schema server: %v", err)
-		time.Sleep(time.Second)
-		goto SCHEMA_CONNECT
-	}
-	s.remoteSchemaClient = schemapb.NewSchemaServerClient(cc)
-}
-
-func (s *Server) CreateCacheClient(ctx context.Context) {
-START:
-	var err error
-	switch s.config.Cache.Type {
-	default:
-		fmt.Fprintf(os.Stderr, "unknown cache type: %s", s.config.Cache.Type)
-		os.Exit(1)
-	case "local":
-		err = s.createLocalCacheClient(ctx)
-		if err != nil {
-			log.Errorf("failed to initialize a local cache client: %v", err)
-			time.Sleep(time.Second)
-			goto START
-		}
-		log.Infof("local cache created")
-	case "remote":
-		err = s.createRemoteCacheClient(ctx)
-		if err != nil {
-			log.Errorf("failed to initialize a remote cache client: %v", err)
-			time.Sleep(time.Second)
-			goto START
-		}
-		log.Infof("connected to remote cache")
-	}
-}
-
-func (s *Server) createLocalCacheClient(ctx context.Context) error {
-	var err error
-	log.Infof("initializing local cache client")
-	s.cacheClient, err = cache.NewLocalCache(&cconfig.CacheConfig{
-		MaxCaches: -1,
-		StoreType: s.config.Cache.StoreType,
-		Dir:       s.config.Cache.Dir,
-	})
-	return err
-}
-
-func (s *Server) createRemoteCacheClient(ctx context.Context) error {
-	log.Infof("initializing remote cache client")
-	var err error
-	s.cacheClient, err = cache.NewRemoteCache(ctx, s.config.Cache.Address)
-	return err
+	log.Infof("ready...")
 }
 
 func (s *Server) createDatastores() {
 	wg := new(sync.WaitGroup)
 	wg.Add(len(s.config.Datastores))
 	for _, dsCfg := range s.config.Datastores {
+		log.Debugf("creating datastore %s", dsCfg.Name)
 		go func(dsCfg *config.DatastoreConfig) {
 			defer wg.Done()
-			ds := datastore.New(dsCfg, s.remoteSchemaClient, s.cacheClient, s.gnmiOpts...)
+			defer s.md.Unlock()
 			s.md.Lock()
-			s.datastores[dsCfg.Name] = ds
-			s.md.Unlock()
+			s.datastores[dsCfg.Name] = datastore.New(dsCfg, s.schemaClient, s.cacheClient, s.gnmiOpts...)
 		}(dsCfg)
 	}
 	wg.Wait()
+	log.Infof("configured datastores initialized")
 }

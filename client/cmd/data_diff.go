@@ -17,7 +17,7 @@ var dataDiffCmd = &cobra.Command{
 	Use:          "diff",
 	Short:        "diff candidate and its baseline",
 	SilenceUsage: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx, cancel := context.WithCancel(cmd.Context())
 		defer cancel()
 		dataClient, err := createDataClient(ctx, addr)

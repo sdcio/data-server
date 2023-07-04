@@ -2,19 +2,17 @@ package schemaClient
 
 import (
 	"context"
-	"errors"
-	"io"
 
+	"github.com/iptecharch/data-server/schema"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
-	log "github.com/sirupsen/logrus"
 )
 
 type SchemaClientBound struct {
 	schema       *schemapb.Schema
-	schemaClient schemapb.SchemaServerClient
+	schemaClient schema.Client
 }
 
-func NewSchemaClientBound(s *schemapb.Schema, sc schemapb.SchemaServerClient) *SchemaClientBound {
+func NewSchemaClientBound(s *schemapb.Schema, sc schema.Client) *SchemaClientBound {
 	return &SchemaClientBound{
 		schema:       s,
 		schemaClient: sc,
@@ -34,7 +32,7 @@ func (scb *SchemaClientBound) GetSchemaElements(ctx context.Context, p *schemapb
 		Path:   p,
 		Schema: scb.getSchema(),
 	}
-	stream, err := scb.schemaClient.GetSchemaElements(ctx, gsr)
+	och, err := scb.schemaClient.GetSchemaElements(ctx, gsr)
 	if err != nil {
 		return nil, err
 	}
@@ -42,18 +40,16 @@ func (scb *SchemaClientBound) GetSchemaElements(ctx context.Context, p *schemapb
 	go func() {
 		defer close(ch)
 		for {
-			r, err := stream.Recv()
-			if errors.Is(err, io.EOF) {
-				return
-			}
-			if err != nil {
-				log.Errorf("GetSchemaElements stream err: %v", err)
-				return
-			}
 			select {
-			case <-done:
+			case <-ctx.Done():
 				return
-			case ch <- r:
+			case se, ok := <-och:
+				if !ok {
+					return
+				}
+				ch <- &schemapb.GetSchemaResponse{
+					Schema: se,
+				}
 			}
 		}
 	}()

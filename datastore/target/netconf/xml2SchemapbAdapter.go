@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/beevik/etree"
+	"github.com/iptecharch/data-server/schema"
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	log "github.com/sirupsen/logrus"
 )
@@ -12,12 +13,12 @@ import (
 // XML2SchemapbConfigAdapter is used to transform the provided XML configuration data into the gnmi-like schemapb.Notifications.
 // This transformation is done via schema information acquired throughout the SchemaServerClient throughout the transformation process.
 type XML2SchemapbConfigAdapter struct {
-	schemaClient schemapb.SchemaServerClient
+	schemaClient schema.Client
 	schema       *schemapb.Schema
 }
 
 // NewXML2SchemapbConfigAdapter constructs a new XML2SchemapbConfigAdapter
-func NewXML2SchemapbConfigAdapter(ssc schemapb.SchemaServerClient, schema *schemapb.Schema) *XML2SchemapbConfigAdapter {
+func NewXML2SchemapbConfigAdapter(ssc schema.Client, schema *schemapb.Schema) *XML2SchemapbConfigAdapter {
 	return &XML2SchemapbConfigAdapter{
 		schemaClient: ssc,
 		schema:       schema,
@@ -46,8 +47,8 @@ func (x *XML2SchemapbConfigAdapter) transformRecursive(ctx context.Context, e *e
 		return err
 	}
 
-	switch sr.Schema.(type) {
-	case *schemapb.GetSchemaResponse_Container:
+	switch sr.GetSchema().Schema.(type) {
+	case *schemapb.SchemaElem_Container:
 		// retrieved schema describes a yang container
 		log.Tracef("transforming container %q", e.Tag)
 		err = x.transformContainer(ctx, e, sr, pelems, result)
@@ -55,15 +56,15 @@ func (x *XML2SchemapbConfigAdapter) transformRecursive(ctx context.Context, e *e
 			return err
 		}
 
-	case *schemapb.GetSchemaResponse_Field:
+	case *schemapb.SchemaElem_Field:
 		// retrieved schema describes a yang Field
 		log.Tracef("transforming field %q", e.Tag)
-		err = x.transformField(ctx, e, pelems, sr.GetField(), result)
+		err = x.transformField(ctx, e, pelems, sr.GetSchema().GetField(), result)
 		if err != nil {
 			return err
 		}
 
-	case *schemapb.GetSchemaResponse_Leaflist:
+	case *schemapb.SchemaElem_Leaflist:
 		// retrieved schema describes a yang LeafList
 		log.Tracef("transforming leaflist %q", e.Tag)
 		err = x.transformLeafList(ctx, e, sr, pelems, result, tc)
@@ -77,7 +78,7 @@ func (x *XML2SchemapbConfigAdapter) transformRecursive(ctx context.Context, e *e
 
 // transformContainer transforms an etree.element of a configuration as an update into the provided *schemapb.Notification.
 func (x *XML2SchemapbConfigAdapter) transformContainer(ctx context.Context, e *etree.Element, sr *schemapb.GetSchemaResponse, pelems []*schemapb.PathElem, result *schemapb.Notification) error {
-	cs := sr.GetContainer()
+	cs := sr.GetSchema().GetContainer()
 	for _, ls := range cs.Keys {
 		pelem := pelems[len(pelems)-1]
 		if pelem.Key == nil {

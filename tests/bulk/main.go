@@ -23,7 +23,7 @@ var interfaces []string
 var candidate string
 
 func main() {
-	pflag.StringVarP(&addr, "address", "a", "localhost:55000", "schema/data server address")
+	pflag.StringVarP(&addr, "address", "a", "localhost:56000", "schema/data server address")
 	pflag.StringVarP(&ds, "ds", "", "srl1", "datastore name")
 	pflag.Int64VarP(&conc, "concurrency", "", 250, "max concurrent set requests")
 	pflag.StringSliceVarP(&interfaces, "interface", "", []string{"ethernet-1/1"}, "list of interfaces to provision")
@@ -51,7 +51,7 @@ func main() {
 		panic(err)
 	}
 	// _ = crDsRsp
-	wg := sync.WaitGroup{}
+	wg := &sync.WaitGroup{}
 	wg.Add(numVlan * len(interfaces))
 	sem := semaphore.NewWeighted(conc)
 	now := time.Now()
@@ -67,7 +67,7 @@ func main() {
 				defer sem.Release(1)
 				index := strconv.Itoa(i)
 				vlanID := strconv.Itoa(i + 1)
-				setRsp, err := dataClient.SetData(ctx, &schemapb.SetDataRequest{
+				req := &schemapb.SetDataRequest{
 					Name: ds,
 					Datastore: &schemapb.DataStore{
 						Type: schemapb.Type_CANDIDATE,
@@ -227,7 +227,8 @@ func main() {
 							},
 						},
 					},
-				})
+				}
+				setRsp, err := dataClient.SetData(ctx, req)
 				if err != nil {
 					panic(err)
 				}
@@ -253,6 +254,11 @@ func main() {
 	_ = commitRsp
 
 	fmt.Println("commit ack after     :", time.Since(now))
+
+	if !cleanup {
+		return
+	}
+	fmt.Println("deleting")
 	wg.Add(numVlan * len(interfaces))
 	_, err = dataClient.CreateDataStore(ctx, &schemapb.CreateDataStoreRequest{
 		Name: ds,
@@ -264,11 +270,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	if !cleanup {
-		return
-	}
-	fmt.Println("deleting")
-
 	now = time.Now()
 	for _, iface := range interfaces {
 		for i := 0; i < numVlan; i++ {

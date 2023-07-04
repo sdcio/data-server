@@ -125,7 +125,7 @@ func (s *Server) CreateDataStore(ctx context.Context, req *schemapb.CreateDataSt
 		s.md.Lock()
 		defer s.md.Unlock()
 		s.datastores[req.GetName()] = datastore.New(
-			dsConfig, s.remoteSchemaClient, s.cacheClient, s.gnmiOpts...)
+			dsConfig, s.schemaClient, s.cacheClient, s.gnmiOpts...)
 		return &schemapb.CreateDataStoreResponse{}, nil
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "schema or datastore must be set")

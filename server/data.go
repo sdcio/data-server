@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"sync"
 
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	log "github.com/sirupsen/logrus"
@@ -35,8 +37,11 @@ func (s *Server) GetData(req *schemapb.GetDataRequest, stream schemapb.DataServe
 	if !ok {
 		return status.Errorf(codes.InvalidArgument, "unknown datastore %s", name)
 	}
+	wg := new(sync.WaitGroup)
+	wg.Add(1)
 	nCh := make(chan *schemapb.GetDataResponse)
 	go func() {
+		defer wg.Done()
 		for {
 			select {
 			case <-stream.Context().Done():
@@ -45,8 +50,12 @@ func (s *Server) GetData(req *schemapb.GetDataRequest, stream schemapb.DataServe
 				if !ok {
 					return
 				}
+				fmt.Println(rsp)
 				err := stream.Send(rsp)
-				if err != nil && !strings.Contains(err.Error(), "context canceled") {
+				if err != nil {
+					if strings.Contains(err.Error(), "context canceled") || strings.Contains(err.Error(), "EOF") {
+						return
+					}
 					log.Errorf("GetData stream send err :%v", err)
 				}
 			}
@@ -56,11 +65,12 @@ func (s *Server) GetData(req *schemapb.GetDataRequest, stream schemapb.DataServe
 	if err != nil {
 		return err
 	}
+	wg.Wait()
 	return nil
 }
 
 func (s *Server) SetData(ctx context.Context, req *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error) {
-	log.Infof("received SetDataRequest: %v", req)
+	log.Debugf("received SetDataRequest: %v", req)
 	name := req.GetName()
 	if name == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "missing datastore name")
@@ -75,7 +85,7 @@ func (s *Server) SetData(ctx context.Context, req *schemapb.SetDataRequest) (*sc
 }
 
 func (s *Server) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schemapb.DiffResponse, error) {
-	log.Infof("received DiffRequest: %v", req)
+	log.Debugf("received DiffRequest: %v", req)
 	name := req.GetName()
 	if name == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "missing datastore name")
@@ -90,7 +100,7 @@ func (s *Server) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schemapb
 }
 
 func (s *Server) Subscribe(req *schemapb.SubscribeRequest, stream schemapb.DataServer_SubscribeServer) error {
-	log.Infof("received SubscribeRequest: %v", req)
+	log.Debugf("received SubscribeRequest: %v", req)
 	name := req.GetName()
 	if name == "" {
 		return status.Errorf(codes.InvalidArgument, "missing datastore name")

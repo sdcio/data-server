@@ -6,8 +6,11 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/prototext"
 )
@@ -35,11 +38,37 @@ var datastoreGetCmd = &cobra.Command{
 		}
 		fmt.Println("response:")
 		fmt.Println(prototext.Format(rsp))
+		printDataStoreTable(rsp)
 		return nil
 	},
 }
 
 func init() {
 	datastoreCmd.AddCommand(datastoreGetCmd)
+}
 
+func printDataStoreTable(rsp *schemapb.GetDataStoreResponse) {
+	candidates := make([]string, 0, len(rsp.GetDatastore()))
+	for _, ds := range rsp.GetDatastore() {
+		if ds.GetType() == schemapb.Type_MAIN {
+			continue
+		}
+		candidates = append(candidates, "- "+ds.GetName())
+	}
+	tableData := make([][]string, 0, 1)
+	tableData = append(tableData, []string{
+		rsp.GetName(),
+		fmt.Sprintf("%s/%s/%s", rsp.GetSchema().GetName(), rsp.GetSchema().GetVendor(), rsp.GetSchema().GetVersion()),
+		strings.Join(candidates, "\n"),
+		rsp.GetTarget().GetType(),
+		rsp.GetTarget().GetAddress(),
+	})
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Name", "Schema", "Candidate(s)", "SBI", "Address"})
+	table.SetAlignment(tablewriter.ALIGN_LEFT)
+	table.SetAutoFormatHeaders(false)
+	table.SetAutoWrapText(false)
+	table.AppendBulk(tableData)
+	table.Render()
 }
