@@ -43,6 +43,8 @@ func (scb *SchemaClientBound) GetSchemaElements(ctx context.Context, p *schemapb
 			select {
 			case <-ctx.Done():
 				return
+			case <-done:
+				return
 			case se, ok := <-och:
 				if !ok {
 					return
