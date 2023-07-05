@@ -3,7 +3,7 @@ name: schema
 topology:
   defaults:
     kind: srl
-    image: ghcr.io/nokia/srlinux:latest
+    image: ghcr.io/nokia/srlinux:22.11.2
   nodes:
     srl1:
     srl2:

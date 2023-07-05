@@ -284,7 +284,7 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, c
 				return fmt.Errorf("received more schema elements than pathElem")
 			}
 			peIndex++
-			switch sch := sch.GetSchema().Schema.(type) {
+			switch sch := sch.GetSchema().GetSchema().(type) {
 			case *schemapb.SchemaElem_Container:
 				// check if container keys are leafrefs
 				for _, keySchema := range sch.Container.GetKeys() {
@@ -295,7 +295,15 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, c
 					if err != nil {
 						return err
 					}
-					return d.resolveLeafref(ctx, candidate, leafRefPath, upd.GetValue().GetStringVal())
+					// get pathElem with leafRef key
+					pe := upd.GetPath().GetElem()[peIndex-1]
+					// get leafRef value
+					leafRefValue := pe.GetKey()[keySchema.GetName()]
+					//
+					err = d.resolveLeafref(ctx, candidate, leafRefPath, leafRefValue)
+					if err != nil {
+						return err
+					}
 				}
 			case *schemapb.SchemaElem_Field:
 				if sch.Field.GetType().GetType() != "leafref" {
@@ -307,25 +315,10 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, c
 					return err
 				}
 
-				return d.resolveLeafref(ctx, candidate, leafRefPath, upd.GetValue().GetStringVal())
-
-				// prgbuilder := xpath.NewProgBuilder(leafRefPath)
-				// // init an ExpressionLexer
-				// lexer := expr.NewExprLex(leafRefPath, prgbuilder, nil)
-				// // parse the provided Must-Expression
-				// lexer.Parse()
-				// prog, err := lexer.CreateProgram(leafRefPath)
-				// if err != nil {
-				// 	return err
-				// }
-
-				// machine := xpath.NewMachine(leafRefPath, prog, leafRefPath)
-
-				// // run the must statement evaluation virtual machine
-				// res1 := xpath.NewCtxFromCurrent(ctx, machine, upd.Path.Elem, d.getValidationClient(), candidate).EnableValidation().Run()
-
-				// resu, err := res1.GetLiteralResult()
-				// _ = resu
+				err = d.resolveLeafref(ctx, candidate, leafRefPath, upd.GetValue().GetStringVal())
+				if err != nil {
+					return err
+				}
 
 			case *schemapb.SchemaElem_Leaflist:
 				if sch.Leaflist.GetType().GetType() != "leafref" {
@@ -335,7 +328,7 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, c
 				if err != nil {
 					return err
 				}
-				fmt.Println("!! found leafref leaflist", sch.Leaflist.Name, leafRefPath)
+				log.Warnf("!! found leafref leaflist %s | %s", sch.Leaflist.Name, leafRefPath)
 			}
 		}
 	}
@@ -353,18 +346,18 @@ func (d *Datastore) resolveLeafref(ctx context.Context, candidate, leafRefPath s
 	// adding its name to the one before last element as a key
 	// with the value of the item that we're validating the leafref for
 
-	pLen := len(p.Elem)
+	pLen := len(p.GetElem())
 	// extract one before the last path elements element
-	keyAddedLastElem := p.Elem[pLen-2]
+	keyAddedLastElem := p.GetElem()[pLen-2]
 	// add the Key map
-	if keyAddedLastElem.Key == nil {
+	if keyAddedLastElem.GetKey() == nil {
 		keyAddedLastElem.Key = map[string]string{}
 	}
 	// add the updates value as the value under the key, which is the initial last element of the leafref path
-	keyAddedLastElem.Key[p.Elem[pLen-1].Name] = value
+	keyAddedLastElem.Key[p.GetElem()[pLen-1].GetName()] = value
 	// reconstruct the path, the leafref points to, with the path except for the last two elements
 	// and the altered penultimate element
-	p.Elem = append(p.Elem[:pLen-2], keyAddedLastElem)
+	p.Elem = append(p.GetElem()[:pLen-2], keyAddedLastElem)
 
 	// TODO: update when stored values are not stringVal anymore
 	data, err := d.getValidationClient().GetValue(ctx, candidate, p)
