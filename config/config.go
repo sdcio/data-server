@@ -62,8 +62,12 @@ func (c *Config) validateSetDefaults() error {
 	if c.Schemas != nil && c.SchemaServer != nil {
 		return errors.New("cannot define local schemas and a remote schema server at the same time")
 	}
-	if (c.Schemas == nil && c.SchemaServer == nil) && (c.GRPCServer.SchemaServer == nil || !c.GRPCServer.SchemaServer.Enabled) {
-		return errors.New("schema-server RPCs must be exposed if no schemas are defined at startup")
+	if c.Schemas == nil && c.SchemaServer == nil {
+		return errors.New("missing `schemas` or `schema-server` sections")
+	}
+
+	if c.GRPCServer.SchemaServer == nil || !c.GRPCServer.SchemaServer.Enabled {
+		return errors.New("schema-server RPCs cannot be exposed if the schema server is not enabled")
 	}
 	var err error
 	for _, ds := range c.Datastores {

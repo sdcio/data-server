@@ -16,6 +16,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/prototext"
 )
 
 type Datastore struct {
@@ -147,7 +148,7 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 	if err != nil {
 		return err
 	}
-	log.Debugf("%s:%s notification: %v", d.Name(), name, notification)
+	log.Debugf("%s:%s notification:\n%s", d.Name(), name, prototext.Format(notification))
 	// TODO: consider if leafref validation
 	// needs to run before must statements validation
 
@@ -173,7 +174,7 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 		// Replace
 		Delete: notification.GetDelete(),
 	}
-	log.Debugf("datastore %s/%s commit: %v", d.config.Name, name, sbiSet)
+	log.Debugf("datastore %s/%s commit:\n%s", d.config.Name, name, prototext.Format(sbiSet))
 	log.Infof("datastore %s/%s commit: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d",
 		d.config.Name, name, len(sbiSet.GetUpdate()), len(sbiSet.GetReplace()), len(sbiSet.GetDelete()))
 	rsp, err := d.sbi.Set(ctx, sbiSet)

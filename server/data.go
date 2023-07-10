@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -50,7 +49,6 @@ func (s *Server) GetData(req *schemapb.GetDataRequest, stream schemapb.DataServe
 				if !ok {
 					return
 				}
-				fmt.Println(rsp)
 				err := stream.Send(rsp)
 				if err != nil {
 					if strings.Contains(err.Error(), "context canceled") || strings.Contains(err.Error(), "EOF") {
