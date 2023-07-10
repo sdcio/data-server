@@ -2,9 +2,10 @@ package schema
 
 import (
 	"context"
+	"strings"
 
 	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"google.golang.org/grpc"
 )
@@ -73,10 +74,14 @@ func (c *remoteClient) GetSchemaElements(ctx context.Context, in *schemapb.GetSc
 	}
 	ch := make(chan *schemapb.SchemaElem)
 	go func() {
+		defer close(ch)
 		for {
 			msg, err := stream.Recv()
 			if err != nil {
-				logrus.Errorf("stream rcv ended: %v", err)
+				if strings.Contains(err.Error(), "EOF") {
+					return
+				}
+				log.Errorf("stream rcv ended: %v", err)
 				return
 			}
 			ch <- msg.GetSchema()
