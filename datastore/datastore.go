@@ -12,7 +12,7 @@ import (
 	"github.com/iptecharch/data-server/datastore/target"
 	"github.com/iptecharch/data-server/schema"
 	"github.com/iptecharch/data-server/utils"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
@@ -29,7 +29,7 @@ type Datastore struct {
 	sbi target.Target
 
 	// schema server client
-	// schemaClient schemapb.SchemaServerClient
+	// schemaClient sdcpb.SchemaServerClient
 	schemaClient schema.Client
 
 	// client, bound to schema and version on the schema side and to datastore name on the cache side
@@ -131,7 +131,7 @@ func (d *Datastore) Candidates(ctx context.Context) ([]string, error) {
 	return d.cacheClient.GetCandidates(ctx, d.Name())
 }
 
-func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) error {
+func (d *Datastore) Commit(ctx context.Context, req *sdcpb.CommitRequest) error {
 	name := req.GetDatastore().GetName()
 	if name == "" {
 		return fmt.Errorf("missing candidate name")
@@ -169,7 +169,7 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 		}
 	}
 	// push updates to sbi
-	sbiSet := &schemapb.SetDataRequest{
+	sbiSet := &sdcpb.SetDataRequest{
 		Update: notification.GetUpdate(),
 		// Replace
 		Delete: notification.GetDelete(),
@@ -190,7 +190,7 @@ func (d *Datastore) Commit(ctx context.Context, req *schemapb.CommitRequest) err
 	return d.cacheClient.DeleteCandidate(ctx, d.Name(), name)
 }
 
-func (d *Datastore) Rebase(ctx context.Context, req *schemapb.RebaseRequest) error {
+func (d *Datastore) Rebase(ctx context.Context, req *sdcpb.RebaseRequest) error {
 	// name := req.GetDatastore().GetName()
 	// if name == "" {
 	// 	return fmt.Errorf("missing candidate name")
@@ -210,7 +210,7 @@ func (d *Datastore) Rebase(ctx context.Context, req *schemapb.RebaseRequest) err
 	return nil
 }
 
-func (d *Datastore) Discard(ctx context.Context, req *schemapb.DiscardRequest) error {
+func (d *Datastore) Discard(ctx context.Context, req *sdcpb.DiscardRequest) error {
 	return d.cacheClient.Discard(ctx, req.GetName(), req.Datastore.GetName())
 }
 
@@ -249,19 +249,19 @@ func (d *Datastore) Sync(ctx context.Context) {
 	}
 }
 
-// func isState(r *schemapb.GetSchemaResponse) bool {
+// func isState(r *sdcpb.GetSchemaResponse) bool {
 // 	switch r := r.Schema.(type) {
-// 	case *schemapb.GetSchemaResponse_Container:
+// 	case *sdcpb.GetSchemaResponse_Container:
 // 		return r.Container.IsState
-// 	case *schemapb.GetSchemaResponse_Field:
+// 	case *sdcpb.GetSchemaResponse_Field:
 // 		return r.Field.IsState
-// 	case *schemapb.GetSchemaResponse_Leaflist:
+// 	case *sdcpb.GetSchemaResponse_Leaflist:
 // 		return r.Leaflist.IsState
 // 	}
 // 	return false
 // }
 
-func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, candidate string) error {
+func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, candidate string) error {
 	done := make(chan struct{})
 	ch, err := d.getValidationClient().GetSchemaElements(ctx, upd.GetPath(), done)
 	if err != nil {
@@ -286,7 +286,7 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, c
 			}
 			peIndex++
 			switch sch := sch.GetSchema().GetSchema().(type) {
-			case *schemapb.SchemaElem_Container:
+			case *sdcpb.SchemaElem_Container:
 				// check if container keys are leafrefs
 				for _, keySchema := range sch.Container.GetKeys() {
 					if keySchema.GetType().GetType() != "leafref" {
@@ -306,7 +306,7 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, c
 						return err
 					}
 				}
-			case *schemapb.SchemaElem_Field:
+			case *sdcpb.SchemaElem_Field:
 				if sch.Field.GetType().GetType() != "leafref" {
 					continue
 				}
@@ -321,7 +321,7 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, c
 					return err
 				}
 
-			case *schemapb.SchemaElem_Leaflist:
+			case *sdcpb.SchemaElem_Leaflist:
 				if sch.Leaflist.GetType().GetType() != "leafref" {
 					continue
 				}
@@ -336,7 +336,7 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *schemapb.Update, c
 }
 
 func (d *Datastore) resolveLeafref(ctx context.Context, candidate, leafRefPath string, value string) error {
-	// parse the string into a *schemapb.Path
+	// parse the string into a *sdcpb.Path
 	p, err := utils.ParsePath(leafRefPath)
 	if err != nil {
 		return err
@@ -403,7 +403,7 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 			}
 			// workaround, skip presence containers
 			switch r := scRsp.GetSchema().Schema.(type) {
-			case *schemapb.SchemaElem_Container:
+			case *sdcpb.SchemaElem_Container:
 				if r.Container.IsPresence {
 					continue
 				}
@@ -427,22 +427,22 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 }
 
 // helper for GetSchema
-func (d *Datastore) getSchema(ctx context.Context, p *schemapb.Path) (*schemapb.GetSchemaResponse, error) {
-	return d.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
+func (d *Datastore) getSchema(ctx context.Context, p *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+	return d.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
 		Path:   p,
 		Schema: d.Schema().GetSchema(),
 	})
 }
 
-func (d *Datastore) validatePath(ctx context.Context, p *schemapb.Path) error {
+func (d *Datastore) validatePath(ctx context.Context, p *sdcpb.Path) error {
 	_, err := d.getSchema(ctx, p)
 	return err
 }
 
-func (d *Datastore) toPath(ctx context.Context, p []string) (*schemapb.Path, error) {
-	rsp, err := d.schemaClient.ToPath(ctx, &schemapb.ToPathRequest{
+func (d *Datastore) toPath(ctx context.Context, p []string) (*sdcpb.Path, error) {
+	rsp, err := d.schemaClient.ToPath(ctx, &sdcpb.ToPathRequest{
 		PathElement: p,
-		Schema: &schemapb.Schema{
+		Schema: &sdcpb.Schema{
 			Name:    d.Schema().Name,
 			Vendor:  d.Schema().Vendor,
 			Version: d.Schema().Version,
@@ -454,10 +454,10 @@ func (d *Datastore) toPath(ctx context.Context, p []string) (*schemapb.Path, err
 	return rsp.GetPath(), nil
 }
 
-func (d *Datastore) changesToUpdates(ctx context.Context, changes []*cache.Change) (*schemapb.Notification, error) {
-	notif := &schemapb.Notification{
-		Update: make([]*schemapb.Update, 0, len(changes)),
-		Delete: make([]*schemapb.Path, 0, len(changes)),
+func (d *Datastore) changesToUpdates(ctx context.Context, changes []*cache.Change) (*sdcpb.Notification, error) {
+	notif := &sdcpb.Notification{
+		Update: make([]*sdcpb.Update, 0, len(changes)),
+		Delete: make([]*sdcpb.Path, 0, len(changes)),
 	}
 	for _, change := range changes {
 		switch {
@@ -476,7 +476,7 @@ func (d *Datastore) changesToUpdates(ctx context.Context, changes []*cache.Chang
 			if err != nil {
 				return nil, err
 			}
-			upd := &schemapb.Update{
+			upd := &sdcpb.Update{
 				Path:  p,
 				Value: tv,
 			}

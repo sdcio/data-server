@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"strings"
 
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/prototext"
 )
@@ -25,18 +25,18 @@ var dataGetCmd = &cobra.Command{
 	Short:        "get data",
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		var dt schemapb.DataType
+		var dt sdcpb.DataType
 		switch dataType {
 		case "ALL":
 		case "CONFIG":
-			dt = schemapb.DataType_CONFIG
+			dt = sdcpb.DataType_CONFIG
 		case "STATE":
-			dt = schemapb.DataType_STATE
+			dt = sdcpb.DataType_STATE
 		default:
 			return fmt.Errorf("invalid flag value --type %s", dataType)
 		}
 
-		req := &schemapb.GetDataRequest{
+		req := &sdcpb.GetDataRequest{
 			Name:     datastoreName,
 			DataType: dt,
 		}
@@ -48,8 +48,8 @@ var dataGetCmd = &cobra.Command{
 			req.Path = append(req.Path, xp)
 		}
 		if candidate != "" {
-			req.Datastore = &schemapb.DataStore{
-				Type: schemapb.Type_CANDIDATE,
+			req.Datastore = &sdcpb.DataStore{
+				Type: sdcpb.Type_CANDIDATE,
 				Name: candidate,
 			}
 		}

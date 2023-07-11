@@ -8,18 +8,18 @@ import (
 	"github.com/iptecharch/data-server/schema"
 	"google.golang.org/grpc"
 
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 )
 
 type Target interface {
-	Get(ctx context.Context, req *schemapb.GetDataRequest) (*schemapb.GetDataResponse, error)
-	Set(ctx context.Context, req *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error)
+	Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error)
+	Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error)
 	Subscribe()
 	//
 	Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate)
 }
 
-func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schema.Client, schema *schemapb.Schema, opts ...grpc.DialOption) (Target, error) {
+func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schema.Client, schema *sdcpb.Schema, opts ...grpc.DialOption) (Target, error) {
 	switch cfg.Type {
 	case "gnmi":
 		return newGNMITarget(ctx, name, cfg, opts...)
@@ -37,5 +37,5 @@ func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schema.
 
 type SyncUpdate struct {
 	Tree   string
-	Update *schemapb.Notification
+	Update *sdcpb.Notification
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/iptecharch/cache/proto/cachepb"
 	"github.com/iptecharch/data-server/cache"
 	"github.com/iptecharch/data-server/utils"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/iptecharch/yang-parser/xpath"
 	"github.com/iptecharch/yang-parser/xpath/grammars/expr"
 	log "github.com/sirupsen/logrus"
@@ -23,7 +23,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest, nCh chan *schemapb.GetDataResponse) error {
+func (d *Datastore) Get(ctx context.Context, req *sdcpb.GetDataRequest, nCh chan *sdcpb.GetDataResponse) error {
 	defer close(nCh)
 
 	var err error
@@ -38,14 +38,14 @@ func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest, nCh c
 	// choose store(s)
 	var stores []cachepb.Store
 	switch req.GetDataType() {
-	case schemapb.DataType_ALL:
+	case sdcpb.DataType_ALL:
 		stores = []cachepb.Store{cachepb.Store_CONFIG}
 		if req.GetDatastore().GetName() == "" {
 			stores = append(stores, cachepb.Store_STATE)
 		}
-	case schemapb.DataType_CONFIG:
+	case sdcpb.DataType_CONFIG:
 		stores = []cachepb.Store{cachepb.Store_CONFIG}
-	case schemapb.DataType_STATE:
+	case sdcpb.DataType_STATE:
 		if req.GetDatastore().GetName() == "" {
 			stores = []cachepb.Store{cachepb.Store_STATE}
 		}
@@ -57,7 +57,7 @@ func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest, nCh c
 		name = fmt.Sprintf("%s/%s", req.GetName(), req.GetDatastore().GetName())
 	}
 
-	// convert schemapb paths to a string list
+	// convert sdcpb paths to a string list
 	paths := make([][]string, 0, len(req.GetPath()))
 	for _, p := range req.GetPath() {
 		paths = append(paths, utils.ToStrings(p, false, false))
@@ -76,15 +76,15 @@ func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest, nCh c
 			if err != nil {
 				return err
 			}
-			notification := &schemapb.Notification{
+			notification := &sdcpb.Notification{
 				Timestamp: time.Now().UnixNano(),
-				Update: []*schemapb.Update{{
+				Update: []*sdcpb.Update{{
 					Path:  scp,
 					Value: tv,
 				}},
 			}
-			rsp := &schemapb.GetDataResponse{
-				Notification: []*schemapb.Notification{notification},
+			rsp := &sdcpb.GetDataResponse{
+				Notification: []*sdcpb.Notification{notification},
 			}
 			select {
 			case <-ctx.Done():
@@ -96,11 +96,11 @@ func (d *Datastore) Get(ctx context.Context, req *schemapb.GetDataRequest, nCh c
 	return nil
 }
 
-func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error) {
+func (d *Datastore) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
 	switch req.GetDatastore().GetType() {
-	case schemapb.Type_MAIN:
+	case sdcpb.Type_MAIN:
 		return nil, status.Error(codes.InvalidArgument, "cannot set fields in MAIN datastore")
-	case schemapb.Type_CANDIDATE:
+	case sdcpb.Type_CANDIDATE:
 		//
 		ok, err := d.cacheClient.HasCandidate(ctx, req.GetName(), req.GetDatastore().GetName())
 		if err != nil {
@@ -110,8 +110,8 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 			return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDatastore().GetName())
 		}
 
-		replaces := make([]*schemapb.Update, 0, len(req.GetReplace()))
-		updates := make([]*schemapb.Update, 0, len(req.GetUpdate()))
+		replaces := make([]*sdcpb.Update, 0, len(req.GetReplace()))
+		updates := make([]*sdcpb.Update, 0, len(req.GetUpdate()))
 		// expand json/json_ietf values
 		for _, upd := range req.GetReplace() {
 			rs, err := d.expandUpdate(ctx, upd)
@@ -163,8 +163,8 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 
 		// insert/delete
 		// the order of operations is delete, replace, update
-		rsp := &schemapb.SetDataResponse{
-			Response: make([]*schemapb.UpdateResult, 0,
+		rsp := &sdcpb.SetDataResponse{
+			Response: make([]*sdcpb.UpdateResult, 0,
 				len(req.GetDelete())+len(req.GetReplace())+len(req.GetUpdate())),
 		}
 
@@ -175,7 +175,7 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 		for _, del := range req.GetDelete() {
 			dels = append(dels, utils.ToStrings(del, false, false))
 		}
-		for _, changes := range [][]*schemapb.Update{replaces, updates} {
+		for _, changes := range [][]*sdcpb.Update{replaces, updates} {
 			for _, upd := range changes {
 				cUpd, err := d.cacheClient.NewUpdate(upd)
 				if err != nil {
@@ -191,25 +191,25 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 
 		// deletes start
 		for _, del := range req.GetDelete() {
-			rsp.Response = append(rsp.Response, &schemapb.UpdateResult{
+			rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
 				Path: del,
-				Op:   schemapb.UpdateResult_DELETE,
+				Op:   sdcpb.UpdateResult_DELETE,
 			})
 		}
 		// deletes end
 		// replaces start
 		for _, rep := range req.GetReplace() {
-			rsp.Response = append(rsp.Response, &schemapb.UpdateResult{
+			rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
 				Path: rep.GetPath(),
-				Op:   schemapb.UpdateResult_REPLACE,
+				Op:   sdcpb.UpdateResult_REPLACE,
 			})
 		}
 		// replaces end
 		// updates start
 		for _, upd := range req.GetUpdate() {
-			rsp.Response = append(rsp.Response, &schemapb.UpdateResult{
+			rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
 				Path: upd.GetPath(),
-				Op:   schemapb.UpdateResult_UPDATE,
+				Op:   sdcpb.UpdateResult_UPDATE,
 			})
 		}
 		// updates end
@@ -219,19 +219,19 @@ func (d *Datastore) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sch
 	}
 }
 
-func (d *Datastore) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schemapb.DiffResponse, error) {
+func (d *Datastore) Diff(ctx context.Context, req *sdcpb.DiffRequest) (*sdcpb.DiffResponse, error) {
 	switch req.GetDatastore().GetType() {
-	case schemapb.Type_MAIN:
+	case sdcpb.Type_MAIN:
 		return nil, status.Errorf(codes.InvalidArgument, "must set a candidate datastore")
-	case schemapb.Type_CANDIDATE:
+	case sdcpb.Type_CANDIDATE:
 		changes, err := d.cacheClient.GetChanges(ctx, req.GetName(), req.GetDatastore().GetName())
 		if err != nil {
 			return nil, err
 		}
-		diffRsp := &schemapb.DiffResponse{
+		diffRsp := &sdcpb.DiffResponse{
 			Name:      req.GetName(),
 			Datastore: req.GetDatastore(),
-			Diff:      make([]*schemapb.DiffUpdate, 0, len(changes)),
+			Diff:      make([]*sdcpb.DiffUpdate, 0, len(changes)),
 		}
 		for _, change := range changes {
 			switch {
@@ -257,9 +257,9 @@ func (d *Datastore) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schem
 				}
 				// get path from schema server
 				p, err := d.schemaClient.ToPath(ctx,
-					&schemapb.ToPathRequest{
+					&sdcpb.ToPathRequest{
 						PathElement: change.Update.GetPath(),
-						Schema: &schemapb.Schema{
+						Schema: &sdcpb.Schema{
 							Name:    d.config.Schema.Name,
 							Vendor:  d.config.Schema.Vendor,
 							Version: d.config.Schema.Version,
@@ -268,7 +268,7 @@ func (d *Datastore) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schem
 				if err != nil {
 					return nil, err
 				}
-				diffup := &schemapb.DiffUpdate{
+				diffup := &sdcpb.DiffUpdate{
 					Path:           p.GetPath(),
 					MainValue:      mainVal,
 					CandidateValue: candVal,
@@ -287,9 +287,9 @@ func (d *Datastore) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schem
 
 				// get path from schema server
 				p, err := d.schemaClient.ToPath(ctx,
-					&schemapb.ToPathRequest{
+					&sdcpb.ToPathRequest{
 						PathElement: change.Delete,
-						Schema: &schemapb.Schema{
+						Schema: &sdcpb.Schema{
 							Name:    d.config.Schema.Name,
 							Vendor:  d.config.Schema.Vendor,
 							Version: d.config.Schema.Version,
@@ -299,7 +299,7 @@ func (d *Datastore) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schem
 					return nil, err
 				}
 
-				diffup := &schemapb.DiffUpdate{
+				diffup := &sdcpb.DiffUpdate{
 					Path:      p.GetPath(),
 					MainValue: val,
 				}
@@ -311,11 +311,11 @@ func (d *Datastore) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schem
 	return nil, status.Errorf(codes.InvalidArgument, "unknown datastore type %s", req.GetDatastore().GetType())
 }
 
-func (d *Datastore) Subscribe(req *schemapb.SubscribeRequest, stream schemapb.DataServer_SubscribeServer) error {
+func (d *Datastore) Subscribe(req *sdcpb.SubscribeRequest, stream sdcpb.DataServer_SubscribeServer) error {
 	return nil
 }
 
-func (d *Datastore) validateUpdate(ctx context.Context, upd *schemapb.Update) error {
+func (d *Datastore) validateUpdate(ctx context.Context, upd *sdcpb.Update) error {
 	// 1.validate the path i.e check that the path exists
 	// 2.validate that the value is compliant with the schema
 
@@ -330,9 +330,9 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *schemapb.Update) er
 		return err
 	}
 	switch obj := rsp.GetSchema().Schema.(type) {
-	case *schemapb.SchemaElem_Container:
+	case *sdcpb.SchemaElem_Container:
 		return fmt.Errorf("cannot set value on container %q object", obj.Container.Name)
-	case *schemapb.SchemaElem_Field:
+	case *sdcpb.SchemaElem_Field:
 		if obj.Field.IsState {
 			return fmt.Errorf("cannot set state field: %v", obj.Field.Name)
 		}
@@ -340,7 +340,7 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *schemapb.Update) er
 		if err != nil {
 			return err
 		}
-	case *schemapb.SchemaElem_Leaflist:
+	case *sdcpb.SchemaElem_Leaflist:
 		err = validateLeafListValue(obj.Leaflist, val)
 		if err != nil {
 			return err
@@ -349,10 +349,10 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *schemapb.Update) er
 	return nil
 }
 
-func (d *Datastore) validateMustStatement(ctx context.Context, candidateName string, p *schemapb.Path) (bool, error) {
+func (d *Datastore) validateMustStatement(ctx context.Context, candidateName string, p *sdcpb.Path) (bool, error) {
 	// normalizedPaths will contain the provided path. If the last path.elems contins one or more keys, these will be
 	// taken and appended to the path. The must statements have to be checked for all of the key elements.
-	var normalizedPaths []*schemapb.Path
+	var normalizedPaths []*sdcpb.Path
 
 	// this is to massage for instance
 	// /bfd/subinterface[id=ethernet-1.25] -> /bfd/subinterface[id=ethernet-1.25]/id
@@ -361,9 +361,9 @@ func (d *Datastore) validateMustStatement(ctx context.Context, candidateName str
 	if len(p.Elem[len(p.Elem)-1].Key) > 0 {
 		for k := range p.GetElem()[len(p.Elem)-1].GetKey() {
 			// clone p as new path
-			newPath := proto.Clone(p).(*schemapb.Path)
+			newPath := proto.Clone(p).(*sdcpb.Path)
 			// take the key attribute name and add it as the new path.elem
-			newPath.Elem = append(newPath.Elem, &schemapb.PathElem{Name: k})
+			newPath.Elem = append(newPath.Elem, &sdcpb.PathElem{Name: k})
 			// add the result to the normalized Paths
 			normalizedPaths = append(normalizedPaths, newPath)
 		}
@@ -378,14 +378,14 @@ func (d *Datastore) validateMustStatement(ctx context.Context, candidateName str
 			return false, err
 		}
 
-		var mustStatements []*schemapb.MustStatement
+		var mustStatements []*sdcpb.MustStatement
 		switch rsp.GetSchema().Schema.(type) {
-		case *schemapb.SchemaElem_Container:
+		case *sdcpb.SchemaElem_Container:
 			rsp.Schema.GetContainer()
 			mustStatements = rsp.Schema.GetContainer().GetMustStatements()
-		case *schemapb.SchemaElem_Leaflist:
+		case *sdcpb.SchemaElem_Leaflist:
 			mustStatements = rsp.Schema.GetLeaflist().GetMustStatements()
-		case *schemapb.SchemaElem_Field:
+		case *sdcpb.SchemaElem_Field:
 			mustStatements = rsp.Schema.GetField().GetMustStatements()
 		}
 
@@ -421,11 +421,11 @@ func (d *Datastore) validateMustStatement(ctx context.Context, candidateName str
 	return true, nil
 }
 
-func validateFieldValue(f *schemapb.LeafSchema, v any) error {
+func validateFieldValue(f *sdcpb.LeafSchema, v any) error {
 	return validateLeafTypeValue(f.GetType(), v)
 }
 
-func validateLeafTypeValue(lt *schemapb.SchemaLeafType, v any) error {
+func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 	switch lt.GetType() {
 	case "string":
 		return nil
@@ -577,7 +577,7 @@ func validateLeafTypeValue(lt *schemapb.SchemaLeafType, v any) error {
 	}
 }
 
-func validateLeafListValue(ll *schemapb.LeafListSchema, v any) error {
+func validateLeafListValue(ll *sdcpb.LeafListSchema, v any) error {
 	// TODO: validate Leaflist
 	// TODO: eval must statements
 	for _, must := range ll.MustStatements {
@@ -586,7 +586,7 @@ func validateLeafListValue(ll *schemapb.LeafListSchema, v any) error {
 	return validateLeafTypeValue(ll.GetType(), v)
 }
 
-func equalTypedValues(v1, v2 *schemapb.TypedValue) bool {
+func equalTypedValues(v1, v2 *sdcpb.TypedValue) bool {
 	if v1 == nil {
 		return v2 == nil
 	}
@@ -595,9 +595,9 @@ func equalTypedValues(v1, v2 *schemapb.TypedValue) bool {
 	}
 
 	switch v1 := v1.GetValue().(type) {
-	case *schemapb.TypedValue_AnyVal:
+	case *sdcpb.TypedValue_AnyVal:
 		switch v2 := v2.GetValue().(type) {
-		case *schemapb.TypedValue_AnyVal:
+		case *sdcpb.TypedValue_AnyVal:
 			if v1 == nil && v2 == nil {
 				return true
 			}
@@ -617,9 +617,9 @@ func equalTypedValues(v1, v2 *schemapb.TypedValue) bool {
 		default:
 			return false
 		}
-	case *schemapb.TypedValue_AsciiVal:
+	case *sdcpb.TypedValue_AsciiVal:
 		switch v2 := v2.GetValue().(type) {
-		case *schemapb.TypedValue_AsciiVal:
+		case *sdcpb.TypedValue_AsciiVal:
 			if v1 == nil && v2 == nil {
 				return true
 			}
@@ -630,9 +630,9 @@ func equalTypedValues(v1, v2 *schemapb.TypedValue) bool {
 		default:
 			return false
 		}
-	case *schemapb.TypedValue_BoolVal:
+	case *sdcpb.TypedValue_BoolVal:
 		switch v2 := v2.GetValue().(type) {
-		case *schemapb.TypedValue_BoolVal:
+		case *sdcpb.TypedValue_BoolVal:
 			if v1 == nil && v2 == nil {
 				return true
 			}
@@ -643,9 +643,9 @@ func equalTypedValues(v1, v2 *schemapb.TypedValue) bool {
 		default:
 			return false
 		}
-	case *schemapb.TypedValue_BytesVal:
+	case *sdcpb.TypedValue_BytesVal:
 		switch v2 := v2.GetValue().(type) {
-		case *schemapb.TypedValue_BytesVal:
+		case *sdcpb.TypedValue_BytesVal:
 			if v1 == nil && v2 == nil {
 				return true
 			}
@@ -656,9 +656,9 @@ func equalTypedValues(v1, v2 *schemapb.TypedValue) bool {
 		default:
 			return false
 		}
-	case *schemapb.TypedValue_DecimalVal:
+	case *sdcpb.TypedValue_DecimalVal:
 		switch v2 := v2.GetValue().(type) {
-		case *schemapb.TypedValue_DecimalVal:
+		case *sdcpb.TypedValue_DecimalVal:
 			if v1 == nil && v2 == nil {
 				return true
 			}
@@ -672,9 +672,9 @@ func equalTypedValues(v1, v2 *schemapb.TypedValue) bool {
 		default:
 			return false
 		}
-	case *schemapb.TypedValue_FloatVal:
+	case *sdcpb.TypedValue_FloatVal:
 		switch v2 := v2.GetValue().(type) {
-		case *schemapb.TypedValue_FloatVal:
+		case *sdcpb.TypedValue_FloatVal:
 			if v1 == nil && v2 == nil {
 				return true
 			}
@@ -685,9 +685,9 @@ func equalTypedValues(v1, v2 *schemapb.TypedValue) bool {
 		default:
 			return false
 		}
-	case *schemapb.TypedValue_IntVal:
+	case *sdcpb.TypedValue_IntVal:
 		switch v2 := v2.GetValue().(type) {
-		case *schemapb.TypedValue_IntVal:
+		case *sdcpb.TypedValue_IntVal:
 			if v1 == nil && v2 == nil {
 				return true
 			}
@@ -698,9 +698,9 @@ func equalTypedValues(v1, v2 *schemapb.TypedValue) bool {
 		default:
 			return false
 		}
-	case *schemapb.TypedValue_JsonIetfVal:
+	case *sdcpb.TypedValue_JsonIetfVal:
 		switch v2 := v2.GetValue().(type) {
-		case *schemapb.TypedValue_JsonIetfVal:
+		case *sdcpb.TypedValue_JsonIetfVal:
 			if v1 == nil && v2 == nil {
 				return true
 			}
@@ -711,9 +711,9 @@ func equalTypedValues(v1, v2 *schemapb.TypedValue) bool {
 		default:
 			return false
 		}
-	case *schemapb.TypedValue_JsonVal:
+	case *sdcpb.TypedValue_JsonVal:
 		switch v2 := v2.GetValue().(type) {
-		case *schemapb.TypedValue_JsonVal:
+		case *sdcpb.TypedValue_JsonVal:
 			if v1 == nil && v2 == nil {
 				return true
 			}
@@ -724,9 +724,9 @@ func equalTypedValues(v1, v2 *schemapb.TypedValue) bool {
 		default:
 			return false
 		}
-	case *schemapb.TypedValue_LeaflistVal:
+	case *sdcpb.TypedValue_LeaflistVal:
 		switch v2 := v2.GetValue().(type) {
-		case *schemapb.TypedValue_LeaflistVal:
+		case *sdcpb.TypedValue_LeaflistVal:
 			if v1 == nil && v2 == nil {
 				return true
 			}
@@ -744,9 +744,9 @@ func equalTypedValues(v1, v2 *schemapb.TypedValue) bool {
 		default:
 			return false
 		}
-	case *schemapb.TypedValue_ProtoBytes:
+	case *sdcpb.TypedValue_ProtoBytes:
 		switch v2 := v2.GetValue().(type) {
-		case *schemapb.TypedValue_ProtoBytes:
+		case *sdcpb.TypedValue_ProtoBytes:
 			if v1 == nil && v2 == nil {
 				return true
 			}
@@ -757,9 +757,9 @@ func equalTypedValues(v1, v2 *schemapb.TypedValue) bool {
 		default:
 			return false
 		}
-	case *schemapb.TypedValue_StringVal:
+	case *sdcpb.TypedValue_StringVal:
 		switch v2 := v2.GetValue().(type) {
-		case *schemapb.TypedValue_StringVal:
+		case *sdcpb.TypedValue_StringVal:
 			if v1 == nil && v2 == nil {
 				return true
 			}
@@ -770,9 +770,9 @@ func equalTypedValues(v1, v2 *schemapb.TypedValue) bool {
 		default:
 			return false
 		}
-	case *schemapb.TypedValue_UintVal:
+	case *sdcpb.TypedValue_UintVal:
 		switch v2 := v2.GetValue().(type) {
-		case *schemapb.TypedValue_UintVal:
+		case *sdcpb.TypedValue_UintVal:
 			if v1 == nil && v2 == nil {
 				return true
 			}
@@ -787,9 +787,9 @@ func equalTypedValues(v1, v2 *schemapb.TypedValue) bool {
 	return true
 }
 
-func (d *Datastore) expandUpdate(ctx context.Context, upd *schemapb.Update) ([]*schemapb.Update, error) {
+func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
 	rsp, err := d.schemaClient.GetSchema(ctx,
-		&schemapb.GetSchemaRequest{
+		&sdcpb.GetSchemaRequest{
 			Path:   upd.GetPath(),
 			Schema: d.Schema().GetSchema(),
 		})
@@ -797,7 +797,7 @@ func (d *Datastore) expandUpdate(ctx context.Context, upd *schemapb.Update) ([]*
 		return nil, err
 	}
 	switch rsp := rsp.GetSchema().Schema.(type) {
-	case *schemapb.SchemaElem_Container:
+	case *sdcpb.SchemaElem_Container:
 		log.Debugf("datastore %s: expanding update %v on container %q", d.config.Name, upd, rsp.Container.Name)
 		var v interface{}
 		err := json.Unmarshal(upd.GetValue().GetJsonVal(), &v)
@@ -810,31 +810,31 @@ func (d *Datastore) expandUpdate(ctx context.Context, upd *schemapb.Update) ([]*
 			return nil, err
 		}
 		return rs, nil
-	case *schemapb.SchemaElem_Field:
+	case *sdcpb.SchemaElem_Field:
 		// TODO: Check if value is json and convert to String ?
-		return []*schemapb.Update{upd}, nil
-	case *schemapb.SchemaElem_Leaflist:
+		return []*sdcpb.Update{upd}, nil
+	case *sdcpb.SchemaElem_Leaflist:
 		// TODO: Check if value is json and convert to String ?
-		return []*schemapb.Update{upd}, nil
+		return []*sdcpb.Update{upd}, nil
 	}
 	return nil, nil
 }
 
-func (d *Datastore) expandContainerValue(ctx context.Context, p *schemapb.Path, jv any, cs *schemapb.SchemaElem_Container) ([]*schemapb.Update, error) {
+func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container) ([]*sdcpb.Update, error) {
 	log.Debugf("expanding jsonVal %T | %v | %v", jv, jv, p)
 	switch jv := jv.(type) {
 	case string:
 		v := strings.Trim(jv, "\"")
-		return []*schemapb.Update{
+		return []*sdcpb.Update{
 			{
 				Path: p,
-				Value: &schemapb.TypedValue{
-					Value: &schemapb.TypedValue_StringVal{StringVal: v},
+				Value: &sdcpb.TypedValue{
+					Value: &sdcpb.TypedValue_StringVal{StringVal: v},
 				},
 			},
 		}, nil
 	case map[string]any:
-		upds := make([]*schemapb.Update, 0)
+		upds := make([]*sdcpb.Update, 0)
 		// make sure all keys are present
 		// and append them to path
 		var keysInPath map[string]string
@@ -869,27 +869,27 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *schemapb.Path, 
 				return nil, fmt.Errorf("unknown object %q under container %q", k, cs.Container.Name)
 			}
 			switch item := item.(type) {
-			case *schemapb.LeafSchema: // field
+			case *sdcpb.LeafSchema: // field
 				log.Debugf("handling field %s", item.Name)
-				np := proto.Clone(p).(*schemapb.Path)
-				np.Elem = append(np.Elem, &schemapb.PathElem{Name: item.Name})
-				upd := &schemapb.Update{
+				np := proto.Clone(p).(*sdcpb.Path)
+				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item.Name})
+				upd := &sdcpb.Update{
 					Path: np,
-					Value: &schemapb.TypedValue{
-						Value: &schemapb.TypedValue_StringVal{
+					Value: &sdcpb.TypedValue{
+						Value: &sdcpb.TypedValue_StringVal{
 							StringVal: fmt.Sprintf("%v", v),
 						},
 					},
 				}
 				upds = append(upds, upd)
-			case *schemapb.LeafListSchema: // leaflist
+			case *sdcpb.LeafListSchema: // leaflist
 				log.Debugf("TODO: handling leafList %s", item.Name)
 			case string: // child container
 				log.Debugf("handling child container %s", item)
-				np := proto.Clone(p).(*schemapb.Path)
-				np.Elem = append(np.Elem, &schemapb.PathElem{Name: item})
+				np := proto.Clone(p).(*sdcpb.Path)
+				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item})
 				rsp, err := d.schemaClient.GetSchema(ctx,
-					&schemapb.GetSchemaRequest{
+					&sdcpb.GetSchemaRequest{
 						Path:   np,
 						Schema: d.Schema().GetSchema(),
 					})
@@ -897,7 +897,7 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *schemapb.Path, 
 					return nil, err
 				}
 				switch rsp := rsp.GetSchema().Schema.(type) {
-				case *schemapb.SchemaElem_Container:
+				case *sdcpb.SchemaElem_Container:
 					rs, err := d.expandContainerValue(ctx, np, v, rsp)
 					if err != nil {
 						return nil, err
@@ -913,9 +913,9 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *schemapb.Path, 
 		}
 		return upds, nil
 	case []any:
-		upds := make([]*schemapb.Update, 0)
+		upds := make([]*sdcpb.Update, 0)
 		for _, v := range jv {
-			np := proto.Clone(p).(*schemapb.Path)
+			np := proto.Clone(p).(*sdcpb.Path)
 			r, err := d.expandContainerValue(ctx, np, v, cs)
 			if err != nil {
 				return nil, err
@@ -929,7 +929,7 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *schemapb.Path, 
 	}
 }
 
-func (d *Datastore) getItem(ctx context.Context, s string, cs *schemapb.SchemaElem_Container) (any, bool) {
+func (d *Datastore) getItem(ctx context.Context, s string, cs *sdcpb.SchemaElem_Container) (any, bool) {
 	f, ok := getField(s, cs)
 	if ok {
 		return f, true
@@ -945,7 +945,7 @@ func (d *Datastore) getItem(ctx context.Context, s string, cs *schemapb.SchemaEl
 	return nil, false
 }
 
-func isKey(s string, cs *schemapb.SchemaElem_Container) bool {
+func isKey(s string, cs *sdcpb.SchemaElem_Container) bool {
 	for _, k := range cs.Container.GetKeys() {
 		if k.Name == s {
 			return true
@@ -954,7 +954,7 @@ func isKey(s string, cs *schemapb.SchemaElem_Container) bool {
 	return false
 }
 
-func getField(s string, cs *schemapb.SchemaElem_Container) (*schemapb.LeafSchema, bool) {
+func getField(s string, cs *sdcpb.SchemaElem_Container) (*sdcpb.LeafSchema, bool) {
 	for _, f := range cs.Container.GetFields() {
 		if f.Name == s {
 			return f, true
@@ -963,7 +963,7 @@ func getField(s string, cs *schemapb.SchemaElem_Container) (*schemapb.LeafSchema
 	return nil, false
 }
 
-func getLeafList(s string, cs *schemapb.SchemaElem_Container) (*schemapb.LeafListSchema, bool) {
+func getLeafList(s string, cs *sdcpb.SchemaElem_Container) (*sdcpb.LeafListSchema, bool) {
 	for _, lfl := range cs.Container.GetLeaflists() {
 		if lfl.Name == s {
 			return lfl, true
@@ -972,7 +972,7 @@ func getLeafList(s string, cs *schemapb.SchemaElem_Container) (*schemapb.LeafLis
 	return nil, false
 }
 
-func (d *Datastore) getChild(ctx context.Context, s string, cs *schemapb.SchemaElem_Container) (string, bool) {
+func (d *Datastore) getChild(ctx context.Context, s string, cs *sdcpb.SchemaElem_Container) (string, bool) {
 	for _, c := range cs.Container.GetChildren() {
 		if c == s {
 			return c, true
@@ -980,8 +980,8 @@ func (d *Datastore) getChild(ctx context.Context, s string, cs *schemapb.SchemaE
 	}
 	if cs.Container.Name == "root" {
 		for _, c := range cs.Container.GetChildren() {
-			rsp, err := d.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
-				Path:   &schemapb.Path{Elem: []*schemapb.PathElem{{Name: c}}},
+			rsp, err := d.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
+				Path:   &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: c}}},
 				Schema: d.Schema().GetSchema(),
 			})
 			if err != nil {
@@ -989,7 +989,7 @@ func (d *Datastore) getChild(ctx context.Context, s string, cs *schemapb.SchemaE
 				return "", false
 			}
 			switch rsp := rsp.GetSchema().Schema.(type) {
-			case *schemapb.SchemaElem_Container:
+			case *sdcpb.SchemaElem_Container:
 				for _, child := range rsp.Container.GetChildren() {
 					if child == s {
 						return child, true

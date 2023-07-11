@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
@@ -13,7 +13,7 @@ import (
 )
 
 // data
-func (s *Server) GetData(req *schemapb.GetDataRequest, stream schemapb.DataServer_GetDataServer) error {
+func (s *Server) GetData(req *sdcpb.GetDataRequest, stream sdcpb.DataServer_GetDataServer) error {
 	pr, _ := peer.FromContext(stream.Context())
 	log.Debugf("received GetData request %v from peer %s", req, pr.Addr.String())
 	name := req.GetName()
@@ -21,8 +21,8 @@ func (s *Server) GetData(req *schemapb.GetDataRequest, stream schemapb.DataServe
 		return status.Error(codes.InvalidArgument, "missing datastore name")
 	}
 	switch req.GetDataType() {
-	case schemapb.DataType_STATE:
-		if req.GetDatastore().GetType() == schemapb.Type_CANDIDATE {
+	case sdcpb.DataType_STATE:
+		if req.GetDatastore().GetType() == sdcpb.Type_CANDIDATE {
 			return status.Error(codes.InvalidArgument, "a candidate datastore does not store state data")
 		}
 	}
@@ -38,7 +38,7 @@ func (s *Server) GetData(req *schemapb.GetDataRequest, stream schemapb.DataServe
 	}
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
-	nCh := make(chan *schemapb.GetDataResponse)
+	nCh := make(chan *sdcpb.GetDataResponse)
 	go func() {
 		defer wg.Done()
 		for {
@@ -67,7 +67,7 @@ func (s *Server) GetData(req *schemapb.GetDataRequest, stream schemapb.DataServe
 	return nil
 }
 
-func (s *Server) SetData(ctx context.Context, req *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error) {
+func (s *Server) SetData(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
 	log.Debugf("received SetDataRequest: %v", req)
 	name := req.GetName()
 	if name == "" {
@@ -82,7 +82,7 @@ func (s *Server) SetData(ctx context.Context, req *schemapb.SetDataRequest) (*sc
 	return ds.Set(ctx, req)
 }
 
-func (s *Server) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schemapb.DiffResponse, error) {
+func (s *Server) Diff(ctx context.Context, req *sdcpb.DiffRequest) (*sdcpb.DiffResponse, error) {
 	log.Debugf("received DiffRequest: %v", req)
 	name := req.GetName()
 	if name == "" {
@@ -97,7 +97,7 @@ func (s *Server) Diff(ctx context.Context, req *schemapb.DiffRequest) (*schemapb
 	return ds.Diff(ctx, req)
 }
 
-func (s *Server) Subscribe(req *schemapb.SubscribeRequest, stream schemapb.DataServer_SubscribeServer) error {
+func (s *Server) Subscribe(req *sdcpb.SubscribeRequest, stream sdcpb.DataServer_SubscribeServer) error {
 	log.Debugf("received SubscribeRequest: %v", req)
 	name := req.GetName()
 	if name == "" {

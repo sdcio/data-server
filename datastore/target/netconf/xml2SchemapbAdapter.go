@@ -6,39 +6,39 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/iptecharch/data-server/schema"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
 
-// XML2SchemapbConfigAdapter is used to transform the provided XML configuration data into the gnmi-like schemapb.Notifications.
+// XML2sdcpbConfigAdapter is used to transform the provided XML configuration data into the gnmi-like sdcpb.Notifications.
 // This transformation is done via schema information acquired throughout the SchemaServerClient throughout the transformation process.
-type XML2SchemapbConfigAdapter struct {
+type XML2sdcpbConfigAdapter struct {
 	schemaClient schema.Client
-	schema       *schemapb.Schema
+	schema       *sdcpb.Schema
 }
 
-// NewXML2SchemapbConfigAdapter constructs a new XML2SchemapbConfigAdapter
-func NewXML2SchemapbConfigAdapter(ssc schema.Client, schema *schemapb.Schema) *XML2SchemapbConfigAdapter {
-	return &XML2SchemapbConfigAdapter{
+// NewXML2sdcpbConfigAdapter constructs a new XML2sdcpbConfigAdapter
+func NewXML2sdcpbConfigAdapter(ssc schema.Client, schema *sdcpb.Schema) *XML2sdcpbConfigAdapter {
+	return &XML2sdcpbConfigAdapter{
 		schemaClient: ssc,
 		schema:       schema,
 	}
 }
 
-// Transform takes an etree.Document and transforms the content into a schemapb based Notification
-func (x *XML2SchemapbConfigAdapter) Transform(ctx context.Context, doc *etree.Document) *schemapb.Notification {
-	result := &schemapb.Notification{}
-	x.transformRecursive(ctx, doc.Root(), []*schemapb.PathElem{}, result, nil)
+// Transform takes an etree.Document and transforms the content into a sdcpb based Notification
+func (x *XML2sdcpbConfigAdapter) Transform(ctx context.Context, doc *etree.Document) *sdcpb.Notification {
+	result := &sdcpb.Notification{}
+	x.transformRecursive(ctx, doc.Root(), []*sdcpb.PathElem{}, result, nil)
 	return result
 }
 
-func (x *XML2SchemapbConfigAdapter) transformRecursive(ctx context.Context, e *etree.Element, pelems []*schemapb.PathElem, result *schemapb.Notification, tc *TransformationContext) error {
+func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, result *sdcpb.Notification, tc *TransformationContext) error {
 	// add the actual path element to the array of path elements that make up the actual abs path
-	pelems = append(pelems, &schemapb.PathElem{Name: e.Tag})
+	pelems = append(pelems, &sdcpb.PathElem{Name: e.Tag})
 
 	// retrieve schema
-	sr, err := x.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
-		Path: &schemapb.Path{
+	sr, err := x.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
+		Path: &sdcpb.Path{
 			Elem: pelems,
 		},
 		Schema: x.schema,
@@ -48,7 +48,7 @@ func (x *XML2SchemapbConfigAdapter) transformRecursive(ctx context.Context, e *e
 	}
 
 	switch sr.GetSchema().Schema.(type) {
-	case *schemapb.SchemaElem_Container:
+	case *sdcpb.SchemaElem_Container:
 		// retrieved schema describes a yang container
 		log.Tracef("transforming container %q", e.Tag)
 		err = x.transformContainer(ctx, e, sr, pelems, result)
@@ -56,7 +56,7 @@ func (x *XML2SchemapbConfigAdapter) transformRecursive(ctx context.Context, e *e
 			return err
 		}
 
-	case *schemapb.SchemaElem_Field:
+	case *sdcpb.SchemaElem_Field:
 		// retrieved schema describes a yang Field
 		log.Tracef("transforming field %q", e.Tag)
 		err = x.transformField(ctx, e, pelems, sr.GetSchema().GetField(), result)
@@ -64,7 +64,7 @@ func (x *XML2SchemapbConfigAdapter) transformRecursive(ctx context.Context, e *e
 			return err
 		}
 
-	case *schemapb.SchemaElem_Leaflist:
+	case *sdcpb.SchemaElem_Leaflist:
 		// retrieved schema describes a yang LeafList
 		log.Tracef("transforming leaflist %q", e.Tag)
 		err = x.transformLeafList(ctx, e, sr, pelems, result, tc)
@@ -76,8 +76,8 @@ func (x *XML2SchemapbConfigAdapter) transformRecursive(ctx context.Context, e *e
 	return nil
 }
 
-// transformContainer transforms an etree.element of a configuration as an update into the provided *schemapb.Notification.
-func (x *XML2SchemapbConfigAdapter) transformContainer(ctx context.Context, e *etree.Element, sr *schemapb.GetSchemaResponse, pelems []*schemapb.PathElem, result *schemapb.Notification) error {
+// transformContainer transforms an etree.element of a configuration as an update into the provided *sdcpb.Notification.
+func (x *XML2sdcpbConfigAdapter) transformContainer(ctx context.Context, e *etree.Element, sr *sdcpb.GetSchemaResponse, pelems []*sdcpb.PathElem, result *sdcpb.Notification) error {
 	cs := sr.GetSchema().GetContainer()
 	for _, ls := range cs.Keys {
 		pelem := pelems[len(pelems)-1]
@@ -103,8 +103,8 @@ func (x *XML2SchemapbConfigAdapter) transformContainer(ctx context.Context, e *e
 	return nil
 }
 
-// transformField transforms an etree.element of a configuration as an update into the provided *schemapb.Notification.
-func (x *XML2SchemapbConfigAdapter) transformField(ctx context.Context, e *etree.Element, pelems []*schemapb.PathElem, ls *schemapb.LeafSchema, result *schemapb.Notification) error {
+// transformField transforms an etree.element of a configuration as an update into the provided *sdcpb.Notification.
+func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, ls *sdcpb.LeafSchema, result *sdcpb.Notification) error {
 	// process terminal values
 	//data := strings.TrimSpace(e.Text())
 
@@ -113,9 +113,9 @@ func (x *XML2SchemapbConfigAdapter) transformField(ctx context.Context, e *etree
 		return err
 	}
 
-	// create schemapb.update
-	u := &schemapb.Update{
-		Path: &schemapb.Path{
+	// create sdcpb.update
+	u := &sdcpb.Update{
+		Path: &sdcpb.Path{
 			Elem: pelems,
 		},
 		Value: tv,
@@ -126,13 +126,13 @@ func (x *XML2SchemapbConfigAdapter) transformField(ctx context.Context, e *etree
 
 // transformLeafList processes LeafList entries. These will be store in the TransformationContext.
 // A new TransformationContext is created when entering a new container. And the appropriate actions are taken when a container is exited.
-// Meaning the LeafLists will then be transformed into a single update with a schemapb.TypedValue_LeaflistVal with all the values.
-func (x *XML2SchemapbConfigAdapter) transformLeafList(ctx context.Context, e *etree.Element, sr *schemapb.GetSchemaResponse, pelems []*schemapb.PathElem, result *schemapb.Notification, tc *TransformationContext) error {
+// Meaning the LeafLists will then be transformed into a single update with a sdcpb.TypedValue_LeaflistVal with all the values.
+func (x *XML2sdcpbConfigAdapter) transformLeafList(ctx context.Context, e *etree.Element, sr *sdcpb.GetSchemaResponse, pelems []*sdcpb.PathElem, result *sdcpb.Notification, tc *TransformationContext) error {
 
 	// process terminal values
 	data := strings.TrimSpace(e.Text())
 
-	typedval := &schemapb.TypedValue{Value: &schemapb.TypedValue_StringVal{StringVal: data}}
+	typedval := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: data}}
 
 	name := pelems[len(pelems)-1].Name
 	tc.AddLeafListEntry(name, typedval)

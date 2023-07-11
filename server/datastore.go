@@ -5,14 +5,14 @@ import (
 
 	"github.com/iptecharch/data-server/config"
 	"github.com/iptecharch/data-server/datastore"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // datastore
-func (s *Server) GetDataStore(ctx context.Context, req *schemapb.GetDataStoreRequest) (*schemapb.GetDataStoreResponse, error) {
+func (s *Server) GetDataStore(ctx context.Context, req *sdcpb.GetDataStoreRequest) (*sdcpb.GetDataStoreResponse, error) {
 	log.Debugf("Received GetDataStoreRequest: %v", req)
 	name := req.GetName()
 	if name == "" {
@@ -28,36 +28,36 @@ func (s *Server) GetDataStore(ctx context.Context, req *schemapb.GetDataStoreReq
 	if err != nil {
 		return nil, err
 	}
-	rsp := &schemapb.GetDataStoreResponse{
+	rsp := &sdcpb.GetDataStoreResponse{
 		Name:      name,
-		Datastore: make([]*schemapb.DataStore, 0, len(cands)+1),
+		Datastore: make([]*sdcpb.DataStore, 0, len(cands)+1),
 	}
 	rsp.Datastore = append(rsp.Datastore,
-		&schemapb.DataStore{
-			Type: *schemapb.Type_MAIN.Enum().Enum(),
+		&sdcpb.DataStore{
+			Type: *sdcpb.Type_MAIN.Enum().Enum(),
 			Name: name,
 		},
 	)
-	rsp.Target = &schemapb.Target{
+	rsp.Target = &sdcpb.Target{
 		Type:    ds.Config().SBI.Type,
 		Address: ds.Config().SBI.Address,
-		// Tls: &schemapb.TLS{
+		// Tls: &sdcpb.TLS{
 		// 	Ca:         ds.Config().SBI.TLS.CA,
 		// 	Cert:       ds.Config().SBI.TLS.Cert,
 		// 	Key:        ds.Config().SBI.TLS.Key,
 		// 	SkipVerify: ds.Config().SBI.TLS.SkipVerify,
 		// },
-		// Credentials: &schemapb.Credentials{},
+		// Credentials: &sdcpb.Credentials{},
 	}
-	rsp.Schema = &schemapb.Schema{
+	rsp.Schema = &sdcpb.Schema{
 		Name:    ds.Config().Schema.Name,
 		Vendor:  ds.Config().Schema.Vendor,
 		Version: ds.Config().Schema.Version,
 	}
 	for _, cand := range cands {
 		rsp.Datastore = append(rsp.Datastore,
-			&schemapb.DataStore{
-				Type: *schemapb.Type_CANDIDATE.Enum(),
+			&sdcpb.DataStore{
+				Type: *sdcpb.Type_CANDIDATE.Enum(),
 				Name: cand,
 			},
 		)
@@ -66,7 +66,7 @@ func (s *Server) GetDataStore(ctx context.Context, req *schemapb.GetDataStoreReq
 	return rsp, nil
 }
 
-func (s *Server) CreateDataStore(ctx context.Context, req *schemapb.CreateDataStoreRequest) (*schemapb.CreateDataStoreResponse, error) {
+func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStoreRequest) (*sdcpb.CreateDataStoreResponse, error) {
 	log.Debugf("Received CreateDataStoreRequest: %v", req)
 	name := req.GetName()
 	if name == "" {
@@ -82,12 +82,12 @@ func (s *Server) CreateDataStore(ctx context.Context, req *schemapb.CreateDataSt
 			return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %s", name)
 		}
 		switch req.GetDatastore().GetType() {
-		case schemapb.Type_CANDIDATE:
+		case sdcpb.Type_CANDIDATE:
 			err := ds.CreateCandidate(ctx, req.GetDatastore().GetName())
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "%v", err)
 			}
-			return &schemapb.CreateDataStoreResponse{}, nil
+			return &sdcpb.CreateDataStoreResponse{}, nil
 		default:
 			return nil, status.Errorf(codes.InvalidArgument, "schema required for MAIN datastore creation")
 		}
@@ -126,13 +126,13 @@ func (s *Server) CreateDataStore(ctx context.Context, req *schemapb.CreateDataSt
 		defer s.md.Unlock()
 		s.datastores[req.GetName()] = datastore.New(
 			dsConfig, s.schemaClient, s.cacheClient, s.gnmiOpts...)
-		return &schemapb.CreateDataStoreResponse{}, nil
+		return &sdcpb.CreateDataStoreResponse{}, nil
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "schema or datastore must be set")
 	}
 }
 
-func (s *Server) DeleteDataStore(ctx context.Context, req *schemapb.DeleteDataStoreRequest) (*schemapb.DeleteDataStoreResponse, error) {
+func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStoreRequest) (*sdcpb.DeleteDataStoreResponse, error) {
 	log.Debugf("Received DeleteDataStoreRequest: %v", req)
 	name := req.GetName()
 	if name == "" {
@@ -151,24 +151,24 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *schemapb.DeleteDataSt
 		ds.Stop()
 		delete(s.datastores, name)
 		log.Infof("deleted main %s", name)
-		return &schemapb.DeleteDataStoreResponse{}, nil
+		return &sdcpb.DeleteDataStoreResponse{}, nil
 	default:
 		switch req.GetDatastore().GetType() {
-		case *schemapb.Type_CANDIDATE.Enum():
+		case *sdcpb.Type_CANDIDATE.Enum():
 			ds.DeleteCandidate(ctx, req.GetDatastore().GetName())
 			log.Infof("datastore %s deleted candidate %s", name, req.GetDatastore().GetName())
-		case *schemapb.Type_MAIN.Enum():
+		case *sdcpb.Type_MAIN.Enum():
 			s.md.Lock()
 			defer s.md.Unlock()
 			ds.Stop()
 			delete(s.datastores, name)
 			log.Infof("deleted main %s", name)
 		}
-		return &schemapb.DeleteDataStoreResponse{}, nil
+		return &sdcpb.DeleteDataStoreResponse{}, nil
 	}
 }
 
-func (s *Server) Commit(ctx context.Context, req *schemapb.CommitRequest) (*schemapb.CommitResponse, error) {
+func (s *Server) Commit(ctx context.Context, req *sdcpb.CommitRequest) (*sdcpb.CommitResponse, error) {
 	log.Debugf("Received CommitDataStoreRequest: %v", req)
 	name := req.GetName()
 	if name == "" {
@@ -184,10 +184,10 @@ func (s *Server) Commit(ctx context.Context, req *schemapb.CommitRequest) (*sche
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%v", err)
 	}
-	return &schemapb.CommitResponse{}, nil
+	return &sdcpb.CommitResponse{}, nil
 }
 
-func (s *Server) Rebase(ctx context.Context, req *schemapb.RebaseRequest) (*schemapb.RebaseResponse, error) {
+func (s *Server) Rebase(ctx context.Context, req *sdcpb.RebaseRequest) (*sdcpb.RebaseResponse, error) {
 	log.Debugf("Received RebaseDataStoreRequest: %v", req)
 	name := req.GetName()
 	if name == "" {
@@ -203,10 +203,10 @@ func (s *Server) Rebase(ctx context.Context, req *schemapb.RebaseRequest) (*sche
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%v", err)
 	}
-	return &schemapb.RebaseResponse{}, nil
+	return &sdcpb.RebaseResponse{}, nil
 }
 
-func (s *Server) Discard(ctx context.Context, req *schemapb.DiscardRequest) (*schemapb.DiscardResponse, error) {
+func (s *Server) Discard(ctx context.Context, req *sdcpb.DiscardRequest) (*sdcpb.DiscardResponse, error) {
 	log.Debugf("Received DiscardDataStoreRequest: %v", req)
 	name := req.GetName()
 	if name == "" {
@@ -222,5 +222,5 @@ func (s *Server) Discard(ctx context.Context, req *schemapb.DiscardRequest) (*sc
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%v", err)
 	}
-	return &schemapb.DiscardResponse{}, nil
+	return &sdcpb.DiscardResponse{}, nil
 }

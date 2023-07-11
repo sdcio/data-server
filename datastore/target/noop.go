@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/iptecharch/data-server/config"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -19,16 +19,16 @@ func newNoopTarget(_ context.Context, name string) (*noopTarget, error) {
 	return nt, nil
 }
 
-func (t *noopTarget) Get(_ context.Context, _ *schemapb.GetDataRequest) (*schemapb.GetDataResponse, error) {
-	result := &schemapb.GetDataResponse{
-		Notification: []*schemapb.Notification{},
+func (t *noopTarget) Get(_ context.Context, _ *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+	result := &sdcpb.GetDataResponse{
+		Notification: []*sdcpb.Notification{},
 	}
 	return result, nil
 }
 
-func (t *noopTarget) Set(_ context.Context, _ *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error) {
-	result := &schemapb.SetDataResponse{
-		Response: []*schemapb.UpdateResult{},
+func (t *noopTarget) Set(_ context.Context, _ *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
+	result := &sdcpb.SetDataResponse{
+		Response: []*sdcpb.UpdateResult{},
 	}
 	return result, nil
 }

@@ -7,8 +7,8 @@ import (
 
 	"github.com/iptecharch/data-server/schema"
 	schemaConfig "github.com/iptecharch/schema-server/config"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	schemaStore "github.com/iptecharch/schema-server/schema"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -71,53 +71,53 @@ func (s *Server) createSchemaClient(ctx context.Context) {
 			goto SCHEMA_CONNECT
 		}
 		log.Infof("connected to schema server: %s", s.config.SchemaServer.Address)
-		// s.remoteSchemaClient = schemapb.NewSchemaServerClient(cc)
+		// s.remoteSchemaClient = sdcpb.NewSchemaServerClient(cc)
 		s.schemaClient = schema.NewRemoteClient(cc)
 	}
 }
 
-func (s *Server) GetSchema(ctx context.Context, req *schemapb.GetSchemaRequest) (*schemapb.GetSchemaResponse, error) {
+func (s *Server) GetSchema(ctx context.Context, req *sdcpb.GetSchemaRequest) (*sdcpb.GetSchemaResponse, error) {
 	log.Debugf("received GetSchemaRequest: %v", req)
 	return s.schemaClient.GetSchema(ctx, req)
 }
 
-func (s *Server) ListSchema(ctx context.Context, req *schemapb.ListSchemaRequest) (*schemapb.ListSchemaResponse, error) {
+func (s *Server) ListSchema(ctx context.Context, req *sdcpb.ListSchemaRequest) (*sdcpb.ListSchemaResponse, error) {
 	log.Debugf("received ListSchema: %v", req)
 	return s.schemaClient.ListSchema(ctx, req)
 }
 
-func (s *Server) GetSchemaDetails(ctx context.Context, req *schemapb.GetSchemaDetailsRequest) (*schemapb.GetSchemaDetailsResponse, error) {
+func (s *Server) GetSchemaDetails(ctx context.Context, req *sdcpb.GetSchemaDetailsRequest) (*sdcpb.GetSchemaDetailsResponse, error) {
 	log.Debugf("received GetSchemaDetails: %v", req)
 	return s.schemaClient.GetSchemaDetails(ctx, req)
 }
 
-func (s *Server) CreateSchema(ctx context.Context, req *schemapb.CreateSchemaRequest) (*schemapb.CreateSchemaResponse, error) {
+func (s *Server) CreateSchema(ctx context.Context, req *sdcpb.CreateSchemaRequest) (*sdcpb.CreateSchemaResponse, error) {
 	log.Debugf("received CreateSchema: %v", req)
 	return s.schemaClient.CreateSchema(ctx, req)
 }
 
-func (s *Server) ReloadSchema(ctx context.Context, req *schemapb.ReloadSchemaRequest) (*schemapb.ReloadSchemaResponse, error) {
+func (s *Server) ReloadSchema(ctx context.Context, req *sdcpb.ReloadSchemaRequest) (*sdcpb.ReloadSchemaResponse, error) {
 	log.Debugf("received ReloadSchema: %v", req)
 	return s.schemaClient.ReloadSchema(ctx, req)
 }
 
-func (s *Server) DeleteSchema(ctx context.Context, req *schemapb.DeleteSchemaRequest) (*schemapb.DeleteSchemaResponse, error) {
+func (s *Server) DeleteSchema(ctx context.Context, req *sdcpb.DeleteSchemaRequest) (*sdcpb.DeleteSchemaResponse, error) {
 	log.Debugf("received DeleteSchema: %v", req)
 	return s.schemaClient.DeleteSchema(ctx, req)
 }
 
-func (s *Server) ToPath(ctx context.Context, req *schemapb.ToPathRequest) (*schemapb.ToPathResponse, error) {
+func (s *Server) ToPath(ctx context.Context, req *sdcpb.ToPathRequest) (*sdcpb.ToPathResponse, error) {
 	log.Debugf("received ToPath: %v", req)
 	return s.schemaClient.ToPath(ctx, req)
 }
 
-func (s *Server) ExpandPath(ctx context.Context, req *schemapb.ExpandPathRequest) (*schemapb.ExpandPathResponse, error) {
+func (s *Server) ExpandPath(ctx context.Context, req *sdcpb.ExpandPathRequest) (*sdcpb.ExpandPathResponse, error) {
 	log.Debugf("received ExpandPath: %v", req)
 	return s.schemaClient.ExpandPath(ctx, req)
 }
 
 // BROKEN
-func (s *Server) UploadSchema(stream schemapb.SchemaServer_UploadSchemaServer) error {
+func (s *Server) UploadSchema(stream sdcpb.SchemaServer_UploadSchemaServer) error {
 	schemaUploadClient, err := s.schemaClient.UploadSchema(stream.Context())
 	if err != nil {
 		return err
@@ -135,7 +135,7 @@ func (s *Server) UploadSchema(stream schemapb.SchemaServer_UploadSchemaServer) e
 	}
 }
 
-func (s *Server) GetSchemaElements(req *schemapb.GetSchemaRequest, stream schemapb.SchemaServer_GetSchemaElementsServer) error {
+func (s *Server) GetSchemaElements(req *sdcpb.GetSchemaRequest, stream sdcpb.SchemaServer_GetSchemaElementsServer) error {
 	ctx := stream.Context()
 	ch, err := s.schemaClient.GetSchemaElements(ctx, req)
 	if err != nil {
@@ -149,7 +149,7 @@ func (s *Server) GetSchemaElements(req *schemapb.GetSchemaRequest, stream schema
 			if !ok {
 				return nil
 			}
-			err = stream.Send(&schemapb.GetSchemaResponse{
+			err = stream.Send(&sdcpb.GetSchemaResponse{
 				Schema: sce,
 			})
 			if err != nil {

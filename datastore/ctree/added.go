@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/iptecharch/schema-server/config"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/openconfig/gnmi/path"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	log "github.com/sirupsen/logrus"
@@ -49,7 +49,7 @@ func (t *Tree) AddGNMINotification(n *gnmi.Notification) error {
 		if upd.GetVal().GetValue() == nil {
 			continue
 		}
-		// convert gnmi.TypedValue to schemapb.TypedValue
+		// convert gnmi.TypedValue to sdcpb.TypedValue
 		scVal := utils.ToSchemaTypedValue(upd.GetVal())
 		err = t.Add(items, scVal)
 		if err != nil {
@@ -60,7 +60,7 @@ func (t *Tree) AddGNMINotification(n *gnmi.Notification) error {
 	return nil
 }
 
-func (t *Tree) AddSchemaNotification(n *schemapb.Notification) error {
+func (t *Tree) AddSchemaNotification(n *sdcpb.Notification) error {
 	if n == nil {
 		return nil
 	}
@@ -88,14 +88,14 @@ func (t *Tree) AddNotification(n any) error {
 	switch n := n.(type) {
 	case *gnmi.Notification:
 		return t.AddGNMINotification(n)
-	case *schemapb.Notification:
+	case *sdcpb.Notification:
 		return t.AddSchemaNotification(n)
 	default:
 		return fmt.Errorf("unknown notification type %T", n)
 	}
 }
 
-func (t *Tree) AddSchemaUpdate(upd *schemapb.Update) error {
+func (t *Tree) AddSchemaUpdate(upd *sdcpb.Update) error {
 	items, err := utils.CompletePath(nil, upd.GetPath())
 	if err != nil {
 		return err
@@ -105,7 +105,7 @@ func (t *Tree) AddSchemaUpdate(upd *schemapb.Update) error {
 	return err
 }
 
-func (t *Tree) GetPath(ctx context.Context, p *schemapb.Path, schemaClient schemapb.SchemaServerClient, sc *config.SchemaConfig) ([]*schemapb.Notification, error) {
+func (t *Tree) GetPath(ctx context.Context, p *sdcpb.Path, schemaClient sdcpb.SchemaServerClient, sc *config.SchemaConfig) ([]*sdcpb.Notification, error) {
 	cp, err := utils.CompletePath(nil, p)
 	if err != nil {
 		return nil, err
@@ -113,11 +113,11 @@ func (t *Tree) GetPath(ctx context.Context, p *schemapb.Path, schemaClient schem
 	return t.GetNotifications(ctx, cp, schemaClient, sc)
 }
 
-func (t *Tree) GetNotifications(ctx context.Context, p []string, schemaClient schemapb.SchemaServerClient, sc *config.SchemaConfig) ([]*schemapb.Notification, error) {
-	ns := make([]*schemapb.Notification, 0)
+func (t *Tree) GetNotifications(ctx context.Context, p []string, schemaClient sdcpb.SchemaServerClient, sc *config.SchemaConfig) ([]*sdcpb.Notification, error) {
+	ns := make([]*sdcpb.Notification, 0)
 	err := t.Query(p,
 		func(path []string, _ *Leaf, val interface{}) error {
-			req := &schemapb.ToPathRequest{
+			req := &sdcpb.ToPathRequest{
 				PathElement: path,
 				Schema:      sc.GetSchema(),
 			}
@@ -125,9 +125,9 @@ func (t *Tree) GetNotifications(ctx context.Context, p []string, schemaClient sc
 			if err != nil {
 				return err
 			}
-			n := &schemapb.Notification{
+			n := &sdcpb.Notification{
 				Timestamp: time.Now().UnixNano(),
-				Update: []*schemapb.Update{{
+				Update: []*sdcpb.Update{{
 					Path:  rsp.GetPath(),
 					Value: utils.ToSchemaTypedValue(val),
 				}},
@@ -138,7 +138,7 @@ func (t *Tree) GetNotifications(ctx context.Context, p []string, schemaClient sc
 	return ns, err
 }
 
-func (t *Tree) DeletePath(p *schemapb.Path) error {
+func (t *Tree) DeletePath(p *sdcpb.Path) error {
 	cp, err := utils.CompletePath(nil, p)
 	if err != nil {
 		return err

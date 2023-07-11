@@ -2,7 +2,7 @@
     "interface": {
         "name": "ethernet-1/1",
         "admin-state": "enable",
-        "description": "via schemapb JSON",
+        "description": "via sdcpb JSON",
         "vlan-tagging": true,
         "subinterface": {
             "index": 12,

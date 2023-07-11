@@ -5,13 +5,13 @@ go 1.20
 require (
 	github.com/AlekSi/pointer v1.2.0
 	github.com/beevik/etree v1.2.0
-	github.com/golang/protobuf v1.5.3
 	github.com/gorilla/mux v1.8.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/iptecharch/cache v0.0.9
-	github.com/iptecharch/schema-server v0.0.3
-	github.com/iptecharch/yang-parser v0.0.2
+	github.com/iptecharch/cache v0.0.10
+	github.com/iptecharch/schema-server v0.0.4
+	github.com/iptecharch/sdc-protos v0.0.1
+	github.com/iptecharch/yang-parser v0.0.3
 	github.com/kylelemons/godebug v1.1.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/openconfig/gnmi v0.9.1
@@ -87,6 +87,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v1.1.1 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
+	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/flatbuffers v23.3.3+incompatible // indirect
 	github.com/google/gnostic v0.6.9 // indirect

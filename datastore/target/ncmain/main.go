@@ -7,7 +7,7 @@ import (
 	"github.com/iptecharch/data-server/config"
 	"github.com/iptecharch/data-server/datastore/target"
 	"github.com/iptecharch/data-server/schema"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -43,7 +43,7 @@ func main() {
 	}
 
 	ssc := schema.NewRemoteClient(cc)
-	schema := &schemapb.Schema{
+	schema := &sdcpb.Schema{
 		Name:    "junos",
 		Vendor:  "Juniper",
 		Version: "22.3R1",
@@ -54,16 +54,16 @@ func main() {
 		fmt.Printf("ERROR: %v", err)
 	}
 
-	gdr, err := t.Get(ctx, &schemapb.GetDataRequest{
+	gdr, err := t.Get(ctx, &sdcpb.GetDataRequest{
 		Name: "foobar",
-		Path: []*schemapb.Path{
-			//{Elem: []*schemapb.PathElem{{Name: "configuration"}, {Name: "system"}}},
-			//{Elem: []*schemapb.PathElem{{Name: "configuration"}, {Name: "interfaces"}, {Name: "interface", Key: map[string]string{"name": "ge5"}}, {Name: "mtu"}}},
-			//{Elem: []*schemapb.PathElem{{Name: "configuration"}, {Name: "interfaces"}, {Name: "interface", Key: map[string]string{"name": "ge5"}}}},
-			// {Elem: []*schemapb.PathElem{{Name: "configuration"}, {Name: "interfaces"}, {Name: "interface", Key: map[string]string{"name": "ge5"}}}},
+		Path: []*sdcpb.Path{
+			//{Elem: []*sdcpb.PathElem{{Name: "configuration"}, {Name: "system"}}},
+			//{Elem: []*sdcpb.PathElem{{Name: "configuration"}, {Name: "interfaces"}, {Name: "interface", Key: map[string]string{"name": "ge5"}}, {Name: "mtu"}}},
+			//{Elem: []*sdcpb.PathElem{{Name: "configuration"}, {Name: "interfaces"}, {Name: "interface", Key: map[string]string{"name": "ge5"}}}},
+			// {Elem: []*sdcpb.PathElem{{Name: "configuration"}, {Name: "interfaces"}, {Name: "interface", Key: map[string]string{"name": "ge5"}}}},
 		},
-		Datastore: &schemapb.DataStore{
-			Type: schemapb.Type_MAIN,
+		Datastore: &sdcpb.DataStore{
+			Type: sdcpb.Type_MAIN,
 		},
 	})
 	if err != nil {

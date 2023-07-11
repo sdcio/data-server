@@ -6,11 +6,11 @@ import (
 	"regexp"
 	"strings"
 
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
 
-func Convert(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedValue, error) {
+func Convert(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	switch lst.Type {
 	case "string":
 		return ConvertString(value, lst)
@@ -59,35 +59,35 @@ func Convert(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedValue, 
 	return ConvertString(value, lst)
 }
 
-func ConvertInstanceIdentifier(value string, slt *schemapb.SchemaLeafType) (*schemapb.TypedValue, error) {
+func ConvertInstanceIdentifier(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// delegate to string, validation is left for a different party at a later stage in processing
 	return ConvertString(value, slt)
 }
 
-func ConvertIdentityRef(value string, slt *schemapb.SchemaLeafType) (*schemapb.TypedValue, error) {
+func ConvertIdentityRef(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// delegate to string, validation is left for a different party at a later stage in processing
 	return ConvertString(value, slt)
 }
 
-func ConvertBinary(value string, slt *schemapb.SchemaLeafType) (*schemapb.TypedValue, error) {
+func ConvertBinary(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// Binary is basically a base64 encoded string that might carry a length restriction
 	// so we should be fine with delegating to string
 	return ConvertString(value, slt)
 }
 
-func ConvertLeafRef(value string, slt *schemapb.SchemaLeafType) (*schemapb.TypedValue, error) {
+func ConvertLeafRef(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// a leafref should basically be a string value that also exists somewhere else in the config as a value.
 	// we leave the validation of the leafrefs to a different party at a later stage
 	return ConvertString(value, slt)
 }
 
-func ConvertEnumeration(value string, slt *schemapb.SchemaLeafType) (*schemapb.TypedValue, error) {
+func ConvertEnumeration(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// iterate the valid values as per schema
 	for _, item := range slt.Values {
 		// if value is found, return a StringVal
 		if value == item {
-			return &schemapb.TypedValue{
-				Value: &schemapb.TypedValue_StringVal{
+			return &sdcpb.TypedValue{
+				Value: &sdcpb.TypedValue_StringVal{
 					StringVal: value,
 				},
 			}, nil
@@ -97,7 +97,7 @@ func ConvertEnumeration(value string, slt *schemapb.SchemaLeafType) (*schemapb.T
 	return nil, fmt.Errorf("value %q does not match any valid enum values [%s]", value, strings.Join(slt.Values, ", "))
 }
 
-func ConvertBoolean(value string, _ *schemapb.SchemaLeafType) (*schemapb.TypedValue, error) {
+func ConvertBoolean(value string, _ *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	var bval bool
 	// check for true or false in string representation
 	switch value {
@@ -110,13 +110,13 @@ func ConvertBoolean(value string, _ *schemapb.SchemaLeafType) (*schemapb.TypedVa
 		return nil, fmt.Errorf("illegal value %q for boolean type", value)
 	}
 	// otherwise return the BoolVal TypedValue
-	return &schemapb.TypedValue{
-		Value: &schemapb.TypedValue_BoolVal{
+	return &sdcpb.TypedValue{
+		Value: &sdcpb.TypedValue_BoolVal{
 			BoolVal: bval,
 		},
 	}, nil
 }
-func ConvertUint8(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedValue, error) {
+func ConvertUint8(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// create / parse the ranges
 	ranges := NewUrnges(lst.Range, 0, math.MaxUint8)
 	// validate the value against the ranges
@@ -128,7 +128,7 @@ func ConvertUint8(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedVa
 	return val, nil
 }
 
-func ConvertUint16(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedValue, error) {
+func ConvertUint16(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// create / parse the ranges
 	ranges := NewUrnges(lst.Range, 0, math.MaxUint16)
 	// validate the value against the ranges
@@ -140,7 +140,7 @@ func ConvertUint16(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedV
 	return val, nil
 }
 
-func ConvertUint32(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedValue, error) {
+func ConvertUint32(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// create / parse the ranges
 	ranges := NewUrnges(lst.Range, 0, math.MaxUint32)
 	// validate the value against the ranges
@@ -152,7 +152,7 @@ func ConvertUint32(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedV
 	return val, nil
 }
 
-func ConvertUint64(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedValue, error) {
+func ConvertUint64(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// create / parse the ranges
 	ranges := NewUrnges(lst.Range, 0, math.MaxUint64)
 	// validate the value against the ranges
@@ -164,7 +164,7 @@ func ConvertUint64(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedV
 	return val, nil
 }
 
-func ConvertInt8(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedValue, error) {
+func ConvertInt8(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// create / parse the ranges
 	ranges := NewSrnges(lst.Range, math.MinInt8, math.MaxInt8)
 	// validate the value against the ranges
@@ -176,7 +176,7 @@ func ConvertInt8(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedVal
 	return val, nil
 }
 
-func ConvertInt16(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedValue, error) {
+func ConvertInt16(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// create / parse the ranges
 	ranges := NewSrnges(lst.Range, math.MinInt16, math.MaxInt16)
 	// validate the value against the ranges
@@ -188,7 +188,7 @@ func ConvertInt16(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedVa
 	return val, nil
 }
 
-func ConvertInt32(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedValue, error) {
+func ConvertInt32(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// create / parse the ranges
 	ranges := NewSrnges(lst.Range, math.MinInt32, math.MaxInt32)
 	// validate the value against the ranges
@@ -199,7 +199,7 @@ func ConvertInt32(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedVa
 	// return the TypedValue
 	return val, nil
 }
-func ConvertInt64(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedValue, error) {
+func ConvertInt64(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// create / parse the ranges
 	ranges := NewSrnges(lst.Range, math.MinInt64, math.MaxInt64)
 	// validate the value against the ranges
@@ -211,7 +211,7 @@ func ConvertInt64(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedVa
 	return val, nil
 }
 
-func ConvertString(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedValue, error) {
+func ConvertString(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// check length of the string if the length property is set
 	// length will contain a range like string definition "5..60" or "7..10|40..45"
 	if len(lst.Length) != 0 {
@@ -253,8 +253,8 @@ func ConvertString(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedV
 		}
 	}
 	if overallMatch {
-		return &schemapb.TypedValue{
-			Value: &schemapb.TypedValue_StringVal{
+		return &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_StringVal{
 				StringVal: value,
 			},
 		}, nil
@@ -263,7 +263,7 @@ func ConvertString(value string, lst *schemapb.SchemaLeafType) (*schemapb.TypedV
 
 }
 
-func ConvertUnion(value string, slts []*schemapb.SchemaLeafType) (*schemapb.TypedValue, error) {
+func ConvertUnion(value string, slts []*sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// iterate over the union types try to convert without error
 	for _, slt := range slts {
 		tv, err := Convert(value, slt)

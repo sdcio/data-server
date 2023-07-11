@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -27,7 +27,7 @@ var datastoreGetCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		req := &schemapb.GetDataStoreRequest{
+		req := &sdcpb.GetDataStoreRequest{
 			Name: datastoreName,
 		}
 		fmt.Println("request:")
@@ -47,10 +47,10 @@ func init() {
 	datastoreCmd.AddCommand(datastoreGetCmd)
 }
 
-func printDataStoreTable(rsp *schemapb.GetDataStoreResponse) {
+func printDataStoreTable(rsp *sdcpb.GetDataStoreResponse) {
 	candidates := make([]string, 0, len(rsp.GetDatastore()))
 	for _, ds := range rsp.GetDatastore() {
-		if ds.GetType() == schemapb.Type_MAIN {
+		if ds.GetType() == sdcpb.Type_MAIN {
 			continue
 		}
 		candidates = append(candidates, "- "+ds.GetName())

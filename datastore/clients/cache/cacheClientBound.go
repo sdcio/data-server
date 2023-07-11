@@ -5,8 +5,8 @@ import (
 
 	"github.com/iptecharch/cache/proto/cachepb"
 	"github.com/iptecharch/data-server/cache"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 )
 
 type CacheClientBound struct {
@@ -22,7 +22,7 @@ func NewCacheClientBound(name string, c cache.Client) *CacheClientBound {
 }
 
 // GetValue retrieves config value for the provided path
-func (ccb *CacheClientBound) GetValue(ctx context.Context, candidateName string, path *schemapb.Path) (*schemapb.TypedValue, error) {
+func (ccb *CacheClientBound) GetValue(ctx context.Context, candidateName string, path *sdcpb.Path) (*sdcpb.TypedValue, error) {
 	spath, err := utils.CompletePath(nil, path)
 	if err != nil {
 		return nil, err

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/iptecharch/data-server/config"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -14,10 +14,10 @@ func newNATSTarget(ctx context.Context, cfg *config.SBI) (*natsTarget, error) {
 	return &natsTarget{}, nil
 }
 
-func (t *natsTarget) Get(ctx context.Context, req *schemapb.GetDataRequest) (*schemapb.GetDataResponse, error) {
+func (t *natsTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
 	return nil, nil
 }
-func (t *natsTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error) {
+func (t *natsTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
 	return nil, nil
 }
 func (t *natsTarget) Subscribe() {}

@@ -4,7 +4,7 @@
             "name": "ethernet-1/1",
             "vlan-tagging": true,
             "admin-state": "enable",
-            "description": "via schemapb JSON",
+            "description": "via sdcpb JSON",
             "subinterface": {
                 "index": 12,
                 "admin-state": "enable",
@@ -22,7 +22,7 @@
             "name": "ethernet-1/2",
             "vlan-tagging": true,
             "admin-state": "enable",
-            "description": "via schemapb JSON",
+            "description": "via sdcpb JSON",
             "subinterface": {
                 "index": 12,
                 "admin-state": "enable",

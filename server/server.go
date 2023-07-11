@@ -14,7 +14,7 @@ import (
 	"github.com/iptecharch/data-server/config"
 	"github.com/iptecharch/data-server/datastore"
 	"github.com/iptecharch/data-server/schema"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -38,13 +38,13 @@ type Server struct {
 	datastores map[string]*datastore.Datastore // datastore group with sbi
 
 	srv *grpc.Server
-	schemapb.UnimplementedDataServerServer
-	schemapb.UnimplementedSchemaServerServer
+	sdcpb.UnimplementedDataServerServer
+	sdcpb.UnimplementedSchemaServerServer
 
 	router *mux.Router
 	reg    *prometheus.Registry
 
-	// remoteSchemaClient schemapb.SchemaServerClient
+	// remoteSchemaClient sdcpb.SchemaServerClient
 
 	schemaClient schema.Client
 	cacheClient  cache.Client
@@ -108,11 +108,11 @@ func New(ctx context.Context, c *config.Config) (*Server, error) {
 	s.srv = grpc.NewServer(opts...)
 
 	// register Data server gRPC Methods
-	schemapb.RegisterDataServerServer(s.srv, s)
+	sdcpb.RegisterDataServerServer(s.srv, s)
 
 	// register Schema server gRPC Methods
 	if s.config.GRPCServer.SchemaServer != nil && s.config.GRPCServer.SchemaServer.Enabled {
-		schemapb.RegisterSchemaServerServer(s.srv, s)
+		sdcpb.RegisterSchemaServerServer(s.srv, s)
 	}
 
 	return s, nil
