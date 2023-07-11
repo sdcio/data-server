@@ -8,21 +8,21 @@ import (
 	"github.com/iptecharch/cache/cache"
 	"github.com/iptecharch/cache/config"
 	"github.com/iptecharch/cache/proto/cachepb"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
 type localCache struct {
-	c cache.Cache[*schemapb.TypedValue]
+	c cache.Cache[*sdcpb.TypedValue]
 }
 
 func NewLocalCache(cfg *config.CacheConfig) (Client, error) {
 	lc := &localCache{
 		c: cache.New(cfg,
-			func() *schemapb.TypedValue {
-				return &schemapb.TypedValue{}
+			func() *sdcpb.TypedValue {
+				return &sdcpb.TypedValue{}
 			}),
 	}
 	err := lc.c.Init(context.TODO())
@@ -196,7 +196,7 @@ func (c *localCache) Discard(ctx context.Context, name, candidate string) error 
 	return c.c.Discard(ctx, name, candidate)
 }
 
-func (c *localCache) NewUpdate(upd *schemapb.Update) (Update, error) {
+func (c *localCache) NewUpdate(upd *sdcpb.Update) (Update, error) {
 	lupd := &localUpdate{
 		path: utils.ToStrings(upd.GetPath(), false, false),
 		tv:   upd.GetValue(),
@@ -210,14 +210,14 @@ func (c *localCache) Close() error {
 
 type localUpdate struct {
 	path []string
-	tv   *schemapb.TypedValue
+	tv   *sdcpb.TypedValue
 }
 
 func (u *localUpdate) GetPath() []string {
 	return u.path
 }
 
-func (u *localUpdate) Value() (*schemapb.TypedValue, error) {
+func (u *localUpdate) Value() (*sdcpb.TypedValue, error) {
 	return u.tv, nil
 }
 

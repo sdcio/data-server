@@ -8,7 +8,7 @@ import (
 	"github.com/iptecharch/data-server/datastore/target/netconf"
 	"github.com/iptecharch/data-server/datastore/target/netconf/driver/scrapligo"
 	"github.com/iptecharch/data-server/schema"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -16,11 +16,11 @@ type ncTarget struct {
 	name         string
 	driver       netconf.Driver
 	schemaClient schema.Client
-	schema       *schemapb.Schema
+	schema       *sdcpb.Schema
 	sbi          *config.SBI
 }
 
-func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient schema.Client, schema *schemapb.Schema) (*ncTarget, error) {
+func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient schema.Client, schema *sdcpb.Schema) (*ncTarget, error) {
 
 	// create a new
 	d, err := scrapligo.NewScrapligoNetconfTarget(cfg)
@@ -37,13 +37,13 @@ func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient s
 	}, nil
 }
 
-func (t *ncTarget) Get(ctx context.Context, req *schemapb.GetDataRequest) (*schemapb.GetDataResponse, error) {
+func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
 	var source string
 
 	switch req.Datastore.Type {
-	case schemapb.Type_MAIN:
+	case sdcpb.Type_MAIN:
 		source = "running"
-	case schemapb.Type_CANDIDATE:
+	case sdcpb.Type_CANDIDATE:
 		source = "candidate"
 	}
 
@@ -73,22 +73,22 @@ func (t *ncTarget) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sche
 
 	log.Debugf("netconf response:\n%s", ncResponse.DocAsString())
 
-	// init an XML2SchemapbConfigAdapter used to convert the netconf xml config to a schemapb.Notification
-	data := netconf.NewXML2SchemapbConfigAdapter(t.schemaClient, t.schema)
+	// init an XML2sdcpbConfigAdapter used to convert the netconf xml config to a sdcpb.Notification
+	data := netconf.NewXML2sdcpbConfigAdapter(t.schemaClient, t.schema)
 
-	// start transformation, which yields the schemapb_Notification
+	// start transformation, which yields the sdcpb_Notification
 	noti := data.Transform(ctx, ncResponse.Doc)
 
-	// building the resulting schemapb.GetDataResponse struct
-	result := &schemapb.GetDataResponse{
-		Notification: []*schemapb.Notification{
+	// building the resulting sdcpb.GetDataResponse struct
+	result := &sdcpb.GetDataResponse{
+		Notification: []*sdcpb.Notification{
 			noti,
 		},
 	}
 	return result, nil
 }
 
-func (t *ncTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error) {
+func (t *ncTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
 
 	xmlCBDelete := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, t.sbi.IncludeNS)
 
@@ -150,7 +150,7 @@ func (t *ncTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sche
 	if err != nil {
 		return nil, err
 	}
-	return &schemapb.SetDataResponse{
+	return &sdcpb.SetDataResponse{
 		Timestamp: time.Now().UnixNano(),
 	}, nil
 }

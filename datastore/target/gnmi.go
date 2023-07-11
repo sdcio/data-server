@@ -9,7 +9,7 @@ import (
 	"github.com/AlekSi/pointer"
 	"github.com/iptecharch/data-server/config"
 	"github.com/iptecharch/data-server/utils"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	gapi "github.com/openconfig/gnmic/api"
 	gtarget "github.com/openconfig/gnmic/target"
@@ -53,7 +53,7 @@ func newGNMITarget(ctx context.Context, name string, cfg *config.SBI, opts ...gr
 	return gt, nil
 }
 
-func (t *gnmiTarget) Get(ctx context.Context, req *schemapb.GetDataRequest) (*schemapb.GetDataResponse, error) {
+func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
 	gnmiReq := &gnmi.GetRequest{
 		Path:     make([]*gnmi.Path, 0, len(req.GetPath())),
 		Encoding: gnmi.Encoding_ASCII,
@@ -65,17 +65,17 @@ func (t *gnmiTarget) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sc
 	if err != nil {
 		return nil, err
 	}
-	schemaRsp := &schemapb.GetDataResponse{
-		Notification: make([]*schemapb.Notification, 0, len(gnmiRsp.GetNotification())),
+	schemaRsp := &sdcpb.GetDataResponse{
+		Notification: make([]*sdcpb.Notification, 0, len(gnmiRsp.GetNotification())),
 	}
 	for _, n := range gnmiRsp.GetNotification() {
-		sn := &schemapb.Notification{
+		sn := &sdcpb.Notification{
 			Timestamp: n.GetTimestamp(),
-			Update:    make([]*schemapb.Update, 0, len(n.GetUpdate())),
-			Delete:    make([]*schemapb.Path, 0, len(n.GetDelete())),
+			Update:    make([]*sdcpb.Update, 0, len(n.GetUpdate())),
+			Delete:    make([]*sdcpb.Path, 0, len(n.GetDelete())),
 		}
 		for _, upd := range n.GetUpdate() {
-			sn.Update = append(sn.Update, &schemapb.Update{
+			sn.Update = append(sn.Update, &sdcpb.Update{
 				Path:  utils.FromGNMIPath(n.GetPrefix(), upd.GetPath()),
 				Value: utils.FromGNMITypedValue(upd.GetVal()),
 			})
@@ -88,7 +88,7 @@ func (t *gnmiTarget) Get(ctx context.Context, req *schemapb.GetDataRequest) (*sc
 	return schemaRsp, nil
 }
 
-func (t *gnmiTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*schemapb.SetDataResponse, error) {
+func (t *gnmiTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
 	setReq := &gnmi.SetRequest{
 		Delete:  make([]*gnmi.Path, 0, len(req.GetDelete())),
 		Replace: make([]*gnmi.Update, 0, len(req.GetReplace())),
@@ -113,14 +113,14 @@ func (t *gnmiTarget) Set(ctx context.Context, req *schemapb.SetDataRequest) (*sc
 	if err != nil {
 		return nil, err
 	}
-	schemaSetRsp := &schemapb.SetDataResponse{
-		Response:  make([]*schemapb.UpdateResult, 0, len(rsp.GetResponse())),
+	schemaSetRsp := &sdcpb.SetDataResponse{
+		Response:  make([]*sdcpb.UpdateResult, 0, len(rsp.GetResponse())),
 		Timestamp: rsp.GetTimestamp(),
 	}
 	for _, updr := range rsp.GetResponse() {
-		schemaSetRsp.Response = append(schemaSetRsp.Response, &schemapb.UpdateResult{
+		schemaSetRsp.Response = append(schemaSetRsp.Response, &sdcpb.UpdateResult{
 			Path: utils.FromGNMIPath(rsp.GetPrefix(), updr.GetPath()),
-			Op:   schemapb.UpdateResult_Operation(updr.GetOp()),
+			Op:   sdcpb.UpdateResult_Operation(updr.GetOp()),
 		})
 	}
 	return schemaSetRsp, nil

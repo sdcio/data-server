@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/prototext"
 )
@@ -18,12 +18,12 @@ var datastoreDeleteCmd = &cobra.Command{
 	Short:        "delete datastore",
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		req := &schemapb.DeleteDataStoreRequest{
+		req := &sdcpb.DeleteDataStoreRequest{
 			Name: datastoreName,
 		}
 		if candidate != "" {
-			req.Datastore = &schemapb.DataStore{
-				Type: schemapb.Type_CANDIDATE,
+			req.Datastore = &sdcpb.DataStore{
+				Type: sdcpb.Type_CANDIDATE,
 				Name: candidate,
 			}
 		}

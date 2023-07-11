@@ -7,40 +7,40 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/iptecharch/data-server/datastore/target/netconf/conversion"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 )
 
-func getNamespaceFromGetSchemaResponse(sr *schemapb.GetSchemaResponse) string {
+func getNamespaceFromGetSchemaResponse(sr *sdcpb.GetSchemaResponse) string {
 	switch sr.GetSchema().Schema.(type) {
-	case *schemapb.SchemaElem_Container:
+	case *sdcpb.SchemaElem_Container:
 		return sr.Schema.GetContainer().GetNamespace()
-	case *schemapb.SchemaElem_Field:
+	case *sdcpb.SchemaElem_Field:
 		return sr.Schema.GetField().GetNamespace()
-	case *schemapb.SchemaElem_Leaflist:
+	case *sdcpb.SchemaElem_Leaflist:
 		return sr.Schema.GetLeaflist().GetNamespace()
 	}
 	return ""
 }
 
-func valueAsString(v *schemapb.TypedValue) (string, error) {
+func valueAsString(v *sdcpb.TypedValue) (string, error) {
 	switch v.Value.(type) {
-	case *schemapb.TypedValue_StringVal:
+	case *sdcpb.TypedValue_StringVal:
 		return v.GetStringVal(), nil
-	case *schemapb.TypedValue_IntVal:
+	case *sdcpb.TypedValue_IntVal:
 		return fmt.Sprintf("%d", v.GetIntVal()), nil
-	case *schemapb.TypedValue_UintVal:
+	case *sdcpb.TypedValue_UintVal:
 		return fmt.Sprintf("%d", v.GetUintVal()), nil
-	case *schemapb.TypedValue_BoolVal:
+	case *sdcpb.TypedValue_BoolVal:
 		return string(strconv.FormatBool(v.GetBoolVal())), nil
-	case *schemapb.TypedValue_BytesVal:
+	case *sdcpb.TypedValue_BytesVal:
 		return string(v.GetBytesVal()), nil
-	case *schemapb.TypedValue_FloatVal:
+	case *sdcpb.TypedValue_FloatVal:
 		return string(strconv.FormatFloat(float64(v.GetFloatVal()), 'b', -1, 32)), nil
-	// case *schemapb.TypedValue_DecimalVal:
+	// case *sdcpb.TypedValue_DecimalVal:
 	// 	return fmt.Sprintf("%d", v.GetDecimalVal().Digits), nil
-	case *schemapb.TypedValue_AsciiVal:
+	case *sdcpb.TypedValue_AsciiVal:
 		return v.GetAsciiVal(), nil
-	case *schemapb.TypedValue_LeaflistVal:
+	case *sdcpb.TypedValue_LeaflistVal:
 		sArr := []string{}
 		// iterate through list elements
 		for _, elem := range v.GetLeaflistVal().Element {
@@ -51,23 +51,23 @@ func valueAsString(v *schemapb.TypedValue) (string, error) {
 			sArr = append(sArr, val)
 		}
 		return fmt.Sprintf("[ %s ]", strings.Join(sArr, ", ")), nil
-	case *schemapb.TypedValue_AnyVal:
+	case *sdcpb.TypedValue_AnyVal:
 		return string(v.GetAnyVal().Value), nil
-	case *schemapb.TypedValue_JsonVal:
+	case *sdcpb.TypedValue_JsonVal:
 		return string(v.GetJsonVal()), nil
-	case *schemapb.TypedValue_JsonIetfVal:
+	case *sdcpb.TypedValue_JsonIetfVal:
 		return string(v.GetJsonIetfVal()), nil
-	case *schemapb.TypedValue_ProtoBytes:
+	case *sdcpb.TypedValue_ProtoBytes:
 		return "PROTOBYTES", nil
 	}
 	return "", fmt.Errorf("TypedValue to String failed")
 }
 
-func StringElementToTypedValue(s string, ls *schemapb.LeafSchema) (*schemapb.TypedValue, error) {
+func StringElementToTypedValue(s string, ls *sdcpb.LeafSchema) (*sdcpb.TypedValue, error) {
 	return conversion.Convert(s, ls.Type)
 }
 
-func pathElem2Xpath(pe *schemapb.PathElem, namespace string) (etree.Path, error) {
+func pathElem2Xpath(pe *sdcpb.PathElem, namespace string) (etree.Path, error) {
 	var keys []string
 
 	// prepare the keys -> "k=v"

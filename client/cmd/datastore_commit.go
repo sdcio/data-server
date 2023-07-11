@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/prototext"
 )
@@ -24,10 +24,10 @@ var datastoreCommitCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		req := &schemapb.CommitRequest{
+		req := &sdcpb.CommitRequest{
 			Name: datastoreName,
-			Datastore: &schemapb.DataStore{
-				Type: schemapb.Type_CANDIDATE,
+			Datastore: &sdcpb.DataStore{
+				Type: sdcpb.Type_CANDIDATE,
 				Name: candidate,
 			},
 			Rebase: rebase,

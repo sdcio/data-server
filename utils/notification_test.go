@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/openconfig/gnmi/proto/gnmi"
 )
 
@@ -16,7 +16,7 @@ func TestFromGNMIPath(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		want *schemapb.Path
+		want *sdcpb.Path
 	}{
 		{
 			name: "simple",
@@ -28,8 +28,8 @@ func TestFromGNMIPath(t *testing.T) {
 					},
 				},
 			},
-			want: &schemapb.Path{
-				Elem: []*schemapb.PathElem{
+			want: &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
 					{Name: "foo"},
 				},
 			},
@@ -45,8 +45,8 @@ func TestFromGNMIPath(t *testing.T) {
 					},
 				},
 			},
-			want: &schemapb.Path{
-				Elem: []*schemapb.PathElem{
+			want: &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
 					{Name: "foo"},
 					{Name: "bar"},
 				},
@@ -63,8 +63,8 @@ func TestFromGNMIPath(t *testing.T) {
 					},
 				},
 			},
-			want: &schemapb.Path{
-				Elem: []*schemapb.PathElem{
+			want: &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
 					{Name: "foo", Key: map[string]string{"k": "v"}},
 					{Name: "bar"},
 				},
@@ -81,8 +81,8 @@ func TestFromGNMIPath(t *testing.T) {
 					},
 				},
 			},
-			want: &schemapb.Path{
-				Elem: []*schemapb.PathElem{
+			want: &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
 					{Name: "foo", Key: map[string]string{"k1": "v1", "k2": "v2"}},
 					{Name: "bar"},
 				},

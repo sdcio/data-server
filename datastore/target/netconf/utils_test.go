@@ -5,12 +5,12 @@ import (
 	"testing"
 
 	"github.com/beevik/etree"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 )
 
 func Test_pathElem2Xpath(t *testing.T) {
 	type args struct {
-		pe        *schemapb.PathElem
+		pe        *sdcpb.PathElem
 		namespace string
 	}
 	tests := []struct {
@@ -22,7 +22,7 @@ func Test_pathElem2Xpath(t *testing.T) {
 		{
 			name: "one",
 			args: args{
-				pe: &schemapb.PathElem{
+				pe: &sdcpb.PathElem{
 					Name: "interface",
 					Key: map[string]string{
 						"name": "eth0",
@@ -53,8 +53,8 @@ func Test_pathElem2Xpath(t *testing.T) {
 // 		doc *etree.Document
 // 	}
 // 	type args struct {
-// 		p *schemapb.Path
-// 		v *schemapb.TypedValue
+// 		p *sdcpb.Path
+// 		v *sdcpb.TypedValue
 // 	}
 // 	tests := []struct {
 // 		name    string
@@ -69,8 +69,8 @@ func Test_pathElem2Xpath(t *testing.T) {
 // 			},
 // 			wantErr: false,
 // 			args: args{
-// 				p: &schemapb.Path{
-// 					Elem: []*schemapb.PathElem{
+// 				p: &sdcpb.Path{
+// 					Elem: []*sdcpb.PathElem{
 // 						{
 // 							Name: "interface",
 // 							Key: map[string]string{
@@ -88,8 +88,8 @@ func Test_pathElem2Xpath(t *testing.T) {
 // 						},
 // 					},
 // 				},
-// 				v: &schemapb.TypedValue{
-// 					Value: &schemapb.TypedValue_StringVal{
+// 				v: &sdcpb.TypedValue{
+// 					Value: &sdcpb.TypedValue_StringVal{
 // 						StringVal: "MyDesciption",
 // 					},
 // 				},
@@ -102,8 +102,8 @@ func Test_pathElem2Xpath(t *testing.T) {
 // 			},
 // 			wantErr: false,
 // 			args: args{
-// 				p: &schemapb.Path{
-// 					Elem: []*schemapb.PathElem{
+// 				p: &sdcpb.Path{
+// 					Elem: []*sdcpb.PathElem{
 // 						{
 // 							Name: "interface",
 // 							Key: map[string]string{
@@ -121,8 +121,8 @@ func Test_pathElem2Xpath(t *testing.T) {
 // 						},
 // 					},
 // 				},
-// 				v: &schemapb.TypedValue{
-// 					Value: &schemapb.TypedValue_IntVal{
+// 				v: &sdcpb.TypedValue{
+// 					Value: &sdcpb.TypedValue_IntVal{
 // 						IntVal: 35,
 // 					},
 // 				},

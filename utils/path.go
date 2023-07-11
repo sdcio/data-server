@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 )
 
 var errMalformedXPath = errors.New("malformed xpath")
@@ -13,12 +13,12 @@ var errMalformedXPathKey = errors.New("malformed xpath key")
 
 var escapedBracketsReplacer = strings.NewReplacer(`\]`, `]`, `\[`, `[`)
 
-// ParsePath creates a schemapb.Path out of a p string, check if the first element is prefixed by an origin,
+// ParsePath creates a sdcpb.Path out of a p string, check if the first element is prefixed by an origin,
 // removes it from the xpath and adds it to the returned mgmt_serverPath
-func ParsePath(p string) (*schemapb.Path, error) {
+func ParsePath(p string) (*sdcpb.Path, error) {
 	lp := len(p)
 	if lp == 0 {
-		return &schemapb.Path{}, nil
+		return &sdcpb.Path{}, nil
 	}
 	var origin string
 
@@ -34,14 +34,14 @@ func ParsePath(p string) (*schemapb.Path, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &schemapb.Path{
+	return &sdcpb.Path{
 		Origin: origin,
 		Elem:   pes,
 	}, nil
 }
 
 // toPathElems parses a xpath and returns a list of path elements
-func toPathElems(p string) ([]*schemapb.PathElem, error) {
+func toPathElems(p string) ([]*sdcpb.PathElem, error) {
 	if !strings.HasSuffix(p, "/") {
 		p += "/"
 	}
@@ -80,7 +80,7 @@ func toPathElems(p string) ([]*schemapb.PathElem, error) {
 		return nil, errMalformedXPath
 	}
 	stringElems := strings.Split(string(buffer), string(null))
-	pElems := make([]*schemapb.PathElem, 0, len(stringElems))
+	pElems := make([]*sdcpb.PathElem, 0, len(stringElems))
 	for _, s := range stringElems {
 		if s == "" {
 			continue
@@ -95,7 +95,7 @@ func toPathElems(p string) ([]*schemapb.PathElem, error) {
 }
 
 // toPathElem take a xpath formatted path element such as "elem1[k=v]" and returns the corresponding mgmt_server.PathElem
-func toPathElem(s string) (*schemapb.PathElem, error) {
+func toPathElem(s string) (*sdcpb.PathElem, error) {
 	idx := -1
 	prevC := rune(0)
 	for i, r := range s {
@@ -114,7 +114,7 @@ func toPathElem(s string) (*schemapb.PathElem, error) {
 		}
 		s = s[:idx]
 	}
-	return &schemapb.PathElem{Name: s, Key: kvs}, nil
+	return &sdcpb.PathElem{Name: s, Key: kvs}, nil
 }
 
 // parseXPathKeys takes keys definition from an xpath, e.g [k1=v1][k2=v2] and return the keys and values as a map[string]string
@@ -176,7 +176,7 @@ func parseXPathKeys(s string) (map[string]string, error) {
 // the gnmi.Path will be prepended in the index strings unless they are empty string.
 // gnmi.Path.Element field is deprecated, but being gracefully handled by this function
 // in the absence of gnmi.Path.Elem.
-func ToStrings(p *schemapb.Path, prefix, nokeys bool) []string {
+func ToStrings(p *sdcpb.Path, prefix, nokeys bool) []string {
 	is := []string{}
 	if p == nil {
 		return is
@@ -221,7 +221,7 @@ func sortedVals(m map[string]string) []string {
 	return vs
 }
 
-func CompletePath(prefix, path *schemapb.Path) ([]string, error) {
+func CompletePath(prefix, path *sdcpb.Path) ([]string, error) {
 	oPre, oPath := prefix.GetOrigin(), path.GetOrigin()
 
 	var fullPrefix []string
@@ -253,7 +253,7 @@ func CompletePathFromString(s string) ([]string, error) {
 	return CompletePath(nil, p)
 }
 
-func ToXPath(p *schemapb.Path, noKeys bool) string {
+func ToXPath(p *sdcpb.Path, noKeys bool) string {
 	if p == nil {
 		return ""
 	}

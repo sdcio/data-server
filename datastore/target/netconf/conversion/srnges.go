@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 )
 
 // urnges represents a collection of rng (range)
@@ -35,15 +35,15 @@ func (r *SRng) String() string {
 	return fmt.Sprintf("%d..%d", r.min, r.max)
 }
 
-func (r *SRnges) isWithinAnyRange(value string) (*schemapb.TypedValue, error) {
+func (r *SRnges) isWithinAnyRange(value string) (*sdcpb.TypedValue, error) {
 	intValue, err := strconv.ParseInt(value, 10, 64)
 	if err != nil {
 		return nil, err
 	}
 
 	// create the TypedValue already
-	tv := &schemapb.TypedValue{
-		Value: &schemapb.TypedValue_IntVal{
+	tv := &sdcpb.TypedValue{
+		Value: &sdcpb.TypedValue_IntVal{
 			IntVal: intValue,
 		},
 	}

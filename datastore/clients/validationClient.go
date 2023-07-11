@@ -5,7 +5,7 @@ import (
 	CacheClient "github.com/iptecharch/data-server/datastore/clients/cache"
 	SchemaClient "github.com/iptecharch/data-server/datastore/clients/schema"
 	"github.com/iptecharch/data-server/schema"
-	"github.com/iptecharch/schema-server/protos/schema_server"
+	schema_server "github.com/iptecharch/sdc-protos/sdcpb"
 )
 
 type ValidationClient struct {

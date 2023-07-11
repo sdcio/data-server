@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
@@ -40,10 +40,10 @@ func main() {
 		panic(err)
 	}
 	defer cc.Close()
-	_, err = dataClient.CreateDataStore(ctx, &schemapb.CreateDataStoreRequest{
+	_, err = dataClient.CreateDataStore(ctx, &sdcpb.CreateDataStoreRequest{
 		Name: ds,
-		Datastore: &schemapb.DataStore{
-			Type: schemapb.Type_CANDIDATE,
+		Datastore: &sdcpb.DataStore{
+			Type: sdcpb.Type_CANDIDATE,
 			Name: candidate,
 		},
 	})
@@ -67,16 +67,16 @@ func main() {
 				defer sem.Release(1)
 				index := strconv.Itoa(i)
 				vlanID := strconv.Itoa(i + 1)
-				req := &schemapb.SetDataRequest{
+				req := &sdcpb.SetDataRequest{
 					Name: ds,
-					Datastore: &schemapb.DataStore{
-						Type: schemapb.Type_CANDIDATE,
+					Datastore: &sdcpb.DataStore{
+						Type: sdcpb.Type_CANDIDATE,
 						Name: candidate,
 					},
-					Update: []*schemapb.Update{
+					Update: []*sdcpb.Update{
 						// interface enable
 						{
-							Path: &schemapb.Path{Elem: []*schemapb.PathElem{
+							Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
 								{
 									Name: "interface",
 									Key: map[string]string{
@@ -87,13 +87,13 @@ func main() {
 									Name: "admin-state",
 								},
 							}},
-							Value: &schemapb.TypedValue{
-								Value: &schemapb.TypedValue_StringVal{StringVal: "enable"},
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "enable"},
 							},
 						},
 						// interface vlan-tagging
 						{
-							Path: &schemapb.Path{Elem: []*schemapb.PathElem{
+							Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
 								{
 									Name: "interface",
 									Key: map[string]string{
@@ -104,13 +104,13 @@ func main() {
 									Name: "vlan-tagging",
 								},
 							}},
-							Value: &schemapb.TypedValue{
-								Value: &schemapb.TypedValue_StringVal{StringVal: "true"},
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "true"},
 							},
 						},
 						// interface description
 						{
-							Path: &schemapb.Path{Elem: []*schemapb.PathElem{
+							Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
 								{
 									Name: "interface",
 									Key: map[string]string{
@@ -121,13 +121,13 @@ func main() {
 									Name: "description",
 								},
 							}},
-							Value: &schemapb.TypedValue{
-								Value: &schemapb.TypedValue_StringVal{StringVal: "if_desc"},
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "if_desc"},
 							},
 						},
 						// subinterface admin-state
 						{
-							Path: &schemapb.Path{Elem: []*schemapb.PathElem{
+							Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
 								{
 									Name: "interface",
 									Key: map[string]string{
@@ -144,13 +144,13 @@ func main() {
 									Name: "admin-state",
 								},
 							}},
-							Value: &schemapb.TypedValue{
-								Value: &schemapb.TypedValue_StringVal{StringVal: "enable"},
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "enable"},
 							},
 						},
 						// type bridged
 						{
-							Path: &schemapb.Path{Elem: []*schemapb.PathElem{
+							Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
 								{
 									Name: "interface",
 									Key: map[string]string{
@@ -167,13 +167,13 @@ func main() {
 									Name: "type",
 								},
 							}},
-							Value: &schemapb.TypedValue{
-								Value: &schemapb.TypedValue_StringVal{StringVal: "bridged"},
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "bridged"},
 							},
 						},
 						// subinterface description
 						{
-							Path: &schemapb.Path{Elem: []*schemapb.PathElem{
+							Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
 								{
 									Name: "interface",
 									Key: map[string]string{
@@ -190,13 +190,13 @@ func main() {
 									Name: "description",
 								},
 							}},
-							Value: &schemapb.TypedValue{
-								Value: &schemapb.TypedValue_StringVal{StringVal: "subif_desc"},
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "subif_desc"},
 							},
 						},
 						// subinterface vlan-id
 						{
-							Path: &schemapb.Path{Elem: []*schemapb.PathElem{
+							Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
 								{
 									Name: "interface",
 									Key: map[string]string{
@@ -222,8 +222,8 @@ func main() {
 									Name: "vlan-id",
 								},
 							}},
-							Value: &schemapb.TypedValue{
-								Value: &schemapb.TypedValue_StringVal{StringVal: vlanID},
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: vlanID},
 							},
 						},
 					},
@@ -239,10 +239,10 @@ func main() {
 	wg.Wait()
 	fmt.Println("set requests done    :", time.Since(now))
 	now = time.Now()
-	commitRsp, err := dataClient.Commit(ctx, &schemapb.CommitRequest{
+	commitRsp, err := dataClient.Commit(ctx, &sdcpb.CommitRequest{
 		Name: ds,
-		Datastore: &schemapb.DataStore{
-			Type: schemapb.Type_CANDIDATE,
+		Datastore: &sdcpb.DataStore{
+			Type: sdcpb.Type_CANDIDATE,
 			Name: candidate,
 		},
 		Rebase: false,
@@ -260,10 +260,10 @@ func main() {
 	}
 	fmt.Println("deleting")
 	wg.Add(numVlan * len(interfaces))
-	_, err = dataClient.CreateDataStore(ctx, &schemapb.CreateDataStoreRequest{
+	_, err = dataClient.CreateDataStore(ctx, &sdcpb.CreateDataStoreRequest{
 		Name: ds,
-		Datastore: &schemapb.DataStore{
-			Type: schemapb.Type_CANDIDATE,
+		Datastore: &sdcpb.DataStore{
+			Type: sdcpb.Type_CANDIDATE,
 			Name: candidate,
 		},
 	})
@@ -281,14 +281,14 @@ func main() {
 				defer wg.Done()
 				defer sem.Release(1)
 				index := strconv.Itoa(i)
-				setRsp, err := dataClient.SetData(ctx, &schemapb.SetDataRequest{
+				setRsp, err := dataClient.SetData(ctx, &sdcpb.SetDataRequest{
 					Name: ds,
-					Datastore: &schemapb.DataStore{
-						Type: schemapb.Type_CANDIDATE,
+					Datastore: &sdcpb.DataStore{
+						Type: sdcpb.Type_CANDIDATE,
 						Name: candidate,
 					},
-					Delete: []*schemapb.Path{
-						{Elem: []*schemapb.PathElem{
+					Delete: []*sdcpb.Path{
+						{Elem: []*sdcpb.PathElem{
 							{
 								Name: "interface",
 								Key: map[string]string{
@@ -310,10 +310,10 @@ func main() {
 	wg.Wait()
 	fmt.Println("delete requests done :", time.Since(now))
 	now = time.Now()
-	commitRsp, err = dataClient.Commit(ctx, &schemapb.CommitRequest{
+	commitRsp, err = dataClient.Commit(ctx, &sdcpb.CommitRequest{
 		Name: ds,
-		Datastore: &schemapb.DataStore{
-			Type: schemapb.Type_CANDIDATE,
+		Datastore: &sdcpb.DataStore{
+			Type: sdcpb.Type_CANDIDATE,
 			Name: candidate,
 		},
 		Rebase: false,
@@ -326,7 +326,7 @@ func main() {
 	fmt.Println("deletes commit ok    :", time.Since(now))
 }
 
-func createDataClient(ctx context.Context, addr string) (*grpc.ClientConn, schemapb.DataServerClient, error) {
+func createDataClient(ctx context.Context, addr string) (*grpc.ClientConn, sdcpb.DataServerClient, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, addr,
@@ -338,5 +338,5 @@ func createDataClient(ctx context.Context, addr string) (*grpc.ClientConn, schem
 	if err != nil {
 		return nil, nil, err
 	}
-	return cc, schemapb.NewDataServerClient(cc), nil
+	return cc, sdcpb.NewDataServerClient(cc), nil
 }

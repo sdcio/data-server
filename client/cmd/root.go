@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -45,7 +45,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&schemaVersion, "version", "", "schema version")
 }
 
-func createDataClient(ctx context.Context, addr string) (schemapb.DataServerClient, error) {
+func createDataClient(ctx context.Context, addr string) (sdcpb.DataServerClient, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, addr,
@@ -57,5 +57,5 @@ func createDataClient(ctx context.Context, addr string) (schemapb.DataServerClie
 	if err != nil {
 		return nil, err
 	}
-	return schemapb.NewDataServerClient(cc), nil
+	return sdcpb.NewDataServerClient(cc), nil
 }

@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/iptecharch/schema-server/protos/schema_server"
+	schema_server "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/prototext"
 )

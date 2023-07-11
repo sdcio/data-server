@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/iptecharch/cache/proto/cachepb"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 )
 
 type Client interface {
@@ -36,15 +36,15 @@ type Client interface {
 	GetChanges(ctx context.Context, name, candidate string) ([]*Change, error)
 	// discard changes made to a candidate
 	Discard(ctx context.Context, name, candidate string) error
-	// build a cache update from a schemapb.Update
-	NewUpdate(*schemapb.Update) (Update, error)
+	// build a cache update from a sdcpb.Update
+	NewUpdate(*sdcpb.Update) (Update, error)
 	// disconnect from the cache
 	Close() error
 }
 
 type Update interface {
 	GetPath() []string
-	Value() (*schemapb.TypedValue, error)
+	Value() (*sdcpb.TypedValue, error)
 	Bytes() []byte
 }
 

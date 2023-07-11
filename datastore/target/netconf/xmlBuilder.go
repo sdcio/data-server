@@ -5,21 +5,21 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/iptecharch/data-server/schema"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 )
 
 // XMLConfigBuilder is used to builds XML configuration or XML Filter documents
-// Via the use of a schemapb.SchemaServerClient and the *schemapb.Schema Namespace, Key and Type information
+// Via the use of a sdcpb.SchemaServerClient and the *sdcpb.Schema Namespace, Key and Type information
 // and a valid configuration or filter document can be crafted.
 type XMLConfigBuilder struct {
 	doc            *etree.Document
 	schemaClient   schema.Client
-	schema         *schemapb.Schema
+	schema         *sdcpb.Schema
 	honorNamespace bool
 }
 
 // NewXMLConfigBuilder returns a new XMLConfigBuilder instance
-func NewXMLConfigBuilder(ssc schema.Client, schema *schemapb.Schema, honorNamespace bool) *XMLConfigBuilder {
+func NewXMLConfigBuilder(ssc schema.Client, schema *sdcpb.Schema, honorNamespace bool) *XMLConfigBuilder {
 	return &XMLConfigBuilder{
 		doc:            etree.NewDocument(),
 		schemaClient:   ssc,
@@ -40,7 +40,7 @@ func (x *XMLConfigBuilder) GetDoc() (string, error) {
 
 // Delete adds the given path to the XMLConfigDocument and adds the delete operation
 // attribute ( operation="delete" ) to the last element of path p.
-func (x *XMLConfigBuilder) Delete(ctx context.Context, p *schemapb.Path) error {
+func (x *XMLConfigBuilder) Delete(ctx context.Context, p *sdcpb.Path) error {
 	// fastForward the XML to the element defined in the path p
 	elem, err := x.fastForward(ctx, p)
 	if err != nil {
@@ -52,11 +52,11 @@ func (x *XMLConfigBuilder) Delete(ctx context.Context, p *schemapb.Path) error {
 	return nil
 }
 
-// fastForward takes the *schemapb.Path p and iterates through the xml document along this path.
+// fastForward takes the *sdcpb.Path p and iterates through the xml document along this path.
 // It will create all the missing elements along the path in the document, as well as creating the provided
 // key elements. Finally the element that represents the last part of the path is returned to the caller.
 // If x.honorNamespace is set to true, it will also add "xmlns" attributes.
-func (x *XMLConfigBuilder) fastForward(ctx context.Context, p *schemapb.Path) (*etree.Element, error) {
+func (x *XMLConfigBuilder) fastForward(ctx context.Context, p *sdcpb.Path) (*etree.Element, error) {
 	parent := &x.doc.Element
 	actualNamespace := ""
 
@@ -101,8 +101,8 @@ func (x *XMLConfigBuilder) fastForward(ctx context.Context, p *schemapb.Path) (*
 	return parent, nil
 }
 
-// Add adds the given *schemapb.TypedValue v under the given *schemapb.Path p into the xml document
-func (x *XMLConfigBuilder) Add(ctx context.Context, p *schemapb.Path, v *schemapb.TypedValue) error {
+// Add adds the given *sdcpb.TypedValue v under the given *sdcpb.Path p into the xml document
+func (x *XMLConfigBuilder) Add(ctx context.Context, p *sdcpb.Path, v *sdcpb.TypedValue) error {
 	// fastForward the XML to the element defined in the path p
 	elem, err := x.fastForward(ctx, p)
 	if err != nil {
@@ -120,10 +120,10 @@ func (x *XMLConfigBuilder) Add(ctx context.Context, p *schemapb.Path, v *schemap
 	return nil
 }
 
-// AddElement add a given *schemapb.Path p to the xml document. This will not define a terminal value
+// AddElement add a given *sdcpb.Path p to the xml document. This will not define a terminal value
 // under the given path. This is usefull when creating Netconf Filters where you provide an xml document
 // pointing to branches that you're intrested in receiving.
-func (x *XMLConfigBuilder) AddElement(ctx context.Context, p *schemapb.Path) (*etree.Element, error) {
+func (x *XMLConfigBuilder) AddElement(ctx context.Context, p *sdcpb.Path) (*etree.Element, error) {
 	// fastForward the XML to the element defined in the path p
 	elem, err := x.fastForward(ctx, p)
 	if err != nil {
@@ -132,12 +132,12 @@ func (x *XMLConfigBuilder) AddElement(ctx context.Context, p *schemapb.Path) (*e
 	return elem, nil
 }
 
-// ResolveNamespace takes a *schemapb.Path and a pathElementIndex (peIdx). It returns the namespace of
-// the element on position peIdx of the *schemapb.path p
-func (x *XMLConfigBuilder) ResolveNamespace(ctx context.Context, p *schemapb.Path, peIdx int) (string, error) {
+// ResolveNamespace takes a *sdcpb.Path and a pathElementIndex (peIdx). It returns the namespace of
+// the element on position peIdx of the *sdcpb.path p
+func (x *XMLConfigBuilder) ResolveNamespace(ctx context.Context, p *sdcpb.Path, peIdx int) (string, error) {
 	// Perform schema queries
-	sr, err := x.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
-		Path: &schemapb.Path{
+	sr, err := x.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
+		Path: &sdcpb.Path{
 			Elem:   p.Elem[:peIdx+1],
 			Origin: p.Origin,
 			Target: p.Target,

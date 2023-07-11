@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/prototext"
 )
@@ -26,22 +26,22 @@ var datastoreCreateCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		var req *schemapb.CreateDataStoreRequest
+		var req *sdcpb.CreateDataStoreRequest
 		switch {
 		// create a candidate datastore
 		case candidate != "":
-			req = &schemapb.CreateDataStoreRequest{
+			req = &sdcpb.CreateDataStoreRequest{
 				Name: datastoreName,
-				Datastore: &schemapb.DataStore{
-					Type: schemapb.Type_CANDIDATE,
+				Datastore: &sdcpb.DataStore{
+					Type: sdcpb.Type_CANDIDATE,
 					Name: candidate,
 				},
 			}
 			//create a main datastore
 		default:
-			req = &schemapb.CreateDataStoreRequest{
+			req = &sdcpb.CreateDataStoreRequest{
 				Name: datastoreName,
-				Schema: &schemapb.Schema{
+				Schema: &sdcpb.Schema{
 					Name:    schemaName,
 					Vendor:  schemaVendor,
 					Version: schemaVersion,

@@ -10,8 +10,8 @@ import (
 	"os"
 	"strings"
 
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/prototext"
 )
@@ -68,16 +68,16 @@ func init() {
 	dataSetCmd.Flags().StringVarP(&updateFile, "update-file", "", "", "update file containing a JSON or JSON_IETF value")
 }
 
-func buildDataSetRequest() (*schemapb.SetDataRequest, error) {
-	req := &schemapb.SetDataRequest{
+func buildDataSetRequest() (*sdcpb.SetDataRequest, error) {
+	req := &sdcpb.SetDataRequest{
 		Name: datastoreName,
-		Datastore: &schemapb.DataStore{
-			Type: schemapb.Type_CANDIDATE,
+		Datastore: &sdcpb.DataStore{
+			Type: sdcpb.Type_CANDIDATE,
 			Name: candidate,
 		},
-		Update:  make([]*schemapb.Update, 0),
-		Replace: make([]*schemapb.Update, 0),
-		Delete:  make([]*schemapb.Path, 0),
+		Update:  make([]*sdcpb.Update, 0),
+		Replace: make([]*sdcpb.Update, 0),
+		Delete:  make([]*sdcpb.Path, 0),
 	}
 	if updatePath != "" {
 		updPath, err := utils.ParsePath(updatePath)
@@ -88,10 +88,10 @@ func buildDataSetRequest() (*schemapb.SetDataRequest, error) {
 		if err != nil {
 			return nil, err
 		}
-		req.Update = append(req.Update, &schemapb.Update{
+		req.Update = append(req.Update, &sdcpb.Update{
 			Path: updPath,
-			Value: &schemapb.TypedValue{
-				Value: &schemapb.TypedValue_JsonVal{
+			Value: &sdcpb.TypedValue{
+				Value: &sdcpb.TypedValue_JsonVal{
 					JsonVal: b,
 				},
 			},
@@ -106,10 +106,10 @@ func buildDataSetRequest() (*schemapb.SetDataRequest, error) {
 			if err != nil {
 				return nil, err
 			}
-			req.Update = append(req.Update, &schemapb.Update{
+			req.Update = append(req.Update, &sdcpb.Update{
 				Path: updPath,
-				Value: &schemapb.TypedValue{
-					Value: &schemapb.TypedValue_StringVal{
+				Value: &sdcpb.TypedValue{
+					Value: &sdcpb.TypedValue_StringVal{
 						StringVal: updSplit[1],
 					},
 				},
@@ -125,10 +125,10 @@ func buildDataSetRequest() (*schemapb.SetDataRequest, error) {
 		if err != nil {
 			return nil, err
 		}
-		req.Replace = append(req.Replace, &schemapb.Update{
+		req.Replace = append(req.Replace, &sdcpb.Update{
 			Path: repPath,
-			Value: &schemapb.TypedValue{
-				Value: &schemapb.TypedValue_JsonVal{
+			Value: &sdcpb.TypedValue{
+				Value: &sdcpb.TypedValue_JsonVal{
 					JsonVal: b,
 				},
 			},
@@ -143,10 +143,10 @@ func buildDataSetRequest() (*schemapb.SetDataRequest, error) {
 			if err != nil {
 				return nil, err
 			}
-			req.Replace = append(req.Replace, &schemapb.Update{
+			req.Replace = append(req.Replace, &sdcpb.Update{
 				Path: repPath,
-				Value: &schemapb.TypedValue{
-					Value: &schemapb.TypedValue_StringVal{
+				Value: &sdcpb.TypedValue{
+					Value: &sdcpb.TypedValue_StringVal{
 						StringVal: repSplit[1],
 					},
 				},

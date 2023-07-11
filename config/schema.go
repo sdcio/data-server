@@ -1,7 +1,7 @@
 package config
 
 import (
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 )
 
 type SchemaConfig struct {
@@ -13,8 +13,8 @@ type SchemaConfig struct {
 	Excludes    []string `json:"excludes,omitempty"`
 }
 
-func (sc *SchemaConfig) GetSchema() *schemapb.Schema {
-	return &schemapb.Schema{
+func (sc *SchemaConfig) GetSchema() *sdcpb.Schema {
+	return &sdcpb.Schema{
 		Name:    sc.Name,
 		Vendor:  sc.Vendor,
 		Version: sc.Version,

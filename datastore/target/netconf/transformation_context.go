@@ -4,38 +4,38 @@ import (
 	"fmt"
 	"strings"
 
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 )
 
 // TransformationContext
 type TransformationContext struct {
 	// LeafList contains the leaflist of the actual hierarchy level
-	// it is to be converted into an schemapb.Update on existing the level
-	leafLists map[string][]*schemapb.TypedValue
-	pelems    []*schemapb.PathElem
+	// it is to be converted into an sdcpb.Update on existing the level
+	leafLists map[string][]*sdcpb.TypedValue
+	pelems    []*sdcpb.PathElem
 }
 
-func NewTransformationContext(pelems []*schemapb.PathElem) *TransformationContext {
+func NewTransformationContext(pelems []*sdcpb.PathElem) *TransformationContext {
 	return &TransformationContext{
 		pelems: pelems,
 	}
 }
 
 // Close when closing the context, updates for LeafLists will be calculated and returned
-func (tc *TransformationContext) Close() []*schemapb.Update {
-	result := []*schemapb.Update{}
+func (tc *TransformationContext) Close() []*sdcpb.Update {
+	result := []*sdcpb.Update{}
 	// process LeafList Elements
 	for k, v := range tc.leafLists {
 
-		pathElems := append(tc.pelems, &schemapb.PathElem{Name: k})
+		pathElems := append(tc.pelems, &sdcpb.PathElem{Name: k})
 
-		u := &schemapb.Update{
-			Path: &schemapb.Path{
+		u := &sdcpb.Update{
+			Path: &sdcpb.Path{
 				Elem: pathElems,
 			},
-			Value: &schemapb.TypedValue{
-				Value: &schemapb.TypedValue_LeaflistVal{
-					LeaflistVal: &schemapb.ScalarArray{
+			Value: &sdcpb.TypedValue{
+				Value: &sdcpb.TypedValue_LeaflistVal{
+					LeaflistVal: &sdcpb.ScalarArray{
 						Element: v,
 					},
 				},
@@ -62,18 +62,18 @@ func (tc *TransformationContext) String() (result string, err error) {
 	return result, nil
 }
 
-func (tc *TransformationContext) AddLeafListEntry(name string, val *schemapb.TypedValue) error {
+func (tc *TransformationContext) AddLeafListEntry(name string, val *sdcpb.TypedValue) error {
 
 	// we do not expect the leafLists to be excesively in use, so we do late initialization
 	// although the check is performed on every call to this function
 	if tc.leafLists == nil {
-		tc.leafLists = map[string][]*schemapb.TypedValue{}
+		tc.leafLists = map[string][]*sdcpb.TypedValue{}
 	}
 
 	var exists bool
 	// add the tv array if it is the first element and hence does not exist
 	if _, exists = tc.leafLists[name]; !exists {
-		tc.leafLists[name] = []*schemapb.TypedValue{}
+		tc.leafLists[name] = []*sdcpb.TypedValue{}
 	}
 	// append the tv to the list
 	tc.leafLists[name] = append(tc.leafLists[name], val)

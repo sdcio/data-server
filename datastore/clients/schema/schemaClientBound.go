@@ -4,15 +4,15 @@ import (
 	"context"
 
 	"github.com/iptecharch/data-server/schema"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 )
 
 type SchemaClientBound struct {
-	schema       *schemapb.Schema
+	schema       *sdcpb.Schema
 	schemaClient schema.Client
 }
 
-func NewSchemaClientBound(s *schemapb.Schema, sc schema.Client) *SchemaClientBound {
+func NewSchemaClientBound(s *sdcpb.Schema, sc schema.Client) *SchemaClientBound {
 	return &SchemaClientBound{
 		schema:       s,
 		schemaClient: sc,
@@ -20,15 +20,15 @@ func NewSchemaClientBound(s *schemapb.Schema, sc schema.Client) *SchemaClientBou
 }
 
 // GetSchema retrieves the schema for the given path
-func (scb *SchemaClientBound) GetSchema(ctx context.Context, path *schemapb.Path) (*schemapb.GetSchemaResponse, error) {
-	return scb.schemaClient.GetSchema(ctx, &schemapb.GetSchemaRequest{
+func (scb *SchemaClientBound) GetSchema(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+	return scb.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
 		Schema: scb.getSchema(),
 		Path:   path,
 	})
 }
 
-func (scb *SchemaClientBound) GetSchemaElements(ctx context.Context, p *schemapb.Path, done chan struct{}) (chan *schemapb.GetSchemaResponse, error) {
-	gsr := &schemapb.GetSchemaRequest{
+func (scb *SchemaClientBound) GetSchemaElements(ctx context.Context, p *sdcpb.Path, done chan struct{}) (chan *sdcpb.GetSchemaResponse, error) {
+	gsr := &sdcpb.GetSchemaRequest{
 		Path:   p,
 		Schema: scb.getSchema(),
 	}
@@ -36,7 +36,7 @@ func (scb *SchemaClientBound) GetSchemaElements(ctx context.Context, p *schemapb
 	if err != nil {
 		return nil, err
 	}
-	ch := make(chan *schemapb.GetSchemaResponse)
+	ch := make(chan *sdcpb.GetSchemaResponse)
 	go func() {
 		defer close(ch)
 		for {
@@ -49,7 +49,7 @@ func (scb *SchemaClientBound) GetSchemaElements(ctx context.Context, p *schemapb
 				if !ok {
 					return
 				}
-				ch <- &schemapb.GetSchemaResponse{
+				ch <- &sdcpb.GetSchemaResponse{
 					Schema: se,
 				}
 			}
@@ -58,8 +58,8 @@ func (scb *SchemaClientBound) GetSchemaElements(ctx context.Context, p *schemapb
 	return ch, nil
 }
 
-func (scb *SchemaClientBound) getSchema() *schemapb.Schema {
-	return &schemapb.Schema{
+func (scb *SchemaClientBound) getSchema() *sdcpb.Schema {
+	return &sdcpb.Schema{
 		Name:    scb.schema.Name,
 		Version: scb.schema.Version,
 		Vendor:  scb.schema.Vendor,

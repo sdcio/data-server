@@ -6,8 +6,8 @@ import (
 
 	"github.com/iptecharch/cache/client"
 	"github.com/iptecharch/cache/proto/cachepb"
-	schemapb "github.com/iptecharch/schema-server/protos/schema_server"
 	"github.com/iptecharch/schema-server/utils"
+	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -156,7 +156,7 @@ func (c *remoteCache) Discard(ctx context.Context, name, candidate string) error
 	return c.c.Discard(ctx, name, candidate)
 }
 
-func (c *remoteCache) NewUpdate(upd *schemapb.Update) (Update, error) {
+func (c *remoteCache) NewUpdate(upd *sdcpb.Update) (Update, error) {
 	b, err := proto.Marshal(upd.GetValue())
 	if err != nil {
 		return nil, err
@@ -181,8 +181,8 @@ func (u *remoteUpdate) GetPath() []string {
 	return u.path
 }
 
-func (u *remoteUpdate) Value() (*schemapb.TypedValue, error) {
-	tv := new(schemapb.TypedValue)
+func (u *remoteUpdate) Value() (*sdcpb.TypedValue, error) {
+	tv := new(sdcpb.TypedValue)
 	err := proto.Unmarshal(u.bytes, tv)
 	if err != nil {
 		return nil, err
