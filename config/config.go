@@ -65,8 +65,7 @@ func (c *Config) validateSetDefaults() error {
 	if c.Schemas == nil && c.SchemaServer == nil {
 		return errors.New("missing `schemas` or `schema-server` sections")
 	}
-
-	if c.GRPCServer.SchemaServer == nil || !c.GRPCServer.SchemaServer.Enabled {
+	if c.SchemaServer == nil && (c.GRPCServer.SchemaServer == nil || !c.GRPCServer.SchemaServer.Enabled) {
 		return errors.New("schema-server RPCs cannot be exposed if the schema server is not enabled")
 	}
 	var err error
