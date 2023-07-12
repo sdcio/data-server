@@ -13,3 +13,6 @@ keys
 clabs/
 tests/results
 cached/
+log.html
+output.xml
+report.html

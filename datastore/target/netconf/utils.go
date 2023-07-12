@@ -70,9 +70,9 @@ func StringElementToTypedValue(s string, ls *sdcpb.LeafSchema) (*sdcpb.TypedValu
 func pathElem2Xpath(pe *sdcpb.PathElem, namespace string) (etree.Path, error) {
 	var keys []string
 
-	// prepare the keys -> "k=v"
+	// prepare the keys -> "k='v'"
 	for k, v := range pe.Key {
-		keys = append(keys, fmt.Sprintf("%s=%s", k, v))
+		keys = append(keys, fmt.Sprintf("%s='%s'", k, v))
 	}
 
 	keyString := ""
