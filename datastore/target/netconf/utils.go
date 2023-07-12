@@ -72,10 +72,7 @@ func pathElem2Xpath(pe *schemapb.PathElem, namespace string) (etree.Path, error)
 
 	// prepare the keys -> "k='v'"
 	for k, v := range pe.Key {
-		if !(strings.HasPrefix(v, "'") && strings.HasSuffix(v, "'")) {
-			return etree.Path{}, fmt.Errorf("invalid Path %q, filter values expected as k='v'", pe.String())
-		}
-		keys = append(keys, fmt.Sprintf("%s=%s", k, v))
+		keys = append(keys, fmt.Sprintf("%s='%s'", k, v))
 	}
 
 	keyString := ""
