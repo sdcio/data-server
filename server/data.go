@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"time"
 
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
@@ -98,17 +99,29 @@ func (s *Server) Diff(ctx context.Context, req *sdcpb.DiffRequest) (*sdcpb.DiffR
 }
 
 func (s *Server) Subscribe(req *sdcpb.SubscribeRequest, stream sdcpb.DataServer_SubscribeServer) error {
-	log.Debugf("received SubscribeRequest: %v", req)
+	log.Infof("received SubscribeRequest: %v", req)
 	name := req.GetName()
 	if name == "" {
 		return status.Errorf(codes.InvalidArgument, "missing datastore name")
 	}
+	if req.GetSubscribe() == nil {
+		return status.Errorf(codes.InvalidArgument, "missing subscribe request")
+	}
+	if len(req.GetSubscribe().GetSubscription()) == 0 {
+		return status.Errorf(codes.InvalidArgument, "missing subscription list in request")
+	}
+	// TODO: set subscribe request defaults
+	for _, subsc := range req.GetSubscribe().GetSubscription() {
+		if subsc.Mode != sdcpb.SubscriptionMode_ON_CHANGE && subsc.SampleInterval < uint64(time.Second) {
+			subsc.SampleInterval = uint64(time.Second)
+		}
+	}
+
 	s.md.RLock()
 	ds, ok := s.datastores[name]
 	s.md.RUnlock()
 	if !ok {
 		return status.Errorf(codes.InvalidArgument, "unknown datastore %s", name)
 	}
-	ds.Subscribe(req, stream)
-	return status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
+	return ds.Subscribe(req, stream)
 }

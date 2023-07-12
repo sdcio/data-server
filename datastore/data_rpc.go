@@ -35,22 +35,6 @@ func (d *Datastore) Get(ctx context.Context, req *sdcpb.GetDataRequest, nCh chan
 		}
 	}
 
-	// choose store(s)
-	var stores []cachepb.Store
-	switch req.GetDataType() {
-	case sdcpb.DataType_ALL:
-		stores = []cachepb.Store{cachepb.Store_CONFIG}
-		if req.GetDatastore().GetName() == "" {
-			stores = append(stores, cachepb.Store_STATE)
-		}
-	case sdcpb.DataType_CONFIG:
-		stores = []cachepb.Store{cachepb.Store_CONFIG}
-	case sdcpb.DataType_STATE:
-		if req.GetDatastore().GetName() == "" {
-			stores = []cachepb.Store{cachepb.Store_STATE}
-		}
-	}
-
 	// build target cache name
 	name := req.GetName()
 	if req.GetDatastore().GetName() != "" {
@@ -65,7 +49,7 @@ func (d *Datastore) Get(ctx context.Context, req *sdcpb.GetDataRequest, nCh chan
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	for _, store := range stores {
+	for _, store := range getStores(req) {
 		for upd := range d.cacheClient.ReadCh(ctx, name, store, paths) {
 			log.Debugf("ds=%s read path=%v from store=%v: %v", name, paths, store, upd)
 			scp, err := d.toPath(ctx, upd.GetPath())
@@ -312,6 +296,56 @@ func (d *Datastore) Diff(ctx context.Context, req *sdcpb.DiffRequest) (*sdcpb.Di
 }
 
 func (d *Datastore) Subscribe(req *sdcpb.SubscribeRequest, stream sdcpb.DataServer_SubscribeServer) error {
+	ctx, cancel := context.WithCancel(stream.Context())
+	defer cancel()
+	switch req.GetSubscribe().GetMode() {
+	case sdcpb.SubscriptionListMode_STREAM:
+		for _, subsc := range req.GetSubscribe().GetSubscription() {
+			switch subsc.GetMode() {
+			case sdcpb.SubscriptionMode_ON_CHANGE:
+				// TODO:
+			case sdcpb.SubscriptionMode_SAMPLE:
+				ticker := time.NewTicker(time.Duration(subsc.GetSampleInterval()))
+				defer ticker.Stop()
+				err := d.doSubscribeOnce(ctx, req, stream)
+				if err != nil {
+					return err
+				}
+				err = stream.Send(&sdcpb.SubscribeResponse{
+					Response: &sdcpb.SubscribeResponse_SyncResponse{
+						SyncResponse: true,
+					},
+				})
+				if err != nil {
+					return err
+				}
+				// start periodic gets, TODO: optimize using cache RPC
+				for {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case <-ticker.C:
+						err := d.doSubscribeOnce(ctx, req, stream)
+						if err != nil {
+							return err
+						}
+					}
+				}
+			case sdcpb.SubscriptionMode_TARGET_DEFINED:
+			}
+		}
+	case sdcpb.SubscriptionListMode_ONCE:
+		err := d.doSubscribeOnce(ctx, req, stream)
+		if err != nil {
+			return err
+		}
+
+		return stream.Send(&sdcpb.SubscribeResponse{
+			Response: &sdcpb.SubscribeResponse_SyncResponse{
+				SyncResponse: true,
+			},
+		})
+	}
 	return nil
 }
 
@@ -1001,4 +1035,75 @@ func (d *Datastore) getChild(ctx context.Context, s string, cs *sdcpb.SchemaElem
 		}
 	}
 	return "", false
+}
+
+func (d *Datastore) doSubscribeOnce(ctx context.Context, req *sdcpb.SubscribeRequest, stream sdcpb.DataServer_SubscribeServer) error {
+	paths := make([][]string, 0, len(req.GetSubscribe().GetSubscription()))
+	for _, subsc := range req.GetSubscribe().GetSubscription() {
+		paths = append(paths, utils.ToStrings(subsc.GetPath(), false, false))
+	}
+	for _, store := range getStores(req) {
+		for upd := range d.cacheClient.ReadCh(ctx, req.GetName(), store, paths) {
+			log.Debugf("ds=%s read path=%v from store=%v: %v", req.GetName(), paths, store, upd)
+			scp, err := d.toPath(ctx, upd.GetPath())
+			if err != nil {
+				return err
+			}
+			tv, err := upd.Value()
+			if err != nil {
+				return err
+			}
+			notification := &sdcpb.Notification{
+				Timestamp: time.Now().UnixNano(),
+				Update: []*sdcpb.Update{{
+					Path:  scp,
+					Value: tv,
+				}},
+			}
+			rsp := &sdcpb.SubscribeResponse{
+				Response: &sdcpb.SubscribeResponse_Update{
+					Update: notification,
+				},
+			}
+			log.Debugf("ds=%s sending subscribe response: %v", req.GetName(), rsp)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				err = stream.Send(rsp)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func getStores(req proto.Message) []cachepb.Store {
+	var dt sdcpb.DataType
+	var candName string
+	switch req := req.(type) {
+	case *sdcpb.GetDataRequest:
+		dt = req.GetDataType()
+		candName = req.GetDatastore().GetName()
+	case *sdcpb.SubscribeRequest:
+		dt = req.GetSubscribe().GetDataType()
+	}
+
+	var stores []cachepb.Store
+	switch dt {
+	case sdcpb.DataType_ALL:
+		stores = []cachepb.Store{cachepb.Store_CONFIG}
+		if candName == "" {
+			stores = append(stores, cachepb.Store_STATE)
+		}
+	case sdcpb.DataType_CONFIG:
+		stores = []cachepb.Store{cachepb.Store_CONFIG}
+	case sdcpb.DataType_STATE:
+		if candName == "" {
+			stores = []cachepb.Store{cachepb.Store_STATE}
+		}
+	}
+	return stores
 }
