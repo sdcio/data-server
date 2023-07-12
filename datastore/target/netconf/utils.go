@@ -70,8 +70,11 @@ func StringElementToTypedValue(s string, ls *schemapb.LeafSchema) (*schemapb.Typ
 func pathElem2Xpath(pe *schemapb.PathElem, namespace string) (etree.Path, error) {
 	var keys []string
 
-	// prepare the keys -> "k=v"
+	// prepare the keys -> "k='v'"
 	for k, v := range pe.Key {
+		if !(strings.HasPrefix(v, "'") && strings.HasSuffix(v, "'")) {
+			return etree.Path{}, fmt.Errorf("invalid Path %q, filter values expected as k='v'", pe.String())
+		}
 		keys = append(keys, fmt.Sprintf("%s=%s", k, v))
 	}
 
