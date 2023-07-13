@@ -104,15 +104,13 @@ func (s *Server) Subscribe(req *sdcpb.SubscribeRequest, stream sdcpb.DataServer_
 	if name == "" {
 		return status.Errorf(codes.InvalidArgument, "missing datastore name")
 	}
-	if req.GetSubscribe() == nil {
-		return status.Errorf(codes.InvalidArgument, "missing subscribe request")
-	}
-	if len(req.GetSubscribe().GetSubscription()) == 0 {
+
+	if len(req.GetSubscription()) == 0 {
 		return status.Errorf(codes.InvalidArgument, "missing subscription list in request")
 	}
 	// TODO: set subscribe request defaults
-	for _, subsc := range req.GetSubscribe().GetSubscription() {
-		if subsc.Mode != sdcpb.SubscriptionMode_ON_CHANGE && subsc.SampleInterval < uint64(time.Second) {
+	for _, subsc := range req.GetSubscription() {
+		if subsc.GetSampleInterval() < uint64(time.Second) {
 			subsc.SampleInterval = uint64(time.Second)
 		}
 	}
@@ -124,4 +122,8 @@ func (s *Server) Subscribe(req *sdcpb.SubscribeRequest, stream sdcpb.DataServer_
 		return status.Errorf(codes.InvalidArgument, "unknown datastore %s", name)
 	}
 	return ds.Subscribe(req, stream)
+}
+
+func (s *Server) Watch(req *sdcpb.WatchRequest, stream sdcpb.DataServer_WatchServer) error {
+	return nil
 }

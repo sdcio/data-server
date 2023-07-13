@@ -66,7 +66,7 @@ func (t *Tree) AddSchemaNotification(n *sdcpb.Notification) error {
 	}
 
 	for _, del := range n.GetDelete() {
-		items, err := utils.CompletePath(n.GetPrefix(), del)
+		items, err := utils.CompletePath(nil, del)
 		if err != nil {
 			return err
 		}

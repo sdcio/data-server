@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"time"
 
 	"github.com/iptecharch/cache/proto/cachepb"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
@@ -29,9 +30,9 @@ type Client interface {
 	// send a stream of modifications (update or delete) to a cache, or candidate
 	Modify(ctx context.Context, name string, store cachepb.Store, dels [][]string, upds []Update) error
 	// read from a cache or candidate
-	Read(ctx context.Context, name string, store cachepb.Store, paths [][]string) []Update
+	Read(ctx context.Context, name string, store cachepb.Store, paths [][]string, period time.Duration) []Update
 	// read from a cache or candidate, get results through a channel
-	ReadCh(ctx context.Context, name string, store cachepb.Store, paths [][]string) chan Update
+	ReadCh(ctx context.Context, name string, store cachepb.Store, paths [][]string, period time.Duration) chan Update
 	// get changes present in a candidate
 	GetChanges(ctx context.Context, name, candidate string) ([]*Change, error)
 	// discard changes made to a candidate

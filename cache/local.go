@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/iptecharch/cache/cache"
 	"github.com/iptecharch/cache/config"
@@ -111,8 +112,8 @@ func (c *localCache) Modify(ctx context.Context, name string, store cachepb.Stor
 	return nil
 }
 
-func (c *localCache) Read(ctx context.Context, name string, store cachepb.Store, paths [][]string) []Update {
-	ch := c.ReadCh(ctx, name, store, paths)
+func (c *localCache) Read(ctx context.Context, name string, store cachepb.Store, paths [][]string, period time.Duration) []Update {
+	ch := c.ReadCh(ctx, name, store, paths, period)
 	var upds = make([]Update, 0, len(paths))
 	for {
 		select {
@@ -127,7 +128,7 @@ func (c *localCache) Read(ctx context.Context, name string, store cachepb.Store,
 	}
 }
 
-func (c *localCache) ReadCh(ctx context.Context, name string, store cachepb.Store, paths [][]string) chan Update {
+func (c *localCache) ReadCh(ctx context.Context, name string, store cachepb.Store, paths [][]string, period time.Duration) chan Update {
 	var cStore cache.Store
 	switch store {
 	case cachepb.Store_CONFIG:
@@ -143,7 +144,7 @@ func (c *localCache) ReadCh(ctx context.Context, name string, store cachepb.Stor
 		wg.Wait()
 		close(outCh)
 	}()
-
+	// TODO: use period
 	for _, p := range paths {
 		go func(p []string) { // TODO: limit num of goroutines ?
 			defer wg.Done()

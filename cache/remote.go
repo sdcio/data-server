@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/iptecharch/cache/client"
 	"github.com/iptecharch/cache/proto/cachepb"
@@ -90,8 +91,8 @@ func (c *remoteCache) Modify(ctx context.Context, name string, store cachepb.Sto
 	return c.c.Modify(ctx, name, store, dels, pbUpds)
 }
 
-func (c *remoteCache) Read(ctx context.Context, name string, store cachepb.Store, paths [][]string) []Update {
-	outCh := c.ReadCh(ctx, name, store, paths)
+func (c *remoteCache) Read(ctx context.Context, name string, store cachepb.Store, paths [][]string, period time.Duration) []Update {
+	outCh := c.ReadCh(ctx, name, store, paths, period)
 	updates := make([]Update, 0)
 	for {
 		select {
@@ -106,8 +107,8 @@ func (c *remoteCache) Read(ctx context.Context, name string, store cachepb.Store
 	}
 }
 
-func (c *remoteCache) ReadCh(ctx context.Context, name string, store cachepb.Store, paths [][]string) chan Update {
-	inCh := c.c.Read(ctx, name, store, paths)
+func (c *remoteCache) ReadCh(ctx context.Context, name string, store cachepb.Store, paths [][]string, period time.Duration) chan Update {
+	inCh := c.c.Read(ctx, name, store, paths, period)
 	outCh := make(chan Update)
 	go func() {
 		defer close(outCh)

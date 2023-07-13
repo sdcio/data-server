@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/iptecharch/cache/proto/cachepb"
@@ -50,7 +51,7 @@ func (d *Datastore) Get(ctx context.Context, req *sdcpb.GetDataRequest, nCh chan
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	for _, store := range getStores(req) {
-		for upd := range d.cacheClient.ReadCh(ctx, name, store, paths) {
+		for upd := range d.cacheClient.ReadCh(ctx, name, store, paths, 0) {
 			log.Debugf("ds=%s read path=%v from store=%v: %v", name, paths, store, upd)
 			scp, err := d.toPath(ctx, upd.GetPath())
 			if err != nil {
@@ -226,7 +227,7 @@ func (d *Datastore) Diff(ctx context.Context, req *sdcpb.DiffRequest) (*sdcpb.Di
 				}
 
 				// read value from main
-				values := d.cacheClient.Read(ctx, req.GetName(), cachepb.Store_CONFIG, [][]string{change.Update.GetPath()})
+				values := d.cacheClient.Read(ctx, req.GetName(), cachepb.Store_CONFIG, [][]string{change.Update.GetPath()}, 0)
 				if len(values) == 0 {
 					continue
 				}
@@ -260,7 +261,7 @@ func (d *Datastore) Diff(ctx context.Context, req *sdcpb.DiffRequest) (*sdcpb.Di
 				diffRsp.Diff = append(diffRsp.Diff, diffup)
 			case len(change.Delete) != 0:
 				// read value from main
-				values := d.cacheClient.Read(ctx, req.GetName(), cachepb.Store_CONFIG, [][]string{change.Delete})
+				values := d.cacheClient.Read(ctx, req.GetName(), cachepb.Store_CONFIG, [][]string{change.Delete}, 0)
 				if len(values) == 0 {
 					continue
 				}
@@ -298,54 +299,50 @@ func (d *Datastore) Diff(ctx context.Context, req *sdcpb.DiffRequest) (*sdcpb.Di
 func (d *Datastore) Subscribe(req *sdcpb.SubscribeRequest, stream sdcpb.DataServer_SubscribeServer) error {
 	ctx, cancel := context.WithCancel(stream.Context())
 	defer cancel()
-	switch req.GetSubscribe().GetMode() {
-	case sdcpb.SubscriptionListMode_STREAM:
-		for _, subsc := range req.GetSubscribe().GetSubscription() {
-			switch subsc.GetMode() {
-			case sdcpb.SubscriptionMode_ON_CHANGE:
-				// TODO:
-			case sdcpb.SubscriptionMode_SAMPLE:
-				ticker := time.NewTicker(time.Duration(subsc.GetSampleInterval()))
-				defer ticker.Stop()
-				err := d.doSubscribeOnce(ctx, req, stream)
-				if err != nil {
-					return err
-				}
-				err = stream.Send(&sdcpb.SubscribeResponse{
-					Response: &sdcpb.SubscribeResponse_SyncResponse{
-						SyncResponse: true,
-					},
-				})
-				if err != nil {
-					return err
-				}
-				// start periodic gets, TODO: optimize using cache RPC
-				for {
-					select {
-					case <-ctx.Done():
-						return ctx.Err()
-					case <-ticker.C:
-						err := d.doSubscribeOnce(ctx, req, stream)
-						if err != nil {
-							return err
-						}
-					}
-				}
-			case sdcpb.SubscriptionMode_TARGET_DEFINED:
-			}
-		}
-	case sdcpb.SubscriptionListMode_ONCE:
-		err := d.doSubscribeOnce(ctx, req, stream)
+	var err error
+	for _, subsc := range req.GetSubscription() {
+		err := d.doSubscribeOnce(ctx, subsc, stream)
 		if err != nil {
 			return err
 		}
-
-		return stream.Send(&sdcpb.SubscribeResponse{
-			Response: &sdcpb.SubscribeResponse_SyncResponse{
-				SyncResponse: true,
-			},
-		})
 	}
+	err = stream.Send(&sdcpb.SubscribeResponse{
+		Response: &sdcpb.SubscribeResponse_SyncResponse{
+			SyncResponse: true,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	// start periodic gets, TODO: optimize using cache RPC
+	wg := new(sync.WaitGroup)
+	wg.Add(len(req.GetSubscription()))
+	errCh := make(chan error, 1)
+	doneCh := make(chan struct{})
+	for _, subsc := range req.GetSubscription() {
+		go func(subsc *sdcpb.Subscription) {
+			ticker := time.NewTicker(time.Duration(subsc.GetSampleInterval()))
+			defer ticker.Stop()
+			defer wg.Done()
+			for {
+				select {
+				case <-doneCh:
+					return
+				case <-ctx.Done():
+					errCh <- ctx.Err()
+					return
+				case <-ticker.C:
+					err := d.doSubscribeOnce(ctx, subsc, stream)
+					if err != nil {
+						errCh <- err
+						close(doneCh)
+						return
+					}
+				}
+			}
+		}(subsc)
+	}
+	wg.Wait()
 	return nil
 }
 
@@ -1037,35 +1034,20 @@ func (d *Datastore) getChild(ctx context.Context, s string, cs *sdcpb.SchemaElem
 	return "", false
 }
 
-func (d *Datastore) doSubscribeOnce(ctx context.Context, req *sdcpb.SubscribeRequest, stream sdcpb.DataServer_SubscribeServer) error {
-	paths := make([][]string, 0, len(req.GetSubscribe().GetSubscription()))
-	for _, subsc := range req.GetSubscribe().GetSubscription() {
-		paths = append(paths, utils.ToStrings(subsc.GetPath(), false, false))
+func (d *Datastore) doSubscribeOnce(ctx context.Context, subscription *sdcpb.Subscription, stream sdcpb.DataServer_SubscribeServer) error {
+	paths := make([][]string, 0, len(subscription.GetPath()))
+	for _, path := range subscription.GetPath() {
+		paths = append(paths, utils.ToStrings(path, false, false))
 	}
-	for _, store := range getStores(req) {
-		for upd := range d.cacheClient.ReadCh(ctx, req.GetName(), store, paths) {
-			log.Debugf("ds=%s read path=%v from store=%v: %v", req.GetName(), paths, store, upd)
-			scp, err := d.toPath(ctx, upd.GetPath())
+
+	for _, store := range getStores(subscription) {
+		for upd := range d.cacheClient.ReadCh(ctx, d.config.Name, store, paths, 0) {
+			log.Debugf("ds=%s read path=%v from store=%v: %v", d.config.Name, paths, store, upd)
+			rsp, err := d.subscribeResponseFromCacheUpdate(ctx, upd)
 			if err != nil {
 				return err
 			}
-			tv, err := upd.Value()
-			if err != nil {
-				return err
-			}
-			notification := &sdcpb.Notification{
-				Timestamp: time.Now().UnixNano(),
-				Update: []*sdcpb.Update{{
-					Path:  scp,
-					Value: tv,
-				}},
-			}
-			rsp := &sdcpb.SubscribeResponse{
-				Response: &sdcpb.SubscribeResponse_Update{
-					Update: notification,
-				},
-			}
-			log.Debugf("ds=%s sending subscribe response: %v", req.GetName(), rsp)
+			log.Debugf("ds=%s sending subscribe response: %v", d.config.Name, rsp)
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -1087,8 +1069,8 @@ func getStores(req proto.Message) []cachepb.Store {
 	case *sdcpb.GetDataRequest:
 		dt = req.GetDataType()
 		candName = req.GetDatastore().GetName()
-	case *sdcpb.SubscribeRequest:
-		dt = req.GetSubscribe().GetDataType()
+	case *sdcpb.Subscription:
+		dt = req.GetDataType()
 	}
 
 	var stores []cachepb.Store
@@ -1106,4 +1088,27 @@ func getStores(req proto.Message) []cachepb.Store {
 		}
 	}
 	return stores
+}
+
+func (d *Datastore) subscribeResponseFromCacheUpdate(ctx context.Context, upd cache.Update) (*sdcpb.SubscribeResponse, error) {
+	scp, err := d.toPath(ctx, upd.GetPath())
+	if err != nil {
+		return nil, err
+	}
+	tv, err := upd.Value()
+	if err != nil {
+		return nil, err
+	}
+	notification := &sdcpb.Notification{
+		Timestamp: time.Now().UnixNano(),
+		Update: []*sdcpb.Update{{
+			Path:  scp,
+			Value: tv,
+		}},
+	}
+	return &sdcpb.SubscribeResponse{
+		Response: &sdcpb.SubscribeResponse_Update{
+			Update: notification,
+		},
+	}, nil
 }
