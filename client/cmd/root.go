@@ -39,7 +39,7 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	rootCmd.PersistentFlags().StringVarP(&addr, "address", "a", "localhost:55000", "schema server address")
+	rootCmd.PersistentFlags().StringVarP(&addr, "address", "a", "localhost:56000", "schema server address")
 	rootCmd.PersistentFlags().StringVar(&schemaName, "name", "", "schema name")
 	rootCmd.PersistentFlags().StringVar(&schemaVendor, "vendor", "", "schema vendor")
 	rootCmd.PersistentFlags().StringVar(&schemaVersion, "version", "", "schema version")

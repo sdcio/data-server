@@ -1,6 +1,6 @@
 grpc-server:
   # gRPC listening address
-  address: ":56000"
+  # address: ":56000"
 
   ## TLS config
   # tls:

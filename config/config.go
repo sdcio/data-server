@@ -50,7 +50,7 @@ func (c *Config) validateSetDefaults() error {
 		return errors.New("grpc-server definition is required")
 	}
 	if c.GRPCServer.Address == "" {
-		c.GRPCServer.Address = ":55000"
+		c.GRPCServer.Address = ":56000"
 	}
 	if c.GRPCServer.MaxRecvMsgSize <= 0 {
 		c.GRPCServer.MaxRecvMsgSize = 4 * 1024 * 1024
