@@ -27,7 +27,7 @@ func (ccb *CacheClientBound) GetValue(ctx context.Context, candidateName string,
 	if err != nil {
 		return nil, err
 	}
-	cacheupds := ccb.cacheClient.Read(ctx, ccb.name+"/"+candidateName, cachepb.Store_CONFIG, [][]string{spath})
+	cacheupds := ccb.cacheClient.Read(ctx, ccb.name+"/"+candidateName, cachepb.Store_CONFIG, [][]string{spath}, 0)
 	if len(cacheupds) == 0 {
 		return nil, nil
 	}

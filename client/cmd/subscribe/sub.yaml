@@ -1,0 +1,8 @@
+subscription:
+- paths:
+  - /interface[name=mgmt0]/admin-state
+  sample-interval: 10s
+- paths:
+  - system/gnmi-server/network-instance[name=mgmt]/admin-state
+  - network-instance[name=mgmt]/admin-state
+  sample-interval: 5s
