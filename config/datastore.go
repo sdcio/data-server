@@ -44,12 +44,11 @@ type Sync struct {
 }
 
 type GNMISync struct {
-	Name           string        `yaml:"name,omitempty" json:"name,omitempty"`
-	Paths          []string      `yaml:"paths,omitempty" json:"paths,omitempty"`
-	Mode           string        `yaml:"mode,omitempty" json:"mode,omitempty"`
-	SampleInterval time.Duration `yaml:"sample-interval,omitempty" json:"sample-interval,omitempty"`
-	Period         time.Duration `yaml:"period,omitempty" json:"period,omitempty"`
-	Encoding       string        `yaml:"encoding,omitempty" json:"encoding,omitempty"`
+	Name     string        `yaml:"name,omitempty" json:"name,omitempty"`
+	Paths    []string      `yaml:"paths,omitempty" json:"paths,omitempty"`
+	Mode     string        `yaml:"mode,omitempty" json:"mode,omitempty"`
+	Interval time.Duration `yaml:"interval,omitempty" json:"interval,omitempty"`
+	Encoding string        `yaml:"encoding,omitempty" json:"encoding,omitempty"`
 }
 
 type CacheConfig struct {

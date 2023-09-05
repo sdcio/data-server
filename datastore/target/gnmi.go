@@ -159,7 +159,7 @@ START:
 			go t.target.Subscribe(ctx, subReq, gnmiSync.Name)
 			// periodic subscribe ONCE
 			go func(gnmiSync *config.GNMISync) {
-				ticker := time.NewTicker(gnmiSync.Period)
+				ticker := time.NewTicker(gnmiSync.Interval)
 				defer ticker.Stop()
 				for {
 					select {
@@ -175,9 +175,9 @@ START:
 			for _, p := range gnmiSync.Paths {
 				subscriptionOpts = append(subscriptionOpts, gapi.Path(p))
 			}
-			subscriptionOpts = append(subscriptionOpts, gapi.SubscriptionMode(gnmiSync.Mode))
-			if gnmiSync.SampleInterval > 0 {
-				subscriptionOpts = append(subscriptionOpts, gapi.SampleInterval(gnmiSync.SampleInterval))
+			subscriptionOpts = append(subscriptionOpts, gapi.SubscriptionModeON_CHANGE())
+			if gnmiSync.Interval > 0 {
+				subscriptionOpts = append(subscriptionOpts, gapi.SampleInterval(gnmiSync.Interval))
 			}
 			opts = append(opts,
 				gapi.EncodingCustom(encoding(gnmiSync.Encoding)),

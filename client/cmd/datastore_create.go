@@ -5,7 +5,9 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
@@ -13,6 +15,8 @@ import (
 )
 
 var candidate string
+var target string
+var syncFile string
 
 // datastoreCreateCmd represents the create command
 var datastoreCreateCmd = &cobra.Command{
@@ -26,27 +30,47 @@ var datastoreCreateCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		var req *sdcpb.CreateDataStoreRequest
+		b, err := os.ReadFile(target)
+		if err != nil {
+			return err
+		}
+		tg := &sdcpb.Target{}
+		err = json.Unmarshal(b, tg)
+		if err != nil {
+			return err
+		}
+		req := &sdcpb.CreateDataStoreRequest{
+			Name: datastoreName,
+		}
+		if syncFile != "" {
+			b, err = os.ReadFile(syncFile)
+			if err != nil {
+				return err
+			}
+			sync := &sdcpb.Sync{}
+			err = json.Unmarshal(b, sync)
+			if err != nil {
+				return err
+			}
+			req.Sync = sync
+		}
+
 		switch {
 		// create a candidate datastore
 		case candidate != "":
-			req = &sdcpb.CreateDataStoreRequest{
-				Name: datastoreName,
-				Datastore: &sdcpb.DataStore{
-					Type: sdcpb.Type_CANDIDATE,
-					Name: candidate,
-				},
+			req.Datastore = &sdcpb.DataStore{
+				Type: sdcpb.Type_CANDIDATE,
+				Name: candidate,
 			}
+			req.Target = tg
 			//create a main datastore
 		default:
-			req = &sdcpb.CreateDataStoreRequest{
-				Name: datastoreName,
-				Schema: &sdcpb.Schema{
-					Name:    schemaName,
-					Vendor:  schemaVendor,
-					Version: schemaVersion,
-				},
+			req.Schema = &sdcpb.Schema{
+				Name:    schemaName,
+				Vendor:  schemaVendor,
+				Version: schemaVersion,
 			}
+			req.Target = tg
 		}
 		fmt.Println("request:")
 		fmt.Println(prototext.Format(req))
@@ -62,4 +86,8 @@ var datastoreCreateCmd = &cobra.Command{
 
 func init() {
 	datastoreCmd.AddCommand(datastoreCreateCmd)
+
+	datastoreCreateCmd.Flags().StringVarP(&target, "target", "", "", "target definition file")
+	datastoreCreateCmd.Flags().StringVarP(&syncFile, "sync", "", "", "target sync definition file")
+
 }
