@@ -18,7 +18,7 @@ import (
 // datastoreGetCmd represents the get command
 var datastoreGetCmd = &cobra.Command{
 	Use:          "get",
-	Short:        "list candidates in a datastore",
+	Short:        "show datastore details",
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx, cancel := context.WithCancel(cmd.Context())
@@ -48,6 +48,16 @@ func init() {
 }
 
 func printDataStoreTable(rsp *sdcpb.GetDataStoreResponse) {
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Name", "Schema", "Candidate(s)", "SBI", "Address"})
+	table.SetAlignment(tablewriter.ALIGN_LEFT)
+	table.SetAutoFormatHeaders(false)
+	table.SetAutoWrapText(false)
+	table.AppendBulk(toTableData(rsp))
+	table.Render()
+}
+
+func toTableData(rsp *sdcpb.GetDataStoreResponse) [][]string {
 	candidates := make([]string, 0, len(rsp.GetDatastore()))
 	for _, ds := range rsp.GetDatastore() {
 		if ds.GetType() == sdcpb.Type_MAIN {
@@ -55,20 +65,13 @@ func printDataStoreTable(rsp *sdcpb.GetDataStoreResponse) {
 		}
 		candidates = append(candidates, "- "+ds.GetName())
 	}
-	tableData := make([][]string, 0, 1)
-	tableData = append(tableData, []string{
-		rsp.GetName(),
-		fmt.Sprintf("%s/%s/%s", rsp.GetSchema().GetName(), rsp.GetSchema().GetVendor(), rsp.GetSchema().GetVersion()),
-		strings.Join(candidates, "\n"),
-		rsp.GetTarget().GetType(),
-		rsp.GetTarget().GetAddress(),
-	})
-
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "Schema", "Candidate(s)", "SBI", "Address"})
-	table.SetAlignment(tablewriter.ALIGN_LEFT)
-	table.SetAutoFormatHeaders(false)
-	table.SetAutoWrapText(false)
-	table.AppendBulk(tableData)
-	table.Render()
+	return [][]string{
+		[]string{
+			rsp.GetName(),
+			fmt.Sprintf("%s/%s/%s", rsp.GetSchema().GetName(), rsp.GetSchema().GetVendor(), rsp.GetSchema().GetVersion()),
+			strings.Join(candidates, "\n"),
+			rsp.GetTarget().GetType(),
+			rsp.GetTarget().GetAddress(),
+		},
+	}
 }

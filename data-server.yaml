@@ -27,72 +27,72 @@ grpc-server:
   max-recv-msg-size: 25165824 # 24 * 1024 * 1024 (24MB)
 
 datastores: # this specifies MAIN datastores
-  - name: srl1
-    schema: 
-      name: srl
-      vendor: Nokia
-      version: 22.11.2
-    sbi:
-      type: gnmi # nc, nats, redis
-      address: clab-schema-srl1:57400
-      credentials:
-        username: admin
-        password: NokiaSrl1!
-      tls:
-        skip-verify: true
-    sync:
-      validate: true
-      gnmi:
-        - path:
-          - /
-          name: config
-          mode: on-change
-          encoding: 45
-        # - path:
-        #   - /
-        #   name: state
-        #   mode: sample
-        #   encoding: 46
-  - name: srl2
-    schema: 
-      name: srl
-      vendor: Nokia
-      version: 22.11.2
-    sbi:
-      type: gnmi # nc, nats, redis
-      address: clab-schema-srl2:57400
-      credentials:
-        username: admin
-        password: NokiaSrl1!
-      tls:
-        skip-verify: true
-    sync:
-      validate: true
-      gnmi:
-        - path:
-          - /
-          name: config
-          mode: on-change
-          encoding: 45
-        # - path:
-        #   - /
-        #   name: state
-        #   mode: sample
-        #   encoding: 46
-  # - name: crpd1
-  #   schema:
-  #     name: junos
-  #     vendor: Juniper
-  #     version: 22.3R1
-  #   sbi:
-  #     type: nc
-  #     address: clab-crpd-crpd1
-  #     credentials:
-  #       username: root
-  #       password: clab123
+#   - name: srl1
+#     schema: 
+#       name: srl
+#       vendor: Nokia
+#       version: 22.11.2
+#     sbi:
+#       type: gnmi # nc, nats, redis
+#       address: clab-schema-srl1:57400
+#       credentials:
+#         username: admin
+#         password: NokiaSrl1!
+#       tls:
+#         skip-verify: true
+#     sync:
+#       validate: true
+#       gnmi:
+#         - path:
+#           - /
+#           name: config
+#           mode: on-change
+#           encoding: 45
+#         # - path:
+#         #   - /
+#         #   name: state
+#         #   mode: sample
+#         #   encoding: 46
+#   - name: srl2
+#     schema: 
+#       name: srl
+#       vendor: Nokia
+#       version: 22.11.2
+#     sbi:
+#       type: gnmi # nc, nats, redis
+#       address: clab-schema-srl2:57400
+#       credentials:
+#         username: admin
+#         password: NokiaSrl1!
+#       tls:
+#         skip-verify: true
+#     sync:
+#       validate: true
+#       gnmi:
+#         - path:
+#           - /
+#           name: config
+#           mode: on-change
+#           encoding: 45
+#         # - path:
+#         #   - /
+#         #   name: state
+#         #   mode: sample
+#         #   encoding: 46
+#   # - name: crpd1
+#   #   schema:
+#   #     name: junos
+#   #     vendor: Juniper
+#   #     version: 22.3R1
+#   #   sbi:
+#   #     type: nc
+#   #     address: clab-crpd-crpd1
+#   #     credentials:
+#   #       username: root
+#   #       password: clab123
 
-# schemas definitions
-# for local schema store only
+# # schemas definitions
+# # for local schema store only
 
 schemas:
   - name: sros

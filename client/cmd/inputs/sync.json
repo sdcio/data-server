@@ -1,0 +1,12 @@
+{
+    "validate": true,
+    "gnmi": [
+      {
+        "path": [
+          "/"
+        ],
+        "name": "config",
+        "encoding": "45"
+      }
+    ]
+  }

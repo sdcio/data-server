@@ -1,0 +1,11 @@
+{
+  "type": "gnmi",
+  "address": "clab-schema-srl2:57400",
+  "credentials": {
+    "username": "admin",
+    "password": "NokiaSrl1!"
+  },
+  "tls": {
+    "skip_verify": true
+  }
+}

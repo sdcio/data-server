@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -45,7 +46,7 @@ type Datastore struct {
 
 // New creates a new datastore, its schema server client and initializes the SBI target
 // func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Datastore {
-func New(c *config.DatastoreConfig, scc schema.Client, cc cache.Client, opts ...grpc.DialOption) *Datastore {
+func New(ctx context.Context, c *config.DatastoreConfig, scc schema.Client, cc cache.Client, opts ...grpc.DialOption) *Datastore {
 	ds := &Datastore{
 		config:       c,
 		schemaClient: scc,
@@ -54,20 +55,21 @@ func New(c *config.DatastoreConfig, scc schema.Client, cc cache.Client, opts ...
 	if c.Sync != nil {
 		ds.synCh = make(chan *target.SyncUpdate, c.Sync.Buffer)
 	}
-	ctx, cancel := context.WithCancel(context.TODO())
+	ctx, cancel := context.WithCancel(ctx)
 	ds.cfn = cancel
 
 	// create cache instance if needed
 	// this is a blocking  call
 	ds.initCache(ctx)
 
-	// init sbi, this is a blocking call
-	ds.connectSBI(ctx, opts...)
-
-	// start syncing goroutine
-	if c.Sync != nil {
-		go ds.Sync(ctx)
-	}
+	go func() {
+		// init sbi, this is a blocking call
+		ds.connectSBI(ctx, opts...)
+		// start syncing goroutine
+		if c.Sync != nil {
+			go ds.Sync(ctx)
+		}
+	}()
 	return ds
 }
 
@@ -84,7 +86,7 @@ START:
 		return
 	}
 
-	log.Infof("cache %s does not exist creating it", d.config.Name)
+	log.Infof("cache %s does not exist, creating it", d.config.Name)
 CREATE:
 	err = d.cacheClient.Create(ctx, d.config.Name, false, false)
 	if err != nil {
@@ -224,7 +226,8 @@ func (d *Datastore) DeleteCandidate(ctx context.Context, name string) error {
 
 func (d *Datastore) Stop() {
 	d.cfn()
-	d.cacheClient.Close()
+	// d.cacheClient.Close()
+	d.cacheClient.Delete(context.TODO(), d.Config().Name)
 }
 
 func (d *Datastore) Sync(ctx context.Context) {
@@ -240,6 +243,10 @@ func (d *Datastore) Sync(ctx context.Context) {
 		case syncup := <-d.synCh:
 			err = sem.Acquire(ctx, 1)
 			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					log.Infof("datastore %s sync stopped", d.config.Name)
+					return
+				}
 				log.Errorf("failed to acquire semaphore: %v", err)
 				continue
 			}

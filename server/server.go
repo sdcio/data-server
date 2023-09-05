@@ -32,6 +32,7 @@ const (
 type Server struct {
 	config *config.Config
 
+	ctx context.Context
 	cfn context.CancelFunc
 
 	md         *sync.RWMutex
@@ -56,6 +57,7 @@ func New(ctx context.Context, c *config.Config) (*Server, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	var s = &Server{
 		config: c,
+		ctx:    ctx,
 		cfn:    cancel,
 
 		md:         &sync.RWMutex{},
@@ -164,27 +166,43 @@ func (s *Server) Stop() {
 }
 
 func (s *Server) startDataServer(ctx context.Context) {
+	wg := new(sync.WaitGroup)
+	wg.Add(2)
+
 	// create schemaClient, local or remote, based on config
-	s.createSchemaClient(ctx)
+	go func() {
+		defer wg.Done()
+		s.createSchemaClient(ctx)
+	}()
 
 	// create cacheClient, local or remote, based on config
-	s.createCacheClient(ctx)
+	go func() {
+		defer wg.Done()
+		s.createCacheClient(ctx)
+	}()
 
+	wg.Wait()
 	// init datastores
-	s.createDatastores()
+	s.createInitialDatastores(ctx)
 	log.Infof("ready...")
 }
 
-func (s *Server) createDatastores() {
+func (s *Server) createInitialDatastores(ctx context.Context) {
+	numConfiguredDS := len(s.config.Datastores)
+	if numConfiguredDS == 0 {
+		return
+	}
 	wg := new(sync.WaitGroup)
-	wg.Add(len(s.config.Datastores))
+	wg.Add(numConfiguredDS)
+
 	for _, dsCfg := range s.config.Datastores {
 		log.Debugf("creating datastore %s", dsCfg.Name)
 		go func(dsCfg *config.DatastoreConfig) {
 			defer wg.Done()
-			defer s.md.Unlock()
+			ds := datastore.New(ctx, dsCfg, s.schemaClient, s.cacheClient, s.gnmiOpts...)
 			s.md.Lock()
-			s.datastores[dsCfg.Name] = datastore.New(dsCfg, s.schemaClient, s.cacheClient, s.gnmiOpts...)
+			defer s.md.Unlock()
+			s.datastores[dsCfg.Name] = ds
 		}(dsCfg)
 	}
 	wg.Wait()
