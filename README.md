@@ -56,14 +56,14 @@ bin/datactl -a clab-distributed-data-server:56000 datastore get --ds srl1
 
 ```shell
 bin/datactl -a clab-distributed-data-server:56000 datastore create --ds sr1 --candidate default
-bin/datactl -a clab-distributed-data-server:56000 datastore get --ds sr1 
-bin/datactl -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default --update /configure/system/name:::sr123 
+bin/datactl -a clab-distributed-data-server:56000 datastore get --ds sr1
+bin/datactl -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default --update /configure/system/name:::sr123
 bin/datactl -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default --update /configure/service/vprn[service-name=vprn1]/customer:::1
 bin/datactl -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default --update /configure/service/vprn[service-name=vprn1]/service-id:::100
 bin/datactl -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default --update /configure/service/vprn[service-name=vprn1]/admin-state:::enable
 ##
 # bin/datactl -a clab-distributed-data-server:56000 data get --ds sr1 --path /configure/system/name
-bin/datactl -a clab-distributed-data-server:56000 data get --ds sr1 --candidate default --path /configure/system/name 
+bin/datactl -a clab-distributed-data-server:56000 data get --ds sr1 --candidate default --path /configure/system/name
 bin/datactl -a clab-distributed-data-server:56000 data get --ds sr1 --candidate default --path /configure/service/vprn[service-name=vprn1]
 bin/datactl -a clab-distributed-data-server:56000 datastore commit --ds sr1 --candidate default
 ```
