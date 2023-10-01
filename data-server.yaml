@@ -16,19 +16,19 @@ grpc-server:
     enabled: true
     # directory to store the uploaded schemas
     schemas-directory: ./schemas
-  
+
   # data-server attributes
   data-server:
     # max number of candidates per DS
     max-candidates: 16
 
-  # max message size in bytes the server can receive. 
+  # max message size in bytes the server can receive.
   # If this is not set, it defaults to 4 * 1024 * 1024 (4MB)
   max-recv-msg-size: 25165824 # 24 * 1024 * 1024 (24MB)
 
 datastores: # this specifies MAIN datastores
 #   - name: srl1
-#     schema: 
+#     schema:
 #       name: srl
 #       vendor: Nokia
 #       version: 22.11.2
@@ -94,64 +94,64 @@ datastores: # this specifies MAIN datastores
 # # schemas definitions
 # # for local schema store only
 
-schemas:
-  - name: sros
-    vendor: Nokia
-    version: 22.10
-    files:
-      - ./lab/common/yang/sros_22.10/YANG/nokia-combined
-    directories:
-      - ./lab/common/yang/sros_22.10/YANG/ietf
-      - ./lab/common/yang/sros_22.10/YANG/nokia-sros-yang-extensions.yang
-  - name: srl
-    vendor: Nokia
-    version: 22.11.2
-    files:
-      - ./lab/common/yang/srl-22.11.2/srl_nokia/models
-    directories:
-      - ./lab/common/yang/srl-22.11.2/ietf
-    excludes:
-      - .*tools.*
-  - name: srl
-    vendor: Nokia
-    version: 22.11.1
-    files:
-      - ./lab/common/yang/srl-22.11.1/srl_nokia/models
-    directories:
-      - ./lab/common/yang/srl-22.11.1/ietf
-    excludes:
-      - .*tools.*
-  - name: srl
-    vendor: Nokia
-    version: 22.6.4
-    files:
-      - ./lab/common/yang/srl-22.6.4/srl_nokia/models
-    directories:
-      - ./lab/common/yang/srl-22.6.4/ietf
-    excludes:
-      - .*tools.*
-  - name: srl
-    vendor: Nokia
-    version: 22.3.2
-    files:
-      - ./lab/common/yang/srl-22.3.2/srl_nokia/models
-    directories:
-      - ./lab/common/yang/srl-22.3.2/ietf
-    excludes:
-      - .*tools.*
-  - name: srl
-    vendor: Nokia
-    version: 21.11.3
-    files:
-      - ./lab/common/yang/srl-21.11.3/srl_nokia/models
-    directories:
-      - ./lab/common/yang/srl-21.11.3/ietf
-    excludes:
-      - .*tools.*
+# schemas:
+  # - name: sros
+  #   vendor: Nokia
+  #   version: 22.10
+  #   files:
+  #     - ./lab/common/yang/sros_22.10/YANG/nokia-combined
+  #   directories:
+  #     - ./lab/common/yang/sros_22.10/YANG/ietf
+  #     - ./lab/common/yang/sros_22.10/YANG/nokia-sros-yang-extensions.yang
+  # - name: srl
+  #   vendor: Nokia
+  #   version: 22.11.2
+  #   files:
+  #     - ./lab/common/yang/srl-22.11.2/srl_nokia/models
+  #   directories:
+  #     - ./lab/common/yang/srl-22.11.2/ietf
+  #   excludes:
+  #     - .*tools.*
+  # - name: srl
+  #   vendor: Nokia
+  #   version: 22.11.1
+  #   files:
+  #     - ./lab/common/yang/srl-22.11.1/srl_nokia/models
+  #   directories:
+  #     - ./lab/common/yang/srl-22.11.1/ietf
+  #   excludes:
+  #     - .*tools.*
+  # - name: srl
+  #   vendor: Nokia
+  #   version: 22.6.4
+  #   files:
+  #     - ./lab/common/yang/srl-22.6.4/srl_nokia/models
+  #   directories:
+  #     - ./lab/common/yang/srl-22.6.4/ietf
+  #   excludes:
+  #     - .*tools.*
+  # - name: srl
+  #   vendor: Nokia
+  #   version: 22.3.2
+  #   files:
+  #     - ./lab/common/yang/srl-22.3.2/srl_nokia/models
+  #   directories:
+  #     - ./lab/common/yang/srl-22.3.2/ietf
+  #   excludes:
+  #     - .*tools.*
+  # - name: srl
+  #   vendor: Nokia
+  #   version: 21.11.3
+  #   files:
+  #     - ./lab/common/yang/srl-21.11.3/srl_nokia/models
+  #   directories:
+  #     - ./lab/common/yang/srl-21.11.3/ietf
+  #   excludes:
+  #     - .*tools.*
 
 # remote schema server
-# schema-server:
-#   address: localhost:55000
+schema-server:
+  address: localhost:55000
   # TLS config
   # tls:
   #   ca:
@@ -163,14 +163,14 @@ schemas:
 # type: local
 # store-type: badgerdb
 # dir: ./cached/caches
-# cache:
-#   type: local
-#   # store-type if type == local
-#   store-type: badgerdb
-#   # local directory for caches if type == local
-#   dir: "./cached/caches"
-#   # remote cache address, if type == remotes
-#   # address: 
+cache:
+  type: remote
+  # store-type if type == local
+  #store-type: badgerdb
+  # local directory for caches if type == local
+  # dir: "./cached/caches"
+  # remote cache address, if type == remote
+  address: localhost:50100
 
 # expose a prometheus server with cpu, mem and grpc metrics
 prometheus:

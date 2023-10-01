@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
@@ -63,10 +64,17 @@ func toTableData(rsp *sdcpb.GetDataStoreResponse) [][]string {
 		if ds.GetType() == sdcpb.Type_MAIN {
 			continue
 		}
-		candidates = append(candidates, "- "+ds.GetName())
+		candidateName := "- " + ds.GetName()
+		if ds.Owner != "" {
+			candidateName += "/" + ds.Owner
+		}
+		if ds.Priority != 0 {
+			candidateName += "/" + strconv.Itoa(int(ds.Priority))
+		}
+		candidates = append(candidates, candidateName)
 	}
 	return [][]string{
-		[]string{
+		{
 			rsp.GetName(),
 			fmt.Sprintf("%s/%s/%s", rsp.GetSchema().GetName(), rsp.GetSchema().GetVendor(), rsp.GetSchema().GetVersion()),
 			strings.Join(candidates, "\n"),

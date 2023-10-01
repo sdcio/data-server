@@ -10,6 +10,8 @@ import (
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/prototext"
+
+	"github.com/iptecharch/data-server/pkg/utils"
 )
 
 // dataDiffCmd represents the diff command
@@ -39,10 +41,24 @@ var dataDiffCmd = &cobra.Command{
 		}
 		fmt.Println("response:")
 		fmt.Println(prototext.Format(rsp))
+		printDiffResponse(rsp)
 		return nil
 	},
 }
 
 func init() {
 	dataCmd.AddCommand(dataDiffCmd)
+}
+
+func printDiffResponse(rsp *sdcpb.DiffResponse) {
+	if rsp == nil {
+		return
+	}
+	prefix := fmt.Sprintf("%s: %s/%s/%d:", rsp.GetName(), rsp.GetDatastore().GetName(), rsp.GetDatastore().GetOwner(), rsp.GetDatastore().GetPriority())
+	for _, diff := range rsp.GetDiff() {
+		p := utils.ToXPath(diff.GetPath(), false)
+		fmt.Printf("%s\n\tpath=%s:\n\tmain->candidate: %s -> %s\n",
+			prefix, p,
+			diff.GetMainValue(), diff.GetCandidateValue())
+	}
 }

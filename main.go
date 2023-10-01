@@ -9,10 +9,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/iptecharch/data-server/config"
-	"github.com/iptecharch/data-server/server"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
+
+	"github.com/iptecharch/data-server/pkg/config"
+	"github.com/iptecharch/data-server/pkg/server"
 )
 
 var configFile string
