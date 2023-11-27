@@ -9,9 +9,9 @@ import (
 	"github.com/AlekSi/pointer"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/openconfig/gnmi/proto/gnmi"
-	gapi "github.com/openconfig/gnmic/api"
-	gtarget "github.com/openconfig/gnmic/target"
-	"github.com/openconfig/gnmic/types"
+	gapi "github.com/openconfig/gnmic/pkg/api"
+	gtarget "github.com/openconfig/gnmic/pkg/target"
+	"github.com/openconfig/gnmic/pkg/types"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
