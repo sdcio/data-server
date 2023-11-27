@@ -1,15 +1,12 @@
-
-BRANCH :=$(shell git rev-parse --abbrev-ref HEAD)
-COMMIT := $(shell git rev-parse --short HEAD)
 REMOTE_REGISTRY := registry.kmrd.dev/iptecharch/data-server
-TAG := 0.0.0-$(BRANCH)-$(COMMIT)
+TAG := $(shell git describe --tags)
 IMAGE := $(REMOTE_REGISTRY):$(TAG)
 TEST_IMAGE := $(IMAGE)-test
 
 # go versions
-TARGET_GO_VERSION := go1.20.5
+TARGET_GO_VERSION := go1.21.4
 GO_FALLBACK := go
-# We prefere $TARGET_GO_VERSION if it is not available we go with whatever go we find ($GO_FALLBACK)
+# We prefer $TARGET_GO_VERSION if it is not available we go with whatever go we find ($GO_FALLBACK)
 GO_BIN := $(shell if [ "$$(which $(TARGET_GO_VERSION))" != "" ]; then echo $$(which $(TARGET_GO_VERSION)); else echo $$(which $(GO_FALLBACK)); fi)
 
 build:
@@ -24,11 +21,13 @@ test:
 
 docker-build:
 	docker build . -t $(IMAGE)
-	docker tag $(IMAGE) $(REMOTE_REGISTRY):latest
 
 docker-push: docker-build
-	docker tag $(IMAGE) $(REMOTE_REGISTRY):latest
 	docker push $(IMAGE)
+
+release: docker-build
+	docker tag $(IMAGE) $(REMOTE_REGISTRY):latest
+	docker push $(REMOTE_REGISTRY):latest
 
 docker-test:
 	docker build . -t $(TEST_IMAGE) -f tests/container/Dockerfile
