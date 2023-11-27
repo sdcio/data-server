@@ -134,8 +134,10 @@ func (t *gnmiTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb
 func (t *gnmiTarget) Subscribe() {}
 
 func (t *gnmiTarget) Sync(octx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
-	log.Infof("starting target %s sync", t.target.Config.Name)
-	log.Infof("sync config: %+v", syncConfig)
+	if t != nil && t.target != nil && t.target.Config != nil {
+		log.Infof("starting target %s sync", t.target.Config.Name)
+		log.Infof("sync config: %+v", syncConfig)
+	}
 	var cancel context.CancelFunc
 	var ctx context.Context
 	var err error
@@ -260,7 +262,7 @@ func (t *gnmiTarget) streamSync(ctx context.Context, gnmiSync *config.GNMISync) 
 		return err
 
 	}
-	log.Debugf("sync %q: subRequest: %v", gnmiSync.Name, subReq)
+	log.Infof("sync %q: subRequest: %v", gnmiSync.Name, subReq)
 	go t.target.Subscribe(ctx, subReq, gnmiSync.Name)
 	return nil
 }

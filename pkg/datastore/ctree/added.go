@@ -12,7 +12,7 @@ import (
 	"github.com/openconfig/gnmi/proto/gnmi"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/iptecharch/data-server/utils"
+	"github.com/iptecharch/data-server/pkg/utils"
 )
 
 func (t *Tree) Clone() (*Tree, error) {

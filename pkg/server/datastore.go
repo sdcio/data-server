@@ -80,7 +80,25 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		if _, ok := s.datastores[name]; ok {
 			return nil, status.Errorf(codes.InvalidArgument, "datastore %s already exists", name)
 		}
-
+		sbi := &config.SBI{
+			Type:    req.GetTarget().GetType(),
+			Address: req.GetTarget().GetAddress(),
+		}
+		if req.GetTarget().GetTls() != nil {
+			sbi.TLS = &config.TLS{
+				CA:         req.GetTarget().GetTls().GetCa(),
+				Cert:       req.GetTarget().GetTls().GetCert(),
+				Key:        req.GetTarget().GetTls().GetKey(),
+				SkipVerify: req.GetTarget().GetTls().GetSkipVerify(),
+			}
+		}
+		if req.GetTarget().GetCredentials() != nil {
+			sbi.Credentials = &config.Creds{
+				Username: req.GetTarget().GetCredentials().GetUsername(),
+				Password: req.GetTarget().GetCredentials().GetPassword(),
+				Token:    req.GetTarget().GetCredentials().GetToken(),
+			}
+		}
 		dsConfig := &config.DatastoreConfig{
 			Name: name,
 			Schema: &config.SchemaConfig{
@@ -88,21 +106,7 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 				Vendor:  req.GetSchema().GetVendor(),
 				Version: req.GetSchema().GetVersion(),
 			},
-			SBI: &config.SBI{
-				Type:    req.GetTarget().GetType(),
-				Address: req.GetTarget().GetAddress(),
-				TLS: &config.TLS{
-					CA:         req.GetTarget().GetTls().GetCa(),
-					Cert:       req.GetTarget().GetTls().GetCert(),
-					Key:        req.GetTarget().GetTls().GetKey(),
-					SkipVerify: req.GetTarget().GetTls().GetSkipVerify(),
-				},
-				Credentials: &config.Creds{
-					Username: req.GetTarget().GetCredentials().GetUsername(),
-					Password: req.GetTarget().GetCredentials().GetPassword(),
-					Token:    req.GetTarget().GetCredentials().GetToken(),
-				},
-			},
+			SBI: sbi,
 		}
 		sync := req.GetSync()
 		if sync != nil {
