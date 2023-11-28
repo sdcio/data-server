@@ -8,8 +8,8 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/iptecharch/cache v0.0.14
-	github.com/iptecharch/schema-server v0.0.6
+	github.com/iptecharch/cache v0.0.15
+	github.com/iptecharch/schema-server v0.0.7
 	github.com/iptecharch/sdc-protos v0.0.8
 	github.com/iptecharch/yang-parser v0.0.3
 	github.com/kylelemons/godebug v1.1.0
@@ -38,7 +38,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/creack/pty v1.1.18 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/dgraph-io/badger/v4 v4.1.0 // indirect
+	github.com/dgraph-io/badger/v4 v4.2.0 // indirect
 	github.com/dgraph-io/ristretto v0.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
@@ -72,7 +72,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/openconfig/gnmic/pkg/path v0.1.1 // indirect
 	github.com/openconfig/gnmic/pkg/utils v0.1.0 // indirect
-	github.com/openconfig/goyang v1.4.2 // indirect
+	github.com/openconfig/goyang v1.4.4 // indirect
 	github.com/openconfig/grpctunnel v0.1.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
