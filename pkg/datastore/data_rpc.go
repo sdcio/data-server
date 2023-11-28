@@ -26,7 +26,14 @@ import (
 
 func (d *Datastore) Get(ctx context.Context, req *sdcpb.GetDataRequest, nCh chan *sdcpb.GetDataResponse) error {
 	defer close(nCh)
-
+	switch req.GetDatastore().GetType() {
+	case sdcpb.Type_MAIN:
+	case sdcpb.Type_CANDIDATE:
+	case sdcpb.Type_INTENDED:
+		if req.GetDataType() == sdcpb.DataType_STATE {
+			return status.Error(codes.InvalidArgument, "cannot query STATE data from INTENDED store")
+		}
+	}
 	var err error
 	// validate that path(s) exist in the schema
 	for _, p := range req.GetPath() {
@@ -50,9 +57,12 @@ func (d *Datastore) Get(ctx context.Context, req *sdcpb.GetDataRequest, nCh chan
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
 	for _, store := range getStores(req) {
 		for upd := range d.cacheClient.ReadCh(ctx, name, &cache.Opts{
-			Store: store,
+			Store:    store,
+			Owner:    req.GetDatastore().GetOwner(),
+			Priority: req.GetDatastore().GetPriority(),
 		}, paths, 0) {
 			log.Debugf("ds=%s read path=%v from store=%v: %v", name, paths, store, upd)
 			scp, err := d.toPath(ctx, upd.GetPath())
@@ -87,6 +97,8 @@ func (d *Datastore) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.
 	switch req.GetDatastore().GetType() {
 	case sdcpb.Type_MAIN:
 		return nil, status.Error(codes.InvalidArgument, "cannot set fields in MAIN datastore")
+	case sdcpb.Type_INTENDED:
+		return nil, status.Error(codes.InvalidArgument, "cannot set fields in INTENDED datastore")
 	case sdcpb.Type_CANDIDATE:
 		//
 		ok, err := d.cacheClient.HasCandidate(ctx, req.GetName(), req.GetDatastore().GetName())
@@ -1115,6 +1127,9 @@ func getStores(req proto.Message) []cachepb.Store {
 	var candName string
 	switch req := req.(type) {
 	case *sdcpb.GetDataRequest:
+		if req.GetDatastore().GetType() == sdcpb.Type_INTENDED {
+			return []cachepb.Store{cachepb.Store_INTENDED}
+		}
 		dt = req.GetDataType()
 		candName = req.GetDatastore().GetName()
 	case *sdcpb.Subscription:

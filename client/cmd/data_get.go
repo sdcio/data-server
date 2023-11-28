@@ -18,6 +18,7 @@ import (
 var paths []string
 var dataType string
 var format string
+var intended bool
 
 // dataGetCmd represents the get command
 var dataGetCmd = &cobra.Command{
@@ -25,6 +26,9 @@ var dataGetCmd = &cobra.Command{
 	Short:        "get data",
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, _ []string) error {
+		if candidate != "" && intended {
+			return fmt.Errorf("cannot set a candidate name and intended store at the same time")
+		}
 		var dt sdcpb.DataType
 		switch dataType {
 		case "ALL":
@@ -51,6 +55,13 @@ var dataGetCmd = &cobra.Command{
 			req.Datastore = &sdcpb.DataStore{
 				Type: sdcpb.Type_CANDIDATE,
 				Name: candidate,
+			}
+		}
+		if intended {
+			req.Datastore = &sdcpb.DataStore{
+				Type:     sdcpb.Type_INTENDED,
+				Owner:    owner,
+				Priority: priority,
 			}
 		}
 		ctx, cancel := context.WithCancel(cmd.Context())
@@ -107,4 +118,8 @@ func init() {
 	dataGetCmd.Flags().StringArrayVarP(&paths, "path", "", []string{}, "get path(s)")
 	dataGetCmd.Flags().StringVarP(&dataType, "type", "", "ALL", "data type, one of: ALL, CONFIG, STATE")
 	dataGetCmd.Flags().StringVarP(&format, "format", "", "", "print format, '', 'flat' or 'json'")
+	// intended store
+	dataGetCmd.Flags().BoolVarP(&intended, "intended", "", false, "get data from intended store")
+	dataGetCmd.Flags().StringVarP(&owner, "owner", "", "", "intended store owner to query")
+	dataGetCmd.Flags().Int32VarP(&priority, "priority", "", 0, "intended store priority")
 }

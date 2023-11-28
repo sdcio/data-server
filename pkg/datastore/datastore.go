@@ -157,9 +157,6 @@ func (d *Datastore) Commit(ctx context.Context, req *sdcpb.CommitRequest) error 
 	if name == "" {
 		return fmt.Errorf("missing candidate name")
 	}
-	if req.GetRebase() {
-		fmt.Println("TODO: implement candidate base in cache")
-	}
 	changes, err := d.cacheClient.GetChanges(ctx, d.Config().Name, req.GetDatastore().GetName())
 	if err != nil {
 		return err
@@ -215,11 +212,11 @@ func (d *Datastore) Commit(ctx context.Context, req *sdcpb.CommitRequest) error 
 	if err != nil {
 		return err
 	}
+
 	if req.GetStay() {
 		// reset candidate changes and (TODO) rebase
 		return d.cacheClient.Discard(ctx, d.config.Name, name)
 	}
-
 	// delete candidate
 	return d.cacheClient.DeleteCandidate(ctx, d.Name(), name)
 }
