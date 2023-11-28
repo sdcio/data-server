@@ -8,9 +8,9 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/iptecharch/cache v0.0.15
-	github.com/iptecharch/schema-server v0.0.7
-	github.com/iptecharch/sdc-protos v0.0.8
+	github.com/iptecharch/cache v0.0.17
+	github.com/iptecharch/schema-server v0.0.8
+	github.com/iptecharch/sdc-protos v0.0.10
 	github.com/iptecharch/yang-parser v0.0.3
 	github.com/kylelemons/godebug v1.1.0
 	github.com/olekukonko/tablewriter v0.0.5

@@ -35,10 +35,6 @@ func Execute() {
 var addr string
 
 func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
 	rootCmd.PersistentFlags().StringVarP(&addr, "address", "a", "localhost:56000", "schema server address")
 	rootCmd.PersistentFlags().StringVar(&schemaName, "name", "", "schema name")
 	rootCmd.PersistentFlags().StringVar(&schemaVendor, "vendor", "", "schema vendor")
