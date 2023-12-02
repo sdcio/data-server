@@ -86,7 +86,7 @@ func (c *remoteCache) Clone(ctx context.Context, name, clone string) error {
 	return c.c.Clone(ctx, name, clone)
 }
 
-func (c *remoteCache) Modify(ctx context.Context, name string, opts *Opts, dels [][]string, upds []Update) error {
+func (c *remoteCache) Modify(ctx context.Context, name string, opts *Opts, dels [][]string, upds []*Update) error {
 	pbUpds := make([]*cachepb.Update, 0, len(upds))
 	for _, upd := range upds {
 		pbUpds = append(pbUpds,
@@ -101,20 +101,15 @@ func (c *remoteCache) Modify(ctx context.Context, name string, opts *Opts, dels 
 	wo := &client.ClientOpts{
 		Owner:    opts.Owner,
 		Priority: opts.Priority,
+		Store:    getStore(opts.Store),
 	}
-	switch opts.Store {
-	case cachepb.Store_CONFIG:
-	case cachepb.Store_STATE:
-		wo.Store = cache.StoreState
-	case cachepb.Store_INTENDED:
-		wo.Store = cache.StoreIntended
-	}
+
 	return c.c.Modify(ctx, name, wo, dels, pbUpds)
 }
 
-func (c *remoteCache) Read(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) []Update {
+func (c *remoteCache) Read(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) []*Update {
 	outCh := c.ReadCh(ctx, name, opts, paths, period)
-	updates := make([]Update, 0)
+	updates := make([]*Update, 0)
 	for {
 		select {
 		case <-ctx.Done():
@@ -128,34 +123,30 @@ func (c *remoteCache) Read(ctx context.Context, name string, opts *Opts, paths [
 	}
 }
 
-func (c *remoteCache) ReadCh(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) chan Update {
+func (c *remoteCache) ReadCh(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) chan *Update {
 	ro := &client.ClientOpts{
 		Owner:    opts.Owner,
 		Priority: opts.Priority,
+		Store:    getStore(opts.Store),
 	}
-	switch opts.Store {
-	case cachepb.Store_CONFIG:
-		ro.Store = cache.StoreConfig
-	case cachepb.Store_STATE:
-		ro.Store = cache.StoreState
-	case cachepb.Store_INTENDED:
-		ro.Store = cache.StoreIntended
-	}
+
 	inCh := c.c.Read(ctx, name, ro, paths, period)
-	outCh := make(chan Update)
+	outCh := make(chan *Update)
 	go func() {
 		defer close(outCh)
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case upd, ok := <-inCh:
+			case readResponse, ok := <-inCh:
 				if !ok {
 					return
 				}
-				rUpd := &update{
-					path:  upd.GetPath(),
-					value: upd.GetValue().GetValue(),
+				rUpd := &Update{
+					path:     readResponse.GetPath(),
+					value:    readResponse.GetValue().GetValue(),
+					priority: readResponse.GetPriority(),
+					owner:    readResponse.GetOwner(),
 				}
 				select {
 				case <-ctx.Done():
@@ -176,7 +167,7 @@ func (c *remoteCache) GetChanges(ctx context.Context, name, candidate string) ([
 	lcs := make([]*Change, 0, len(changes))
 	for _, change := range changes {
 		lcs = append(lcs, &Change{
-			Update: &update{
+			Update: &Update{
 				path:  change.GetUpdate().GetPath(),
 				value: change.GetUpdate().GetValue().GetValue(),
 			},
@@ -194,12 +185,12 @@ func (c *remoteCache) Commit(ctx context.Context, name, candidate string) error 
 	return c.c.Commit(ctx, name, candidate)
 }
 
-func (c *remoteCache) NewUpdate(upd *sdcpb.Update) (Update, error) {
+func (c *remoteCache) NewUpdate(upd *sdcpb.Update) (*Update, error) {
 	b, err := proto.Marshal(upd.GetValue())
 	if err != nil {
 		return nil, err
 	}
-	rupd := &update{
+	rupd := &Update{
 		path:  utils.ToStrings(upd.GetPath(), false, false),
 		value: b,
 	}

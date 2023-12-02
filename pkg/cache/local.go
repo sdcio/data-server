@@ -8,7 +8,6 @@ import (
 
 	"github.com/iptecharch/cache/pkg/cache"
 	"github.com/iptecharch/cache/pkg/config"
-	"github.com/iptecharch/cache/proto/cachepb"
 	"github.com/iptecharch/schema-server/utils"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
@@ -79,23 +78,15 @@ func (c *localCache) Clone(ctx context.Context, name, clone string) error {
 	return err
 }
 
-func (c *localCache) Modify(ctx context.Context, name string, opts *Opts, dels [][]string, upds []Update) error {
+func (c *localCache) Modify(ctx context.Context, name string, opts *Opts, dels [][]string, upds []*Update) error {
 	if opts == nil {
 		opts = &Opts{}
-	}
-	var cStore cache.Store
-	switch opts.Store {
-	case cachepb.Store_CONFIG:
-	case cachepb.Store_STATE:
-		cStore = cache.StoreState
-	case cachepb.Store_INTENDED:
-		cStore = cache.StoreIntended
 	}
 	//
 	var err error
 	for _, del := range dels {
-		err = c.c.DeleteValue(ctx, name, &cache.Opts{
-			Store:    cStore,
+		err = c.c.DeletePrefix(ctx, name, &cache.Opts{
+			Store:    getStore(opts.Store),
 			Path:     del,
 			Owner:    opts.Owner,
 			Priority: opts.Priority,
@@ -107,7 +98,7 @@ func (c *localCache) Modify(ctx context.Context, name string, opts *Opts, dels [
 
 	for _, upd := range upds {
 		err = c.c.WriteValue(ctx, name, &cache.Opts{
-			Store:    cStore,
+			Store:    getStore(opts.Store),
 			Path:     upd.GetPath(),
 			Owner:    opts.Owner,
 			Priority: opts.Priority,
@@ -119,9 +110,9 @@ func (c *localCache) Modify(ctx context.Context, name string, opts *Opts, dels [
 	return nil
 }
 
-func (c *localCache) Read(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) []Update {
+func (c *localCache) Read(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) []*Update {
 	ch := c.ReadCh(ctx, name, opts, paths, period)
-	var upds = make([]Update, 0, len(paths))
+	var upds = make([]*Update, 0, len(paths))
 	for {
 		select {
 		case <-ctx.Done():
@@ -135,19 +126,11 @@ func (c *localCache) Read(ctx context.Context, name string, opts *Opts, paths []
 	}
 }
 
-func (c *localCache) ReadCh(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) chan Update {
+func (c *localCache) ReadCh(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) chan *Update {
 	if opts == nil {
 		opts = &Opts{}
 	}
-	var cStore cache.Store
-	switch opts.Store {
-	case cachepb.Store_CONFIG:
-	case cachepb.Store_STATE:
-		cStore = cache.StoreState
-	case cachepb.Store_INTENDED:
-		cStore = cache.StoreIntended
-	}
-	outCh := make(chan Update)
+	outCh := make(chan *Update)
 
 	wg := new(sync.WaitGroup)
 	wg.Add(len(paths))
@@ -161,7 +144,7 @@ func (c *localCache) ReadCh(ctx context.Context, name string, opts *Opts, paths 
 		go func(p []string) { // TODO: limit num of goroutines ?
 			defer wg.Done()
 			ch, err := c.c.ReadValue(ctx, name, &cache.Opts{
-				Store:    cStore,
+				Store:    getStore(opts.Store),
 				Path:     p,
 				Owner:    opts.Owner,
 				Priority: opts.Priority,
@@ -182,9 +165,11 @@ func (c *localCache) ReadCh(ctx context.Context, name string, opts *Opts, paths 
 						continue
 					}
 
-					outCh <- &update{
-						path:  upd.P,
-						value: upd.V,
+					outCh <- &Update{
+						path:     upd.P,
+						value:    upd.V,
+						priority: upd.Priority,
+						owner:    upd.Owner,
 					}
 				}
 			}
@@ -203,7 +188,7 @@ func (c *localCache) GetChanges(ctx context.Context, name, candidate string) ([]
 		changes = append(changes, &Change{Delete: del})
 	}
 	for _, entry := range entries {
-		changes = append(changes, &Change{Update: &update{
+		changes = append(changes, &Change{Update: &Update{
 			path:  entry.P,
 			value: entry.V,
 		}})
@@ -219,12 +204,12 @@ func (c *localCache) Commit(ctx context.Context, name, candidate string) error {
 	return c.c.Commit(ctx, name, candidate)
 }
 
-func (c *localCache) NewUpdate(upd *sdcpb.Update) (Update, error) {
+func (c *localCache) NewUpdate(upd *sdcpb.Update) (*Update, error) {
 	b, err := proto.Marshal(upd.Value)
 	if err != nil {
 		return nil, err
 	}
-	lupd := &update{
+	lupd := &Update{
 		path:  utils.ToStrings(upd.GetPath(), false, false),
 		value: b,
 	}
