@@ -1,0 +1,25 @@
+[
+    {
+        "path": "",
+        "value": {
+            "interface": {
+                "name": "ethernet-1/1",
+                "admin-state": "enable",
+                "description": "via sdcpb INTENT",
+                "vlan-tagging": true,
+                "subinterface": {
+                    "index": 12,
+                    "admin-state": "enable",
+                    "type": "bridged",
+                    "vlan": {
+                        "encap": {
+                            "single-tagged": {
+                                "vlan-id": 13
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+]

@@ -5,3 +5,5 @@ proto/*proto
 *.md
 *.txt
 schema-server
+cached
+intra

@@ -31,11 +31,11 @@ type Client interface {
 	Clone(ctx context.Context, name, clone string) error
 
 	// send a stream of modifications (update or delete) to a cache, or candidate
-	Modify(ctx context.Context, name string, opts *Opts, dels [][]string, upds []Update) error
+	Modify(ctx context.Context, name string, opts *Opts, dels [][]string, upds []*Update) error
 	// read from a cache or candidate
-	Read(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) []Update
+	Read(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) []*Update
 	// read from a cache or candidate, get results through a channel
-	ReadCh(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) chan Update
+	ReadCh(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) chan *Update
 	// get changes present in a candidate
 	GetChanges(ctx context.Context, name, candidate string) ([]*Change, error)
 	// discard changes made to a candidate
@@ -43,27 +43,23 @@ type Client interface {
 	// commit a candidate changes into the intended store
 	Commit(ctx context.Context, name, candidate string) error
 	// build a cache update from a sdcpb.Update
-	NewUpdate(*sdcpb.Update) (Update, error)
+	NewUpdate(*sdcpb.Update) (*Update, error)
 	// disconnect from the cache
 	Close() error
 }
 
-type Update interface {
-	GetPath() []string
-	Value() (*sdcpb.TypedValue, error)
-	Bytes() []byte
+type Update struct {
+	path     []string
+	value    []byte
+	priority int32
+	owner    string
 }
 
-type update struct {
-	path  []string
-	value []byte
-}
-
-func (u *update) GetPath() []string {
+func (u *Update) GetPath() []string {
 	return u.path
 }
 
-func (u *update) Value() (*sdcpb.TypedValue, error) {
+func (u *Update) Value() (*sdcpb.TypedValue, error) {
 	tv := new(sdcpb.TypedValue)
 	err := proto.Unmarshal(u.value, tv)
 	if err != nil {
@@ -72,12 +68,19 @@ func (u *update) Value() (*sdcpb.TypedValue, error) {
 	return tv, nil
 }
 
-func (u *update) Bytes() []byte {
+func (u *Update) Bytes() []byte {
 	return u.value
 }
 
+func (u *Update) Priority() int32 {
+	return u.priority
+}
+func (u *Update) Owner() string {
+	return u.owner
+}
+
 type Change struct {
-	Update Update
+	Update *Update
 	Delete []string
 }
 
@@ -85,4 +88,17 @@ type Opts struct {
 	Store    cachepb.Store
 	Owner    string
 	Priority int32
+}
+
+func getStore(s cachepb.Store) cache.Store {
+	switch s {
+	default: //case cachepb.Store_CONFIG:
+		return cache.StoreConfig
+	case cachepb.Store_STATE:
+		return cache.StoreState
+	case cachepb.Store_INTENDED:
+		return cache.StoreIntended
+	case cachepb.Store_METADATA:
+		return cache.StoreMetadata
+	}
 }

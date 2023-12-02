@@ -94,6 +94,7 @@ datastores: # this specifies MAIN datastores
 # # schemas definitions
 # # for local schema store only
 
+# starts a local schema client
 schemas:
   - name: sros
     vendor: Nokia

@@ -161,10 +161,6 @@ func (d *Datastore) Commit(ctx context.Context, req *sdcpb.CommitRequest) error 
 	if err != nil {
 		return err
 	}
-	log.Debugf("%s:%s changes: %v", d.Name(), name, changes)
-	for i, change := range changes {
-		log.Debugf("%s:%s %d: change: %v", d.Name(), name, i, change)
-	}
 	notification, err := d.changesToUpdates(ctx, changes)
 	if err != nil {
 		return err
@@ -207,7 +203,7 @@ func (d *Datastore) Commit(ctx context.Context, req *sdcpb.CommitRequest) error 
 		}
 		log.Debugf("datastore %s/%s SetResponse from SBI: %v", d.config.Name, name, rsp)
 	}
-	// TODO: commit candidate changes into the intended store
+	// commit candidate changes into the intended store
 	err = d.cacheClient.Commit(ctx, d.config.Name, name)
 	if err != nil {
 		return err
@@ -465,7 +461,7 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 		defer cancel()
 		err = d.cacheClient.Modify(rctx, d.Config().Name, &cache.Opts{
 			Store: store,
-		}, nil, []cache.Update{cUpd})
+		}, nil, []*cache.Update{cUpd})
 		if err != nil {
 			log.Errorf("datastore %s failed to send modify request to cache: %v", d.config.Name, err)
 		}

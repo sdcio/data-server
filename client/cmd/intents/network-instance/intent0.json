@@ -1,0 +1,18 @@
+[
+    {
+        "path": "network-instance[name=default]",
+        "value": {          
+            "description": "default instance intent0",
+            "admin-state": "enable",
+            "type": "default"
+        }
+    },
+    {
+        "path": "network-instance[name=ns1]",
+        "value": {          
+            "description": "ns1 instance intent0",
+            "admin-state": "enable",
+            "type": "ip-vrf"
+        }
+    }
+]
