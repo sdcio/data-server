@@ -65,7 +65,14 @@ func New(ctx context.Context, c *config.DatastoreConfig, scc schema.Client, cc c
 
 	go func() {
 		// init sbi, this is a blocking call
-		ds.connectSBI(ctx, opts...)
+		err := ds.connectSBI(ctx, opts...)
+		if errors.Is(err, context.Canceled) {
+			return
+		}
+		if err != nil {
+			log.Errorf("failed to create SBI for target %s: %v", ds.Config().Name, err)
+			return
+		}
 		// start syncing goroutine
 		if c.Sync != nil {
 			go ds.Sync(ctx)
@@ -97,13 +104,19 @@ CREATE:
 	}
 }
 
-func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) {
+func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) error {
 	var err error
 	sc := d.Schema().GetSchema()
 	d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, sc, opts...)
 	if err == nil {
-		return
+		return nil
 	}
+	// err not nil
+	//
+	if !errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+
 	log.Errorf("failed to create DS %s target: %v", d.config.Name, err)
 	ticker := time.NewTicker(d.config.SBI.ConnectRetry)
 	defer ticker.Stop()
@@ -111,14 +124,14 @@ func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case <-ticker.C:
 			d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, sc, opts...)
 			if err != nil {
 				log.Errorf("failed to create DS %s target: %v", d.config.Name, err)
 				continue
 			}
-			return
+			return nil
 		}
 	}
 }
