@@ -69,7 +69,7 @@ func (d *Datastore) getIntentFlat(ctx context.Context, intentName string) ([]*sd
 
 func (d *Datastore) SetIntent(ctx context.Context, req *sdcpb.SetIntentRequest) (*sdcpb.SetIntentResponse, error) {
 	now := time.Now().UnixNano()
-	candidateName := fmt.Sprintf("%s-%d", req.GetName(), now)
+	candidateName := fmt.Sprintf("%s-%d", req.GetIntent(), now)
 	err := d.CreateCandidate(ctx, &sdcpb.DataStore{
 		Type:     sdcpb.Type_CANDIDATE,
 		Name:     candidateName,
@@ -268,11 +268,13 @@ func (d *Datastore) SetIntentDelete(ctx context.Context, req *sdcpb.SetIntentReq
 	if err != nil {
 		return err
 	}
+
 	// get paths of the current intent
 	appliedCompletePaths := make([][]string, 0, len(intentNotifications))
 	appliedPaths := make([]*sdcpb.Path, 0, len(intentNotifications))
 	for _, n := range intentNotifications {
-		for _, upd := range n.GetUpdate() {
+		for i, upd := range n.GetUpdate() {
+			log.Debugf("intent=%s has applied update.%d: %v", req.GetIntent(), i, upd)
 			cp, err := utils.CompletePath(nil, upd.GetPath())
 			if err != nil {
 				return err
@@ -313,7 +315,7 @@ func (d *Datastore) SetIntentDelete(ctx context.Context, req *sdcpb.SetIntentReq
 		return err
 	}
 
-	// This function writes back the intent notification
+	// This defer function writes back the intent notification
 	// in the intended store if one of the following steps fail:
 	// - write to candidate and initial validations
 	// - apply intent: further validations and send to southbound
@@ -323,6 +325,7 @@ func (d *Datastore) SetIntentDelete(ctx context.Context, req *sdcpb.SetIntentReq
 		if !failed {
 			return
 		}
+		log.Debugf("ds: %s: intent %s: reverting back intended notifications", d.Name(), req.GetIntent())
 		cacheUpdates := make([]*cache.Update, 0, len(intentNotifications))
 		for _, n := range intentNotifications {
 			for _, upd := range n.GetUpdate() {
