@@ -17,11 +17,6 @@ import (
 	"github.com/iptecharch/data-server/pkg/utils"
 )
 
-// var paths []string
-// var dataType string
-// var format string
-// var intended bool
-// var intentName string
 var deleteFlag bool
 var intentDefinition string
 
@@ -69,7 +64,6 @@ var dataSetIntentCmd = &cobra.Command{
 					},
 				})
 			}
-
 		}
 		ctx, cancel := context.WithCancel(cmd.Context())
 		defer cancel()
