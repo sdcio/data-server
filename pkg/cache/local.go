@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -119,6 +120,9 @@ func (c *localCache) Read(ctx context.Context, name string, opts *Opts, paths []
 			return nil
 		case u, ok := <-ch:
 			if !ok {
+				sort.Slice(upds, func(i, j int) bool {
+					return upds[i].ts < upds[j].ts
+				})
 				return upds
 			}
 			upds = append(upds, u)
@@ -170,6 +174,7 @@ func (c *localCache) ReadCh(ctx context.Context, name string, opts *Opts, paths 
 						value:    upd.V,
 						priority: upd.Priority,
 						owner:    upd.Owner,
+						ts:       int64(upd.Timestamp),
 					}
 				}
 			}

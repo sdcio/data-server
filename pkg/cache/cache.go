@@ -53,6 +53,7 @@ type Update struct {
 	value    []byte
 	priority int32
 	owner    string
+	ts       int64
 }
 
 func (u *Update) GetPath() []string {
@@ -77,6 +78,10 @@ func (u *Update) Priority() int32 {
 }
 func (u *Update) Owner() string {
 	return u.owner
+}
+
+func (u *Update) TS() int64 {
+	return u.ts
 }
 
 type Change struct {
