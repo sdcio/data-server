@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/iptecharch/cache/pkg/cache"
@@ -116,6 +117,9 @@ func (c *remoteCache) Read(ctx context.Context, name string, opts *Opts, paths [
 			return nil
 		case upd, ok := <-outCh:
 			if !ok {
+				sort.Slice(updates, func(i, j int) bool {
+					return updates[i].ts < updates[j].ts
+				})
 				return updates
 			}
 			updates = append(updates, upd)
@@ -147,6 +151,7 @@ func (c *remoteCache) ReadCh(ctx context.Context, name string, opts *Opts, paths
 					value:    readResponse.GetValue().GetValue(),
 					priority: readResponse.GetPriority(),
 					owner:    readResponse.GetOwner(),
+					ts:       readResponse.GetTimestamp(),
 				}
 				select {
 				case <-ctx.Done():

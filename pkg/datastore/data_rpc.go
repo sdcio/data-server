@@ -895,6 +895,7 @@ func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 	if err != nil {
 		return nil, err
 	}
+
 	switch rsp := rsp.GetSchema().Schema.(type) {
 	case *sdcpb.SchemaElem_Container:
 		log.Debugf("datastore %s: expanding update %v on container %q", d.config.Name, upd, rsp.Container.Name)
@@ -917,6 +918,18 @@ func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 		return []*sdcpb.Update{upd}, nil
 	}
 	return nil, nil
+}
+
+func (d *Datastore) expandUpdates(ctx context.Context, updates []*sdcpb.Update) ([]*sdcpb.Update, error) {
+	outUpdates := make([]*sdcpb.Update, 0, len(updates))
+	for _, upd := range updates {
+		expUpds, err := d.expandUpdate(ctx, upd)
+		if err != nil {
+			return nil, err
+		}
+		outUpdates = append(outUpdates, expUpds...)
+	}
+	return outUpdates, nil
 }
 
 func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container) ([]*sdcpb.Update, error) {
