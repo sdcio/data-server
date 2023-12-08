@@ -168,6 +168,7 @@ func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh cha
 	for _, ncc := range syncConfig.Netconf {
 		// periodic get
 		go func(ncSync *config.NetconfSync) {
+			t.internalSync(ctx, ncSync, syncCh)
 			ticker := time.NewTicker(ncSync.Interval)
 			defer ticker.Stop()
 			for {
@@ -175,7 +176,7 @@ func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh cha
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
-					t.internal_sync(ctx, syncConfig, syncCh)
+					t.internalSync(ctx, ncSync, syncCh)
 				}
 			}
 		}(ncc)
@@ -185,41 +186,41 @@ func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh cha
 	log.Infof("sync stopped: %v", ctx.Err())
 }
 
-func (t *ncTarget) internal_sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
+func (t *ncTarget) internalSync(ctx context.Context, sc *config.NetconfSync, syncCh chan *SyncUpdate) {
 	// iterate syncConfig
-	for _, sc := range syncConfig.Netconf {
-		paths := make([]*sdcpb.Path, 0, len(sc.Paths))
-		// iterate referenced paths
-		for _, p := range sc.Paths {
-			path, err := utils.ParsePath(p)
-			if err != nil {
-				log.Errorf("failed Parsing Path %q, %v", p, err)
-			}
-			// add the parsed path
-			paths = append(paths, path)
-		}
-
-		// init a DataRequest
-		req := &sdcpb.GetDataRequest{
-			Name:     sc.Name,
-			Path:     paths,
-			DataType: sdcpb.DataType_CONFIG,
-			Datastore: &sdcpb.DataStore{
-				Type: sdcpb.Type_MAIN,
-			},
-		}
-
-		// execute netconf get
-		resp, err := t.Get(ctx, req)
+	paths := make([]*sdcpb.Path, 0, len(sc.Paths))
+	// iterate referenced paths
+	for _, p := range sc.Paths {
+		path, err := utils.ParsePath(p)
 		if err != nil {
-			log.Errorf("failed getting config %v", err)
+			log.Errorf("failed Parsing Path %q, %v", p, err)
+			return
 		}
+		// add the parsed path
+		paths = append(paths, path)
+	}
 
-		// push notifications into syncCh
-		for _, n := range resp.Notification {
-			syncCh <- &SyncUpdate{
-				Update: n,
-			}
+	// init a DataRequest
+	req := &sdcpb.GetDataRequest{
+		Name:     sc.Name,
+		Path:     paths,
+		DataType: sdcpb.DataType_CONFIG,
+		Datastore: &sdcpb.DataStore{
+			Type: sdcpb.Type_MAIN,
+		},
+	}
+
+	// execute netconf get
+	resp, err := t.Get(ctx, req)
+	if err != nil {
+		log.Errorf("failed getting config %v", err)
+		return
+	}
+
+	// push notifications into syncCh
+	for _, n := range resp.Notification {
+		syncCh <- &SyncUpdate{
+			Update: n,
 		}
 	}
 }
