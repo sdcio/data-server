@@ -11,6 +11,7 @@ import (
 	"github.com/iptecharch/data-server/pkg/datastore/target/netconf"
 	"github.com/iptecharch/data-server/pkg/datastore/target/netconf/driver/scrapligo"
 	"github.com/iptecharch/data-server/pkg/schema"
+	"github.com/iptecharch/data-server/pkg/utils"
 )
 
 type ncTarget struct {
@@ -78,7 +79,10 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	data := netconf.NewXML2sdcpbConfigAdapter(t.schemaClient, t.schema)
 
 	// start transformation, which yields the sdcpb_Notification
-	noti := data.Transform(ctx, ncResponse.Doc)
+	noti, err := data.Transform(ctx, ncResponse.Doc)
+	if err != nil {
+		return nil, err
+	}
 
 	// building the resulting sdcpb.GetDataResponse struct
 	result := &sdcpb.GetDataResponse{
@@ -160,9 +164,64 @@ func (t *ncTarget) Subscribe() {}
 
 func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
 	log.Infof("starting target %s sync", t.sbi.Address)
-	log.Infof("sync still is a NOOP on netconf targets")
+
+	for _, ncc := range syncConfig.Netconf {
+		// periodic get
+		go func(ncSync *config.NetconfSync) {
+			ticker := time.NewTicker(ncSync.Interval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					t.internal_sync(ctx, syncConfig, syncCh)
+				}
+			}
+		}(ncc)
+	}
+
 	<-ctx.Done()
 	log.Infof("sync stopped: %v", ctx.Err())
+}
+
+func (t *ncTarget) internal_sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
+	// iterate syncConfig
+	for _, sc := range syncConfig.Netconf {
+		paths := make([]*sdcpb.Path, 0, len(sc.Paths))
+		// iterate referenced paths
+		for _, p := range sc.Paths {
+			path, err := utils.ParsePath(p)
+			if err != nil {
+				log.Errorf("failed Parsing Path %q, %v", p, err)
+			}
+			// add the parsed path
+			paths = append(paths, path)
+		}
+
+		// init a DataRequest
+		req := &sdcpb.GetDataRequest{
+			Name:     sc.Name,
+			Path:     paths,
+			DataType: sdcpb.DataType_CONFIG,
+			Datastore: &sdcpb.DataStore{
+				Type: sdcpb.Type_MAIN,
+			},
+		}
+
+		// execute netconf get
+		resp, err := t.Get(ctx, req)
+		if err != nil {
+			log.Errorf("failed getting config %v", err)
+		}
+
+		// push notifications into syncCh
+		for _, n := range resp.Notification {
+			syncCh <- &SyncUpdate{
+				Update: n,
+			}
+		}
+	}
 }
 
 func (t *ncTarget) Close() {
