@@ -15,6 +15,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const (
+	numParallelReaders = 10
+)
+
 type localCache struct {
 	c cache.Cache
 }
@@ -137,48 +141,63 @@ func (c *localCache) ReadCh(ctx context.Context, name string, opts *Opts, paths 
 	outCh := make(chan *Update)
 
 	wg := new(sync.WaitGroup)
-	wg.Add(len(paths))
+	wg.Add(numParallelReaders)
 
 	go func() {
 		wg.Wait()
 		close(outCh)
 	}()
 	// TODO: use period
+	pCh := make(chan []string, len(paths))
 	for _, p := range paths {
-		go func(p []string) { // TODO: limit num of goroutines ?
-			defer wg.Done()
-			ch, err := c.c.ReadValue(ctx, name, &cache.Opts{
-				Store:    getStore(opts.Store),
-				Path:     p,
-				Owner:    opts.Owner,
-				Priority: opts.Priority,
-			})
-			if err != nil {
-				log.Errorf("failed to read path %v: %v", p, err)
-				return
-			}
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case upd, ok := <-ch:
-					if !ok {
-						return
-					}
-					if upd == nil {
-						continue
-					}
+		pCh <- p
+	}
+	close(pCh)
 
-					outCh <- &Update{
-						path:     upd.P,
-						value:    upd.V,
-						priority: upd.Priority,
-						owner:    upd.Owner,
-						ts:       int64(upd.Timestamp),
+	for i := 0; i < numParallelReaders; i++ {
+		go func() {
+			defer wg.Done()
+			select {
+			case <-ctx.Done():
+				return
+			case p, ok := <-pCh:
+				if !ok {
+					return
+				}
+				ch, err := c.c.ReadValue(ctx, name, &cache.Opts{
+					Store:         getStore(opts.Store),
+					Path:          p,
+					Owner:         opts.Owner,
+					Priority:      opts.Priority,
+					PriorityCount: opts.PriorityCount,
+				})
+				if err != nil {
+					log.Errorf("failed to read path %v: %v", p, err)
+					return
+				}
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case upd, ok := <-ch:
+						if !ok {
+							return
+						}
+						if upd == nil {
+							continue
+						}
+
+						outCh <- &Update{
+							path:     upd.P,
+							value:    upd.V,
+							priority: upd.Priority,
+							owner:    upd.Owner,
+							ts:       int64(upd.Timestamp),
+						}
 					}
 				}
 			}
-		}(p)
+		}()
 	}
 	return outCh
 }
