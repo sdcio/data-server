@@ -188,11 +188,17 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	}
 
 	//
-	currentUpdatesHighestPriorities := d.readCurrentUpdatesHighestPriorities(ctx, ic.currentPaths, 2)
-	// go though current paths to figure out
+	currentPaths := make([][]string, 0, len(ic.currentPaths))
 	for _, p := range ic.currentPaths {
-		logger.Debugf("D | has applied path: %v", p)
 		cp, _ := utils.CompletePath(nil, p)
+		currentPaths = append(currentPaths, cp)
+	}
+
+	currentUpdatesHighestPriorities := d.readCurrentUpdatesHighestPriorities(ctx, currentPaths, 2)
+	// go though current paths to figure out
+	for i, cp := range currentPaths {
+		logger.Debugf("D | has applied path: %v", cp)
+		// cp, _ := utils.CompletePath(nil, p)
 		// get the 2 current highest priorities values for this path
 		rsrs := currentUpdatesHighestPriorities[strings.Join(cp, ",")]
 
@@ -203,7 +209,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 			}
 		}
 		// debug end
-		logger.Debugf("D | got %d sets of highest priorities", len(rsrs))
+		logger.Debugf("D | got %d set(s) of highest priorities", len(rsrs))
 		switch lrs := len(rsrs); lrs {
 		case 0: // there should be no current paths in this case, intent created for the first time
 		case 1:
@@ -211,7 +217,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 			switch lcce := len(rsrs[0]); lcce {
 			case 0:
 			case 1:
-				logger.Debugf("D | paths %v has 1 entry in the intended store: %v", cp, rsrs[0][0])
+				logger.Debugf("D | path %v has 1 entry in the intended store: %v", cp, rsrs[0][0])
 				switch {
 				// exist with a "higher" priority, do not delete
 				case rsrs[0][0].Priority() < req.GetPriority():
@@ -222,12 +228,12 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 					if rsrs[0][0].Owner() == req.GetIntent() {
 						// same priority and same owner, add it to deletes
 						logger.Debugf("D | path %v | exists with an equal priority and same owner: add to set data request delete", cp)
-						setDataReq.Delete = append(setDataReq.Delete, p)
+						setDataReq.Delete = append(setDataReq.Delete, ic.currentPaths[i])
 					}
 				case rsrs[0][0].Priority() > req.GetPriority():
 					logger.Debugf("D | path %v | exists with a `lower` priority; goes in the set data request delete", cp)
 					// intent has higher priority, delete
-					setDataReq.Delete = append(setDataReq.Delete, p)
+					setDataReq.Delete = append(setDataReq.Delete, ic.currentPaths[i])
 					// TODO: here? check next priority and apply it if it exists
 				}
 			default:
@@ -272,20 +278,21 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	// TODO: add removed paths as deletes if they are not present in the setDataReq.Update
 	pathsToRemove := make([]*sdcpb.Path, 0, len(ic.removedPathsMap))
 	uniqueAdded := map[string]struct{}{}
+	// TODO: retrieve all next priorities
 	for rmcp := range ic.removedPathsMap {
-		logger.Debugf("RMP1: %s\n", rmcp)
+		logger.Debugf("RMP1: %s", rmcp)
 		rmp, err := d.toPath(ctx, strings.Split(rmcp, ","))
 		if err != nil {
 			return err
 		}
-		logger.Debugf("RMP2: %s\n", rmp)
+		logger.Debugf("RMP2: %s", rmp)
 		keyPaths := d.buildPathsWithKeysAsLeaves([]*sdcpb.Path{rmp})
-		logger.Debugf("RMP3: keyPaths: %v\n", keyPaths)
+		logger.Debugf("RMP3: keyPaths: %v", keyPaths)
 		if len(keyPaths) == 0 {
 			continue
 		}
 		// check next intended entry after the current one
-		nextUpdate := d.getNextPriority(ctx, req.GetPriority(), req.GetName(), strings.Split(rmcp, ","))
+		nextUpdate := d.getNextPriority(ctx, req.GetPriority(), req.GetIntent(), strings.Split(rmcp, ","))
 		logger.Debugf("RMP4: next update %v = %v", rmcp, nextUpdate)
 		if nextUpdate != nil {
 			nu, err := d.cacheUpdateToUpdate(ctx, nextUpdate)
@@ -295,6 +302,9 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 			setDataReq.Update = append(setDataReq.Update, nu)
 			continue
 		}
+
+		// no next update, check if the removed paths are reference by any other
+		// update. if not delete they keyPaths.
 
 		// ugly start
 	NEXT_PATH:
@@ -328,6 +338,10 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		setDataReq.Delete = append(setDataReq.Delete, ptrm)
 	}
 	//
+
+	// TODO: cleanup set data request:
+	// - remove redundant deletes
+	// - group updates into updates with JSON TypedValues?
 
 	logger.Debug()
 	logger.Debugf("done building set data request for the candidate")
@@ -545,6 +559,7 @@ func (d *Datastore) readIntendedPathHighestPriorities(ctx context.Context, cp []
 	if len(currentCacheEntries) == 0 {
 		return nil
 	}
+
 	groupping := make(map[int32][]*cache.Update)
 	for _, cce := range currentCacheEntries {
 		if _, ok := groupping[cce.Priority()]; !ok {
@@ -612,18 +627,12 @@ func (d *Datastore) readNewUpdatesHighestPriority(ctx context.Context, ccp [][]s
 	return rs
 }
 
-func (d *Datastore) readCurrentUpdatesHighestPriorities(ctx context.Context, sdcps []*sdcpb.Path, count uint64) map[string][][]*cache.Update {
-	paths := make([][]string, 0, len(sdcps))
-	for _, p := range sdcps {
-		cp, _ := utils.CompletePath(nil, p)
-		paths = append(paths, cp)
-	}
-
+func (d *Datastore) readCurrentUpdatesHighestPriorities(ctx context.Context, ccp [][]string, count uint64) map[string][][]*cache.Update {
 	currentCacheEntries := d.cacheClient.Read(ctx, d.Name(),
 		&cache.Opts{
 			Store:         cachepb.Store_INTENDED,
 			PriorityCount: count,
-		}, paths,
+		}, ccp,
 		0)
 	if len(currentCacheEntries) == 0 {
 		return nil
