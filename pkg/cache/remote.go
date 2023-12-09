@@ -100,9 +100,10 @@ func (c *remoteCache) Modify(ctx context.Context, name string, opts *Opts, dels 
 		)
 	}
 	wo := &client.ClientOpts{
-		Owner:    opts.Owner,
-		Priority: opts.Priority,
-		Store:    getStore(opts.Store),
+		Owner:         opts.Owner,
+		Priority:      opts.Priority,
+		Store:         getStore(opts.Store),
+		PriorityCount: opts.PriorityCount,
 	}
 
 	return c.c.Modify(ctx, name, wo, dels, pbUpds)
@@ -129,9 +130,10 @@ func (c *remoteCache) Read(ctx context.Context, name string, opts *Opts, paths [
 
 func (c *remoteCache) ReadCh(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) chan *Update {
 	ro := &client.ClientOpts{
-		Owner:    opts.Owner,
-		Priority: opts.Priority,
-		Store:    getStore(opts.Store),
+		Owner:         opts.Owner,
+		Priority:      opts.Priority,
+		Store:         getStore(opts.Store),
+		PriorityCount: opts.PriorityCount,
 	}
 
 	inCh := c.c.Read(ctx, name, ro, paths, period)

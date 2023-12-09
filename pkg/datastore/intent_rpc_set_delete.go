@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"context"
+	"strings"
 
 	"github.com/iptecharch/cache/proto/cachepb"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
@@ -48,12 +49,14 @@ func (d *Datastore) SetIntentDelete(ctx context.Context, req *sdcpb.SetIntentReq
 		}
 	}
 
+	currentCacheEntriesPerPath := d.readNewUpdatesHighestPriority(ctx, appliedCompletePaths)
 	// go through applied paths and check if they are the highest priority
 	for idx, cp := range appliedCompletePaths {
 		// get the current highest priority value for this path
-		currentCacheEntries := d.cacheClient.Read(ctx, d.Config().Name, &cache.Opts{
-			Store: cachepb.Store_INTENDED,
-		}, [][]string{cp}, 0)
+		// currentCacheEntries := d.cacheClient.Read(ctx, d.Config().Name, &cache.Opts{
+		// 	Store: cachepb.Store_INTENDED,
+		// }, [][]string{cp}, 0)
+		currentCacheEntries := currentCacheEntriesPerPath[strings.Join(cp, ",")]
 		log.Debugf("ds=%s | %s | highest update (p=updates): %v=%v", d.Name(), req.GetIntent(), cp, currentCacheEntries)
 		switch len(currentCacheEntries) {
 		case 0:
@@ -115,12 +118,10 @@ func (d *Datastore) SetIntentDelete(ctx context.Context, req *sdcpb.SetIntentReq
 
 	// add delete paths
 	// setDataReq.Delete = d.buildDeletePaths(ctx, req.GetPriority(), req.GetIntent(), setDataReq.Delete)
-
+	currentCacheEntriesPerPathAfterDelete := d.readNewUpdatesHighestPriority(ctx, appliedCompletePaths)
 	// go through the applied paths again and get the highest priority (path,value) after deletion
 	for idx, cp := range appliedCompletePaths {
-		currentCacheEntries := d.cacheClient.Read(ctx, d.Config().Name, &cache.Opts{
-			Store: cachepb.Store_INTENDED,
-		}, [][]string{cp}, 0)
+		currentCacheEntries := currentCacheEntriesPerPathAfterDelete[strings.Join(cp, ",")]
 		log.Debugf("ds=%s | %s | highest update after delete (p=updates): %v=%v", d.Name(), req.GetIntent(), cp, currentCacheEntries)
 		switch lcce := len(currentCacheEntries); lcce {
 		case 0:

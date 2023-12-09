@@ -15,6 +15,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 )
 
+const (
+	defaultGRPCAddress    = ":56000"
+	defaultMaxRecvMsgSize = 4 * 1024 * 1024
+	defaultRPCTimeout     = 5 * time.Minute
+)
+
 type Config struct {
 	GRPCServer   *GRPCServer                  `yaml:"grpc-server,omitempty" json:"grpc-server,omitempty"`
 	Schemas      []*schemaConfig.SchemaConfig `yaml:"schemas,omitempty" json:"schemas,omitempty"`
@@ -50,13 +56,13 @@ func (c *Config) validateSetDefaults() error {
 		return errors.New("grpc-server definition is required")
 	}
 	if c.GRPCServer.Address == "" {
-		c.GRPCServer.Address = ":56000"
+		c.GRPCServer.Address = defaultGRPCAddress
 	}
 	if c.GRPCServer.MaxRecvMsgSize <= 0 {
-		c.GRPCServer.MaxRecvMsgSize = 4 * 1024 * 1024
+		c.GRPCServer.MaxRecvMsgSize = defaultMaxRecvMsgSize
 	}
 	if c.GRPCServer.RPCTimeout <= 0 {
-		c.GRPCServer.RPCTimeout = time.Minute
+		c.GRPCServer.RPCTimeout = defaultRPCTimeout
 	}
 	// make sure either local or remote schema stores are enabled
 	if c.Schemas != nil && c.SchemaServer != nil {

@@ -1,7 +1,7 @@
 grpc-server:
   # gRPC listening address
   # address: ":56000"
-
+  # rpc-timeout: 5m
   ## TLS config
   # tls:
   #   ca:

@@ -90,9 +90,10 @@ type Change struct {
 }
 
 type Opts struct {
-	Store    cachepb.Store
-	Owner    string
-	Priority int32
+	Store         cachepb.Store
+	Owner         string
+	Priority      int32
+	PriorityCount uint64
 }
 
 func getStore(s cachepb.Store) cache.Store {
