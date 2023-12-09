@@ -39,10 +39,17 @@ type Creds struct {
 }
 
 type Sync struct {
-	Validate     bool        `yaml:"validate,omitempty" json:"validate,omitempty"`
-	Buffer       int64       `yaml:"buffer,omitempty" json:"buffer,omitempty"`
-	WriteWorkers int64       `yaml:"write-workers,omitempty" json:"write-workers,omitempty"`
-	GNMI         []*GNMISync `yaml:"gnmi,omitempty" json:"gnmi,omitempty"`
+	Validate     bool           `yaml:"validate,omitempty" json:"validate,omitempty"`
+	Buffer       int64          `yaml:"buffer,omitempty" json:"buffer,omitempty"`
+	WriteWorkers int64          `yaml:"write-workers,omitempty" json:"write-workers,omitempty"`
+	GNMI         []*GNMISync    `yaml:"gnmi,omitempty" json:"gnmi,omitempty"`
+	Netconf      []*NetconfSync `yaml:"netconf,omitempty" json:"netconf,omitempty"`
+}
+
+type NetconfSync struct {
+	Name     string        `yaml:"name,omitempty" json:"name,omitempty"`
+	Paths    []string      `yaml:"paths,omitempty" json:"paths,omitempty"`
+	Interval time.Duration `yaml:"interval,omitempty" json:"interval,omitempty"`
 }
 
 type GNMISync struct {
