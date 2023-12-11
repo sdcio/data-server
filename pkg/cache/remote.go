@@ -192,6 +192,22 @@ func (c *remoteCache) Commit(ctx context.Context, name, candidate string) error 
 	return c.c.Commit(ctx, name, candidate)
 }
 
+func (c *remoteCache) CreatePruneID(ctx context.Context, name string, force bool) (string, error) {
+	rsp, err := c.c.Prune(ctx, name, "", force)
+	if err != nil {
+		return "", err
+	}
+	return rsp.GetId(), nil
+}
+
+func (c *remoteCache) ApplyPrune(ctx context.Context, name, id string) error {
+	_, err := c.c.Prune(ctx, name, id, false)
+	if err != nil {
+		return err
+	}
+	return err
+}
+
 func (c *remoteCache) NewUpdate(upd *sdcpb.Update) (*Update, error) {
 	b, err := proto.Marshal(upd.GetValue())
 	if err != nil {

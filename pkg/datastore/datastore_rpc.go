@@ -274,13 +274,40 @@ func (d *Datastore) Sync(ctx context.Context) {
 		d.config.Sync,
 		d.synCh,
 	)
+
 	var err error
+	var pruneID string
+
 	for {
 		select {
 		case <-ctx.Done():
-			log.Errorf("datastore %s sync stopped: %v", d.config.Name, ctx.Err())
+			log.Errorf("datastore %s sync stopped: %v", d.Name(), ctx.Err())
 			return
 		case syncup := <-d.synCh:
+			if syncup.Start {
+				for {
+					pruneID, err = d.cacheClient.CreatePruneID(ctx, d.Name(), syncup.Force)
+					if err != nil {
+						log.Errorf("datastore %s failed to create prune ID: %v", d.Name(), err)
+						time.Sleep(time.Second)
+						continue // retry
+					}
+					break
+				}
+			}
+			if syncup.End && pruneID != "" {
+				for {
+					err = d.cacheClient.ApplyPrune(ctx, d.Name(), pruneID)
+					if err != nil {
+						log.Errorf("datastore %s failed to prune cache after update: %v", d.Name(), err)
+						time.Sleep(time.Second)
+						continue // retry
+					}
+					break
+				}
+				pruneID = ""
+				continue // MAIN FOR loop
+			}
 			err = sem.Acquire(ctx, 1)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
