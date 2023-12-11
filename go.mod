@@ -2,6 +2,8 @@ module github.com/iptecharch/data-server
 
 go 1.21.4
 
+replace github.com/iptecharch/cache v0.0.22 => ../cache
+
 require (
 	github.com/AlekSi/pointer v1.2.0
 	github.com/beevik/etree v1.2.0
@@ -80,6 +82,7 @@ require (
 	github.com/prometheus/common v0.44.0 // indirect
 	github.com/prometheus/procfs v0.11.1 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
+	github.com/rs/xid v1.5.0 // indirect
 	github.com/sirikothe/gotextfsm v1.0.1-0.20200816110946-6aa2cfd355e4 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/crypto v0.16.0 // indirect

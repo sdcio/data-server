@@ -29,7 +29,9 @@ type Client interface {
 	DeleteCandidate(ctx context.Context, name, candidate string) error
 	// clone a cache
 	Clone(ctx context.Context, name, clone string) error
-
+	//
+	CreatePruneID(ctx context.Context, name string, force bool) (string, error)
+	ApplyPrune(ctx context.Context, name, id string) error
 	// send a stream of modifications (update or delete) to a cache, or candidate
 	Modify(ctx context.Context, name string, opts *Opts, dels [][]string, upds []*Update) error
 	// read from a cache or candidate

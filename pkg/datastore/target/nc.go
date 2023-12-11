@@ -168,7 +168,7 @@ func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh cha
 	for _, ncc := range syncConfig.Netconf {
 		// periodic get
 		go func(ncSync *config.NetconfSync) {
-			t.internalSync(ctx, ncSync, syncCh)
+			t.internalSync(ctx, ncSync, true, syncCh)
 			ticker := time.NewTicker(ncSync.Interval)
 			defer ticker.Stop()
 			for {
@@ -176,7 +176,7 @@ func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh cha
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
-					t.internalSync(ctx, ncSync, syncCh)
+					t.internalSync(ctx, ncSync, false, syncCh)
 				}
 			}
 		}(ncc)
@@ -186,7 +186,7 @@ func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh cha
 	log.Infof("sync stopped: %v", ctx.Err())
 }
 
-func (t *ncTarget) internalSync(ctx context.Context, sc *config.NetconfSync, syncCh chan *SyncUpdate) {
+func (t *ncTarget) internalSync(ctx context.Context, sc *config.NetconfSync, force bool, syncCh chan *SyncUpdate) {
 	// iterate syncConfig
 	paths := make([]*sdcpb.Path, 0, len(sc.Paths))
 	// iterate referenced paths
@@ -218,10 +218,17 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.NetconfSync, syn
 	}
 
 	// push notifications into syncCh
+	syncCh <- &SyncUpdate{
+		Start: true,
+		Force: force,
+	}
 	for _, n := range resp.Notification {
 		syncCh <- &SyncUpdate{
 			Update: n,
 		}
+	}
+	syncCh <- &SyncUpdate{
+		End: true,
 	}
 }
 

@@ -228,6 +228,14 @@ func (c *localCache) Commit(ctx context.Context, name, candidate string) error {
 	return c.c.Commit(ctx, name, candidate)
 }
 
+func (c *localCache) CreatePruneID(ctx context.Context, name string, force bool) (string, error) {
+	return c.c.CreatePruneID(ctx, name, force)
+}
+
+func (c *localCache) ApplyPrune(ctx context.Context, name, id string) error {
+	return c.c.ApplyPrune(ctx, name, id)
+}
+
 func (c *localCache) NewUpdate(upd *sdcpb.Update) (*Update, error) {
 	b, err := proto.Marshal(upd.Value)
 	if err != nil {

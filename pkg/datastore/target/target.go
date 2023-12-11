@@ -38,4 +38,7 @@ func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schema.
 type SyncUpdate struct {
 	Tree   string
 	Update *sdcpb.Notification
+	Start  bool
+	Force  bool
+	End    bool
 }
