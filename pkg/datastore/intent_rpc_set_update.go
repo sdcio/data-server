@@ -490,7 +490,7 @@ func (d *Datastore) newIntentContext(ctx context.Context, req *sdcpb.SetIntentRe
 	ic.newKeyAsLeafPaths = extractKeyLeafPaths(ic.newPaths)
 	//
 	// get current intent notifications
-	intentNotifications, err := d.getIntentFlat(ctx, req.GetIntent())
+	intentNotifications, err := d.getIntentFlatNotifications(ctx, req.GetIntent())
 	if err != nil {
 		return nil, err
 	}

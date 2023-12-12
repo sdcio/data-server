@@ -20,6 +20,9 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 	if req.GetIntent() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing intent name")
 	}
+	if req.GetPriority() == 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing intent priority")
+	}
 	s.md.RLock()
 	defer s.md.RUnlock()
 	ds, ok := s.datastores[req.GetName()]
@@ -52,4 +55,20 @@ func (s *Server) SetIntent(ctx context.Context, req *sdcpb.SetIntentRequest) (*s
 		return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %s", req.GetName())
 	}
 	return ds.SetIntent(ctx, req)
+}
+
+func (s *Server) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (*sdcpb.ListIntentResponse, error) {
+	pr, _ := peer.FromContext(ctx)
+	log.Debugf("received ListIntent request %v from peer %s", req, pr.Addr.String())
+
+	if req.GetName() == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
+	}
+	s.md.RLock()
+	defer s.md.RUnlock()
+	ds, ok := s.datastores[req.GetName()]
+	if !ok {
+		return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %s", req.GetName())
+	}
+	return ds.ListIntent(ctx, req)
 }

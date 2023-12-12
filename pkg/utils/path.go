@@ -14,7 +14,7 @@ var errMalformedXPathKey = errors.New("malformed xpath key")
 var escapedBracketsReplacer = strings.NewReplacer(`\]`, `]`, `\[`, `[`)
 
 // ParsePath creates a sdcpb.Path out of a p string, check if the first element is prefixed by an origin,
-// removes it from the xpath and adds it to the returned mgmt_serverPath
+// removes it from the xpath and adds it to the returned sdcpb.Path
 func ParsePath(p string) (*sdcpb.Path, error) {
 	lp := len(p)
 	if lp == 0 {
@@ -94,7 +94,7 @@ func toPathElems(p string) ([]*sdcpb.PathElem, error) {
 	return pElems, nil
 }
 
-// toPathElem take a xpath formatted path element such as "elem1[k=v]" and returns the corresponding mgmt_server.PathElem
+// toPathElem take a xpath formatted path element such as "elem1[k=v]" and returns the corresponding sdcpb.PathElem
 func toPathElem(s string) (*sdcpb.PathElem, error) {
 	idx := -1
 	prevC := rune(0)

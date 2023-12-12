@@ -134,6 +134,7 @@ func (c *remoteCache) ReadCh(ctx context.Context, name string, opts *Opts, paths
 		Priority:      opts.Priority,
 		Store:         getStore(opts.Store),
 		PriorityCount: opts.PriorityCount,
+		KeysOnly:      opts.KeysOnly,
 	}
 
 	inCh := c.c.Read(ctx, name, ro, paths, period)

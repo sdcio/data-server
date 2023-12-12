@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/iptecharch/cache/proto/cachepb"
@@ -16,56 +19,27 @@ import (
 	"github.com/iptecharch/data-server/pkg/utils"
 )
 
-var rawIntentPrefix = "__raw_intent_"
+var rawIntentPrefix = "__raw_intent__"
+
+const (
+	intentRawNameSep = "_"
+)
 
 func (d *Datastore) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*sdcpb.GetIntentResponse, error) {
-	r, err := d.getRawIntent(ctx, req.GetIntent())
+	r, err := d.getRawIntent(ctx, req.GetIntent(), req.GetPriority())
 	if err != nil {
 		return nil, err
 	}
+
 	rsp := &sdcpb.GetIntentResponse{
-		Notification: []*sdcpb.Notification{
-			{
-				Update: r.GetUpdate(),
-			},
+		Name: d.Name(),
+		Intent: &sdcpb.Intent{
+			Intent:   r.GetIntent(),
+			Priority: r.GetPriority(),
+			Update:   r.GetUpdate(),
 		},
 	}
 	return rsp, nil
-}
-
-func (d *Datastore) getIntentFlat(ctx context.Context, intentName string) ([]*sdcpb.Notification, error) {
-	notifications := make([]*sdcpb.Notification, 0)
-	upds := d.cacheClient.Read(ctx, d.config.Name, &cache.Opts{
-		Store: cachepb.Store_INTENDED,
-		Owner: intentName,
-		// Priority: -1, // TODO: related to next TODO in line 47 (skip owner)
-	}, [][]string{{"*"}}, 0)
-
-	for _, upd := range upds {
-		if upd.Owner() != intentName {
-			continue // TODO: DIRTY temp(?) workaround for 2 intents with the same priority
-		}
-		scp, err := d.toPath(ctx, upd.GetPath())
-		if err != nil {
-			return nil, err
-		}
-		tv, err := upd.Value()
-		if err != nil {
-			return nil, err
-		}
-		n := &sdcpb.Notification{
-			Timestamp: time.Now().UnixNano(),
-			Update: []*sdcpb.Update{{
-				Path:  scp,
-				Value: tv,
-			}},
-		}
-		notifications = append(notifications, n)
-	}
-	log.Debug()
-	log.Debugf("ds=%s | %s | current notifications: %v", d.Name(), intentName, notifications)
-	log.Debug()
-	return notifications, nil
 }
 
 func (d *Datastore) SetIntent(ctx context.Context, req *sdcpb.SetIntentRequest) (*sdcpb.SetIntentResponse, error) {
@@ -99,6 +73,51 @@ func (d *Datastore) SetIntent(ctx context.Context, req *sdcpb.SetIntentRequest) 
 	return &sdcpb.SetIntentResponse{}, nil
 }
 
+func (d *Datastore) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (*sdcpb.ListIntentResponse, error) {
+	intents, err := d.listRawIntent(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &sdcpb.ListIntentResponse{
+		Name:   req.GetName(),
+		Intent: intents,
+	}, nil
+}
+
+func (d *Datastore) getIntentFlatNotifications(ctx context.Context, intentName string) ([]*sdcpb.Notification, error) {
+	notifications := make([]*sdcpb.Notification, 0)
+	upds := d.cacheClient.Read(ctx, d.config.Name, &cache.Opts{
+		Store: cachepb.Store_INTENDED,
+		Owner: intentName,
+	}, [][]string{{"*"}}, 0)
+
+	for _, upd := range upds {
+		if upd.Owner() != intentName {
+			continue // TODO: DIRTY temp(?) workaround for 2 intents with the same priority
+		}
+		scp, err := d.toPath(ctx, upd.GetPath())
+		if err != nil {
+			return nil, err
+		}
+		tv, err := upd.Value()
+		if err != nil {
+			return nil, err
+		}
+		n := &sdcpb.Notification{
+			Timestamp: time.Now().UnixNano(),
+			Update: []*sdcpb.Update{{
+				Path:  scp,
+				Value: tv,
+			}},
+		}
+		notifications = append(notifications, n)
+	}
+	log.Debug()
+	log.Debugf("ds=%s | %s | current notifications: %v", d.Name(), intentName, notifications)
+	log.Debug()
+	return notifications, nil
+}
+
 func (d *Datastore) applyIntent(ctx context.Context, candidateName string, priority int32, sdreq *sdcpb.SetDataRequest) error {
 	if candidateName == "" {
 		return fmt.Errorf("missing candidate name")
@@ -111,13 +130,9 @@ func (d *Datastore) applyIntent(ctx context.Context, candidateName string, prior
 		Delete: []*sdcpb.Path{},
 	}
 
-	// newDeletePaths := make([]*sdcpb.Path, 0, len(sdreq.GetDelete()))
-	// newDeletePaths = append(newDeletePaths, sdreq.GetDelete()...)
-	// sdreq.Delete = d.buildDeletePaths(ctx, priority, newDeletePaths)
 	log.Debugf("%s: %s notification:\n%s", d.Name(), candidateName, prototext.Format(sdreq))
 	// TODO: consider if leafref validation
 	// needs to run before must statements validation
-
 	log.Debugf("%s: validating must statements candidate %s", d.Name(), sdreq.GetDatastore())
 	// validate MUST statements
 	for _, upd := range sdreq.GetUpdate() {
@@ -163,10 +178,11 @@ func (d *Datastore) saveRawIntent(ctx context.Context, intentName string, req *s
 		return err
 	}
 	//
+	rin := rawIntentName(intentName, req.GetPriority())
 	upd, err := d.cacheClient.NewUpdate(
 		&sdcpb.Update{
 			Path: &sdcpb.Path{
-				Elem: []*sdcpb.PathElem{{Name: rawIntentPrefix + intentName}},
+				Elem: []*sdcpb.PathElem{{Name: rin}},
 			},
 			Value: &sdcpb.TypedValue{
 				Value: &sdcpb.TypedValue_BytesVal{BytesVal: b},
@@ -188,10 +204,11 @@ func (d *Datastore) saveRawIntent(ctx context.Context, intentName string, req *s
 	return nil
 }
 
-func (d *Datastore) getRawIntent(ctx context.Context, intentName string) (*sdcpb.SetIntentRequest, error) {
+func (d *Datastore) getRawIntent(ctx context.Context, intentName string, priority int32) (*sdcpb.SetIntentRequest, error) {
+	rin := rawIntentName(intentName, priority)
 	upds := d.cacheClient.Read(ctx, d.config.Name, &cache.Opts{
 		Store: cachepb.Store_METADATA,
-	}, [][]string{{rawIntentPrefix + intentName}}, 0)
+	}, [][]string{{rin}}, 0)
 	if len(upds) == 0 {
 		return nil, errors.New("not found")
 	}
@@ -208,12 +225,51 @@ func (d *Datastore) getRawIntent(ctx context.Context, intentName string) (*sdcpb
 	return req, nil
 }
 
-func (d *Datastore) deleteRawIntent(ctx context.Context, intentName string) error {
+func (d *Datastore) listRawIntent(ctx context.Context) ([]*sdcpb.Intent, error) {
+	upds := d.cacheClient.Read(ctx, d.config.Name, &cache.Opts{
+		Store:    cachepb.Store_METADATA,
+		KeysOnly: true,
+	}, [][]string{{"*"}}, 0)
+	numUpds := len(upds)
+	if numUpds == 0 {
+		return nil, nil
+	}
+	intents := make([]*sdcpb.Intent, 0, numUpds)
+	for _, upd := range upds {
+		if len(upd.GetPath()) == 0 {
+			return nil, fmt.Errorf("malformed raw intent name: %q", upd.GetPath()[0])
+		}
+		intentRawName := strings.TrimPrefix(upd.GetPath()[0], rawIntentPrefix)
+		intentNameComp := strings.Split(intentRawName, intentRawNameSep)
+		inc := len(intentNameComp)
+		if inc < 2 {
+			return nil, fmt.Errorf("malformed raw intent name: %q", upd.GetPath()[0])
+		}
+		pr, err := strconv.Atoi(intentNameComp[inc-1])
+		if err != nil {
+			return nil, fmt.Errorf("malformed raw intent name: %q: %v", upd.GetPath()[0], err)
+		}
+		in := &sdcpb.Intent{
+			Intent:   strings.Join(intentNameComp[:inc-1], intentRawNameSep),
+			Priority: int32(pr),
+		}
+		intents = append(intents, in)
+	}
+	sort.Slice(intents, func(i, j int) bool {
+		if intents[i].GetPriority() == intents[j].GetPriority() {
+			return intents[i].GetIntent() < intents[j].GetIntent()
+		}
+		return intents[i].GetPriority() < intents[j].GetPriority()
+	})
+	return intents, nil
+}
+
+func (d *Datastore) deleteRawIntent(ctx context.Context, intentName string, priority int32) error {
 	return d.cacheClient.Modify(ctx, d.config.Name,
 		&cache.Opts{
 			Store: cachepb.Store_METADATA,
 		},
-		[][]string{{rawIntentPrefix + intentName}},
+		[][]string{{rawIntentName(intentName, priority)}},
 		nil)
 }
 
@@ -350,4 +406,8 @@ func copyMap(m map[string]string) map[string]string {
 		nm[k] = v
 	}
 	return nm
+}
+
+func rawIntentName(name string, pr int32) string {
+	return fmt.Sprintf("%s%s%s%d", rawIntentPrefix, name, intentRawNameSep, pr)
 }

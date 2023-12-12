@@ -170,6 +170,7 @@ func (c *localCache) ReadCh(ctx context.Context, name string, opts *Opts, paths 
 					Owner:         opts.Owner,
 					Priority:      opts.Priority,
 					PriorityCount: opts.PriorityCount,
+					KeysOnly:      opts.KeysOnly,
 				})
 				if err != nil {
 					log.Errorf("failed to read path %v: %v", p, err)
