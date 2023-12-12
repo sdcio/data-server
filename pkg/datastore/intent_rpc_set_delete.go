@@ -29,7 +29,7 @@ func (d *Datastore) SetIntentDelete(ctx context.Context, req *sdcpb.SetIntentReq
 		Update: make([]*sdcpb.Update, 0),
 	}
 	// get current intent notifications
-	intentNotifications, err := d.getIntentFlat(ctx, req.GetIntent())
+	intentNotifications, err := d.getIntentFlatNotifications(ctx, req.GetIntent())
 	if err != nil {
 		return err
 	}
@@ -194,7 +194,7 @@ func (d *Datastore) SetIntentDelete(ctx context.Context, req *sdcpb.SetIntentReq
 	}
 	failed = false
 	// delete raw intent
-	return d.deleteRawIntent(ctx, req.GetIntent())
+	return d.deleteRawIntent(ctx, req.GetIntent(), req.GetPriority())
 }
 
 // func (d *Datastore) buildDeletePaths(ctx context.Context, priority int32, owner string, appliedPaths []*sdcpb.Path) []*sdcpb.Path {

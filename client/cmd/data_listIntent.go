@@ -12,18 +12,14 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 )
 
-var intentName string
-
-// dataGetIntentCmd represents the get-intent command
-var dataGetIntentCmd = &cobra.Command{
-	Use:          "get-intent",
-	Short:        "get intent data",
+// dataListIntentCmd represents the list-intent command
+var dataListIntentCmd = &cobra.Command{
+	Use:          "list-intent",
+	Short:        "list intents",
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		req := &sdcpb.GetIntentRequest{
-			Name:     datastoreName,
-			Intent:   intentName,
-			Priority: priority,
+		req := &sdcpb.ListIntentRequest{
+			Name: datastoreName,
 		}
 		ctx, cancel := context.WithCancel(cmd.Context())
 		defer cancel()
@@ -33,7 +29,7 @@ var dataGetIntentCmd = &cobra.Command{
 		}
 		fmt.Println("request:")
 		fmt.Println(prototext.Format(req))
-		rsp, err := dataClient.GetIntent(ctx, req)
+		rsp, err := dataClient.ListIntent(ctx, req)
 		if err != nil {
 			return err
 		}
@@ -44,7 +40,6 @@ var dataGetIntentCmd = &cobra.Command{
 }
 
 func init() {
-	dataCmd.AddCommand(dataGetIntentCmd)
-	dataGetIntentCmd.Flags().StringVarP(&intentName, "intent", "", "", "intent name")
-	dataGetIntentCmd.Flags().Int32VarP(&priority, "priority", "", 0, "intent priority")
+	dataCmd.AddCommand(dataListIntentCmd)
+	dataListIntentCmd.Flags().StringVarP(&intentName, "intent", "", "", "intent name")
 }
