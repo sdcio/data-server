@@ -20,7 +20,7 @@ test:
 	go test ./...
 
 docker-build:
-	docker build . -t $(IMAGE)
+	docker build . -t $(IMAGE) --ssh default=$(SSH_AUTH_SOCK)
 
 docker-push: docker-build
 	docker push $(IMAGE)
@@ -30,7 +30,7 @@ release: docker-build
 	docker push $(REMOTE_REGISTRY):latest
 
 docker-test:
-	docker build . -t $(TEST_IMAGE) -f tests/container/Dockerfile
+	docker build . -t $(TEST_IMAGE) -f tests/container/Dockerfile --ssh default=$(SSH_AUTH_SOCK)
 	docker run -v ./tests/results:/results:rw $(TEST_IMAGE) robot --outputdir /results /app/tests/robot
 
 run-distributed:
