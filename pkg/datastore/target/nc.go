@@ -165,9 +165,9 @@ func (t *ncTarget) Subscribe() {}
 func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
 	log.Infof("starting target %s sync", t.sbi.Address)
 
-	for _, ncc := range syncConfig.Netconf {
+	for _, ncc := range syncConfig.Config {
 		// periodic get
-		go func(ncSync *config.NetconfSync) {
+		go func(ncSync *config.SyncProtocol) {
 			t.internalSync(ctx, ncSync, true, syncCh)
 			ticker := time.NewTicker(ncSync.Interval)
 			defer ticker.Stop()
@@ -186,7 +186,7 @@ func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh cha
 	log.Infof("sync stopped: %v", ctx.Err())
 }
 
-func (t *ncTarget) internalSync(ctx context.Context, sc *config.NetconfSync, force bool, syncCh chan *SyncUpdate) {
+func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, force bool, syncCh chan *SyncUpdate) {
 	// iterate syncConfig
 	paths := make([]*sdcpb.Path, 0, len(sc.Paths))
 	// iterate referenced paths

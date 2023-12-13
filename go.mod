@@ -10,7 +10,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/iptecharch/cache v0.0.24
 	github.com/iptecharch/schema-server v0.0.8
-	github.com/iptecharch/sdc-protos v0.0.12
+	github.com/iptecharch/sdc-protos v0.0.13
 	github.com/iptecharch/yang-parser v0.0.3
 	github.com/kylelemons/godebug v1.1.0
 	github.com/olekukonko/tablewriter v0.0.5

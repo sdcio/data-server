@@ -30,6 +30,8 @@ type SBI struct {
 	PreferredNCVersion string `yaml:"preferred-nc-version,omitempty" json:"preferred-nc-version,omitempty"`
 	// ConnectRetry
 	ConnectRetry time.Duration `yaml:"connect-retry,omitempty" json:"connect-retry,omitempty"`
+	// Timeout
+	Timeout time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 }
 
 type Creds struct {
@@ -39,24 +41,18 @@ type Creds struct {
 }
 
 type Sync struct {
-	Validate     bool           `yaml:"validate,omitempty" json:"validate,omitempty"`
-	Buffer       int64          `yaml:"buffer,omitempty" json:"buffer,omitempty"`
-	WriteWorkers int64          `yaml:"write-workers,omitempty" json:"write-workers,omitempty"`
-	GNMI         []*GNMISync    `yaml:"gnmi,omitempty" json:"gnmi,omitempty"`
-	Netconf      []*NetconfSync `yaml:"netconf,omitempty" json:"netconf,omitempty"`
+	Validate     bool            `yaml:"validate,omitempty" json:"validate,omitempty"`
+	Buffer       int64           `yaml:"buffer,omitempty" json:"buffer,omitempty"`
+	WriteWorkers int64           `yaml:"write-workers,omitempty" json:"write-workers,omitempty"`
+	Config       []*SyncProtocol `yaml:"config,omitempty" json:"config,omitempty"`
 }
 
-type NetconfSync struct {
+type SyncProtocol struct {
 	Name     string        `yaml:"name,omitempty" json:"name,omitempty"`
+	Protocol string        `yaml:"protocol,omitempty" json:"protocol,omitempty"`
 	Paths    []string      `yaml:"paths,omitempty" json:"paths,omitempty"`
 	Interval time.Duration `yaml:"interval,omitempty" json:"interval,omitempty"`
-}
-
-type GNMISync struct {
-	Name     string        `yaml:"name,omitempty" json:"name,omitempty"`
-	Paths    []string      `yaml:"paths,omitempty" json:"paths,omitempty"`
 	Mode     string        `yaml:"mode,omitempty" json:"mode,omitempty"`
-	Interval time.Duration `yaml:"interval,omitempty" json:"interval,omitempty"`
 	Encoding string        `yaml:"encoding,omitempty" json:"encoding,omitempty"`
 }
 
@@ -100,6 +96,9 @@ func (s *SBI) validateSetDefaults() error {
 		if s.Port <= 0 {
 			s.Port = defaultNCPort
 		}
+		if s.Timeout <= 0 {
+			s.Timeout = defaultTimeout
+		}
 		return nil
 	default:
 		return nil
@@ -107,7 +106,8 @@ func (s *SBI) validateSetDefaults() error {
 }
 
 func (s *Sync) validateSetDefaults() error {
-	if s == nil || (len(s.GNMI) == 0 && len(s.Netconf) == 0) {
+	// no sync
+	if s == nil || len(s.Config) == 0 {
 		return nil
 	}
 	if s.Buffer <= 0 {

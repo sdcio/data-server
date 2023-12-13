@@ -136,7 +136,6 @@ func (t *gnmiTarget) Subscribe() {}
 func (t *gnmiTarget) Sync(octx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
 	if t != nil && t.target != nil && t.target.Config != nil {
 		log.Infof("starting target %s sync", t.target.Config.Name)
-		log.Infof("sync config: %+v", syncConfig)
 	}
 	var cancel context.CancelFunc
 	var ctx context.Context
@@ -147,7 +146,7 @@ START:
 	}
 	ctx, cancel = context.WithCancel(octx)
 	defer cancel()
-	for _, gnmiSync := range syncConfig.GNMI {
+	for _, gnmiSync := range syncConfig.Config {
 		switch gnmiSync.Mode {
 		case "once":
 			err = t.periodicSync(ctx, gnmiSync)
@@ -172,7 +171,7 @@ START:
 			switch r := rsp.Response.Response.(type) {
 			case *gnmi.SubscribeResponse_Update:
 				syncCh <- &SyncUpdate{
-					Tree:   rsp.SubscriptionName,
+					Store:  rsp.SubscriptionName,
 					Update: utils.ToSchemaNotification(r.Update),
 				}
 			}
@@ -203,7 +202,7 @@ func encoding(e string) int {
 	return en
 }
 
-func (t *gnmiTarget) periodicSync(ctx context.Context, gnmiSync *config.GNMISync) error {
+func (t *gnmiTarget) periodicSync(ctx context.Context, gnmiSync *config.SyncProtocol) error {
 	opts := make([]gapi.GNMIOption, 0)
 	subscriptionOpts := make([]gapi.GNMIOption, 0)
 	for _, p := range gnmiSync.Paths {
@@ -221,7 +220,7 @@ func (t *gnmiTarget) periodicSync(ctx context.Context, gnmiSync *config.GNMISync
 	// initial subscribe ONCE
 	go t.target.Subscribe(ctx, subReq, gnmiSync.Name)
 	// periodic subscribe ONCE
-	go func(gnmiSync *config.GNMISync) {
+	go func(gnmiSync *config.SyncProtocol) {
 		ticker := time.NewTicker(gnmiSync.Interval)
 		defer ticker.Stop()
 		for {
@@ -236,7 +235,7 @@ func (t *gnmiTarget) periodicSync(ctx context.Context, gnmiSync *config.GNMISync
 	return nil
 }
 
-func (t *gnmiTarget) streamSync(ctx context.Context, gnmiSync *config.GNMISync) error {
+func (t *gnmiTarget) streamSync(ctx context.Context, gnmiSync *config.SyncProtocol) error {
 	opts := make([]gapi.GNMIOption, 0)
 	subscriptionOpts := make([]gapi.GNMIOption, 0)
 	for _, p := range gnmiSync.Paths {

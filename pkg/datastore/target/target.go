@@ -36,9 +36,16 @@ func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schema.
 }
 
 type SyncUpdate struct {
-	Tree   string
+	// identifies the store this updates needs to be written to if Sync.Validate == false
+	Store string
+	// The received update
 	Update *sdcpb.Notification
-	Start  bool
-	Force  bool
-	End    bool
+	// if true indicates the start of cache pruning
+	Start bool
+	// if true and start is true indicates first sync iteration,
+	// it overrides any ongoing pruning in the cache.
+	Force bool
+	// if true indicates the end of a sync iteration.
+	// triggers the pruning on the cache side.
+	End bool
 }
