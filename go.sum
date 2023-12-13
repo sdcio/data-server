@@ -139,8 +139,8 @@ github.com/iptecharch/cache v0.0.24 h1:KUNI4vsfVSZ5oG8m+5ULyQ3vYJAG2GYDEqx9whlgj
 github.com/iptecharch/cache v0.0.24/go.mod h1:rDVQsB/tTLCWomfvRgM147uSP3wMiRI4zAay+WtDE6g=
 github.com/iptecharch/schema-server v0.0.8 h1:WxIQoXxKDDW0QIdVZkDvO8fkeT0iZPDlvTrdCq8/oyU=
 github.com/iptecharch/schema-server v0.0.8/go.mod h1:PJ45vGNQQaepzhWM+NcgDp3EDHw2mpjfOr0kVTNdCo8=
-github.com/iptecharch/sdc-protos v0.0.12 h1:BHKGdBDeTUwbsNoZSx3DWxeLQYK3BRY/JVVfiw6/ALY=
-github.com/iptecharch/sdc-protos v0.0.12/go.mod h1:stMHinsJNfsg/KbAe2HsSwU4fnS6ub1VZzLcG+IHFJA=
+github.com/iptecharch/sdc-protos v0.0.13 h1:39B8z9Y3PTTxcVO1f/8k046TTvQ9N8ctF78G2r0N8So=
+github.com/iptecharch/sdc-protos v0.0.13/go.mod h1:stMHinsJNfsg/KbAe2HsSwU4fnS6ub1VZzLcG+IHFJA=
 github.com/iptecharch/yang-parser v0.0.3 h1:sfmGIWdhEeql8RXUF/nD0/Z4Td9Pbhk76jVC/VXSSNI=
 github.com/iptecharch/yang-parser v0.0.3/go.mod h1:mOB/+f1fOgqD00+RoxHgOxl+Cnq0kEd0tZwBrcrMaUI=
 github.com/jhump/protoreflect v1.15.3 h1:6SFRuqU45u9hIZPJAoZ8c28T3nK64BNdp9w6jFonzls=

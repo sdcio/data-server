@@ -27,27 +27,28 @@ grpc-server:
   max-recv-msg-size: 25165824 # 24 * 1024 * 1024 (24MB)
 
 datastores: # this specifies MAIN datastores
-#   - name: srl1
-#     schema:
-#       name: srl
-#       vendor: Nokia
-#       version: 22.11.2
-#     sbi:
-#       type: gnmi # nc, nats, redis
-#       address: clab-schema-srl1:57400
-#       credentials:
-#         username: admin
-#         password: NokiaSrl1!
-#       tls:
-#         skip-verify: true
-#     sync:
-#       validate: true
-#       gnmi:
-#         - path:
-#           - /
-#           name: config
-#           mode: on-change
-#           encoding: 45
+  # - name: sr1
+  #   schema:
+  #     name: sros
+  #     vendor: Nokia
+  #     version: 23.3
+  #   sbi:
+  #     type: nc # gnmic, nc, ### nats, redis
+  #     address: clab-nc-sr1
+  #     # timeout: 5m
+  #     credentials:
+  #       username: admin
+  #       password: admin
+  #   sync:
+  #     # write-workers: 1
+  #     validate: true
+  #     #netconf:
+  #     config:
+  #     - name: config
+  #       protocol: netconf
+  #       paths:
+  #       - /
+  #       interval: 1m
 #         # - path:
 #         #   - /
 #         #   name: state
@@ -98,12 +99,20 @@ datastores: # this specifies MAIN datastores
 schemas:
   - name: sros
     vendor: Nokia
-    version: 22.10
+    version: 23.3
     files:
-      - ./lab/common/yang/sros_22.10/YANG/nokia-combined
+      - ./lab/common/yang/sros_23.3/YANG/nokia-combined
     directories:
-      - ./lab/common/yang/sros_22.10/YANG/ietf
-      - ./lab/common/yang/sros_22.10/YANG/nokia-sros-yang-extensions.yang
+      - ./lab/common/yang/sros_23.3/YANG/ietf
+      - ./lab/common/yang/sros_23.3/YANG/nokia-sros-yang-extensions.yang
+  - name: sros
+    vendor: Nokia
+    version: 23.7
+    files:
+      - ./lab/common/yang/sros_23.7/YANG/nokia-combined
+    directories:
+      - ./lab/common/yang/sros_23.7/YANG/ietf
+      - ./lab/common/yang/sros_23.7/YANG/nokia-sros-yang-extensions.yang
   - name: srl
     vendor: Nokia
     version: 22.11.2

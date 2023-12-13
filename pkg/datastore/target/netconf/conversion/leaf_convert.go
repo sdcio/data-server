@@ -55,7 +55,7 @@ func Convert(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error)
 	case "instance-identifier": //TODO: https://www.rfc-editor.org/rfc/rfc6020.html#section-9.13
 		return ConvertInstanceIdentifier(value, lst)
 	}
-	log.Errorf("type %q not implemented", lst.Type)
+	log.Warnf("type %q not implemented", lst.Type)
 	return ConvertString(value, lst)
 }
 
