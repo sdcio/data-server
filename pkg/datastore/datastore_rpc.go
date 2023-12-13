@@ -277,7 +277,7 @@ func (d *Datastore) Sync(ctx context.Context) {
 
 	var err error
 	var pruneID string
-
+MAIN:
 	for {
 		select {
 		case <-ctx.Done():
@@ -285,6 +285,7 @@ func (d *Datastore) Sync(ctx context.Context) {
 			return
 		case syncup := <-d.synCh:
 			if syncup.Start {
+				log.Debugf("%s: netconf sync start", d.Name())
 				for {
 					pruneID, err = d.cacheClient.CreatePruneID(ctx, d.Name(), syncup.Force)
 					if err != nil {
@@ -292,10 +293,11 @@ func (d *Datastore) Sync(ctx context.Context) {
 						time.Sleep(time.Second)
 						continue // retry
 					}
-					break
+					continue MAIN
 				}
 			}
 			if syncup.End && pruneID != "" {
+				log.Debugf("%s: netconf sync end", d.Name())
 				for {
 					err = d.cacheClient.ApplyPrune(ctx, d.Name(), pruneID)
 					if err != nil {
@@ -305,9 +307,11 @@ func (d *Datastore) Sync(ctx context.Context) {
 					}
 					break
 				}
+				log.Debugf("%s: netconf sync resetting pruneID", d.Name())
 				pruneID = ""
 				continue // MAIN FOR loop
 			}
+			log.Debugf("%s: netconf acquire semaphore", d.Name())
 			err = sem.Acquire(ctx, 1)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
@@ -317,6 +321,7 @@ func (d *Datastore) Sync(ctx context.Context) {
 				log.Errorf("failed to acquire semaphore: %v", err)
 				continue
 			}
+			log.Debugf("%s: netconf acquired semaphore", d.Name())
 			go d.storeSyncMsg(ctx, syncup, sem)
 		}
 	}
@@ -472,7 +477,6 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 			log.Errorf("datastore %s failed to delete path %v: %v", d.config.Name, delPath, err)
 		}
 	}
-
 	for _, upd := range syncup.Update.GetUpdate() {
 		store := cachepb.Store_CONFIG
 		if d.config.Sync != nil && d.config.Sync.Validate {

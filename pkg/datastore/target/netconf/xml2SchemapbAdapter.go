@@ -108,7 +108,6 @@ func (x *XML2sdcpbConfigAdapter) transformContainer(ctx context.Context, e *etre
 // transformField transforms an etree.element of a configuration as an update into the provided *sdcpb.Notification.
 func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, ls *sdcpb.LeafSchema, result *sdcpb.Notification) error {
 	// process terminal values
-	//data := strings.TrimSpace(e.Text())
 
 	tv, err := StringElementToTypedValue(e.Text(), ls)
 	if err != nil {

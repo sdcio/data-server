@@ -2,6 +2,7 @@ package scrapligo
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/beevik/etree"
 	scraplinetconf "github.com/scrapli/scrapligo/driver/netconf"
@@ -23,6 +24,7 @@ func NewScrapligoNetconfTarget(cfg *config.SBI) (*ScrapligoNetconfTarget, error)
 		options.WithNetconfForceSelfClosingTags(),
 		options.WithTransportType("standard"),
 		options.WithPort(cfg.Port),
+		options.WithTimeoutOps(10 * time.Minute),
 	}
 
 	if cfg.Credentials != nil {

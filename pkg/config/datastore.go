@@ -107,7 +107,7 @@ func (s *SBI) validateSetDefaults() error {
 }
 
 func (s *Sync) validateSetDefaults() error {
-	if s == nil || len(s.GNMI) == 0 {
+	if s == nil || (len(s.GNMI) == 0 && len(s.Netconf) == 0) {
 		return nil
 	}
 	if s.Buffer <= 0 {
