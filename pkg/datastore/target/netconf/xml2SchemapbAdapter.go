@@ -108,17 +108,22 @@ func (x *XML2sdcpbConfigAdapter) transformContainer(ctx context.Context, e *etre
 // transformField transforms an etree.element of a configuration as an update into the provided *sdcpb.Notification.
 func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, ls *sdcpb.LeafSchema, result *sdcpb.Notification) error {
 	// process terminal values
-	//data := strings.TrimSpace(e.Text())
-
 	tv, err := StringElementToTypedValue(e.Text(), ls)
 	if err != nil {
 		return err
 	}
-
+	// copy pathElems
+	npelem := make([]*sdcpb.PathElem, 0, len(pelems))
+	for _, pe := range pelems {
+		npelem = append(npelem, &sdcpb.PathElem{
+			Name: pe.GetName(),
+			Key:  pe.GetKey(),
+		})
+	}
 	// create sdcpb.update
 	u := &sdcpb.Update{
 		Path: &sdcpb.Path{
-			Elem: pelems,
+			Elem: npelem,
 		},
 		Value: tv,
 	}

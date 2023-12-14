@@ -108,31 +108,36 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 			},
 			SBI: sbi,
 		}
-		sync := req.GetSync()
-		if sync != nil {
+		if req.GetSync() != nil {
 			dsConfig.Sync = &config.Sync{
 				Validate:     req.GetSync().GetValidate(),
 				Buffer:       req.GetSync().GetBuffer(),
 				WriteWorkers: req.GetSync().GetWriteWorkers(),
-				GNMI:         make([]*config.GNMISync, 0, len(sync.GetGnmi())),
+				Config:       make([]*config.SyncProtocol, 0, len(req.GetSync().GetConfig())),
 			}
-			for _, gnSync := range sync.GetGnmi() {
-				mode := "on-change"
-				switch gnSync.GetMode() {
-				case sdcpb.SyncMode_SM_ON_CHANGE:
-				case sdcpb.SyncMode_SM_SAMPLE:
-					mode = "sample"
-				case sdcpb.SyncMode_SM_ONCE:
-					mode = "once"
+			for _, pSync := range req.GetSync().GetConfig() {
+				gnSyncConfig := &config.SyncProtocol{
+					Protocol: pSync.GetProtocol(),
+					Name:     pSync.GetName(),
+					Paths:    pSync.GetPath(),
+					Interval: time.Duration(pSync.GetInterval()),
 				}
-				gnSyncConfig := &config.GNMISync{
-					Name:     gnSync.GetName(),
-					Paths:    gnSync.GetPath(),
-					Mode:     mode,
-					Interval: time.Duration(gnSync.GetInterval()),
-					Encoding: gnSync.GetEncoding(),
+				switch pSync.Protocol {
+				case "gnmi":
+					gnSyncConfig.Mode = "on-change"
+					switch pSync.GetMode() {
+					case sdcpb.SyncMode_SM_ON_CHANGE:
+					case sdcpb.SyncMode_SM_SAMPLE:
+						gnSyncConfig.Mode = "sample"
+					case sdcpb.SyncMode_SM_ONCE:
+						gnSyncConfig.Mode = "once"
+					}
+					gnSyncConfig.Encoding = pSync.GetEncoding()
+				case "netconf":
+				default:
+					return nil, status.Errorf(codes.InvalidArgument, "unknown sync protocol: %q", pSync.Protocol)
 				}
-				dsConfig.Sync.GNMI = append(dsConfig.Sync.GNMI, gnSyncConfig)
+				dsConfig.Sync.Config = append(dsConfig.Sync.Config, gnSyncConfig)
 			}
 		}
 		err := dsConfig.ValidateSetDefaults()

@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 const (
 	defaultNCPort             = 830
 	defaultCacheType          = "local"
@@ -8,4 +10,5 @@ const (
 	defaultStoreType          = "badgerdb"
 	defaultCacheDir           = "./cached/caches"
 	defaultWriteWorkers       = 16
+	defaultTimeout            = 30 * time.Second
 )

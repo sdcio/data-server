@@ -23,6 +23,7 @@ func NewScrapligoNetconfTarget(cfg *config.SBI) (*ScrapligoNetconfTarget, error)
 		options.WithNetconfForceSelfClosingTags(),
 		options.WithTransportType("standard"),
 		options.WithPort(cfg.Port),
+		options.WithTimeoutOps(cfg.Timeout),
 	}
 
 	if cfg.Credentials != nil {
