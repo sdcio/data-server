@@ -216,17 +216,19 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, fo
 		log.Errorf("failed getting config %v", err)
 		return
 	}
-
 	// push notifications into syncCh
 	syncCh <- &SyncUpdate{
 		Start: true,
 		Force: force,
 	}
-	for _, n := range resp.Notification {
+	notificationsCount := 0
+	for _, n := range resp.GetNotification() {
 		syncCh <- &SyncUpdate{
 			Update: n,
 		}
+		notificationsCount++
 	}
+	log.Debugf("%s: sync-ed %d notifications", t.name, notificationsCount)
 	syncCh <- &SyncUpdate{
 		End: true,
 	}
