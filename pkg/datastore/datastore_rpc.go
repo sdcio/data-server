@@ -311,6 +311,7 @@ MAIN:
 				pruneID = ""
 				continue // MAIN FOR loop
 			}
+			// a regular notification
 			log.Debugf("%s: netconf acquire semaphore", d.Name())
 			err = sem.Acquire(ctx, 1)
 			if err != nil {
@@ -509,7 +510,6 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 		if err != nil {
 			log.Errorf("datastore %s failed to send modify request to cache: %v", d.config.Name, err)
 		}
-		// upds = append(upds, cUpd)
 	}
 }
 
