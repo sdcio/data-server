@@ -35,14 +35,13 @@ datastores: # this specifies MAIN datastores
   #   sbi:
   #     type: nc # gnmic, nc, ### nats, redis
   #     address: clab-nc-sr1
+  #     include-ns: true
   #     # timeout: 5m
   #     credentials:
   #       username: admin
   #       password: admin
   #   sync:
-  #     # write-workers: 1
   #     validate: true
-  #     #netconf:
   #     config:
   #     - name: config
   #       protocol: netconf
