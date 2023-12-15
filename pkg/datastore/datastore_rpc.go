@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/iptecharch/cache/proto/cachepb"
@@ -112,7 +113,6 @@ func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) err
 		return nil
 	}
 	// err not nil
-	//
 	if !errors.Is(err, context.DeadlineExceeded) {
 		return err
 	}
@@ -174,6 +174,7 @@ func (d *Datastore) Commit(ctx context.Context, req *sdcpb.CommitRequest) error 
 	if err != nil {
 		return err
 	}
+
 	notification, err := d.changesToUpdates(ctx, changes)
 	if err != nil {
 		return err
@@ -379,8 +380,12 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, cand
 					pe := upd.GetPath().GetElem()[peIndex-1]
 					// get leafRef value
 					leafRefValue := pe.GetKey()[keySchema.GetName()]
-					//
-					err = d.resolveLeafref(ctx, candidate, leafRefPath, leafRefValue)
+
+					lrefDdcpbPath, err := utils.ParsePath(leafRefPath)
+					if err != nil {
+						return err
+					}
+					err = d.resolveLeafref(ctx, candidate, lrefDdcpbPath, leafRefValue)
 					if err != nil {
 						return err
 					}
@@ -395,7 +400,22 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, cand
 					return err
 				}
 
-				err = d.resolveLeafref(ctx, candidate, leafRefPath, upd.GetValue().GetStringVal())
+				// convert leafref Path to sdcpb Path
+				lrefSdcpbPath, err := utils.ParsePath(leafRefPath)
+				if err != nil {
+					return err
+				}
+				// if it contains "./" or "../" like any relative path stuff
+				// we need to resolve that
+				if strings.Contains(leafRefPath, "./") {
+					// make leafref path absolute
+					lrefSdcpbPath, err = d.makeLeafRefAbs(ctx, upd.GetPath(), lrefSdcpbPath, upd.GetValue().GetStringVal())
+					if err != nil {
+						return err
+					}
+				}
+
+				err = d.resolveLeafref(ctx, candidate, lrefSdcpbPath, upd.GetValue().GetStringVal())
 				if err != nil {
 					return err
 				}
@@ -414,33 +434,74 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, cand
 	}
 }
 
-func (d *Datastore) resolveLeafref(ctx context.Context, candidate, leafRefPath string, value string) error {
-	// parse the string into a *sdcpb.Path
-	p, err := utils.ParsePath(leafRefPath)
-	if err != nil {
-		return err
+func (d *Datastore) makeLeafRefAbs(ctx context.Context, base, lref *sdcpb.Path, value string) (*sdcpb.Path, error) {
+	// create a result
+	result := &sdcpb.Path{
+		Elem: make([]*sdcpb.PathElem, 0, len(base.Elem)),
 	}
+	// copy base into result
+	for _, x := range base.Elem {
+		result.Elem = append(result.Elem, &sdcpb.PathElem{
+			Name: x.GetName(),
+			Key:  copyMap(x.GetKey()),
+		})
+	}
+	// process leafref elements and adjust result
+	for _, lrefElem := range lref.Elem {
+		// if .. in path, remove last elem from result (move up)
+		if lrefElem.GetName() == ".." {
+			if len(result.Elem) == 0 {
+				return nil, fmt.Errorf("invalid leafref path %s based on %s", lref.String(), base.String())
+			}
+			result.Elem = result.Elem[:len(result.Elem)-1]
+			continue
+		}
+		if lrefElem.GetName() == "." {
+			// no one knows if this is a valid case, but we voted and here it is :-P
+			continue
+		}
+
+		// if proper path elem, add to path
+		result.Elem = append(result.Elem, lrefElem)
+	}
+
+	return result, nil
+}
+
+func (d *Datastore) resolveLeafref(ctx context.Context, candidate string, leafRefPath *sdcpb.Path, value string) error {
 
 	// Subsequent Process:
 	// now we remove the last element of the referenced path
 	// adding its name to the one before last element as a key
 	// with the value of the item that we're validating the leafref for
 
-	pLen := len(p.GetElem())
-	// extract one before the last path elements element
-	keyAddedLastElem := p.GetElem()[pLen-2]
-	// add the Key map
-	if keyAddedLastElem.GetKey() == nil {
-		keyAddedLastElem.Key = map[string]string{}
+	// get the schema for results paths last element
+	schemaResp, err := d.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
+		Path:   &sdcpb.Path{Elem: leafRefPath.Elem[:len(leafRefPath.Elem)-1]},
+		Schema: d.Schema().GetSchema(),
+	})
+	if err != nil {
+		return err
 	}
-	// add the updates value as the value under the key, which is the initial last element of the leafref path
-	keyAddedLastElem.Key[p.GetElem()[pLen-1].GetName()] = value
-	// reconstruct the path, the leafref points to, with the path except for the last two elements
-	// and the altered penultimate element
-	p.Elem = append(p.GetElem()[:pLen-2], keyAddedLastElem)
+	// check for the schema defined keys
+	for _, k := range schemaResp.GetSchema().GetContainer().GetKeys() {
+		// if the last element of results path is a key
+		if k.Name == leafRefPath.GetElem()[len(leafRefPath.Elem)-1].GetName() {
+			// check if the one before last has a key map initialized
+			if leafRefPath.Elem[len(leafRefPath.Elem)-2].GetKey() == nil {
+				// create map otherwise
+				leafRefPath.Elem[len(leafRefPath.Elem)-2].Key = map[string]string{}
+			}
+			// add the value as a key value under the last elements name to the one before last elemnt key list
+			leafRefPath.Elem[len(leafRefPath.Elem)-2].Key[leafRefPath.Elem[len(leafRefPath.Elem)-1].Name] = value
+			// remove the last elem, we now have the key value stored in the one before last
+			leafRefPath.Elem = leafRefPath.Elem[:len(leafRefPath.Elem)-1]
+			return nil
+		}
+	}
 
 	// TODO: update when stored values are not stringVal anymore
-	data, err := d.getValidationClient().GetValue(ctx, candidate, p)
+	data, err := d.getValidationClient().GetValue(ctx, candidate, leafRefPath)
 	if err != nil {
 		return err
 	}
