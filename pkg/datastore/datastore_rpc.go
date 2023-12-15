@@ -381,11 +381,21 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, cand
 					// get leafRef value
 					leafRefValue := pe.GetKey()[keySchema.GetName()]
 
-					lrefDdcpbPath, err := utils.ParsePath(leafRefPath)
+					lrefSdcpbPath, err := utils.ParsePath(leafRefPath)
 					if err != nil {
 						return err
 					}
-					err = d.resolveLeafref(ctx, candidate, lrefDdcpbPath, leafRefValue)
+					// if it contains "./" or "../" like any relative path stuff
+					// we need to resolve that
+					if strings.Contains(leafRefPath, "./") {
+						// make leafref path absolute
+						lrefSdcpbPath, err = makeLeafRefAbs(upd.GetPath(), lrefSdcpbPath, upd.GetValue().GetStringVal())
+						if err != nil {
+							return err
+						}
+					}
+
+					err = d.resolveLeafref(ctx, candidate, lrefSdcpbPath, leafRefValue)
 					if err != nil {
 						return err
 					}
@@ -409,7 +419,7 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, cand
 				// we need to resolve that
 				if strings.Contains(leafRefPath, "./") {
 					// make leafref path absolute
-					lrefSdcpbPath, err = d.makeLeafRefAbs(ctx, upd.GetPath(), lrefSdcpbPath, upd.GetValue().GetStringVal())
+					lrefSdcpbPath, err = makeLeafRefAbs(upd.GetPath(), lrefSdcpbPath, upd.GetValue().GetStringVal())
 					if err != nil {
 						return err
 					}
@@ -434,7 +444,7 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, cand
 	}
 }
 
-func (d *Datastore) makeLeafRefAbs(ctx context.Context, base, lref *sdcpb.Path, value string) (*sdcpb.Path, error) {
+func makeLeafRefAbs(base, lref *sdcpb.Path, value string) (*sdcpb.Path, error) {
 	// create a result
 	result := &sdcpb.Path{
 		Elem: make([]*sdcpb.PathElem, 0, len(base.Elem)),
