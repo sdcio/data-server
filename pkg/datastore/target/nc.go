@@ -50,7 +50,12 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	}
 
 	// init a new XMLConfigBuilder for the pathfilter
-	pathfilterXmlBuilder := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, t.sbi.IncludeNS)
+	pathfilterXmlBuilder := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema,
+		&netconf.XMLConfigBuilderOpts{
+			HonorNamespace:         t.sbi.IncludeNS,
+			OperationWithNamespace: t.sbi.OperationWithNamespace,
+			UseOperationRemove:     t.sbi.UseOperationRemove,
+		})
 
 	// add all the requested paths to the document
 	for _, p := range req.Path {
@@ -94,12 +99,16 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 }
 
 func (t *ncTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
-
-	xmlCBDelete := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, t.sbi.IncludeNS)
+	xcbCfg := &netconf.XMLConfigBuilderOpts{
+		HonorNamespace:         t.sbi.IncludeNS,
+		OperationWithNamespace: t.sbi.OperationWithNamespace,
+		UseOperationRemove:     t.sbi.UseOperationRemove,
+	}
+	xmlCBDelete := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, xcbCfg)
 
 	// iterate over the delete array
-	for _, d := range req.Delete {
-		xmlCBDelete.Delete(ctx, d)
+	for _, p := range req.GetDelete() {
+		xmlCBDelete.Delete(ctx, p)
 	}
 
 	// iterate over the replace array
@@ -114,7 +123,7 @@ func (t *ncTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.S
 	// }
 	//
 
-	xmlCBAdd := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, t.sbi.IncludeNS)
+	xmlCBAdd := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, xcbCfg)
 
 	// iterate over the update array
 	for _, u := range req.Update {

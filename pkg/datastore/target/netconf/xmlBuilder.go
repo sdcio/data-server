@@ -9,23 +9,37 @@ import (
 	"github.com/iptecharch/data-server/pkg/schema"
 )
 
+const (
+	//
+	ncBase1_0 = "urn:ietf:params:xml:ns:netconf:base:1.0"
+	//
+	operationDelete = "delete"
+	operationRemove = "remove"
+)
+
 // XMLConfigBuilder is used to builds XML configuration or XML Filter documents
 // Via the use of a sdcpb.SchemaServerClient and the *sdcpb.Schema Namespace, Key and Type information
 // and a valid configuration or filter document can be crafted.
 type XMLConfigBuilder struct {
-	doc            *etree.Document
-	schemaClient   schema.Client
-	schema         *sdcpb.Schema
-	honorNamespace bool
+	cfg          *XMLConfigBuilderOpts
+	doc          *etree.Document
+	schemaClient schema.Client
+	schema       *sdcpb.Schema
+}
+
+type XMLConfigBuilderOpts struct {
+	HonorNamespace         bool
+	OperationWithNamespace bool
+	UseOperationRemove     bool
 }
 
 // NewXMLConfigBuilder returns a new XMLConfigBuilder instance
-func NewXMLConfigBuilder(ssc schema.Client, schema *sdcpb.Schema, honorNamespace bool) *XMLConfigBuilder {
+func NewXMLConfigBuilder(ssc schema.Client, schema *sdcpb.Schema, cfgOpts *XMLConfigBuilderOpts) *XMLConfigBuilder {
 	return &XMLConfigBuilder{
-		doc:            etree.NewDocument(),
-		schemaClient:   ssc,
-		schema:         schema,
-		honorNamespace: honorNamespace,
+		cfg:          cfgOpts,
+		doc:          etree.NewDocument(),
+		schemaClient: ssc,
+		schema:       schema,
 	}
 }
 
@@ -47,8 +61,18 @@ func (x *XMLConfigBuilder) Delete(ctx context.Context, p *sdcpb.Path) error {
 	if err != nil {
 		return err
 	}
+	operName := operationDelete
+	operKey := "operation"
+	if x.cfg.UseOperationRemove {
+		operName = operationRemove
+	}
+	// add base1.0 as xmlns:nc attr
+	if x.cfg.OperationWithNamespace {
+		elem.CreateAttr("xmlns:nc", ncBase1_0)
+		operKey = "nc:" + operKey
+	}
 	// add the delete operation attribute
-	elem.CreateAttr("operation", "delete")
+	elem.CreateAttr(operKey, operName)
 
 	return nil
 }
@@ -56,7 +80,7 @@ func (x *XMLConfigBuilder) Delete(ctx context.Context, p *sdcpb.Path) error {
 // fastForward takes the *sdcpb.Path p and iterates through the xml document along this path.
 // It will create all the missing elements along the path in the document, as well as creating the provided
 // key elements. Finally the element that represents the last part of the path is returned to the caller.
-// If x.honorNamespace is set to true, it will also add "xmlns" attributes.
+// If x.cfg.honorNamespace is set to true, it will also add "xmlns" attributes.
 func (x *XMLConfigBuilder) fastForward(ctx context.Context, p *sdcpb.Path) (*etree.Element, error) {
 	parent := &x.doc.Element
 	actualNamespace := ""
@@ -82,7 +106,7 @@ func (x *XMLConfigBuilder) fastForward(ctx context.Context, p *sdcpb.Path) (*etr
 			// if there is no such element, create it
 			//elemName := toNamespacedName(pe.Name, namespace)
 			newChild = parent.CreateElement(pe.Name)
-			if x.honorNamespace && namespaceUri != actualNamespace {
+			if x.cfg.HonorNamespace && namespaceUri != actualNamespace {
 				newChild.CreateAttr("xmlns", namespaceUri)
 			}
 			// with all its keys
