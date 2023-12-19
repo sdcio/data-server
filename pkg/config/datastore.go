@@ -28,6 +28,10 @@ type SBI struct {
 	IncludeNS bool `yaml:"include-ns,omitempty" json:"include-ns,omitempty"`
 	// sets the preferred NC version: 1.0 or 1.1
 	PreferredNCVersion string `yaml:"preferred-nc-version,omitempty" json:"preferred-nc-version,omitempty"`
+	// add a namespace when specifying a netconf operation such as 'delete' or 'remove'
+	OperationWithNamespace bool `yaml:"operation-with-namespace,omitempty" json:"operation-with-namespace,omitempty"`
+	// use 'remove' operation instead of 'delete'
+	UseOperationRemove bool `yaml:"use-operation-remove,omitempty" json:"use-operation-remove,omitempty"`
 	// ConnectRetry
 	ConnectRetry time.Duration `yaml:"connect-retry,omitempty" json:"connect-retry,omitempty"`
 	// Timeout

@@ -81,9 +81,11 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 			return nil, status.Errorf(codes.InvalidArgument, "datastore %s already exists", name)
 		}
 		sbi := &config.SBI{
-			Type:      req.GetTarget().GetType(),
-			Address:   req.GetTarget().GetAddress(),
-			IncludeNS: req.GetTarget().GetIncludeNs(),
+			Type:                   req.GetTarget().GetType(),
+			Address:                req.GetTarget().GetAddress(),
+			IncludeNS:              req.GetTarget().GetIncludeNs(),
+			OperationWithNamespace: req.GetTarget().GetOperationWithNs(),
+			UseOperationRemove:     req.GetTarget().GetUseOperationRemove(),
 		}
 		if req.GetTarget().GetTls() != nil {
 			sbi.TLS = &config.TLS{
