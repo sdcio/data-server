@@ -22,7 +22,7 @@ var trace bool
 var stop bool
 
 func main() {
-	pflag.StringVarP(&configFile, "config", "c", "data-server.yaml", "config file path")
+	pflag.StringVarP(&configFile, "config", "c", "", "config file path")
 	pflag.BoolVarP(&debug, "debug", "d", false, "set log level to DEBUG")
 	pflag.BoolVarP(&trace, "trace", "t", false, "set log level to TRACE")
 	pflag.Parse()
