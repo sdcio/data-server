@@ -38,22 +38,25 @@ type TLS struct {
 }
 
 func New(file string) (*Config, error) {
-	b, err := os.ReadFile(file)
-	if err != nil {
-		return nil, err
-	}
 	c := new(Config)
-	err = yaml.Unmarshal(b, c)
-	if err != nil {
-		return nil, err
+	if file != "" {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			return nil, err
+		}
+
+		err = yaml.Unmarshal(b, c)
+		if err != nil {
+			return nil, err
+		}
 	}
-	err = c.validateSetDefaults()
+	err := c.validateSetDefaults()
 	return c, err
 }
 
 func (c *Config) validateSetDefaults() error {
 	if c.GRPCServer == nil {
-		return errors.New("grpc-server definition is required")
+		c.GRPCServer = &GRPCServer{}
 	}
 	if c.GRPCServer.Address == "" {
 		c.GRPCServer.Address = defaultGRPCAddress
@@ -69,9 +72,15 @@ func (c *Config) validateSetDefaults() error {
 		return errors.New("cannot define local schemas and a remote schema server at the same time")
 	}
 	if c.Schemas == nil && c.SchemaServer == nil {
-		return errors.New("missing `schemas` or `schema-server` sections")
+		c.Schemas = make([]*schemaConfig.SchemaConfig, 0)
+		if c.GRPCServer.SchemaServer == nil {
+			c.GRPCServer.SchemaServer = &SchemaServer{
+				Enabled:          true,
+				SchemasDirectory: "/schemas",
+			}
+		}
 	}
-	if c.SchemaServer == nil && (c.GRPCServer.SchemaServer == nil || !c.GRPCServer.SchemaServer.Enabled) {
+	if c.Schemas == nil && (c.GRPCServer.SchemaServer == nil || !c.GRPCServer.SchemaServer.Enabled) {
 		return errors.New("schema-server RPCs cannot be exposed if the schema server is not enabled")
 	}
 	var err error
