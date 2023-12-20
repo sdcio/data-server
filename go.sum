@@ -137,8 +137,8 @@ github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/iptecharch/cache v0.0.26 h1:uf4qWyCbUvzk5QP4n7YmiZH9lID+oy/+oC5jlP7ox+0=
 github.com/iptecharch/cache v0.0.26/go.mod h1:rDVQsB/tTLCWomfvRgM147uSP3wMiRI4zAay+WtDE6g=
-github.com/iptecharch/schema-server v0.0.9 h1:OsvXrzRV0WnpMLD/70rWE3YidzvpxKFvEDMwkfi/Mcs=
-github.com/iptecharch/schema-server v0.0.9/go.mod h1:HqK2HXEbxCFkI2HOG7TsQbxLDHC4rY8XTkJaRNWI6x4=
+github.com/iptecharch/schema-server v0.0.10 h1:Ns0jm+a7jftyPQl5YdCrP9ilWoadbTvVU/0CuW6Yr5U=
+github.com/iptecharch/schema-server v0.0.10/go.mod h1:HqK2HXEbxCFkI2HOG7TsQbxLDHC4rY8XTkJaRNWI6x4=
 github.com/iptecharch/sdc-protos v0.0.15 h1:7+zy5UM0USmXkXGDemDXcbcbtoI3fKhFcH7scZoybTg=
 github.com/iptecharch/sdc-protos v0.0.15/go.mod h1:stMHinsJNfsg/KbAe2HsSwU4fnS6ub1VZzLcG+IHFJA=
 github.com/iptecharch/yang-parser v0.0.3 h1:sfmGIWdhEeql8RXUF/nD0/Z4Td9Pbhk76jVC/VXSSNI=
