@@ -2,8 +2,15 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"time"
+)
+
+const (
+	sbiNOOP    = "noop"
+	sbiNETCONF = "netconf"
+	sbiGNMI    = "gnmi"
 )
 
 type DatastoreConfig struct {
@@ -18,8 +25,6 @@ type SBI struct {
 	Type string `yaml:"type,omitempty" json:"type,omitempty"`
 	// gNMI or netconf address
 	Address string `yaml:"address,omitempty" json:"address,omitempty"`
-	// netconf port
-	Port int `yaml:"port,omitempty" json:"port,omitempty"`
 	// TLS config
 	TLS *TLS `yaml:"tls,omitempty" json:"tls,omitempty"`
 	// Target SBI credentials
@@ -84,29 +89,32 @@ func (ds *DatastoreConfig) ValidateSetDefaults() error {
 }
 
 func (s *SBI) validateSetDefaults() error {
-	if s.Type == "noop" {
+	switch s.Type {
+	case sbiNOOP:
 		return nil
+	case sbiNETCONF:
+	case sbiGNMI:
+	default:
+		return fmt.Errorf("unknown sbi type: %q", s.Type)
 	}
+
 	if s.Address == "" {
 		return errors.New("missing SBI address")
 	}
+
+	_, _, err := net.SplitHostPort(s.Address)
+	if err != nil {
+		return err
+	}
+
 	if s.ConnectRetry < time.Second {
 		s.ConnectRetry = time.Second
 	}
-	switch s.Type {
-	case "gnmi":
-		return nil
-	case "nc":
-		if s.Port <= 0 {
-			s.Port = defaultNCPort
-		}
-		if s.Timeout <= 0 {
-			s.Timeout = defaultTimeout
-		}
-		return nil
-	default:
-		return nil
+	
+	if s.Timeout <= 0 {
+		s.Timeout = defaultTimeout
 	}
+	return nil
 }
 
 func (s *Sync) validateSetDefaults() error {

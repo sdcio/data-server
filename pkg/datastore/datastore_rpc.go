@@ -286,7 +286,7 @@ MAIN:
 			return
 		case syncup := <-d.synCh:
 			if syncup.Start {
-				log.Debugf("%s: netconf sync start", d.Name())
+				log.Debugf("%s: sync start", d.Name())
 				for {
 					pruneID, err = d.cacheClient.CreatePruneID(ctx, d.Name(), syncup.Force)
 					if err != nil {
@@ -298,7 +298,7 @@ MAIN:
 				}
 			}
 			if syncup.End && pruneID != "" {
-				log.Debugf("%s: netconf sync end", d.Name())
+				log.Debugf("%s: sync end", d.Name())
 				for {
 					err = d.cacheClient.ApplyPrune(ctx, d.Name(), pruneID)
 					if err != nil {
@@ -308,12 +308,12 @@ MAIN:
 					}
 					break
 				}
-				log.Debugf("%s: netconf sync resetting pruneID", d.Name())
+				log.Debugf("%s: sync resetting pruneID", d.Name())
 				pruneID = ""
 				continue // MAIN FOR loop
 			}
 			// a regular notification
-			log.Debugf("%s: netconf acquire semaphore", d.Name())
+			log.Debugf("%s: sync acquire semaphore", d.Name())
 			err = sem.Acquire(ctx, 1)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
@@ -323,7 +323,7 @@ MAIN:
 				log.Errorf("failed to acquire semaphore: %v", err)
 				continue
 			}
-			log.Debugf("%s: netconf acquired semaphore", d.Name())
+			log.Debugf("%s: sync acquired semaphore", d.Name())
 			go d.storeSyncMsg(ctx, syncup, sem)
 		}
 	}
