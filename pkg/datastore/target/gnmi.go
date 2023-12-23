@@ -2,6 +2,7 @@ package target
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +15,8 @@ import (
 	"github.com/openconfig/gnmic/pkg/types"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/iptecharch/data-server/pkg/config"
 	"github.com/iptecharch/data-server/pkg/utils"
@@ -24,7 +27,8 @@ const (
 )
 
 type gnmiTarget struct {
-	target *gtarget.Target
+	target    *gtarget.Target
+	encodings map[gnmi.Encoding]struct{}
 }
 
 func newGNMITarget(ctx context.Context, name string, cfg *config.SBI, opts ...grpc.DialOption) (*gnmiTarget, error) {
@@ -48,13 +52,21 @@ func newGNMITarget(ctx context.Context, name string, cfg *config.SBI, opts ...gr
 		tc.Insecure = pointer.ToBool(true)
 	}
 	gt := &gnmiTarget{
-		target: gtarget.NewTarget(tc),
+		target:    gtarget.NewTarget(tc),
+		encodings: make(map[gnmi.Encoding]struct{}),
 	}
 	err := gt.target.CreateGNMIClient(ctx, opts...)
 	if err != nil {
 		return nil, err
 	}
-	// go gt.Sync(ctx, syncCh)
+	// discover supported encodings
+	capResp, err := gt.target.Capabilities(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, enc := range capResp.GetSupportedEncodings() {
+		gt.encodings[enc] = struct{}{}
+	}
 	return gt, nil
 }
 
@@ -100,20 +112,20 @@ func (t *gnmiTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb
 		Update:  make([]*gnmi.Update, 0, len(req.GetUpdate())),
 	}
 	for _, del := range req.GetDelete() {
-		setReq.Delete = append(setReq.Delete, utils.ToGNMIPath(del))
+		gdel := utils.ToGNMIPath(del)
+		setReq.Delete = append(setReq.Delete, gdel)
 	}
 	for _, repl := range req.GetReplace() {
-		setReq.Replace = append(setReq.Replace, &gnmi.Update{
-			Path: utils.ToGNMIPath(repl.GetPath()),
-			Val:  utils.ToGNMITypedValue(repl.GetValue()),
-		})
+		grepl := t.convertKeyUpdates(repl)
+		setReq.Replace = append(setReq.Replace, grepl)
 	}
 	for _, upd := range req.GetUpdate() {
-		setReq.Update = append(setReq.Update, &gnmi.Update{
-			Path: utils.ToGNMIPath(upd.GetPath()),
-			Val:  utils.ToGNMITypedValue(upd.GetValue()),
-		})
+		gupd := t.convertKeyUpdates(upd)
+		setReq.Update = append(setReq.Update, gupd)
 	}
+
+	log.Debugf("gnmi set request:\n%s", prototext.Format(setReq))
+
 	rsp, err := t.target.Set(ctx, setReq)
 	if err != nil {
 		return nil, err
@@ -264,4 +276,51 @@ func (t *gnmiTarget) streamSync(ctx context.Context, gnmiSync *config.SyncProtoc
 	log.Infof("sync %q: subRequest: %v", gnmiSync.Name, subReq)
 	go t.target.Subscribe(ctx, subReq, gnmiSync.Name)
 	return nil
+}
+
+func (t *gnmiTarget) convertKeyUpdates(upd *sdcpb.Update) *gnmi.Update {
+	if !pathIsKeyAsLeaf(upd.GetPath()) {
+		return &gnmi.Update{
+			Path: utils.ToGNMIPath(upd.GetPath()),
+			Val:  utils.ToGNMITypedValue(upd.GetValue()),
+		}
+	}
+	// convert key as leaf to jsonVal
+	numPElem := len(upd.GetPath().GetElem())
+	key := upd.GetPath().GetElem()[numPElem-1].GetName()
+	valm := map[string]string{
+		key: upd.GetValue().GetStringVal(),
+	}
+	b, _ := json.Marshal(valm)
+	var val *sdcpb.TypedValue
+	if _, ok := t.encodings[gnmi.Encoding_JSON_IETF]; ok {
+		val = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonIetfVal{
+			JsonIetfVal: b,
+		}}
+	} else if _, ok := t.encodings[gnmi.Encoding_JSON]; ok {
+		val = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{
+			JsonVal: b,
+		}}
+	}
+
+	// modify path
+	p := proto.Clone(upd.GetPath()).(*sdcpb.Path)
+	// p := upd.GetPath()
+	p.Elem = p.GetElem()[:numPElem-1]
+	// TODO: REVISIT: remove key from the last elem
+	// delete(p.GetElem()[len(upd.GetPath().GetElem())-1].Key, key)
+	return &gnmi.Update{
+		Path: utils.ToGNMIPath(p),
+		Val:  utils.ToGNMITypedValue(val),
+	}
+}
+
+func pathIsKeyAsLeaf(p *sdcpb.Path) bool {
+	numPElem := len(p.GetElem())
+	if numPElem < 2 {
+		return false
+	}
+
+	_, ok := p.GetElem()[numPElem-2].GetKey()[p.GetElem()[numPElem-1].GetName()]
+	return ok
 }

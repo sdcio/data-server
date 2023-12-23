@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	numParallelReaders = 10
+	maxNumParallelReaders = 10
 )
 
 type localCache struct {
@@ -138,62 +138,70 @@ func (c *localCache) ReadCh(ctx context.Context, name string, opts *Opts, paths 
 	if opts == nil {
 		opts = &Opts{}
 	}
-	outCh := make(chan *Update)
+	outCh := make(chan *Update, 10)
+	numPaths := len(paths)
+	//
+	numReaders := maxNumParallelReaders
+	if numPaths < numReaders {
+		numReaders = numPaths
+	}
 
 	wg := new(sync.WaitGroup)
-	wg.Add(numParallelReaders)
+	wg.Add(numReaders)
 
 	go func() {
 		wg.Wait()
 		close(outCh)
 	}()
 	// TODO: use period
-	pCh := make(chan []string, len(paths))
+	pCh := make(chan []string, numPaths)
 	for _, p := range paths {
 		pCh <- p
 	}
 	close(pCh)
 
-	for i := 0; i < numParallelReaders; i++ {
+	for i := 0; i < numReaders; i++ {
 		go func() {
 			defer wg.Done()
-			select {
-			case <-ctx.Done():
-				return
-			case p, ok := <-pCh:
-				if !ok {
+		MAIN:
+			for {
+				select {
+				case <-ctx.Done():
 					return
-				}
-				ch, err := c.c.ReadValue(ctx, name, &cache.Opts{
-					Store:         getStore(opts.Store),
-					Path:          p,
-					Owner:         opts.Owner,
-					Priority:      opts.Priority,
-					PriorityCount: opts.PriorityCount,
-					KeysOnly:      opts.KeysOnly,
-				})
-				if err != nil {
-					log.Errorf("failed to read path %v: %v", p, err)
-					return
-				}
-				for {
-					select {
-					case <-ctx.Done():
+				case p, ok := <-pCh:
+					if !ok {
 						return
-					case upd, ok := <-ch:
-						if !ok {
+					}
+					ch, err := c.c.ReadValue(ctx, name, &cache.Opts{
+						Store:         getStore(opts.Store),
+						Path:          p,
+						Owner:         opts.Owner,
+						Priority:      opts.Priority,
+						PriorityCount: opts.PriorityCount,
+						KeysOnly:      opts.KeysOnly,
+					})
+					if err != nil {
+						log.Errorf("failed to read path %v: %v", p, err)
+						return
+					}
+					for {
+						select {
+						case <-ctx.Done():
 							return
-						}
-						if upd == nil {
-							continue
-						}
-
-						outCh <- &Update{
-							path:     upd.P,
-							value:    upd.V,
-							priority: upd.Priority,
-							owner:    upd.Owner,
-							ts:       int64(upd.Timestamp),
+						case e, ok := <-ch:
+							if !ok {
+								continue MAIN // ReadValue done, go to next path
+							}
+							if e == nil {
+								continue //
+							}
+							outCh <- &Update{
+								path:     e.P,
+								value:    e.V,
+								priority: e.Priority,
+								owner:    e.Owner,
+								ts:       int64(e.Timestamp),
+							}
 						}
 					}
 				}

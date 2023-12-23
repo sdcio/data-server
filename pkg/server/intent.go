@@ -34,7 +34,7 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 
 func (s *Server) SetIntent(ctx context.Context, req *sdcpb.SetIntentRequest) (*sdcpb.SetIntentResponse, error) {
 	pr, _ := peer.FromContext(ctx)
-	log.Debugf("received GetIntent request %v from peer %s", req, pr.Addr.String())
+	log.Debugf("received SetIntent request %v from peer %s", req, pr.Addr.String())
 
 	if req.GetName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")

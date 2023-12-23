@@ -136,6 +136,10 @@ func (d *Datastore) applyIntent(ctx context.Context, candidateName string, prior
 	log.Debugf("%s: validating must statements candidate %s", d.Name(), sdreq.GetDatastore())
 	// validate MUST statements
 	for _, upd := range sdreq.GetUpdate() {
+		// Workaround: do not validate key as leaf for now
+		if pathIsKeyAsLeaf(upd.GetPath()) {
+			continue
+		}
 		log.Debugf("%s: %s validating must statement on path: %v", d.Name(), candidateName, upd.GetPath())
 		_, err = d.validateMustStatement(ctx, candidateName, upd.GetPath())
 		if err != nil {
@@ -150,6 +154,7 @@ func (d *Datastore) applyIntent(ctx context.Context, candidateName string, prior
 			return err
 		}
 	}
+
 	// push updates to sbi
 	sbiSet = &sdcpb.SetDataRequest{
 		Update: sdreq.GetUpdate(),
@@ -157,7 +162,7 @@ func (d *Datastore) applyIntent(ctx context.Context, candidateName string, prior
 	}
 	log.Debugf("datastore %s/%s applyIntent:\n%s", d.config.Name, candidateName, prototext.Format(sbiSet))
 
-	log.Debugf("datastore %s/%s applyIntent: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d",
+	log.Infof("datastore %s/%s applyIntent: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d",
 		d.config.Name, candidateName, len(sbiSet.GetUpdate()), len(sbiSet.GetReplace()), len(sbiSet.GetDelete()))
 
 	// send set request only if there are updates and/or deletes
