@@ -41,7 +41,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		"intent":   req.GetIntent(),
 		"priority": req.GetPriority(),
 	})
-
+	logger.Logger.SetLevel(log.GetLevel())
 	logger.Debugf("set intent update start")
 	defer logger.Debugf("set intent update end")
 
@@ -108,6 +108,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	// go through all updates from the intent to figure out
 	// if they need to be applied based on the intent priority.
 	logger.Debugf("reading intent paths to be updated from intended store; looking for the highest priority values")
+
 	for _, upd := range ic.newUpdates {
 		// build complete path (as []string) from update path
 		cp, err := utils.CompletePath(nil, upd.GetPath())
@@ -395,7 +396,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	}
 
 	// add paths ending with keys to updates
-	ic.newUpdates = d.updatesAddKeysAsLeaves(ic.newUpdates)
+	//ic.newUpdates = d.updatesAddKeysAsLeaves(ic.newUpdates)
 	cacheUpdates := make([]*cache.Update, 0, len(ic.newUpdates))
 	for _, upd := range ic.newUpdates {
 		cup, err := d.cacheClient.NewUpdate(upd)
@@ -479,7 +480,7 @@ func (d *Datastore) newIntentContext(ctx context.Context, req *sdcpb.SetIntentRe
 		removedPathsMap: map[string]struct{}{},
 	}
 	// expand intent updates values
-	ic.newUpdates, err = d.expandUpdates(ctx, req.GetUpdate())
+	ic.newUpdates, err = d.expandUpdates(ctx, req.GetUpdate(), true)
 	if err != nil {
 		return nil, err
 	}
