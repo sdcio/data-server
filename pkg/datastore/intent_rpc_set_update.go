@@ -105,7 +105,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		ccp = append(ccp, cp)
 	}
 	allCurrentCacheEntries := d.readNewUpdatesHighestPriority(ctx, ccp)
-	// go through all updates from the intent to figure out
+	// PH1: go through all updates from the intent to figure out
 	// if they need to be applied based on the intent priority.
 	logger.Debugf("reading intent paths to be updated from intended store; looking for the highest priority values")
 
@@ -116,11 +116,6 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 			return err
 		}
 		// get the current highest priority value(s) for this path
-		// currentCacheEntries := d.cacheClient.Read(ctx, d.Config().Name,
-		// 	&cache.Opts{
-		// 		Store: cachepb.Store_INTENDED,
-		// 	}, [][]string{cp},
-		// 	0)
 		currentCacheEntries := allCurrentCacheEntries[strings.Join(cp, ",")]
 		logger.Debugf("highest update (p=updates): %v=%v", cp, currentCacheEntries)
 		// check if an update with "higher" priority exists
@@ -136,8 +131,8 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 			switch {
 			case currentCacheEntries[0].Priority() < req.GetPriority():
 				logger.Debugf("path %v | current intended value has a `higher` priority that the intent: current intended value goes in the setData update", cp)
-				// there is a current value with higher priority
-				// add it to the candidate to allow for proper validation
+				// there is a current value with higher priority.
+				// add it to the candidate to allow for proper validation.
 				upd, err := d.cacheUpdateToUpdate(ctx, currentCacheEntries[0])
 				if err != nil {
 					return err
@@ -145,7 +140,8 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 				setDataReq.Update = append(setDataReq.Update, upd)
 			case currentCacheEntries[0].Priority() == req.GetPriority():
 				logger.Debugf("path %v | current intended value has an equal priority to the intent: goes in the setData update and delete", cp)
-				// exists with same priority, apply current
+				// exists with same priority, apply current:
+				// TODO: keep current or overwrite
 				setDataReq.Update = append(setDataReq.Update, upd)
 				// add delete to remove previous value
 				// setDataReq.Delete = append(setDataReq.Delete, upd.GetPath())

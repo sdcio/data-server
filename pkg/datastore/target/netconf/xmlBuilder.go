@@ -84,7 +84,6 @@ func (x *XMLConfigBuilder) Delete(ctx context.Context, p *sdcpb.Path) error {
 func (x *XMLConfigBuilder) fastForward(ctx context.Context, p *sdcpb.Path) (*etree.Element, error) {
 	parent := &x.doc.Element
 	actualNamespace := ""
-
 	for peIdx, pe := range p.Elem {
 
 		//namespace := x.namespaces.Resolve(namespaceUri)
@@ -140,7 +139,10 @@ func (x *XMLConfigBuilder) Add(ctx context.Context, p *sdcpb.Path, v *sdcpb.Type
 		return err
 	}
 	// set the respective value
-	elem.CreateText(value)
+	// use SetText instead of CreateText to properly handle paths
+	// with a key as leaf.
+	elem.SetText(value)
+	// elem.CreateText(value)
 
 	return nil
 }
