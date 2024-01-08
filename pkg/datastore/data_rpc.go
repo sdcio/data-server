@@ -114,17 +114,17 @@ func (d *Datastore) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.
 
 		// expand json/json_ietf values
 		for _, upd := range req.GetReplace() {
-			rs, err := d.expandUpdate(ctx, upd)
+			rs, err := d.expandUpdate(ctx, upd, false)
 			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+				return nil, status.Errorf(codes.InvalidArgument, "failed expand replace: %v", err)
 			}
 			replaces = append(replaces, rs...)
 		}
 
 		for _, upd := range req.GetUpdate() {
-			rs, err := d.expandUpdate(ctx, upd)
+			rs, err := d.expandUpdate(ctx, upd, false)
 			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+				return nil, status.Errorf(codes.InvalidArgument, "failed expand update: %v", err)
 			}
 			updates = append(updates, rs...)
 		}
@@ -430,7 +430,10 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *sdcpb.Update) error
 	}
 	switch obj := rsp.GetSchema().Schema.(type) {
 	case *sdcpb.SchemaElem_Container:
-		return fmt.Errorf("cannot set value on container %q object", obj.Container.Name)
+		if !pathIsKeyAsLeaf(upd.GetPath()) {
+			return fmt.Errorf("cannot set value on container %q object", obj.Container.Name)
+		}
+		// TODO: validate key as leaf
 	case *sdcpb.SchemaElem_Field:
 		if obj.Field.IsState {
 			return fmt.Errorf("cannot set state field: %v", obj.Field.Name)
@@ -886,7 +889,7 @@ func equalTypedValues(v1, v2 *sdcpb.TypedValue) bool {
 	return true
 }
 
-func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
+func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update, includeKeysAsLeaf bool) ([]*sdcpb.Update, error) {
 	rsp, err := d.schemaClient.GetSchema(ctx,
 		&sdcpb.GetSchemaRequest{
 			Path:   upd.GetPath(),
@@ -900,12 +903,20 @@ func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 	case *sdcpb.SchemaElem_Container:
 		log.Debugf("datastore %s: expanding update %v on container %q", d.config.Name, upd, rsp.Container.Name)
 		var v interface{}
-		err := json.Unmarshal(upd.GetValue().GetJsonVal(), &v)
+		var err error
+		switch upd.GetValue().Value.(type) {
+		case *sdcpb.TypedValue_JsonIetfVal:
+			err = json.Unmarshal(upd.GetValue().GetJsonIetfVal(), &v)
+		case *sdcpb.TypedValue_JsonVal:
+			err = json.Unmarshal(upd.GetValue().GetJsonVal(), &v)
+		default:
+			return []*sdcpb.Update{upd}, nil
+		}
 		if err != nil {
 			return nil, err
 		}
 		log.Debugf("datastore %s: update has jsonVal: %T, %v\n", d.config.Name, v, v)
-		rs, err := d.expandContainerValue(ctx, upd.GetPath(), v, rsp)
+		rs, err := d.expandContainerValue(ctx, upd.GetPath(), v, rsp, includeKeysAsLeaf)
 		if err != nil {
 			return nil, err
 		}
@@ -920,10 +931,10 @@ func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 	return nil, nil
 }
 
-func (d *Datastore) expandUpdates(ctx context.Context, updates []*sdcpb.Update) ([]*sdcpb.Update, error) {
+func (d *Datastore) expandUpdates(ctx context.Context, updates []*sdcpb.Update, includeKeysAsLeaf bool) ([]*sdcpb.Update, error) {
 	outUpdates := make([]*sdcpb.Update, 0, len(updates))
 	for _, upd := range updates {
-		expUpds, err := d.expandUpdate(ctx, upd)
+		expUpds, err := d.expandUpdate(ctx, upd, includeKeysAsLeaf)
 		if err != nil {
 			return nil, err
 		}
@@ -932,7 +943,7 @@ func (d *Datastore) expandUpdates(ctx context.Context, updates []*sdcpb.Update) 
 	return outUpdates, nil
 }
 
-func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container) ([]*sdcpb.Update, error) {
+func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container, includeKeysAsLeaf bool) ([]*sdcpb.Update, error) {
 	log.Debugf("expanding jsonVal %T | %v | %v", jv, jv, p)
 	switch jv := jv.(type) {
 	case string:
@@ -964,6 +975,19 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 					p.GetElem()[len(p.GetElem())-1].Key = make(map[string]string)
 				}
 				p.GetElem()[len(p.GetElem())-1].Key[k.Name] = fmt.Sprintf("%v", v)
+				if includeKeysAsLeaf {
+					np := proto.Clone(p).(*sdcpb.Path)
+					np.Elem = append(np.Elem, &sdcpb.PathElem{Name: k.Name})
+					upd := &sdcpb.Update{
+						Path: np,
+						Value: &sdcpb.TypedValue{
+							Value: &sdcpb.TypedValue_StringVal{
+								StringVal: fmt.Sprintf("%v", v),
+							},
+						},
+					}
+					upds = append(upds, upd)
+				}
 				continue
 			}
 			// if key is not in the value it must be set in the path
@@ -1010,7 +1034,7 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				}
 				switch rsp := rsp.GetSchema().Schema.(type) {
 				case *sdcpb.SchemaElem_Container:
-					rs, err := d.expandContainerValue(ctx, np, v, rsp)
+					rs, err := d.expandContainerValue(ctx, np, v, rsp, includeKeysAsLeaf)
 					if err != nil {
 						return nil, err
 					}
@@ -1028,7 +1052,7 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		upds := make([]*sdcpb.Update, 0)
 		for _, v := range jv {
 			np := proto.Clone(p).(*sdcpb.Path)
-			r, err := d.expandContainerValue(ctx, np, v, cs)
+			r, err := d.expandContainerValue(ctx, np, v, cs, includeKeysAsLeaf)
 			if err != nil {
 				return nil, err
 			}

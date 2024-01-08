@@ -18,7 +18,7 @@ import (
 const (
 	defaultGRPCAddress    = ":56000"
 	defaultMaxRecvMsgSize = 4 * 1024 * 1024
-	defaultRPCTimeout     = 5 * time.Minute
+	defaultRPCTimeout     = 30 * time.Minute
 )
 
 type Config struct {
