@@ -17,7 +17,7 @@ require (
 	github.com/openconfig/gnmi v0.10.0
 	github.com/openconfig/gnmic/pkg/api v0.1.1
 	github.com/openconfig/gnmic/pkg/target v0.1.1
-	github.com/openconfig/gnmic/pkg/types v0.1.1
+	github.com/openconfig/gnmic/pkg/types v0.1.2
 	github.com/prometheus/client_golang v1.17.0
 	github.com/scrapli/scrapligo v1.2.0
 	github.com/sirupsen/logrus v1.9.3
