@@ -2,6 +2,7 @@ package netconf
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/beevik/etree"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
@@ -97,7 +98,7 @@ func (x *XMLConfigBuilder) fastForward(ctx context.Context, p *sdcpb.Path) (*etr
 		var newChild *etree.Element
 		if newChild = parent.FindElementPath(path); newChild == nil {
 
-			namespaceUri, err := x.ResolveNamespace(ctx, p, peIdx)
+			namespaceUri, err := x.resolveNamespace(ctx, p, peIdx)
 			if err != nil {
 				return nil, err
 			}
@@ -159,9 +160,14 @@ func (x *XMLConfigBuilder) AddElement(ctx context.Context, p *sdcpb.Path) (*etre
 	return elem, nil
 }
 
-// ResolveNamespace takes a *sdcpb.Path and a pathElementIndex (peIdx). It returns the namespace of
+// resolveNamespace takes a *sdcpb.Path and a pathElementIndex (peIdx). It returns the namespace of
 // the element on position peIdx of the *sdcpb.path p
-func (x *XMLConfigBuilder) ResolveNamespace(ctx context.Context, p *sdcpb.Path, peIdx int) (string, error) {
+func (x *XMLConfigBuilder) resolveNamespace(ctx context.Context, p *sdcpb.Path, peIdx int) (string, error) {
+
+	if peIdx+1 > len(p.Elem) {
+		return "", fmt.Errorf("peIdx exceeds limit %d for path %s", len(p.Elem), p.String())
+	}
+
 	// Perform schema queries
 	sr, err := x.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
 		Path: &sdcpb.Path{

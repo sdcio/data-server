@@ -141,3 +141,68 @@ func Test_pathElem2Xpath(t *testing.T) {
 // 	})
 // }
 //}
+
+func Test_getNamespaceFromGetSchemaResponse(t *testing.T) {
+	tests := []struct {
+		name string
+		sr   *sdcpb.GetSchemaResponse
+		want string
+	}{
+
+		{
+			name: "ContainerSchema",
+			sr: &sdcpb.GetSchemaResponse{
+				Schema: &sdcpb.SchemaElem{
+					Schema: &sdcpb.SchemaElem_Container{
+						Container: &sdcpb.ContainerSchema{
+							Namespace: "Container",
+						},
+					},
+				},
+			},
+			want: "Container",
+		},
+		{
+			name: "FieldSchema",
+			sr: &sdcpb.GetSchemaResponse{
+				Schema: &sdcpb.SchemaElem{
+					Schema: &sdcpb.SchemaElem_Field{
+						Field: &sdcpb.LeafSchema{
+							Namespace: "Field",
+						},
+					},
+				},
+			},
+			want: "Field",
+		},
+		{
+			name: "LeafListSchema",
+			sr: &sdcpb.GetSchemaResponse{
+				Schema: &sdcpb.SchemaElem{
+					Schema: &sdcpb.SchemaElem_Leaflist{
+						Leaflist: &sdcpb.LeafListSchema{
+							Namespace: "LeafList",
+						},
+					},
+				},
+			},
+			want: "LeafList",
+		},
+		{
+			name: "Unknown",
+			sr: &sdcpb.GetSchemaResponse{
+				Schema: &sdcpb.SchemaElem{
+					Schema: nil,
+				},
+			},
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := getNamespaceFromGetSchemaResponse(tt.sr); got != tt.want {
+				t.Errorf("getNamespaceFromGetSchemaResponse() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
