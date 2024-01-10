@@ -56,3 +56,9 @@ mocks-gen: mocks-rm ## Generate mocks for all the defined interfaces.
 .PHONY: mocks-rm
 mocks-rm: ## remove generated mocks
 	rm -rf $(MOCKDIR)/*
+
+.PHONY: unit-tests
+unit-tests: mocks-gen
+	rm -rf /tmp/sdcio/dataserver-tests/coverage
+	mkdir -p /tmp/sdcio/dataserver-tests/coverage
+	CGO_ENABLED=1 go test -cover -race ./... -v -covermode atomic -args -test.gocoverdir="/tmp/sdcio/dataserver-tests/coverage"

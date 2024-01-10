@@ -9,7 +9,6 @@ import (
 	"github.com/beevik/etree"
 	"github.com/google/go-cmp/cmp"
 	"github.com/iptecharch/data-server/mocks/mockschema"
-	schema_server "github.com/iptecharch/sdc-protos/sdcpb"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
@@ -22,7 +21,7 @@ const (
 )
 
 var (
-	TestSchema = &schema_server.Schema{
+	TestSchema = &sdcpb.Schema{
 		Name:    SchemaName,
 		Vendor:  SchemaVendor,
 		Version: SchemaVersion,
@@ -41,7 +40,7 @@ func TestXMLConfigBuilder_GetDoc(t *testing.T) {
 			name: "Empty Document",
 			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
 				schemaClientMock := mockschema.NewMockClient(ctrl)
-				return NewXMLConfigBuilder(schemaClientMock, TestSchema, false)
+				return NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: false})
 			},
 			want:    ``,
 			wantErr: false,
@@ -50,7 +49,7 @@ func TestXMLConfigBuilder_GetDoc(t *testing.T) {
 			name: "Non-Empty Document",
 			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
 				schemaClientMock := mockschema.NewMockClient(ctrl)
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, false)
+				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: false})
 
 				// create doc elements
 				people := cb.doc.CreateElement("get-config")
@@ -165,7 +164,7 @@ func TestXMLConfigBuilder_fastForward(t *testing.T) {
 			name: "Valid Document get vlan-id",
 			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
 				schemaClientMock := mockschema.NewMockClient(ctrl)
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, false)
+				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: false})
 				cb.doc = Doc1
 				return cb
 			},
@@ -186,7 +185,7 @@ func TestXMLConfigBuilder_fastForward(t *testing.T) {
 			name: "Valid Document get interfaces",
 			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
 				schemaClientMock := mockschema.NewMockClient(ctrl)
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, false)
+				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: false})
 				cb.doc = Doc1
 				return cb
 			},
@@ -212,7 +211,7 @@ func TestXMLConfigBuilder_fastForward(t *testing.T) {
 						return nil, fmt.Errorf("GetSchema Error")
 					},
 				)
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, false)
+				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: false})
 				return cb
 			},
 			checkResult: func(got *etree.Element, tt *testStruct, xmlbuilder *XMLConfigBuilder) error {
@@ -243,7 +242,7 @@ func TestXMLConfigBuilder_fastForward(t *testing.T) {
 					},
 				)
 
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, false)
+				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: false})
 				return cb
 			},
 			checkResult: func(got *etree.Element, tt *testStruct, xmlbuilder *XMLConfigBuilder) error {
@@ -294,7 +293,7 @@ func TestXMLConfigBuilder_fastForward(t *testing.T) {
 					},
 				)
 
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, true)
+				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: true})
 				return cb
 			},
 			checkResult: func(got *etree.Element, tt *testStruct, xmlbuilder *XMLConfigBuilder) error {
@@ -369,7 +368,7 @@ func TestXMLConfigBuilder_fastForward_multipleExecutions(t *testing.T) {
 		},
 	)
 
-	xmlbuilder := NewXMLConfigBuilder(schemaClientMock, TestSchema, true)
+	xmlbuilder := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: true})
 
 	// fastForward the first path
 	elem1, err := xmlbuilder.fastForward(TestCtx, PathVlanId)
@@ -450,7 +449,7 @@ func TestXMLConfigBuilder_resolveNamespace(t *testing.T) {
 					},
 				)
 
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, true)
+				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: true})
 				return cb
 			},
 			args: args{
@@ -467,7 +466,7 @@ func TestXMLConfigBuilder_resolveNamespace(t *testing.T) {
 				schemaClientMock := mockschema.NewMockClient(ctrl)
 				schemaClientMock.EXPECT().GetSchema(TestCtx, gomock.Any()).AnyTimes()
 
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, true)
+				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: true})
 				return cb
 			},
 			args: args{
@@ -496,7 +495,7 @@ func TestXMLConfigBuilder_resolveNamespace(t *testing.T) {
 					},
 				)
 
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, true)
+				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: true})
 				return cb
 			},
 			args: args{

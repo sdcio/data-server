@@ -18,3 +18,4 @@ output.xml
 report.html
 intra/
 nbn/
+mocks/*
