@@ -31,6 +31,7 @@ release: docker-build
 	docker push $(REMOTE_REGISTRY):latest
 
 docker-test:
+	ssh-add ./keys/id_rsa 2>/dev/null; true
 	docker build . -t $(TEST_IMAGE) -f tests/container/Dockerfile --ssh default=$(SSH_AUTH_SOCK)
 	docker run -v ./tests/results:/results:rw $(TEST_IMAGE) robot --outputdir /results /app/tests/robot
 
