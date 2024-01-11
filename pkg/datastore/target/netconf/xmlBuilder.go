@@ -29,9 +29,12 @@ type XMLConfigBuilder struct {
 }
 
 type XMLConfigBuilderOpts struct {
-	HonorNamespace         bool
+	// if true, XML tags incorporate their namespace as an attribute.
+	HonorNamespace bool
+	// if true, enables proper namespacing for the edit-config RPC operation attribute.
 	OperationWithNamespace bool
-	UseOperationRemove     bool
+	// if true, use NETCONF operation `remove`rather than `delete` in edit-config RPC.
+	UseOperationRemove bool
 }
 
 // NewXMLConfigBuilder returns a new XMLConfigBuilder instance
