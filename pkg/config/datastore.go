@@ -110,7 +110,7 @@ func (s *SBI) validateSetDefaults() error {
 	if s.ConnectRetry < time.Second {
 		s.ConnectRetry = time.Second
 	}
-	
+
 	if s.Timeout <= 0 {
 		s.Timeout = defaultTimeout
 	}
@@ -131,7 +131,7 @@ func (s *Sync) validateSetDefaults() error {
 	return nil
 }
 
-func (c *CacheConfig) validateSetDefaults() error {
+func (c *CacheConfig) ValidateSetDefaults() error {
 	switch c.Type {
 	case "remote":
 		if c.Address == "" {

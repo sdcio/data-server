@@ -92,7 +92,7 @@ func (c *Config) validateSetDefaults() error {
 	if c.Cache == nil {
 		c.Cache = &CacheConfig{}
 	}
-	if err = c.Cache.validateSetDefaults(); err != nil {
+	if err = c.Cache.ValidateSetDefaults(); err != nil {
 		return err
 	}
 	return nil

@@ -8,11 +8,13 @@ import (
 	"time"
 
 	"github.com/iptecharch/cache/pkg/cache"
-	"github.com/iptecharch/cache/pkg/config"
+	cconfig "github.com/iptecharch/cache/pkg/config"
 	"github.com/iptecharch/schema-server/utils"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/iptecharch/data-server/pkg/config"
 )
 
 const (
@@ -25,7 +27,11 @@ type localCache struct {
 
 func NewLocalCache(cfg *config.CacheConfig) (Client, error) {
 	lc := &localCache{
-		c: cache.New(cfg),
+		c: cache.New(&cconfig.CacheConfig{
+			MaxCaches: -1,
+			StoreType: cfg.StoreType,
+			Dir:       cfg.Dir,
+		}),
 	}
 	err := lc.c.Init(context.TODO())
 	if err != nil {

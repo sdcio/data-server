@@ -6,10 +6,10 @@ import (
 	"os"
 	"time"
 
-	cconfig "github.com/iptecharch/cache/pkg/config"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/iptecharch/data-server/pkg/cache"
+	"github.com/iptecharch/data-server/pkg/config"
 )
 
 func (s *Server) createCacheClient(ctx context.Context) {
@@ -41,8 +41,8 @@ START:
 func (s *Server) createLocalCacheClient(ctx context.Context) error {
 	var err error
 	log.Infof("initializing local cache client")
-	s.cacheClient, err = cache.NewLocalCache(&cconfig.CacheConfig{
-		MaxCaches: -1,
+	s.cacheClient, err = cache.NewLocalCache(&config.CacheConfig{
+		// MaxCaches: -1,
 		StoreType: s.config.Cache.StoreType,
 		Dir:       s.config.Cache.Dir,
 	})
