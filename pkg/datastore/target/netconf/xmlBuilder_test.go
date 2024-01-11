@@ -339,9 +339,7 @@ func TestXMLConfigBuilder_fastForward(t *testing.T) {
 			if err = tt.checkResult(got, &tt, xmlBuilder); err != nil {
 				t.Error(err)
 			}
-
-			fmt.Println(xmlBuilder.GetDoc())
-
+			//fmt.Println(xmlBuilder.GetDoc())
 			// signal mock done
 			mockCtrl.Finish()
 		})
@@ -520,6 +518,200 @@ func TestXMLConfigBuilder_resolveNamespace(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("XMLConfigBuilder.resolveNamespace() = %v, want %v", got, tt.want)
 			}
+			mockCtrl.Finish()
+		})
+	}
+}
+
+func TestXMLConfigBuilder_AddValue(t *testing.T) {
+	AddValueDoc1 := etree.NewDocument()
+	// populate Doc1
+	getConfig := AddValueDoc1.CreateElement("get-config")
+	interfs := getConfig.CreateElement("interfaces")
+	interf1 := interfs.CreateElement("interface")
+	interfname := interf1.CreateElement("name")
+	interfname.SetText("eth0")
+	_ = interf1.CreateElement("mtu")
+	subinterf11 := interf1.CreateElement("subinterface")
+	subinterf11name := subinterf11.CreateElement("name")
+	subinterf11name.SetText("1")
+	_ = subinterf11.CreateElement("vlan-id")
+	interf2 := interfs.CreateElement("interface")
+	interf2name := interf2.CreateElement("name")
+	interf2name.SetText("eth1")
+	mtuInterf2 := interf2.CreateElement("mtu")
+	mtuInterf2.SetText("9100")
+	// Doc1 done
+
+	type args struct {
+		ctx context.Context
+		p   *sdcpb.Path
+		v   *sdcpb.TypedValue
+	}
+
+	type testStruct struct {
+		// The name of the test
+		name string
+		// Arguments to the fastforward function
+		args args
+		// rettrieve the initilaized xmlBuilder
+		getXmlBuilder func(ctrl *gomock.Controller) *XMLConfigBuilder
+		// check the results
+		checkResult func(tt *testStruct, xmlBuilder *XMLConfigBuilder) error
+		// indicate if an error is expeced or not
+		wantErr bool
+	}
+
+	tests := []testStruct{
+		{
+			name: "GetSchema Error",
+			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
+				schemaClientMock := mockschema.NewMockClient(ctrl)
+				schemaClientMock.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+					func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
+						return nil, fmt.Errorf("GetSchema Error")
+					},
+				)
+				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: false})
+				return cb
+			},
+			checkResult: func(tt *testStruct, xmlbuilder *XMLConfigBuilder) error {
+				// no check required, we're expecting an error
+				return nil
+			},
+			args: args{
+				ctx: TestCtx,
+				p:   PathInterfaces,
+			},
+			wantErr: true,
+		},
+		{
+			name: "Non-Existing Path - Empty Namespace",
+			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
+				schemaClientMock := mockschema.NewMockClient(ctrl)
+				schemaClientMock.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+					func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
+						return &sdcpb.GetSchemaResponse{
+							Schema: &sdcpb.SchemaElem{
+								Schema: &sdcpb.SchemaElem_Container{
+									Container: &sdcpb.ContainerSchema{
+										Namespace: "",
+									},
+								},
+							},
+						}, nil
+					},
+				)
+
+				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: false})
+				return cb
+			},
+			checkResult: func(tt *testStruct, xmlbuilder *XMLConfigBuilder) error {
+				expectedResult := `<get-config>
+  <interfaces>
+    <interface>
+      <name>eth0</name>
+      <subinterface>
+        <name>1</name>
+        <vlan-id>5</vlan-id>
+      </subinterface>
+    </interface>
+  </interfaces>
+</get-config>
+`
+				xdoc, err := xmlbuilder.GetDoc()
+				if err != nil {
+					return err
+				}
+				if d := cmp.Diff(xdoc, expectedResult); d != "" {
+					return fmt.Errorf(d)
+				}
+				return nil
+			},
+			args: args{
+				ctx: TestCtx,
+				p:   PathVlanId,
+				v: &sdcpb.TypedValue{
+					Value: &sdcpb.TypedValue_StringVal{
+						StringVal: "5",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Non-Existing Path - All different Namespaces",
+			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
+				namespaceCounter := 0
+				schemaClientMock := mockschema.NewMockClient(ctrl)
+				schemaClientMock.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+					func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
+						namespaceCounter++
+						return &sdcpb.GetSchemaResponse{
+							Schema: &sdcpb.SchemaElem{
+								Schema: &sdcpb.SchemaElem_Container{
+									Container: &sdcpb.ContainerSchema{
+										Namespace: fmt.Sprintf("NS-%d", namespaceCounter),
+									},
+								},
+							},
+						}, nil
+					},
+				)
+
+				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: true})
+				return cb
+			},
+			checkResult: func(tt *testStruct, xmlbuilder *XMLConfigBuilder) error {
+				expectedResult := `<get-config xmlns="NS-1">
+  <interfaces xmlns="NS-2">
+    <interface xmlns="NS-3">
+      <name>eth0</name>
+      <subinterface xmlns="NS-4">
+        <name>1</name>
+        <vlan-id xmlns="NS-5">5</vlan-id>
+      </subinterface>
+    </interface>
+  </interfaces>
+</get-config>
+`
+				xdoc, err := xmlbuilder.GetDoc()
+				if err != nil {
+					return err
+				}
+				if d := cmp.Diff(xdoc, expectedResult); d != "" {
+					return fmt.Errorf(d)
+				}
+				return nil
+			},
+			args: args{
+				ctx: TestCtx,
+				p:   PathVlanId,
+				v: &sdcpb.TypedValue{
+					Value: &sdcpb.TypedValue_StringVal{
+						StringVal: "5",
+					},
+				},
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// create Mock controller
+			mockCtrl := gomock.NewController(t)
+
+			xmlBuilder := tt.getXmlBuilder(mockCtrl)
+			err := xmlBuilder.AddValue(tt.args.ctx, tt.args.p, tt.args.v)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("XMLConfigBuilder.fastForward() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if err = tt.checkResult(&tt, xmlBuilder); err != nil {
+				t.Error(err)
+			}
+			//fmt.Println(xmlBuilder.GetDoc())
+			// signal mock done
 			mockCtrl.Finish()
 		})
 	}

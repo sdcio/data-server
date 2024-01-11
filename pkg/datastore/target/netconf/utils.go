@@ -68,7 +68,18 @@ func StringElementToTypedValue(s string, ls *sdcpb.LeafSchema) (*sdcpb.TypedValu
 	return conversion.Convert(s, ls.Type)
 }
 
-func pathElem2Xpath(pe *sdcpb.PathElem, namespace string) (etree.Path, error) {
+// pathElem2EtreePath takes the given pathElem and creates an xpath expression out of it,
+// which is then used to build an etree.Path, which is then returned
+func pathElem2EtreePath(pe *sdcpb.PathElem) (etree.Path, error) {
+	xpathString, err := pathElem2XPath(pe)
+	if err != nil {
+		return etree.Path{}, err
+	}
+	return etree.CompilePath(xpathString)
+}
+
+// pathElem2XPath takes the given PathElem and generates the corresponding xpath expression
+func pathElem2XPath(pe *sdcpb.PathElem) (string, error) {
 	var keys []string
 
 	// prepare the keys -> "k='v'"
@@ -82,9 +93,7 @@ func pathElem2Xpath(pe *sdcpb.PathElem, namespace string) (etree.Path, error) {
 		keyString = "[" + strings.Join(keys, ",") + "]"
 	}
 
-	//name := toNamespacedName(pe.Name, namespace)
-
 	// build the final xpath
 	filterString := fmt.Sprintf("./%s%s", pe.Name, keyString)
-	return etree.CompilePath(filterString)
+	return filterString, nil
 }

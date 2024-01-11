@@ -1,10 +1,9 @@
 package netconf
 
 import (
-	"reflect"
 	"testing"
 
-	"github.com/beevik/etree"
+	"github.com/google/go-cmp/cmp"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 )
 
@@ -16,11 +15,22 @@ func Test_pathElem2Xpath(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    etree.Path
+		want    string
 		wantErr bool
 	}{
 		{
-			name: "one",
+			name: "PathElem without keys",
+			args: args{
+				pe: &sdcpb.PathElem{
+					Name: "interfaces",
+				},
+				namespace: "",
+			},
+			want:    "./interfaces",
+			wantErr: false,
+		},
+		{
+			name: "PathElem with single key",
 			args: args{
 				pe: &sdcpb.PathElem{
 					Name: "interface",
@@ -30,20 +40,36 @@ func Test_pathElem2Xpath(t *testing.T) {
 				},
 				namespace: "",
 			},
-			want:    etree.MustCompilePath("./interface[name=eth0]"),
+			want:    "./interface[name='eth0']",
+			wantErr: false,
+		},
+		{
+			name: "PathElem with two keys",
+			args: args{
+				pe: &sdcpb.PathElem{
+					Name: "interface",
+					Key: map[string]string{
+						"name":  "eth0",
+						"state": "up",
+					},
+				},
+				namespace: "",
+			},
+			want:    "./interface[name='eth0',state='up']",
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := pathElem2Xpath(tt.args.pe, tt.args.namespace)
+			got, err := pathElem2XPath(tt.args.pe)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("pathElem2Xpath() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("pathElem2Xpath() = %v, want %v", got, tt.want)
+			if d := cmp.Diff(got, tt.want); d != "" {
+				t.Errorf(d)
 			}
+
 		})
 	}
 }
