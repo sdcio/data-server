@@ -59,7 +59,7 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 
 	// add all the requested paths to the document
 	for _, p := range req.Path {
-		_, err := pathfilterXmlBuilder.AddElement(ctx, p)
+		err := pathfilterXmlBuilder.AddElements(ctx, p)
 		if err != nil {
 			return nil, err
 		}
@@ -127,7 +127,7 @@ func (t *ncTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.S
 
 	// iterate over the update array
 	for _, u := range req.Update {
-		xmlCBAdd.Add(ctx, u.Path, u.Value)
+		xmlCBAdd.AddValue(ctx, u.Path, u.Value)
 	}
 
 	// first apply the deletes before the adds

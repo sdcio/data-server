@@ -2,6 +2,7 @@ package netconf
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/beevik/etree"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
@@ -28,9 +29,12 @@ type XMLConfigBuilder struct {
 }
 
 type XMLConfigBuilderOpts struct {
-	HonorNamespace         bool
+	// HonorNamespace if true, XML tags incorporate their namespace as an attribute.
+	HonorNamespace bool
+	// OperationWithNamespace if true, enables proper namespacing for the edit-config RPC operation attribute.
 	OperationWithNamespace bool
-	UseOperationRemove     bool
+	// UseOperationRemove if true, use NETCONF operation `remove` rather than `delete` in edit-config RPC.
+	UseOperationRemove bool
 }
 
 // NewXMLConfigBuilder returns a new XMLConfigBuilder instance
@@ -86,31 +90,26 @@ func (x *XMLConfigBuilder) fastForward(ctx context.Context, p *sdcpb.Path) (*etr
 	actualNamespace := ""
 	for peIdx, pe := range p.Elem {
 
-		//namespace := x.namespaces.Resolve(namespaceUri)
-
-		// generate an xpath from the path element
+		// generate an etree.Path from the path element
 		// this is to find the next level xml element
-		path, err := pathElem2Xpath(pe, "")
+		path, err := pathElem2EtreePath(pe)
 		if err != nil {
 			return nil, err
 		}
 		var newChild *etree.Element
 		if newChild = parent.FindElementPath(path); newChild == nil {
-
-			namespaceUri, err := x.ResolveNamespace(ctx, p, peIdx)
+			namespaceUri, err := x.resolveNamespace(ctx, p, peIdx)
 			if err != nil {
 				return nil, err
 			}
 
 			// if there is no such element, create it
-			//elemName := toNamespacedName(pe.Name, namespace)
 			newChild = parent.CreateElement(pe.Name)
 			if x.cfg.HonorNamespace && namespaceUri != actualNamespace {
 				newChild.CreateAttr("xmlns", namespaceUri)
 			}
 			// with all its keys
 			for k, v := range pe.Key {
-				//keyNamespaced := toNamespacedName(k, namespace)
 				keyElem := newChild.CreateElement(k)
 				keyElem.CreateText(v)
 			}
@@ -125,8 +124,8 @@ func (x *XMLConfigBuilder) fastForward(ctx context.Context, p *sdcpb.Path) (*etr
 	return parent, nil
 }
 
-// Add adds the given *sdcpb.TypedValue v under the given *sdcpb.Path p into the xml document
-func (x *XMLConfigBuilder) Add(ctx context.Context, p *sdcpb.Path, v *sdcpb.TypedValue) error {
+// AddValue adds the given *sdcpb.TypedValue v under the given *sdcpb.Path p into the xml document
+func (x *XMLConfigBuilder) AddValue(ctx context.Context, p *sdcpb.Path, v *sdcpb.TypedValue) error {
 	// fastForward the XML to the element defined in the path p
 	elem, err := x.fastForward(ctx, p)
 	if err != nil {
@@ -142,26 +141,26 @@ func (x *XMLConfigBuilder) Add(ctx context.Context, p *sdcpb.Path, v *sdcpb.Type
 	// use SetText instead of CreateText to properly handle paths
 	// with a key as leaf.
 	elem.SetText(value)
-	// elem.CreateText(value)
 
 	return nil
 }
 
-// AddElement add a given *sdcpb.Path p to the xml document. This will not define a terminal value
+// AddElements add a given *sdcpb.Path p to the xml document. This will not define a terminal value
 // under the given path. This is usefull when creating Netconf Filters where you provide an xml document
 // pointing to branches that you're intrested in receiving.
-func (x *XMLConfigBuilder) AddElement(ctx context.Context, p *sdcpb.Path) (*etree.Element, error) {
-	// fastForward the XML to the element defined in the path p
-	elem, err := x.fastForward(ctx, p)
-	if err != nil {
-		return nil, err
-	}
-	return elem, nil
+func (x *XMLConfigBuilder) AddElements(ctx context.Context, p *sdcpb.Path) error {
+	_, err := x.fastForward(ctx, p)
+	return err
 }
 
-// ResolveNamespace takes a *sdcpb.Path and a pathElementIndex (peIdx). It returns the namespace of
+// resolveNamespace takes a *sdcpb.Path and a pathElementIndex (peIdx). It returns the namespace of
 // the element on position peIdx of the *sdcpb.path p
-func (x *XMLConfigBuilder) ResolveNamespace(ctx context.Context, p *sdcpb.Path, peIdx int) (string, error) {
+func (x *XMLConfigBuilder) resolveNamespace(ctx context.Context, p *sdcpb.Path, peIdx int) (string, error) {
+
+	if peIdx+1 > len(p.Elem) {
+		return "", fmt.Errorf("peIdx exceeds limit %d for path %s", len(p.Elem), p.String())
+	}
+
 	// Perform schema queries
 	sr, err := x.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
 		Path: &sdcpb.Path{
