@@ -1,6 +1,17 @@
 project_name: data-server
 builds:
-  - env:
+  - id: data-server
+    binary: data-server
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+  - id: datactl
+    binary: datactl
+    main: ./client/main.go
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
