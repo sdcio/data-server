@@ -8,6 +8,8 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/google/go-cmp/cmp"
+	"github.com/iptecharch/data-server/mocks/mockschema"
+	"github.com/iptecharch/data-server/pkg/schema"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
@@ -714,6 +716,203 @@ func TestXMLConfigBuilder_AddValue(t *testing.T) {
 			//fmt.Println(xmlBuilder.GetDoc())
 			// signal mock done
 			mockCtrl.Finish()
+		})
+	}
+}
+
+func TestXMLConfigBuilder_Delete(t *testing.T) {
+
+	GetNewDoc := func() *etree.Document {
+		AddValueDoc1 := etree.NewDocument()
+		// populate Doc1
+		getConfig := AddValueDoc1.CreateElement("get-config")
+		interfs := getConfig.CreateElement("interfaces")
+		interf1 := interfs.CreateElement("interface")
+		interfname := interf1.CreateElement("name")
+		interfname.SetText("eth0")
+		_ = interf1.CreateElement("mtu")
+		subinterf11 := interf1.CreateElement("subinterface")
+		subinterf11name := subinterf11.CreateElement("name")
+		subinterf11name.SetText("1")
+		_ = subinterf11.CreateElement("vlan-id")
+		interf2 := interfs.CreateElement("interface")
+		interf2name := interf2.CreateElement("name")
+		interf2name.SetText("eth1")
+		mtuInterf2 := interf2.CreateElement("mtu")
+		mtuInterf2.SetText("9100")
+		return AddValueDoc1
+		// Doc1 done
+	}
+
+	type fields struct {
+		cfg          *XMLConfigBuilderOpts
+		doc          *etree.Document
+		schemaClient schema.Client
+		schema       *sdcpb.Schema
+	}
+	type args struct {
+		ctx context.Context
+		p   *sdcpb.Path
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+		want    string
+	}{
+		{
+			name: "Delete with namespace",
+			fields: fields{
+				doc: GetNewDoc(),
+				cfg: &XMLConfigBuilderOpts{
+					HonorNamespace:         true,
+					OperationWithNamespace: true,
+					UseOperationRemove:     false,
+				},
+			},
+			args: args{
+				ctx: TestCtx,
+				p:   PathInterfaces,
+			},
+			wantErr: false,
+			want: `<get-config>
+  <interfaces xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="delete">
+    <interface>
+      <name>eth0</name>
+      <mtu/>
+      <subinterface>
+        <name>1</name>
+        <vlan-id/>
+      </subinterface>
+    </interface>
+    <interface>
+      <name>eth1</name>
+      <mtu>9100</mtu>
+    </interface>
+  </interfaces>
+</get-config>
+`,
+		},
+		{
+			name: "Delete with namespace",
+			fields: fields{
+				doc: GetNewDoc(),
+				cfg: &XMLConfigBuilderOpts{
+					HonorNamespace:         false,
+					OperationWithNamespace: false,
+					UseOperationRemove:     false,
+				},
+			},
+			args: args{
+				ctx: TestCtx,
+				p:   PathInterfaces,
+			},
+			wantErr: false,
+			want: `<get-config>
+  <interfaces operation="delete">
+    <interface>
+      <name>eth0</name>
+      <mtu/>
+      <subinterface>
+        <name>1</name>
+        <vlan-id/>
+      </subinterface>
+    </interface>
+    <interface>
+      <name>eth1</name>
+      <mtu>9100</mtu>
+    </interface>
+  </interfaces>
+</get-config>
+`,
+		},
+		{
+			name: "Remove with namespace",
+			fields: fields{
+				doc: GetNewDoc(),
+				cfg: &XMLConfigBuilderOpts{
+					HonorNamespace:         true,
+					OperationWithNamespace: true,
+					UseOperationRemove:     true,
+				},
+			},
+			args: args{
+				ctx: TestCtx,
+				p:   PathInterfaces,
+			},
+			wantErr: false,
+			want: `<get-config>
+  <interfaces xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove">
+    <interface>
+      <name>eth0</name>
+      <mtu/>
+      <subinterface>
+        <name>1</name>
+        <vlan-id/>
+      </subinterface>
+    </interface>
+    <interface>
+      <name>eth1</name>
+      <mtu>9100</mtu>
+    </interface>
+  </interfaces>
+</get-config>
+`,
+		},
+		{
+			name: "Remove with namespace",
+			fields: fields{
+				doc: GetNewDoc(),
+				cfg: &XMLConfigBuilderOpts{
+					HonorNamespace:         false,
+					OperationWithNamespace: false,
+					UseOperationRemove:     true,
+				},
+			},
+			args: args{
+				ctx: TestCtx,
+				p:   PathInterfaces,
+			},
+			wantErr: false,
+			want: `<get-config>
+  <interfaces operation="remove">
+    <interface>
+      <name>eth0</name>
+      <mtu/>
+      <subinterface>
+        <name>1</name>
+        <vlan-id/>
+      </subinterface>
+    </interface>
+    <interface>
+      <name>eth1</name>
+      <mtu>9100</mtu>
+    </interface>
+  </interfaces>
+</get-config>
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			x := &XMLConfigBuilder{
+				cfg:          tt.fields.cfg,
+				doc:          tt.fields.doc,
+				schemaClient: tt.fields.schemaClient,
+				schema:       tt.fields.schema,
+			}
+			if err := x.Delete(tt.args.ctx, tt.args.p); (err != nil) != tt.wantErr {
+				t.Errorf("XMLConfigBuilder.Delete() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			doc, err := x.GetDoc()
+			if err != nil {
+				t.Error(err)
+			}
+			fmt.Println(doc)
+			if diff := cmp.Diff(doc, tt.want); diff != "" {
+				t.Errorf(diff)
+			}
 		})
 	}
 }
