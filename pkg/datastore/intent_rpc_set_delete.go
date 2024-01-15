@@ -3,6 +3,7 @@ package datastore
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/iptecharch/cache/proto/cachepb"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
@@ -29,7 +30,7 @@ func (d *Datastore) SetIntentDelete(ctx context.Context, req *sdcpb.SetIntentReq
 		Update: make([]*sdcpb.Update, 0),
 	}
 	// get current intent notifications
-	intentNotifications, err := d.getIntentFlatNotifications(ctx, req.GetIntent())
+	intentNotifications, err := d.getIntentFlatNotifications(ctx, req.GetIntent(), req.GetPriority())
 	if err != nil {
 		return err
 	}
@@ -83,6 +84,7 @@ func (d *Datastore) SetIntentDelete(ctx context.Context, req *sdcpb.SetIntentReq
 	if err != nil {
 		return err
 	}
+	time.Sleep(1 * time.Second) // workaround for remote cache. TODO: to remove
 
 	// This defer function writes back the intent notification
 	// in the intended store if one of the following steps fail:

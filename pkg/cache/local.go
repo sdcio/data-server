@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/iptecharch/cache/pkg/cache"
@@ -13,10 +12,6 @@ import (
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
-)
-
-const (
-	maxNumParallelReaders = 10
 )
 
 type localCache struct {
@@ -92,7 +87,7 @@ func (c *localCache) Modify(ctx context.Context, name string, opts *Opts, dels [
 	for _, del := range dels {
 		err = c.c.DeletePrefix(ctx, name, &cache.Opts{
 			Store:    getStore(opts.Store),
-			Path:     del,
+			Path:     [][]string{del}, // TODO:
 			Owner:    opts.Owner,
 			Priority: opts.Priority,
 		})
@@ -104,7 +99,7 @@ func (c *localCache) Modify(ctx context.Context, name string, opts *Opts, dels [
 	for _, upd := range upds {
 		err = c.c.WriteValue(ctx, name, &cache.Opts{
 			Store:    getStore(opts.Store),
-			Path:     upd.GetPath(),
+			Path:     [][]string{upd.GetPath()},
 			Owner:    opts.Owner,
 			Priority: opts.Priority,
 		}, upd.Bytes())
@@ -138,76 +133,42 @@ func (c *localCache) ReadCh(ctx context.Context, name string, opts *Opts, paths 
 	if opts == nil {
 		opts = &Opts{}
 	}
-	outCh := make(chan *Update, 10)
-	numPaths := len(paths)
-	//
-	numReaders := maxNumParallelReaders
-	if numPaths < numReaders {
-		numReaders = numPaths
-	}
-
-	wg := new(sync.WaitGroup)
-	wg.Add(numReaders)
-
+	outCh := make(chan *Update)
 	go func() {
-		wg.Wait()
-		close(outCh)
-	}()
-	// TODO: use period
-	pCh := make(chan []string, numPaths)
-	for _, p := range paths {
-		pCh <- p
-	}
-	close(pCh)
-
-	for i := 0; i < numReaders; i++ {
-		go func() {
-			defer wg.Done()
-		MAIN:
-			for {
-				select {
-				case <-ctx.Done():
+		defer close(outCh)
+		ch, err := c.c.ReadValue(ctx, name, &cache.Opts{
+			Store:         getStore(opts.Store),
+			Path:          paths,
+			Owner:         opts.Owner,
+			Priority:      opts.Priority,
+			PriorityCount: opts.PriorityCount,
+			KeysOnly:      opts.KeysOnly,
+		})
+		if err != nil {
+			log.Errorf("failed to read path %v: %v", paths, err)
+			return
+		}
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case e, ok := <-ch:
+				if !ok {
 					return
-				case p, ok := <-pCh:
-					if !ok {
-						return
-					}
-					ch, err := c.c.ReadValue(ctx, name, &cache.Opts{
-						Store:         getStore(opts.Store),
-						Path:          p,
-						Owner:         opts.Owner,
-						Priority:      opts.Priority,
-						PriorityCount: opts.PriorityCount,
-						KeysOnly:      opts.KeysOnly,
-					})
-					if err != nil {
-						log.Errorf("failed to read path %v: %v", p, err)
-						return
-					}
-					for {
-						select {
-						case <-ctx.Done():
-							return
-						case e, ok := <-ch:
-							if !ok {
-								continue MAIN // ReadValue done, go to next path
-							}
-							if e == nil {
-								continue //
-							}
-							outCh <- &Update{
-								path:     e.P,
-								value:    e.V,
-								priority: e.Priority,
-								owner:    e.Owner,
-								ts:       int64(e.Timestamp),
-							}
-						}
-					}
+				}
+				if e == nil {
+					continue //
+				}
+				outCh <- &Update{
+					path:     e.P,
+					value:    e.V,
+					priority: e.Priority,
+					owner:    e.Owner,
+					ts:       int64(e.Timestamp),
 				}
 			}
-		}()
-	}
+		}
+	}()
 	return outCh
 }
 

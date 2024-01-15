@@ -25,6 +25,8 @@ const (
 	intentRawNameSep = "_"
 )
 
+var ErrIntentNotFound = errors.New("intent not found")
+
 func (d *Datastore) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*sdcpb.GetIntentResponse, error) {
 	r, err := d.getRawIntent(ctx, req.GetIntent(), req.GetPriority())
 	if err != nil {
@@ -84,12 +86,29 @@ func (d *Datastore) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest
 	}, nil
 }
 
-func (d *Datastore) getIntentFlatNotifications(ctx context.Context, intentName string) ([]*sdcpb.Notification, error) {
+func (d *Datastore) getIntentFlatNotifications(ctx context.Context, intentName string, priority int32) ([]*sdcpb.Notification, error) {
 	notifications := make([]*sdcpb.Notification, 0)
+
+	rawIntent, err := d.getRawIntent(ctx, intentName, priority)
+	if errors.Is(err, ErrIntentNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	expUpds, err := d.expandUpdates(ctx, rawIntent.GetUpdate(), true)
+	if err != nil {
+		return nil, err
+	}
+	paths := make([][]string, 0, len(expUpds))
+	for _, expu := range expUpds {
+		paths = append(paths, utils.ToStrings(expu.Path, false, false))
+	}
 	upds := d.cacheClient.Read(ctx, d.config.Name, &cache.Opts{
-		Store: cachepb.Store_INTENDED,
-		Owner: intentName,
-	}, [][]string{{"*"}}, 0)
+		Store:    cachepb.Store_INTENDED,
+		Owner:    intentName,
+		Priority: priority,
+	}, paths, 0)
 
 	for _, upd := range upds {
 		if upd.Owner() != intentName {
@@ -133,7 +152,7 @@ func (d *Datastore) applyIntent(ctx context.Context, candidateName string, prior
 	log.Debugf("%s: %s notification:\n%s", d.Name(), candidateName, prototext.Format(sdreq))
 	// TODO: consider if leafref validation
 	// needs to run before must statements validation
-	log.Debugf("%s: validating must statements candidate %s", d.Name(), sdreq.GetDatastore())
+	log.Infof("%s: validating must statements candidate %s", d.Name(), sdreq.GetDatastore())
 	// validate MUST statements
 	for _, upd := range sdreq.GetUpdate() {
 		// Workaround: do not validate key as leaf for now
@@ -146,7 +165,7 @@ func (d *Datastore) applyIntent(ctx context.Context, candidateName string, prior
 			return err
 		}
 	}
-
+	log.Infof("%s: validating leafrefs candidate %s", d.Name(), sdreq.GetDatastore())
 	for _, upd := range sdreq.GetUpdate() {
 		log.Debugf("%s: %s validating leafRef on update: %v", d.Name(), candidateName, upd)
 		err = d.validateLeafRef(ctx, upd, candidateName)
@@ -215,7 +234,7 @@ func (d *Datastore) getRawIntent(ctx context.Context, intentName string, priorit
 		Store: cachepb.Store_METADATA,
 	}, [][]string{{rin}}, 0)
 	if len(upds) == 0 {
-		return nil, errors.New("not found")
+		return nil, ErrIntentNotFound
 	}
 
 	val, err := upds[0].Value()
@@ -276,48 +295,6 @@ func (d *Datastore) deleteRawIntent(ctx context.Context, intentName string, prio
 		},
 		[][]string{{rawIntentName(intentName, priority)}},
 		nil)
-}
-
-func (d *Datastore) updatesAddKeysAsLeaves(updates []*sdcpb.Update) []*sdcpb.Update {
-	added := make(map[string]struct{})
-	upds := make([]*sdcpb.Update, 0, len(updates))
-	for _, upd := range updates {
-		upds = append(upds, upd)
-		for idx, pe := range upd.GetPath().GetElem() {
-			if len(pe.GetKey()) == 0 {
-				continue
-			}
-			//fmt.Printf("u | PE %v has keys\n", pe)
-			for k, v := range pe.GetKey() {
-				//fmt.Printf("u | PE %v has key %s\n", pe, k)
-				p := &sdcpb.Path{
-					Elem: make([]*sdcpb.PathElem, idx+1),
-				}
-				for i := 0; i < idx+1; i++ {
-					p.Elem[i] = &sdcpb.PathElem{
-						Name: upd.GetPath().GetElem()[i].GetName(),
-						Key:  copyMap(upd.GetPath().GetElem()[i].GetKey()),
-					}
-				}
-				p.Elem = append(p.Elem, &sdcpb.PathElem{Name: k})
-				//fmt.Printf("u | KEY Path: %v\n", p)
-				nupd := &sdcpb.Update{
-					Path: p,
-					Value: &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_StringVal{StringVal: v},
-					},
-				}
-				uniqueID := utils.ToXPath(p, false) + ":::" + v
-				if _, ok := added[uniqueID]; !ok {
-					//fmt.Printf("u | ADDING KEY Path: %v\n", p)
-					added[uniqueID] = struct{}{}
-					upds = append(upds, nupd)
-				}
-			}
-		}
-		//// fmt.Println()
-	}
-	return upds
 }
 
 func (d *Datastore) pathsAddKeysAsLeaves(paths []*sdcpb.Path) []*sdcpb.Path {

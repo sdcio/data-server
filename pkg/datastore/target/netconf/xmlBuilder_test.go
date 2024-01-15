@@ -8,10 +8,11 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/google/go-cmp/cmp"
-	"github.com/iptecharch/data-server/mocks/mockschema"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
+
+	"github.com/iptecharch/data-server/mocks/mockschema"
 )
 
 const (
