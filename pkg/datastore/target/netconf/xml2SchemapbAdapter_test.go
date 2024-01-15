@@ -7,6 +7,7 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/iptecharch/data-server/mocks/mockschema"
+	"github.com/iptecharch/data-server/pkg/utils"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
@@ -41,7 +42,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 	}
 	tests := []struct {
 		name                      string
-		getXML2sdcpbConfigAdapter func(ctrl *gomock.Controller) *XML2sdcpbConfigAdapter
+		getXML2sdcpbConfigAdapter func(ctrl *gomock.Controller, t *testing.T) *XML2sdcpbConfigAdapter
 		args                      args
 		want                      *sdcpb.Notification
 		wantErr                   bool
@@ -52,13 +53,20 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 				ctx: TestCtx,
 				doc: GetNewDoc(),
 			},
-			getXML2sdcpbConfigAdapter: func(ctrl *gomock.Controller) *XML2sdcpbConfigAdapter {
+			getXML2sdcpbConfigAdapter: func(ctrl *gomock.Controller, t *testing.T) *XML2sdcpbConfigAdapter {
+
+				var expectedPath []*sdcpb.PathElem
 
 				schemaClientMock := mockschema.NewMockClient(ctrl)
 				counter := 0
 				schemaClientMock.EXPECT().GetSchema(TestCtx, gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
 					func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
 						selem := &sdcpb.SchemaElem{}
+						// Test that the provided schema equals the expected Schema
+						if in.Schema != TestSchema {
+							t.Errorf("Schema provide to GetSchema is wrong %s vs. %s", in.Schema.String(), TestSchema.String())
+						}
+
 						switch counter {
 						case 0:
 							selem.Schema = &sdcpb.SchemaElem_Container{
@@ -66,6 +74,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 									Name: "interfaces",
 								},
 							}
+							expectedPath = []*sdcpb.PathElem{{Name: "interfaces"}}
 						case 1:
 							selem.Schema = &sdcpb.SchemaElem_Container{
 								Container: &sdcpb.ContainerSchema{
@@ -77,6 +86,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 									},
 								},
 							}
+							expectedPath = []*sdcpb.PathElem{{Name: "interfaces"}, {Name: "interface"}}
 						case 2:
 							selem.Schema = &sdcpb.SchemaElem_Field{
 								Field: &sdcpb.LeafSchema{
@@ -86,9 +96,15 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 									},
 								},
 							}
+							expectedPath = []*sdcpb.PathElem{{Name: "interfaces"}, {Name: "interface", Key: map[string]string{"name": "eth0"}}, {Name: "name"}}
 						}
-						counter++
 
+						// check for the right input
+						if !reflect.DeepEqual(in.GetPath().Elem, expectedPath) {
+							t.Errorf("getSchema expected path %s but got %s", utils.ToStrings(&sdcpb.Path{Elem: expectedPath}, false, false), utils.ToStrings(in.GetPath(), false, false))
+						}
+
+						counter++
 						return &sdcpb.GetSchemaResponse{
 							Schema: selem,
 						}, nil
@@ -130,7 +146,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
 
-			x := tt.getXML2sdcpbConfigAdapter(mockCtrl)
+			x := tt.getXML2sdcpbConfigAdapter(mockCtrl, t)
 			// tt.args.doc.Indent(2)
 			// s, _ := tt.args.doc.WriteToString()
 			// fmt.Println(s)
