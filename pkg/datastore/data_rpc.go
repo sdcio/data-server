@@ -890,6 +890,34 @@ func equalTypedValues(v1, v2 *sdcpb.TypedValue) bool {
 }
 
 func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update, includeKeysAsLeaf bool) ([]*sdcpb.Update, error) {
+	upds := make([]*sdcpb.Update, 0)
+	if includeKeysAsLeaf {
+		// expand update path if it contains keys
+		for i, pe := range upd.GetPath().GetElem() {
+			if len(pe.GetKey()) == 0 {
+				continue
+			}
+			//
+			for k, v := range pe.GetKey() {
+				intUpd := &sdcpb.Update{
+					Path: &sdcpb.Path{
+						Elem: make([]*sdcpb.PathElem, 0, i+1+1),
+					},
+				}
+				for j := 0; j <= i; j++ {
+					intUpd.Path.Elem = append(intUpd.Path.Elem,
+						&sdcpb.PathElem{
+							Name: upd.GetPath().GetElem()[j].GetName(),
+							Key:  upd.GetPath().GetElem()[j].GetKey(),
+						},
+					)
+				}
+				intUpd.Path.Elem = append(intUpd.Path.Elem, &sdcpb.PathElem{Name: k})
+				intUpd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
+				upds = append(upds, intUpd)
+			}
+		}
+	}
 	rsp, err := d.schemaClient.GetSchema(ctx,
 		&sdcpb.GetSchemaRequest{
 			Path:   upd.GetPath(),
@@ -920,13 +948,16 @@ func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update, include
 		if err != nil {
 			return nil, err
 		}
-		return rs, nil
+		upds := append(upds, rs...)
+		return upds, nil
 	case *sdcpb.SchemaElem_Field:
 		// TODO: Check if value is json and convert to String ?
-		return []*sdcpb.Update{upd}, nil
+		upds = append(upds, upd)
+		return upds, nil
 	case *sdcpb.SchemaElem_Leaflist:
 		// TODO: Check if value is json and convert to String ?
-		return []*sdcpb.Update{upd}, nil
+		upds = append(upds, upd)
+		return upds, nil
 	}
 	return nil, nil
 }
