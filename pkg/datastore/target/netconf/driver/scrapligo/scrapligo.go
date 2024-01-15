@@ -67,6 +67,16 @@ func (snt *ScrapligoNetconfTarget) Close() error {
 	return snt.driver.Close()
 }
 
+func (snt *ScrapligoNetconfTarget) IsAlive() bool {
+	if snt == nil || snt.driver == nil {
+		return false
+	}
+	if snt.driver.Transport == nil {
+		return false
+	}
+	return snt.driver.Transport.IsAlive()
+}
+
 // EditConfig transforms the generalized EditConfig into the scrapligo implementation
 func (snt *ScrapligoNetconfTarget) EditConfig(target string, config string) (*types.NetconfResponse, error) {
 	// add the <config/> tag to the provided config data

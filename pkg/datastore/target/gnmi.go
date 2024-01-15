@@ -143,7 +143,12 @@ func (t *gnmiTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb
 	return schemaSetRsp, nil
 }
 
-func (t *gnmiTarget) Subscribe() {}
+func (t *gnmiTarget) Status() string {
+	if t == nil || t.target == nil {
+		return "NOT CONNECTED"
+	}
+	return t.target.ConnState()
+}
 
 func (t *gnmiTarget) Sync(octx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
 	if t != nil && t.target != nil && t.target.Config != nil {
@@ -198,8 +203,8 @@ START:
 	}
 }
 
-func (t *gnmiTarget) Close() {
-	t.target.Close()
+func (t *gnmiTarget) Close() error {
+	return t.target.Close()
 }
 
 func encoding(e string) int {
