@@ -429,7 +429,6 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, cand
 				if err != nil {
 					return err
 				}
-
 			case *sdcpb.SchemaElem_Leaflist:
 				if sch.Leaflist.GetType().GetType() != "leafref" {
 					continue

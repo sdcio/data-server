@@ -26,7 +26,7 @@ grpc-server:
   # If this is not set, it defaults to 4 * 1024 * 1024 (4MB)
   max-recv-msg-size: 25165824 # 24 * 1024 * 1024 (24MB)
 
-datastores: # this specifies MAIN datastores
+# datastores: # this specifies MAIN datastores
   # - name: sr1
   #   schema:
   #     name: sros
@@ -104,14 +104,14 @@ schemas:
   #   directories:
   #     - ./lab/common/yang/sros_23.3/YANG/ietf
   #     - ./lab/common/yang/sros_23.3/YANG/nokia-sros-yang-extensions.yang
-  - name: sros-withdash
-    vendor: Nokia
-    version: 23.7
-    files:
-      - ./lab/common/yang/sros_23.7/YANG/nokia-combined
-    directories:
-      - ./lab/common/yang/sros_23.7/YANG/ietf
-      - ./lab/common/yang/sros_23.7/YANG/nokia-sros-yang-extensions.yang
+  # - name: sros-withdash
+  #   vendor: Nokia
+  #   version: 23.7
+  #   files:
+  #     - ./lab/common/yang/sros_23.7/YANG/nokia-combined
+  #   directories:
+  #     - ./lab/common/yang/sros_23.7/YANG/ietf
+  #     - ./lab/common/yang/sros_23.7/YANG/nokia-sros-yang-extensions.yang
   # - name: srl
   #   vendor: Nokia
   #   version: 22.11.2
@@ -121,17 +121,17 @@ schemas:
   #     - ./lab/common/yang/srl-22.11.2/ietf
   #   excludes:
   #     - .*tools.*
-  - name: srl
-    vendor: Nokia
-    version: 23.10.1
-    files:
-      - ./lab/common/yang/srl-23.10.1/srl_nokia/models
-    directories:
-      - ./lab/common/yang/srl-23.10.1/ietf
-      - ./lab/common/yang/srl-23.10.1/openconfig/extensions
-      - ./lab/common/yang/srl-23.10.1/openconfig/openconfig-extensions.yang
-    excludes:
-      - .*tools.*
+  # - name: srl
+  #   vendor: Nokia
+  #   version: 23.10.1
+  #   files:
+  #     - ./lab/common/yang/srl-23.10.1/srl_nokia/models
+  #   directories:
+  #     - ./lab/common/yang/srl-23.10.1/ietf
+  #     - ./lab/common/yang/srl-23.10.1/openconfig/extensions
+  #     - ./lab/common/yang/srl-23.10.1/openconfig/openconfig-extensions.yang
+  #   excludes:
+  #     - .*tools.*
   # - name: srl
   #   vendor: Nokia
   #   version: 22.11.1
@@ -171,8 +171,10 @@ schemas:
   #     - .*tools.*
 
 # remote schema server
-# schema-server:
-#   address: localhost:55000
+schema-server:
+  address: localhost:55000
+  cache-ttl: 300s
+  cache-capacity: 1000
   # TLS config
   # tls:
   #   ca:

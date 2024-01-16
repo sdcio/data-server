@@ -99,8 +99,10 @@ func (c *Config) validateSetDefaults() error {
 }
 
 type RemoteSchemaServer struct {
-	Address string `yaml:"address,omitempty" json:"address,omitempty"`
-	TLS     *TLS   `yaml:"tls,omitempty" json:"tls,omitempty"`
+	Address       string        `yaml:"address,omitempty" json:"address,omitempty"`
+	TLS           *TLS          `yaml:"tls,omitempty" json:"tls,omitempty"`
+	CacheTTL      time.Duration `yaml:"cache-ttl,omitempty" json:"cache-ttl,omitempty"`
+	CacheCapacity uint64        `yaml:"cache-capacity,omitempty" json:"cache-capacity,omitempty"`
 }
 
 type GRPCServer struct {
