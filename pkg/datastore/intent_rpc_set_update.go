@@ -19,16 +19,12 @@ type intentContext struct {
 	req           *sdcpb.SetIntentRequest
 	candidateName string
 
-	newUpdates        []*sdcpb.Update
-	newPaths          []*sdcpb.Path
-	newKeyAsLeafPaths []*sdcpb.Path
-	// used to figure out removedPaths
-	newTree *ctree.Tree
+	newUpdates       []*sdcpb.Update
+	newCompletePaths [][]string
 	//
 	currentUpdates        []*sdcpb.Update
 	currentPaths          []*sdcpb.Path
 	currentKeyAsLeafPaths []*sdcpb.Path
-	// currentTree           *ctree.Tree
 	//
 	// removedPaths    []*sdcpb.Path
 	removedPathsMap map[string]struct{}
@@ -42,6 +38,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		"priority": req.GetPriority(),
 	})
 	logger.Logger.SetLevel(log.GetLevel())
+	logger.Logger.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	logger.Debugf("set intent update start")
 	defer logger.Debugf("set intent update end")
 
@@ -49,39 +46,6 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	if err != nil {
 		return err
 	}
-
-	// debug start
-	logger.Debug()
-	for i, upd := range ic.newUpdates {
-		logger.Debugf("set intent expanded update.%d: %s", i, upd)
-	}
-	logger.Debug()
-	for i, p := range ic.newPaths {
-		logger.Debugf("set intent new path.%d: %s", i, p)
-	}
-	logger.Debug()
-	for i, p := range ic.newKeyAsLeafPaths {
-		logger.Debugf("set intent newKeyAsLeaf path.%d: %s", i, p)
-	}
-	logger.Debug()
-	for i, upd := range ic.currentUpdates {
-		logger.Debugf("set intent current update.%d: %s", i, upd)
-	}
-	logger.Debug()
-	for i, p := range ic.currentPaths {
-		logger.Debugf("set intent current path.%d: %s", i, p)
-	}
-	logger.Debug()
-	for i, p := range ic.currentKeyAsLeafPaths {
-		logger.Debugf("set intent currentKeyAsLeaf path.%d: %s", i, p)
-	}
-	logger.Debug()
-
-	logger.Debugf("has %d removed paths", len(ic.removedPathsMap))
-	for rmp := range ic.removedPathsMap {
-		logger.Debugf("removed path: %s", rmp)
-	}
-	// debug stop
 
 	// TODO: validate updates earlier
 
@@ -98,23 +62,13 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		Delete: make([]*sdcpb.Path, 0),
 	}
 	//
-	ccp := make([][]string, 0, len(ic.newUpdates))
-	for _, upd := range ic.newUpdates {
-		// build complete path (as []string) from update path
-		cp, _ := utils.CompletePath(nil, upd.GetPath())
-		ccp = append(ccp, cp)
-	}
-	allCurrentCacheEntries := d.readNewUpdatesHighestPriority(ctx, ccp)
+	allCurrentCacheEntries := d.readNewUpdatesHighestPriority(ctx, ic.newCompletePaths)
 	// PH1: go through all updates from the intent to figure out
 	// if they need to be applied based on the intent priority.
 	logger.Debugf("reading intent paths to be updated from intended store; looking for the highest priority values")
 
-	for _, upd := range ic.newUpdates {
-		// build complete path (as []string) from update path
-		cp, err := utils.CompletePath(nil, upd.GetPath())
-		if err != nil {
-			return err
-		}
+	for i, upd := range ic.newUpdates {
+		cp := ic.newCompletePaths[i]
 		// get the current highest priority value(s) for this path
 		currentCacheEntries := allCurrentCacheEntries[strings.Join(cp, ",")]
 		logger.Debugf("highest update (p=updates): %v=%v", cp, currentCacheEntries)
@@ -300,7 +254,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 			continue
 		}
 
-		// no next update, check if the removed paths are reference by any other
+		// no next update, check if the removed paths are referenced by any other
 		// update. if not delete they keyPaths.
 
 		// ugly start
@@ -354,11 +308,12 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	logger.Debugf("set data request: END")
 	logger.Debug()
 	// fmt.Println(prototext.Format(setDataReq))
+	log.Info("intent setting into candidate")
 	_, err = d.Set(ctx, setDataReq)
 	if err != nil {
 		return err
 	}
-
+	log.Info("intent set into candidate")
 	// apply intent
 	err = d.applyIntent(ctx, candidateName, req.GetPriority(), setDataReq)
 	if err != nil {
@@ -366,7 +321,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	}
 	logger.Debug()
 	logger.Debug("intent is validated")
-	logger.Debug("intent is applied")
+	log.Info("intent is applied")
 	logger.Debug()
 
 	/////////////////////////////////////
@@ -392,7 +347,6 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	}
 
 	// add paths ending with keys to updates
-	//ic.newUpdates = d.updatesAddKeysAsLeaves(ic.newUpdates)
 	cacheUpdates := make([]*cache.Update, 0, len(ic.newUpdates))
 	for _, upd := range ic.newUpdates {
 		cup, err := d.cacheClient.NewUpdate(upd)
@@ -422,16 +376,20 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	if err != nil {
 		return err
 	}
+	log.Info("intent is saved")
 	return nil
 }
 
 // buildRemovedPaths populates the removedPaths field without the keys as leaves.
 // it adds explicit deletes for each leaf missing in an update.
-func (d *Datastore) buildRemovedPaths(ctx context.Context, ic *intentContext) error {
+func (ic *intentContext) buildRemovedPaths(ctx context.Context) error {
 	var err error
+	// this tree is used to figure out the
+	// paths that don't exist anymore in an intent update.
+	t := ctree.Tree{}
 	// build new tree
 	for _, nu := range ic.newUpdates {
-		err = ic.newTree.AddSchemaUpdate(nu)
+		err = t.AddSchemaUpdate(nu)
 		if err != nil {
 			return err
 		}
@@ -440,9 +398,8 @@ func (d *Datastore) buildRemovedPaths(ctx context.Context, ic *intentContext) er
 	// the ones that don't exist are added to removedPaths
 	for _, p := range ic.currentPaths {
 		cp, _ := utils.CompletePath(nil, p)
-		if ic.newTree.GetLeaf(cp) == nil {
+		if t.GetLeaf(cp) == nil {
 			ic.removedPathsMap[strings.Join(cp, ",")] = struct{}{}
-			// ic.removedPaths = append(ic.removedPaths, p)
 		}
 	}
 	return nil
@@ -461,18 +418,16 @@ func pathIsKeyAsLeaf(p *sdcpb.Path) bool {
 func (d *Datastore) newIntentContext(ctx context.Context, req *sdcpb.SetIntentRequest, candidate string) (*intentContext, error) {
 	var err error
 	ic := &intentContext{
-		req:               req,
-		candidateName:     candidate,
-		newUpdates:        []*sdcpb.Update{},
-		newPaths:          []*sdcpb.Path{},
-		newKeyAsLeafPaths: []*sdcpb.Path{},
-		newTree:           &ctree.Tree{},
+		req:           req,
+		candidateName: candidate,
+
+		newUpdates:       []*sdcpb.Update{},
+		newCompletePaths: [][]string{},
 
 		currentUpdates:        []*sdcpb.Update{},
 		currentPaths:          []*sdcpb.Path{},
 		currentKeyAsLeafPaths: []*sdcpb.Path{},
-		// currentTree:           &ctree.Tree{},
-		// removedPaths:    []*sdcpb.Path{},
+
 		removedPathsMap: map[string]struct{}{},
 	}
 	// expand intent updates values
@@ -480,14 +435,16 @@ func (d *Datastore) newIntentContext(ctx context.Context, req *sdcpb.SetIntentRe
 	if err != nil {
 		return nil, err
 	}
-	// build new paths
+	// build new complete paths ([]string)
+	ic.newCompletePaths = make([][]string, 0, len(ic.newUpdates))
 	for _, upd := range ic.newUpdates {
-		ic.newPaths = append(ic.newPaths, upd.GetPath())
+		// build complete path (as []string) from update path
+		cp, _ := utils.CompletePath(nil, upd.GetPath())
+		ic.newCompletePaths = append(ic.newCompletePaths, cp)
 	}
-	ic.newKeyAsLeafPaths = extractKeyLeafPaths(ic.newPaths)
-	//
+
 	// get current intent notifications
-	intentNotifications, err := d.getIntentFlatNotifications(ctx, req.GetIntent())
+	intentNotifications, err := d.getIntentFlatNotifications(ctx, req.GetIntent(), req.GetPriority())
 	if err != nil {
 		return nil, err
 	}
@@ -502,48 +459,43 @@ func (d *Datastore) newIntentContext(ctx context.Context, req *sdcpb.SetIntentRe
 			ic.currentPaths = append(ic.currentPaths, upd.GetPath())
 		}
 	}
-	err = d.buildRemovedPaths(ctx, ic)
+
+	err = ic.buildRemovedPaths(ctx)
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("intent=%s: %d new updates", req.GetIntent(), len(ic.newUpdates))
+	log.Infof("intent=%s: %d new cPaths", req.GetIntent(), len(ic.newCompletePaths))
+	log.Infof("intent=%s: %d current updates", req.GetIntent(), len(ic.currentUpdates))
+	log.Infof("intent=%s: %d current paths", req.GetIntent(), len(ic.currentPaths))
+	log.Infof("intent=%s: %d current paths with key as leaf", req.GetIntent(), len(ic.currentKeyAsLeafPaths))
+	log.Infof("intent=%s: %d removed paths", req.GetIntent(), len(ic.removedPathsMap))
+	// debug start
+	log.Debug()
+	for i, upd := range ic.newUpdates {
+		log.Debugf("set intent expanded update.%d: %s", i, upd)
+	}
+	// logger.Debug()
+	log.Debug()
+	for i, upd := range ic.currentUpdates {
+		log.Debugf("set intent current update.%d: %s", i, upd)
+	}
+	log.Debug()
+	for i, p := range ic.currentPaths {
+		log.Debugf("set intent current path.%d: %s", i, p)
+	}
+	log.Debug()
+	for i, p := range ic.currentKeyAsLeafPaths {
+		log.Debugf("set intent currentKeyAsLeaf path.%d: %s", i, p)
+	}
+	log.Debug()
+
+	log.Debugf("has %d removed paths", len(ic.removedPathsMap))
+	for rmp := range ic.removedPathsMap {
+		log.Debugf("removed path: %s", rmp)
+	}
+	// debug stop
 	return ic, nil
-}
-
-func extractKeyLeafPaths(ps []*sdcpb.Path) []*sdcpb.Path {
-	if len(ps) == 0 {
-		return nil
-	}
-	//
-	rs := make([]*sdcpb.Path, 0, len(ps))
-	added := make(map[string]struct{})
-
-	for _, p := range ps {
-		for idx, pe := range p.GetElem() {
-			if len(pe.GetKey()) == 0 {
-				continue
-			}
-			// path has keys
-			for k := range pe.GetKey() {
-				keyPath := &sdcpb.Path{
-					Elem: make([]*sdcpb.PathElem, idx+1),
-				}
-				for i := 0; i < idx+1; i++ {
-					keyPath.Elem[i] = &sdcpb.PathElem{
-						Name: p.GetElem()[i].GetName(),
-						Key:  copyMap(p.GetElem()[i].GetKey()),
-					}
-				}
-				keyPath.Elem = append(keyPath.Elem, &sdcpb.PathElem{Name: k})
-				kxp := utils.ToXPath(keyPath, false)
-				if _, ok := added[kxp]; !ok {
-					added[kxp] = struct{}{}
-					rs = append(rs, keyPath)
-				}
-			}
-		}
-	}
-	//
-	return rs
 }
 
 func (d *Datastore) readIntendedPathHighestPriorities(ctx context.Context, cp []string, count uint64) [][]*cache.Update {

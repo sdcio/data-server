@@ -50,7 +50,7 @@ func init() {
 
 func printDataStoreTable(rsp *sdcpb.GetDataStoreResponse) {
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "Schema", "Candidate(s)", "SBI", "Address"})
+	table.SetHeader([]string{"Name", "Schema", "Candidate(s)", "SBI", "Address", "State"})
 	table.SetAlignment(tablewriter.ALIGN_LEFT)
 	table.SetAutoFormatHeaders(false)
 	table.SetAutoWrapText(false)
@@ -80,6 +80,7 @@ func toTableData(rsp *sdcpb.GetDataStoreResponse) [][]string {
 			strings.Join(candidates, "\n"),
 			rsp.GetTarget().GetType(),
 			rsp.GetTarget().GetAddress(),
+			rsp.GetTarget().GetStatus(),
 		},
 	}
 }
