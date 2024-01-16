@@ -2,6 +2,9 @@ package target
 
 import (
 	"context"
+	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
@@ -15,31 +18,41 @@ import (
 )
 
 type ncTarget struct {
-	name         string
-	driver       netconf.Driver
+	name   string
+	driver netconf.Driver
+
+	m         *sync.Mutex
+	connected bool
+
 	schemaClient schema.Client
 	schema       *sdcpb.Schema
-	sbi          *config.SBI
+	sbiConfig    *config.SBI
 }
 
 func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient schema.Client, schema *sdcpb.Schema) (*ncTarget, error) {
-
-	// create a new
-	d, err := scrapligo.NewScrapligoNetconfTarget(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ncTarget{
+	t := &ncTarget{
 		name:         name,
-		driver:       d,
+		m:            new(sync.Mutex),
+		connected:    false,
 		schemaClient: schemaClient,
 		schema:       schema,
-		sbi:          cfg,
-	}, nil
+		sbiConfig:    cfg,
+	}
+	var err error
+	// create a new NETCONF driver
+	t.driver, err = scrapligo.NewScrapligoNetconfTarget(cfg)
+	if err != nil {
+		return t, err
+	}
+	t.connected = true
+	return t, nil
+
 }
 
 func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+	if !t.connected {
+		return nil, fmt.Errorf("not connected")
+	}
 	var source string
 
 	switch req.Datastore.Type {
@@ -52,9 +65,9 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	// init a new XMLConfigBuilder for the pathfilter
 	pathfilterXmlBuilder := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema,
 		&netconf.XMLConfigBuilderOpts{
-			HonorNamespace:         t.sbi.IncludeNS,
-			OperationWithNamespace: t.sbi.OperationWithNamespace,
-			UseOperationRemove:     t.sbi.UseOperationRemove,
+			HonorNamespace:         t.sbiConfig.IncludeNS,
+			OperationWithNamespace: t.sbiConfig.OperationWithNamespace,
+			UseOperationRemove:     t.sbiConfig.UseOperationRemove,
 		})
 
 	// add all the requested paths to the document
@@ -75,6 +88,11 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	// execute the GetConfig rpc
 	ncResponse, err := t.driver.GetConfig(source, filterDoc)
 	if err != nil {
+		if strings.Contains(err.Error(), "EOF") {
+			t.Close()
+			t.connected = false
+			go t.reconnect()
+		}
 		return nil, err
 	}
 
@@ -99,10 +117,13 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 }
 
 func (t *ncTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
+	if !t.connected {
+		return nil, fmt.Errorf("not connected")
+	}
 	xcbCfg := &netconf.XMLConfigBuilderOpts{
-		HonorNamespace:         t.sbi.IncludeNS,
-		OperationWithNamespace: t.sbi.OperationWithNamespace,
-		UseOperationRemove:     t.sbi.UseOperationRemove,
+		HonorNamespace:         t.sbiConfig.IncludeNS,
+		OperationWithNamespace: t.sbiConfig.OperationWithNamespace,
+		UseOperationRemove:     t.sbiConfig.UseOperationRemove,
 	}
 	xmlCBDelete := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, xcbCfg)
 
@@ -149,6 +170,12 @@ func (t *ncTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.S
 		_, err = t.driver.EditConfig("candidate", xdoc)
 		if err != nil {
 			log.Errorf("datastore %s failed edit-config: %v", t.name, err)
+			if strings.Contains(err.Error(), "EOF") {
+				t.Close()
+				t.connected = false
+				go t.reconnect()
+				return nil, err
+			}
 			err2 := t.driver.Discard()
 			if err != nil {
 				// log failed discard
@@ -162,6 +189,11 @@ func (t *ncTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.S
 	// commit the config
 	err := t.driver.Commit()
 	if err != nil {
+		if strings.Contains(err.Error(), "EOF") {
+			t.Close()
+			t.connected = false
+			go t.reconnect()
+		}
 		return nil, err
 	}
 	return &sdcpb.SetDataResponse{
@@ -169,10 +201,18 @@ func (t *ncTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.S
 	}, nil
 }
 
-func (t *ncTarget) Subscribe() {}
+func (t *ncTarget) Status() string {
+	if t == nil || t.driver == nil {
+		return "NOT CONNECTED"
+	}
+	if t.driver.IsAlive() {
+		return "CONNECTED"
+	}
+	return "NOT CONNECTED"
+}
 
 func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
-	log.Infof("starting target %s sync", t.sbi.Address)
+	log.Infof("starting target %s sync", t.sbiConfig.Address)
 
 	for _, ncc := range syncConfig.Config {
 		// periodic get
@@ -196,6 +236,9 @@ func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh cha
 }
 
 func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, force bool, syncCh chan *SyncUpdate) {
+	if !t.connected {
+		return
+	}
 	// iterate syncConfig
 	paths := make([]*sdcpb.Path, 0, len(sc.Paths))
 	// iterate referenced paths
@@ -222,7 +265,12 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, fo
 	// execute netconf get
 	resp, err := t.Get(ctx, req)
 	if err != nil {
-		log.Errorf("failed getting config %v", err)
+		log.Errorf("failed getting config: %T | %v", err, err)
+		if strings.Contains(err.Error(), "EOF") {
+			t.Close()
+			t.connected = false
+			go t.reconnect()
+		}
 		return
 	}
 	// push notifications into syncCh
@@ -243,6 +291,29 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, fo
 	}
 }
 
-func (t *ncTarget) Close() {
-	t.driver.Close()
+func (t *ncTarget) Close() error {
+	return t.driver.Close()
+}
+
+func (t *ncTarget) reconnect() {
+	t.m.Lock()
+	defer t.m.Unlock()
+
+	if t.connected {
+		return
+	}
+
+	var err error
+	log.Infof("%s: NETCONF reconnecting...", t.name)
+	for {
+		t.driver, err = scrapligo.NewScrapligoNetconfTarget(t.sbiConfig)
+		if err != nil {
+			log.Errorf("failed to create NETCONF driver: %v", err)
+			time.Sleep(t.sbiConfig.ConnectRetry)
+			continue
+		}
+		log.Infof("%s: NETCONF reconnected...", t.name)
+		t.connected = true
+		return
+	}
 }

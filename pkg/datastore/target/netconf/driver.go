@@ -21,4 +21,6 @@ type Driver interface {
 	Discard() error
 	// Close the connection to the device
 	Close() error
+	// IsAlive returns true if the underlying transport driver is still open
+	IsAlive() bool
 }

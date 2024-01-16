@@ -20,9 +20,9 @@ const (
 type Target interface {
 	Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error)
 	Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error)
-	Subscribe()
-	//
 	Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate)
+	Status() string
+	Close() error
 }
 
 func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schema.Client, schema *sdcpb.Schema, opts ...grpc.DialOption) (Target, error) {
@@ -31,10 +31,6 @@ func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schema.
 		return newGNMITarget(ctx, name, cfg, opts...)
 	case targetTypeNETCONF:
 		return newNCTarget(ctx, name, cfg, schemaClient, schema)
-	case "redis":
-		return newRedisTarget(ctx, cfg)
-	case "nats":
-		return newNATSTarget(ctx, cfg)
 	case targetTypeNOOP, "":
 		return newNoopTarget(ctx, name)
 	}
