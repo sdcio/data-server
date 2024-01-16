@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/beevik/etree"
+
 	"github.com/iptecharch/data-server/mocks/mocknetconf"
 	"github.com/iptecharch/data-server/mocks/mockschema"
 	"github.com/iptecharch/data-server/pkg/config"
@@ -213,6 +214,7 @@ func Test_ncTarget_Get(t *testing.T) {
 			},
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// create Mock controller
@@ -238,3 +240,18 @@ func Test_ncTarget_Get(t *testing.T) {
 		})
 	}
 }
+
+const (
+	SchemaName    = "TestModel"
+	SchemaVendor  = "TestVendor"
+	SchemaVersion = "TestVersion"
+)
+
+var (
+	TestSchema = &sdcpb.Schema{
+		Name:    SchemaName,
+		Vendor:  SchemaVendor,
+		Version: SchemaVersion,
+	}
+	TestCtx = context.TODO()
+)
