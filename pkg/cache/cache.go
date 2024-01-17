@@ -108,7 +108,7 @@ func getStore(s cachepb.Store) cache.Store {
 		return cache.StoreState
 	case cachepb.Store_INTENDED:
 		return cache.StoreIntended
-	case cachepb.Store_METADATA:
-		return cache.StoreMetadata
+	case cachepb.Store_INTENTS:
+		return cache.StoreIntents
 	}
 }

@@ -2,6 +2,8 @@ module github.com/iptecharch/data-server
 
 go 1.21.4
 
+replace github.com/iptecharch/cache v0.0.28 => ../cache
+
 require (
 	github.com/AlekSi/pointer v1.2.0
 	github.com/beevik/etree v1.2.0
