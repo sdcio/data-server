@@ -2,8 +2,6 @@ module github.com/iptecharch/data-server
 
 go 1.21.4
 
-replace github.com/iptecharch/cache v0.0.28 => ../cache
-
 require (
 	github.com/AlekSi/pointer v1.2.0
 	github.com/beevik/etree v1.2.0
@@ -11,7 +9,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/iptecharch/cache v0.0.28
+	github.com/iptecharch/cache v0.0.29
 	github.com/iptecharch/schema-server v0.0.10
 	github.com/iptecharch/sdc-protos v0.0.16
 	github.com/iptecharch/yang-parser v0.0.3
