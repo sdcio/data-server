@@ -47,6 +47,29 @@ func TestJsonBuilder_AddPath(t *testing.T) {
 					},
 					value: "8",
 				},
+				{
+					path: []*sdcpb.PathElem{
+						{Name: "interface", Key: map[string]string{"name": "eth1"}},
+						{Name: "mtu"},
+					},
+					value: "1500",
+				},
+				{
+					path: []*sdcpb.PathElem{
+						{Name: "system"},
+						{Name: "file", Key: map[string]string{"name": "foo", "bar": "Second Key Val"}},
+						{Name: "filename"},
+					},
+					value: "funnyfile.log",
+				},
+				{
+					path: []*sdcpb.PathElem{
+						{Name: "system"},
+						{Name: "file", Key: map[string]string{"name": "foo", "bar": "Second Key Val"}},
+						{Name: "path"},
+					},
+					value: "/some/system/path",
+				},
 			},
 		},
 	}
