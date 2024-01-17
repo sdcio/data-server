@@ -1,9 +1,10 @@
 package jsonbuilder
 
 import (
-	"fmt"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 )
 
@@ -14,8 +15,31 @@ func TestJsonBuilder_AddPath(t *testing.T) {
 			path  []*sdcpb.PathElem
 			value string
 		}
+		want    *JEntry
 		wantErr bool
 	}{
+		{
+			name:    "Single Element",
+			wantErr: false,
+			pvs: []struct {
+				path  []*sdcpb.PathElem
+				value string
+			}{
+				{
+					path: []*sdcpb.PathElem{
+						{Name: "interface"},
+					},
+					value: "5",
+				},
+			},
+			want: &JEntry{
+				etype: ETMap,
+				// name:  "root",
+				mapVal: map[string]*JEntry{
+					"interface": NewJEntryString("5"),
+				},
+			},
+		},
 		{
 			name:    "One",
 			wantErr: false,
@@ -71,26 +95,106 @@ func TestJsonBuilder_AddPath(t *testing.T) {
 					value: "/some/system/path",
 				},
 			},
+			want: &JEntry{
+				etype: ETMap,
+				mapVal: map[string]*JEntry{
+					"interface": {
+						etype: ETArray,
+						arrayVal: []*JEntry{
+							{
+								etype: ETMap,
+								mapVal: map[string]*JEntry{
+									"name": NewJEntryString("eth0"),
+									"subinterface": {
+										etype: ETArray,
+										arrayVal: []*JEntry{
+											{
+												etype: ETMap,
+												mapVal: map[string]*JEntry{
+													"name":    NewJEntryString("999"),
+													"vlan-id": NewJEntryString("5"),
+												},
+											},
+											{
+												etype: ETMap,
+												mapVal: map[string]*JEntry{
+													"name":    NewJEntryString("996"),
+													"vlan-id": NewJEntryString("88"),
+												},
+											},
+										},
+									},
+								},
+							},
+							{
+								etype: ETMap,
+								mapVal: map[string]*JEntry{
+									"name": NewJEntryString("eth1"),
+									"subinterface": {
+										etype: ETArray,
+										arrayVal: []*JEntry{
+											{
+												etype: ETMap,
+												mapVal: map[string]*JEntry{
+													"name":    NewJEntryString("76"),
+													"vlan-id": NewJEntryString("8"),
+												},
+											},
+										},
+									},
+									"mtu": NewJEntryString("1500"),
+								},
+							},
+						},
+					},
+					"system": {
+						etype: ETMap,
+						mapVal: map[string]*JEntry{
+							"file": {
+								etype: ETArray,
+								arrayVal: []*JEntry{
+									{
+										etype: ETMap,
+										mapVal: map[string]*JEntry{
+											"name":     NewJEntryString("foo"),
+											"bar":      NewJEntryString("Second Key Val"),
+											"filename": NewJEntryString("funnyfile.log"),
+											"path":     NewJEntryString("/some/system/path"),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			jb := NewJsonBuilder()
 			for _, pathValueItem := range tt.pvs {
 				if err := jb.AddValue(pathValueItem.path, pathValueItem.value); (err != nil) != tt.wantErr {
-					PrintDoc(jb)
 					t.Errorf("JsonBuilder.AddPath() error = %v, wantErr %v", err, tt.wantErr)
 				}
 			}
-			PrintDoc(jb)
+
+			// PrintDoc(jb)
+			// PrintDoc(&JsonBuilder{root: tt.want})
+
+			if !cmp.Equal(jb.root, tt.want, cmp.AllowUnexported(JEntry{}), cmpopts.IgnoreFields(JEntry{}, "name")) {
+				d := cmp.Diff(jb.root, tt.want, cmp.AllowUnexported(JEntry{}), cmpopts.IgnoreFields(JEntry{}, "name"))
+				t.Error(d)
+			}
 		})
 	}
 }
 
-func PrintDoc(jb *JsonBuilder) {
-	doc, err := jb.GetDocIndent()
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println(string(doc))
-}
+// func PrintDoc(jb *JsonBuilder) {
+// 	doc, err := jb.GetDocIndent()
+// 	if err != nil {
+// 		fmt.Println(err)
+// 	}
+// 	fmt.Println(string(doc))
+// }
