@@ -283,6 +283,7 @@ func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*
 		// 	SkipVerify: ds.Config().SBI.TLS.SkipVerify,
 		// },
 		// Credentials: &sdcpb.Credentials{},
+		Status: ds.ConnectionState(),
 	}
 	rsp.Schema = &sdcpb.Schema{
 		Name:    ds.Config().Schema.Name,

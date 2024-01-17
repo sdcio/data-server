@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/iptecharch/cache/proto/cachepb"
 	"github.com/iptecharch/schema-server/utils"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -99,6 +101,7 @@ func (c *remoteCache) Modify(ctx context.Context, name string, opts *Opts, dels 
 			},
 		)
 	}
+
 	wo := &client.ClientOpts{
 		Owner:         opts.Owner,
 		Priority:      opts.Priority,
@@ -136,7 +139,6 @@ func (c *remoteCache) ReadCh(ctx context.Context, name string, opts *Opts, paths
 		PriorityCount: opts.PriorityCount,
 		KeysOnly:      opts.KeysOnly,
 	}
-
 	inCh := c.c.Read(ctx, name, ro, paths, period)
 	outCh := make(chan *Update)
 	go func() {
@@ -144,6 +146,9 @@ func (c *remoteCache) ReadCh(ctx context.Context, name string, opts *Opts, paths
 		for {
 			select {
 			case <-ctx.Done():
+				if !errors.Is(ctx.Err(), context.Canceled) {
+					log.Errorf("ctx done: %v", ctx.Err())
+				}
 				return
 			case readResponse, ok := <-inCh:
 				if !ok {
@@ -158,6 +163,9 @@ func (c *remoteCache) ReadCh(ctx context.Context, name string, opts *Opts, paths
 				}
 				select {
 				case <-ctx.Done():
+					if !errors.Is(ctx.Err(), context.Canceled) {
+						log.Errorf("ctx done: %v", ctx.Err())
+					}
 					return
 				case outCh <- rUpd:
 				}

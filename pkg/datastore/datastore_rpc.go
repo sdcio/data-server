@@ -112,10 +112,6 @@ func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) err
 	if err == nil {
 		return nil
 	}
-	// err not nil
-	if !errors.Is(err, context.DeadlineExceeded) {
-		return err
-	}
 
 	log.Errorf("failed to create DS %s target: %v", d.config.Name, err)
 	ticker := time.NewTicker(d.config.SBI.ConnectRetry)
@@ -263,8 +259,19 @@ func (d *Datastore) DeleteCandidate(ctx context.Context, name string) error {
 	return d.cacheClient.DeleteCandidate(ctx, d.Name(), name)
 }
 
+func (d *Datastore) ConnectionState() string {
+	if d.sbi == nil {
+		return ""
+	}
+	return d.sbi.Status()
+}
+
 func (d *Datastore) Stop() error {
 	d.cfn()
+	err := d.sbi.Close()
+	if err != nil {
+		log.Errorf("datastore %s failed to close the target connection: %v", d.Name(), err)
+	}
 	return d.cacheClient.Delete(context.TODO(), d.Config().Name)
 }
 
