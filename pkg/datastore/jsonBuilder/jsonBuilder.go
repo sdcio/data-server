@@ -2,7 +2,6 @@ package jsonbuilder
 
 import (
 	"encoding/json"
-	"fmt"
 
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 )
@@ -20,15 +19,24 @@ func NewJsonBuilder() *JsonBuilder {
 func (jb *JsonBuilder) AddValue(p []*sdcpb.PathElem, v string) error {
 	var err error
 	actual_elem := jb.root
+	var nextKeys map[string]string
 
-	var prev_key map[string]string
-	for _, pe := range p {
-		fmt.Printf("Elem %s\n", pe.Name)
-		actual_elem, err = actual_elem.GetSubElem(pe.Name, prev_key, len(pe.Key) > 0, true)
+	for idx, pe := range p {
+		// fmt.Printf("Elem %s - %v\n", pe.Name, idx >= len(p)-1)
+		// access the keys of the next element
+		// they are required to figure out the type of
+		// the to be created subelement
+		if idx < len(p)-1 {
+			nextKeys = p[idx+1].Key
+		} else {
+			nextKeys = nil
+		}
+
+		// we also indicate if this is the last element in the path
+		actual_elem, err = actual_elem.GetSubElem(pe.Name, pe.Key, true, nextKeys, idx >= len(p)-1)
 		if err != nil {
 			return err
 		}
-		prev_key = pe.Key
 	}
 	actual_elem.AddToMap(p[len(p)-1].Name, NewJEntryString(v))
 

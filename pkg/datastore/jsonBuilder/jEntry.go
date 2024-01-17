@@ -78,37 +78,66 @@ func (j *JEntry) GetString() string {
 	return j.stringVal
 }
 
-func (j *JEntry) GetSubElem(name string, key map[string]string, hasKeys bool, create bool) (*JEntry, error) {
+func (j *JEntry) GetSubElem(name string, key map[string]string, create bool, nextKeys map[string]string, lastElem bool) (*JEntry, error) {
 
 	switch j.etype {
 	case ETArray:
-		// iterate through list find matching entry
-		// otherwise create new
-		return j.getSubElemArray(name, key, hasKeys, create)
+		return j.getSubElemArray(name, key, create, nextKeys, lastElem)
 	case ETMap:
-		val, exists := j.mapVal[name]
-		if exists {
-			return val, nil
-		}
-		if !create {
-			return nil, fmt.Errorf("%w: %s", ErrNotFound, name)
-		}
-
-		var newEntry *JEntry
-		if hasKeys {
-			newEntry = NewJEntryArray(name)
-			j.mapVal[name] = newEntry
-		} else {
-			newEntry = NewJEntryMap(name)
-			j.mapVal[name] = newEntry
-		}
-		return newEntry, nil
+		return j.GetSubElemMap(name, key, create, nextKeys, lastElem)
 	}
 	return nil, fmt.Errorf("ERROR")
 }
 
+func (j *JEntry) GetSubElemMap(name string, key map[string]string, create bool, nextKeys map[string]string, lastElem bool) (*JEntry, error) {
+	val, exists := j.mapVal[name]
+	if exists {
+		if len(key) == 0 {
+			return val, nil
+		}
+	OUTER:
+		for _, elem := range val.arrayVal {
+			for k, v := range key {
+				if !(elem.mapVal[k].etype == ETString && elem.mapVal[k].GetString() == v) {
+					// we can check the next Array entry
+					continue OUTER
+				}
+			}
+			return elem, nil
+		}
+	}
+	if !create {
+		return nil, fmt.Errorf("%w: %s", ErrNotFound, name)
+	}
+
+	var newEntry *JEntry
+	if len(key) > 0 {
+		var arr *JEntry
+		if exists {
+			arr = val
+		} else {
+			arr = NewJEntryArray(name)
+			j.mapVal[name] = arr
+		}
+		newEntry = NewJEntryMap("Item")
+		for k, v := range key {
+			newEntry.mapVal[k] = NewJEntryString(v)
+		}
+		arr.arrayVal = append(arr.arrayVal, newEntry)
+		return newEntry, nil
+	}
+	if lastElem {
+		return j, nil
+	}
+
+	newEntry = NewJEntryMap(name)
+	j.mapVal[name] = newEntry
+
+	return newEntry, nil
+}
+
 // getsubElemArray is the GetSubElem implementation for the Array type
-func (j *JEntry) getSubElemArray(name string, key map[string]string, hasKeys bool, create bool) (*JEntry, error) {
+func (j *JEntry) getSubElemArray(name string, key map[string]string, create bool, nextKeys map[string]string, lastElem bool) (*JEntry, error) {
 OUTER:
 	for _, elem := range j.arrayVal {
 		for k, v := range key {
@@ -120,28 +149,16 @@ OUTER:
 		// return the found element
 		return elem, nil
 	}
-	// if create is set, create it
+	// if create is not set,
+	if !create {
+		return nil, fmt.Errorf("Not Found")
+	}
 	var newEntry *JEntry
 	if create {
-		if len(key) > 0 {
-			newEntry = NewJEntryMap("Item")
-			for k, v := range key {
-				newEntry.mapVal[k] = NewJEntryString(v)
-			}
-			j.arrayVal = append(j.arrayVal, newEntry)
-		}
-		var subElem *JEntry
-		if hasKeys {
-			subElem = NewJEntryArray(name)
-		} else {
-			subElem = NewJEntryMap(name)
-		}
-		newEntry.mapVal[name] = subElem
-
-		return subElem, nil
+		_ = ""
 	}
-	// if create is not set return an error
-	return nil, fmt.Errorf("Not Found")
+
+	return newEntry, nil
 }
 
 // AddMapEntry adds the given JEntry to the Map
