@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/jellydator/ttlcache/v3"
@@ -12,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/iptecharch/data-server/pkg/config"
 	"github.com/iptecharch/data-server/pkg/utils"
 )
 
@@ -21,24 +21,40 @@ type cacheKey struct {
 	Version string
 	Path    string
 }
+
 type remoteClient struct {
+	// the schema server client
+	c sdcpb.SchemaServerClient
+	// cache used to store SchemaResponses if enabled.
 	schemaCache *ttlcache.Cache[cacheKey, *sdcpb.GetSchemaResponse]
-	c           sdcpb.SchemaServerClient
+	// remote cache config.
+	cacheConfig *config.RemoteSchemaCache
+	// cacheGet options, only `WithDisableTouchOnHit` is used now.
+	getOpts []ttlcache.Option[cacheKey, *sdcpb.GetSchemaResponse]
 }
 
-func NewRemoteClient(cc *grpc.ClientConn, ttl time.Duration, cap uint64) Client {
+func NewRemoteClient(cc *grpc.ClientConn, cacheConfig *config.RemoteSchemaCache) Client {
 	// no cache
-	if ttl <= 0 {
+	if cacheConfig == nil {
 		return &remoteClient{
 			c: sdcpb.NewSchemaServerClient(cc),
 		}
 	}
+	// rc with cache
 	rc := &remoteClient{
 		schemaCache: ttlcache.New[cacheKey, *sdcpb.GetSchemaResponse](
-			ttlcache.WithTTL[cacheKey, *sdcpb.GetSchemaResponse](ttl),
-			ttlcache.WithCapacity[cacheKey, *sdcpb.GetSchemaResponse](cap),
+			ttlcache.WithTTL[cacheKey, *sdcpb.GetSchemaResponse](cacheConfig.TTL),
+			ttlcache.WithCapacity[cacheKey, *sdcpb.GetSchemaResponse](cacheConfig.Capacity),
 		),
 		c: sdcpb.NewSchemaServerClient(cc),
+
+		cacheConfig: cacheConfig,
+		getOpts:     []ttlcache.Option[cacheKey, *sdcpb.GetSchemaResponse]{},
+	}
+	if cacheConfig.RefreshOnHit {
+		rc.getOpts = []ttlcache.Option[cacheKey, *sdcpb.GetSchemaResponse]{
+			ttlcache.WithDisableTouchOnHit[cacheKey, *sdcpb.GetSchemaResponse](),
+		}
 	}
 	go rc.schemaCache.Start()
 	return rc
@@ -56,44 +72,52 @@ func (c *remoteClient) ListSchema(ctx context.Context, in *sdcpb.ListSchemaReque
 
 // returns the schema of an item identified by a gNMI-like path
 func (c *remoteClient) GetSchema(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
-	// no cache
+	// no cache, query from the remote server.
 	if c.schemaCache == nil {
 		return c.c.GetSchema(ctx, in, opts...)
 	}
+	// if the cache has no descriptions, query from the remote server.
+	if in.GetWithDescription() && !c.cacheConfig.WithDescription {
+		return c.c.GetSchema(ctx, in, opts...)
+	}
+	// build cache entry key
 	key := cacheKey{
 		Name:    in.GetSchema().GetName(),
 		Vendor:  in.GetSchema().GetVendor(),
 		Version: in.GetSchema().GetVersion(),
 		Path:    utils.ToXPath(in.GetPath(), true),
 	}
-
-	if item := c.schemaCache.Get(key); item != nil {
+	// check if the key exists in the cache
+	if item := c.schemaCache.Get(key, c.getOpts...); item != nil {
+		// clone it
 		rsp := proto.Clone(item.Value()).(*sdcpb.GetSchemaResponse)
 		// apply modifiers
-		if !in.GetWithDescription() {
+		// if the request does not need the description and the
+		// cache stores with description, remove it.
+		if !in.GetWithDescription() && c.cacheConfig.WithDescription {
 			return removeDescription(rsp), nil
 		}
 		return rsp, nil
 	}
+	// key not found in the cache, query remote server
 	rsp, err := c.c.GetSchema(ctx, &sdcpb.GetSchemaRequest{
 		Path:            in.GetPath(),
 		Schema:          in.GetSchema(),
 		ValidateKeys:    in.GetValidateKeys(),
-		WithDescription: true,
+		WithDescription: c.cacheConfig.WithDescription,
 	}, opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	if err != nil {
-		return nil, err
-	}
-	// populate the cache
+	// populate the cache with the retrieved schema.
 	c.schemaCache.Set(key, rsp, ttlcache.DefaultTTL)
-	// copy response
+	// clone the response to return it to the client.
 	rrsp := proto.Clone(rsp).(*sdcpb.GetSchemaResponse)
 	// apply modifiers
-	if !in.GetWithDescription() {
+	// if the request does not need the description and the
+	// cache stores with description, remove it.
+	if !in.GetWithDescription() && c.cacheConfig.WithDescription {
 		return removeDescription(rrsp), nil
 	}
 	return rrsp, nil

@@ -173,8 +173,11 @@ schemas:
 # remote schema server
 schema-server:
   address: localhost:55000
-  cache-ttl: 300s
-  cache-capacity: 1000
+  cache:
+    ttl: 300s
+    capacity: 1000
+    with-description: false
+    refresh-on-hit: false
   # TLS config
   # tls:
   #   ca:

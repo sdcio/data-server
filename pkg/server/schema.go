@@ -72,10 +72,7 @@ func (s *Server) createSchemaClient(ctx context.Context) {
 			goto SCHEMA_CONNECT
 		}
 		log.Infof("connected to schema server: %s", s.config.SchemaServer.Address)
-		s.schemaClient = schema.NewRemoteClient(cc,
-			s.config.SchemaServer.CacheTTL,
-			s.config.SchemaServer.CacheCapacity,
-		)
+		s.schemaClient = schema.NewRemoteClient(cc, s.config.SchemaServer.Cache)
 	}
 }
 
