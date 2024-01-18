@@ -41,7 +41,7 @@ func TestJsonBuilder_AddPath(t *testing.T) {
 			},
 		},
 		{
-			name:    "One",
+			name:    "Complex Scenario",
 			wantErr: false,
 			pvs: []struct {
 				path  []*sdcpb.PathElem
