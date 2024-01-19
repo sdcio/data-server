@@ -2,6 +2,7 @@ package target
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -47,7 +48,7 @@ func Test_ncTarget_Get(t *testing.T) {
 </interface>
 `
 					responseDoc := etree.NewDocument()
-					err := responseDoc.ReadFromString("<interface>eth0</interface>")
+					err := responseDoc.ReadFromString("<interface><name>eth0</name><mtu>1500</mtu></interface>")
 					if err != nil {
 						t.Errorf("error creating response")
 					}
@@ -64,21 +65,80 @@ func Test_ncTarget_Get(t *testing.T) {
 				},
 				getSchemaClient: func(c *gomock.Controller, t *testing.T) schema.Client {
 					s := mockschema.NewMockClient(c)
-					s.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-						func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
-							return &sdcpb.GetSchemaResponse{
-								Schema: &sdcpb.SchemaElem{
-									Schema: &sdcpb.SchemaElem_Field{
-										Field: &sdcpb.LeafSchema{
-											Name: "Foo",
-											Type: &sdcpb.SchemaLeafType{
-												TypeName: "string",
+					gomock.InOrder(
+						s.EXPECT().GetSchema(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
+							func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
+								fmt.Println(in.String())
+								return &sdcpb.GetSchemaResponse{
+									Schema: &sdcpb.SchemaElem{
+										Schema: &sdcpb.SchemaElem_Container{
+											Container: &sdcpb.ContainerSchema{
+												Name: "interface",
+												Keys: []*sdcpb.LeafSchema{
+													{
+														Name: "name",
+													},
+												},
 											},
 										},
 									},
-								},
-							}, nil
-						},
+								}, nil
+							},
+						),
+						s.EXPECT().GetSchema(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
+							func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
+								fmt.Println(in.String())
+								return &sdcpb.GetSchemaResponse{
+									Schema: &sdcpb.SchemaElem{
+										Schema: &sdcpb.SchemaElem_Container{
+											Container: &sdcpb.ContainerSchema{
+												Name: "interface",
+												Keys: []*sdcpb.LeafSchema{
+													{
+														Name: "name",
+													},
+												},
+											},
+										},
+									},
+								}, nil
+							},
+						),
+						s.EXPECT().GetSchema(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
+							func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
+								fmt.Println(in.String())
+								return &sdcpb.GetSchemaResponse{
+									Schema: &sdcpb.SchemaElem{
+										Schema: &sdcpb.SchemaElem_Field{
+											Field: &sdcpb.LeafSchema{
+												Name: "name",
+												Type: &sdcpb.SchemaLeafType{
+													Type: "string",
+												},
+											},
+										},
+									},
+								}, nil
+							},
+						),
+						s.EXPECT().GetSchema(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
+							func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
+								fmt.Println(in.String())
+								return &sdcpb.GetSchemaResponse{
+									Schema: &sdcpb.SchemaElem{
+										Schema: &sdcpb.SchemaElem_Field{
+											Field: &sdcpb.LeafSchema{
+												Name: "mtu",
+												Type: &sdcpb.SchemaLeafType{
+
+													Type: "string",
+												},
+											},
+										},
+									},
+								}, nil
+							},
+						),
 					)
 					return s
 				},
@@ -112,12 +172,38 @@ func Test_ncTarget_Get(t *testing.T) {
 									Elem: []*sdcpb.PathElem{
 										{
 											Name: "interface",
+											Key: map[string]string{
+												"name": "eth0",
+											},
+										},
+										{
+											Name: "name",
 										},
 									},
 								},
 								Value: &sdcpb.TypedValue{
 									Value: &sdcpb.TypedValue_StringVal{
 										StringVal: "eth0",
+									},
+								},
+							},
+							{
+								Path: &sdcpb.Path{
+									Elem: []*sdcpb.PathElem{
+										{
+											Name: "interface",
+											Key: map[string]string{
+												"name": "eth0",
+											},
+										},
+										{
+											Name: "mtu",
+										},
+									},
+								},
+								Value: &sdcpb.TypedValue{
+									Value: &sdcpb.TypedValue_StringVal{
+										StringVal: "1500",
 									},
 								},
 							},
