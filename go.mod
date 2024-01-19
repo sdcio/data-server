@@ -9,9 +9,9 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/iptecharch/cache v0.0.28
+	github.com/iptecharch/cache v0.0.29
 	github.com/iptecharch/schema-server v0.0.10
-	github.com/iptecharch/sdc-protos v0.0.15
+	github.com/iptecharch/sdc-protos v0.0.16
 	github.com/iptecharch/yang-parser v0.0.3
 	github.com/jellydator/ttlcache/v3 v3.1.1
 	github.com/kylelemons/godebug v1.1.0
@@ -19,7 +19,7 @@ require (
 	github.com/openconfig/gnmi v0.10.0
 	github.com/openconfig/gnmic/pkg/api v0.1.1
 	github.com/openconfig/gnmic/pkg/target v0.1.1
-	github.com/openconfig/gnmic/pkg/types v0.1.1
+	github.com/openconfig/gnmic/pkg/types v0.1.2
 	github.com/prometheus/client_golang v1.17.0
 	github.com/scrapli/scrapligo v1.2.0
 	github.com/sirupsen/logrus v1.9.3

@@ -104,7 +104,7 @@ schemas:
     directories:
       - ./lab/common/yang/sros_23.3/YANG/ietf
       - ./lab/common/yang/sros_23.3/YANG/nokia-sros-yang-extensions.yang
-  - name: sros-withdash
+  - name: sros
     vendor: Nokia
     version: 23.7
     files:
@@ -193,7 +193,7 @@ cache:
   # type: remote
   type: local
   # store-type if type == local
-  store-type: badgerdbv2
+  store-type: badgerdb
   # local directory for caches if type == local
   dir: "./cached/caches"
   # remote cache address, if type == remote

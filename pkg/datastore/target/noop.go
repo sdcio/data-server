@@ -67,10 +67,10 @@ func (t *noopTarget) Set(_ context.Context, req *sdcpb.SetDataRequest) (*sdcpb.S
 	return result, nil
 }
 
-func (t *noopTarget) Subscribe() {}
+func (t *noopTarget) Status() string { return "N/A" }
 
 func (t *noopTarget) Sync(ctx context.Context, _ *config.Sync, syncCh chan *SyncUpdate) {
 	log.Infof("starting target %s sync", t.name)
 }
 
-func (t *noopTarget) Close() {}
+func (t *noopTarget) Close() error { return nil }
