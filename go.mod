@@ -13,6 +13,7 @@ require (
 	github.com/iptecharch/schema-server v0.0.10
 	github.com/iptecharch/sdc-protos v0.0.16
 	github.com/iptecharch/yang-parser v0.0.3
+	github.com/jellydator/ttlcache/v3 v3.1.1
 	github.com/kylelemons/godebug v1.1.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/openconfig/gnmi v0.10.0
