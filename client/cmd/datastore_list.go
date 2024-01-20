@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -27,15 +28,24 @@ var datastoreListCmd = &cobra.Command{
 			return err
 		}
 		req := &sdcpb.ListDataStoreRequest{}
-		fmt.Println("request:")
-		fmt.Println(prototext.Format(req))
 		rsp, err := dataClient.ListDataStore(ctx, req)
 		if err != nil {
 			return err
 		}
-		fmt.Println("response:")
-		fmt.Println(prototext.Format(rsp))
-		printDataStoresTable(rsp)
+
+		switch format {
+		case "":
+			fmt.Println(prototext.Format(rsp))
+		case "table":
+			printDataStoresTable(rsp)
+		case "json":
+			b, err := json.MarshalIndent(rsp, "", "  ")
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(b))
+		}
+
 		return nil
 	},
 }

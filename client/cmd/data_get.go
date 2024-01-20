@@ -117,7 +117,7 @@ func init() {
 	dataCmd.AddCommand(dataGetCmd)
 	dataGetCmd.Flags().StringArrayVarP(&paths, "path", "", []string{}, "get path(s)")
 	dataGetCmd.Flags().StringVarP(&dataType, "type", "", "ALL", "data type, one of: ALL, CONFIG, STATE")
-	dataGetCmd.Flags().StringVarP(&format, "format", "", "", "print format, '', 'flat' or 'json'")
+
 	// intended store
 	dataGetCmd.Flags().BoolVarP(&intended, "intended", "", false, "get data from intended store")
 	dataGetCmd.Flags().StringVarP(&owner, "owner", "", "", "intended store owner to query")

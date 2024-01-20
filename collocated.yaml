@@ -96,6 +96,8 @@ grpc-server:
 
 # starts a local schema store/client
 schema-store:
+  # type is either memstore (default) or persistsstore
+  # type: memstore
   schemas:
     - name: sros
       vendor: Nokia
