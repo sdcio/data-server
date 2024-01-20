@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/iptecharch/cache/proto/cachepb"
-	"github.com/iptecharch/schema-server/utils"
+	"github.com/iptecharch/schema-server/pkg/utils"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 
 	"github.com/iptecharch/data-server/pkg/cache"

@@ -3,16 +3,16 @@ package schema
 import (
 	"context"
 
-	schemaStore "github.com/iptecharch/schema-server/schema"
+	schemaStore "github.com/iptecharch/schema-server/pkg/store"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"google.golang.org/grpc"
 )
 
 type localClient struct {
-	*schemaStore.Store
+	schemaStore.Store
 }
 
-func NewLocalClient(store *schemaStore.Store) Client {
+func NewLocalClient(store schemaStore.Store) Client {
 	return &localClient{
 		Store: store,
 	}

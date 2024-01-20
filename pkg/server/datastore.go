@@ -179,7 +179,7 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 			log.Errorf("failed to stop datastore %s: %v", name, err)
 		}
 		delete(s.datastores, name)
-		log.Infof("deleted main %s", name)
+		log.Infof("deleted datastore %s", name)
 		return &sdcpb.DeleteDataStoreResponse{}, nil
 	default:
 		switch req.GetDatastore().GetType() {
@@ -192,7 +192,7 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 				log.Errorf("failed to stop datastore %s: %v", name, err)
 			}
 			delete(s.datastores, name)
-			log.Infof("deleted main %s", name)
+			log.Infof("deleted datastore %s", name)
 		}
 		return &sdcpb.DeleteDataStoreResponse{}, nil
 	}

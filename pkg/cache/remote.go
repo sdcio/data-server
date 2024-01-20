@@ -10,7 +10,7 @@ import (
 	"github.com/iptecharch/cache/pkg/cache"
 	"github.com/iptecharch/cache/pkg/client"
 	"github.com/iptecharch/cache/proto/cachepb"
-	"github.com/iptecharch/schema-server/utils"
+	"github.com/iptecharch/schema-server/pkg/utils"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"

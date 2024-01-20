@@ -64,6 +64,12 @@ func NewScrapligoNetconfTarget(cfg *config.SBI) (*ScrapligoNetconfTarget, error)
 }
 
 func (snt *ScrapligoNetconfTarget) Close() error {
+	if snt == nil {
+		return nil
+	}
+	if snt.driver == nil {
+		return nil
+	}
 	return snt.driver.Close()
 }
 
