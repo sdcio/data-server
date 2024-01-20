@@ -98,6 +98,7 @@ grpc-server:
 schema-store:
   # type is either memstore (default) or persistsstore
   # type: memstore
+  type: persiststore
   schemas:
     - name: sros
       vendor: Nokia

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/olekukonko/tablewriter"
@@ -59,8 +60,11 @@ func printDataStoresTable(rsp *sdcpb.ListDataStoreResponse) {
 	for _, r := range rsp.GetDatastores() {
 		tableData = append(tableData, toTableData(r)...)
 	}
+	sort.Slice(tableData, func(i, j int) bool {
+		return tableData[i][0] < tableData[j][0]
+	})
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "Schema", "Candidate(s)", "SBI", "Address"})
+	table.SetHeader([]string{"Name", "Schema", "Protocol", "Address", "State", "Candidate(s)"})
 	table.SetAlignment(tablewriter.ALIGN_LEFT)
 	table.SetAutoFormatHeaders(false)
 	table.SetAutoWrapText(false)
