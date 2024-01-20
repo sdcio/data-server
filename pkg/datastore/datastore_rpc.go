@@ -289,7 +289,9 @@ MAIN:
 	for {
 		select {
 		case <-ctx.Done():
-			log.Errorf("datastore %s sync stopped: %v", d.Name(), ctx.Err())
+			if !errors.Is(ctx.Err(), context.Canceled) {
+				log.Errorf("datastore %s sync stopped: %v", d.Name(), ctx.Err())
+			}
 			return
 		case syncup := <-d.synCh:
 			if syncup.Start {

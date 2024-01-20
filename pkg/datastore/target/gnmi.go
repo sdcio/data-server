@@ -3,6 +3,7 @@ package target
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -182,7 +183,9 @@ START:
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("target %s sync stopped: %v", t.target.Config.Name, ctx.Err())
+			if !errors.Is(ctx.Err(), context.Canceled) {
+				log.Errorf("datastore %s sync stopped: %v", t.target.Config.Name, ctx.Err())
+			}
 			return
 		case rsp := <-rspch:
 			switch r := rsp.Response.Response.(type) {

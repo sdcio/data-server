@@ -2,6 +2,7 @@ package target
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -232,7 +233,9 @@ func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh cha
 	}
 
 	<-ctx.Done()
-	log.Infof("sync stopped: %v", ctx.Err())
+	if !errors.Is(ctx.Err(), context.Canceled) {
+		log.Errorf("datastore %s sync stopped: %v", t.name, ctx.Err())
+	}
 }
 
 func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, force bool, syncCh chan *SyncUpdate) {
