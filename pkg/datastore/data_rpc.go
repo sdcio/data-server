@@ -1145,7 +1145,7 @@ func (d *Datastore) getChild(ctx context.Context, s string, cs *sdcpb.SchemaElem
 			return c, true
 		}
 	}
-	if cs.Container.Name == "root" {
+	if cs.Container.Name == "__root__" {
 		for _, c := range cs.Container.GetChildren() {
 			rsp, err := d.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
 				Path:   &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: c}}},

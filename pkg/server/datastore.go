@@ -179,7 +179,7 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 			log.Errorf("failed to stop datastore %s: %v", name, err)
 		}
 		delete(s.datastores, name)
-		log.Infof("deleted main %s", name)
+		log.Infof("deleted datastore %s", name)
 		return &sdcpb.DeleteDataStoreResponse{}, nil
 	default:
 		switch req.GetDatastore().GetType() {
@@ -192,7 +192,7 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 				log.Errorf("failed to stop datastore %s: %v", name, err)
 			}
 			delete(s.datastores, name)
-			log.Infof("deleted main %s", name)
+			log.Infof("deleted datastore %s", name)
 		}
 		return &sdcpb.DeleteDataStoreResponse{}, nil
 	}
@@ -276,14 +276,20 @@ func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*
 	rsp.Target = &sdcpb.Target{
 		Type:    ds.Config().SBI.Type,
 		Address: ds.Config().SBI.Address,
-		// Tls: &sdcpb.TLS{
-		// 	Ca:         ds.Config().SBI.TLS.CA,
-		// 	Cert:       ds.Config().SBI.TLS.Cert,
-		// 	Key:        ds.Config().SBI.TLS.Key,
-		// 	SkipVerify: ds.Config().SBI.TLS.SkipVerify,
-		// },
-		// Credentials: &sdcpb.Credentials{},
-		Status: ds.ConnectionState(),
+	}
+	// map datastore sbi conn state to sdcpb.TargetStatus
+	switch ds.ConnectionState() {
+	// netconf
+	case "CONNECTED":
+		rsp.Target.Status = sdcpb.TargetStatus_CONNECTED
+	case "NOT_CONNECTED":
+		// gnmi
+	case "READY", "IDLE":
+		rsp.Target.Status = sdcpb.TargetStatus_CONNECTED
+		rsp.Target.StatusDetails = ds.ConnectionState()
+	default:
+		rsp.Target.Status = sdcpb.TargetStatus_NOT_CONNECTED
+		rsp.Target.StatusDetails = ds.ConnectionState()
 	}
 	rsp.Schema = &sdcpb.Schema{
 		Name:    ds.Config().Schema.Name,

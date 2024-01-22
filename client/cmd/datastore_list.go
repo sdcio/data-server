@@ -5,8 +5,10 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/olekukonko/tablewriter"
@@ -27,15 +29,24 @@ var datastoreListCmd = &cobra.Command{
 			return err
 		}
 		req := &sdcpb.ListDataStoreRequest{}
-		fmt.Println("request:")
-		fmt.Println(prototext.Format(req))
 		rsp, err := dataClient.ListDataStore(ctx, req)
 		if err != nil {
 			return err
 		}
-		fmt.Println("response:")
-		fmt.Println(prototext.Format(rsp))
-		printDataStoresTable(rsp)
+
+		switch format {
+		case "":
+			fmt.Println(prototext.Format(rsp))
+		case "table":
+			printDataStoresTable(rsp)
+		case "json":
+			b, err := json.MarshalIndent(rsp, "", "  ")
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(b))
+		}
+
 		return nil
 	},
 }
@@ -49,8 +60,11 @@ func printDataStoresTable(rsp *sdcpb.ListDataStoreResponse) {
 	for _, r := range rsp.GetDatastores() {
 		tableData = append(tableData, toTableData(r)...)
 	}
+	sort.Slice(tableData, func(i, j int) bool {
+		return tableData[i][0] < tableData[j][0]
+	})
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "Schema", "Candidate(s)", "SBI", "Address"})
+	table.SetHeader([]string{"Name", "Schema", "Protocol", "Address", "State", "Candidate (C/O/P)"})
 	table.SetAlignment(tablewriter.ALIGN_LEFT)
 	table.SetAutoFormatHeaders(false)
 	table.SetAutoWrapText(false)

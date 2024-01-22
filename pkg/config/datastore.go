@@ -110,7 +110,7 @@ func (s *SBI) validateSetDefaults() error {
 	if s.ConnectRetry < time.Second {
 		s.ConnectRetry = time.Second
 	}
-	
+
 	if s.Timeout <= 0 {
 		s.Timeout = defaultTimeout
 	}

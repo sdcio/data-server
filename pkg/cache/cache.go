@@ -79,6 +79,7 @@ func (u *Update) Bytes() []byte {
 func (u *Update) Priority() int32 {
 	return u.priority
 }
+
 func (u *Update) Owner() string {
 	return u.owner
 }

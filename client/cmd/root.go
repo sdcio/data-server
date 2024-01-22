@@ -39,6 +39,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&schemaName, "name", "", "schema name")
 	rootCmd.PersistentFlags().StringVar(&schemaVendor, "vendor", "", "schema vendor")
 	rootCmd.PersistentFlags().StringVar(&schemaVersion, "version", "", "schema version")
+	rootCmd.PersistentFlags().StringVarP(&format, "format", "", "", "print format, '','table', 'flat' or 'json'")
 }
 
 func createDataClient(ctx context.Context, addr string) (sdcpb.DataServerClient, error) {

@@ -9,28 +9,21 @@ import (
 	"os"
 	"time"
 
-	schemaConfig "github.com/iptecharch/schema-server/config"
+	schemaConfig "github.com/iptecharch/schema-server/pkg/config"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 )
 
-const (
-	defaultGRPCAddress    = ":56000"
-	defaultMaxRecvMsgSize = 4 * 1024 * 1024
-	defaultRPCTimeout     = 30 * time.Minute
-
-	defaultRemoteSchemaServerCacheTTL      = 300 * time.Second
-	defaultRemoteSchemaServerCacheCapacity = 1000
-)
+const ()
 
 type Config struct {
-	GRPCServer   *GRPCServer                  `yaml:"grpc-server,omitempty" json:"grpc-server,omitempty"`
-	Schemas      []*schemaConfig.SchemaConfig `yaml:"schemas,omitempty" json:"schemas,omitempty"`
-	Datastores   []*DatastoreConfig           `yaml:"datastores,omitempty" json:"datastores,omitempty"`
-	SchemaServer *RemoteSchemaServer          `yaml:"schema-server,omitempty" json:"schema-server,omitempty"`
-	Cache        *CacheConfig                 `yaml:"cache,omitempty" json:"cache,omitempty"`
-	Prometheus   *PromConfig                  `yaml:"prometheus,omitempty" json:"prometheus,omitempty"`
+	GRPCServer   *GRPCServer                     `yaml:"grpc-server,omitempty" json:"grpc-server,omitempty"`
+	SchemaStore  *schemaConfig.SchemaStoreConfig `yaml:"schema-store,omitempty" json:"schema-store,omitempty"`
+	Datastores   []*DatastoreConfig              `yaml:"datastores,omitempty" json:"datastores,omitempty"`
+	SchemaServer *RemoteSchemaServer             `yaml:"schema-server,omitempty" json:"schema-server,omitempty"`
+	Cache        *CacheConfig                    `yaml:"cache,omitempty" json:"cache,omitempty"`
+	Prometheus   *PromConfig                     `yaml:"prometheus,omitempty" json:"prometheus,omitempty"`
 }
 
 type TLS struct {
@@ -67,12 +60,15 @@ func (c *Config) validateSetDefaults() error {
 	}
 
 	// make sure either local or remote schema stores are enabled
-	if c.Schemas != nil && c.SchemaServer != nil {
-		return errors.New("cannot define local schemas and a remote schema server at the same time")
+	if c.SchemaStore != nil && c.SchemaServer != nil {
+		return errors.New("cannot define local schema-store and a remote schema server at the same time")
 	}
 	// set local schema server config
-	if c.Schemas == nil && c.SchemaServer == nil {
-		c.Schemas = make([]*schemaConfig.SchemaConfig, 0)
+	if c.SchemaStore == nil && c.SchemaServer == nil {
+		c.SchemaStore = &schemaConfig.SchemaStoreConfig{
+			Type:    schemaConfig.StoreTypePersistent,
+			Schemas: make([]*schemaConfig.SchemaConfig, 0),
+		}
 		if c.GRPCServer.SchemaServer == nil {
 			c.GRPCServer.SchemaServer = &SchemaServer{
 				Enabled:          true,
@@ -80,7 +76,20 @@ func (c *Config) validateSetDefaults() error {
 			}
 		}
 	}
-	if c.Schemas == nil && (c.GRPCServer.SchemaServer == nil || !c.GRPCServer.SchemaServer.Enabled) {
+	if c.SchemaStore != nil {
+		switch c.SchemaStore.Type {
+		case "":
+			c.SchemaStore.Type = schemaConfig.StoreTypeMemory
+		case schemaConfig.StoreTypeMemory:
+		case schemaConfig.StoreTypePersistent:
+			if c.SchemaStore.Path == "" {
+				c.SchemaStore.Path = defaultSchemaStorePath
+			}
+		default:
+			return fmt.Errorf("unknown schema store type %q", c.SchemaStore.Type)
+		}
+	}
+	if c.SchemaStore == nil && (c.GRPCServer.SchemaServer == nil || !c.GRPCServer.SchemaServer.Enabled) {
 		return errors.New("schema-server RPCs cannot be exposed if the schema server is not enabled")
 	}
 	//

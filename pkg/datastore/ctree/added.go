@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/iptecharch/schema-server/config"
+	"github.com/iptecharch/schema-server/pkg/config"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/openconfig/gnmi/path"
 	"github.com/openconfig/gnmi/proto/gnmi"
