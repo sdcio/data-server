@@ -9,8 +9,8 @@ import (
 	schemaConfig "github.com/iptecharch/schema-server/pkg/config"
 	schemaServerSchema "github.com/iptecharch/schema-server/pkg/schema"
 	schemaStore "github.com/iptecharch/schema-server/pkg/store"
-	schemaMemStore "github.com/iptecharch/schema-server/pkg/store/memstore"
-	schemaPersistStore "github.com/iptecharch/schema-server/pkg/store/persiststore"
+	schemaMemoryStore "github.com/iptecharch/schema-server/pkg/store/memstore"
+	schemaPersistentStore "github.com/iptecharch/schema-server/pkg/store/persiststore"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -34,11 +34,11 @@ func (s *Server) createSchemaClient(ctx context.Context) {
 func (s *Server) createLocalSchemaStore(ctx context.Context) {
 	var store schemaStore.Store
 	switch s.config.SchemaStore.Type {
-	case "memstore", "":
-		store = schemaMemStore.New()
-	case "persiststore":
+	case schemaConfig.StoreTypeMemory:
+		store = schemaMemoryStore.New()
+	case schemaConfig.StoreTypePersistent:
 		var err error
-		store, err = schemaPersistStore.New(ctx, s.config.SchemaStore.Path)
+		store, err = schemaPersistentStore.New(ctx, s.config.SchemaStore.Path, s.config.SchemaStore.Cache)
 		if err != nil {
 			log.Errorf("failed to create a persistent schema store: %v", err)
 			os.Exit(1)
@@ -55,6 +55,15 @@ func (s *Server) createLocalSchemaStore(ctx context.Context) {
 	for _, sCfg := range s.config.SchemaStore.Schemas {
 		go func(sCfg *schemaConfig.SchemaConfig, store schemaStore.Store) {
 			defer wg.Done()
+			sck := schemaStore.SchemaKey{
+				Name:    sCfg.Name,
+				Vendor:  sCfg.Vendor,
+				Version: sCfg.Version,
+			}
+			if store.HasSchema(sck) {
+				log.Infof("schema %s already exists in the store: not reloading it...", sck)
+				return
+			}
 			sc, err := schemaServerSchema.NewSchema(sCfg)
 			if err != nil {
 				log.Errorf("schema %s parsing failed: %v", sCfg.Name, err)

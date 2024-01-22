@@ -19,6 +19,5 @@ const (
 	defaultWriteWorkers       = 16
 	defaultTimeout            = 30 * time.Second
 
-	defaultSchemaStoreType = "memstore"
 	defaultSchemaStorePath = "./schema-dir"
 )

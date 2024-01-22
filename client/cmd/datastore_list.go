@@ -64,7 +64,7 @@ func printDataStoresTable(rsp *sdcpb.ListDataStoreResponse) {
 		return tableData[i][0] < tableData[j][0]
 	})
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "Schema", "Protocol", "Address", "State", "Candidate(s)"})
+	table.SetHeader([]string{"Name", "Schema", "Protocol", "Address", "State", "Candidate (C/O/P)"})
 	table.SetAlignment(tablewriter.ALIGN_LEFT)
 	table.SetAutoFormatHeaders(false)
 	table.SetAutoWrapText(false)

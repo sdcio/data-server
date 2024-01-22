@@ -45,6 +45,7 @@ func (d *Datastore) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) 
 }
 
 func (d *Datastore) SetIntent(ctx context.Context, req *sdcpb.SetIntentRequest) (*sdcpb.SetIntentResponse, error) {
+	log.Infof("received SetIntentRequest: ds=%s intent=%s", req.GetName(), req.GetIntent())
 	now := time.Now().UnixNano()
 	candidateName := fmt.Sprintf("%s-%d", req.GetIntent(), now)
 	err := d.CreateCandidate(ctx, &sdcpb.DataStore{

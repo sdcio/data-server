@@ -204,12 +204,12 @@ func (t *ncTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.S
 
 func (t *ncTarget) Status() string {
 	if t == nil || t.driver == nil {
-		return "NOT CONNECTED"
+		return "NOT_CONNECTED"
 	}
 	if t.driver.IsAlive() {
 		return "CONNECTED"
 	}
-	return "NOT CONNECTED"
+	return "NOT_CONNECTED"
 }
 
 func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {

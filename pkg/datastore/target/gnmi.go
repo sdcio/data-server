@@ -146,7 +146,7 @@ func (t *gnmiTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb
 
 func (t *gnmiTarget) Status() string {
 	if t == nil || t.target == nil {
-		return "NOT CONNECTED"
+		return "NOT_CONNECTED"
 	}
 	return t.target.ConnState()
 }

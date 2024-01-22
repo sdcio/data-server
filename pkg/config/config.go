@@ -66,7 +66,7 @@ func (c *Config) validateSetDefaults() error {
 	// set local schema server config
 	if c.SchemaStore == nil && c.SchemaServer == nil {
 		c.SchemaStore = &schemaConfig.SchemaStoreConfig{
-			Type:    "memstore",
+			Type:    schemaConfig.StoreTypePersistent,
 			Schemas: make([]*schemaConfig.SchemaConfig, 0),
 		}
 		if c.GRPCServer.SchemaServer == nil {
@@ -79,9 +79,9 @@ func (c *Config) validateSetDefaults() error {
 	if c.SchemaStore != nil {
 		switch c.SchemaStore.Type {
 		case "":
-			c.SchemaStore.Type = defaultSchemaStoreType
-		case "memstore":
-		case "persiststore":
+			c.SchemaStore.Type = schemaConfig.StoreTypeMemory
+		case schemaConfig.StoreTypeMemory:
+		case schemaConfig.StoreTypePersistent:
 			if c.SchemaStore.Path == "" {
 				c.SchemaStore.Path = defaultSchemaStorePath
 			}
