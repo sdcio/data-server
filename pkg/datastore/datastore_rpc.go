@@ -267,12 +267,18 @@ func (d *Datastore) ConnectionState() string {
 }
 
 func (d *Datastore) Stop() error {
+	if d == nil {
+		return nil
+	}
 	d.cfn()
+	if d.sbi == nil {
+		return nil
+	}
 	err := d.sbi.Close()
 	if err != nil {
 		log.Errorf("datastore %s failed to close the target connection: %v", d.Name(), err)
 	}
-	return d.cacheClient.Delete(context.TODO(), d.Config().Name)
+	return nil
 }
 
 func (d *Datastore) Sync(ctx context.Context) {
