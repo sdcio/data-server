@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/iptecharch/cache/proto/cachepb"
@@ -44,6 +45,12 @@ type Datastore struct {
 
 	// stop cancel func
 	cfn context.CancelFunc
+
+	// intent semaphore.
+	// Used by SetIntent to guarantee that
+	// only one SetIntent
+	// is applied at a time.
+	intentMutex *sync.Mutex
 }
 
 // New creates a new datastore, its schema server client and initializes the SBI target
@@ -53,6 +60,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, scc schema.Client, cc c
 		config:       c,
 		schemaClient: scc,
 		cacheClient:  cc,
+		intentMutex:  new(sync.Mutex),
 	}
 	if c.Sync != nil {
 		ds.synCh = make(chan *target.SyncUpdate, c.Sync.Buffer)
