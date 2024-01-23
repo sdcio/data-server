@@ -1,0 +1,58 @@
+project_name: data-server
+builds:
+  - id: data-server
+    binary: data-server
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+  - id: datactl
+    binary: datactl
+    main: ./client/main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+dockers:
+  - goos: linux
+    goarch: amd64
+    ids:
+      - data-server
+      - datactl
+    image_templates:
+      - "ghcr.io/iptecharch/data-server:v0.0.0-{{ .ShortCommit }}"
+      - "ghcr.io/iptecharch/data-server:v0.0.0-dev-latest"
+      - "registry.kmrd.dev/iptecharch/data-server:v0.0.0-{{ .ShortCommit }}"
+      - "registry.kmrd.dev/iptecharch/data-server:v0.0.0-dev-latest"
+    dockerfile: goreleaser.dockerfile
+    skip_push: false
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.source=https://github.com/iptecharch/{{.ProjectName}}"
+      - "--label=org.opencontainers.image.version=v{{.Version}}"
+  - goos: linux
+    goarch: amd64
+    ids:
+      - data-server
+      - datactl
+    image_templates:
+      - "registry.k8s.hans.io/iptecharch/data-server:v0.0.0-{{ .ShortCommit }}"
+      - "registry.k8s.hans.io/iptecharch/data-server:v0.0.0-dev-latest"
+    dockerfile: goreleaser.dockerfile
+    skip_push: false
+    push_flags:
+      - --tls-verify=false
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.source=https://github.com/iptecharch/{{.ProjectName}}"
+      - "--label=org.opencontainers.image.version=v{{.Version}}"
+release:
+  disable: true
