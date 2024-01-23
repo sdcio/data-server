@@ -45,6 +45,7 @@ func main() {
 	if trace {
 		log.SetLevel(log.TraceLevel)
 	}
+	log.Infof("data-server %s-%s", version, commit)
 
 	var s *server.Server
 START:
