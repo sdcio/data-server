@@ -45,6 +45,7 @@ func (d *Datastore) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) 
 }
 
 func (d *Datastore) SetIntent(ctx context.Context, req *sdcpb.SetIntentRequest) (*sdcpb.SetIntentResponse, error) {
+	log.Infof("received SetIntentRequest: ds=%s intent=%s", req.GetName(), req.GetIntent())
 	now := time.Now().UnixNano()
 	candidateName := fmt.Sprintf("%s-%d", req.GetIntent(), now)
 	err := d.CreateCandidate(ctx, &sdcpb.DataStore{
@@ -218,7 +219,7 @@ func (d *Datastore) saveRawIntent(ctx context.Context, intentName string, req *s
 	}
 	err = d.cacheClient.Modify(ctx, d.config.Name,
 		&cache.Opts{
-			Store: cachepb.Store_METADATA,
+			Store: cachepb.Store_INTENTS,
 		},
 		nil,
 		[]*cache.Update{upd})
@@ -231,7 +232,7 @@ func (d *Datastore) saveRawIntent(ctx context.Context, intentName string, req *s
 func (d *Datastore) getRawIntent(ctx context.Context, intentName string, priority int32) (*sdcpb.SetIntentRequest, error) {
 	rin := rawIntentName(intentName, priority)
 	upds := d.cacheClient.Read(ctx, d.config.Name, &cache.Opts{
-		Store: cachepb.Store_METADATA,
+		Store: cachepb.Store_INTENTS,
 	}, [][]string{{rin}}, 0)
 	if len(upds) == 0 {
 		return nil, ErrIntentNotFound
@@ -251,7 +252,7 @@ func (d *Datastore) getRawIntent(ctx context.Context, intentName string, priorit
 
 func (d *Datastore) listRawIntent(ctx context.Context) ([]*sdcpb.Intent, error) {
 	upds := d.cacheClient.Read(ctx, d.config.Name, &cache.Opts{
-		Store:    cachepb.Store_METADATA,
+		Store:    cachepb.Store_INTENTS,
 		KeysOnly: true,
 	}, [][]string{{"*"}}, 0)
 	numUpds := len(upds)
@@ -291,7 +292,7 @@ func (d *Datastore) listRawIntent(ctx context.Context) ([]*sdcpb.Intent, error) 
 func (d *Datastore) deleteRawIntent(ctx context.Context, intentName string, priority int32) error {
 	return d.cacheClient.Modify(ctx, d.config.Name,
 		&cache.Opts{
-			Store: cachepb.Store_METADATA,
+			Store: cachepb.Store_INTENTS,
 		},
 		[][]string{{rawIntentName(intentName, priority)}},
 		nil)

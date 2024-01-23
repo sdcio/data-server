@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/iptecharch/schema-server/utils"
+	"github.com/iptecharch/schema-server/pkg/utils"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/prototext"

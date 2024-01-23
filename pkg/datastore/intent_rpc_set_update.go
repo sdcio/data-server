@@ -321,7 +321,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	}
 	logger.Debug()
 	logger.Debug("intent is validated")
-	log.Info("intent is applied")
+	log.Infof("ds=%s intent=%s intent is applied", req.GetName(), req.GetIntent())
 	logger.Debug()
 
 	/////////////////////////////////////
@@ -376,7 +376,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	if err != nil {
 		return err
 	}
-	log.Info("intent is saved")
+	log.Infof("ds=%s intent=%s: intent saved", req.GetName(), req.GetIntent())
 	return nil
 }
 

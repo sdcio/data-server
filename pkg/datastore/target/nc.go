@@ -2,6 +2,7 @@ package target
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -203,12 +204,12 @@ func (t *ncTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.S
 
 func (t *ncTarget) Status() string {
 	if t == nil || t.driver == nil {
-		return "NOT CONNECTED"
+		return "NOT_CONNECTED"
 	}
 	if t.driver.IsAlive() {
 		return "CONNECTED"
 	}
-	return "NOT CONNECTED"
+	return "NOT_CONNECTED"
 }
 
 func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
@@ -232,7 +233,9 @@ func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh cha
 	}
 
 	<-ctx.Done()
-	log.Infof("sync stopped: %v", ctx.Err())
+	if !errors.Is(ctx.Err(), context.Canceled) {
+		log.Errorf("datastore %s sync stopped: %v", t.name, ctx.Err())
+	}
 }
 
 func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, force bool, syncCh chan *SyncUpdate) {

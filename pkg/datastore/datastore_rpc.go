@@ -289,7 +289,9 @@ MAIN:
 	for {
 		select {
 		case <-ctx.Done():
-			log.Errorf("datastore %s sync stopped: %v", d.Name(), ctx.Err())
+			if !errors.Is(ctx.Err(), context.Canceled) {
+				log.Errorf("datastore %s sync stopped: %v", d.Name(), ctx.Err())
+			}
 			return
 		case syncup := <-d.synCh:
 			if syncup.Start {
@@ -436,7 +438,6 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, cand
 				if err != nil {
 					return err
 				}
-
 			case *sdcpb.SchemaElem_Leaflist:
 				if sch.Leaflist.GetType().GetType() != "leafref" {
 					continue
