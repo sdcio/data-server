@@ -26,6 +26,10 @@ dockers:
     image_templates:
       - "ghcr.io/iptecharch/data-server:latest"
       - "ghcr.io/iptecharch/data-server:v{{ .Version }}"
+      - "registry.kmrd.dev/iptecharch/data-server:latest"
+      - "registry.kmrd.dev/iptecharch/data-server:v{{ .Version }}"
+      - "registry.k8s.hans.io/iptecharch/data-server:latest"
+      - "registry.k8s.hans.io/iptecharch/data-server:v{{ .Version }}"
     dockerfile: goreleaser.dockerfile
     skip_push: false
     build_flag_templates:
