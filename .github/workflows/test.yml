@@ -1,0 +1,41 @@
+---
+name: Test
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - "main"
+      - "!releases/**"
+env:
+  GOVER: 1.21.4
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: webfactory/ssh-agent@v0.8.0
+        with:
+            ssh-private-key: ${{ secrets.IPTECHARCH_SSH_KEY }}
+      - name: Setup Git config
+        run: |
+          git config --global url."ssh://git@github.com/".insteadOf "https://github.com/"
+          mkdir -p -m 0700 /home/runner/.ssh && ssh-keyscan github.com >> /home/runner/.ssh/known_hosts
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GOVER }}
+      - run: go test -cover ./...
+        env:
+          CGO_ENABLED: 0
+      # run staticcheck
+      # - uses: reviewdog/action-staticcheck@v1
+      #   with:
+      #     github_token: ${{ secrets.GITHUB_TOKEN }}
+      #     # Change reviewdog reporter if you need [github-pr-check,github-check,github-pr-review].
+      #     reporter: github-pr-review
+      #     # Report all results.
+      #     filter_mode: nofilter
+      #     # Exit with 1 when it find at least one finding.
+      #     fail_on_error: true
