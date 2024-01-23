@@ -40,8 +40,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: iptecharch-builder
-          password: ${{ secrets.IPTECHARCH_GITHUB_PAT }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to Hans' Private k8s Container Registry
         uses: docker/login-action@v3
@@ -65,4 +65,4 @@ jobs:
           version: latest
           args: release --clean -f .goreleaser.yml
         env:
-          GITHUB_TOKEN: ${{ secrets.IPTECHARCH_GITHUB_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
