@@ -295,6 +295,12 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, fo
 }
 
 func (t *ncTarget) Close() error {
+	if t == nil {
+		return nil
+	}
+	if t.driver == nil {
+		return nil
+	}
 	return t.driver.Close()
 }
 

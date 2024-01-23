@@ -508,7 +508,7 @@ func (d *Datastore) validateMustStatement(ctx context.Context, candidateName str
 			machine := xpath.NewMachine(exprStr, prog, exprStr)
 
 			// run the must statement evaluation virtual machine
-			res1 := xpath.NewCtxFromCurrent(ctx, machine, p.Elem, d.getValidationClient(), candidateName).EnableValidation().Run()
+			res1 := xpath.NewCtxFromCurrent(ctx, machine, p.Elem, d.getValidationClient(), candidateName).Run()
 
 			// retrieve the boolean result of the execution
 			result, err := res1.GetBoolResult()
