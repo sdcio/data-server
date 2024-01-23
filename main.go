@@ -21,11 +21,21 @@ var debug bool
 var trace bool
 var stop bool
 
+var versionFlag bool
+var version = "dev"
+var commit = ""
+
 func main() {
 	pflag.StringVarP(&configFile, "config", "c", "", "config file path")
 	pflag.BoolVarP(&debug, "debug", "d", false, "set log level to DEBUG")
 	pflag.BoolVarP(&trace, "trace", "t", false, "set log level to TRACE")
+	pflag.BoolVarP(&versionFlag, "version", "v", false, "print version")
 	pflag.Parse()
+
+	if versionFlag {
+		fmt.Println(version + "-" + commit)
+		return
+	}
 
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	log.SetLevel(log.InfoLevel)

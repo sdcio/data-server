@@ -21,3 +21,4 @@ nbn/
 mocks/*
 .vscode
 schema-dir
+dist/
