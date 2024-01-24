@@ -136,10 +136,10 @@ github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/iptecharch/cache v0.0.29 h1:PnWrsbs6DRuIUSV/mLFbrBcbhyaZvu32A1pqpmlXpts=
 github.com/iptecharch/cache v0.0.29/go.mod h1:ofOIjTApxhy15tKgjzOedhrKQnF0dsAO48gkE/jyYXQ=
-github.com/iptecharch/schema-server v0.0.12 h1:n+/vbIuFy0rdha2nuBizgrRFTrQJxeWlFt78TFUJefI=
-github.com/iptecharch/schema-server v0.0.12/go.mod h1:stFWQKA474CjdR4hTPwYh42j3A4zAJtwpuZBH4mB7z8=
-github.com/iptecharch/sdc-protos v0.0.18 h1:If4bWz2fBATNPpAXKJWvkG2P3fnGF8sGmjZv7Ww7M7Y=
-github.com/iptecharch/sdc-protos v0.0.18/go.mod h1:stMHinsJNfsg/KbAe2HsSwU4fnS6ub1VZzLcG+IHFJA=
+github.com/iptecharch/schema-server v0.0.13 h1:tCjeCJMnMYBggHUzG8JSwi9prTH+ResNSMiQvKXcoLM=
+github.com/iptecharch/schema-server v0.0.13/go.mod h1:mf1b0aPAkohvNYOthfRG1VYvaQSk0M8dIJGaQlYqRCo=
+github.com/iptecharch/sdc-protos v0.0.19 h1:f5x67NpIa0aXZdFfgSa0sHD37YhHYc6KYG2xtEPxQ/k=
+github.com/iptecharch/sdc-protos v0.0.19/go.mod h1:l1i2wnD7455b1zRQjcJGEOC+Q0H7RMu2UViIowBCPyM=
 github.com/iptecharch/yang-parser v0.0.3 h1:sfmGIWdhEeql8RXUF/nD0/Z4Td9Pbhk76jVC/VXSSNI=
 github.com/iptecharch/yang-parser v0.0.3/go.mod h1:mOB/+f1fOgqD00+RoxHgOxl+Cnq0kEd0tZwBrcrMaUI=
 github.com/jellydator/ttlcache/v3 v3.1.1 h1:RCgYJqo3jgvhl+fEWvjNW8thxGWsgxi+TPhRir1Y9y8=
@@ -203,8 +203,8 @@ github.com/openconfig/gnmic/pkg/types v0.1.2/go.mod h1:Gwc9suBy/s17bP8BaCrp3dE5E
 github.com/openconfig/gnmic/pkg/utils v0.1.0 h1:MqRhW8oJdPpBb1UprbnpDxciBJVjl/Gw97xuNoBG3Vs=
 github.com/openconfig/gnmic/pkg/utils v0.1.0/go.mod h1:DQm/e8cdRwdmUORjODWteDU0HG0CWNYBAhLWqnPQegE=
 github.com/openconfig/goyang v0.0.0-20200115183954-d0a48929f0ea/go.mod h1:dhXaV0JgHJzdrHi2l+w0fZrwArtXL7jEFoiqLEdmkvU=
-github.com/openconfig/goyang v1.4.4 h1:ee0bbD60eQIjqrzH5S8yjneA6kA36UdxitokeL3+SGg=
-github.com/openconfig/goyang v1.4.4/go.mod h1:sdNZi/wdTZyLNBNfgLzmmbi7kISm7FskMDKKzMY+x1M=
+github.com/openconfig/goyang v1.4.5 h1:+s3p3MeiPQ/QNsC5DL3MXhCp5cv4dag3vlGKCtszsRU=
+github.com/openconfig/goyang v1.4.5/go.mod h1:sdNZi/wdTZyLNBNfgLzmmbi7kISm7FskMDKKzMY+x1M=
 github.com/openconfig/grpctunnel v0.0.0-20220819142823-6f5422b8ca70/go.mod h1:OmTWe7RyZj2CIzIgy4ovEBzCLBJzRvWSZmn7u02U9gU=
 github.com/openconfig/grpctunnel v0.1.0 h1:EN99qtlExZczgQgp5ANnHRC/Rs62cAG+Tz2BQ5m/maM=
 github.com/openconfig/grpctunnel v0.1.0/go.mod h1:G04Pdu0pml98tdvXrvLaU+EBo3PxYfI9MYqpvdaEHLo=
@@ -331,8 +331,8 @@ golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e/go.mod h1:RxMgew5VJxzue5/jJ
 golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20210220032951-036812b2e83c/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
-golang.org/x/sync v0.5.0 h1:60k92dhOjHxJkrqnwsfl8KuaHbn/5dl0lUPUklKo3qE=
-golang.org/x/sync v0.5.0/go.mod h1:Czt+wKu1gCyEFDUtn0jG5QVvpJ6rzVqr5aXyt9drQfk=
+golang.org/x/sync v0.6.0 h1:5BMeUDZ7vkXGfEr1x9B4bRcTH4lpkTkpdh0T/J+qjbQ=
+golang.org/x/sync v0.6.0/go.mod h1:Czt+wKu1gCyEFDUtn0jG5QVvpJ6rzVqr5aXyt9drQfk=
 golang.org/x/sys v0.0.0-20180830151530-49385e6e1522/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20190412213103-97732733099d/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
@@ -412,8 +412,8 @@ google.golang.org/grpc v1.33.2/go.mod h1:JMHMWHQWaTccqQQlmk3MJZS+GWXOdAesneDmEnv
 google.golang.org/grpc v1.36.0/go.mod h1:qjiiYl8FncCW8feJPdyg3v6XW24KsRHe+dy9BAGRRjU=
 google.golang.org/grpc v1.39.1/go.mod h1:PImNr+rS9TWYb2O4/emRugxiyHZ5JyHW5F+RPnDzfrE=
 google.golang.org/grpc v1.40.0/go.mod h1:ogyxbiOoUXAkP+4+xa6PZSE9DZgIHtSpzjDTB9KAK34=
-google.golang.org/grpc v1.60.0 h1:6FQAR0kM31P6MRdeluor2w2gPaS4SVNrD/DNTxrQ15k=
-google.golang.org/grpc v1.60.0/go.mod h1:OlCHIeLYqSSsLi6i49B5QGdzaMZK9+M7LXN2FKz4eGM=
+google.golang.org/grpc v1.60.1 h1:26+wFr+cNqSGFcOXcabYC0lUVJVRa2Sb2ortSK7VrEU=
+google.golang.org/grpc v1.60.1/go.mod h1:OlCHIeLYqSSsLi6i49B5QGdzaMZK9+M7LXN2FKz4eGM=
 google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.1.0/go.mod h1:6Kw0yEErY5E/yWrBtf03jp27GLLJujG4z/JK95pnjjw=
 google.golang.org/protobuf v0.0.0-20200109180630-ec00e32a8dfd/go.mod h1:DFci5gLYBciE7Vtevhsrf46CRTquxDuWsQurQQe4oz8=
 google.golang.org/protobuf v0.0.0-20200221191635-4d8936d0db64/go.mod h1:kwYJMbMJ01Woi6D6+Kah6886xMZcty6N08ah7+eCXa0=
