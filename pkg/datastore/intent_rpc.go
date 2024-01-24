@@ -12,6 +12,8 @@ import (
 	"github.com/iptecharch/cache/proto/cachepb"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
@@ -45,6 +47,11 @@ func (d *Datastore) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) 
 }
 
 func (d *Datastore) SetIntent(ctx context.Context, req *sdcpb.SetIntentRequest) (*sdcpb.SetIntentResponse, error) {
+	if !d.intentMutex.TryLock() {
+		return nil, status.Errorf(codes.ResourceExhausted, "datastore %s has an ongoing SetIntentRequest", d.Name())
+	}
+	defer d.intentMutex.Unlock()
+
 	log.Infof("received SetIntentRequest: ds=%s intent=%s", req.GetName(), req.GetIntent())
 	now := time.Now().UnixNano()
 	candidateName := fmt.Sprintf("%s-%d", req.GetIntent(), now)
