@@ -4,6 +4,8 @@ builds:
     binary: data-server
     env:
       - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}}
     goos:
       - linux
     goarch:
@@ -13,6 +15,8 @@ builds:
     main: ./client/main.go
     env:
       - CGO_ENABLED=0
+    ldflags:
+      - -s -w
     goos:
       - linux
     goarch:
