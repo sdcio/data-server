@@ -10,8 +10,8 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/iptecharch/cache v0.0.29
-	github.com/iptecharch/schema-server v0.0.12
-	github.com/iptecharch/sdc-protos v0.0.18
+	github.com/iptecharch/schema-server v0.0.13
+	github.com/iptecharch/sdc-protos v0.0.19
 	github.com/iptecharch/yang-parser v0.0.3
 	github.com/jellydator/ttlcache/v3 v3.1.1
 	github.com/kylelemons/godebug v1.1.0
@@ -26,10 +26,10 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
 	go.uber.org/mock v0.4.0
-	golang.org/x/sync v0.5.0
+	golang.org/x/sync v0.6.0
+	google.golang.org/grpc v1.60.1
 	google.golang.org/protobuf v1.32.0
-	google.golang.org/grpc v1.60.0
-  gopkg.in/yaml.v2 v2.4.0
+	gopkg.in/yaml.v2 v2.4.0
 	sigs.k8s.io/controller-runtime v0.16.3
 )
 
@@ -74,7 +74,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/openconfig/gnmic/pkg/path v0.1.1 // indirect
 	github.com/openconfig/gnmic/pkg/utils v0.1.0 // indirect
-	github.com/openconfig/goyang v1.4.4 // indirect
+	github.com/openconfig/goyang v1.4.5 // indirect
 	github.com/openconfig/grpctunnel v0.1.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
