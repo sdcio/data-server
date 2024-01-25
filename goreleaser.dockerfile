@@ -23,8 +23,8 @@ COPY --from=builder /etc/passwd /etc/group /etc/shadow /etc/
 # add-in our ca certificates
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-COPY data-server /app/
-COPY datactl /app/
+COPY --chown=1000:1000 data-server /app/
+COPY --chown=1000:1000 datactl /app/
 WORKDIR /app
 
 # from now on, run as the unprivileged user
