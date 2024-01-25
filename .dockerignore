@@ -7,3 +7,4 @@ proto/*proto
 schema-server
 cached
 intra
+schema-dir

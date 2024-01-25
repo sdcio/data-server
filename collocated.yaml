@@ -98,6 +98,9 @@ grpc-server:
 schema-store:
   # type is either memory or persistent (default)
   type: persistent
+  cache: 
+    ttl: 60s
+    capacity: 100
   schemas:
     - name: sros
       vendor: Nokia

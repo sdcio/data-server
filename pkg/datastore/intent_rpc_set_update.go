@@ -94,9 +94,12 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 				setDataReq.Update = append(setDataReq.Update, upd)
 			case currentCacheEntries[0].Priority() == req.GetPriority():
 				logger.Debugf("path %v | current intended value has an equal priority to the intent: goes in the setData update and delete", cp)
-				// exists with same priority, apply current:
-				// TODO: keep current or overwrite
-				setDataReq.Update = append(setDataReq.Update, upd)
+				// exists with same priority, apply current?
+				// check if the first result is owned by this intent,
+				// in which case replace it
+				if currentCacheEntries[0].Owner() == req.GetIntent() {
+					setDataReq.Update = append(setDataReq.Update, upd)
+				}
 				// add delete to remove previous value
 				// setDataReq.Delete = append(setDataReq.Delete, upd.GetPath())
 			case currentCacheEntries[0].Priority() > req.GetPriority():
@@ -309,7 +312,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	logger.Debug()
 	// fmt.Println(prototext.Format(setDataReq))
 	log.Info("intent setting into candidate")
-	_, err = d.Set(ctx, setDataReq)
+	_, err = d.setCandidate(ctx, setDataReq, false)
 	if err != nil {
 		return err
 	}
@@ -321,7 +324,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	}
 	logger.Debug()
 	logger.Debug("intent is validated")
-	log.Infof("ds=%s intent=%s intent is applied", req.GetName(), req.GetIntent())
+	log.Infof("ds=%s intent=%s: intent applied", req.GetName(), req.GetIntent())
 	logger.Debug()
 
 	/////////////////////////////////////
@@ -587,21 +590,22 @@ func (d *Datastore) readCurrentUpdatesHighestPriorities(ctx context.Context, ccp
 		return nil
 	}
 	rs := make(map[string][][]*cache.Update)
-	grouppings := make(map[string]map[int32][]*cache.Update)
+	groupings := make(map[string]map[int32][]*cache.Update)
+
 	for _, cce := range currentCacheEntries {
 		sp := strings.Join(cce.GetPath(), ",")
 		if _, ok := rs[sp]; !ok {
 			rs[sp] = make([][]*cache.Update, 0, 1)
 		}
-		if _, ok := grouppings[sp]; !ok {
-			grouppings[sp] = make(map[int32][]*cache.Update)
+		if _, ok := groupings[sp]; !ok {
+			groupings[sp] = make(map[int32][]*cache.Update)
 		}
-		if _, ok := grouppings[sp][cce.Priority()]; !ok {
-			grouppings[sp][cce.Priority()] = make([]*cache.Update, 0, 1)
+		if _, ok := groupings[sp][cce.Priority()]; !ok {
+			groupings[sp][cce.Priority()] = make([]*cache.Update, 0, 1)
 		}
-		grouppings[sp][cce.Priority()] = append(grouppings[sp][cce.Priority()], cce)
+		groupings[sp][cce.Priority()] = append(groupings[sp][cce.Priority()], cce)
 	}
-	for sp, groupping := range grouppings {
+	for sp, groupping := range groupings {
 		priorities := make([]int32, 0, count)
 		for k := range groupping {
 			priorities = append(priorities, k)

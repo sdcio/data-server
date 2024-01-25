@@ -100,131 +100,7 @@ func (d *Datastore) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.
 	case sdcpb.Type_INTENDED:
 		return nil, status.Error(codes.InvalidArgument, "cannot set fields in INTENDED datastore")
 	case sdcpb.Type_CANDIDATE:
-		//
-		ok, err := d.cacheClient.HasCandidate(ctx, req.GetName(), req.GetDatastore().GetName())
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDatastore().GetName())
-		}
-
-		replaces := make([]*sdcpb.Update, 0, len(req.GetReplace()))
-		updates := make([]*sdcpb.Update, 0, len(req.GetUpdate()))
-
-		// expand json/json_ietf values
-		for _, upd := range req.GetReplace() {
-			rs, err := d.expandUpdate(ctx, upd, false)
-			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "failed expand replace: %v", err)
-			}
-			replaces = append(replaces, rs...)
-		}
-
-		for _, upd := range req.GetUpdate() {
-			rs, err := d.expandUpdate(ctx, upd, false)
-			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "failed expand update: %v", err)
-			}
-			updates = append(updates, rs...)
-		}
-
-		// debugging
-		if log.GetLevel() >= log.DebugLevel {
-			for _, upd := range replaces {
-				log.Debugf("expanded replace:\n%s", prototext.Format(upd))
-			}
-			for _, upd := range updates {
-				log.Debugf("expanded update:\n%s", prototext.Format(upd))
-			}
-		}
-
-		// validate individual deletes
-		dels := make([]*sdcpb.Path, 0, len(req.GetDelete()))
-		for _, del := range req.GetDelete() {
-			// err = d.validatePath(ctx, del)
-			rsp, err := d.schemaClient.ExpandPath(ctx, &sdcpb.ExpandPathRequest{
-				Path:     del,
-				Schema:   d.Schema().GetSchema(),
-				DataType: sdcpb.DataType_CONFIG,
-			})
-			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "delete path: %q validation failed: %v", del, err)
-			}
-			dels = append(dels, rsp.GetPath()...)
-		}
-
-		for _, upd := range replaces {
-			err = d.validateUpdate(ctx, upd)
-			if err != nil {
-				log.Debugf("replace %v validation failed: %v", upd, err)
-				return nil, status.Errorf(codes.InvalidArgument, "replace: validation failed: %v", err)
-			}
-		}
-
-		for _, upd := range updates {
-			err = d.validateUpdate(ctx, upd)
-			if err != nil {
-				log.Debugf("update %v validation failed: %v", upd, err)
-				return nil, status.Errorf(codes.InvalidArgument, "update: validation failed: %v", err)
-			}
-		}
-
-		// insert/delete
-		// the order of operations is delete, replace, update
-		rsp := &sdcpb.SetDataResponse{
-			Response: make([]*sdcpb.UpdateResult, 0,
-				len(dels)+len(replaces)+len(updates)),
-		}
-
-		name := fmt.Sprintf("%s/%s", req.GetName(), req.GetDatastore().GetName())
-		cdels := make([][]string, 0, len(dels))
-		upds := make([]*cache.Update, 0, len(replaces)+len(updates))
-		// deletes start
-		for _, del := range dels {
-			cdels = append(cdels, utils.ToStrings(del, false, false))
-		}
-		for _, changes := range [][]*sdcpb.Update{replaces, updates} {
-			for _, upd := range changes {
-				cUpd, err := d.cacheClient.NewUpdate(upd)
-				if err != nil {
-					return nil, err
-				}
-				upds = append(upds, cUpd)
-			}
-		}
-		err = d.cacheClient.Modify(ctx, name, &cache.Opts{
-			Store: cachepb.Store_CONFIG,
-		}, cdels, upds)
-		if err != nil {
-			return nil, err
-		}
-
-		// deletes start
-		for _, del := range req.GetDelete() {
-			rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
-				Path: del,
-				Op:   sdcpb.UpdateResult_DELETE,
-			})
-		}
-		// deletes end
-		// replaces start
-		for _, rep := range req.GetReplace() {
-			rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
-				Path: rep.GetPath(),
-				Op:   sdcpb.UpdateResult_REPLACE,
-			})
-		}
-		// replaces end
-		// updates start
-		for _, upd := range req.GetUpdate() {
-			rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
-				Path: upd.GetPath(),
-				Op:   sdcpb.UpdateResult_UPDATE,
-			})
-		}
-		// updates end
-		return rsp, nil
+		return d.setCandidate(ctx, req, true)
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %v", req.GetDatastore().GetType())
 	}
@@ -451,16 +327,16 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *sdcpb.Update) error
 	return nil
 }
 
-func (d *Datastore) validateMustStatement(ctx context.Context, candidateName string, p *sdcpb.Path) (bool, error) {
-	// normalizedPaths will contain the provided path. If the last path.elems contins one or more keys, these will be
+func (d *Datastore) validateMustStatement(ctx context.Context, candidateName string, p *sdcpb.Path, normalizePaths bool) (bool, error) {
+	// normalizedPaths will contain the provided path. If the last path.elems contains one or more keys, these will be
 	// taken and appended to the path. The must statements have to be checked for all of the key elements.
-	var normalizedPaths []*sdcpb.Path
+	var normalizedPaths = make([]*sdcpb.Path, 0, 1)
 
 	// this is to massage for instance
 	// /bfd/subinterface[id=ethernet-1.25] -> /bfd/subinterface[id=ethernet-1.25]/id
 	// because we need to resolve down to id, to retrieve the relevant must statements
 	// further there can be more then just a single key.
-	if len(p.Elem[len(p.Elem)-1].Key) > 0 {
+	if len(p.Elem[len(p.Elem)-1].Key) > 0 && normalizePaths {
 		for k := range p.GetElem()[len(p.Elem)-1].GetKey() {
 			// clone p as new path
 			newPath := proto.Clone(p).(*sdcpb.Path)
@@ -1252,4 +1128,138 @@ func (d *Datastore) subscribeResponseFromCacheUpdate(ctx context.Context, upd *c
 			Update: notification,
 		},
 	}, nil
+}
+
+func (d *Datastore) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest, expandDeletes bool) (*sdcpb.SetDataResponse, error) {
+	ok, err := d.cacheClient.HasCandidate(ctx, req.GetName(), req.GetDatastore().GetName())
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDatastore().GetName())
+	}
+
+	replaces := make([]*sdcpb.Update, 0, len(req.GetReplace()))
+	updates := make([]*sdcpb.Update, 0, len(req.GetUpdate()))
+
+	// expand json/json_ietf values
+	for _, upd := range req.GetReplace() {
+		rs, err := d.expandUpdate(ctx, upd, false)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "failed expand replace: %v", err)
+		}
+		replaces = append(replaces, rs...)
+	}
+
+	for _, upd := range req.GetUpdate() {
+		rs, err := d.expandUpdate(ctx, upd, false)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "failed expand update: %v", err)
+		}
+		updates = append(updates, rs...)
+	}
+
+	// debugging
+	if log.GetLevel() >= log.DebugLevel {
+		for _, upd := range replaces {
+			log.Debugf("expanded replace:\n%s", prototext.Format(upd))
+		}
+		for _, upd := range updates {
+			log.Debugf("expanded update:\n%s", prototext.Format(upd))
+		}
+	}
+
+	// validate individual deletes
+	dels := make([]*sdcpb.Path, 0, len(req.GetDelete()))
+	for _, del := range req.GetDelete() {
+		if expandDeletes {
+			rsp, err := d.schemaClient.ExpandPath(ctx, &sdcpb.ExpandPathRequest{
+				Path:     del,
+				Schema:   d.Schema().GetSchema(),
+				DataType: sdcpb.DataType_CONFIG,
+			})
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "delete path: %q validation failed: %v", del, err)
+			}
+			dels = append(dels, rsp.GetPath()...)
+			continue
+		}
+		err = d.validatePath(ctx, del)
+		if err != nil {
+			return nil, err
+		}
+		dels = append(dels, del)
+	}
+
+	for _, upd := range replaces {
+		err = d.validateUpdate(ctx, upd)
+		if err != nil {
+			log.Debugf("replace %v validation failed: %v", upd, err)
+			return nil, status.Errorf(codes.InvalidArgument, "replace: validation failed: %v", err)
+		}
+	}
+
+	for _, upd := range updates {
+		err = d.validateUpdate(ctx, upd)
+		if err != nil {
+			log.Debugf("update %v validation failed: %v", upd, err)
+			return nil, status.Errorf(codes.InvalidArgument, "update: validation failed: %v", err)
+		}
+	}
+
+	// insert/delete
+	// the order of operations is delete, replace, update
+	rsp := &sdcpb.SetDataResponse{
+		Response: make([]*sdcpb.UpdateResult, 0,
+			len(dels)+len(replaces)+len(updates)),
+	}
+
+	name := fmt.Sprintf("%s/%s", req.GetName(), req.GetDatastore().GetName())
+	cdels := make([][]string, 0, len(dels))
+	upds := make([]*cache.Update, 0, len(replaces)+len(updates))
+	// deletes start
+	for _, del := range dels {
+		cdels = append(cdels, utils.ToStrings(del, false, false))
+	}
+	for _, changes := range [][]*sdcpb.Update{replaces, updates} {
+		for _, upd := range changes {
+			cUpd, err := d.cacheClient.NewUpdate(upd)
+			if err != nil {
+				return nil, err
+			}
+			upds = append(upds, cUpd)
+		}
+	}
+	err = d.cacheClient.Modify(ctx, name, &cache.Opts{
+		Store: cachepb.Store_CONFIG,
+	}, cdels, upds)
+	if err != nil {
+		return nil, err
+	}
+
+	// deletes start
+	for _, del := range req.GetDelete() {
+		rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
+			Path: del,
+			Op:   sdcpb.UpdateResult_DELETE,
+		})
+	}
+	// deletes end
+	// replaces start
+	for _, rep := range req.GetReplace() {
+		rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
+			Path: rep.GetPath(),
+			Op:   sdcpb.UpdateResult_REPLACE,
+		})
+	}
+	// replaces end
+	// updates start
+	for _, upd := range req.GetUpdate() {
+		rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
+			Path: upd.GetPath(),
+			Op:   sdcpb.UpdateResult_UPDATE,
+		})
+	}
+	// updates end
+	return rsp, nil
 }

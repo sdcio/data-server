@@ -168,7 +168,7 @@ func (d *Datastore) applyIntent(ctx context.Context, candidateName string, prior
 			continue
 		}
 		log.Debugf("%s: %s validating must statement on path: %v", d.Name(), candidateName, upd.GetPath())
-		_, err = d.validateMustStatement(ctx, candidateName, upd.GetPath())
+		_, err = d.validateMustStatement(ctx, candidateName, upd.GetPath(), false)
 		if err != nil {
 			return err
 		}

@@ -190,7 +190,7 @@ func (d *Datastore) Commit(ctx context.Context, req *sdcpb.CommitRequest) error 
 	// validate MUST statements
 	for _, upd := range notification.GetUpdate() {
 		log.Debugf("%s:%s validating must statement on path: %v", d.Name(), name, upd.GetPath())
-		_, err = d.validateMustStatement(ctx, req.GetDatastore().GetName(), upd.GetPath())
+		_, err = d.validateMustStatement(ctx, req.GetDatastore().GetName(), upd.GetPath(), true)
 		if err != nil {
 			return err
 		}
