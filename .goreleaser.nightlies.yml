@@ -36,6 +36,7 @@ dockers:
     skip_push: false
     build_flag_templates:
       - "--pull"
+      - "--build-arg=UID=10000"
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.source=https://github.com/iptecharch/{{.ProjectName}}"
@@ -54,6 +55,7 @@ dockers:
       - --tls-verify=false
     build_flag_templates:
       - "--pull"
+      - "--build-arg=UID=10000"
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.source=https://github.com/iptecharch/{{.ProjectName}}"
