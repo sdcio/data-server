@@ -19,6 +19,7 @@ var paths []string
 var dataType string
 var format string
 var intended bool
+var encoding string
 
 // dataGetCmd represents the get command
 var dataGetCmd = &cobra.Command{
@@ -40,9 +41,22 @@ var dataGetCmd = &cobra.Command{
 			return fmt.Errorf("invalid flag value --type %s", dataType)
 		}
 
+		var enc sdcpb.Encoding
+		switch encoding {
+		case "STRING":
+			enc = sdcpb.Encoding_STRING
+		case "JSON":
+			enc = sdcpb.Encoding_JSON
+		case "JSON_IETF":
+			enc = sdcpb.Encoding_JSON_IETF
+		case "PROTO":
+			enc = sdcpb.Encoding_PROTO
+		}
+
 		req := &sdcpb.GetDataRequest{
 			Name:     datastoreName,
 			DataType: dt,
+			Encoding: enc,
 		}
 		for _, p := range paths {
 			xp, err := utils.ParsePath(p)
@@ -117,6 +131,7 @@ func init() {
 	dataCmd.AddCommand(dataGetCmd)
 	dataGetCmd.Flags().StringArrayVarP(&paths, "path", "", []string{}, "get path(s)")
 	dataGetCmd.Flags().StringVarP(&dataType, "type", "", "ALL", "data type, one of: ALL, CONFIG, STATE")
+	dataGetCmd.Flags().StringVarP(&encoding, "encoding", "", "STRING", "encoding of the returned data: STRING, JSON, JSON_IETF or PROTO")
 
 	// intended store
 	dataGetCmd.Flags().BoolVarP(&intended, "intended", "", false, "get data from intended store")
