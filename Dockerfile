@@ -23,8 +23,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -ldflags="-s -w" -o data-server .
 RUN mkdir -p /schemas
 
-#FROM scratch
-FROM alpine:latest
+FROM scratch
 ARG UID=10000
 # add-in our timezone data file
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
