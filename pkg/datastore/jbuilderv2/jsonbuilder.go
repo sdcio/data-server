@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 
 	schemaClient "github.com/iptecharch/data-server/pkg/datastore/clients/schema"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
@@ -23,16 +24,24 @@ type pathElem struct {
 }
 
 func (pe *pathElem) String() string {
-	s := pe.name
-	keys := make([]string, 0, len(pe.key))
+	numKeys := len(pe.key)
+	if numKeys == 0 {
+		return pe.name
+	}
+
+	sb := &strings.Builder{}
+	sb.WriteString(pe.name)
+
+	keys := make([]string, 0, numKeys)
 	for k := range pe.key {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
+	
 	for _, k := range keys {
-		s += fmt.Sprintf("[%s=%s:%s]", k, pe.key[k], pe.keyType[k])
+		fmt.Fprintf(sb, "[%s=%s:%s]", k, pe.key[k], pe.keyType[k])
 	}
-	return s
+	return sb.String()
 }
 
 type update struct {
