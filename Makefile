@@ -2,6 +2,7 @@ REMOTE_REGISTRY := registry.kmrd.dev/iptecharch/data-server
 TAG := $(shell git describe --tags)
 IMAGE := $(REMOTE_REGISTRY):$(TAG)
 TEST_IMAGE := $(IMAGE)-test
+USERID := 10000
 
 # go versions
 TARGET_GO_VERSION := go1.21.4
@@ -21,7 +22,7 @@ test:
 
 docker-build:
 	ssh-add ./keys/id_rsa 2>/dev/null; true
-	docker build . -t $(IMAGE) --ssh default=$(SSH_AUTH_SOCK)
+	docker build --build-arg USERID=$(USERID) . -t $(IMAGE) --ssh default=$(SSH_AUTH_SOCK)
 
 docker-push: docker-build
 	docker push $(IMAGE)
