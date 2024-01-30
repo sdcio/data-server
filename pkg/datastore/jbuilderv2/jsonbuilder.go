@@ -13,18 +13,45 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const (
+	stringType      = "string"
+	int8Type        = "int8"
+	int16Type       = "int16"
+	int32Type       = "int32"
+	int64Type       = "int64"
+	uint8Type       = "uint8"
+	uint16Type      = "uint16"
+	uint32Type      = "uint32"
+	uint64Type      = "uint64"
+	floatType       = "float"
+	boolType        = "boolean"
+	nullType        = "null"
+	presenceType    = "PRESENCE"
+	decimal64Type   = "decimal64"
+	leafrefType     = "leafref"
+	enumType        = "enumeration"
+	unionType       = "union"
+	identityrefType = "identityref"
+
+	leafListTypePrefix = "LEAFLIST:"
+)
+
 type jsonBuilder struct {
 	scc *schemaClient.SchemaClientBound
 }
 
 type pathElem struct {
-	name    string
-	key     map[string]string
-	keyType map[string]string
+	name         string
+	keyValueType map[string]*vt // TODO: replace with sdcpb.TypedValue
+}
+
+type vt struct {
+	value  string
+	conVal any
 }
 
 func (pe *pathElem) String() string {
-	numKeys := len(pe.key)
+	numKeys := len(pe.keyValueType)
 	if numKeys == 0 {
 		return pe.name
 	}
@@ -33,21 +60,21 @@ func (pe *pathElem) String() string {
 	sb.WriteString(pe.name)
 
 	keys := make([]string, 0, numKeys)
-	for k := range pe.key {
+	for k := range pe.keyValueType {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	
+
 	for _, k := range keys {
-		fmt.Fprintf(sb, "[%s=%s:%s]", k, pe.key[k], pe.keyType[k])
+		fmt.Fprintf(sb, "[%s=%s:%T]", k, pe.keyValueType[k].value, pe.keyValueType[k].conVal)
 	}
 	return sb.String()
 }
 
 type update struct {
-	path      []*pathElem
-	value     string
-	valueType string
+	path  []*pathElem
+	value string
+	// convertedValue any // TODO: replace with sdcpb.TypedValue
 }
 
 func New(scc *schemaClient.SchemaClientBound) *jsonBuilder {
@@ -61,7 +88,7 @@ func New(scc *schemaClient.SchemaClientBound) *jsonBuilder {
 // It ignores non-presence containers.
 // If the path points to a leaf-list. The value is expected to be nil and the value to be set will be the key
 // in the path's last element.
-// If the path points to a field (i.e leaf), the typedValue should not be nil and is expected to be a StringVal.
+// If the path points to a field (i.e leaf), the typedValue should not be nil and is expected to be (for now) a StringVal.
 func (j *jsonBuilder) AddUpdate(ctx context.Context, obj map[string]any, p *sdcpb.Path, tv *sdcpb.TypedValue) error {
 	psc, err := j.scc.GetSchema(ctx, p)
 	if err != nil {
@@ -77,7 +104,8 @@ func (j *jsonBuilder) AddUpdate(ctx context.Context, obj map[string]any, p *sdcp
 		return nil
 	}
 
-	u := update{valueType: vt}
+	// u := update{valueType: vt}
+	u := update{}
 	switch {
 	case psc.GetSchema().GetContainer() != nil:
 		if !psc.GetSchema().GetContainer().IsPresence {
@@ -97,7 +125,7 @@ func (j *jsonBuilder) AddUpdate(ctx context.Context, obj map[string]any, p *sdcp
 		return err
 	}
 
-	convertedValue, err := convertValue(u.value, u.valueType)
+	convertedValue, err := convertValue(u.value, vt)
 	if err != nil {
 		return err
 	}
@@ -111,22 +139,33 @@ func (j *jsonBuilder) AddUpdate(ctx context.Context, obj map[string]any, p *sdcp
 
 // convertValue converts a string value to the specified type.
 func convertValue(value, valueType string) (interface{}, error) {
+	// check if the type is a leaflist type i.e LEAFLIST:XXXX
+	// this check can be replaced with strings.Index if there is a performance issue.. unlikely.
+	if strings.HasPrefix(valueType, leafListTypePrefix) {
+		lfVal, err := convertValue(value, strings.TrimPrefix(valueType, leafListTypePrefix))
+		if err != nil {
+			return nil, err
+		}
+		// return as a []any so that it can be concatenated with
+		// other values of the same leaf-list
+		return []any{lfVal}, nil
+	}
 	switch valueType {
-	case "string":
+	case stringType:
 		return value, nil
-	case "int8", "int16", "int32", "uint8", "uint16", "uint32":
+	case int8Type, int16Type, int32Type, uint8Type, uint16Type, uint32Type:
 		return strconv.Atoi(value)
-	case "float":
+	case floatType:
 		return strconv.ParseFloat(value, 64)
-	case "boolean":
+	case boolType:
 		return strconv.ParseBool(value)
-	case "null":
+	case nullType:
 		return nil, nil
-	case "PRESENCE":
+	case presenceType:
 		return map[string]any{}, nil
-	case "LEAFLIST":
-		return []any{value}, nil
-	case "decimal64":
+	// case "LEAFLIST": // not needed ?
+	// 	return []any{value}, nil
+	case decimal64Type:
 		return value, nil
 	case "":
 		return value, nil
@@ -144,9 +183,9 @@ func (j *jsonBuilder) addValueToObject(obj map[string]any, path []*pathElem, val
 			switch value.(type) {
 			case []any:
 				switch obj[elem.name].(type) {
-				case []any: // leaf-list
+				case []any: // YANG leaf-list case
 					obj[elem.name] = append(obj[elem.name].([]any), value.([]any)...)
-				default: // leaf, presence container
+				default: // YANG leaf or presence container case
 					obj[elem.name] = value
 				}
 			default:
@@ -154,8 +193,8 @@ func (j *jsonBuilder) addValueToObject(obj map[string]any, path []*pathElem, val
 			}
 			continue
 		}
-		// Handle nested objects or arrays
-		if len(elem.key) == 0 {
+		// Handle nested objects or arrays i.e YANG containers
+		if len(elem.keyValueType) == 0 {
 			// If no keys, ensure the next element is a nested object
 			if _, ok := obj[elem.name]; !ok {
 				obj[elem.name] = make(map[string]interface{})
@@ -168,7 +207,7 @@ func (j *jsonBuilder) addValueToObject(obj map[string]any, path []*pathElem, val
 			}
 			continue
 		}
-		// Handle keys for arrays of objects
+		// Handle keys for arrays of objects i.e YANG lists
 		if _, ok := obj[elem.name]; !ok {
 			obj[elem.name] = make([]map[string]interface{}, 0)
 		}
@@ -178,7 +217,7 @@ func (j *jsonBuilder) addValueToObject(obj map[string]any, path []*pathElem, val
 			return fmt.Errorf("failed: path element '%s' is not an array of objects as expected: %T", elem.name, obj[elem.name])
 		}
 
-		matchedObj, found, err := findOrCreateMatchingObject(arr, elem.key, elem.keyType)
+		matchedObj, found, err := findOrCreateMatchingObject(arr, elem.keyValueType)
 		if err != nil {
 			return err
 		}
@@ -193,12 +232,16 @@ func (j *jsonBuilder) addValueToObject(obj map[string]any, path []*pathElem, val
 
 // findOrCreateMatchingObject finds or creates an object that matches the key-value pairs.
 // i.e this function creates items under a list given a set of keys.
-func findOrCreateMatchingObject(arr []map[string]interface{}, keys, keyTypes map[string]string) (map[string]interface{}, bool, error) {
+// It does that by looping through the maps in the given array looking for a map
+// that has the same keys/values as the provided map 'keys'.
+// If it finds a match, it returns it.
+// If it doesn't, it creates the map and populates it with
+// the provided keys.
+func findOrCreateMatchingObject(arr []map[string]interface{}, keys map[string]*vt) (map[string]interface{}, bool, error) {
 	for _, obj := range arr {
 		match := true
 		for k, v := range keys {
-			convertedValue, err := convertValue(v, keyTypes[k])
-			if err != nil || !reflect.DeepEqual(obj[k], convertedValue) {
+			if !reflect.DeepEqual(obj[k], v.conVal) {
 				match = false
 				break
 			}
@@ -211,11 +254,7 @@ func findOrCreateMatchingObject(arr []map[string]interface{}, keys, keyTypes map
 	// No match found, create a new object
 	newObj := make(map[string]interface{})
 	for k, v := range keys {
-		convertedValue, err := convertValue(v, keyTypes[k])
-		if err != nil {
-			return nil, false, fmt.Errorf("failed converting key value: %v:%s: %v", v, keyTypes[k], err)
-		}
-		newObj[k] = convertedValue
+		newObj[k] = v.conVal
 	}
 	return newObj, false, nil
 }
@@ -223,28 +262,22 @@ func findOrCreateMatchingObject(arr []map[string]interface{}, keys, keyTypes map
 func (j *jsonBuilder) getType(ctx context.Context, tv *sdcpb.TypedValue, rsp *sdcpb.GetSchemaResponse) (string, bool, error) {
 	switch rsp.GetSchema().Schema.(type) {
 	case *sdcpb.SchemaElem_Container:
-		return "PRESENCE", getDefault(rsp) == tv.GetStringVal(), nil
+		return presenceType, getDefault(rsp) == tv.GetStringVal(), nil
 	case *sdcpb.SchemaElem_Leaflist:
-		return "LEAFLIST", getDefault(rsp) == tv.GetStringVal(), nil
+		llType := getLeaflistType(rsp.GetSchema().GetLeaflist().GetType(), tv)
+		return llType, getDefault(rsp) == tv.GetStringVal(), nil
 	case *sdcpb.SchemaElem_Field:
-		// fmt.Println("!!GOT FIELD", p, tv)
 		switch t := rsp.Schema.GetField().GetType().GetType(); t {
-		case "int64", "uint64", "enumeration":
-			return "string", getDefault(rsp) == tv.GetStringVal(), nil
-		case "union":
-			// TODO: go through union types and compare the given value to the type
-			for _, ut := range rsp.Schema.GetField().GetType().GetUnionTypes() {
-				_, err := convertValue(tv.GetStringVal(), ut.GetType())
-				if err == nil {
-					return ut.GetType(), rsp.Schema.GetField().GetDefault() == tv.GetStringVal(), nil
-				}
-			}
-			return "string", getDefault(rsp) == tv.GetStringVal(), nil
-		case "identityref":
-			return "string", getDefault(rsp) == tv.GetStringVal(), nil
-		case "leafref":
+		case int64Type, uint64Type, enumType:
+			return stringType, getDefault(rsp) == tv.GetStringVal(), nil
+		case unionType:
+			ut := getTypeUnion(rsp.Schema.GetField().GetType(), tv)
+			return ut, getDefault(rsp) == tv.GetStringVal(), nil
+		case identityrefType:
+			return stringType, getDefault(rsp) == tv.GetStringVal(), nil
+		case leafrefType:
 			// TODO: query leafref schema and return its type
-			return "string", getDefault(rsp) == tv.GetStringVal(), nil
+			return stringType, getDefault(rsp) == tv.GetStringVal(), nil
 		default:
 			return t, getDefault(rsp) == tv.GetStringVal(), nil
 		}
@@ -257,9 +290,11 @@ func (j *jsonBuilder) buildPathElems(ctx context.Context, p *sdcpb.Path) ([]*pat
 	pes := make([]*pathElem, 0, len(p.GetElem()))
 	for i, sdcpe := range p.GetElem() {
 		pe := &pathElem{
-			name:    sdcpe.GetName(),
-			key:     sdcpe.GetKey(),
-			keyType: map[string]string{},
+			name:         sdcpe.GetName(),
+			keyValueType: map[string]*vt{},
+		}
+		for k, v := range sdcpe.GetKey() {
+			pe.keyValueType[k] = &vt{value: v}
 		}
 		basePath := &sdcpb.Path{Elem: make([]*sdcpb.PathElem, 0, i)}
 		for j := 0; j <= i; j++ {
@@ -275,10 +310,22 @@ func (j *jsonBuilder) buildPathElems(ctx context.Context, p *sdcpb.Path) ([]*pat
 		switch {
 		case baseListSchema.GetSchema().GetContainer() != nil:
 			for _, keySchema := range baseListSchema.GetSchema().GetContainer().GetKeys() {
-				pe.keyType[keySchema.GetName()] = toBasicType(keySchema.GetType(), pe.key[keySchema.GetName()])
+				val := pe.keyValueType[keySchema.GetName()].value
+				typ := toBasicType(keySchema.GetType(), val)
+				convVal, err := convertValue(val, typ)
+				if err != nil {
+					return nil, err
+				}
+				pe.keyValueType[keySchema.GetName()].conVal = convVal
 			}
 		case baseListSchema.GetSchema().GetLeaflist() != nil:
-			pe.keyType[sdcpe.GetName()] = toBasicType(baseListSchema.GetSchema().GetLeaflist().GetType(), pe.key[sdcpe.GetName()])
+			val := pe.keyValueType[sdcpe.GetName()].value
+			typ := toBasicType(baseListSchema.GetSchema().GetLeaflist().GetType(), pe.keyValueType[sdcpe.GetName()].value)
+			convVal, err := convertValue(val, typ)
+			if err != nil {
+				return nil, err
+			}
+			pe.keyValueType[sdcpe.GetName()].conVal = convVal
 		}
 		pes = append(pes, pe)
 	}
@@ -300,24 +347,40 @@ func getDefault(rsp *sdcpb.GetSchemaResponse) string {
 
 func toBasicType(sclt *sdcpb.SchemaLeafType, val string) string {
 	switch sclt.Type {
-	case "int64", "uint64", "enumeration":
-		return "string"
-	case "union":
-		// TODO: go through union types and compare the given value to the type
-		for _, ut := range sclt.GetUnionTypes() {
-			_, err := convertValue(val, ut.GetType())
-			if err == nil {
-				return ut.GetType()
-			}
-		}
-		// default to string
-		return "string"
-	case "identityref":
-		return "string"
+	case int64Type, uint64Type, identityrefType, enumType: // TODO: revisit enum type
+		return stringType
+	case unionType:
+		return getTypeUnion(sclt, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: val}})
 	case "leafref":
 		// TODO: follow leaf ref and return its type
-		return "string"
+		return stringType
 	default:
 		return sclt.Type
 	}
+}
+
+func getTypeUnion(uType *sdcpb.SchemaLeafType, tv *sdcpb.TypedValue) string {
+	for _, ut := range uType.GetUnionTypes() {
+		_, err := convertValue(tv.GetStringVal(), ut.GetType())
+		if err == nil {
+			return ut.GetType()
+		}
+	}
+	// default to string
+	return stringType
+}
+
+func getLeaflistType(llType *sdcpb.SchemaLeafType, tv *sdcpb.TypedValue) string {
+	llTypeStr := ""
+	switch llType.GetType() {
+	case int64Type, uint64Type, enumType, stringType, identityrefType:
+		llTypeStr = stringType
+	case leafrefType: // TODO: query leafref schema and return its type
+		llTypeStr = stringType
+	case unionType:
+		llTypeStr = getTypeUnion(llType, tv)
+	default:
+		llTypeStr = llType.GetType()
+	}
+	return leafListTypePrefix + llTypeStr
 }
