@@ -163,10 +163,6 @@ func (d *Datastore) applyIntent(ctx context.Context, candidateName string, prior
 	log.Infof("%s: validating must statements candidate %s", d.Name(), sdreq.GetDatastore())
 	// validate MUST statements
 	for _, upd := range sdreq.GetUpdate() {
-		// Workaround: do not validate key as leaf for now
-		if pathIsKeyAsLeaf(upd.GetPath()) {
-			continue
-		}
 		log.Debugf("%s: %s validating must statement on path: %v", d.Name(), candidateName, upd.GetPath())
 		_, err = d.validateMustStatement(ctx, candidateName, upd.GetPath(), false)
 		if err != nil {

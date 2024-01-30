@@ -21,6 +21,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/iptecharch/data-server/pkg/cache"
+	"github.com/iptecharch/data-server/pkg/datastore/jbuilderv2"
 	"github.com/iptecharch/data-server/pkg/utils"
 )
 
@@ -34,6 +35,17 @@ func (d *Datastore) Get(ctx context.Context, req *sdcpb.GetDataRequest, nCh chan
 			return status.Error(codes.InvalidArgument, "cannot query STATE data from INTENDED store")
 		}
 	}
+
+	switch req.GetEncoding() {
+	case sdcpb.Encoding_STRING:
+	case sdcpb.Encoding_JSON:
+	case sdcpb.Encoding_JSON_IETF:
+		return fmt.Errorf("not implemented")
+	case sdcpb.Encoding_PROTO:
+	default:
+		return fmt.Errorf("unknown encoding: %v", req.GetEncoding())
+	}
+
 	var err error
 	// validate that path(s) exist in the schema
 	for _, p := range req.GetPath() {
@@ -58,35 +70,208 @@ func (d *Datastore) Get(ctx context.Context, req *sdcpb.GetDataRequest, nCh chan
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	switch req.GetEncoding() {
+	case sdcpb.Encoding_STRING:
+		err = d.handleGetDataUpdatesSTRING(ctx, name, req, paths, nCh)
+	case sdcpb.Encoding_JSON:
+		err = d.handleGetDataUpdatesJSON(ctx, name, req, paths, nCh)
+	case sdcpb.Encoding_JSON_IETF:
+	case sdcpb.Encoding_PROTO:
+		err = d.handleGetDataUpdatesPROTO(ctx, name, req, paths, nCh)
+	}
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (d *Datastore) handleGetDataUpdatesSTRING(ctx context.Context, name string, req *sdcpb.GetDataRequest, paths [][]string, out chan *sdcpb.GetDataResponse) error {
+NEXT_STORE:
 	for _, store := range getStores(req) {
-		for upd := range d.cacheClient.ReadCh(ctx, name, &cache.Opts{
+		in := d.cacheClient.ReadCh(ctx, name, &cache.Opts{
 			Store:    store,
 			Owner:    req.GetDatastore().GetOwner(),
 			Priority: req.GetDatastore().GetPriority(),
-		}, paths, 0) {
-			log.Debugf("ds=%s read path=%v from store=%v: %v", name, paths, store, upd)
-			scp, err := d.toPath(ctx, upd.GetPath())
-			if err != nil {
-				return err
-			}
-			tv, err := upd.Value()
-			if err != nil {
-				return err
-			}
-			notification := &sdcpb.Notification{
-				Timestamp: time.Now().UnixNano(),
-				Update: []*sdcpb.Update{{
-					Path:  scp,
-					Value: tv,
-				}},
-			}
-			rsp := &sdcpb.GetDataResponse{
-				Notification: []*sdcpb.Notification{notification},
-			}
+		}, paths, 0)
+
+		for {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case nCh <- rsp:
+			case upd, ok := <-in:
+				//log.Debugf("ds=%s read path=%v from store=%v: %v", name, paths, store, upd)
+				if !ok {
+					continue NEXT_STORE
+				}
+				if len(upd.GetPath()) == 0 {
+					continue
+				}
+				scp, err := d.toPath(ctx, upd.GetPath())
+				if err != nil {
+					return err
+				}
+				switch len(scp.GetElem()) {
+				case 0:
+					continue
+				case 1:
+					if scp.GetElem()[0].GetName() == "" {
+						continue
+					}
+				}
+				tv, err := upd.Value()
+				if err != nil {
+					return err
+				}
+				notification := &sdcpb.Notification{
+					Timestamp: time.Now().UnixNano(),
+					Update: []*sdcpb.Update{{
+						Path:  scp,
+						Value: tv,
+					}},
+				}
+				rsp := &sdcpb.GetDataResponse{
+					Notification: []*sdcpb.Notification{notification},
+				}
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case out <- rsp:
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, req *sdcpb.GetDataRequest, paths [][]string, out chan *sdcpb.GetDataResponse) error {
+	jbuilder := jbuilderv2.New(d.getValidationClient().SchemaClientBound)
+	rs := make(map[string]any)
+
+	for _, store := range getStores(req) {
+		in := d.cacheClient.ReadCh(ctx, name, &cache.Opts{
+			Store:    store,
+			Owner:    req.GetDatastore().GetOwner(),
+			Priority: req.GetDatastore().GetPriority(),
+		}, paths, 0)
+	OUTER:
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case upd, ok := <-in:
+				if !ok {
+					break OUTER
+				}
+
+				if len(upd.GetPath()) == 0 {
+					continue
+				}
+
+				scp, err := d.toPath(ctx, upd.GetPath())
+				if err != nil {
+					return err
+				}
+				switch len(scp.GetElem()) {
+				case 0:
+					continue
+				case 1:
+					if scp.GetElem()[0].GetName() == "" {
+						continue
+					}
+				}
+				tv, err := upd.Value()
+				if err != nil {
+					return err
+				}
+				err = jbuilder.AddUpdate(ctx, rs, scp, tv)
+				if err != nil {
+					err = fmt.Errorf("failed json builder:path=%s, v=%v, err=%v", scp, tv, err)
+					return err
+				}
+			}
+		}
+	}
+	// marshal map into JSON bytes
+	b, err := json.Marshal(rs)
+	if err != nil {
+		err = fmt.Errorf("failed json builder indent : %v", err)
+		log.Error(err)
+		return err
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case out <- &sdcpb.GetDataResponse{
+		Notification: []*sdcpb.Notification{
+			{
+				Timestamp: time.Now().UnixNano(),
+				Update: []*sdcpb.Update{{
+					Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: b}},
+				}},
+			},
+		},
+	}:
+	}
+	return nil
+}
+
+func (d *Datastore) handleGetDataUpdatesPROTO(ctx context.Context, name string, req *sdcpb.GetDataRequest, paths [][]string, out chan *sdcpb.GetDataResponse) error {
+NEXT_STORE:
+	for _, store := range getStores(req) {
+		in := d.cacheClient.ReadCh(ctx, name, &cache.Opts{
+			Store:    store,
+			Owner:    req.GetDatastore().GetOwner(),
+			Priority: req.GetDatastore().GetPriority(),
+		}, paths, 0)
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case upd, ok := <-in:
+				//log.Debugf("ds=%s read path=%v from store=%v: %v", name, paths, store, upd)
+				if !ok {
+					continue NEXT_STORE
+				}
+
+				if len(upd.GetPath()) == 0 {
+					continue
+				}
+				scp, err := d.toPath(ctx, upd.GetPath())
+				if err != nil {
+					return err
+				}
+				switch len(scp.GetElem()) {
+				case 0:
+					continue
+				case 1:
+					if scp.GetElem()[0].GetName() == "" {
+						continue
+					}
+				}
+				tv, err := upd.Value()
+				if err != nil {
+					return err
+				}
+				ctv, err := d.convertTVProto(ctx, scp, tv)
+				if err != nil {
+					return err
+				}
+				notification := &sdcpb.Notification{
+					Timestamp: time.Now().UnixNano(),
+					Update: []*sdcpb.Update{{
+						Path:  scp,
+						Value: ctv,
+					}},
+				}
+				rsp := &sdcpb.GetDataResponse{
+					Notification: []*sdcpb.Notification{notification},
+				}
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case out <- rsp:
+				}
 			}
 		}
 	}
@@ -359,7 +544,6 @@ func (d *Datastore) validateMustStatement(ctx context.Context, candidateName str
 		var mustStatements []*sdcpb.MustStatement
 		switch rsp.GetSchema().Schema.(type) {
 		case *sdcpb.SchemaElem_Container:
-			rsp.Schema.GetContainer()
 			mustStatements = rsp.Schema.GetContainer().GetMustStatements()
 		case *sdcpb.SchemaElem_Leaflist:
 			mustStatements = rsp.Schema.GetLeaflist().GetMustStatements()
@@ -1262,4 +1446,59 @@ func (d *Datastore) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest,
 	}
 	// updates end
 	return rsp, nil
+}
+
+func (d *Datastore) convertTVProto(ctx context.Context, p *sdcpb.Path, tv *sdcpb.TypedValue) (*sdcpb.TypedValue, error) {
+	rsp, err := d.getSchema(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case rsp.GetSchema().GetContainer() != nil:
+		if rsp.GetSchema().GetContainer().IsPresence {
+			return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: nil}}, nil
+		}
+	case rsp.GetSchema().GetLeaflist() != nil:
+		return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: nil}}, nil
+	case rsp.GetSchema().GetField() != nil:
+		switch rsp.GetSchema().GetField().GetType().GetType() {
+		default:
+			return tv, nil
+		case "string", "identityref":
+			return tv, nil
+		case "uint64", "uint32", "uint16", "uint8":
+			i, err := strconv.Atoi(tv.GetStringVal())
+			if err != nil {
+				return nil, err
+			}
+			ctv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_UintVal{UintVal: uint64(i)}}
+			return ctv, nil
+		case "int64", "int32", "int16", "int8":
+
+			i, err := strconv.Atoi(tv.GetStringVal())
+			if err != nil {
+				return nil, err
+			}
+			ctv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_IntVal{IntVal: int64(i)}}
+			return ctv, nil
+		case "enumeration":
+			return tv, nil
+		case "union":
+			// TODO:
+			return tv, nil
+		case "boolean":
+			v, err := strconv.ParseBool(tv.GetStringVal())
+			if err != nil {
+				return nil, err
+			}
+			return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: v}}, nil
+		case "float":
+			v, err := strconv.ParseFloat(tv.GetStringVal(), 32)
+			if err != nil {
+				return nil, err
+			}
+			return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_FloatVal{FloatVal: float32(v)}}, nil
+		}
+	}
+	return nil, nil
 }

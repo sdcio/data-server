@@ -579,23 +579,18 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 				log.Errorf("datastore %s failed to get schema for update path %v: %v", d.config.Name, upd.GetPath(), err)
 				continue
 			}
-			// workaround, skip presence containers
-			// switch r := scRsp.GetSchema().Schema.(type) {
-			// case *sdcpb.SchemaElem_Container:
-			// 	if r.Container.IsPresence {
-			// 		continue
-			// 	}
-			// }
 			if isState(scRsp) {
 				store = cachepb.Store_STATE
 			}
 		}
+		
 		cUpd, err := d.cacheClient.NewUpdate(upd)
 		if err != nil {
 			log.Errorf("datastore %s failed to create update from %v: %v", d.config.Name, upd, err)
 			continue
 		}
-		rctx, cancel := context.WithTimeout(ctx, time.Minute) // TODO:
+
+		rctx, cancel := context.WithTimeout(ctx, time.Minute) // TODO:[KR] make this timeout configurable ?
 		defer cancel()
 		err = d.cacheClient.Modify(rctx, d.Config().Name, &cache.Opts{
 			Store: store,

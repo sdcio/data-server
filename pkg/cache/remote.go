@@ -140,7 +140,7 @@ func (c *remoteCache) ReadCh(ctx context.Context, name string, opts *Opts, paths
 		KeysOnly:      opts.KeysOnly,
 	}
 	inCh := c.c.Read(ctx, name, ro, paths, period)
-	outCh := make(chan *Update)
+	outCh := make(chan *Update, len(paths))
 	go func() {
 		defer close(outCh)
 		for {

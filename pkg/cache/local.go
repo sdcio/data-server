@@ -133,7 +133,7 @@ func (c *localCache) ReadCh(ctx context.Context, name string, opts *Opts, paths 
 	if opts == nil {
 		opts = &Opts{}
 	}
-	outCh := make(chan *Update)
+	outCh := make(chan *Update, len(paths))
 	go func() {
 		defer close(outCh)
 		ch, err := c.c.ReadValue(ctx, name, &cache.Opts{
