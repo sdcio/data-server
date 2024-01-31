@@ -752,30 +752,11 @@ func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update, include
 	upds := make([]*sdcpb.Update, 0)
 	if includeKeysAsLeaf {
 		// expand update path if it contains keys
-		for i, pe := range upd.GetPath().GetElem() {
-			if len(pe.GetKey()) == 0 {
-				continue
-			}
-			//
-			for k, v := range pe.GetKey() {
-				intUpd := &sdcpb.Update{
-					Path: &sdcpb.Path{
-						Elem: make([]*sdcpb.PathElem, 0, i+1+1),
-					},
-				}
-				for j := 0; j <= i; j++ {
-					intUpd.Path.Elem = append(intUpd.Path.Elem,
-						&sdcpb.PathElem{
-							Name: upd.GetPath().GetElem()[j].GetName(),
-							Key:  upd.GetPath().GetElem()[j].GetKey(),
-						},
-					)
-				}
-				intUpd.Path.Elem = append(intUpd.Path.Elem, &sdcpb.PathElem{Name: k})
-				intUpd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
-				upds = append(upds, intUpd)
-			}
+		intUpd, err := d.expandUpdateKeysAsLeaf(ctx, upd)
+		if err != nil {
+			return nil, err
 		}
+		upds = append(upds, intUpd...)
 	}
 	rsp, err := d.schemaClient.GetSchema(ctx,
 		&sdcpb.GetSchemaRequest{
@@ -833,6 +814,36 @@ func (d *Datastore) expandUpdates(ctx context.Context, updates []*sdcpb.Update, 
 	return outUpdates, nil
 }
 
+func (d *Datastore) expandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
+	upds := make([]*sdcpb.Update, 0)
+	// expand update path if it contains keys
+	for i, pe := range upd.GetPath().GetElem() {
+		if len(pe.GetKey()) == 0 {
+			continue
+		}
+		//
+		for k, v := range pe.GetKey() {
+			intUpd := &sdcpb.Update{
+				Path: &sdcpb.Path{
+					Elem: make([]*sdcpb.PathElem, 0, i+1+1),
+				},
+			}
+			for j := 0; j <= i; j++ {
+				intUpd.Path.Elem = append(intUpd.Path.Elem,
+					&sdcpb.PathElem{
+						Name: upd.GetPath().GetElem()[j].GetName(),
+						Key:  upd.GetPath().GetElem()[j].GetKey(),
+					},
+				)
+			}
+			intUpd.Path.Elem = append(intUpd.Path.Elem, &sdcpb.PathElem{Name: k})
+			intUpd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
+			upds = append(upds, intUpd)
+		}
+	}
+	return upds, nil
+}
+
 func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container, includeKeysAsLeaf bool) ([]*sdcpb.Update, error) {
 	log.Debugf("expanding jsonVal %T | %v | %v", jv, jv, p)
 	switch jv := jv.(type) {
@@ -854,17 +865,34 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		if numElems := len(p.GetElem()); numElems > 0 {
 			keysInPath = p.GetElem()[numElems-1].GetKey()
 		}
+		// make sure all keys exist either in the JSON value or
+		// in the path but NOT in both and build keySet
+		keySet := map[string]string{}
+		for _, k := range cs.Container.GetKeys() {
+			if v, ok := jv[k.Name]; ok {
+				if _, ok := keysInPath[k.Name]; ok {
+					return nil, fmt.Errorf("key %q is present in both the path and JSON value", k.Name)
+				}
+				keySet[k.Name] = fmt.Sprintf("%v", v)
+				continue
+			}
+			if v, ok := keysInPath[k.Name]; ok {
+				keySet[k.Name] = v
+				continue
+			}
+			return nil, fmt.Errorf("missing key %s in element %s", k.Name, cs.Container.GetName())
+		}
 		// handling keys in last element of the path or in the json value
 		for _, k := range cs.Container.GetKeys() {
 			if v, ok := jv[k.Name]; ok {
 				log.Debugf("handling key %s", k.Name)
 				if _, ok := keysInPath[k.Name]; ok {
-					return nil, fmt.Errorf("key %q is present in both the path and value", k.Name)
+					return nil, fmt.Errorf("key %q is present in both the path and JSON value", k.Name)
 				}
 				if p.GetElem()[len(p.GetElem())-1].Key == nil {
 					p.GetElem()[len(p.GetElem())-1].Key = make(map[string]string)
 				}
-				p.GetElem()[len(p.GetElem())-1].Key[k.Name] = fmt.Sprintf("%v", v)
+				p.GetElem()[len(p.GetElem())-1].Key = keySet
 				if includeKeysAsLeaf {
 					np := proto.Clone(p).(*sdcpb.Path)
 					np.Elem = append(np.Elem, &sdcpb.PathElem{Name: k.Name})
@@ -882,10 +910,10 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 			}
 			// if key is not in the value it must be set in the path
 			if _, ok := keysInPath[k.Name]; !ok {
-				return nil, fmt.Errorf("missing key %q from container %q", k.Name, cs.Container.Name)
+				return nil, fmt.Errorf("missing key %q from list %q", k.Name, cs.Container.Name)
 			}
 		}
-
+		//
 		for k, v := range jv {
 			if isKey(k, cs) {
 				continue
