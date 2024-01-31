@@ -34,8 +34,6 @@ const (
 	enumType        = "enumeration"
 	unionType       = "union"
 	identityrefType = "identityref"
-
-	leafListTypePrefix = "LEAFLIST:"
 )
 
 type jsonBuilder struct {
