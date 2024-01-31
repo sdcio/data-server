@@ -38,13 +38,26 @@ func (d *Datastore) SetIntentDelete(ctx context.Context, req *sdcpb.SetIntentReq
 		if !ok {
 			continue
 		}
+		log.Debugf("ds=%s | %s | path=%v has %d entry(ies) layers", d.Name(), req.GetIntent(), cp, len(currentCacheEntries))
+		for i, cce := range currentCacheEntries {
+			log.Debugf("ds=%s | %s | path=%v has entry.%d %v", d.Name(), req.GetIntent(), cp, i, cce)
+			for j, cc := range cce {
+				log.Debugf("ds=%s | %s | path=%v has entry.%d.%d %v", d.Name(), req.GetIntent(), cp, i, j, cc)
+			}
+		}
+
 		if currentCacheEntries == nil || currentCacheEntries[0] == nil {
 			log.Warningf("unexpected empty response from cache for path: %v", cp)
 			continue
 		}
 		// the intent has a lower priority than the highest one for this path
-		// => nothing to change.
+		// => nothing to change, but ?? add the highest intent entry for validation
 		if currentCacheEntries[0][0].Priority() < req.GetPriority() {
+			upd, err := d.cacheUpdateToUpdate(ctx, currentCacheEntries[0][0])
+			if err != nil {
+				return err
+			}
+			setDataReq.Update = append(setDataReq.Update, upd)
 			continue
 		}
 		switch len(currentCacheEntries) {
