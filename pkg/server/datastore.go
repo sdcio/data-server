@@ -178,6 +178,10 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 		if err != nil {
 			log.Errorf("failed to stop datastore %s: %v", name, err)
 		}
+		err = ds.DeleteCache(ctx)
+		if err != nil {
+			log.Errorf("failed to delete the datastore %s cache: %v", name, err)
+		}
 		delete(s.datastores, name)
 		log.Infof("deleted datastore %s", name)
 		return &sdcpb.DeleteDataStoreResponse{}, nil

@@ -291,6 +291,10 @@ func (d *Datastore) Stop() error {
 	return nil
 }
 
+func (d *Datastore) DeleteCache(ctx context.Context) error {
+	return d.cacheClient.Delete(ctx, d.config.Name)
+}
+
 func (d *Datastore) Sync(ctx context.Context) {
 	// this semaphore controls the number of concurrent writes to the cache
 	sem := semaphore.NewWeighted(d.config.Sync.WriteWorkers)
