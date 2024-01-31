@@ -1,8 +1,10 @@
 package jbuilderv2
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
 	"strconv"
@@ -40,9 +42,10 @@ type jsonBuilder struct {
 	scc *schemaClient.SchemaClientBound
 }
 
+// pathElem is a path element that carries the keys types as well as their values
 type pathElem struct {
 	name         string
-	keyValueType map[string]*vt // TODO: replace with sdcpb.TypedValue
+	keyValueType map[string]*vt
 }
 
 type vt struct {
@@ -71,12 +74,6 @@ func (pe *pathElem) String() string {
 	return sb.String()
 }
 
-type update struct {
-	path  []*pathElem
-	value string
-	// convertedValue any // TODO: replace with sdcpb.TypedValue
-}
-
 func New(scc *schemaClient.SchemaClientBound) *jsonBuilder {
 	return &jsonBuilder{
 		scc: scc,
@@ -85,71 +82,43 @@ func New(scc *schemaClient.SchemaClientBound) *jsonBuilder {
 
 // AddUpdate adds the path and value to the obj map.
 // It does that by checking the schema of the object the path points to.
+// It converts keys along the path to their YANG type.
 // It ignores non-presence containers.
-// If the path points to a leaf-list. The value is expected to be nil and the value to be set will be the key
-// in the path's last element.
-// If the path points to a field (i.e leaf), the typedValue should not be nil and is expected to be (for now) a StringVal.
+// If the path points to a leaf-list. The value is expected to be a TypedValue_leafList.
+// If the path points to a field (i.e leaf), the typedValue should not be nil and is expected to reflect its YANG type.
 func (j *jsonBuilder) AddUpdate(ctx context.Context, obj map[string]any, p *sdcpb.Path, tv *sdcpb.TypedValue) error {
 	psc, err := j.scc.GetSchema(ctx, p)
 	if err != nil {
 		return err
 	}
 
-	vt, isDefault, err := j.getType(ctx, tv, psc)
-	if err != nil {
-		return err
-	}
-
-	if isDefault && tv != nil && tv.GetValue() != nil {
+	if isDefault(tv, psc.GetSchema()) && tv != nil && tv.GetValue() != nil {
 		return nil
 	}
+	value := getValue(tv)
 
-	// u := update{valueType: vt}
-	u := update{}
 	switch {
 	case psc.GetSchema().GetContainer() != nil:
-		if !psc.GetSchema().GetContainer().IsPresence {
+		if !psc.GetSchema().GetContainer().GetIsPresence() {
 			return nil
 		}
-	case psc.GetSchema().GetLeaflist() != nil:
-		for _, v := range p.GetElem()[len(p.GetElem())-1].GetKey() {
-			u.value = v
-			break
-		}
-	case psc.GetSchema().GetField() != nil:
-		u.value = tv.GetStringVal()
+		value = map[string]any{}
 	}
 
-	u.path, err = j.buildPathElems(ctx, p)
+	pes, err := j.buildPathElems(ctx, p)
 	if err != nil {
 		return err
 	}
 
-	convertedValue, err := convertValue(u.value, vt)
-	if err != nil {
-		return err
-	}
-
-	err = j.addValueToObject(obj, u.path, convertedValue)
+	err = j.addValueToObject(obj, pes, value)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-// convertValue converts a string value to the specified type.
-func convertValue(value, valueType string) (interface{}, error) {
-	// check if the type is a leaflist type i.e LEAFLIST:XXXX
-	// this check can be replaced with strings.Index if there is a performance issue.. unlikely.
-	if strings.HasPrefix(valueType, leafListTypePrefix) {
-		lfVal, err := convertValue(value, strings.TrimPrefix(valueType, leafListTypePrefix))
-		if err != nil {
-			return nil, err
-		}
-		// return as a []any so that it can be concatenated with
-		// other values of the same leaf-list
-		return []any{lfVal}, nil
-	}
+// convertKeyValue converts a string value to the specified type.
+func convertKeyValue(value, valueType string) (interface{}, error) {
 	switch valueType {
 	case stringType:
 		return value, nil
@@ -163,8 +132,6 @@ func convertValue(value, valueType string) (interface{}, error) {
 		return nil, nil
 	case presenceType:
 		return map[string]any{}, nil
-	// case "LEAFLIST": // not needed ?
-	// 	return []any{value}, nil
 	case decimal64Type:
 		return value, nil
 	case "":
@@ -203,7 +170,8 @@ func (j *jsonBuilder) addValueToObject(obj map[string]any, path []*pathElem, val
 			case map[string]interface{}:
 				obj = obj[elem.name].(map[string]interface{})
 			default:
-				log.Warnf("unexpected element type at %s: got %T", elem.name, obj[elem.name])
+				log.Warnf("json_builder: unexpected element type at %s: got %T", elem.name, obj[elem.name])
+				log.Warnf("json_builder: path %s | value %T | %v", path, value, value)
 			}
 			continue
 		}
@@ -259,33 +227,6 @@ func findOrCreateMatchingObject(arr []map[string]interface{}, keys map[string]*v
 	return newObj, false, nil
 }
 
-func (j *jsonBuilder) getType(ctx context.Context, tv *sdcpb.TypedValue, rsp *sdcpb.GetSchemaResponse) (string, bool, error) {
-	switch rsp.GetSchema().Schema.(type) {
-	case *sdcpb.SchemaElem_Container:
-		return presenceType, getDefault(rsp) == tv.GetStringVal(), nil
-	case *sdcpb.SchemaElem_Leaflist:
-		llType := getLeaflistType(rsp.GetSchema().GetLeaflist().GetType(), tv)
-		return llType, getDefault(rsp) == tv.GetStringVal(), nil
-	case *sdcpb.SchemaElem_Field:
-		switch t := rsp.Schema.GetField().GetType().GetType(); t {
-		case int64Type, uint64Type, enumType:
-			return stringType, getDefault(rsp) == tv.GetStringVal(), nil
-		case unionType:
-			ut := getTypeUnion(rsp.Schema.GetField().GetType(), tv)
-			return ut, getDefault(rsp) == tv.GetStringVal(), nil
-		case identityrefType:
-			return stringType, getDefault(rsp) == tv.GetStringVal(), nil
-		case leafrefType:
-			// TODO: query leafref schema and return its type
-			return stringType, getDefault(rsp) == tv.GetStringVal(), nil
-		default:
-			return t, getDefault(rsp) == tv.GetStringVal(), nil
-		}
-	default:
-		return "", getDefault(rsp) == tv.GetStringVal(), nil
-	}
-}
-
 func (j *jsonBuilder) buildPathElems(ctx context.Context, p *sdcpb.Path) ([]*pathElem, error) {
 	pes := make([]*pathElem, 0, len(p.GetElem()))
 	for i, sdcpe := range p.GetElem() {
@@ -296,12 +237,13 @@ func (j *jsonBuilder) buildPathElems(ctx context.Context, p *sdcpb.Path) ([]*pat
 		for k, v := range sdcpe.GetKey() {
 			pe.keyValueType[k] = &vt{value: v}
 		}
+
 		basePath := &sdcpb.Path{Elem: make([]*sdcpb.PathElem, 0, i)}
 		for j := 0; j <= i; j++ {
 			basePath.Elem = append(basePath.Elem, &sdcpb.PathElem{Name: p.GetElem()[j].GetName()})
 		}
 
-		// check if basePath points to a list or leaf-list.
+		// check if basePath points to a list.
 		baseListSchema, err := j.scc.GetSchema(ctx, basePath)
 		if err != nil {
 			return nil, err
@@ -309,40 +251,20 @@ func (j *jsonBuilder) buildPathElems(ctx context.Context, p *sdcpb.Path) ([]*pat
 
 		switch {
 		case baseListSchema.GetSchema().GetContainer() != nil:
+			// convert keys
 			for _, keySchema := range baseListSchema.GetSchema().GetContainer().GetKeys() {
 				val := pe.keyValueType[keySchema.GetName()].value
 				typ := toBasicType(keySchema.GetType(), val)
-				convVal, err := convertValue(val, typ)
+				convVal, err := convertKeyValue(val, typ)
 				if err != nil {
 					return nil, err
 				}
 				pe.keyValueType[keySchema.GetName()].conVal = convVal
 			}
-		case baseListSchema.GetSchema().GetLeaflist() != nil:
-			val := pe.keyValueType[sdcpe.GetName()].value
-			typ := toBasicType(baseListSchema.GetSchema().GetLeaflist().GetType(), pe.keyValueType[sdcpe.GetName()].value)
-			convVal, err := convertValue(val, typ)
-			if err != nil {
-				return nil, err
-			}
-			pe.keyValueType[sdcpe.GetName()].conVal = convVal
 		}
 		pes = append(pes, pe)
 	}
 	return pes, nil
-}
-
-func getDefault(rsp *sdcpb.GetSchemaResponse) string {
-	if rsp == nil {
-		return ""
-	}
-	switch rsp.GetSchema().Schema.(type) {
-	case *sdcpb.SchemaElem_Container:
-	case *sdcpb.SchemaElem_Leaflist:
-	case *sdcpb.SchemaElem_Field:
-		return rsp.GetSchema().GetField().GetDefault()
-	}
-	return ""
 }
 
 func toBasicType(sclt *sdcpb.SchemaLeafType, val string) string {
@@ -353,6 +275,7 @@ func toBasicType(sclt *sdcpb.SchemaLeafType, val string) string {
 		return getTypeUnion(sclt, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: val}})
 	case "leafref":
 		// TODO: follow leaf ref and return its type
+		//       strip the leafref path from ns and query its schema
 		return stringType
 	default:
 		return sclt.Type
@@ -361,7 +284,7 @@ func toBasicType(sclt *sdcpb.SchemaLeafType, val string) string {
 
 func getTypeUnion(uType *sdcpb.SchemaLeafType, tv *sdcpb.TypedValue) string {
 	for _, ut := range uType.GetUnionTypes() {
-		_, err := convertValue(tv.GetStringVal(), ut.GetType())
+		_, err := convertKeyValue(tv.GetStringVal(), ut.GetType())
 		if err == nil {
 			return ut.GetType()
 		}
@@ -370,17 +293,136 @@ func getTypeUnion(uType *sdcpb.SchemaLeafType, tv *sdcpb.TypedValue) string {
 	return stringType
 }
 
-func getLeaflistType(llType *sdcpb.SchemaLeafType, tv *sdcpb.TypedValue) string {
-	llTypeStr := ""
-	switch llType.GetType() {
-	case int64Type, uint64Type, enumType, stringType, identityrefType:
-		llTypeStr = stringType
-	case leafrefType: // TODO: query leafref schema and return its type
-		llTypeStr = stringType
-	case unionType:
-		llTypeStr = getTypeUnion(llType, tv)
-	default:
-		llTypeStr = llType.GetType()
+func isDefault(tv *sdcpb.TypedValue, schemaElem *sdcpb.SchemaElem) bool {
+	defaultVal := ""
+	switch {
+	case schemaElem.GetContainer() != nil:
+		return false
+	case schemaElem.GetLeaflist() != nil:
+		lfDefaultVals := schemaElem.GetLeaflist().GetDefaults()
+		numDefaults := len(lfDefaultVals)
+		switch tv.Value.(type) {
+		case *sdcpb.TypedValue_LeaflistVal:
+			numlf := len(tv.GetLeaflistVal().GetElement())
+			if numlf != numDefaults {
+				return false
+			}
+			for i, lftv := range tv.GetLeaflistVal().GetElement() {
+				if !tvIsEqual(lftv, lfDefaultVals[i]) {
+					return false
+				}
+			}
+			return true
+		default:
+			// if there are no defaults or there
+			// are more than one, return false
+			if numDefaults != 1 {
+				return false
+			}
+			// compare a single leaf-list as a leaf
+			defaultVal = lfDefaultVals[0]
+		}
+	case schemaElem.GetField() != nil:
+		defaultVal = schemaElem.GetField().GetDefault()
 	}
-	return leafListTypePrefix + llTypeStr
+
+	return tvIsEqual(tv, defaultVal)
+}
+
+func tvIsEqual(tv *sdcpb.TypedValue, val string) bool {
+	switch tv.Value.(type) {
+	case *sdcpb.TypedValue_AsciiVal:
+		return tv.GetAsciiVal() == val
+	case *sdcpb.TypedValue_BoolVal:
+		v, err := strconv.ParseBool(val)
+		if err != nil {
+			return false
+		}
+		return tv.GetBoolVal() == v
+	case *sdcpb.TypedValue_BytesVal:
+		// TODO: recheck
+		return bytes.Equal([]byte(val), tv.GetBytesVal())
+	case *sdcpb.TypedValue_DecimalVal:
+		vf, err := strconv.ParseFloat(val, 64)
+		if err != nil {
+			return false
+		}
+		dem := math.Pow10(int(tv.GetDecimalVal().GetPrecision()))
+		if dem == 0 {
+			return false
+		}
+		num := float64(tv.GetDecimalVal().GetDigits())
+		f := num / dem
+		return vf == f
+	case *sdcpb.TypedValue_FloatVal:
+		v, err := strconv.ParseFloat(val, 32)
+		if err != nil {
+			return false
+		}
+		return tv.GetFloatVal() == float32(v)
+	case *sdcpb.TypedValue_DoubleVal:
+		v, err := strconv.ParseFloat(val, 64)
+		if err != nil {
+			return false
+		}
+		return tv.GetDoubleVal() == v
+	case *sdcpb.TypedValue_IntVal:
+		v, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return false
+		}
+		return tv.GetIntVal() == v
+	case *sdcpb.TypedValue_StringVal:
+		return tv.GetStringVal() == val
+	case *sdcpb.TypedValue_UintVal:
+		v, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return false
+		}
+		return tv.GetUintVal() == uint64(v)
+	case *sdcpb.TypedValue_JsonIetfVal:
+	case *sdcpb.TypedValue_JsonVal:
+	case *sdcpb.TypedValue_LeaflistVal: // should not reach here
+	case *sdcpb.TypedValue_ProtoBytes:
+	case *sdcpb.TypedValue_AnyVal:
+	}
+	return false
+}
+
+func getValue(tv *sdcpb.TypedValue) any {
+	switch tv.Value.(type) {
+	case *sdcpb.TypedValue_AsciiVal:
+		return tv.GetAsciiVal()
+	case *sdcpb.TypedValue_BoolVal:
+		return tv.GetBoolVal()
+	case *sdcpb.TypedValue_BytesVal:
+		return tv.GetBytesVal()
+	case *sdcpb.TypedValue_DecimalVal:
+		return tv.GetDecimalVal()
+	case *sdcpb.TypedValue_FloatVal:
+		return tv.GetFloatVal()
+	case *sdcpb.TypedValue_DoubleVal:
+		return tv.GetDoubleVal()
+	case *sdcpb.TypedValue_IntVal:
+		return tv.GetIntVal()
+	case *sdcpb.TypedValue_StringVal:
+		return tv.GetStringVal()
+	case *sdcpb.TypedValue_UintVal:
+		return tv.GetUintVal()
+	case *sdcpb.TypedValue_JsonIetfVal:
+		return tv.GetJsonIetfVal()
+	case *sdcpb.TypedValue_JsonVal:
+		return tv.GetJsonVal()
+	case *sdcpb.TypedValue_LeaflistVal:
+		rs := make([]any, 0, len(tv.GetLeaflistVal().GetElement()))
+		for _, e := range tv.GetLeaflistVal().GetElement() {
+			rs = append(rs, getValue(e))
+		}
+		return rs
+	case *sdcpb.TypedValue_ProtoBytes:
+		return tv.GetProtoBytes()
+	case *sdcpb.TypedValue_AnyVal:
+		return tv.GetAnyVal()
+	}
+	return nil
 }

@@ -1,7 +1,6 @@
 package datastore
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -146,6 +145,7 @@ NEXT_STORE:
 func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, req *sdcpb.GetDataRequest, paths [][]string, out chan *sdcpb.GetDataResponse) error {
 	jbuilder := jbuilderv2.New(d.getValidationClient().SchemaClientBound)
 	rs := make(map[string]any)
+	now := time.Now().UnixNano()
 
 	for _, store := range getStores(req) {
 		in := d.cacheClient.ReadCh(ctx, name, &cache.Opts{
@@ -205,7 +205,7 @@ func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, r
 	case out <- &sdcpb.GetDataResponse{
 		Notification: []*sdcpb.Notification{
 			{
-				Timestamp: time.Now().UnixNano(),
+				Timestamp: now,
 				Update: []*sdcpb.Update{{
 					Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: b}},
 				}},
@@ -253,7 +253,7 @@ NEXT_STORE:
 				if err != nil {
 					return err
 				}
-				ctv, err := d.convertTVProto(ctx, scp, tv)
+				ctv, err := d.convertTypedValueToProto(ctx, scp, tv)
 				if err != nil {
 					return err
 				}
@@ -359,7 +359,7 @@ func (d *Datastore) Diff(ctx context.Context, req *sdcpb.DiffRequest) (*sdcpb.Di
 					log.Debugf("read value %v: %v", change.Update.GetPath(), mainVal)
 					log.Debugf("path=%v: main=%v, cand=%v", change.Update.GetPath(), mainVal, candVal)
 					// compare values
-					if equalTypedValues(mainVal, candVal) {
+					if utils.EqualTypedValues(mainVal, candVal) {
 						continue
 					}
 					// get path from schema server
@@ -746,207 +746,6 @@ func validateLeafListValue(ll *sdcpb.LeafListSchema, v any) error {
 		_ = must
 	}
 	return validateLeafTypeValue(ll.GetType(), v)
-}
-
-func equalTypedValues(v1, v2 *sdcpb.TypedValue) bool {
-	if v1 == nil {
-		return v2 == nil
-	}
-	if v2 == nil {
-		return v1 == nil
-	}
-
-	switch v1 := v1.GetValue().(type) {
-	case *sdcpb.TypedValue_AnyVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_AnyVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			if v1.AnyVal == nil && v2.AnyVal == nil {
-				return true
-			}
-			if v1.AnyVal == nil || v2.AnyVal == nil {
-				return false
-			}
-			if v1.AnyVal.GetTypeUrl() != v2.AnyVal.GetTypeUrl() {
-				return false
-			}
-			return bytes.Equal(v1.AnyVal.GetValue(), v2.AnyVal.GetValue())
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_AsciiVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_AsciiVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return v1.AsciiVal == v2.AsciiVal
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_BoolVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_BoolVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return v1.BoolVal == v2.BoolVal
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_BytesVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_BytesVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return bytes.Equal(v1.BytesVal, v2.BytesVal)
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_DecimalVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_DecimalVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			if v1.DecimalVal.GetDigits() != v2.DecimalVal.GetDigits() {
-				return false
-			}
-			return v1.DecimalVal.GetPrecision() == v2.DecimalVal.GetPrecision()
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_FloatVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_FloatVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return v1.FloatVal == v2.FloatVal
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_IntVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_IntVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return v1.IntVal == v2.IntVal
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_JsonIetfVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_JsonIetfVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return bytes.Equal(v1.JsonIetfVal, v2.JsonIetfVal)
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_JsonVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_JsonVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return bytes.Equal(v1.JsonVal, v2.JsonVal)
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_LeaflistVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_LeaflistVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			if len(v1.LeaflistVal.GetElement()) != len(v2.LeaflistVal.GetElement()) {
-				return false
-			}
-			for i := range v1.LeaflistVal.GetElement() {
-				if !equalTypedValues(v1.LeaflistVal.Element[i], v2.LeaflistVal.Element[i]) {
-					return false
-				}
-			}
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_ProtoBytes:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_ProtoBytes:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return bytes.Equal(v1.ProtoBytes, v2.ProtoBytes)
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_StringVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_StringVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return v1.StringVal == v2.StringVal
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_UintVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_UintVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return v1.UintVal == v2.UintVal
-		default:
-			return false
-		}
-	}
-	return true
 }
 
 func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update, includeKeysAsLeaf bool) ([]*sdcpb.Update, error) {
@@ -1448,7 +1247,7 @@ func (d *Datastore) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest,
 	return rsp, nil
 }
 
-func (d *Datastore) convertTVProto(ctx context.Context, p *sdcpb.Path, tv *sdcpb.TypedValue) (*sdcpb.TypedValue, error) {
+func (d *Datastore) convertTypedValueToProto(ctx context.Context, p *sdcpb.Path, tv *sdcpb.TypedValue) (*sdcpb.TypedValue, error) {
 	rsp, err := d.getSchema(ctx, p)
 	if err != nil {
 		return nil, err
@@ -1456,10 +1255,24 @@ func (d *Datastore) convertTVProto(ctx context.Context, p *sdcpb.Path, tv *sdcpb
 	switch {
 	case rsp.GetSchema().GetContainer() != nil:
 		if rsp.GetSchema().GetContainer().IsPresence {
-			return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: nil}}, nil
+			return &sdcpb.TypedValue{
+				Timestamp: tv.GetTimestamp(),
+				Value:     &sdcpb.TypedValue_JsonVal{JsonVal: nil},
+			}, nil
 		}
 	case rsp.GetSchema().GetLeaflist() != nil:
-		return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: nil}}, nil
+		switch tv.Value.(type) {
+		case *sdcpb.TypedValue_LeaflistVal:
+			return tv, nil
+		}
+		return &sdcpb.TypedValue{
+			Timestamp: tv.GetTimestamp(),
+			Value: &sdcpb.TypedValue_LeaflistVal{
+				LeaflistVal: &sdcpb.ScalarArray{
+					Element: []*sdcpb.TypedValue{tv},
+				},
+			},
+		}, nil
 	case rsp.GetSchema().GetField() != nil:
 		switch rsp.GetSchema().GetField().GetType().GetType() {
 		default:
@@ -1471,20 +1284,24 @@ func (d *Datastore) convertTVProto(ctx context.Context, p *sdcpb.Path, tv *sdcpb
 			if err != nil {
 				return nil, err
 			}
-			ctv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_UintVal{UintVal: uint64(i)}}
+			ctv := &sdcpb.TypedValue{
+				Timestamp: tv.GetTimestamp(),
+				Value:     &sdcpb.TypedValue_UintVal{UintVal: uint64(i)},
+			}
 			return ctv, nil
 		case "int64", "int32", "int16", "int8":
-
 			i, err := strconv.Atoi(tv.GetStringVal())
 			if err != nil {
 				return nil, err
 			}
-			ctv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_IntVal{IntVal: int64(i)}}
+			ctv := &sdcpb.TypedValue{
+				Timestamp: tv.GetTimestamp(),
+				Value:     &sdcpb.TypedValue_IntVal{IntVal: int64(i)},
+			}
 			return ctv, nil
 		case "enumeration":
 			return tv, nil
 		case "union":
-			// TODO:
 			return tv, nil
 		case "boolean":
 			v, err := strconv.ParseBool(tv.GetStringVal())
@@ -1497,7 +1314,10 @@ func (d *Datastore) convertTVProto(ctx context.Context, p *sdcpb.Path, tv *sdcpb
 			if err != nil {
 				return nil, err
 			}
-			return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_FloatVal{FloatVal: float32(v)}}, nil
+			return &sdcpb.TypedValue{
+				Timestamp: tv.GetTimestamp(),
+				Value:     &sdcpb.TypedValue_FloatVal{FloatVal: float32(v)},
+			}, nil
 		}
 	}
 	return nil, nil

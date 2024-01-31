@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/iptecharch/data-server/pkg/cache"
 	"github.com/iptecharch/data-server/pkg/config"
@@ -546,8 +548,14 @@ func (d *Datastore) resolveLeafref(ctx context.Context, candidate string, leafRe
 
 func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate, sem *semaphore.Weighted) {
 	defer sem.Release(1)
-	var err error
-	for _, del := range syncup.Update.GetDelete() {
+
+	cNotification, err := d.convertNotificationTypedValues(ctx, syncup.Update)
+	if err != nil {
+		log.Errorf("failed to convert notification typedValue: %v", err)
+		return
+	}
+
+	for _, del := range cNotification.GetDelete() {
 		store := cachepb.Store_CONFIG
 		if d.config.Sync != nil && d.config.Sync.Validate {
 			scRsp, err := d.getSchema(ctx, del)
@@ -571,7 +579,8 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 			log.Errorf("datastore %s failed to delete path %v: %v", d.config.Name, delPath, err)
 		}
 	}
-	for _, upd := range syncup.Update.GetUpdate() {
+
+	for _, upd := range cNotification.GetUpdate() {
 		store := cachepb.Store_CONFIG
 		if d.config.Sync != nil && d.config.Sync.Validate {
 			scRsp, err := d.getSchema(ctx, upd.GetPath())
@@ -583,7 +592,8 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 				store = cachepb.Store_STATE
 			}
 		}
-		
+
+		// TODO:[KR] convert update typedValue if needed
 		cUpd, err := d.cacheClient.NewUpdate(upd)
 		if err != nil {
 			log.Errorf("datastore %s failed to create update from %v: %v", d.config.Name, upd, err)
@@ -673,4 +683,227 @@ func (d *Datastore) getValidationClient() *clients.ValidationClient {
 	}
 	// return the bound validation client
 	return d._validationClientBound
+}
+
+// conversion
+type leafListNotification struct {
+	path      *sdcpb.Path
+	leaflists []*sdcpb.TypedValue
+}
+
+func (d *Datastore) convertNotificationTypedValues(ctx context.Context, n *sdcpb.Notification) (*sdcpb.Notification, error) {
+	// this map serves as a context to group leaf-lists
+	// sent as keys in separate updates.
+	leaflists := map[string]*leafListNotification{}
+	nn := &sdcpb.Notification{
+		Timestamp: n.GetTimestamp(),
+		Update:    make([]*sdcpb.Update, 0, len(n.GetUpdate())),
+		Delete:    n.GetDelete(),
+	}
+	// convert typed values to their YANG type
+	for _, upd := range n.GetUpdate() {
+		scRsp, err := d.getSchema(ctx, upd.GetPath())
+		if err != nil {
+			return nil, err
+		}
+		nup, err := d.convertUpdateTypedValue(ctx, upd, scRsp, leaflists)
+		if err != nil {
+			return nil, err
+		}
+		log.Debugf("%s: converted update from: %v, to: %v", d.Name(), upd, nup)
+		if nup == nil { // filters out notification ending in non-presence containers
+			continue
+		}
+		nn.Update = append(nn.Update, nup)
+	}
+	// add accumulated leaf-lists
+	for _, lfnotif := range leaflists {
+		nn.Update = append(nn.Update, &sdcpb.Update{
+			Path: lfnotif.path,
+			Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{
+				LeaflistVal: &sdcpb.ScalarArray{Element: lfnotif.leaflists},
+			},
+			},
+		})
+	}
+
+	return nn, nil
+}
+
+func (d *Datastore) convertUpdateTypedValue(ctx context.Context, upd *sdcpb.Update, scRsp *sdcpb.GetSchemaResponse, leaflists map[string]*leafListNotification) (*sdcpb.Update, error) {
+	switch {
+	case scRsp.GetSchema().GetContainer() != nil:
+		if !scRsp.GetSchema().GetContainer().GetIsPresence() {
+			return nil, nil
+		}
+		return upd, nil
+	case scRsp.GetSchema().GetLeaflist() != nil:
+		// leaf-list received as a key
+		if upd.GetValue() == nil {
+			// clone path
+			p := proto.Clone(upd.GetPath()).(*sdcpb.Path)
+			// grab the key from the last elem, that's the leaf-list value
+			var lftv *sdcpb.TypedValue
+			for _, v := range p.GetElem()[len(p.GetElem())-1].GetKey() {
+				lftv = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
+				break
+			}
+			if lftv == nil {
+				return nil, fmt.Errorf("malformed leaf-list update: %v", upd)
+			}
+			// delete the key from the last elem (that's the leaf-list value)
+			p.GetElem()[len(p.GetElem())-1].Key = nil
+			// build unique path
+			sp := utils.ToXPath(p, false)
+			if _, ok := leaflists[sp]; !ok {
+				leaflists[sp] = &leafListNotification{
+					path:      p,                               // modified path
+					leaflists: make([]*sdcpb.TypedValue, 0, 1), // at least one elem
+				}
+			}
+			// convert leaf-list to its YANG type
+			clftv, err := d.typedValueToYANGType(lftv, scRsp.GetSchema())
+			if err != nil {
+				return nil, err
+			}
+			// append leaf-list
+			leaflists[sp].leaflists = append(leaflists[sp].leaflists, clftv)
+			return nil, nil
+		}
+		// regular leaf list
+		switch upd.GetValue().Value.(type) {
+		case *sdcpb.TypedValue_LeaflistVal:
+			return upd, nil
+		default:
+			return nil, fmt.Errorf("unexpected leaf-list typedValue: %v", upd.GetValue())
+		}
+	case scRsp.GetSchema().GetField() != nil:
+		ctv, err := d.typedValueToYANGType(upd.GetValue(), scRsp.GetSchema())
+		if err != nil {
+			return nil, err
+		}
+		return &sdcpb.Update{
+			Path:  upd.GetPath(),
+			Value: ctv,
+		}, nil
+	}
+	return nil, nil
+}
+
+func (d *Datastore) typedValueToYANGType(tv *sdcpb.TypedValue, schemaObject *sdcpb.SchemaElem) (*sdcpb.TypedValue, error) {
+	switch tv.Value.(type) {
+	case *sdcpb.TypedValue_AsciiVal:
+		return convertToTypedValue(schemaObject, tv.GetAsciiVal(), tv.GetTimestamp())
+	case *sdcpb.TypedValue_BoolVal:
+		return tv, nil
+	case *sdcpb.TypedValue_BytesVal:
+		return tv, nil
+	case *sdcpb.TypedValue_DecimalVal:
+		return tv, nil
+	case *sdcpb.TypedValue_FloatVal:
+		return tv, nil
+	case *sdcpb.TypedValue_DoubleVal:
+		return tv, nil
+	case *sdcpb.TypedValue_IntVal:
+		return tv, nil
+	case *sdcpb.TypedValue_StringVal:
+		return convertToTypedValue(schemaObject, tv.GetStringVal(), tv.GetTimestamp())
+	case *sdcpb.TypedValue_UintVal:
+		return tv, nil
+	case *sdcpb.TypedValue_JsonIetfVal: // TODO:
+	case *sdcpb.TypedValue_JsonVal: // TODO:
+	case *sdcpb.TypedValue_LeaflistVal:
+		return tv, nil
+	case *sdcpb.TypedValue_ProtoBytes:
+		return tv, nil
+	case *sdcpb.TypedValue_AnyVal:
+		return tv, nil
+	}
+	return tv, nil
+}
+
+func convertToTypedValue(schemaObject *sdcpb.SchemaElem, v string, ts uint64) (*sdcpb.TypedValue, error) {
+	var schemaType *sdcpb.SchemaLeafType
+	switch {
+	case schemaObject.GetField() != nil:
+		schemaType = schemaObject.GetField().GetType()
+	case schemaObject.GetLeaflist() != nil:
+		schemaType = schemaObject.GetLeaflist().GetType()
+	case schemaObject.GetContainer() != nil:
+		if !schemaObject.GetContainer().IsPresence {
+			return nil, errors.New("non presence container update")
+		}
+		return nil, nil
+	}
+	return convertStringToTv(schemaType, v, ts)
+}
+
+func convertStringToTv(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*sdcpb.TypedValue, error) {
+	// convert field or leaf-list schema elem
+	switch schemaType.GetType() {
+	case "string":
+		return &sdcpb.TypedValue{
+
+			Value: &sdcpb.TypedValue_StringVal{StringVal: v},
+		}, nil
+	case "uint64", "uint32", "uint16", "uint8":
+		i, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, err
+		}
+		return &sdcpb.TypedValue{
+			Timestamp: ts,
+			Value:     &sdcpb.TypedValue_UintVal{UintVal: uint64(i)},
+		}, nil
+	case "int64", "int32", "int16", "int8":
+		i, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, err
+		}
+		return &sdcpb.TypedValue{
+			Timestamp: ts,
+			Value:     &sdcpb.TypedValue_IntVal{IntVal: int64(i)},
+		}, nil
+	case "boolean":
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, err
+		}
+		return &sdcpb.TypedValue{
+			Timestamp: ts,
+			Value:     &sdcpb.TypedValue_BoolVal{BoolVal: b},
+		}, nil
+	case "decimal64":
+		// TODO: convert string to decimal
+		return &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_DecimalVal{DecimalVal: &sdcpb.Decimal64{}},
+		}, nil
+	case "identityref":
+		return &sdcpb.TypedValue{
+			Timestamp: ts,
+			Value:     &sdcpb.TypedValue_StringVal{StringVal: v},
+		}, nil
+	case "leafref": // TODO: query leafref type
+		return &sdcpb.TypedValue{
+			Timestamp: ts,
+			Value:     &sdcpb.TypedValue_StringVal{StringVal: v},
+		}, nil
+	case "union":
+		for _, ut := range schemaType.GetUnionTypes() {
+			tv, err := convertStringToTv(ut, v, ts)
+			if err == nil {
+				return tv, nil
+			}
+		}
+		return nil, fmt.Errorf("invalid value %s for union type: %v", v, schemaType)
+	case "enumeration":
+		// TODO: get correct type, assuming string
+		return &sdcpb.TypedValue{
+			Timestamp: ts,
+			Value:     &sdcpb.TypedValue_StringVal{StringVal: v},
+		}, nil
+	case "": // presence ?
+		return &sdcpb.TypedValue{}, nil
+	}
+	return nil, nil
 }
