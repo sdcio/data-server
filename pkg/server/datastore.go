@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
@@ -80,12 +81,21 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		if _, ok := s.datastores[name]; ok {
 			return nil, status.Errorf(codes.InvalidArgument, "datastore %s already exists", name)
 		}
+		commitDatastore := "candidate"
+		switch req.GetTarget().GetCommitCandidate() {
+		case sdcpb.CommitCandidate_COMMIT_CANDIDATE:
+		case sdcpb.CommitCandidate_COMMIT_RUNNING:
+			commitDatastore = "running"
+		default:
+			return nil, fmt.Errorf("unknown commitDatastore: %v", req.GetTarget().GetCommitCandidate())
+		}
 		sbi := &config.SBI{
 			Type:                   req.GetTarget().GetType(),
 			Address:                req.GetTarget().GetAddress(),
 			IncludeNS:              req.GetTarget().GetIncludeNs(),
 			OperationWithNamespace: req.GetTarget().GetOperationWithNs(),
 			UseOperationRemove:     req.GetTarget().GetUseOperationRemove(),
+			CommitDatastore:        commitDatastore,
 		}
 		if req.GetTarget().GetTls() != nil {
 			sbi.TLS = &config.TLS{

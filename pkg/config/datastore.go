@@ -11,6 +11,9 @@ const (
 	sbiNOOP    = "noop"
 	sbiNETCONF = "netconf"
 	sbiGNMI    = "gnmi"
+
+	ncCommitDatastoreRunning   = "running"
+	ncCommitDatastoreCandidate = "candidate"
 )
 
 type DatastoreConfig struct {
@@ -37,6 +40,8 @@ type SBI struct {
 	OperationWithNamespace bool `yaml:"operation-with-namespace,omitempty" json:"operation-with-namespace,omitempty"`
 	// use 'remove' operation instead of 'delete'
 	UseOperationRemove bool `yaml:"use-operation-remove,omitempty" json:"use-operation-remove,omitempty"`
+	// for netconf targets: defines whether to commit to running or use a candidate.
+	CommitDatastore string `yaml:"commit-datastore,omitempty" json:"commit-datastore,omitempty"`
 	// ConnectRetry
 	ConnectRetry time.Duration `yaml:"connect-retry,omitempty" json:"connect-retry,omitempty"`
 	// Timeout
@@ -107,6 +112,17 @@ func (s *SBI) validateSetDefaults() error {
 		return err
 	}
 
+	if s.Type == sbiNETCONF {
+		switch s.CommitDatastore {
+		case "":
+			s.CommitDatastore = ncCommitDatastoreCandidate
+		case ncCommitDatastoreRunning:
+		case ncCommitDatastoreCandidate:
+		default:
+			return fmt.Errorf("unknown commit-datastore: %s. Must be one of %s, %s",
+				s.CommitDatastore, ncCommitDatastoreCandidate, ncCommitDatastoreRunning)
+		}
+	}
 	if s.ConnectRetry < time.Second {
 		s.ConnectRetry = time.Second
 	}

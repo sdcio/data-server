@@ -137,8 +137,8 @@ github.com/iptecharch/cache v0.0.30 h1:/W1DsYWvtIbgmF8T180QUXR7LF6cbt1dnpZfvmYbK
 github.com/iptecharch/cache v0.0.30/go.mod h1:ofOIjTApxhy15tKgjzOedhrKQnF0dsAO48gkE/jyYXQ=
 github.com/iptecharch/schema-server v0.0.14 h1:kZQvP/A3YsJTv5YhQCmKgcb1/iZu57q+tuF4CaT3scc=
 github.com/iptecharch/schema-server v0.0.14/go.mod h1:RmCUIZQCCE+x53YR4hP3wIajWCQ0IG3TIvxrrNSIq4w=
-github.com/iptecharch/sdc-protos v0.0.20 h1:vy6kXpRuZoaN2mGKR2nB8IXNeL5C0fd8ecVYwSf+KC4=
-github.com/iptecharch/sdc-protos v0.0.20/go.mod h1:l1i2wnD7455b1zRQjcJGEOC+Q0H7RMu2UViIowBCPyM=
+github.com/iptecharch/sdc-protos v0.0.21 h1:wmQk3J3SoO6qIbpaMYQi8Y2XfWp+tUabyGPf7E0bzv8=
+github.com/iptecharch/sdc-protos v0.0.21/go.mod h1:l1i2wnD7455b1zRQjcJGEOC+Q0H7RMu2UViIowBCPyM=
 github.com/iptecharch/yang-parser v0.0.3 h1:sfmGIWdhEeql8RXUF/nD0/Z4Td9Pbhk76jVC/VXSSNI=
 github.com/iptecharch/yang-parser v0.0.3/go.mod h1:mOB/+f1fOgqD00+RoxHgOxl+Cnq0kEd0tZwBrcrMaUI=
 github.com/jellydator/ttlcache/v3 v3.1.1 h1:RCgYJqo3jgvhl+fEWvjNW8thxGWsgxi+TPhRir1Y9y8=
