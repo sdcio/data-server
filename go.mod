@@ -11,7 +11,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/iptecharch/cache v0.0.30
 	github.com/iptecharch/schema-server v0.0.14
-	github.com/iptecharch/sdc-protos v0.0.20
+	github.com/iptecharch/sdc-protos v0.0.21
 	github.com/iptecharch/yang-parser v0.0.3
 	github.com/jellydator/ttlcache/v3 v3.1.1
 	github.com/kylelemons/godebug v1.1.0

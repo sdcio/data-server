@@ -121,85 +121,14 @@ func (t *ncTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.S
 	if !t.connected {
 		return nil, fmt.Errorf("not connected")
 	}
-	xcbCfg := &netconf.XMLConfigBuilderOpts{
-		HonorNamespace:         t.sbiConfig.IncludeNS,
-		OperationWithNamespace: t.sbiConfig.OperationWithNamespace,
-		UseOperationRemove:     t.sbiConfig.UseOperationRemove,
+	switch t.sbiConfig.CommitDatastore {
+	case "running":
+		return t.setRunning(ctx, req)
+	case "candidate":
+		return t.setCandidate(ctx, req)
 	}
-	xmlCBDelete := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, xcbCfg)
-
-	// iterate over the delete array
-	for _, p := range req.GetDelete() {
-		xmlCBDelete.Delete(ctx, p)
-	}
-
-	// iterate over the replace array
-	// ATTENTION: This is not implemented intentionally, since it is expected,
-	//  	that the datastore will only come up with deletes and updates.
-	// 		actual replaces will be resolved to deletes and updates by the datastore
-	// 		also replaces would only really make sense with jsonIETF encoding, where
-	// 		an entire branch is replaces, on single values this is covered via an
-	// 		update.
-	//
-	// for _, r := range req.Replace {
-	// }
-	//
-
-	xmlCBAdd := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, xcbCfg)
-
-	// iterate over the update array
-	for _, u := range req.Update {
-		xmlCBAdd.AddValue(ctx, u.Path, u.Value)
-	}
-
-	// first apply the deletes before the adds
-	for _, xml := range []*netconf.XMLConfigBuilder{xmlCBDelete, xmlCBAdd} {
-		// finally retrieve the xml config as string
-		xdoc, err := xml.GetDoc()
-		if err != nil {
-			return nil, err
-		}
-
-		// if there was no data in the xml document, continue
-		if len(xdoc) == 0 {
-			continue
-		}
-
-		log.Debugf("datastore %s XML:\n%s\n", t.name, xdoc)
-
-		// edit the config
-		_, err = t.driver.EditConfig("candidate", xdoc)
-		if err != nil {
-			log.Errorf("datastore %s failed edit-config: %v", t.name, err)
-			if strings.Contains(err.Error(), "EOF") {
-				t.Close()
-				t.connected = false
-				go t.reconnect()
-				return nil, err
-			}
-			err2 := t.driver.Discard()
-			if err != nil {
-				// log failed discard
-				log.Errorf("failed with %v while discarding pending changes after error %v", err2, err)
-			}
-			return nil, err
-		}
-
-	}
-	log.Infof("datastore %s: committing changes on target", t.name)
-	// commit the config
-	err := t.driver.Commit()
-	if err != nil {
-		if strings.Contains(err.Error(), "EOF") {
-			t.Close()
-			t.connected = false
-			go t.reconnect()
-		}
-		return nil, err
-	}
-	return &sdcpb.SetDataResponse{
-		Timestamp: time.Now().UnixNano(),
-	}, nil
+	// should not get here if the config validation happened.
+	return nil, fmt.Errorf("unknown commit-datastore: %s", t.sbiConfig.CommitDatastore)
 }
 
 func (t *ncTarget) Status() string {
@@ -325,4 +254,123 @@ func (t *ncTarget) reconnect() {
 		t.connected = true
 		return
 	}
+}
+
+func (t *ncTarget) setRunning(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
+	xcbCfg := &netconf.XMLConfigBuilderOpts{
+		HonorNamespace:         t.sbiConfig.IncludeNS,
+		OperationWithNamespace: t.sbiConfig.OperationWithNamespace,
+		UseOperationRemove:     t.sbiConfig.UseOperationRemove,
+	}
+
+	xmlBuilder := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, xcbCfg)
+
+	// iterate over the update array
+	for _, u := range req.GetUpdate() {
+		xmlBuilder.AddValue(ctx, u.Path, u.Value)
+	}
+	// iterate over the delete array
+	for _, p := range req.GetDelete() {
+		xmlBuilder.Delete(ctx, p)
+	}
+
+	xdoc, err := xmlBuilder.GetDoc()
+	if err != nil {
+		return nil, err
+	}
+
+	// if there was no data in the xml document, return
+	if len(xdoc) == 0 {
+		return &sdcpb.SetDataResponse{
+			Timestamp: time.Now().UnixNano(),
+		}, nil
+	}
+
+	log.Debugf("datastore %s XML:\n%s\n", t.name, xdoc)
+
+	// edit the config
+	_, err = t.driver.EditConfig("running", xdoc)
+	if err != nil {
+		log.Errorf("datastore %s failed edit-config: %v", t.name, err)
+		if strings.Contains(err.Error(), "EOF") {
+			t.Close()
+			t.connected = false
+			go t.reconnect()
+			return nil, err
+		}
+		return nil, err
+	}
+	return &sdcpb.SetDataResponse{
+		Timestamp: time.Now().UnixNano(),
+	}, nil
+}
+
+func (t *ncTarget) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
+	xcbCfg := &netconf.XMLConfigBuilderOpts{
+		HonorNamespace:         t.sbiConfig.IncludeNS,
+		OperationWithNamespace: t.sbiConfig.OperationWithNamespace,
+		UseOperationRemove:     t.sbiConfig.UseOperationRemove,
+	}
+	xmlCBDelete := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, xcbCfg)
+
+	// iterate over the delete array
+	for _, p := range req.GetDelete() {
+		xmlCBDelete.Delete(ctx, p)
+	}
+
+	xmlCBAdd := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, xcbCfg)
+
+	// iterate over the update array
+	for _, u := range req.Update {
+		xmlCBAdd.AddValue(ctx, u.Path, u.Value)
+	}
+
+	// first apply the deletes before the adds
+	for _, xml := range []*netconf.XMLConfigBuilder{xmlCBDelete, xmlCBAdd} {
+		// finally retrieve the xml config as string
+		xdoc, err := xml.GetDoc()
+		if err != nil {
+			return nil, err
+		}
+
+		// if there was no data in the xml document, continue
+		if len(xdoc) == 0 {
+			continue
+		}
+
+		log.Debugf("datastore %s XML:\n%s\n", t.name, xdoc)
+
+		// edit the config
+		_, err = t.driver.EditConfig("candidate", xdoc)
+		if err != nil {
+			log.Errorf("datastore %s failed edit-config: %v", t.name, err)
+			if strings.Contains(err.Error(), "EOF") {
+				t.Close()
+				t.connected = false
+				go t.reconnect()
+				return nil, err
+			}
+			err2 := t.driver.Discard()
+			if err != nil {
+				// log failed discard
+				log.Errorf("failed with %v while discarding pending changes after error %v", err2, err)
+			}
+			return nil, err
+		}
+
+	}
+	log.Infof("datastore %s: committing changes on target", t.name)
+	// commit the config
+	err := t.driver.Commit()
+	if err != nil {
+		if strings.Contains(err.Error(), "EOF") {
+			t.Close()
+			t.connected = false
+			go t.reconnect()
+		}
+		return nil, err
+	}
+	return &sdcpb.SetDataResponse{
+		Timestamp: time.Now().UnixNano(),
+	}, nil
 }
