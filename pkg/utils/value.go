@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/json"
 
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
@@ -259,4 +260,205 @@ func ToGNMITypedValue(v *sdcpb.TypedValue) *gnmi.TypedValue {
 		}
 	}
 	return nil
+}
+
+func EqualTypedValues(v1, v2 *sdcpb.TypedValue) bool {
+	if v1 == nil {
+		return v2 == nil
+	}
+	if v2 == nil {
+		return v1 == nil
+	}
+
+	switch v1 := v1.GetValue().(type) {
+	case *sdcpb.TypedValue_AnyVal:
+		switch v2 := v2.GetValue().(type) {
+		case *sdcpb.TypedValue_AnyVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			if v1.AnyVal == nil && v2.AnyVal == nil {
+				return true
+			}
+			if v1.AnyVal == nil || v2.AnyVal == nil {
+				return false
+			}
+			if v1.AnyVal.GetTypeUrl() != v2.AnyVal.GetTypeUrl() {
+				return false
+			}
+			return bytes.Equal(v1.AnyVal.GetValue(), v2.AnyVal.GetValue())
+		default:
+			return false
+		}
+	case *sdcpb.TypedValue_AsciiVal:
+		switch v2 := v2.GetValue().(type) {
+		case *sdcpb.TypedValue_AsciiVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return v1.AsciiVal == v2.AsciiVal
+		default:
+			return false
+		}
+	case *sdcpb.TypedValue_BoolVal:
+		switch v2 := v2.GetValue().(type) {
+		case *sdcpb.TypedValue_BoolVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return v1.BoolVal == v2.BoolVal
+		default:
+			return false
+		}
+	case *sdcpb.TypedValue_BytesVal:
+		switch v2 := v2.GetValue().(type) {
+		case *sdcpb.TypedValue_BytesVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return bytes.Equal(v1.BytesVal, v2.BytesVal)
+		default:
+			return false
+		}
+	case *sdcpb.TypedValue_DecimalVal:
+		switch v2 := v2.GetValue().(type) {
+		case *sdcpb.TypedValue_DecimalVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			if v1.DecimalVal.GetDigits() != v2.DecimalVal.GetDigits() {
+				return false
+			}
+			return v1.DecimalVal.GetPrecision() == v2.DecimalVal.GetPrecision()
+		default:
+			return false
+		}
+	case *sdcpb.TypedValue_FloatVal:
+		switch v2 := v2.GetValue().(type) {
+		case *sdcpb.TypedValue_FloatVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return v1.FloatVal == v2.FloatVal
+		default:
+			return false
+		}
+	case *sdcpb.TypedValue_IntVal:
+		switch v2 := v2.GetValue().(type) {
+		case *sdcpb.TypedValue_IntVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return v1.IntVal == v2.IntVal
+		default:
+			return false
+		}
+	case *sdcpb.TypedValue_JsonIetfVal:
+		switch v2 := v2.GetValue().(type) {
+		case *sdcpb.TypedValue_JsonIetfVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return bytes.Equal(v1.JsonIetfVal, v2.JsonIetfVal)
+		default:
+			return false
+		}
+	case *sdcpb.TypedValue_JsonVal:
+		switch v2 := v2.GetValue().(type) {
+		case *sdcpb.TypedValue_JsonVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return bytes.Equal(v1.JsonVal, v2.JsonVal)
+		default:
+			return false
+		}
+	case *sdcpb.TypedValue_LeaflistVal:
+		switch v2 := v2.GetValue().(type) {
+		case *sdcpb.TypedValue_LeaflistVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			if len(v1.LeaflistVal.GetElement()) != len(v2.LeaflistVal.GetElement()) {
+				return false
+			}
+			for i := range v1.LeaflistVal.GetElement() {
+				if !EqualTypedValues(v1.LeaflistVal.Element[i], v2.LeaflistVal.Element[i]) {
+					return false
+				}
+			}
+		default:
+			return false
+		}
+	case *sdcpb.TypedValue_ProtoBytes:
+		switch v2 := v2.GetValue().(type) {
+		case *sdcpb.TypedValue_ProtoBytes:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return bytes.Equal(v1.ProtoBytes, v2.ProtoBytes)
+		default:
+			return false
+		}
+	case *sdcpb.TypedValue_StringVal:
+		switch v2 := v2.GetValue().(type) {
+		case *sdcpb.TypedValue_StringVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return v1.StringVal == v2.StringVal
+		default:
+			return false
+		}
+	case *sdcpb.TypedValue_UintVal:
+		switch v2 := v2.GetValue().(type) {
+		case *sdcpb.TypedValue_UintVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return v1.UintVal == v2.UintVal
+		default:
+			return false
+		}
+	}
+	return true
 }

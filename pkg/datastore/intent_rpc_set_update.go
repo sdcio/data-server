@@ -95,11 +95,14 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 			case currentCacheEntries[0].Priority() == req.GetPriority():
 				logger.Debugf("path %v | current intended value has an equal priority to the intent: goes in the setData update and delete", cp)
 				// exists with same priority, apply current?
-				// check if the first result is owned by this intent,
-				// in which case replace it
-				if currentCacheEntries[0].Owner() == req.GetIntent() {
-					setDataReq.Update = append(setDataReq.Update, upd)
+
+				// add first result for validation
+				upd, err := d.cacheUpdateToUpdate(ctx, currentCacheEntries[0])
+				if err != nil {
+					return err
 				}
+				setDataReq.Update = append(setDataReq.Update, upd)
+				// }
 				// add delete to remove previous value
 				// setDataReq.Delete = append(setDataReq.Delete, upd.GetPath())
 			case currentCacheEntries[0].Priority() > req.GetPriority():
