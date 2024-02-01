@@ -109,7 +109,7 @@ schema-store:
         - ./lab/common/yang/sros_23.3/YANG/nokia-combined
       directories:
         - ./lab/common/yang/sros_23.3/YANG/ietf
-        - ./lab/common/yang/sros_23.3/YANG/nokia-sros-yang-extensions.yang
+        - ./lab/common/yang/sros_23.3/YANG
     - name: sros
       vendor: Nokia
       version: 23.7
@@ -117,7 +117,15 @@ schema-store:
         - ./lab/common/yang/sros_23.7/YANG/nokia-combined
       directories:
         - ./lab/common/yang/sros_23.7/YANG/ietf
-        - ./lab/common/yang/sros_23.7/YANG/nokia-sros-yang-extensions.yang
+        - ./lab/common/yang/sros_23.7/YANG
+    - name: sros
+      vendor: Nokia
+      version: 23.10
+      files:
+        - ./lab/common/yang/sros_23.10/YANG/nokia-combined
+      directories:
+        - ./lab/common/yang/sros_23.10/YANG/ietf
+        - ./lab/common/yang/sros_23.10/YANG
     - name: srl
       vendor: Nokia
       version: 22.11.2
@@ -135,7 +143,7 @@ schema-store:
       directories:
         - ./lab/common/yang/srl-23.10.1/ietf
         - ./lab/common/yang/srl-23.10.1/openconfig/extensions
-        - ./lab/common/yang/srl-23.10.1/openconfig/openconfig-extensions.yang
+        - ./lab/common/yang/srl-23.10.1/openconfig
       excludes:
         - .*tools.*
     - name: srl
