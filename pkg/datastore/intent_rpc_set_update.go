@@ -413,10 +413,12 @@ func (ic *intentContext) buildRemovedPaths(ctx context.Context) error {
 	}
 	// query current paths from new tree
 	// the ones that don't exist are added to removedPaths
-	for _, p := range ic.currentPaths {
-		cp, _ := utils.CompletePath(nil, p)
-		if t.GetLeaf(cp) == nil {
-			ic.removedPathsMap[strings.Join(cp, ",")] = struct{}{}
+	for _, rmps := range [][]*sdcpb.Path{ic.currentPaths, ic.currentKeyAsLeafPaths} {
+		for _, p := range rmps {
+			cp, _ := utils.CompletePath(nil, p)
+			if t.GetLeaf(cp) == nil {
+				ic.removedPathsMap[strings.Join(cp, ",")] = struct{}{}
+			}
 		}
 	}
 	return nil
@@ -490,26 +492,26 @@ func (d *Datastore) newIntentContext(ctx context.Context, req *sdcpb.SetIntentRe
 	// debug start
 	log.Debug()
 	for i, upd := range ic.newUpdates {
-		log.Debugf("set intent expanded update.%d: %s", i, upd)
+		log.Infof("set intent expanded update.%d: %s", i, upd)
 	}
 	// logger.Debug()
 	log.Debug()
 	for i, upd := range ic.currentUpdates {
-		log.Debugf("set intent current update.%d: %s", i, upd)
+		log.Infof("set intent current update.%d: %s", i, upd)
 	}
 	log.Debug()
 	for i, p := range ic.currentPaths {
-		log.Debugf("set intent current path.%d: %s", i, p)
+		log.Infof("set intent current path.%d: %s", i, p)
 	}
 	log.Debug()
 	for i, p := range ic.currentKeyAsLeafPaths {
-		log.Debugf("set intent currentKeyAsLeaf path.%d: %s", i, p)
+		log.Infof("set intent currentKeyAsLeaf path.%d: %s", i, p)
 	}
 	log.Debug()
 
 	log.Debugf("has %d removed paths", len(ic.removedPathsMap))
 	for rmp := range ic.removedPathsMap {
-		log.Debugf("removed path: %s", rmp)
+		log.Infof("removed path: %s", rmp)
 	}
 	// debug stop
 	return ic, nil
