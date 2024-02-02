@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -262,6 +263,15 @@ func (d *Datastore) Discard(ctx context.Context, req *sdcpb.DiscardRequest) erro
 }
 
 func (d *Datastore) CreateCandidate(ctx context.Context, ds *sdcpb.DataStore) error {
+	if ds.GetPriority() < 0 {
+		return fmt.Errorf("invalid priority value must be >0")
+	}
+	if ds.GetPriority() == 0 {
+		ds.Priority = math.MaxInt32
+	}
+	if ds.GetOwner() == "" {
+		ds.Owner = DefaultOwner
+	}
 	return d.cacheClient.CreateCandidate(ctx, d.Name(), ds.GetName(), ds.GetOwner(), ds.GetPriority())
 }
 
