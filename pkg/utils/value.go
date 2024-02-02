@@ -71,8 +71,8 @@ func GetSchemaValue(updValue *sdcpb.TypedValue) (interface{}, error) {
 		value = updValue.GetBytesVal()
 	// case *sdcpb.TypedValue_DecimalVal:
 	// 	value = updValue.GetDecimalVal()
-	// case *sdcpb.TypedValue_FloatVal:
-	// 	value = updValue.GetFloatVal()
+	case *sdcpb.TypedValue_FloatVal:
+		value = updValue.GetFloatVal()
 	// case *sdcpb.TypedValue_DoubleVal:
 	// 	value = updValue.GetDoubleVal()
 	case *sdcpb.TypedValue_IntVal:

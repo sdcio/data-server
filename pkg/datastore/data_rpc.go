@@ -24,6 +24,11 @@ import (
 	"github.com/iptecharch/data-server/pkg/utils"
 )
 
+const (
+	// to be used for candidates created without an owner
+	DefaultOwner = "__sdcio"
+)
+
 func (d *Datastore) Get(ctx context.Context, req *sdcpb.GetDataRequest, nCh chan *sdcpb.GetDataResponse) error {
 	defer close(nCh)
 	switch req.GetDatastore().GetType() {
@@ -481,6 +486,11 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *sdcpb.Update) error
 
 	// 1. validate the path
 	rsp, err := d.getSchema(ctx, upd.GetPath())
+	if err != nil {
+		return err
+	}
+	// 2. convert value to its YANG type
+	upd.Value, err = convertTypedValueToYANGType(rsp.GetSchema(), upd.GetValue())
 	if err != nil {
 		return err
 	}
@@ -1280,15 +1290,19 @@ func (d *Datastore) convertTypedValueToProto(ctx context.Context, p *sdcpb.Path,
 	if err != nil {
 		return nil, err
 	}
+	return convertTypedValueToYANGType(rsp.GetSchema(), tv)
+}
+
+func convertTypedValueToYANGType(schemaElem *sdcpb.SchemaElem, tv *sdcpb.TypedValue) (*sdcpb.TypedValue, error) {
 	switch {
-	case rsp.GetSchema().GetContainer() != nil:
-		if rsp.GetSchema().GetContainer().IsPresence {
+	case schemaElem.GetContainer() != nil:
+		if schemaElem.GetContainer().IsPresence {
 			return &sdcpb.TypedValue{
 				Timestamp: tv.GetTimestamp(),
 				Value:     &sdcpb.TypedValue_JsonVal{JsonVal: nil},
 			}, nil
 		}
-	case rsp.GetSchema().GetLeaflist() != nil:
+	case schemaElem.GetLeaflist() != nil:
 		switch tv.Value.(type) {
 		case *sdcpb.TypedValue_LeaflistVal:
 			return tv, nil
@@ -1301,8 +1315,8 @@ func (d *Datastore) convertTypedValueToProto(ctx context.Context, p *sdcpb.Path,
 				},
 			},
 		}, nil
-	case rsp.GetSchema().GetField() != nil:
-		switch rsp.GetSchema().GetField().GetType().GetType() {
+	case schemaElem.GetField() != nil:
+		switch schemaElem.GetField().GetType().GetType() {
 		default:
 			return tv, nil
 		case "string", "identityref":

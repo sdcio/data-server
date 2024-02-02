@@ -7,8 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 
+	"github.com/iptecharch/data-server/pkg/datastore"
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -96,7 +98,7 @@ func init() {
 
 	datastoreCreateCmd.Flags().StringVarP(&target, "target", "", "", "target definition file")
 	datastoreCreateCmd.Flags().StringVarP(&syncFile, "sync", "", "", "target sync definition file")
-	datastoreCreateCmd.Flags().StringVarP(&owner, "owner", "", "", "candidate owner")
-	datastoreCreateCmd.Flags().Int32VarP(&priority, "priority", "", 0, "candidate priority")
+	datastoreCreateCmd.Flags().StringVarP(&owner, "owner", "", datastore.DefaultOwner, "candidate owner")
+	datastoreCreateCmd.Flags().Int32VarP(&priority, "priority", "", math.MaxInt32, "candidate priority")
 
 }
