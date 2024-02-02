@@ -492,26 +492,26 @@ func (d *Datastore) newIntentContext(ctx context.Context, req *sdcpb.SetIntentRe
 	// debug start
 	log.Debug()
 	for i, upd := range ic.newUpdates {
-		log.Infof("set intent expanded update.%d: %s", i, upd)
+		log.Debugf("set intent expanded update.%d: %s", i, upd)
 	}
 	// logger.Debug()
 	log.Debug()
 	for i, upd := range ic.currentUpdates {
-		log.Infof("set intent current update.%d: %s", i, upd)
+		log.Debugf("set intent current update.%d: %s", i, upd)
 	}
 	log.Debug()
 	for i, p := range ic.currentPaths {
-		log.Infof("set intent current path.%d: %s", i, p)
+		log.Debugf("set intent current path.%d: %s", i, p)
 	}
 	log.Debug()
 	for i, p := range ic.currentKeyAsLeafPaths {
-		log.Infof("set intent currentKeyAsLeaf path.%d: %s", i, p)
+		log.Debugf("set intent currentKeyAsLeaf path.%d: %s", i, p)
 	}
 	log.Debug()
 
 	log.Debugf("has %d removed paths", len(ic.removedPathsMap))
 	for rmp := range ic.removedPathsMap {
-		log.Infof("removed path: %s", rmp)
+		log.Debugf("removed path: %s", rmp)
 	}
 	// debug stop
 	return ic, nil
