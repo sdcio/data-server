@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"fmt"
+	"math"
+	"strings"
 	"time"
 
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
@@ -52,7 +54,11 @@ func (s *Server) GetDataStore(ctx context.Context, req *sdcpb.GetDataStoreReques
 func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStoreRequest) (*sdcpb.CreateDataStoreResponse, error) {
 	log.Debugf("Received CreateDataStoreRequest: %v", req)
 	name := req.GetName()
-	if name == "" {
+	lName := len(name)
+	if lName == 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
+	}
+	if lName > math.MaxUint16 {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
 	}
 	switch {
@@ -66,6 +72,17 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		}
 		switch req.GetDatastore().GetType() {
 		case sdcpb.Type_CANDIDATE:
+			owner := req.GetDatastore().GetOwner()
+			lOwner := len(owner)
+			if lOwner == 0 {
+				return nil, status.Error(codes.InvalidArgument, "missing owner name attribute")
+			}
+			if lOwner > math.MaxUint16 {
+				return nil, status.Errorf(codes.InvalidArgument, "owner name too long(%d>%d)", lOwner, math.MaxUint16)
+			}
+			if strings.HasPrefix(owner, "__") {
+				return nil, status.Error(codes.InvalidArgument, "owner name cannot start with `__`")
+			}
 			err := ds.CreateCandidate(ctx, req.GetDatastore())
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "%v", err)
@@ -310,13 +327,5 @@ func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*
 		Vendor:  ds.Config().Schema.Vendor,
 		Version: ds.Config().Schema.Version,
 	}
-	// for _, cand := range cands {
-	// 	rsp.Datastore = append(rsp.Datastore,
-	// 		&sdcpb.DataStore{
-	// 			Type: *sdcpb.Type_CANDIDATE.Enum(),
-	// 			Name: cand,
-	// 		},
-	// 	)
-	// }
 	return rsp, nil
 }

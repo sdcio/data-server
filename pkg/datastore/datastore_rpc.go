@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -266,8 +265,8 @@ func (d *Datastore) CreateCandidate(ctx context.Context, ds *sdcpb.DataStore) er
 	if ds.GetPriority() < 0 {
 		return fmt.Errorf("invalid priority value must be >0")
 	}
-	if ds.GetPriority() == 0 {
-		ds.Priority = math.MaxInt32
+	if ds.GetPriority() <= 0 {
+		ds.Priority = 1
 	}
 	if ds.GetOwner() == "" {
 		ds.Owner = DefaultOwner

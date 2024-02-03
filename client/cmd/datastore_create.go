@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 
 	"github.com/iptecharch/data-server/pkg/datastore"
@@ -99,6 +98,6 @@ func init() {
 	datastoreCreateCmd.Flags().StringVarP(&target, "target", "", "", "target definition file")
 	datastoreCreateCmd.Flags().StringVarP(&syncFile, "sync", "", "", "target sync definition file")
 	datastoreCreateCmd.Flags().StringVarP(&owner, "owner", "", datastore.DefaultOwner, "candidate owner")
-	datastoreCreateCmd.Flags().Int32VarP(&priority, "priority", "", math.MaxInt32, "candidate priority")
+	datastoreCreateCmd.Flags().Int32VarP(&priority, "priority", "", 1, "candidate priority")
 
 }
