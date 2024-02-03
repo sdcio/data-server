@@ -564,17 +564,19 @@ func (d *Datastore) validateMustStatement(ctx context.Context, candidateName str
 			if err != nil {
 				return false, err
 			}
-
 			machine := xpath.NewMachine(exprStr, prog, exprStr)
 
 			// run the must statement evaluation virtual machine
 			res1 := xpath.NewCtxFromCurrent(ctx, machine, p.Elem, d.getValidationClient(), candidateName).Run()
-
 			// retrieve the boolean result of the execution
 			result, err := res1.GetBoolResult()
 			if !result || err != nil {
 				if err == nil {
 					err = fmt.Errorf(must.Error)
+				}
+				if strings.Contains(err.Error(), "Stack underflow") {
+					log.Warnf("stack underflow error: path=%v, mustExpr=%s", checkPath, exprStr)
+					continue
 				}
 				return result, err
 			}
