@@ -87,24 +87,28 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 				logger.Debugf("path %v | current intended value has a `higher` priority that the intent: current intended value goes in the setData update", cp)
 				// there is a current value with higher priority.
 				// add it to the candidate to allow for proper validation.
-				upd, err := d.cacheUpdateToUpdate(ctx, currentCacheEntries[0])
+				cupd, err := d.cacheUpdateToUpdate(ctx, currentCacheEntries[0])
 				if err != nil {
 					return err
 				}
-				setDataReq.Update = append(setDataReq.Update, upd)
+				setDataReq.Update = append(setDataReq.Update, cupd)
 			case currentCacheEntries[0].Priority() == req.GetPriority():
 				logger.Debugf("path %v | current intended value has an equal priority to the intent: goes in the setData update and delete", cp)
-				// exists with same priority, apply current?
+				// exists with same priority
 
-				// add first result for validation
-				upd, err := d.cacheUpdateToUpdate(ctx, currentCacheEntries[0])
-				if err != nil {
-					return err
+				// if the highest priority is the current intent being applied,
+				// set the new received value
+				if currentCacheEntries[0].Owner() == req.GetIntent() {
+					setDataReq.Update = append(setDataReq.Update, upd)
+				} else {
+					// else: the highest priority is owned by another intent
+					// set the value from cache for validation
+					cupd, err := d.cacheUpdateToUpdate(ctx, currentCacheEntries[0])
+					if err != nil {
+						return err
+					}
+					setDataReq.Update = append(setDataReq.Update, cupd)
 				}
-				setDataReq.Update = append(setDataReq.Update, upd)
-				// }
-				// add delete to remove previous value
-				// setDataReq.Delete = append(setDataReq.Delete, upd.GetPath())
 			case currentCacheEntries[0].Priority() > req.GetPriority():
 				logger.Debugf("path %v | current intended value has an `lower` priority than the intent: new intent update goes in the setData update and delete", cp)
 				// exists with a "lower" priority, apply current
@@ -123,23 +127,30 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 				logger.Debugf("path %v | current intended value has a `higher` priority that the intent: current intended value goes in the setData update", cp)
 				// there is a current value with higher priority
 				// add it to the candidate to allow for proper validation
-				upd, err := d.cacheUpdateToUpdate(ctx, currentCacheEntries[lcce-1]) // take last cache update(sorted by ts)
+				cupd, err := d.cacheUpdateToUpdate(ctx, currentCacheEntries[0])
 				if err != nil {
 					return err
 				}
-				setDataReq.Update = append(setDataReq.Update, upd)
+				setDataReq.Update = append(setDataReq.Update, cupd)
 			case currentCacheEntries[0].Priority() == req.GetPriority():
 				logger.Debugf("path %v | current intended value has an equal priority to the intent: goes in the setData update and delete", cp)
-				// exists with same priority, apply current
-				setDataReq.Update = append(setDataReq.Update, upd)
-				// add delete to remove previous value
-				// setDataReq.Delete = append(setDataReq.Delete, upd.GetPath())
+				// if the highest priority is the current intent being applied,
+				// set the new received value
+				if currentCacheEntries[0].Owner() == req.GetIntent() {
+					setDataReq.Update = append(setDataReq.Update, upd)
+				} else {
+					// else: the highest priority is owned by another intent
+					// set the value from cache for validation
+					cupd, err := d.cacheUpdateToUpdate(ctx, currentCacheEntries[0])
+					if err != nil {
+						return err
+					}
+					setDataReq.Update = append(setDataReq.Update, cupd)
+				}
 			case currentCacheEntries[0].Priority() > req.GetPriority():
 				logger.Debugf("path %v | current intended value has an `lower` priority than the intent: new intent update goes in the setData update and delete", cp)
 				// exists with a "lower" priority, apply current
 				setDataReq.Update = append(setDataReq.Update, upd)
-				// add delete to remove previous value
-				// setDataReq.Delete = append(setDataReq.Delete, upd.GetPath())
 			}
 		}
 	}
@@ -402,10 +413,12 @@ func (ic *intentContext) buildRemovedPaths(ctx context.Context) error {
 	}
 	// query current paths from new tree
 	// the ones that don't exist are added to removedPaths
-	for _, p := range ic.currentPaths {
-		cp, _ := utils.CompletePath(nil, p)
-		if t.GetLeaf(cp) == nil {
-			ic.removedPathsMap[strings.Join(cp, ",")] = struct{}{}
+	for _, rmps := range [][]*sdcpb.Path{ic.currentPaths, ic.currentKeyAsLeafPaths} {
+		for _, p := range rmps {
+			cp, _ := utils.CompletePath(nil, p)
+			if t.GetLeaf(cp) == nil {
+				ic.removedPathsMap[strings.Join(cp, ",")] = struct{}{}
+			}
 		}
 	}
 	return nil
