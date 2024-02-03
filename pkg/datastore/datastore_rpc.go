@@ -262,6 +262,15 @@ func (d *Datastore) Discard(ctx context.Context, req *sdcpb.DiscardRequest) erro
 }
 
 func (d *Datastore) CreateCandidate(ctx context.Context, ds *sdcpb.DataStore) error {
+	if ds.GetPriority() < 0 {
+		return fmt.Errorf("invalid priority value must be >0")
+	}
+	if ds.GetPriority() <= 0 {
+		ds.Priority = 1
+	}
+	if ds.GetOwner() == "" {
+		ds.Owner = DefaultOwner
+	}
 	return d.cacheClient.CreateCandidate(ctx, d.Name(), ds.GetName(), ds.GetOwner(), ds.GetPriority())
 }
 
