@@ -80,7 +80,7 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 			if lOwner > math.MaxUint16 {
 				return nil, status.Errorf(codes.InvalidArgument, "owner name too long(%d>%d)", lOwner, math.MaxUint16)
 			}
-			if strings.HasPrefix(owner, "__") {
+			if strings.HasPrefix(owner, "__") && owner != datastore.DefaultOwner {
 				return nil, status.Error(codes.InvalidArgument, "owner name cannot start with `__`")
 			}
 			err := ds.CreateCandidate(ctx, req.GetDatastore())
