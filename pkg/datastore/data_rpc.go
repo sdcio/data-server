@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -602,6 +603,7 @@ func validateFieldValue(f *sdcpb.LeafSchema, v any) error {
 func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 	switch lt.GetType() {
 	case "string":
+		// TODO: validate length and range
 		return nil
 	case "int8":
 		switch v := v.(type) {
@@ -609,6 +611,10 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			_, err := strconv.ParseInt(v, 10, 8)
 			if err != nil {
 				return err
+			}
+		case int64:
+			if v > math.MaxInt8 || v < math.MinInt8 {
+				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
 			}
 		default:
 			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
@@ -621,6 +627,10 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			if err != nil {
 				return err
 			}
+		case int64:
+			if v > math.MaxInt16 || v < math.MinInt16 {
+				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
+			}
 		default:
 			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
 		}
@@ -631,6 +641,10 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			_, err := strconv.ParseInt(v, 10, 32)
 			if err != nil {
 				return err
+			}
+		case int64:
+			if v > math.MaxInt32 || v < math.MinInt32 {
+				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
 			}
 		default:
 			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
@@ -654,6 +668,10 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			if err != nil {
 				return err
 			}
+		case uint64:
+			if v > math.MaxUint8 {
+				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
+			}
 		default:
 			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
 		}
@@ -665,6 +683,10 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			if err != nil {
 				return err
 			}
+		case uint64:
+			if v > math.MaxUint16 {
+				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
+			}
 		default:
 			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
 		}
@@ -675,6 +697,10 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			_, err := strconv.ParseUint(v, 10, 32)
 			if err != nil {
 				return err
+			}
+		case uint64:
+			if v > math.MaxUint32 {
+				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
 			}
 		default:
 			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
@@ -694,11 +720,9 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 	case "boolean":
 		switch v := v.(type) {
 		case string:
-			switch {
-			case v == "true":
-			case v == "false":
-			default:
-				return fmt.Errorf("value %v must be a boolean", v)
+			_, err := strconv.ParseBool(v)
+			if err != nil {
+				return fmt.Errorf("value %v must be a boolean: %v", v, err)
 			}
 		case bool:
 			return nil
