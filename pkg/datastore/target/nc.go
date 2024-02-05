@@ -25,19 +25,21 @@ type ncTarget struct {
 	m         *sync.Mutex
 	connected bool
 
-	schemaClient schema.Client
-	schema       *sdcpb.Schema
-	sbiConfig    *config.SBI
+	schemaClient     schema.Client
+	schema           *sdcpb.Schema
+	sbiConfig        *config.SBI
+	xml2sdcpbAdapter *netconf.XML2sdcpbConfigAdapter
 }
 
 func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient schema.Client, schema *sdcpb.Schema) (*ncTarget, error) {
 	t := &ncTarget{
-		name:         name,
-		m:            new(sync.Mutex),
-		connected:    false,
-		schemaClient: schemaClient,
-		schema:       schema,
-		sbiConfig:    cfg,
+		name:             name,
+		m:                new(sync.Mutex),
+		connected:        false,
+		schemaClient:     schemaClient,
+		schema:           schema,
+		sbiConfig:        cfg,
+		xml2sdcpbAdapter: netconf.NewXML2sdcpbConfigAdapter(schemaClient, schema),
 	}
 	var err error
 	// create a new NETCONF driver
@@ -47,7 +49,6 @@ func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient s
 	}
 	t.connected = true
 	return t, nil
-
 }
 
 func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
@@ -99,11 +100,8 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 
 	log.Debugf("netconf response:\n%s", ncResponse.DocAsString())
 
-	// init an XML2sdcpbConfigAdapter used to convert the netconf xml config to a sdcpb.Notification
-	data := netconf.NewXML2sdcpbConfigAdapter(t.schemaClient, t.schema)
-
 	// start transformation, which yields the sdcpb_Notification
-	noti, err := data.Transform(ctx, ncResponse.Doc)
+	noti, err := t.xml2sdcpbAdapter.Transform(ctx, ncResponse.Doc)
 	if err != nil {
 		return nil, err
 	}
