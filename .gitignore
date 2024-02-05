@@ -22,3 +22,5 @@ mocks/*
 .vscode
 schema-dir
 dist/
+.*.bak
+clab-*

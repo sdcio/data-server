@@ -11,44 +11,98 @@ Library           OperatingSystem
 
 
 *** Keywords ***
+ListDataStores
+    [Documentation]    List datastores in a data-server
+    ${rc}   ${result} =   Run And Return Rc And Output
+    ...        ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} datastore list
+    RETURN  ${rc}  ${result}
+
+GetDataStore 
+    [Documentation]    Get a target from a data-server
+    [Arguments]    ${datastore}
+    ${rc}   ${result} =    Run And Return Rc And Output
+    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} datastore get --ds ${datastore}
+    RETURN  ${rc}  ${result}
+
+CreateDataStore 
+    [Documentation]    Create a target in a data-server
+    [Arguments]    ${datastore}   ${target-definition-file}    ${sync-file}  ${schema-name}     ${schema-vendor}     ${schema-version}
+    ${rc}   ${result} =     Run And Return Rc And Output
+    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} datastore create --ds ${datastore} --target ${target-definition-file} --sync ${target-sync-file} --name ${schema-name} --vendor ${schema-vendor} --version ${schema-version}
+    RETURN  ${rc}  ${result}
+
+DeleteDatastore 
+    [Documentation]    Delete a target from a data-server
+    [Arguments]    ${datastore}
+    ${rc}   ${result} =   Run And Return Rc And Output
+    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} datastore delete --ds ${datastore}
+    RETURN  ${rc}  ${result}
+
 CreateCandidate
     [Documentation]    Create a new named Candidate in the given Datastore
     [Arguments]    ${datastore}    ${candidate}
-    ${result} =    Run Process    ${CLIENT-BIN}     -a    ${DATA-SERVER-IP}:${DATA-SERVER-PORT}    datastore    create    --ds    ${datastore}    --candidate    ${candidate}
-    RETURN    ${result}
+    ${rc}   ${result} =    Run And Return Rc And Output    
+    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} datastore create --ds ${datastore} --candidate ${candidate}
+    RETURN  ${rc}  ${result}
+
+GetCandidate
+    [Documentation]    Create a new named Candidate in the given Datastore
+    [Arguments]    ${datastore}    ${candidate}
+    ${rc}   ${result} =    Run And Return Rc And Output    
+    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} datastore get --ds ${datastore} --candidate ${candidate}
+    RETURN  ${rc}  ${result}
 
 DeleteCandidate
     [Documentation]    Delete a named Candidate in the given Datastore
     [Arguments]    ${datastore}    ${candidate}
-    ${result} =    Run Process    ${CLIENT-BIN}     -a    ${DATA-SERVER-IP}:${DATA-SERVER-PORT}    datastore    delete    --ds    ${datastore}    --candidate    ${candidate}
-    RETURN    ${result}
+    ${rc}   ${result} =    Run And Return Rc And Output    
+    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} datastore delete --ds ${datastore} --candidate ${candidate}
+    RETURN  ${rc}  ${result}
+
+Diff
+    [Documentation]    Performs a diff on a datastore and a candidate
+    [Arguments]    ${datastore}    ${candidate}
+    ${rc}   ${result} =    Run And Return Rc And Output    
+    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} data diff --ds ${datastore} --candidate ${candidate}
+    RETURN  ${rc}  ${result}
 
 Commit
     [Documentation]    Performs a commit on the given datastore/candidate and returns the Process Result object https://robotframework.org/robotframework/latest/libraries/Process.html#Result%20object
     [Arguments]    ${datastore}    ${candidate}
-    ${result} =    Run Process    ${CLIENT-BIN}     -a    ${DATA-SERVER-IP}:${DATA-SERVER-PORT}    datastore    commit    --ds    ${datastore}    --candidate    ${candidate}
-    RETURN    ${result}
+    ${rc}   ${result} =    Run And Return Rc And Output    
+    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} datastore commit --ds ${datastore} --candidate ${candidate}
+    RETURN  ${rc}  ${result}
+
+Get
+    [Documentation]    Get a path from the datastore
+    [Arguments]    ${datastore}    ${ds-get-flags}
+    ${rc}   ${result} =    Run And Return Rc And Output    
+    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} data get --ds ${datastore} ${ds-get-flags}
+    Log    ${result}
+    RETURN  ${rc}  ${result}
+
+GetFromCandidate
+    [Documentation]    Get a path from the datastore candidate
+    [Arguments]    ${datastore}    ${candidate}    ${path}
+    ${rc}   ${result} =    Run And Return Rc And Output    
+    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} data get --ds ${datastore} --candidate ${candidate} --path ${path}
+    Log    ${result}
+    RETURN  ${rc}  ${result}
 
 Set
     [Documentation]    Applies to the candidate of the given datastore the provided update
-    [Arguments]    ${datastore}    ${candidate}    ${update}
-    ${result} =    Run Process    ${CLIENT-BIN}     -a    ${DATA-SERVER-IP}:${DATA-SERVER-PORT}    data    set    --ds    ${datastore}    --candidate    ${candidate}    --update    ${update}
-    Log    ${result.stdout}
-    Log    ${result.stderr}
-    RETURN    ${result}
+    [Arguments]    ${datastore}    ${candidate}    ${set-flags}
+    ${rc}   ${result} =    Run And Return Rc And Output    
+    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} data set --ds ${datastore} --candidate ${candidate} ${set-flags}
+    Log    ${result}
+    RETURN  ${rc}  ${result}
 
 GetSchema
     [Documentation]    Retrieve the schema element described by name (plattform name), version and vendor under the given path.
     [Arguments]    ${name}    ${version}    ${vendor}    ${path}
-    ${result} =    Run Process    ${CLIENT-BIN}    -a    ${SCHEMA-SERVER-IP}:${SCHEMA-SERVER-PORT}    schema    get    --name    ${name}    --version    ${version}    --vendor    ${vendor}    --path    ${path}    
-    RETURN    ${result}
-
-GetDatastore
-    [Documentation]   Performa get on the given Datastore
-    [Arguments]    ${datastore}
-    ${result} =    Run Process    ${CLIENT-BIN}     -a    ${DATA-SERVER-IP}:${DATA-SERVER-PORT}    datastore    get    --ds    ${datastore}
-    RETURN    ${result}
-
+    ${rc}   ${result} =    Run And Return Rc And Output    
+    ...    ${CLIENT-BIN} -a ${SCHEMA-SERVER-IP}:${SCHEMA-SERVER-PORT} schema get --name ${name} --version ${version} --vendor ${vendor} --path ${path}    
+    RETURN  ${rc}  ${result}
 
 # Helper
 ExtractResponse
