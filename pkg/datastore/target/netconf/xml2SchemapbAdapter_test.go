@@ -145,7 +145,6 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
-			defer mockCtrl.Finish()
 
 			x := tt.getXML2sdcpbConfigAdapter(mockCtrl, t)
 			// tt.args.doc.Indent(2)

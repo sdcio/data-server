@@ -19,6 +19,21 @@ import (
 	"google.golang.org/grpc"
 )
 
+const (
+	SchemaName    = "TestModel"
+	SchemaVendor  = "TestVendor"
+	SchemaVersion = "TestVersion"
+)
+
+var (
+	TestSchema = &sdcpb.Schema{
+		Name:    SchemaName,
+		Vendor:  SchemaVendor,
+		Version: SchemaVersion,
+	}
+	TestCtx = context.TODO()
+)
+
 func Test_ncTarget_Get(t *testing.T) {
 	type fields struct {
 		name            string
@@ -220,13 +235,16 @@ func Test_ncTarget_Get(t *testing.T) {
 			// create Mock controller
 			mockCtrl := gomock.NewController(t)
 
+			sc := tt.fields.getSchemaClient(mockCtrl, t)
+
 			tr := &ncTarget{
-				name:         tt.fields.name,
-				driver:       tt.fields.getDriver(mockCtrl, t),
-				connected:    tt.fields.connected,
-				schemaClient: tt.fields.getSchemaClient(mockCtrl, t),
-				schema:       tt.fields.schema,
-				sbiConfig:    tt.fields.sbiConfig,
+				name:             tt.fields.name,
+				driver:           tt.fields.getDriver(mockCtrl, t),
+				connected:        tt.fields.connected,
+				schemaClient:     sc,
+				schema:           tt.fields.schema,
+				sbiConfig:        tt.fields.sbiConfig,
+				xml2sdcpbAdapter: netconf.NewXML2sdcpbConfigAdapter(sc, tt.fields.schema),
 			}
 			got, err := tr.Get(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
@@ -240,18 +258,3 @@ func Test_ncTarget_Get(t *testing.T) {
 		})
 	}
 }
-
-const (
-	SchemaName    = "TestModel"
-	SchemaVendor  = "TestVendor"
-	SchemaVersion = "TestVersion"
-)
-
-var (
-	TestSchema = &sdcpb.Schema{
-		Name:    SchemaName,
-		Vendor:  SchemaVendor,
-		Version: SchemaVersion,
-	}
-	TestCtx = context.TODO()
-)
