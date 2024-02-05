@@ -13,8 +13,6 @@ import (
 	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
-
-	"github.com/iptecharch/data-server/mocks/mockschema"
 )
 
 const (

@@ -25,9 +25,10 @@ type ncTarget struct {
 	m         *sync.Mutex
 	connected bool
 
-	schemaClient schema.Client
-	schema       *sdcpb.Schema
-	sbiConfig    *config.SBI
+	schemaClient     schema.Client
+	schema           *sdcpb.Schema
+	sbiConfig        *config.SBI
+	xml2sdcpbAdapter *netconf.XML2sdcpbConfigAdapter
 }
 
 func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient schema.Client, schema *sdcpb.Schema) (*ncTarget, error) {
