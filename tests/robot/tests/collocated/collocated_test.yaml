@@ -1,0 +1,94 @@
+grpc-server:
+  schema-server:
+    enabled: true
+    schemas-directory: ./schemas
+
+  # data-server attributes
+  data-server:
+    max-candidates: 16
+
+  max-recv-msg-size: 25165824 # 24 * 1024 * 1024 (24MB)
+
+# starts a local schema store/client
+schema-store:
+  # type is either memory or persistent (default)
+  type: persistent
+  cache: 
+    ttl: 60s
+    capacity: 100
+  schemas:
+    - name: srl
+      vendor: Nokia
+      version: 22.11.2
+      files:
+        - ./srlinux-yang-models/all/v22.11.2/srl_nokia/models
+      directories:
+        - ./srlinux-yang-models/all/v22.11.2/ietf
+      excludes:
+        - .*tools.*
+    - name: srl
+      vendor: Nokia
+      version: 23.10.1
+      files:
+        - ./srlinux-yang-models/all/v23.10.1/srl_nokia/models
+      directories:
+        - ./srlinux-yang-models/all/v23.10.1/ietf
+        - ./srlinux-yang-models/all/v23.10.1/openconfig/extensions
+        - ./srlinux-yang-models/all/v23.10.1/openconfig
+      excludes:
+        - .*tools.*
+    - name: srl
+      vendor: Nokia
+      version: 22.11.1
+      files:
+        - ./srlinux-yang-models/all/v22.11.1/srl_nokia/models
+      directories:
+        - ./srlinux-yang-models/all/v22.11.1/ietf
+      excludes:
+        - .*tools.*
+
+    - name: srl
+      vendor: Nokia
+      version: 22.6.4
+      files:
+        - ./srlinux-yang-models/all/v22.6.4/srl_nokia/models
+      directories:
+        - ./srlinux-yang-models/all/v22.6.4/ietf
+      excludes:
+        - .*tools.*
+    - name: srl
+      vendor: Nokia
+      version: 22.3.2
+      files:
+        - ./srlinux-yang-models/all/v22.3.2/srl_nokia/models
+      directories:
+        - ./srlinux-yang-models/all/v22.3.2/ietf
+      excludes:
+        - .*tools.*
+    - name: srl
+      vendor: Nokia
+      version: 21.11.3
+      files:
+        - ./srlinux-yang-models/all/v21.11.3/srl_nokia/models
+      directories:
+        - ./srlinux-yang-models/all/v21.11.3/ietf
+      excludes:
+        - .*tools.*
+
+# cache config, defaults to
+# type: local
+# store-type: badgerdb
+# dir: ./cached/caches
+cache:
+  # type: remote
+  type: local
+  # store-type if type == local
+  store-type: badgerdb
+  # local directory for caches if type == local
+  dir: "./cached/caches"
+  # remote cache address, if type == remote
+  # address: localhost:50100
+
+# expose a prometheus server with cpu, mem and grpc metrics
+prometheus:
+  address: ":56090"
