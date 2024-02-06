@@ -44,6 +44,8 @@ dockers:
     image_templates:
       - "ghcr.io/iptecharch/data-server:latest"
       - "ghcr.io/iptecharch/data-server:v{{ .Version }}"
+      - "ghcr.io/sdcio/data-server:latest"
+      - "ghcr.io/sdcio/data-server:v{{ .Version }}"
       - "registry.kmrd.dev/iptecharch/data-server:latest"
       - "registry.kmrd.dev/iptecharch/data-server:v{{ .Version }}"
       - "registry.k8s.hans.io/iptecharch/data-server:latest"
@@ -80,6 +82,6 @@ changelog:
       - "^test:"
 release:
   prerelease: auto
-  draft: true
+  draft: false
   replace_existing_draft: true
   disable: false
