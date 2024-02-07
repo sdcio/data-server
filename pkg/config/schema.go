@@ -15,7 +15,7 @@
 package config
 
 import (
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 type SchemaConfig struct {

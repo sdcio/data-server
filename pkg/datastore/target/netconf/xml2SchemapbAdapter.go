@@ -19,10 +19,10 @@ import (
 	"strings"
 
 	"github.com/beevik/etree"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/iptecharch/data-server/pkg/schema"
+	"github.com/sdcio/data-server/pkg/schema"
 )
 
 // XML2sdcpbConfigAdapter is used to transform the provided XML configuration data into the gnmi-like sdcpb.Notifications.

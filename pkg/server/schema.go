@@ -20,18 +20,18 @@ import (
 	"sync"
 	"time"
 
-	schemaConfig "github.com/iptecharch/schema-server/pkg/config"
-	schemaServerSchema "github.com/iptecharch/schema-server/pkg/schema"
-	schemaStore "github.com/iptecharch/schema-server/pkg/store"
-	schemaMemoryStore "github.com/iptecharch/schema-server/pkg/store/memstore"
-	schemaPersistentStore "github.com/iptecharch/schema-server/pkg/store/persiststore"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	schemaConfig "github.com/sdcio/schema-server/pkg/config"
+	schemaServerSchema "github.com/sdcio/schema-server/pkg/schema"
+	schemaStore "github.com/sdcio/schema-server/pkg/store"
+	schemaMemoryStore "github.com/sdcio/schema-server/pkg/store/memstore"
+	schemaPersistentStore "github.com/sdcio/schema-server/pkg/store/persiststore"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/iptecharch/data-server/pkg/schema"
+	"github.com/sdcio/data-server/pkg/schema"
 )
 
 func (s *Server) createSchemaClient(ctx context.Context) {

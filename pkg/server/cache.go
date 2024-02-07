@@ -20,10 +20,10 @@ import (
 	"os"
 	"time"
 
-	cconfig "github.com/iptecharch/cache/pkg/config"
+	cconfig "github.com/sdcio/cache/pkg/config"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/iptecharch/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/cache"
 )
 
 func (s *Server) createCacheClient(ctx context.Context) {

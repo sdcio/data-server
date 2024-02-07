@@ -15,12 +15,12 @@
 package clients
 
 import (
-	schema_server "github.com/iptecharch/sdc-protos/sdcpb"
+	schema_server "github.com/sdcio/sdc-protos/sdcpb"
 
-	"github.com/iptecharch/data-server/pkg/cache"
-	CacheClient "github.com/iptecharch/data-server/pkg/datastore/clients/cache"
-	SchemaClient "github.com/iptecharch/data-server/pkg/datastore/clients/schema"
-	"github.com/iptecharch/data-server/pkg/schema"
+	"github.com/sdcio/data-server/pkg/cache"
+	CacheClient "github.com/sdcio/data-server/pkg/datastore/clients/cache"
+	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/schema"
 )
 
 type ValidationClient struct {

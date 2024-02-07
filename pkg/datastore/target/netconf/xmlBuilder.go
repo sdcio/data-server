@@ -19,9 +19,9 @@ import (
 	"fmt"
 
 	"github.com/beevik/etree"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 
-	"github.com/iptecharch/data-server/pkg/schema"
+	"github.com/sdcio/data-server/pkg/schema"
 )
 
 const (

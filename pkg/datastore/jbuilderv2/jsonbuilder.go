@@ -24,8 +24,8 @@ import (
 	"strconv"
 	"strings"
 
-	schemaClient "github.com/iptecharch/data-server/pkg/datastore/clients/schema"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -19,7 +19,7 @@ import (
 	"reflect"
 	"testing"
 
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {

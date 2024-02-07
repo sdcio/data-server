@@ -14,7 +14,7 @@
 
 package main
 
-import "github.com/iptecharch/data-server/client/cmd"
+import "github.com/sdcio/data-server/client/cmd"
 
 func main() {
 	cmd.Execute()

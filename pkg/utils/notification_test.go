@@ -18,8 +18,8 @@ import (
 	"reflect"
 	"testing"
 
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/openconfig/gnmi/proto/gnmi"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 func TestFromGNMIPath(t *testing.T) {

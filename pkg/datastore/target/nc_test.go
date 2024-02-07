@@ -22,13 +22,13 @@ import (
 
 	"github.com/beevik/etree"
 
-	"github.com/iptecharch/data-server/mocks/mocknetconf"
-	"github.com/iptecharch/data-server/mocks/mockschema"
-	"github.com/iptecharch/data-server/pkg/config"
-	"github.com/iptecharch/data-server/pkg/datastore/target/netconf"
-	"github.com/iptecharch/data-server/pkg/datastore/target/netconf/types"
-	"github.com/iptecharch/data-server/pkg/schema"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	"github.com/sdcio/data-server/mocks/mocknetconf"
+	"github.com/sdcio/data-server/mocks/mockschema"
+	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/datastore/target/netconf"
+	"github.com/sdcio/data-server/pkg/datastore/target/netconf/types"
+	"github.com/sdcio/data-server/pkg/schema"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
 )

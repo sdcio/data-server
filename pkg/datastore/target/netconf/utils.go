@@ -20,9 +20,9 @@ import (
 	"strings"
 
 	"github.com/beevik/etree"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 
-	"github.com/iptecharch/data-server/pkg/datastore/target/netconf/conversion"
+	"github.com/sdcio/data-server/pkg/datastore/target/netconf/conversion"
 )
 
 func getNamespaceFromGetSchemaResponse(sr *sdcpb.GetSchemaResponse) string {

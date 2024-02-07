@@ -22,8 +22,8 @@ import (
 	"strconv"
 	"strings"
 
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/olekukonko/tablewriter"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/prototext"
 )

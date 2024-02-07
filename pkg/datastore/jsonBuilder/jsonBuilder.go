@@ -17,7 +17,7 @@ package jsonbuilder
 import (
 	"encoding/json"
 
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 type JsonBuilder struct {

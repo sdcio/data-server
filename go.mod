@@ -1,4 +1,4 @@
-module github.com/iptecharch/data-server
+module github.com/sdcio/data-server
 
 go 1.21.4
 
@@ -9,10 +9,8 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/iptecharch/cache v0.0.31
-	github.com/iptecharch/schema-server v0.0.14
-	github.com/iptecharch/sdc-protos v0.0.21
-	github.com/iptecharch/yang-parser v0.0.3
+	github.com/iptecharch/data-server v0.0.24
+	github.com/iptecharch/sdc-protos v0.0.15
 	github.com/jellydator/ttlcache/v3 v3.1.1
 	github.com/kylelemons/godebug v1.1.0
 	github.com/olekukonko/tablewriter v0.0.5
@@ -22,6 +20,10 @@ require (
 	github.com/openconfig/gnmic/pkg/types v0.1.2
 	github.com/prometheus/client_golang v1.18.0
 	github.com/scrapli/scrapligo v1.2.0
+	github.com/sdcio/cache v0.0.32
+	github.com/sdcio/schema-server v0.0.15
+	github.com/sdcio/sdc-protos v0.0.22
+	github.com/sdcio/yang-parser v0.0.4
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
@@ -76,7 +78,6 @@ require (
 	github.com/openconfig/goyang v1.4.5 // indirect
 	github.com/openconfig/grpctunnel v0.1.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/common v0.46.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect

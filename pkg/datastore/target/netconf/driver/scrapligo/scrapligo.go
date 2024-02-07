@@ -24,8 +24,8 @@ import (
 	"github.com/scrapli/scrapligo/driver/options"
 	"github.com/scrapli/scrapligo/util"
 
-	"github.com/iptecharch/data-server/pkg/config"
-	"github.com/iptecharch/data-server/pkg/datastore/target/netconf/types"
+	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/datastore/target/netconf/types"
 )
 
 type ScrapligoNetconfTarget struct {

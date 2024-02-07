@@ -20,9 +20,9 @@ import (
 	"testing"
 
 	"github.com/beevik/etree"
-	"github.com/iptecharch/data-server/mocks/mockschema"
-	"github.com/iptecharch/data-server/pkg/utils"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	"github.com/sdcio/data-server/mocks/mockschema"
+	"github.com/sdcio/data-server/pkg/utils"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
 )
