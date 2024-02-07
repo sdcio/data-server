@@ -1,4 +1,4 @@
-REMOTE_REGISTRY := registry.kmrd.dev/iptecharch/data-server
+REMOTE_REGISTRY := registry.kmrd.dev/sdcio/data-server
 TAG := $(shell git describe --tags)
 IMAGE := $(REMOTE_REGISTRY):$(TAG)
 TEST_IMAGE := $(IMAGE)-test

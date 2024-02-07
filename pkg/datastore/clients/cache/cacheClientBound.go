@@ -17,11 +17,11 @@ package CacheClient
 import (
 	"context"
 
-	"github.com/iptecharch/cache/proto/cachepb"
-	"github.com/iptecharch/schema-server/pkg/utils"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	"github.com/sdcio/cache/proto/cachepb"
+	"github.com/sdcio/schema-server/pkg/utils"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 
-	"github.com/iptecharch/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/cache"
 )
 
 type CacheClientBound struct {

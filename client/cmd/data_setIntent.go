@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"os"
 
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"github.com/iptecharch/data-server/pkg/utils"
+	"github.com/sdcio/data-server/pkg/utils"
 )
 
 var deleteFlag bool

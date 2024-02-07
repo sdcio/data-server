@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 // TransformationContext

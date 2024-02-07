@@ -23,7 +23,7 @@ import (
 	"os"
 	"time"
 
-	schemaConfig "github.com/iptecharch/schema-server/pkg/config"
+	schemaConfig "github.com/sdcio/schema-server/pkg/config"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"

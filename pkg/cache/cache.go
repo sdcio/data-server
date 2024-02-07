@@ -18,9 +18,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/iptecharch/cache/pkg/cache"
-	"github.com/iptecharch/cache/proto/cachepb"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	"github.com/sdcio/cache/pkg/cache"
+	"github.com/sdcio/cache/proto/cachepb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/proto"
 )
 

@@ -23,18 +23,18 @@ import (
 	"time"
 
 	"github.com/AlekSi/pointer"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	gapi "github.com/openconfig/gnmic/pkg/api"
 	gtarget "github.com/openconfig/gnmic/pkg/target"
 	"github.com/openconfig/gnmic/pkg/types"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/iptecharch/data-server/pkg/config"
-	"github.com/iptecharch/data-server/pkg/utils"
+	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/utils"
 )
 
 const (

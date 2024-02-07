@@ -42,10 +42,10 @@ dockers:
       - data-server
       - datactl
     image_templates:
-      - "ghcr.io/iptecharch/data-server:v0.0.0-{{ .ShortCommit }}"
-      - "ghcr.io/iptecharch/data-server:v0.0.0-dev-latest"
-      - "registry.kmrd.dev/iptecharch/data-server:v0.0.0-{{ .ShortCommit }}"
-      - "registry.kmrd.dev/iptecharch/data-server:v0.0.0-dev-latest"
+      - "ghcr.io/sdcio/data-server:v0.0.0-{{ .ShortCommit }}"
+      - "ghcr.io/sdcio/data-server:v0.0.0-dev-latest"
+      - "registry.kmrd.dev/sdcio/data-server:v0.0.0-{{ .ShortCommit }}"
+      - "registry.kmrd.dev/sdcio/data-server:v0.0.0-dev-latest"
     dockerfile: goreleaser.dockerfile
     skip_push: false
     build_flag_templates:
@@ -53,7 +53,7 @@ dockers:
       - "--build-arg=USERID=10000"
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.source=https://github.com/iptecharch/{{.ProjectName}}"
+      - "--label=org.opencontainers.image.source=https://github.com/sdcio/{{.ProjectName}}"
       - "--label=org.opencontainers.image.version=v{{.Version}}"
   - goos: linux
     goarch: amd64
@@ -61,8 +61,8 @@ dockers:
       - data-server
       - datactl
     image_templates:
-      - "registry.k8s.hans.io/iptecharch/data-server:v0.0.0-{{ .ShortCommit }}"
-      - "registry.k8s.hans.io/iptecharch/data-server:v0.0.0-dev-latest"
+      - "registry.k8s.hans.io/sdcio/data-server:v0.0.0-{{ .ShortCommit }}"
+      - "registry.k8s.hans.io/sdcio/data-server:v0.0.0-dev-latest"
     dockerfile: goreleaser.dockerfile
     skip_push: false
     push_flags:
@@ -72,7 +72,7 @@ dockers:
       - "--build-arg=USERID=10000"
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.source=https://github.com/iptecharch/{{.ProjectName}}"
+      - "--label=org.opencontainers.image.source=https://github.com/sdcio/{{.ProjectName}}"
       - "--label=org.opencontainers.image.version=v{{.Version}}"
 release:
   disable: true

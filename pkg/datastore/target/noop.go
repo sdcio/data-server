@@ -18,10 +18,10 @@ import (
 	"context"
 	"time"
 
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/iptecharch/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/config"
 )
 
 type noopTarget struct {

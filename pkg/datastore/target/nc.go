@@ -22,14 +22,14 @@ import (
 	"sync"
 	"time"
 
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/iptecharch/data-server/pkg/config"
-	"github.com/iptecharch/data-server/pkg/datastore/target/netconf"
-	"github.com/iptecharch/data-server/pkg/datastore/target/netconf/driver/scrapligo"
-	"github.com/iptecharch/data-server/pkg/schema"
-	"github.com/iptecharch/data-server/pkg/utils"
+	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/datastore/target/netconf"
+	"github.com/sdcio/data-server/pkg/datastore/target/netconf/driver/scrapligo"
+	"github.com/sdcio/data-server/pkg/schema"
+	"github.com/sdcio/data-server/pkg/utils"
 )
 
 type ncTarget struct {

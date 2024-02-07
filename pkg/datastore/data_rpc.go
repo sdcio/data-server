@@ -24,19 +24,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/iptecharch/cache/proto/cachepb"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
-	"github.com/iptecharch/yang-parser/xpath"
-	"github.com/iptecharch/yang-parser/xpath/grammars/expr"
+	"github.com/sdcio/cache/proto/cachepb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/yang-parser/xpath"
+	"github.com/sdcio/yang-parser/xpath/grammars/expr"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/iptecharch/data-server/pkg/cache"
-	"github.com/iptecharch/data-server/pkg/datastore/jbuilderv2"
-	"github.com/iptecharch/data-server/pkg/utils"
+	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/datastore/jbuilderv2"
+	"github.com/sdcio/data-server/pkg/utils"
 )
 
 const (

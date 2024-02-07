@@ -17,8 +17,8 @@ package schema
 import (
 	"context"
 
-	schemaStore "github.com/iptecharch/schema-server/pkg/store"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	schemaStore "github.com/sdcio/schema-server/pkg/store"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc"
 )
 

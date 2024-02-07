@@ -20,10 +20,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/iptecharch/cache/pkg/cache"
-	"github.com/iptecharch/cache/pkg/config"
-	"github.com/iptecharch/schema-server/pkg/utils"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	"github.com/sdcio/cache/pkg/cache"
+	"github.com/sdcio/cache/pkg/config"
+	"github.com/sdcio/schema-server/pkg/utils"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )

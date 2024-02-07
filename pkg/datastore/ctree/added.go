@@ -20,13 +20,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/iptecharch/schema-server/pkg/config"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/openconfig/gnmi/path"
 	"github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/sdcio/schema-server/pkg/config"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/iptecharch/data-server/pkg/utils"
+	"github.com/sdcio/data-server/pkg/utils"
 )
 
 func (t *Tree) Clone() (*Tree, error) {

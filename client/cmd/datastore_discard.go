@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	schema_server "github.com/iptecharch/sdc-protos/sdcpb"
+	schema_server "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/prototext"
 )

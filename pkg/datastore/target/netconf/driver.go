@@ -14,7 +14,7 @@
 
 package netconf
 
-import "github.com/iptecharch/data-server/pkg/datastore/target/netconf/types"
+import "github.com/sdcio/data-server/pkg/datastore/target/netconf/types"
 
 type Driver interface {
 	// Get config or state

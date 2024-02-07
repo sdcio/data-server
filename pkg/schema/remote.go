@@ -19,14 +19,14 @@ import (
 	"fmt"
 	"strings"
 
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/jellydator/ttlcache/v3"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/iptecharch/data-server/pkg/config"
-	"github.com/iptecharch/data-server/pkg/utils"
+	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/utils"
 )
 
 type cacheKey struct {
