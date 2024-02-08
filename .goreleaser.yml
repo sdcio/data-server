@@ -46,8 +46,8 @@ dockers:
       - "ghcr.io/sdcio/data-server:v{{ .Version }}"
       - "registry.kmrd.dev/sdcio/data-server:latest"
       - "registry.kmrd.dev/sdcio/data-server:v{{ .Version }}"
-      - "registry.k8s.hans.io/sdcio/data-server:latest"
-      - "registry.k8s.hans.io/sdcio/data-server:v{{ .Version }}"
+      - "registry.k8s.sdcio.dev/sdcio/data-server:latest"
+      - "registry.k8s.sdcio.dev/sdcio/data-server:v{{ .Version }}"
     dockerfile: goreleaser.dockerfile
     skip_push: false
     build_flag_templates:
@@ -80,6 +80,6 @@ changelog:
       - "^test:"
 release:
   prerelease: auto
-  draft: true
+  draft: false
   replace_existing_draft: true
   disable: false
