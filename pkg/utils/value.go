@@ -17,6 +17,8 @@ package utils
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
+	"strings"
 
 	"github.com/openconfig/gnmi/proto/gnmi"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -475,4 +477,62 @@ func EqualTypedValues(v1, v2 *sdcpb.TypedValue) bool {
 		}
 	}
 	return true
+}
+
+func TypedValueToString(tv *sdcpb.TypedValue) string {
+	switch tv.Value.(type) {
+	case *sdcpb.TypedValue_AnyVal:
+		return string(tv.GetAnyVal().GetValue()) // questionable...
+	case *sdcpb.TypedValue_AsciiVal:
+		return tv.GetAsciiVal()
+	case *sdcpb.TypedValue_BoolVal:
+		return strconv.FormatBool(tv.GetBoolVal())
+	case *sdcpb.TypedValue_BytesVal:
+		return string(tv.GetBytesVal()) // questionable...
+	case *sdcpb.TypedValue_DecimalVal:
+		d := tv.GetDecimalVal()
+		digitsStr := strconv.FormatInt(d.Digits, 10)
+		negative := false
+		if d.Digits < 0 {
+			negative = true
+			digitsStr = digitsStr[1:] // Remove the "-" sign for processing
+		}
+		// Add leading zeros if necessary
+		for uint32(len(digitsStr)) <= d.Precision {
+			digitsStr = "0" + digitsStr
+		}
+		// Insert the decimal point
+		if d.Precision > 0 {
+			decimalPointIndex := len(digitsStr) - int(d.Precision)
+			digitsStr = digitsStr[:decimalPointIndex] + "." + digitsStr[decimalPointIndex:]
+		}
+		// Add back the negative sign if necessary
+		if negative {
+			digitsStr = "-" + digitsStr
+		}
+		return digitsStr
+	case *sdcpb.TypedValue_DoubleVal:
+		return strconv.FormatFloat(tv.GetDoubleVal(), byte('e'), -1, 64)
+	case *sdcpb.TypedValue_FloatVal:
+		return strconv.FormatFloat(float64(tv.GetFloatVal()), byte('e'), -1, 64)
+	case *sdcpb.TypedValue_IntVal:
+		return strconv.Itoa(int(tv.GetIntVal()))
+	case *sdcpb.TypedValue_JsonIetfVal:
+		return string(tv.GetJsonIetfVal())
+	case *sdcpb.TypedValue_JsonVal:
+		return string(tv.GetJsonVal())
+	case *sdcpb.TypedValue_LeaflistVal:
+		rs := make([]string, 0, len(tv.GetLeaflistVal().GetElement()))
+		for _, lfv := range tv.GetLeaflistVal().GetElement() {
+			rs = append(rs, TypedValueToString(lfv))
+		}
+		return strings.Join(rs, ",")
+	case *sdcpb.TypedValue_ProtoBytes:
+		return string(tv.GetProtoBytes()) // questionable
+	case *sdcpb.TypedValue_StringVal:
+		return tv.GetStringVal()
+	case *sdcpb.TypedValue_UintVal:
+		return strconv.Itoa(int(tv.GetUintVal()))
+	}
+	return ""
 }

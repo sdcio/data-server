@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -102,6 +103,8 @@ func New(ctx context.Context, c *config.DatastoreConfig, scc schema.Client, cc c
 		if c.Sync != nil {
 			go ds.Sync(ctx)
 		}
+		// start deviation goroutine
+		ds.DeviationMgr(ctx)
 	}()
 	return ds
 }
@@ -441,7 +444,7 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, cand
 					// we need to resolve that
 					if strings.Contains(leafRefPath, "./") {
 						// make leafref path absolute
-						lrefSdcpbPath, err = makeLeafRefAbs(upd.GetPath(), lrefSdcpbPath, upd.GetValue().GetStringVal())
+						lrefSdcpbPath, err = makeLeafRefAbs(upd.GetPath(), lrefSdcpbPath, utils.TypedValueToString(upd.GetValue()))
 						if err != nil {
 							return err
 						}
@@ -471,13 +474,13 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, cand
 				// we need to resolve that
 				if strings.Contains(leafRefPath, "./") {
 					// make leafref path absolute
-					lrefSdcpbPath, err = makeLeafRefAbs(upd.GetPath(), lrefSdcpbPath, upd.GetValue().GetStringVal())
+					lrefSdcpbPath, err = makeLeafRefAbs(upd.GetPath(), lrefSdcpbPath, utils.TypedValueToString(upd.GetValue()))
 					if err != nil {
 						return err
 					}
 				}
 
-				err = d.resolveLeafref(ctx, candidate, lrefSdcpbPath, upd.GetValue().GetStringVal())
+				err = d.resolveLeafref(ctx, candidate, lrefSdcpbPath, utils.TypedValueToString(upd.GetValue()))
 				if err != nil {
 					return err
 				}
@@ -933,4 +936,71 @@ func convertStringToTv(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*
 		return &sdcpb.TypedValue{}, nil
 	}
 	return nil, nil
+}
+
+func (d *Datastore) DeviationMgr(ctx context.Context) {
+	log.Infof("%s: starting deviationMgr...", d.Name())
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			for upd := range d.cacheClient.ReadCh(ctx, d.Name(), &cache.Opts{
+				Store: cachepb.Store_CONFIG,
+			}, [][]string{nil}, 0) {
+				p := upd.GetPath()
+				v, err := upd.Value()
+				if err != nil {
+					log.Errorf("%s: failed to convert value: %v", d.Name(), err)
+					continue
+				}
+				intentsUpdates := d.cacheClient.Read(ctx, d.Name(), &cache.Opts{
+					Store:         cachepb.Store_INTENDED,
+					Owner:         "",
+					Priority:      0,
+					PriorityCount: 0,
+				}, [][]string{p}, 0)
+				if len(intentsUpdates) == 0 {
+					// TODO: generate a unhandled config deviation
+					log.Debugf("%s: has unhandled config %v: %v", d.Name(), p, v)
+					continue
+				}
+				// NOT_APPLIED or OVERRULED deviation
+				// sort intent updates by priority/TS
+				sort.Slice(intentsUpdates, func(i, j int) bool {
+					if intentsUpdates[i].Priority() == intentsUpdates[j].Priority() {
+						return intentsUpdates[i].TS() < intentsUpdates[j].TS()
+					}
+					return intentsUpdates[i].Priority() < intentsUpdates[j].Priority()
+				})
+				// first intent
+				// // compare values with config
+				fiv, err := intentsUpdates[0].Value()
+				if err != nil {
+					log.Errorf("%s: failed to convert intent value: %v", d.Name(), err)
+					continue
+				}
+				if !utils.EqualTypedValues(fiv, v) {
+					log.Debugf("%s: intent %s has a NOT_APPLIED deviation: configured: %v -> expected %v",
+						d.Name(), intentsUpdates[0].Owner(), v, fiv)
+					// TODO: generate a NOT_APPLIED deviation
+				}
+				// remaining intents
+				for _, intUpd := range intentsUpdates[1:] {
+					iv, err := intUpd.Value()
+					if err != nil {
+						log.Errorf("%s: failed to convert intent value: %v", d.Name(), err)
+						continue
+					}
+					if !utils.EqualTypedValues(fiv, iv) {
+						log.Debugf("%s: intent %s has an OVERRULED deviation: ruling intent has: %v -> overruled intent has: %v",
+							d.Name(), intUpd.Owner(), v, fiv)
+						// TODO: generate an OVERRULED deviation
+					}
+				}
+			}
+		}
+	}
 }

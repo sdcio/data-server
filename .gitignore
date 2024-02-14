@@ -24,3 +24,4 @@ schema-dir
 dist/
 .*.bak
 clab-*
+tests/robot/*-yang-models/

@@ -231,8 +231,8 @@ github.com/sdcio/schema-server v0.0.15 h1:NSBbLkytnMzDrUCqam+rBVvrJVt36p3lU7ddeg
 github.com/sdcio/schema-server v0.0.15/go.mod h1:Wp7DRUkX0DQZNARIgcJtCjOuLp5pwUCDVCAuvM5LA5g=
 github.com/sdcio/sdc-protos v0.0.22 h1:miAONxMvf0zlCYQz2exUS59y8VndR5HNtrVWCPbbTMg=
 github.com/sdcio/sdc-protos v0.0.22/go.mod h1:iVVPmQTRzoCV4abQ4QL5mJethvRVfdV8cHcVyDtSNs4=
-github.com/sdcio/yang-parser v0.0.4 h1:3jpoD5xU75kEK8QwpCZliCY4angS1dzaCMIA+dw6tP8=
-github.com/sdcio/yang-parser v0.0.4/go.mod h1:DV5E5DubAMzaymwO04cU4XmE5JZqHW+kGmtZu0eC4bA=
+github.com/sdcio/yang-parser v0.0.5 h1:YwpgQt2/n3BHFrEa0n0sQ4Q2hLCrTFY2VDKO+2BgoVg=
+github.com/sdcio/yang-parser v0.0.5/go.mod h1:cLYFD8ChaFyn+G0EYpOlGDrI/3J2Zgf7uzO/CKW6l1Q=
 github.com/sirikothe/gotextfsm v1.0.1-0.20200816110946-6aa2cfd355e4 h1:FHUL2HofYJuslFOQdy/JjjP36zxqIpd/dcoiwLMIs7k=
 github.com/sirikothe/gotextfsm v1.0.1-0.20200816110946-6aa2cfd355e4/go.mod h1:CJYqpTg9u5VPCoD0VEl9E68prCIiWQD8m457k098DdQ=
 github.com/sirupsen/logrus v1.4.2/go.mod h1:tLMulIdttU9McNUspp0xgXVQah82FyeX6MwdIuYE2rE=

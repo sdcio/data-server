@@ -1362,7 +1362,7 @@ func convertTypedValueToYANGType(schemaElem *sdcpb.SchemaElem, tv *sdcpb.TypedVa
 		case "string", "identityref":
 			return tv, nil
 		case "uint64", "uint32", "uint16", "uint8":
-			i, err := strconv.Atoi(tv.GetStringVal())
+			i, err := strconv.Atoi(utils.TypedValueToString(tv))
 			if err != nil {
 				return nil, err
 			}
@@ -1372,7 +1372,7 @@ func convertTypedValueToYANGType(schemaElem *sdcpb.SchemaElem, tv *sdcpb.TypedVa
 			}
 			return ctv, nil
 		case "int64", "int32", "int16", "int8":
-			i, err := strconv.Atoi(tv.GetStringVal())
+			i, err := strconv.Atoi(utils.TypedValueToString(tv))
 			if err != nil {
 				return nil, err
 			}
@@ -1386,13 +1386,13 @@ func convertTypedValueToYANGType(schemaElem *sdcpb.SchemaElem, tv *sdcpb.TypedVa
 		case "union":
 			return tv, nil
 		case "boolean":
-			v, err := strconv.ParseBool(tv.GetStringVal())
+			v, err := strconv.ParseBool(utils.TypedValueToString(tv))
 			if err != nil {
 				return nil, err
 			}
 			return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: v}}, nil
 		case "float":
-			v, err := strconv.ParseFloat(tv.GetStringVal(), 32)
+			v, err := strconv.ParseFloat(utils.TypedValueToString(tv), 32)
 			if err != nil {
 				return nil, err
 			}
