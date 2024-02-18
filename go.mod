@@ -18,8 +18,8 @@ require (
 	github.com/openconfig/gnmic/pkg/types v0.1.2
 	github.com/prometheus/client_golang v1.18.0
 	github.com/scrapli/scrapligo v1.2.0
-	github.com/sdcio/cache v0.0.32
-	github.com/sdcio/schema-server v0.0.15
+	github.com/sdcio/cache v0.0.33
+	github.com/sdcio/schema-server v0.0.16
 	github.com/sdcio/sdc-protos v0.0.22
 	github.com/sdcio/yang-parser v0.0.5
 	github.com/sirupsen/logrus v1.9.3
