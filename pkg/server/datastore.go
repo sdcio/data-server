@@ -24,6 +24,7 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
 	"github.com/sdcio/data-server/pkg/config"
@@ -298,6 +299,28 @@ func (s *Server) Discard(ctx context.Context, req *sdcpb.DiscardRequest) (*sdcpb
 		return nil, status.Errorf(codes.Internal, "%v", err)
 	}
 	return &sdcpb.DiscardResponse{}, nil
+}
+
+func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.DataServer_WatchDeviationsServer) error {
+	log.Debugf("Received WatchDeviationRequest: %v", req)
+	ctx := stream.Context()
+	peerInfo, ok := peer.FromContext(ctx)
+	if !ok {
+		return status.Errorf(codes.InvalidArgument, "missing peer info")
+	}
+	if req.GetName() == nil {
+		return status.Errorf(codes.InvalidArgument, "missing datastore name")
+	}
+	s.md.RLock()
+	ds, ok := s.datastores[req.GetName()[0]]
+	s.md.RUnlock()
+	if !ok {
+		return status.Errorf(codes.InvalidArgument, "unknown datastore name: %s", req.GetName()[0])
+	}
+	_ = ds.WatchDeviations(req, stream)
+	<-stream.Context().Done()
+	ds.StopDeviationsWatch(peerInfo.Addr.String())
+	return nil
 }
 
 //
