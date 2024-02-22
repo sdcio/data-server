@@ -85,12 +85,14 @@ type Datastore struct {
 // func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Datastore {
 func New(ctx context.Context, c *config.DatastoreConfig, scc schema.Client, cc cache.Client, opts ...grpc.DialOption) *Datastore {
 	ds := &Datastore{
-		config:           c,
-		schemaClient:     scc,
-		cacheClient:      cc,
-		intentMutex:      new(sync.Mutex),
-		m:                new(sync.RWMutex),
-		deviationClients: make(map[string]sdcpb.DataServer_WatchDeviationsServer),
+		config:                   c,
+		schemaClient:             scc,
+		cacheClient:              cc,
+		intentMutex:              new(sync.Mutex),
+		m:                        new(sync.RWMutex),
+		deviationClients:         make(map[string]sdcpb.DataServer_WatchDeviationsServer),
+		md:                       new(sync.RWMutex),
+		currentIntentsDeviations: make(map[string][]*sdcpb.WatchDeviationResponse),
 	}
 	if c.Sync != nil {
 		ds.synCh = make(chan *target.SyncUpdate, c.Sync.Buffer)
@@ -1102,6 +1104,9 @@ func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.
 				}
 			}
 			xp := utils.ToXPath(sp, false)
+			if _, ok := newDeviations[xp]; !ok {
+				newDeviations[xp] = make([]*sdcpb.WatchDeviationResponse, 0, 1)
+			}
 			newDeviations[xp] = append(newDeviations[xp], rsp)
 		}
 		// remaining intents
@@ -1148,6 +1153,9 @@ func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.
 					}
 				}
 				xp := utils.ToXPath(sp, false)
+				if _, ok := newDeviations[xp]; !ok {
+					newDeviations[xp] = make([]*sdcpb.WatchDeviationResponse, 0, 1)
+				}
 				newDeviations[xp] = append(newDeviations[xp], rsp)
 			}
 		}

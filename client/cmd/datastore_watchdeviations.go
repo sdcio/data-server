@@ -41,6 +41,7 @@ var datastoreWatchDeviationCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		count := 0
 		for {
 			rsp, err := stream.Recv()
 			if err != nil {
@@ -48,8 +49,23 @@ var datastoreWatchDeviationCmd = &cobra.Command{
 			}
 			switch format {
 			case "":
-				fmt.Printf("%s: %s: %s: %s: %s : %s -> %s\n", rsp.GetName(), rsp.GetIntent(), rsp.GetEvent(), rsp.GetReason(), utils.ToXPath(rsp.GetPath(), false), rsp.GetExpectedValue(), rsp.GetCurrentValue())
-				rsp.GetName()
+				switch rsp.Event {
+				case sdcpb.DeviationEvent_START:
+					fmt.Printf("%s: %s: %s\n",
+						rsp.GetName(), rsp.GetIntent(), rsp.GetEvent())
+				case sdcpb.DeviationEvent_END:
+					fmt.Printf("%s: %s: %s\n",
+						rsp.GetName(), rsp.GetIntent(), rsp.GetEvent())
+
+					fmt.Printf("Received %d deviations\n", count)
+					count = 0
+				default:
+					count++
+					fmt.Printf("%s: %s: %s: %s: %s : %s -> %s\n",
+						rsp.GetName(), rsp.GetIntent(), rsp.GetEvent(),
+						rsp.GetReason(), utils.ToXPath(rsp.GetPath(), false),
+						rsp.GetExpectedValue(), rsp.GetCurrentValue())
+				}
 			case "json":
 				b, err := json.MarshalIndent(rsp, "", "  ")
 				if err != nil {
@@ -58,8 +74,6 @@ var datastoreWatchDeviationCmd = &cobra.Command{
 				fmt.Println(string(b))
 			}
 		}
-
-		return nil
 	},
 }
 
