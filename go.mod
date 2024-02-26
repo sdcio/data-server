@@ -27,7 +27,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	go.uber.org/mock v0.4.0
 	golang.org/x/sync v0.6.0
-	google.golang.org/grpc v1.61.0
+	google.golang.org/grpc v1.62.0
 	google.golang.org/protobuf v1.32.0
 	gopkg.in/yaml.v2 v2.4.0
 	sigs.k8s.io/controller-runtime v0.17.0
