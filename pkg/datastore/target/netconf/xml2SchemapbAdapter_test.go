@@ -16,7 +16,6 @@ package netconf
 
 import (
 	"context"
-	"reflect"
 	"testing"
 
 	"github.com/beevik/etree"
@@ -69,7 +68,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 			},
 			getXML2sdcpbConfigAdapter: func(ctrl *gomock.Controller, t *testing.T) *XML2sdcpbConfigAdapter {
 
-				var expectedPath []*sdcpb.PathElem
+				var expectedPath string
 
 				schemaClientMock := mockschema.NewMockClient(ctrl)
 				counter := 0
@@ -88,7 +87,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 									Name: "interfaces",
 								},
 							}
-							expectedPath = []*sdcpb.PathElem{{Name: "interfaces"}}
+							expectedPath = "interfaces"
 						case 1:
 							selem.Schema = &sdcpb.SchemaElem_Container{
 								Container: &sdcpb.ContainerSchema{
@@ -100,7 +99,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 									},
 								},
 							}
-							expectedPath = []*sdcpb.PathElem{{Name: "interfaces"}, {Name: "interface"}}
+							expectedPath = "interfaces/interface"
 						case 2:
 							selem.Schema = &sdcpb.SchemaElem_Field{
 								Field: &sdcpb.LeafSchema{
@@ -110,12 +109,11 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 									},
 								},
 							}
-							expectedPath = []*sdcpb.PathElem{{Name: "interfaces"}, {Name: "interface", Key: map[string]string{"name": "eth0"}}, {Name: "name"}}
+							expectedPath = "interfaces/interface[name=eth0]/name"
 						}
-
 						// check for the right input
-						if !reflect.DeepEqual(in.GetPath().Elem, expectedPath) {
-							t.Errorf("getSchema expected path %s but got %s", utils.ToStrings(&sdcpb.Path{Elem: expectedPath}, false, false), utils.ToStrings(in.GetPath(), false, false))
+						if rp := utils.ToXPath(in.GetPath(), false); rp != expectedPath {
+							t.Errorf("getSchema expected path %s but got %s", expectedPath, rp)
 						}
 
 						counter++
@@ -169,7 +167,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 				t.Errorf("XML2sdcpbConfigAdapter.Transform() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
+			if !utils.NotificationsEqual(got, tt.want) {
 				t.Errorf("XML2sdcpbConfigAdapter.Transform() = %v, want %v", got, tt.want)
 			}
 		})

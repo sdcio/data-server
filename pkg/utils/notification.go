@@ -231,3 +231,32 @@ func ToGNMIPath(p *sdcpb.Path) *gnmi.Path {
 // 	}
 // 	return nil
 // }
+
+func NotificationsEqual(n1, n2 *sdcpb.Notification) bool {
+	if n1 == nil && n2 == nil {
+		return true
+	}
+	if n1 == nil || n2 == nil {
+		return false
+	}
+	if len(n1.GetDelete()) != len(n2.GetDelete()) {
+		return false
+	}
+	for i, dp := range n1.GetDelete() {
+		if !PathsEqual(dp, n2.GetDelete()[i]) {
+			return false
+		}
+	}
+	if len(n1.GetUpdate()) != len(n2.GetUpdate()) {
+		return false
+	}
+	for i, upd := range n1.GetUpdate() {
+		if !PathsEqual(upd.GetPath(), n2.GetUpdate()[i].GetPath()) {
+			return false
+		}
+		if !EqualTypedValues(upd.GetValue(), n2.GetUpdate()[i].GetValue()) {
+			return false
+		}
+	}
+	return true
+}

@@ -49,7 +49,7 @@ func (x *XML2sdcpbConfigAdapter) Transform(ctx context.Context, doc *etree.Docum
 }
 
 func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, result *sdcpb.Notification, tc *TransformationContext) error {
-	// add the actual path element to the array of path elements that make up the actual abs path
+	// add the current tag to the array of path elements that make up the actual abs path
 	pelems = append(pelems, &sdcpb.PathElem{Name: e.Tag})
 
 	// retrieve schema
@@ -94,20 +94,33 @@ func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etre
 
 // transformContainer transforms an etree.element of a configuration as an update into the provided *sdcpb.Notification.
 func (x *XML2sdcpbConfigAdapter) transformContainer(ctx context.Context, e *etree.Element, sr *sdcpb.GetSchemaResponse, pelems []*sdcpb.PathElem, result *sdcpb.Notification) error {
-	cs := sr.GetSchema().GetContainer()
-	for _, ls := range cs.Keys {
-		pelem := pelems[len(pelems)-1]
-		if pelem.Key == nil {
-			pelem.Key = map[string]string{}
+	// copy pelems
+	cPElem := make([]*sdcpb.PathElem, 0, len(pelems))
+	for _, pe := range pelems {
+		npe := &sdcpb.PathElem{
+			Name: pe.Name,
+			Key:  make(map[string]string),
 		}
-		pelem.Key[ls.Name] = e.FindElement("./" + ls.Name).Text()
+		for k, v := range pe.GetKey() {
+			npe.Key[k] = v
+		}
+		cPElem = append(cPElem, npe)
 	}
 
-	ntc := NewTransformationContext(pelems)
+	cs := sr.GetSchema().GetContainer()
+	// add keys to path elem
+	for _, ls := range cs.GetKeys() {
+		if cPElem[len(cPElem)-1].Key == nil {
+			cPElem[len(cPElem)-1].Key = map[string]string{}
+		}
+		cPElem[len(cPElem)-1].Key[ls.Name] = e.FindElement("./" + ls.Name).Text()
+	}
 
-	// continue with all child
+	ntc := NewTransformationContext(cPElem)
+
+	// continue with all children
 	for _, ce := range e.ChildElements() {
-		err := x.transformRecursive(ctx, ce, pelems, result, ntc)
+		err := x.transformRecursive(ctx, ce, cPElem, result, ntc)
 		if err != nil {
 			return err
 		}
