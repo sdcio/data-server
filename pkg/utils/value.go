@@ -85,12 +85,12 @@ func GetSchemaValue(updValue *sdcpb.TypedValue) (interface{}, error) {
 		value = updValue.GetBoolVal()
 	case *sdcpb.TypedValue_BytesVal:
 		value = updValue.GetBytesVal()
-	// case *sdcpb.TypedValue_DecimalVal:
-	// 	value = updValue.GetDecimalVal()
+	case *sdcpb.TypedValue_DecimalVal:
+		value = updValue.GetDecimalVal()
 	case *sdcpb.TypedValue_FloatVal:
 		value = updValue.GetFloatVal()
-	// case *sdcpb.TypedValue_DoubleVal:
-	// 	value = updValue.GetDoubleVal()
+	case *sdcpb.TypedValue_DoubleVal:
+		value = updValue.GetDoubleVal()
 	case *sdcpb.TypedValue_IntVal:
 		value = updValue.GetIntVal()
 	case *sdcpb.TypedValue_StringVal:
@@ -535,4 +535,35 @@ func TypedValueToString(tv *sdcpb.TypedValue) string {
 		return strconv.Itoa(int(tv.GetUintVal()))
 	}
 	return ""
+}
+
+func ParseDecimal64(v string) (*sdcpb.Decimal64, error) {
+	// Remove any leading or trailing spaces.
+	trimmed := strings.TrimSpace(v)
+
+	// Split the string into integer and fractional parts.
+	parts := strings.SplitN(trimmed, ".", 2)
+	intPart := parts[0]
+	var fracPart string
+	if len(parts) > 1 {
+		fracPart = parts[1]
+	}
+
+	// Combine integer and fractional parts into one number.
+	combined := intPart + fracPart
+
+	// Parse combined parts into a uint64.
+	digits, err := strconv.ParseInt(combined, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate precision as the length of the fractional part.
+	precision := uint32(len(fracPart))
+
+	// Return the Decimal64 representation.
+	return &sdcpb.Decimal64{
+		Digits:    digits,
+		Precision: precision,
+	}, nil
 }
