@@ -319,3 +319,42 @@ func StripPathElemPrefix(p string) (string, error) {
 	}
 	return prefix + ToXPath(sp, false), nil
 }
+
+func PathsEqual(p1, p2 *sdcpb.Path) bool {
+	if p1 == nil && p2 == nil {
+		return true
+	}
+	if p1 == nil || p2 == nil {
+		return false
+	}
+	if len(p1.GetElem()) != len(p2.GetElem()) {
+		return false
+	}
+	for i, pe := range p1.GetElem() {
+		if !peEqual(pe, p2.GetElem()[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func peEqual(pe1, pe2 *sdcpb.PathElem) bool {
+	if pe1 == nil && pe2 == nil {
+		return true
+	}
+	if pe1 == nil || pe2 == nil {
+		return false
+	}
+	if pe1.GetName() != pe2.GetName() {
+		return false
+	}
+	if len(pe1.GetKey()) != len(pe2.GetKey()) {
+		return false
+	}
+	for k, v := range pe1.GetKey() {
+		if pe2.GetKey()[k] != v {
+			return false
+		}
+	}
+	return true
+}

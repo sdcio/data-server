@@ -16,6 +16,7 @@ package netconf
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -94,13 +95,12 @@ func pathElem2EtreePath(pe *sdcpb.PathElem) (etree.Path, error) {
 
 // pathElem2XPath takes the given PathElem and generates the corresponding xpath expression
 func pathElem2XPath(pe *sdcpb.PathElem) (string, error) {
-	var keys []string
-
+	keys := make([]string, 0, len(pe.GetKey()))
 	// prepare the keys -> "k='v'"
 	for k, v := range pe.Key {
 		keys = append(keys, fmt.Sprintf("%s='%s'", k, v))
 	}
-
+	sort.Strings(keys)
 	keyString := ""
 	if len(keys) > 0 {
 		// join multiple key elements via comma
