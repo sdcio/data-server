@@ -781,11 +781,22 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			return fmt.Errorf("value %q does not match identityRef type %q, must be one of [%s]", v, lt.TypeName, strings.Join(lt.Values, ", "))
 		}
 		return nil
+	case "decimal64":
+		switch v := v.(type) {
+		case float64: // if it's a float64 then it's a valid decimal64
+		case string:
+			if c := strings.Count(v, "."); c == 0 || c > 1 {
+				return fmt.Errorf("value %q is not a valid Decimal64", v)
+			}
+		default:
+			return fmt.Errorf("unexpected type for a Decimal64 value %q: %T", v, v)
+		}
+		return nil
 	case "leafref":
 		// TODO: does this need extra validation?
 		return nil
 	default:
-		return fmt.Errorf("unhandled type %v", lt.GetType())
+		return fmt.Errorf("unhandled type %v for value %q", lt.GetType(), v)
 	}
 }
 
@@ -1391,6 +1402,16 @@ func convertTypedValueToYANGType(schemaElem *sdcpb.SchemaElem, tv *sdcpb.TypedVa
 				return nil, err
 			}
 			return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: v}}, nil
+		case "decimal64":
+			d64, err := utils.ParseDecimal64(utils.TypedValueToString(tv))
+			if err != nil {
+				return nil, err
+			}
+			return &sdcpb.TypedValue{
+				Value: &sdcpb.TypedValue_DecimalVal{
+					DecimalVal: d64,
+				},
+			}, nil
 		case "float":
 			v, err := strconv.ParseFloat(utils.TypedValueToString(tv), 32)
 			if err != nil {

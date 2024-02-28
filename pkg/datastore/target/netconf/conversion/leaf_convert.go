@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
@@ -71,6 +72,8 @@ func Convert(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error)
 		return ConvertIdentityRef(value, lst)
 	case "instance-identifier": //TODO: https://www.rfc-editor.org/rfc/rfc6020.html#section-9.13
 		return ConvertInstanceIdentifier(value, lst)
+	case "decimal64":
+		return ConvertDecimal64(value, lst)
 	}
 	log.Warnf("type %q not implemented", lst.Type)
 	return ConvertString(value, lst)
@@ -278,6 +281,19 @@ func ConvertString(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, 
 	}
 	return nil, fmt.Errorf("%q does not match patterns", value)
 
+}
+
+func ConvertDecimal64(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+	d64, err := utils.ParseDecimal64(value)
+	if err != nil {
+		return nil, err
+	}
+
+	return &sdcpb.TypedValue{
+		Value: &sdcpb.TypedValue_DecimalVal{
+			DecimalVal: d64,
+		},
+	}, nil
 }
 
 func ConvertUnion(value string, slts []*sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
