@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/beevik/etree"
-
 	"github.com/sdcio/data-server/mocks/mocknetconf"
 	"github.com/sdcio/data-server/mocks/mockschema"
 	"github.com/sdcio/data-server/pkg/config"
@@ -269,6 +268,114 @@ func Test_ncTarget_Get(t *testing.T) {
 				t.Errorf("ncTarget.Get() = %v, want %v", got, tt.want)
 			}
 			mockCtrl.Finish()
+		})
+	}
+}
+
+func Test_stripDataContainerRoot(t *testing.T) {
+	type args struct {
+		n *sdcpb.Notification
+	}
+	tests := []struct {
+		name string
+		args args
+		want *sdcpb.Notification
+	}{
+		{
+			name: "test0",
+			args: args{
+				n: &sdcpb.Notification{
+					Timestamp: 42,
+					Update: []*sdcpb.Update{{
+						Path:  &sdcpb.Path{},
+						Value: &sdcpb.TypedValue{},
+					}},
+				},
+			},
+			want: &sdcpb.Notification{
+				Timestamp: 42,
+				Update: []*sdcpb.Update{{
+					Path:  &sdcpb.Path{},
+					Value: &sdcpb.TypedValue{},
+				}},
+			},
+		},
+		{
+			name: "test1",
+			args: args{
+				n: &sdcpb.Notification{
+					Timestamp: 42,
+					Update: []*sdcpb.Update{{
+						Path: &sdcpb.Path{
+							Elem: []*sdcpb.PathElem{
+								{
+									Name: "data",
+								},
+								{
+									Name: "configure"},
+							},
+						},
+						Value: &sdcpb.TypedValue{},
+					}},
+				},
+			},
+			want: &sdcpb.Notification{
+				Timestamp: 42,
+				Update: []*sdcpb.Update{{
+					Path: &sdcpb.Path{
+						Elem: []*sdcpb.PathElem{
+							{
+								Name: "configure",
+							},
+						},
+					},
+					Value: &sdcpb.TypedValue{},
+				}},
+			},
+		},
+		{
+			name: "test2",
+			args: args{
+				n: &sdcpb.Notification{
+					Timestamp: 42,
+					Update: []*sdcpb.Update{{
+						Path: &sdcpb.Path{
+							Elem: []*sdcpb.PathElem{
+								{
+									Name: "not_data",
+								},
+								{
+									Name: "configure",
+								},
+							},
+						},
+						Value: &sdcpb.TypedValue{},
+					}},
+				},
+			},
+			want: &sdcpb.Notification{
+				Timestamp: 42,
+				Update: []*sdcpb.Update{{
+					Path: &sdcpb.Path{
+						Elem: []*sdcpb.PathElem{
+							{
+								Name: "not_data",
+							},
+							{
+								Name: "configure",
+							},
+						},
+					},
+					Value: &sdcpb.TypedValue{},
+				}},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := stripRootDataContainer(tt.args.n); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("stripDataContainerRoot() = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }

@@ -123,7 +123,7 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	// building the resulting sdcpb.GetDataResponse struct
 	result := &sdcpb.GetDataResponse{
 		Notification: []*sdcpb.Notification{
-			noti,
+			stripRootDataContainer(noti),
 		},
 	}
 	return result, nil
@@ -363,7 +363,7 @@ func (t *ncTarget) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest) 
 				return nil, err
 			}
 			err2 := t.driver.Discard()
-			if err != nil {
+			if err2 != nil {
 				// log failed discard
 				log.Errorf("failed with %v while discarding pending changes after error %v", err2, err)
 			}
@@ -385,4 +385,17 @@ func (t *ncTarget) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest) 
 	return &sdcpb.SetDataResponse{
 		Timestamp: time.Now().UnixNano(),
 	}, nil
+}
+
+func stripRootDataContainer(n *sdcpb.Notification) *sdcpb.Notification {
+	for i := range n.GetUpdate() {
+		numElem := len(n.Update[i].GetPath().GetElem())
+		if numElem == 0 {
+			continue
+		}
+		if n.Update[i].GetPath().GetElem()[0].GetName() == "data" {
+			n.Update[i].GetPath().Elem = n.Update[i].GetPath().Elem[1:]
+		}
+	}
+	return n
 }
