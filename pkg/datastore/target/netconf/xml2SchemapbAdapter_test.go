@@ -57,7 +57,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 		name                      string
 		getXML2sdcpbConfigAdapter func(ctrl *gomock.Controller, t *testing.T) *XML2sdcpbConfigAdapter
 		args                      args
-		want                      *sdcpb.Notification
+		want                      []*sdcpb.Notification
 		wantErr                   bool
 	}{
 		{
@@ -124,28 +124,30 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 				)
 				return NewXML2sdcpbConfigAdapter(schemaClientMock, TestSchema)
 			},
-			want: &sdcpb.Notification{
-				Update: []*sdcpb.Update{
-					{
-						Path: &sdcpb.Path{
-							Elem: []*sdcpb.PathElem{
-								{
-									Name: "interfaces",
-								},
-								{
-									Name: "interface",
-									Key: map[string]string{
-										"name": "eth0",
+			want: []*sdcpb.Notification{
+				{
+					Update: []*sdcpb.Update{
+						{
+							Path: &sdcpb.Path{
+								Elem: []*sdcpb.PathElem{
+									{
+										Name: "interfaces",
+									},
+									{
+										Name: "interface",
+										Key: map[string]string{
+											"name": "eth0",
+										},
+									},
+									{
+										Name: "name",
 									},
 								},
-								{
-									Name: "name",
-								},
 							},
-						},
-						Value: &sdcpb.TypedValue{
-							Value: &sdcpb.TypedValue_StringVal{
-								StringVal: "eth0",
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{
+									StringVal: "eth0",
+								},
 							},
 						},
 					},
@@ -159,16 +161,18 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
 
 			x := tt.getXML2sdcpbConfigAdapter(mockCtrl, t)
-			// tt.args.doc.Indent(2)
-			// s, _ := tt.args.doc.WriteToString()
-			// fmt.Println(s)
 			got, err := x.Transform(tt.args.ctx, tt.args.doc)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("XML2sdcpbConfigAdapter.Transform() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !utils.NotificationsEqual(got, tt.want) {
+			if len(got) != len(tt.want) {
 				t.Errorf("XML2sdcpbConfigAdapter.Transform() = %v, want %v", got, tt.want)
+			}
+			for i := range got {
+				if !utils.NotificationsEqual(got[i], tt.want[i]) {
+					t.Errorf("XML2sdcpbConfigAdapter.Transform() = %v, want %v", got[i], tt.want[i])
+				}
 			}
 		})
 	}

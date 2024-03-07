@@ -41,11 +41,18 @@ func NewXML2sdcpbConfigAdapter(ssc schema.Client, schema *sdcpb.Schema) *XML2sdc
 }
 
 // Transform takes an etree.Document and transforms the content into a sdcpb based Notification
-func (x *XML2sdcpbConfigAdapter) Transform(ctx context.Context, doc *etree.Document) (*sdcpb.Notification, error) {
-	result := &sdcpb.Notification{}
-	err := x.transformRecursive(ctx, doc.Root(), []*sdcpb.PathElem{}, result, nil)
+func (x *XML2sdcpbConfigAdapter) Transform(ctx context.Context, doc *etree.Document) ([]*sdcpb.Notification, error) {
+	result := make([]*sdcpb.Notification, 0, len(doc.ChildElements()))
+	for _, e := range doc.ChildElements() {
+		r := &sdcpb.Notification{}
+		err := x.transformRecursive(ctx, e, []*sdcpb.PathElem{}, r, nil)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, r)
+	}
 
-	return result, err
+	return result, nil
 }
 
 func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, result *sdcpb.Notification, tc *TransformationContext) error {
