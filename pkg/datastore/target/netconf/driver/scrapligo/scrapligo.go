@@ -144,7 +144,7 @@ func (snt *ScrapligoNetconfTarget) GetConfig(source string, filter string) (*typ
 
 	// the actual config is contained under /rpc-reply/data/ in the result document.
 	// so we are extracting that portion
-	newRootXpath := "/rpc-reply/data/*"
+	newRootXpath := "/rpc-reply/data"
 	r := x.FindElement(newRootXpath)
 	if r == nil {
 		return nil, fmt.Errorf("unable to find %q in %s", newRootXpath, resp.Result)
@@ -194,7 +194,7 @@ func (snt *ScrapligoNetconfTarget) Get(filter string) (*types.NetconfResponse, e
 		return nil, err
 	}
 
-	newRootXpath := "/rpc-reply/data/*"
+	newRootXpath := "/rpc-reply/data"
 	r := x.FindElement(newRootXpath)
 	if r == nil {
 		return nil, fmt.Errorf("unable to find %q in %s", newRootXpath, resp.Result)

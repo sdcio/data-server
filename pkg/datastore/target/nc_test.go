@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/beevik/etree"
-
 	"github.com/sdcio/data-server/mocks/mocknetconf"
 	"github.com/sdcio/data-server/mocks/mockschema"
 	"github.com/sdcio/data-server/pkg/config"

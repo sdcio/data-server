@@ -122,9 +122,7 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 
 	// building the resulting sdcpb.GetDataResponse struct
 	result := &sdcpb.GetDataResponse{
-		Notification: []*sdcpb.Notification{
-			noti,
-		},
+		Notification: noti,
 	}
 	return result, nil
 }
@@ -363,7 +361,7 @@ func (t *ncTarget) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest) 
 				return nil, err
 			}
 			err2 := t.driver.Discard()
-			if err != nil {
+			if err2 != nil {
 				// log failed discard
 				log.Errorf("failed with %v while discarding pending changes after error %v", err2, err)
 			}
