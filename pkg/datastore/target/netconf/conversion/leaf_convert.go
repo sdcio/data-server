@@ -15,6 +15,7 @@
 package conversion
 
 import (
+	"encoding/base64"
 	"fmt"
 	"math"
 	"regexp"
@@ -89,10 +90,37 @@ func ConvertIdentityRef(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedVa
 	return ConvertString(value, slt)
 }
 
-func ConvertBinary(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	// Binary is basically a base64 encoded string that might carry a length restriction
-	// so we should be fine with delegating to string
-	return ConvertString(value, slt)
+func ConvertBinary(value string, blt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+	data, err := base64.StdEncoding.DecodeString(value)
+	if err != nil {
+		log.Fatalf("error decoding base64 string: %v", err)
+	}
+
+	if len(blt.Length) != 0 {
+		r := NewUrnges(blt.Length, 0, math.MaxUint64)
+
+		inLength := false
+		for _, rng := range r.rnges {
+			if rng.isInRange(uint64(len(data))) {
+				inLength = true
+				break
+			}
+		}
+		if !inLength {
+			// prepare log message, collecting string rep of the ranges
+			str_ranges := []string{}
+			for _, x := range r.rnges {
+				str_ranges = append(str_ranges, x.String())
+			}
+			return nil, fmt.Errorf("length of the value (%d) is not within the schema defined ranges [ %s ]", len(value), strings.Join(str_ranges, ", "))
+		}
+	}
+
+	return &sdcpb.TypedValue{
+		Value: &sdcpb.TypedValue_BytesVal{
+			BytesVal: data,
+		},
+	}, nil
 }
 
 func ConvertLeafRef(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {

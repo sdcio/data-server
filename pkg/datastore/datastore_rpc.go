@@ -16,6 +16,7 @@ package datastore
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"sort"
@@ -888,8 +889,15 @@ func convertStringToTv(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*
 	switch schemaType.GetType() {
 	case "string":
 		return &sdcpb.TypedValue{
-
 			Value: &sdcpb.TypedValue_StringVal{StringVal: v},
+		}, nil
+	case "binary":
+		data, err := base64.StdEncoding.DecodeString(v)
+		if err != nil {
+			return nil, err
+		}
+		return &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_BytesVal{BytesVal: data},
 		}, nil
 	case "uint64", "uint32", "uint16", "uint8":
 		i, err := strconv.Atoi(v)
