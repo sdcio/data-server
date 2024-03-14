@@ -619,6 +619,9 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 	case "string":
 		// TODO: validate length and range
 		return nil
+	case "binary":
+		// TODO: validate length
+		return nil
 	case "int8":
 		switch v := v.(type) {
 		case string:
@@ -1370,7 +1373,7 @@ func convertTypedValueToYANGType(schemaElem *sdcpb.SchemaElem, tv *sdcpb.TypedVa
 		switch schemaElem.GetField().GetType().GetType() {
 		default:
 			return tv, nil
-		case "string", "identityref":
+		case "string", "identityref", "binary":
 			return tv, nil
 		case "uint64", "uint32", "uint16", "uint8":
 			i, err := strconv.Atoi(utils.TypedValueToString(tv))

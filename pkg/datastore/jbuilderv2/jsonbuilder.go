@@ -108,7 +108,6 @@ func (j *jsonBuilder) AddUpdate(ctx context.Context, obj map[string]any, p *sdcp
 		return nil
 	}
 	value := getValue(tv)
-
 	switch {
 	case psc.GetSchema().GetContainer() != nil:
 		if !psc.GetSchema().GetContainer().GetIsPresence() {
@@ -435,6 +434,7 @@ func getValue(tv *sdcpb.TypedValue) any {
 		return tv.GetProtoBytes()
 	case *sdcpb.TypedValue_AnyVal:
 		return tv.GetAnyVal()
+	default:
+		return tv
 	}
-	return nil
 }
