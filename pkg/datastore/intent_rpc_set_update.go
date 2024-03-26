@@ -35,12 +35,15 @@ type intentContext struct {
 
 	newUpdates       []*sdcpb.Update
 	newCompletePaths [][]string
-	//
-	currentUpdates        []*sdcpb.Update
-	currentPaths          []*sdcpb.Path
+	// is what exists in the intended store for that current intent / current intent config
+	currentUpdates []*sdcpb.Update
+	// paths from currentUpdates without keys being leafes
+	currentPaths []*sdcpb.Path
+	// just key paths from currentUpdates (leafes)
 	currentKeyAsLeafPaths []*sdcpb.Path
 	//
 	// removedPaths    []*sdcpb.Path
+	//
 	removedPathsMap map[string]struct{}
 }
 
@@ -75,7 +78,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		Update: make([]*sdcpb.Update, 0),
 		Delete: make([]*sdcpb.Path, 0),
 	}
-	//
+
 	allCurrentCacheEntries := d.readNewUpdatesHighestPriority(ctx, ic.newCompletePaths)
 	// PH1: go through all updates from the intent to figure out
 	// if they need to be applied based on the intent priority.
@@ -413,7 +416,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 
 // buildRemovedPaths populates the removedPaths field without the keys as leaves.
 // it adds explicit deletes for each leaf missing in an update.
-func (ic *intentContext) buildRemovedPaths(ctx context.Context) error {
+func (ic *intentContext) buildRemovedPaths(_ context.Context) error {
 	var err error
 	// this tree is used to figure out the
 	// paths that don't exist anymore in an intent update.
