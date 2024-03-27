@@ -16,6 +16,7 @@ package datastore
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -26,6 +27,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/datastore/ctree"
+	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/utils"
 )
 
@@ -80,6 +82,50 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	}
 
 	allCurrentCacheEntries := d.readNewUpdatesHighestPriority(ctx, ic.newCompletePaths)
+
+	r := tree.NewRootEntry()
+	for _, updateList := range allCurrentCacheEntries {
+		for _, u := range updateList {
+			r.AddCacheUpdateRecursive(u)
+		}
+	}
+	fmt.Println("tree content:")
+	fmt.Println(r.String())
+
+	// list of updates to be added to the cache later on.
+	// NOT TO MYSELF: Actually I'm asking myself if we can not add it to the intended store a priori
+	// and build the tree then with the highes values we retrieve from the cache.
+	updates := []*cache.Update{}
+
+	for _, upd := range ic.newUpdates {
+
+		// make sure typedValue is carrying the correct type
+		err := d.validateUpdate(ctx, upd)
+		if err != nil {
+			return err
+		}
+
+		val, err := proto.Marshal(upd.GetValue())
+		if err != nil {
+			return err
+		}
+		pathSlice, err := utils.CompletePath(nil, upd.GetPath())
+		if err != nil {
+			return err
+		}
+		cUpd := cache.NewUpdate(pathSlice, val, req.GetPriority(), req.GetIntent(), int64(5))
+		updates = append(updates, cUpd)
+
+		err = r.AddCacheUpdateRecursive(cUpd)
+		if err != nil {
+			return err
+		}
+	}
+
+	fmt.Println("################")
+	fmt.Println("tree content2 :")
+	fmt.Println(r.String())
+
 	// PH1: go through all updates from the intent to figure out
 	// if they need to be applied based on the intent priority.
 	logger.Debugf("reading intent paths to be updated from intended store; looking for the highest priority values")
