@@ -73,6 +73,16 @@ type Update struct {
 	ts       int64
 }
 
+func NewUpdate(path []string, value []byte, priority int32, owner string, ts int64) *Update {
+	return &Update{
+		path:     path,
+		value:    value,
+		priority: priority,
+		owner:    owner,
+		ts:       ts,
+	}
+}
+
 func (u *Update) GetPath() []string {
 	return u.path
 }
@@ -109,7 +119,7 @@ type Change struct {
 
 type Opts struct {
 	Store         cachepb.Store
-	Owner         string
+	Owner         string // represents the intent name
 	Priority      int32
 	PriorityCount uint64
 	KeysOnly      bool
