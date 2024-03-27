@@ -1332,6 +1332,12 @@ func (d *Datastore) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest,
 		return nil, err
 	}
 
+	// validate Choice Cases
+	log.Infof("%s: validating choice cases candidate %s", d.Name(), req.GetDatastore().GetName())
+	if err = d.validateChoiceCases(ctx, updates, replaces, req.Datastore.Name); err != nil {
+		return nil, err
+	}
+
 	// deletes start
 	for _, del := range req.GetDelete() {
 		rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
