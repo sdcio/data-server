@@ -1,0 +1,6 @@
+[
+    {
+        "path": "interface[name=system0]/admin-state",
+        "value": "enable"
+    }
+]
