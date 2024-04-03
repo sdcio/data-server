@@ -20,7 +20,7 @@ SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
 docker pull ghcr.io/nokia/srlinux:$1
 
-id=$(docker create ghcr.io/nokia/srlinux)
+id=$(docker create ghcr.io/nokia/srlinux:$1)
 mkdir -p yang/srl-$1
 
 docker cp $id:/opt/srlinux/models/. $SCRIPTPATH/yang/srl-$1
