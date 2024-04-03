@@ -4,11 +4,11 @@ Resource          ../../keywords/client.robot
 Library           OperatingSystem
 Library           String
 Library           Process
-Suite Setup       Setup Collocated    True    ${DATA-SERVER-BIN}    ${DATA-SERVER-CONFIG}    ${data-server-process-alias}    ${data-server-stderr}
-Suite Teardown    Teardown
+# Suite Setup       Setup Collocated    True    ${DATA-SERVER-BIN}    ${DATA-SERVER-CONFIG}    ${data-server-process-alias}    ${data-server-stderr}
+# Suite Teardown    Teardown
 
 *** Variables ***
-${DATA-SERVER-BIN}    ${CURDIR}/../../../data-server
+${DATA-SERVER-BIN}    ${CURDIR}/../../../../bin/data-server
 ${SDCTL}            sdctl
 
 ${DATA-SERVER-CONFIG}    ${CURDIR}/data-server.yaml
