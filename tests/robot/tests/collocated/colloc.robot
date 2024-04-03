@@ -45,13 +45,13 @@ Create and delete a Datastore
    server.Setupcollocated    True     ${data-server-bin}     ${data-server-config}    ${data-server-process-alias}    ${data-server-stderr}
 
    # create first datastore
-   ${rc}  ${result} =  client.CreateDataStore    ${datastore1}     ${target-file1}     ${target-sync-file}     ${schema-name}     ${schema-vendor}     ${schema-version}
+   ${rc}  ${result} =  client.CreateDataStoreTarget    ${datastore1}     ${target-file1}     ${target-sync-file}     ${schema-name}     ${schema-vendor}     ${schema-version}
    Log     ${result}
    Should Be Equal As Integers    ${rc}    0
    Should Contain    ${result}    ${datastore1}
    
    # create second datastore
-   ${rc}  ${result} =  client.CreateDataStore    ${datastore2}     ${target-file2}     ${target-sync-file}     ${schema-name}     ${schema-vendor}     ${schema-version}
+   ${rc}  ${result} =  client.CreateDataStoreTarget    ${datastore2}     ${target-file2}     ${target-sync-file}     ${schema-name}     ${schema-vendor}     ${schema-version}
    Log     ${result}
    Should Be Equal As Integers    ${rc}    0
    Sleep   30s
@@ -84,13 +84,13 @@ Create and delete a Datastore and candidate
    server.Setupcollocated    True     ${data-server-bin}     ${data-server-config}    ${data-server-process-alias}    ${data-server-stderr}  
    
    # create first datastore
-   ${rc}  ${result} =  client.CreateDataStore    ${datastore1}     ${target-file1}     ${target-sync-file}     ${schema-name}     ${schema-vendor}     ${schema-version}
+   ${rc}  ${result} =  client.CreateDataStoreTarget    ${datastore1}     ${target-file1}     ${target-sync-file}     ${schema-name}     ${schema-vendor}     ${schema-version}
    Log     ${result}
    Should Be Equal As Integers    ${rc}    0
    Should Contain    ${result}    ${datastore1}
 
    # create second datastore
-   ${rc}  ${result} =  client.CreateDataStore    ${datastore2}     ${target-file2}     ${target-sync-file}     ${schema-name}     ${schema-vendor}     ${schema-version}
+   ${rc}  ${result} =  client.CreateDataStoreTarget    ${datastore2}     ${target-file2}     ${target-sync-file}     ${schema-name}     ${schema-vendor}     ${schema-version}
    Log     ${result}
    Should Be Equal As Integers    ${rc}    0
    
@@ -139,7 +139,7 @@ Configure Router gNMI - Set / Delete Leaf
    Log     ${result}
    Should Be Equal As Integers    ${rc}    0
 
-   ${rc}  ${result} =  client.CreateDataStore    ${datastore1}     ${target-file1}     ${target-sync-file}     ${schema-name}     ${schema-vendor}     ${schema-version}
+   ${rc}  ${result} =  client.CreateDataStoreTarget    ${datastore1}     ${target-file1}     ${target-sync-file}     ${schema-name}     ${schema-vendor}     ${schema-version}
    Log     ${result}
    Should Be Equal As Integers    ${rc}    0
    Sleep   30s

@@ -24,9 +24,9 @@ DestroyLab
     Log         ${result}   
     RETURN      ${rc}   ${result}
 
-Setupcollocated
+Setup Collocated
     [Documentation]    Starts a data-server with an embeded schema and cache stores.
-    [Arguments]    ${doBuild}    ${data-server-bin}    ${data-server-config}    ${data-server-process-alias}    ${data-server-stderr}
+    [Arguments]    ${doBuild}    ${data-server-bin}    ${DATA-SERVER-CONFIG}    ${data-server-process-alias}    ${data-server-stderr}
     IF    ${doBuild} == $True
         ${result} =     Run Process    make     build
         Log Many	stdout: ${result.stdout}	stderr: ${result.stderr}
@@ -77,3 +77,8 @@ CheckServerState
     Process Should Be Running    handle=${schema-server-process-alias}    error_message="schema-server failed"
     Process Should Be Running    handle=${data-server-process-alias}    error_message="data-server failed"
     Process Should Be Running    handle=${cache-server-process-alias}    error_message="cache-server failed"
+
+CheckServerState Colocated
+    [Documentation]    Check that data-server are still running
+    [Arguments]    ${data-server-process-alias}
+    Process Should Be Running    handle=${data-server-process-alias}    error_message="data-server failed"

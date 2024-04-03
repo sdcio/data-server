@@ -1,0 +1,6 @@
+[
+    {
+        "path": "interface[name=lag1]/lag/lag-type",
+        "value":"lacp"
+    }
+]
