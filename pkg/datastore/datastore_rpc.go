@@ -575,7 +575,6 @@ func (d *Datastore) resolveLeafref(ctx context.Context, candidate string, leafRe
 			leafRefPath.Elem[len(leafRefPath.Elem)-2].Key[leafRefPath.Elem[len(leafRefPath.Elem)-1].Name] = value
 			// remove the last elem, we now have the key value stored in the one before last
 			leafRefPath.Elem = leafRefPath.Elem[:len(leafRefPath.Elem)-1]
-			return nil
 		}
 	}
 
