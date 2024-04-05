@@ -18,18 +18,10 @@ topology:
   kinds:
     srl:
       image: ghcr.io/nokia/srlinux:23.10.1-218
-    # vr-sros:
-    #   image: registry.kmrd.dev/kmrd/vr-sros:23.10.R1
-    #   license: license23.lic
   nodes:
-    # sr1:
-    #   kind: vr-sros
-    # sr2:
-    #   kind: vr-sros
     srl1:
       kind: srl
     srl2:
       kind: srl
   links:
     - endpoints: ["srl1:e1-1", "srl2:e1-1"]
-    # - endpoints: ["sr1:eth1", "sr2:eth1"]

@@ -31,7 +31,8 @@ GetDataStore
     ...    -a     ${DATA-SERVER-IP}:${DATA-SERVER-PORT} 
     ...    datastore 
     ...    get 
-    ...    --ds ${datastore}
+    ...    --ds 
+    ...    ${datastore}
     Log    ${result.rc}
     Log    ${result.stdout}
     Log    ${result.stderr}
@@ -80,16 +81,22 @@ DeleteDatastore
     RETURN  ${result}
 
 CreateCandidate
-    [Documentation]    Create a new named Candidate in the given Datastore
+    [Documentation]    Create a new named Candidate in the given Datastore.
     [Arguments]    ${datastore}    ${candidate}    ${owner}    ${priority}
     ${result} =   Run Process    
     ...    ${SDCTL}
-    ...    -a     ${DATA-SERVER-IP}:${DATA-SERVER-PORT}
-    ...    datastore    create 
-    ...    --ds     ${datastore} 
-    ...    --candidate    ${candidate}
-    ...    --owner    ${owner}
-    ...    --priority    ${priority}
+    ...    -a     
+    ...    ${DATA-SERVER-IP}:${DATA-SERVER-PORT}
+    ...    datastore    
+    ...    create 
+    ...    --ds     
+    ...    ${datastore} 
+    ...    --candidate    
+    ...    ${candidate}
+    ...    --owner    
+    ...    ${owner}
+    ...    --priority    
+    ...    ${priority}
 
     Log    ${result.rc}
     Log    ${result.stdout}
@@ -97,10 +104,10 @@ CreateCandidate
     RETURN  ${result}
 
 GetCandidate
-    [Documentation]    Create a new named Candidate in the given Datastore
+    [Documentation]    Retrieve the given candidate from the referenced Datastore
     [Arguments]    ${datastore}    ${candidate}
     ${result} =   Run Process
-    ...    ${SDCTL} 
+    ...    ${SDCTL}
     ...    -a     ${DATA-SERVER-IP}:${DATA-SERVER-PORT} 
     ...    datastore    get 
     ...    --ds    ${datastore} 
@@ -161,7 +168,7 @@ Commit
 
 Get
     [Documentation]    Get a path from the datastore
-    [Arguments]    ${datastore}    ${ds-get-flags}
+    [Arguments]    ${datastore}    @{ds-get-flags}
     ${result} =   Run Process
     ...    ${SDCTL} 
     ...    -a    ${DATA-SERVER-IP}:${DATA-SERVER-PORT} 
@@ -184,6 +191,8 @@ GetFromCandidate
     ...    --ds     ${datastore} 
     ...    --candidate    ${candidate} 
     ...    --path    ${path}
+    ...    --type     CONFIG
+    ...    timeout=5sec
 
     Log    ${result.rc}
     Log    ${result.stdout}
@@ -192,14 +201,14 @@ GetFromCandidate
 
 Set
     [Documentation]    Applies to the candidate of the given datastore the provided update
-    [Arguments]    ${datastore}    ${candidate}    ${set-flags}
+    [Arguments]    ${datastore}    ${candidate}    @{set-flags}
     ${result} =   Run Process
     ...    ${SDCTL} 
     ...    -a     ${DATA-SERVER-IP}:${DATA-SERVER-PORT} 
     ...    data    set 
     ...    --ds    ${datastore} 
     ...    --candidate    ${candidate} 
-    ...    ${set-flags}
+    ...    @{set-flags}
 
     Log    ${result.rc}
     Log    ${result.stdout}
@@ -242,6 +251,33 @@ GetSchema
     Log    ${result.stdout}
     Log    ${result.stderr}
     RETURN  ${result}
+
+ListSchemas
+    ${result} =   Run Process
+    ...    ${SDCTL}
+    ...    -a
+    ...    ${SCHEMA-SERVER-IP}:${SCHEMA-SERVER-PORT} 
+    ...    schema
+    ...    list
+
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
+
+Check Datastore Connected
+    [Documentation]    Checks weather the provided Datastore is in the connected state.
+    [Arguments]     ${datastore}
+
+   ${result} =  client.GetDataStore       ${datastore}
+   Should Be Equal As Integers    ${result.rc}    0
+   Should Contain  ${result.stdout}   name: "${datastore}"
+   Should Contain  ${result.stdout}   status: CONNECTED
+   RETURN     ${result}
+
+Wait Until Datastore connected
+    [Arguments]     ${datastore}    ${retry}    ${interval}
+    Wait Until Keyword Succeeds    ${retry}    ${interval}    Check Datastore Connected    ${datastore}
 
 # Helper
 ExtractResponse

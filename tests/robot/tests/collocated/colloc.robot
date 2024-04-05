@@ -1,386 +1,442 @@
 *** Settings ***
-Resource          ../../keywords/server.robot
-Resource          ../../keywords/client.robot
-Resource          ../../keywords/gnmic.robot
-Library           OperatingSystem
-Library           String
-Library           Process
-Suite Setup       server.DeployLab          ${topology-file}
-Suite Teardown    server.DestroyLab          ${topology-file}
+Resource            ../../keywords/server.robot
+Resource            ../../keywords/client.robot
+Resource            ../../keywords/gnmic.robot
+Library             OperatingSystem
+Library             String
+Library             Process
+
+Suite Setup         DeployLab    ${topology-file}
+Suite Teardown      DestroyLab    ${topology-file}
+Test Setup          Setupcollocated    True    ${data-server-bin}    ${data-server-config}    ${data-server-process-alias}    ${data-server-stderr}
+Test Teardown       Teardown
+
 
 *** Variables ***
-${data-server-bin}       ../../bin/data-server
-${data-server-config}    ./tests/collocated/collocated_test.yaml
-${client-bin}            ../../bin/datactl
-${data-server-ip}        127.0.0.1
-${data-server-port}      56000
-${topology-file}         ./tests/collocated/lab/collocated.clab.yaml
+${DATA-SERVER-BIN}              ${CURDIR}/../../../../bin/data-server
+${SDCTL}                        sdctl
+${data-server-config}           ${CURDIR}/collocated_test.yaml
+${topology-file}                ${CURDIR}/lab/collocated.clab.yaml
+
+${DATA-SERVER-IP}    127.0.0.1
+${DATA-SERVER-PORT}    56000
+
+${SCHEMA-SERVER-IP}    127.0.0.1
+${SCHEMA-SERVER-PORT}    56000
 
 # TARGET
-${schema-name}           srl
-${schema-version}        23.10.1
-${schema-vendor}         Nokia
-${candidate-name}        default
+${schema-name}                  srl
+${schema-version}               23.10.1
+${schema-vendor}                Nokia
+${candidate-name}               default
 
-${datastore1}            srl1
-${datastore2}            srl2
-${target-file1}          ./tests/collocated/robot_srl1.json
-${target-file2}          ./tests/collocated/robot_srl2.json
-${target-sync-file}      ./tests/collocated/sync.json
+${owner}                        test
+${priority}                     100
 
-${router}                ""
-${gnmic_flags}           ""
+${datastore1}                   srl1
+${devicename1}                  clab-collocated-srl1
+${target-file1}                 ${CURDIR}/robot_srl1.json
 
+${datastore2}                   srl2
+${devicename2}                  clab-collocated-srl2
+${target-file2}                 ${CURDIR}/robot_srl2.json
+
+${target-sync-file}             ${CURDIR}/sync.json
+
+${router}                       ""
+${gnmic_flags}                  ""
 
 # internal vars
 ${data-server-process-alias}    dsa
-${data-server-stderr}          /tmp/ds-out
+${data-server-stderr}           /tmp/ds-out
 
 
 *** Test Cases ***
-
 Create and delete a Datastore
-   [Tags]    robot:continue-on-failure
+    [Tags]    robot:continue-on-failure
 
-   server.Setupcollocated    True     ${data-server-bin}     ${data-server-config}    ${data-server-process-alias}    ${data-server-stderr}
+    # create first datastore
+    ${result} =    CreateDataStoreTarget
+    ...    ${datastore1}
+    ...    ${target-file1}
+    ...    ${target-sync-file}
+    ...    ${schema-name}
+    ...    ${schema-vendor}
+    ...    ${schema-version}
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    ${datastore1}
 
-   # create first datastore
-   ${rc}  ${result} =  client.CreateDataStoreTarget    ${datastore1}     ${target-file1}     ${target-sync-file}     ${schema-name}     ${schema-vendor}     ${schema-version}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    ${datastore1}
-   
-   # create second datastore
-   ${rc}  ${result} =  client.CreateDataStoreTarget    ${datastore2}     ${target-file2}     ${target-sync-file}     ${schema-name}     ${schema-vendor}     ${schema-version}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Sleep   30s
-   
-   ${rc}  ${result} =  client.GetDataStore       ${datastore1}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain  ${result}   name: "${datastore1}"
-   Should Contain  ${result}   status: CONNECTED
+    # create second datastore
+    ${result} =    CreateDataStoreTarget
+    ...    ${datastore2}
+    ...    ${target-file2}
+    ...    ${target-sync-file}
+    ...    ${schema-name}
+    ...    ${schema-vendor}
+    ...    ${schema-version}
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    ${datastore2}
 
-   ${rc}  ${result} =  client.DeleteDatastore    ${datastore1}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
+    Wait Until Datastore connected    ${datastore1}    30s    1s
 
-   ${rc}  ${result} =  client.GetDataStore       ${datastore1}
-   Log     ${result}
-   Should Not Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    unknown datastore ${datastore1}
+    ${result} =    DeleteDatastore    ${datastore1}
+    Should Be Equal As Integers    ${result.rc}    0
 
-   # ${rc}  ${result} =  server.DestroyLab          ${topology-file}
-   # Log     ${result}
-   # Should Be Equal As Integers    ${rc}    0
-
-   server.Teardown
+    ${result} =    GetDataStore    ${datastore1}
+    Should Not Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    unknown datastore ${datastore1}
 
 Create and delete a Datastore and candidate
-   [Tags]    robot:continue-on-failure
+    [Tags]    robot:continue-on-failure
 
-  
-   server.Setupcollocated    True     ${data-server-bin}     ${data-server-config}    ${data-server-process-alias}    ${data-server-stderr}  
-   
-   # create first datastore
-   ${rc}  ${result} =  client.CreateDataStoreTarget    ${datastore1}     ${target-file1}     ${target-sync-file}     ${schema-name}     ${schema-vendor}     ${schema-version}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    ${datastore1}
+    # create first datastore
+    ${result} =    client.CreateDataStoreTarget
+    ...    ${datastore1}
+    ...    ${target-file1}
+    ...    ${target-sync-file}
+    ...    ${schema-name}
+    ...    ${schema-vendor}
+    ...    ${schema-version}
 
-   # create second datastore
-   ${rc}  ${result} =  client.CreateDataStoreTarget    ${datastore2}     ${target-file2}     ${target-sync-file}     ${schema-name}     ${schema-vendor}     ${schema-version}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   
-   Sleep  30s
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    ${datastore1}
 
-   ${rc}  ${result} =  client.GetDataStore       ${datastore1}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain  ${result}   name: "${datastore1}"
-   Should Contain  ${result}   status: CONNECTED
-   
-   ${rc}  ${result} =  client.CreateCandidate    ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
+    # create second datastore
+    ${result} =    client.CreateDataStoreTarget
+    ...    ${datastore2}
+    ...    ${target-file2}
+    ...    ${target-sync-file}
+    ...    ${schema-name}
+    ...    ${schema-vendor}
+    ...    ${schema-version}
+    Should Be Equal As Integers    ${result.rc}    0
 
-   ${rc}  ${result} =  client.GetCandidate       ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    ${datastore1}
-   Should Contain    ${result}    ${candidate-name}
+    Wait Until Datastore connected    ${datastore1}    30s    1s
 
-   ${rc}  ${result} =  client.DeleteCandidate       ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    ${datastore1}
+    ${result} =    client.CreateCandidate    ${datastore1}    ${candidate-name}    ${owner}    ${priority}
+    Should Be Equal As Integers    ${result.rc}    0
 
-   ${rc}  ${result} =  client.GetCandidate       ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    ${datastore1}
-   Should Not Contain    ${result}    ${candidate-name}
+    ${result} =    client.ListDataStores
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    ${datastore1}
+    Should Contain    ${result.stdout}    ${candidate-name}
 
-   server.Teardown
+    ${result} =    client.GetCandidate    ${datastore1}    ${candidate-name}
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    ${datastore1}
+    Should Contain    ${result.stdout}    ${candidate-name}
+
+    ${result} =    client.DeleteCandidate    ${datastore1}    ${candidate-name}
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    ${datastore1}
+
+    ${result} =    client.GetCandidate    ${datastore1}    ${candidate-name}
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    ${datastore1}
+    Should Not Contain    ${result.stdout}    ${candidate-name}
 
 Configure Router gNMI - Set / Delete Leaf
-   [Tags]    robot:continue-on-failure
-   
-   server.Setupcollocated    True     ${data-server-bin}     ${data-server-config}    ${data-server-process-alias}    ${data-server-stderr}
-   
-   ${rc}   ${result} =   Run And Return Rc And Output
-    ...        schemac -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} schema list
-   Log     ${result}
+    [Tags]    robot:continue-on-failure
 
-   # delete interface config
-   ${rc}  ${result} =  gnmic.Set   clab-collocated-srl1  --skip-verify -u admin -p NokiaSrl1! --delete /interface[name=ethernet-1/1]
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
+    ${result} =    ListSchemas
+    Should Be Equal As Integers    ${result.rc}    0
 
-   ${rc}  ${result} =  client.CreateDataStoreTarget    ${datastore1}     ${target-file1}     ${target-sync-file}     ${schema-name}     ${schema-vendor}     ${schema-version}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Sleep   30s
+    # delete interface config
+    ${result} =    gnmic.Set
+    ...    ${devicename1}
+    ...    --skip-verify
+    ...    -u    admin
+    ...    -p    NokiaSrl1!
+    ...    --delete    /interface[name=ethernet-1/1]
+    Should Be Equal As Integers    ${result.rc}    0
 
-   ${rc}   ${result} =  client.GetDataStore       ${datastore1}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain  ${result}   name: "${datastore1}"
-   Should Contain  ${result}   status: CONNECTED
+    ${result} =    client.CreateDataStoreTarget
+    ...    ${datastore1}
+    ...    ${target-file1}
+    ...    ${target-sync-file}
+    ...    ${schema-name}
+    ...    ${schema-vendor}
+    ...    ${schema-version}
+    Should Be Equal As Integers    ${result.rc}    0
 
-   # create candidate
-   ${rc}  ${result} =  client.CreateCandidate    ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
+    Wait Until Datastore connected    ${datastore1}    30s    1s
 
-   ${rc}  ${result} =  client.GetCandidate       ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    ${datastore1}
-   Should Contain    ${result}    ${candidate-name}
+    # create candidate
+    ${result} =    client.CreateCandidate    ${datastore1}    ${candidate-name}    ${owner}    ${priority}
+    Should Be Equal As Integers    ${result.rc}    0
 
-   # set config into candidate
-   ${rc}  ${result} =  client.Set       ${datastore1}   ${candidate-name}   --update /interface[name=ethernet-1/1]/description:::Desc1
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
+    ${result} =    client.GetCandidate    ${datastore1}    ${candidate-name}
 
-   # get config from candidate
-   ${rc}  ${result} =  client.GetFromCandidate       ${datastore1}   ${candidate-name}   /interface[name=ethernet-1/1]/description
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    Desc1
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    ${datastore1}
+    Should Contain    ${result.stdout}    ${candidate-name}
 
-   # run diff
-   ${rc}  ${result} =  client.Diff       ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    Desc1
+    # set config into candidate
+    ${result} =    client.Set
+    ...    ${datastore1}
+    ...    ${candidate-name}
+    ...    --update    /interface[name=ethernet-1/1]/description:::Desc1
+    Should Be Equal As Integers    ${result.rc}    0
 
-   # commit
-   ${rc}  ${result} =  client.Commit       ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
+    # get config from candidate
+    ${result} =    client.GetFromCandidate
+    ...    ${datastore1}
+    ...    ${candidate-name}
+    ...    /interface[name=ethernet-1/1]/description
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    Desc1
 
-   # query fom intended store
-   ${rc}  ${result} =  client.Get      ${datastore1}   --intended --path /interface[name=ethernet-1/1]/description --priority -1
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    Desc1
+    # run diff
+    ${result} =    client.Diff    ${datastore1}    ${candidate-name}
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    Desc1
 
-   # query fom router
-   ${rc}  ${result} =  gnmic.Get   clab-collocated-srl1  --skip-verify -e JSON_IETF -u admin -p NokiaSrl1! --format flat --path /interface[name=ethernet-1/1]/description
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    Desc1
+    # commit
+    ${result} =    client.Commit    ${datastore1}    ${candidate-name}
+    Should Be Equal As Integers    ${result.rc}    0
 
-   # DELETE
-   # create candidate
-   ${rc}  ${result} =  client.CreateCandidate    ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
+    # query fom intended store
+    ${result} =    client.Get
+    ...    ${datastore1}
+    ...    --intended
+    ...    --path     /interface[name=ethernet-1/1]/description
 
-   ${rc}  ${result} =  client.GetCandidate       ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    ${datastore1}
-   Should Contain    ${result}    ${candidate-name}
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    Desc1
 
-   # set config into candidate
-   ${rc}  ${result} =  client.Set       ${datastore1}   ${candidate-name}   --delete /interface[name=ethernet-1/1]/description
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
+    # query fom router
+    ${result} =    gnmic.Get
+    ...    ${devicename1}
+    ...    --skip-verify
+    ...    -e    JSON_IETF
+    ...    -u    admin
+    ...    -p    NokiaSrl1!
+    ...    --format    flat
+    ...    --path
+    ...    /interface[name=ethernet-1/1]/description
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    Desc1
 
-   # get config from candidate
-   ${rc}  ${result} =  client.GetFromCandidate       ${datastore1}   ${candidate-name}   /interface[name=ethernet-1/1]/description
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Not Contain    ${result}    Desc1
+    # DELETE
+    # create candidate
+    ${result} =    client.CreateCandidate    ${datastore1}    ${candidate-name}    ${owner}    ${priority}
+    Should Be Equal As Integers    ${result.rc}    0
 
-   # run diff
-   ${rc}  ${result} =  client.Diff       ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    Desc1
+    ${result} =    client.GetCandidate    ${datastore1}    ${candidate-name}
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    ${datastore1}
+    Should Contain    ${result.stdout}    ${candidate-name}
 
-   # commit
-   ${rc}  ${result} =  client.Commit       ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
+    # set config into candidate
+    ${result} =    client.Set
+    ...    ${datastore1}
+    ...    ${candidate-name}
+    ...    --delete    /interface[name=ethernet-1/1]/description
+    Should Be Equal As Integers    ${result.rc}    0
 
-   # query fom intended store
-   ${rc}  ${result} =  client.Get      ${datastore1}   --intended --path /interface[name=ethernet-1/1]/description --priority -1
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Not Contain    ${result}    Desc1
+    # get config from candidate
+    ${result} =    client.GetFromCandidate
+    ...    ${datastore1}
+    ...    ${candidate-name}
+    ...    /interface[name=ethernet-1/1]/description
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Not Contain    ${result.stdout}    Desc1
 
-   # query fom router
-   ${rc}  ${result} =  gnmic.Get   clab-collocated-srl1  --skip-verify -e JSON_IETF -u admin -p NokiaSrl1! --format flat --path /interface[name=ethernet-1/1]/description
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Not Contain    ${result}    Desc1
+    # run diff
+    ${result} =    client.Diff    ${datastore1}    ${candidate-name}
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    Desc1
 
-   server.Teardown
+    # commit
+    ${result} =    client.Commit    ${datastore1}    ${candidate-name}
+    Should Be Equal As Integers    ${result.rc}    0
 
+    # query fom intended store
+    ${result} =    client.Get
+    ...    ${datastore1}
+    ...    --intended 
+    ...    --path     /interface[name=ethernet-1/1]/description
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Not Contain    ${result.stdout}    Desc1
+
+    # query fom router
+    ${result} =    gnmic.Get
+    ...    ${devicename1}
+    ...    --skip-verify 
+    ...    -e     JSON_IETF 
+    ...    -u     admin 
+    ...    -p     NokiaSrl1! 
+    ...    --format     flat 
+    ...    --path     /interface[name=ethernet-1/1]/description
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Not Contain    ${result.stdout}    Desc1
 
 Configure Router gNMI - Create / Delete List item
-   [Tags]    robot:continue-on-failure
-   
-   server.Setupcollocated    True     ${data-server-bin}     ${data-server-config}    ${data-server-process-alias}    ${data-server-stderr}
-   
-   ${rc}   ${result} =   Run And Return Rc And Output
-    ...        schemac -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} schema list
-   Log     ${result}
-   
-   # delete interface config in case there are some remains
-   ${rc}  ${result} =  gnmic.Set   clab-collocated-srl1  --skip-verify -u admin -p NokiaSrl1! --delete /interface[name=ethernet-1/1]
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
+    [Tags]    robot:continue-on-failure
 
-   ${rc}  ${result} =  client.CreateDataStore    ${datastore1}     ${target-file1}     ${target-sync-file}     ${schema-name}     ${schema-vendor}     ${schema-version}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Sleep   30s
+    ${result} =    client.ListSchemas
+    Should Be Equal As Integers    ${result.rc}    0
 
-   ${rc}   ${result} =  client.GetDataStore       ${datastore1}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain  ${result}   name: "${datastore1}"
-   Should Contain  ${result}   status: CONNECTED
+    # delete interface config in case there are some remains
+    ${result} =    gnmic.Set
+    ...    ${devicename1}
+    ...    --skip-verify
+    ...    -u    admin
+    ...    -p    NokiaSrl1!
+    ...    --delete    /interface[name=ethernet-1/1]
+    Should Be Equal As Integers    ${result.rc}    0
 
-   # create candidate
-   ${rc}  ${result} =  client.CreateCandidate    ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
+    ${result} =    client.CreateDataStoreTarget
+    ...    ${datastore1}
+    ...    ${target-file1}
+    ...    ${target-sync-file}
+    ...    ${schema-name}
+    ...    ${schema-vendor}
+    ...    ${schema-version}
+    Should Be Equal As Integers    ${result.rc}    0
+    Wait Until Datastore connected    ${datastore1}    30s    1s
 
-   ${rc}  ${result} =  client.GetCandidate       ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    ${datastore1}
-   Should Contain    ${result}    ${candidate-name}
+    # create candidate
+    ${result} =    client.CreateCandidate    ${datastore1}    ${candidate-name}    ${owner}    ${priority}
+    Should Be Equal As Integers    ${result.rc}    0
 
-   # set config into candidate
-   ${rc}  ${result} =  client.Set       
-   ...    ${datastore1}   ${candidate-name}  --update /interface[name=ethernet-1/1]/description:::Desc1 --update /interface[name=ethernet-1/1]/subinterface[index=0]/admin-state:::enable --update /interface[name=ethernet-1/1]/subinterface[index=0]/description:::DescSub0
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
+    ${result} =    client.GetCandidate    ${datastore1}    ${candidate-name}
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    ${datastore1}
+    Should Contain    ${result.stdout}    ${candidate-name}
 
-   # get config from candidate
-   ${rc}  ${result} =  client.GetFromCandidate       ${datastore1}   ${candidate-name}   /interface[name=ethernet-1/1]/description
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    Desc1
-   
-   # get config from candidate
-   ${rc}  ${result} =  client.GetFromCandidate       ${datastore1}   ${candidate-name}   /interface[name=ethernet-1/1]/subinterface[index=0]
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    DescSub0
+    # set config into candidate
+    ${result} =    client.Set
+    ...    ${datastore1}
+    ...    ${candidate-name}
+    ...    --update     /interface[name=ethernet-1/1]/description:::Desc1 --update /interface[name=ethernet-1/1]/subinterface[index=0]/admin-state:::enable 
+    ...    --update     /interface[name=ethernet-1/1]/subinterface[index=0]/description:::DescSub0
+    Should Be Equal As Integers    ${result.rc}    0
 
-   # run diff
-   ${rc}  ${result} =  client.Diff       ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    Desc1
-   Should Contain    ${result}    DescSub0
+    # get config from candidate
+    ${result} =    client.GetFromCandidate
+    ...    ${datastore1}
+    ...    ${candidate-name}
+    ...    /interface[name=ethernet-1/1]/description
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    Desc1
 
-   # commit
-   ${rc}  ${result} =  client.Commit       ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
+    # get config from candidate
+    ${result} =    client.GetFromCandidate
+    ...    ${datastore1}
+    ...    ${candidate-name}
+    ...    /interface[name=ethernet-1/1]/subinterface[index=0]
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    DescSub0
 
-   # query from router
-   ${rc}  ${result} =  gnmic.Get   clab-collocated-srl1  --skip-verify -e ASCII -u admin -p NokiaSrl1! --format flat --path /interface[name=ethernet-1/1]/description
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    Desc1
+    # run diff
+    ${result} =    client.Diff    ${datastore1}    ${candidate-name}
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    Desc1
+    Should Contain    ${result.stdout}    DescSub0
 
-   # query from router
-   ${rc}  ${result} =  gnmic.Get   clab-collocated-srl1  --skip-verify -e ASCII -u admin -p NokiaSrl1! --format flat --path /interface[name=ethernet-1/1]/subinterface[index=0]/description
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    DescSub0
-   
-   # DELETE
-   # create candidate
-   ${rc}  ${result} =  client.CreateCandidate    ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
+    # commit
+    ${result} =    client.Commit    ${datastore1}    ${candidate-name}
+    Should Be Equal As Integers    ${result.rc}    0
 
-   ${rc}  ${result} =  client.GetCandidate       ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    ${datastore1}
-   Should Contain    ${result}    ${candidate-name}
+    # query from router
+    ${result} =    gnmic.Get
+    ...    ${devicename1}
+    ...    --skip-verify
+    ...    -e    ASCII
+    ...    -u    admin
+    ...    -p    NokiaSrl1!
+    ...    --format    flat
+    ...    --path    /interface[name=ethernet-1/1]/description
 
-   # set config into candidate
-   ${rc}  ${result} =  client.Set       
-   ...    ${datastore1}   ${candidate-name}  --delete /interface[name=ethernet-1/1]/description --delete /interface[name=ethernet-1/1]/subinterface[index=0]/description
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    Desc1
 
-   # get config from candidate
-   ${rc}  ${result} =  client.GetFromCandidate       ${datastore1}   ${candidate-name}   /interface[name=ethernet-1/1]
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Not Contain    ${result}    Desc1
-   Should Not Contain    ${result}    DescSub0
-   
-   # run diff
-   ${rc}  ${result} =  client.Diff       ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Contain    ${result}    Desc1
-   Should Contain    ${result}    DescSub0
+    # query from router
+    ${result} =    gnmic.Get
+    ...    ${devicename1}
+    ...    --skip-verify 
+    ...    -e    ASCII 
+    ...    -u    admin 
+    ...    -p    NokiaSrl1! 
+    ...    --format    flat 
+    ...    --path    /interface[name=ethernet-1/1]/subinterface[index=0]/description
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    DescSub0
 
-   # commit
-   ${rc}  ${result} =  client.Commit       ${datastore1}   ${candidate-name}
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
+    # DELETE
+    # create candidate
+    ${result} =    client.CreateCandidate    ${datastore1}    ${candidate-name}    ${owner}    ${priority}
+    Should Be Equal As Integers    ${result.rc}    0
 
-   # query fom intended store
-   ${rc}  ${result} =  client.Get      ${datastore1}   --intended --path /interface[name=ethernet-1/1]/description --priority -1
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Not Contain    ${result}    Desc1
+    ${result} =    client.GetCandidate    ${datastore1}    ${candidate-name}
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    ${datastore1}
+    Should Contain    ${result.stdout}    ${candidate-name}
 
-   # query from router
-   ${rc}  ${result} =  gnmic.Get   clab-collocated-srl1  --skip-verify -e ASCII -u admin -p NokiaSrl1! --format flat --path /interface[name=ethernet-1/1]/description
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Not Contain    ${result}    Desc1
+    # set config into candidate
+    ${result} =    client.Set
+    ...    ${datastore1}
+    ...    ${candidate-name}
+    ...    --delete    /interface[name=ethernet-1/1]/description 
+    ...    --delete    /interface[name=ethernet-1/1]/subinterface[index=0]/description
+    Should Be Equal As Integers    ${result.rc}    0
 
-   # query fom intended store
-   ${rc}  ${result} =  client.Get      ${datastore1}   --intended --path /interface[name=ethernet-1/1]/subinterface[index=0]/description --priority -1
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Not Contain    ${result}    DescSub0
+    # get config from candidate
+    ${result} =    client.GetFromCandidate
+    ...    ${datastore1}
+    ...    ${candidate-name}
+    ...    /interface[name=ethernet-1/1]
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Not Contain    ${result.stdout}    Desc1
+    Should Not Contain    ${result.stdout}    DescSub0
 
-   # query from router
-   ${rc}  ${result} =  gnmic.Get   clab-collocated-srl1  --skip-verify -e ASCII -u admin -p NokiaSrl1! --format flat --path /interface[name=ethernet-1/1]/subinterface[index=0]/description
-   Log     ${result}
-   Should Be Equal As Integers    ${rc}    0
-   Should Not Contain    ${result}    DescSub0
+    # run diff
+    ${result} =    client.Diff    ${datastore1}    ${candidate-name}
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Contain    ${result.stdout}    Desc1
+    Should Contain    ${result.stdout}    DescSub0
 
-   server.Teardown
+    # commit
+    ${result} =    client.Commit    ${datastore1}    ${candidate-name}
+    Should Be Equal As Integers    ${result.rc}    0
+
+    # query fom intended store
+    ${result} =    client.Get
+    ...    ${datastore1}
+    ...    --intended
+    ...    --path    /interface[name=ethernet-1/1]/description
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Not Contain    ${result.stdout}    Desc1
+
+    # query from router
+    ${result} =    gnmic.Get
+    ...    ${devicename1}
+    ...    --skip-verify
+    ...    -e    ASCII
+    ...    -u     admin 
+    ...    -p     NokiaSrl1!
+    ...    --format    flat
+    ...    --path    /interface[name=ethernet-1/1]/description
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Not Contain    ${result.stdout}    Desc1
+
+    # query fom intended store
+    ${result} =    client.Get
+    ...    ${datastore1}
+    ...    --intended 
+    ...    --path    /interface[name=ethernet-1/1]/subinterface[index=0]/description
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Not Contain    ${result.stdout}    DescSub0
+
+    # query from router
+    ${result} =    gnmic.Get
+    ...    ${devicename1}
+    ...    --skip-verify
+    ...    -e    ASCII
+    ...    -u    admin
+    ...    -p    NokiaSrl1!
+    ...    --format    flat
+    ...    --path    /interface[name=ethernet-1/1]/subinterface[index=0]/description
+    Should Be Equal As Integers    ${result.rc}    0
+    Should Not Contain    ${result.stdout}    DescSub0

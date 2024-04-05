@@ -15,19 +15,35 @@ Capabilities
 
 Get
     [Documentation]  run Get using gNMIc
-    [Arguments]    ${router}  ${gnmic_flags}
-    ${rc}   ${result} =    Run And Return Rc And Output    
-    ...    gnmic -a ${router} get ${gnmic_flags} --log
-    Log    ${result}
-    RETURN  ${rc}  ${result}
+    [Arguments]    ${router}  @{gnmic_flags}
+    ${result} =   Run Process
+    ...    gnmic 
+    ...    -a 
+    ...    ${router} 
+    ...    get
+    ...    @{gnmic_flags} 
+    ...    --log
+    
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
 
 Set
     [Documentation]   run Set using gNMIc
-    [Arguments]    ${router}  ${gnmic_flags}
-    ${rc}   ${result} =    Run And Return Rc And Output    
-    ...    gnmic -a ${router} set ${gnmic_flags} --log
-    Log    ${result}
-    RETURN  ${rc}  ${result}
+    [Arguments]    ${router}  @{gnmic_flags}
+    ${result} =   Run Process 
+    ...    gnmic
+    ...    -a 
+    ...    ${router} 
+    ...    set 
+    ...    @{gnmic_flags} 
+    ...    --log
+
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
 
 SubscribeOnce
     [Documentation]  run Subscribe mode ONCE using gNMIc
