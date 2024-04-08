@@ -852,6 +852,29 @@ func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update, include
 		upds := append(upds, rs...)
 		return upds, nil
 	case *sdcpb.SchemaElem_Field:
+		var v interface{}
+		var err error
+
+		var jsonValue []byte
+		switch upd.GetValue().Value.(type) {
+		case *sdcpb.TypedValue_JsonVal:
+			jsonValue = upd.GetValue().GetJsonVal()
+		case *sdcpb.TypedValue_JsonIetfVal:
+			jsonValue = upd.GetValue().GetJsonIetfVal()
+		}
+
+		// process value
+		if jsonValue != nil {
+			err = json.Unmarshal(jsonValue, &v)
+			if err != nil {
+				return nil, err
+			}
+			switch v := v.(type) {
+			case string:
+				upd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
+			}
+		}
+
 		// TODO: Check if value is json and convert to String ?
 		upds = append(upds, upd)
 		return upds, nil

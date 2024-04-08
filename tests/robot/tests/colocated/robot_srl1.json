@@ -1,6 +1,6 @@
 {
     "type": "gnmi",
-    "address": "clab-collocated-srl1:57400",
+    "address": "clab-colocated-srl1:57400",
     "credentials": {
         "username": "admin",
         "password": "NokiaSrl1!"

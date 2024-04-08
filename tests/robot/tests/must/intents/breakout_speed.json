@@ -1,0 +1,11 @@
+[
+    {
+        "path": "interface[name=ethernet-1/1]",
+        "value": {
+            "breakout-mode": {
+                "num-breakout-ports": 2,
+                "breakout-port-speed": "25G"
+            }
+        }
+    }
+]

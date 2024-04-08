@@ -1,6 +1,6 @@
 *** Settings ***
 Documentation     The Library relies on the following variables being available on execution
-...               CLIENT-BIN: Pointing to the client binary
+...               SDCTL: Pointing to the client binary
 ...               DATA-SERVER-IP: IP of data server
 ...               DATA-SERVER-PORT: TCP port of data server
 ...               SCHEMA-SERVER-IP: IP of schema server
@@ -13,96 +13,271 @@ Library           OperatingSystem
 *** Keywords ***
 ListDataStores
     [Documentation]    List datastores in a data-server
-    ${rc}   ${result} =   Run And Return Rc And Output
-    ...        ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} datastore list
-    RETURN  ${rc}  ${result}
+    ${result} =   Run Process    
+    ...    ${SDCTL} 
+    ...    -a     ${DATA-SERVER-IP}:${DATA-SERVER-PORT} 
+    ...    datastore 
+    ...    list
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
 
 GetDataStore 
     [Documentation]    Get a target from a data-server
     [Arguments]    ${datastore}
-    ${rc}   ${result} =    Run And Return Rc And Output
-    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} datastore get --ds ${datastore}
-    RETURN  ${rc}  ${result}
+    ${result} =   Run Process    
+    ...    ${SDCTL} 
+    ...    -a     ${DATA-SERVER-IP}:${DATA-SERVER-PORT} 
+    ...    datastore 
+    ...    get 
+    ...    --ds 
+    ...    ${datastore}
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
 
-CreateDataStore 
+CreateDataStoreTarget
     [Documentation]    Create a target in a data-server
-    [Arguments]    ${datastore}   ${target-definition-file}    ${sync-file}  ${schema-name}     ${schema-vendor}     ${schema-version}
-    ${rc}   ${result} =     Run And Return Rc And Output
-    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} datastore create --ds ${datastore} --target ${target-definition-file} --sync ${target-sync-file} --name ${schema-name} --vendor ${schema-vendor} --version ${schema-version}
-    RETURN  ${rc}  ${result}
+    [Arguments]    ${datastore}   ${target-definition-file}    ${target-sync-file}    ${schema-name}     ${schema-vendor}     ${schema-version}
+    ${result} =   Run Process    
+    ...    ${SDCTL} 
+    ...    -a     ${DATA-SERVER-IP}:${DATA-SERVER-PORT} 
+    ...    datastore 
+    ...    create 
+    ...    --ds 
+    ...    ${datastore} 
+    ...    --target 
+    ...    ${target-definition-file} 
+    ...    --sync 
+    ...    ${target-sync-file} 
+    ...    --name
+    ...    ${schema-name} 
+    ...    --vendor 
+    ...    ${schema-vendor} 
+    ...    --version 
+    ...    ${schema-version}
+
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
 
 DeleteDatastore 
     [Documentation]    Delete a target from a data-server
     [Arguments]    ${datastore}
-    ${rc}   ${result} =   Run And Return Rc And Output
-    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} datastore delete --ds ${datastore}
-    RETURN  ${rc}  ${result}
+    ${result} =   Run Process    
+    ...    ${SDCTL} 
+    ...    -a     ${DATA-SERVER-IP}:${DATA-SERVER-PORT} 
+    ...    datastore 
+    ...    delete 
+    ...    --ds 
+    ...    ${datastore}
+
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
 
 CreateCandidate
-    [Documentation]    Create a new named Candidate in the given Datastore
-    [Arguments]    ${datastore}    ${candidate}
-    ${rc}   ${result} =    Run And Return Rc And Output    
-    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} datastore create --ds ${datastore} --candidate ${candidate}
-    RETURN  ${rc}  ${result}
+    [Documentation]    Create a new named Candidate in the given Datastore.
+    [Arguments]    ${datastore}    ${candidate}    ${owner}    ${priority}
+    ${result} =   Run Process    
+    ...    ${SDCTL}
+    ...    -a     
+    ...    ${DATA-SERVER-IP}:${DATA-SERVER-PORT}
+    ...    datastore    
+    ...    create 
+    ...    --ds     
+    ...    ${datastore} 
+    ...    --candidate    
+    ...    ${candidate}
+    ...    --owner    
+    ...    ${owner}
+    ...    --priority    
+    ...    ${priority}
+
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
 
 GetCandidate
-    [Documentation]    Create a new named Candidate in the given Datastore
+    [Documentation]    Retrieve the given candidate from the referenced Datastore
     [Arguments]    ${datastore}    ${candidate}
-    ${rc}   ${result} =    Run And Return Rc And Output    
-    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} datastore get --ds ${datastore} --candidate ${candidate}
-    RETURN  ${rc}  ${result}
+    ${result} =   Run Process
+    ...    ${SDCTL}
+    ...    -a     ${DATA-SERVER-IP}:${DATA-SERVER-PORT} 
+    ...    datastore    get 
+    ...    --ds    ${datastore} 
+    ...    --candidate    ${candidate}
+
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
 
 DeleteCandidate
     [Documentation]    Delete a named Candidate in the given Datastore
     [Arguments]    ${datastore}    ${candidate}
-    ${rc}   ${result} =    Run And Return Rc And Output    
-    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} datastore delete --ds ${datastore} --candidate ${candidate}
-    RETURN  ${rc}  ${result}
+    ${result} =   Run Process
+    ...    ${SDCTL} 
+    ...    -a    ${DATA-SERVER-IP}:${DATA-SERVER-PORT} 
+    ...    datastore 
+    ...    delete 
+    ...    --ds 
+    ...    ${datastore} 
+    ...    --candidate 
+    ...    ${candidate}
+
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
 
 Diff
     [Documentation]    Performs a diff on a datastore and a candidate
     [Arguments]    ${datastore}    ${candidate}
-    ${rc}   ${result} =    Run And Return Rc And Output    
-    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} data diff --ds ${datastore} --candidate ${candidate}
-    RETURN  ${rc}  ${result}
+    ${result} =   Run Process
+    ...    ${SDCTL} 
+    ...    -a     ${DATA-SERVER-IP}:${DATA-SERVER-PORT} 
+    ...    data    diff 
+    ...    --ds    ${datastore} 
+    ...    --candidate     ${candidate}
+
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
 
 Commit
     [Documentation]    Performs a commit on the given datastore/candidate and returns the Process Result object https://robotframework.org/robotframework/latest/libraries/Process.html#Result%20object
     [Arguments]    ${datastore}    ${candidate}
-    ${rc}   ${result} =    Run And Return Rc And Output    
-    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} datastore commit --ds ${datastore} --candidate ${candidate}
-    RETURN  ${rc}  ${result}
+    ${result} =   Run Process
+    ...    ${SDCTL} 
+    ...    -a   ${DATA-SERVER-IP}:${DATA-SERVER-PORT} 
+    ...    datastore    commit 
+    ...    --ds    ${datastore} 
+    ...    --candidate    ${candidate}
+
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
 
 Get
     [Documentation]    Get a path from the datastore
-    [Arguments]    ${datastore}    ${ds-get-flags}
-    ${rc}   ${result} =    Run And Return Rc And Output    
-    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} data get --ds ${datastore} ${ds-get-flags}
-    Log    ${result}
-    RETURN  ${rc}  ${result}
+    [Arguments]    ${datastore}    @{ds-get-flags}
+    ${result} =   Run Process
+    ...    ${SDCTL} 
+    ...    -a    ${DATA-SERVER-IP}:${DATA-SERVER-PORT} 
+    ...    data    get 
+    ...    --ds    ${datastore} 
+    ...    @{ds-get-flags}
+
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
 
 GetFromCandidate
     [Documentation]    Get a path from the datastore candidate
     [Arguments]    ${datastore}    ${candidate}    ${path}
-    ${rc}   ${result} =    Run And Return Rc And Output    
-    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} data get --ds ${datastore} --candidate ${candidate} --path ${path}
-    Log    ${result}
-    RETURN  ${rc}  ${result}
+    ${result} =   Run Process
+    ...    ${SDCTL} 
+    ...    -a    ${DATA-SERVER-IP}:${DATA-SERVER-PORT} 
+    ...    data    get 
+    ...    --ds     ${datastore} 
+    ...    --candidate    ${candidate} 
+    ...    --path    ${path}
+    ...    --type     CONFIG
+    ...    timeout=5sec
+
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
 
 Set
     [Documentation]    Applies to the candidate of the given datastore the provided update
-    [Arguments]    ${datastore}    ${candidate}    ${set-flags}
-    ${rc}   ${result} =    Run And Return Rc And Output    
-    ...    ${CLIENT-BIN} -a ${DATA-SERVER-IP}:${DATA-SERVER-PORT} data set --ds ${datastore} --candidate ${candidate} ${set-flags}
-    Log    ${result}
-    RETURN  ${rc}  ${result}
+    [Arguments]    ${datastore}    ${candidate}    @{set-flags}
+    ${result} =   Run Process
+    ...    ${SDCTL} 
+    ...    -a     ${DATA-SERVER-IP}:${DATA-SERVER-PORT} 
+    ...    data    set 
+    ...    --ds    ${datastore} 
+    ...    --candidate    ${candidate} 
+    ...    @{set-flags}
+
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
+
+SetIntent
+    [Documentation]    Applies the given intent to the provided candidate datastore
+    [Arguments]    ${datastore}    ${candidate}    ${intent}    ${priority}    ${file}    @{set-flags}
+    ${result} =   Run Process
+    ...    ${SDCTL} 
+    ...    -a     ${DATA-SERVER-IP}:${DATA-SERVER-PORT} 
+    ...    data    set-intent
+    ...    --ds    ${datastore} 
+    ...    --candidate    ${candidate}
+    ...    --priority    ${priority}
+    ...    --intent    ${intent}
+    ...    --body    ${file}
+    ...    @{set-flags}
+
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
+    
 
 GetSchema
     [Documentation]    Retrieve the schema element described by name (plattform name), version and vendor under the given path.
     [Arguments]    ${name}    ${version}    ${vendor}    ${path}
-    ${rc}   ${result} =    Run And Return Rc And Output    
-    ...    ${CLIENT-BIN} -a ${SCHEMA-SERVER-IP}:${SCHEMA-SERVER-PORT} schema get --name ${name} --version ${version} --vendor ${vendor} --path ${path}    
-    RETURN  ${rc}  ${result}
+    ${result} =   Run Process
+    ...    ${SDCTL} 
+    ...    -a     ${SCHEMA-SERVER-IP}:${SCHEMA-SERVER-PORT} 
+    ...    schema    get 
+    ...    --name    ${name} 
+    ...    --version    ${version} 
+    ...    --vendor    ${vendor} 
+    ...    --path    ${path}    
+
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
+
+ListSchemas
+    ${result} =   Run Process
+    ...    ${SDCTL}
+    ...    -a
+    ...    ${SCHEMA-SERVER-IP}:${SCHEMA-SERVER-PORT} 
+    ...    schema
+    ...    list
+
+    Log    ${result.rc}
+    Log    ${result.stdout}
+    Log    ${result.stderr}
+    RETURN  ${result}
+
+Check Datastore Connected
+    [Documentation]    Checks weather the provided Datastore is in the connected state.
+    [Arguments]     ${datastore}
+
+   ${result} =  client.GetDataStore       ${datastore}
+   Should Be Equal As Integers    ${result.rc}    0
+   Should Contain  ${result.stdout}   name: "${datastore}"
+   Should Contain  ${result.stdout}   status: CONNECTED
+   RETURN     ${result}
+
+Wait Until Datastore connected
+    [Arguments]     ${datastore}    ${retry}    ${interval}
+    Wait Until Keyword Succeeds    ${retry}    ${interval}    Check Datastore Connected    ${datastore}
 
 # Helper
 ExtractResponse

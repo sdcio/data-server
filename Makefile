@@ -15,9 +15,16 @@ build:
 	CGO_ENABLED=0 ${GO_BIN} build -o bin/datactl client/main.go 
 	CGO_ENABLED=0 ${GO_BIN} build -o bin/data-server main.go
 
-test:
+install-sdctl:
+	${GO_BIN} install github.com/sdcio/sdctl@latest
+
+robot-tests: build 
 	robot tests/robot
+
+go-tests:
 	go test ./...
+
+test: go-tests robot-tests
 
 docker-build:
 	ssh-add ./keys/id_rsa 2>/dev/null; true

@@ -1,0 +1,6 @@
+[
+    {
+        "path": "interface[name=ethernet-1/1]/admin-state",
+        "value":"disable"
+    }
+]

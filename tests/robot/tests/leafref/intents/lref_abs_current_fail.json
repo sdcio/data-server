@@ -1,0 +1,36 @@
+[
+    {
+        "path": "/",
+        "value": {
+            "interface": [
+                {
+                    "name": "ethernet-1/1",
+                    "subinterface": [
+                        {
+                            "index": 0,
+                            "admin-state": "enable"
+                        }
+                    ]
+                }
+            ],
+            "network-instance": [
+                {
+                    "name": "default",
+                    "protocols": {
+                        "bgp": {
+                            "router-id": "1.2.3.4",
+                            "autonomous-system": "65001",
+                            "dynamic-neighbors": {
+                                "interface": [
+                                    {
+                                        "interface-name": "ethernet-1/1.0"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    }
+]

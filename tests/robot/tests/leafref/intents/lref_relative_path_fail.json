@@ -1,0 +1,28 @@
+[
+    {
+        "path": "/",
+        "value": {
+            "network-instance": [
+                {
+                    "name": "default",
+                    "protocols": {
+                        "bgp": {
+                            "router-id": "1.2.3.4",
+                            "autonomous-system":"65001",
+                            "dynamic-neighbors": {
+                                "accept": {
+                                    "match": [
+                                        {
+                                            "prefix": "1.2.3.4/32",
+                                            "peer-group": "mypg"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    }
+]

@@ -1,0 +1,29 @@
+[
+    {
+        "path": "/",
+        "value": {
+            "system": {
+                "lldp": {
+                    "interface": [
+                        {
+                            "name": "ethernet-1/1",
+                            "admin-state": "enable"
+                        }
+                    ]
+                }
+            },
+            "interface": [
+                {
+                    "name": "ethernet-1/1",
+                    "ethernet": {
+                        "l2cp-transparency": {
+                            "lldp": {
+                                "tunnel": true
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    }
+]

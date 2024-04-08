@@ -12,27 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-grpc-server:
-  address: ":55000"
-  #tls:
-  schema-server: 
-    # if true, enables schema RPCs
-    enabled: true
-    # directory to store teh uploaded schemas
-    schemas-directory: ./schemas
-  max-send-msg-size: 25165824 # (24MB) = 24 * 1024 * 1024
+name: colocated
 
-# schema-server
-schemas:
-  - name: srl
-    vendor: Nokia
-    version: 22.11.2
-    files:
-      - ./schema/testdata/srl-latest-yang-models/srl_nokia/models
-    directories:
-      - ./schema/testdata/srl-latest-yang-models/ietf
-    excludes:
-      - .*tools.*
-
-prometheus:
-  address: :55090
+topology:     
+  kinds:
+    srl:
+      image: ghcr.io/nokia/srlinux:23.10.1-218
+  nodes:
+    srl1:
+      kind: srl
+    srl2:
+      kind: srl
+  links:
+    - endpoints: ["srl1:e1-1", "srl2:e1-1"]
