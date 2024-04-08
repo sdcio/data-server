@@ -22,15 +22,15 @@ Library             Process
 
 Suite Setup         DeployLab    ${topology-file}
 Suite Teardown      DestroyLab    ${topology-file}
-Test Setup          Setupcollocated    True    ${data-server-bin}    ${data-server-config}    ${data-server-process-alias}    ${data-server-stderr}
+Test Setup          SetupColocated    True    ${data-server-bin}    ${data-server-config}    ${data-server-process-alias}    ${data-server-stderr}
 Test Teardown       Teardown
 
 
 *** Variables ***
 ${DATA-SERVER-BIN}              ${CURDIR}/../../../../bin/data-server
 ${SDCTL}                        sdctl
-${data-server-config}           ${CURDIR}/collocated_test.yaml
-${topology-file}                ${CURDIR}/lab/collocated.clab.yaml
+${data-server-config}           ${CURDIR}/colocated_test.yaml
+${topology-file}                ${CURDIR}/lab/colocated.clab.yaml
 
 ${DATA-SERVER-IP}    127.0.0.1
 ${DATA-SERVER-PORT}    56000
@@ -48,11 +48,11 @@ ${owner}                        test
 ${priority}                     100
 
 ${datastore1}                   srl1
-${devicename1}                  clab-collocated-srl1
+${devicename1}                  clab-colocated-srl1
 ${target-file1}                 ${CURDIR}/robot_srl1.json
 
 ${datastore2}                   srl2
-${devicename2}                  clab-collocated-srl2
+${devicename2}                  clab-colocated-srl2
 ${target-file2}                 ${CURDIR}/robot_srl2.json
 
 ${target-sync-file}             ${CURDIR}/sync.json
