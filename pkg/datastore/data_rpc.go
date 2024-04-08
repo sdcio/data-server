@@ -854,14 +854,24 @@ func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update, include
 	case *sdcpb.SchemaElem_Field:
 		var v interface{}
 		var err error
+
+		var jsonValue []byte
 		switch upd.GetValue().Value.(type) {
 		case *sdcpb.TypedValue_JsonVal:
-			err = json.Unmarshal(upd.GetValue().GetJsonVal(), &v)
-			if err == nil {
-				switch v := v.(type) {
-				case string:
-					upd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
-				}
+			jsonValue = upd.GetValue().GetJsonVal()
+		case *sdcpb.TypedValue_JsonIetfVal:
+			jsonValue = upd.GetValue().GetJsonIetfVal()
+		}
+
+		// process value
+		if jsonValue != nil {
+			err = json.Unmarshal(jsonValue, &v)
+			if err != nil {
+				return nil, err
+			}
+			switch v := v.(type) {
+			case string:
+				upd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
 			}
 		}
 
