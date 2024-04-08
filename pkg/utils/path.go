@@ -305,12 +305,24 @@ func StripPathElemPrefix(p string) (string, error) {
 		if i := strings.Index(pe.Name, ":"); i > 0 {
 			pe.Name = pe.Name[i+1:]
 		}
-		// delete prefix from keys
+		// process keys
 		for k, v := range pe.Key {
+			// delete prefix from key name
 			if i := strings.Index(k, ":"); i > 0 {
 				delete(pe.Key, k)
-				pe.Key[k[i+1:]] = v
+				k = k[i+1:]
 			}
+			// delete prefix from key value
+			if strings.Contains(v, ":") {
+				kelems := strings.Split(v, "/")
+				for idx, kelem := range kelems {
+					if i := strings.Index(kelem, ":"); i > 0 {
+						kelems[idx] = kelem[i+1:]
+					}
+				}
+				v = strings.Join(kelems, "/")
+			}
+			pe.Key[k] = v
 		}
 	}
 	prefix := ""

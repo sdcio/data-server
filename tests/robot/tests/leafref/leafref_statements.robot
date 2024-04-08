@@ -105,7 +105,7 @@ BGP dynamic-neighbor peer-group - pass
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
 
-BGP danymic-neighbor interface - fail
+BGP dynamic-neighbor interface - fail
     [Documentation]    This is a LeafRef that contains an absolute path with a key that utilizes the current() reference.
     LogLeafRefStatements    ${srlinux1-schema-name}    ${srlinux1-schema-version}    ${srlinux1-schema-vendor}    network-instance/protocols/bgp/dynamic-neighbors/interface/interface-name
 
@@ -116,7 +116,7 @@ BGP danymic-neighbor interface - fail
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
 
-BGP danymic-neighbor interface - pass
+BGP dynamic-neighbor interface - pass
     [Documentation]    This is a LeafRef that contains an absolute path with a key that utilizes the current() reference.
     LogLeafRefStatements    ${srlinux1-schema-name}    ${srlinux1-schema-version}    ${srlinux1-schema-vendor}    network-instance/protocols/bgp/dynamic-neighbors/interface/interface-name
 
