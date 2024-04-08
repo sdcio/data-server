@@ -182,6 +182,8 @@ START:
 		switch gnmiSync.Mode {
 		case "once":
 			err = t.periodicSync(ctx, gnmiSync)
+		case "get":
+			err = t.getSync(ctx, gnmiSync, syncCh)
 		default:
 			err = t.streamSync(ctx, gnmiSync)
 		}
@@ -240,6 +242,49 @@ func encoding(e string) int {
 		return 0
 	}
 	return en
+}
+
+func (t *gnmiTarget) getSync(ctx context.Context, gnmiSync *config.SyncProtocol, syncCh chan *SyncUpdate) error {
+	// iterate syncConfig
+	paths := make([]*sdcpb.Path, 0, len(gnmiSync.Paths))
+	// iterate referenced paths
+	for _, p := range gnmiSync.Paths {
+		path, err := utils.ParsePath(p)
+		if err != nil {
+			return err
+		}
+		// add the parsed path
+		paths = append(paths, path)
+	}
+	// execute netconf get
+	resp, err := t.Get(ctx, &sdcpb.GetDataRequest{
+		Name:     gnmiSync.Name,
+		Path:     paths,
+		DataType: sdcpb.DataType_CONFIG,
+		Datastore: &sdcpb.DataStore{
+			Type: sdcpb.Type_MAIN,
+		},
+	})
+
+	if err != nil {
+		return err
+	}
+	// push notifications into syncCh
+	syncCh <- &SyncUpdate{
+		Start: true,
+	}
+	notificationsCount := 0
+	for _, n := range resp.GetNotification() {
+		syncCh <- &SyncUpdate{
+			Update: n,
+		}
+		notificationsCount++
+	}
+	log.Debugf("%s: sync-ed %d notifications", t.target.Config.Name, notificationsCount)
+	syncCh <- &SyncUpdate{
+		End: true,
+	}
+	return nil
 }
 
 func (t *gnmiTarget) periodicSync(ctx context.Context, gnmiSync *config.SyncProtocol) error {
