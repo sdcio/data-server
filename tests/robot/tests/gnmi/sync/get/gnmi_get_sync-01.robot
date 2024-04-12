@@ -41,7 +41,7 @@ Create SRL1 Target
     ...    ${srlinux1-schema-version}
     Should Be Equal As Integers    ${result.rc}    0
 
-d     Wait Until Datastore connected    ${srlinux1-name}    30s    1s
+    Wait Until Datastore connected    ${srlinux1-name}    30s    1s
 
 Check Description not present
     Wait Until Datastore Data Contains
