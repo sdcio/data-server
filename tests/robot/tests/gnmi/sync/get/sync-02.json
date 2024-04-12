@@ -1,0 +1,23 @@
+{
+  "validate": true,
+  "config": [
+    {
+      "name": "getInterfMgmt0",
+      "protocol": "gnmi",
+      "mode": 3,
+      "path": [
+        "/interface[name=mgmt0]"
+      ],
+      "interval": 4000000000
+    },
+    {
+      "name": "getInterfe1-1",
+      "protocol": "gnmi",
+      "mode": 3,
+      "path": [
+        "/interface[name=ethernet-1/1]"
+      ],
+      "interval": 5000000000
+    }
+  ]
+}

@@ -70,10 +70,14 @@ Setup
     WaitForOutput    ${data-server-stderr}    sync    3x    3s
 
 Teardown
-    [Documentation]    Stop the started data-server
-    ${rc}   ${result} =   Run And Return Rc And Output
-    ...  rm -rf ../../cached/caches  
-    Log         ${result}   
+    [Documentation]    Stop the started data-server, 
+    ${result} =   Run Process
+    ...  rm 
+    ...  -rf
+    ...  ../../cached/caches  
+    Log         ${result.rc}
+    Log         ${result.stdout}
+    Log         ${result.stderr}   
     Terminate All Processes
 
 # Infra Helper
@@ -105,3 +109,6 @@ CheckServerState Colocated
     [Documentation]    Check that data-server are still running
     [Arguments]    ${data-server-process-alias}
     Process Should Be Running    handle=${data-server-process-alias}    error_message="data-server failed"
+
+CleanUp Dataserver Cache Dir
+    Remove Directory    ./cached/    recursice=${True}

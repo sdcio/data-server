@@ -1,0 +1,14 @@
+{
+  "validate": true,
+  "config": [
+    {
+      "name": "gnmigetInterface",
+      "protocol": "gnmi",
+      "mode": 3,
+      "path": [
+        "/interface[name=mgmt0]"
+      ],
+      "interval": 3000000000
+    }  
+  ]
+}

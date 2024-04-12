@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -85,7 +86,36 @@ func newGNMITarget(ctx context.Context, name string, cfg *config.SBI, opts ...gr
 	return gt, nil
 }
 
+// sdcpbDataTypeToGNMIType helper to convert the sdcpb data type to the gnmi data type
+func sdcpbDataTypeToGNMIType(x sdcpb.DataType) (gnmi.GetRequest_DataType, error) {
+	switch x {
+	case sdcpb.DataType_ALL:
+		return gnmi.GetRequest_ALL, nil
+	case sdcpb.DataType_CONFIG:
+		return gnmi.GetRequest_CONFIG, nil
+	case sdcpb.DataType_STATE:
+		return gnmi.GetRequest_STATE, nil
+	}
+	return 9999, fmt.Errorf("unable to convert sdcpb DataType %s to gnmi DataType", x)
+}
+
+// sdcpbEncodingToGNMIENcoding helper to convert sdcpb encoding to gnmi encoding
+func sdcpbEncodingToGNMIENcoding(x sdcpb.Encoding) (gnmi.Encoding, error) {
+	switch x {
+	case sdcpb.Encoding_JSON:
+		return gnmi.Encoding_JSON, nil
+	case sdcpb.Encoding_JSON_IETF:
+		return gnmi.Encoding_JSON_IETF, nil
+	case sdcpb.Encoding_PROTO:
+		return gnmi.Encoding_PROTO, nil
+	case sdcpb.Encoding_STRING:
+		return gnmi.Encoding_ASCII, nil
+	}
+	return 9999, fmt.Errorf("unable to convert sdcpb encoding %s to gnmi encoding", x)
+}
+
 func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+	var err error
 	gnmiReq := &gnmi.GetRequest{
 		Path:     make([]*gnmi.Path, 0, len(req.GetPath())),
 		Encoding: gnmi.Encoding_ASCII,
@@ -93,6 +123,19 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 	for _, p := range req.GetPath() {
 		gnmiReq.Path = append(gnmiReq.Path, utils.ToGNMIPath(p))
 	}
+
+	// convert sdcpb data type to gnmi data type
+	gnmiReq.Type, err = sdcpbDataTypeToGNMIType(req.GetDataType())
+	if err != nil {
+		return nil, err
+	}
+
+	// convert sdcpb encoding to gnmi encoding
+	gnmiReq.Encoding, err = sdcpbEncodingToGNMIENcoding(req.Encoding)
+	if err != nil {
+		return nil, err
+	}
+	// execute the gnmi get
 	gnmiRsp, err := t.target.Get(ctx, gnmiReq)
 	if err != nil {
 		return nil, err
@@ -178,6 +221,8 @@ START:
 	}
 	ctx, cancel = context.WithCancel(octx)
 	defer cancel()
+
+	// todo: do not run read subscriptions for GET
 	for _, gnmiSync := range syncConfig.Config {
 		switch gnmiSync.Mode {
 		case "once":
@@ -193,6 +238,7 @@ START:
 			goto START
 		}
 	}
+
 	defer t.target.StopSubscriptions()
 
 	rspch, errCh := t.target.ReadSubscriptions()
@@ -256,19 +302,42 @@ func (t *gnmiTarget) getSync(ctx context.Context, gnmiSync *config.SyncProtocol,
 		// add the parsed path
 		paths = append(paths, path)
 	}
-	// execute netconf get
-	resp, err := t.Get(ctx, &sdcpb.GetDataRequest{
+
+	req := &sdcpb.GetDataRequest{
 		Name:     gnmiSync.Name,
 		Path:     paths,
 		DataType: sdcpb.DataType_CONFIG,
 		Datastore: &sdcpb.DataStore{
 			Type: sdcpb.Type_MAIN,
 		},
-	})
-
-	if err != nil {
-		return err
 	}
+
+	go t.internalGetSync(ctx, req, syncCh)
+
+	go func() {
+		ticker := time.NewTicker(gnmiSync.Interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				t.internalGetSync(ctx, req, syncCh)
+			}
+		}
+	}()
+
+	return nil
+}
+
+func (t *gnmiTarget) internalGetSync(ctx context.Context, req *sdcpb.GetDataRequest, syncCh chan *SyncUpdate) {
+	// execute gnmi get
+	resp, err := t.Get(ctx, req)
+	if err != nil {
+		log.Errorf("sync error: %v", err)
+		return
+	}
+
 	// push notifications into syncCh
 	syncCh <- &SyncUpdate{
 		Start: true,
@@ -280,11 +349,10 @@ func (t *gnmiTarget) getSync(ctx context.Context, gnmiSync *config.SyncProtocol,
 		}
 		notificationsCount++
 	}
-	log.Debugf("%s: sync-ed %d notifications", t.target.Config.Name, notificationsCount)
+	log.Debugf("%s: synced %d notifications", t.target.Config.Name, notificationsCount)
 	syncCh <- &SyncUpdate{
 		End: true,
 	}
-	return nil
 }
 
 func (t *gnmiTarget) periodicSync(ctx context.Context, gnmiSync *config.SyncProtocol) error {
