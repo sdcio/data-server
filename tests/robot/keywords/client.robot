@@ -226,7 +226,7 @@ SetIntent
     ...    --candidate    ${candidate}
     ...    --priority    ${priority}
     ...    --intent    ${intent}
-    ...    --body    ${file}
+    ...    --file    ${file}
     ...    @{set-flags}
 
     Log    ${result.rc}
