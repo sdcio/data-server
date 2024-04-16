@@ -332,7 +332,7 @@ func (d *Datastore) pathsAddKeysAsLeaves(paths []*sdcpb.Path) []*sdcpb.Path {
 				for i := 0; i < idx+1; i++ {
 					pp.Elem[i] = &sdcpb.PathElem{
 						Name: p.GetElem()[i].GetName(),
-						Key:  copyMap(p.GetElem()[i].GetKey()),
+						Key:  utils.CopyMap(p.GetElem()[i].GetKey()),
 					}
 				}
 				pp.Elem = append(pp.Elem, &sdcpb.PathElem{Name: k})
@@ -364,7 +364,7 @@ func (d *Datastore) buildPathsWithKeysAsLeaves(paths []*sdcpb.Path) []*sdcpb.Pat
 				for i := 0; i < idx+1; i++ {
 					pp.Elem[i] = &sdcpb.PathElem{
 						Name: p.GetElem()[i].GetName(),
-						Key:  copyMap(p.GetElem()[i].GetKey()),
+						Key:  utils.CopyMap(p.GetElem()[i].GetKey()),
 					}
 				}
 				pp.Elem = append(pp.Elem, &sdcpb.PathElem{Name: k})
@@ -395,17 +395,6 @@ func (d *Datastore) cacheUpdateToUpdate(ctx context.Context, cupd *cache.Update)
 		Path:  scp,
 		Value: val,
 	}, nil
-}
-
-func copyMap(m map[string]string) map[string]string {
-	if m == nil {
-		return nil
-	}
-	nm := make(map[string]string, len(m))
-	for k, v := range m {
-		nm[k] = v
-	}
-	return nm
 }
 
 func rawIntentName(name string, pr int32) string {

@@ -8,6 +8,7 @@
                     "subinterface": [
                         {
                             "index": 0,
+                            "type": "bridged",
                             "admin-state": "enable"
                         }
                     ]
@@ -16,6 +17,7 @@
             "network-instance": [
                 {
                     "name": "default",
+                    "type": "mac-vrf",
                     "interface": [
                         {
                             "name": "ethernet-1/1.0"
