@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -459,7 +460,7 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, cand
 					// we need to resolve that
 					if strings.Contains(leafRefPath, "./") {
 						// make leafref path absolute
-						lrefSdcpbPath, err = makeLeafRefAbs(upd.GetPath(), lrefSdcpbPath, utils.TypedValueToString(upd.GetValue()))
+						lrefSdcpbPath, err = d.makeLeafRefAbs(ctx, upd.GetPath(), lrefSdcpbPath, utils.TypedValueToString(upd.GetValue()), candidate)
 						if err != nil {
 							return err
 						}
@@ -485,14 +486,10 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, cand
 				if err != nil {
 					return err
 				}
-				// if it contains "./" or "../" like any relative path stuff
-				// we need to resolve that
-				if strings.Contains(leafRefPath, "./") {
-					// make leafref path absolute
-					lrefSdcpbPath, err = makeLeafRefAbs(upd.GetPath(), lrefSdcpbPath, utils.TypedValueToString(upd.GetValue()))
-					if err != nil {
-						return err
-					}
+				// make leafref path absolute
+				lrefSdcpbPath, err = d.makeLeafRefAbs(ctx, upd.GetPath(), lrefSdcpbPath, utils.TypedValueToString(upd.GetValue()), candidate)
+				if err != nil {
+					return err
 				}
 
 				err = d.resolveLeafref(ctx, candidate, lrefSdcpbPath, utils.TypedValueToString(upd.GetValue()))
@@ -513,38 +510,117 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, cand
 	}
 }
 
-func makeLeafRefAbs(base, lref *sdcpb.Path, value string) (*sdcpb.Path, error) {
-	// create a result
-	result := &sdcpb.Path{
-		Elem: make([]*sdcpb.PathElem, 0, len(base.Elem)),
+func (d *Datastore) makeLeafRefAbs(ctx context.Context, base, lref *sdcpb.Path, value string, candidate string) (*sdcpb.Path, error) {
+	p, err := d.makeLeafRefAbsPathKeys(ctx, base, lref, value, candidate)
+	if err != nil {
+		return nil, err
 	}
-	// copy base into result
-	for _, x := range base.Elem {
-		result.Elem = append(result.Elem, &sdcpb.PathElem{
-			Name: x.GetName(),
-			Key:  copyMap(x.GetKey()),
-		})
+	p, err = d.makeLeafRefAbsPath(base, p)
+	if err != nil {
+		return nil, err
 	}
+	return p, nil
+}
+
+func (d *Datastore) makeLeafRefAbsPathKeys(ctx context.Context, base, lref *sdcpb.Path, value string, candidate string) (*sdcpb.Path, error) {
+
+	lrefResult := utils.CopyPath(lref)
+
 	// process leafref elements and adjust result
-	for _, lrefElem := range lref.Elem {
-		// if .. in path, remove last elem from result (move up)
-		if lrefElem.GetName() == ".." {
-			if len(result.Elem) == 0 {
+	for _, lrefElem := range lrefResult.Elem {
+
+		// resolve keys
+		for k, v := range lrefElem.Key {
+
+			keyp, err := utils.ParsePath(v)
+			if err != nil {
+				return nil, err
+			}
+
+			// replace current() with its actual value
+			if strings.ToLower(keyp.Elem[0].Name) == "current()" {
+				keyp.Elem = append(base.Elem, keyp.Elem[1:]...)
+			}
+
+			// remove .. in key paths
+			err = removeDotDot(keyp)
+			if err != nil {
+				return nil, err
+			}
+
+			data, err := d.getValidationClient().GetValue(ctx, candidate, keyp)
+			if err != nil {
 				return nil, fmt.Errorf("invalid leafref path %s based on %s", lref.String(), base.String())
 			}
-			result.Elem = result.Elem[:len(result.Elem)-1]
-			continue
-		}
-		if lrefElem.GetName() == "." {
-			// no one knows if this is a valid case, but we voted and here it is :-P
-			continue
-		}
 
-		// if proper path elem, add to path
-		result.Elem = append(result.Elem, lrefElem)
+			lrefElem.Key[k] = data.GetStringVal()
+		}
+	}
+	return lrefResult, nil
+}
+
+func (d *Datastore) makeLeafRefAbsPath(base, lref *sdcpb.Path) (*sdcpb.Path, error) {
+
+	// if the path is relative, the .. would start in the start of the path
+	if lref.Elem[0].Name != ".." {
+		return lref, nil
 	}
 
+	// copy base into result
+	result := utils.CopyPath(base)
+
+	result.Elem = append(result.Elem, lref.Elem...)
+
+	err := removeDotDot(result)
+	if err != nil {
+		return nil, err
+	}
+
+	// // process leafref elements and adjust result
+	// for _, lrefElem := range lref.Elem {
+	// 	switch {
+	// 	// if .. in path, remove last elem from result (move up)
+	// 	case lrefElem.GetName() == "..":
+	// 		if len(result.Elem) == 0 {
+	// 			return nil, fmt.Errorf("invalid leafref path %s based on %s", lref.String(), base.String())
+	// 		}
+	// 		result.Elem = result.Elem[:len(result.Elem)-1]
+	// 	case lrefElem.GetName() == ".":
+	// 		// no one knows if this is a valid case, but we voted and here it is :-P
+	// 		continue
+	// 	default:
+	// 		// if proper path elem, add to path
+	// 		result.Elem = append(result.Elem, lrefElem)
+	// 	}
+	// }
 	return result, nil
+}
+
+func removeDotDot(keyp *sdcpb.Path) error {
+	dropStack := 0
+	result := make([]*sdcpb.PathElem, 0, len(keyp.Elem))
+	// iterate through the path in reverse order
+	for i := len(keyp.Elem) - 1; i >= 0; i-- {
+		{
+			switch {
+			case keyp.Elem[i].Name == "..":
+				dropStack++
+			case keyp.Elem[i].Name == ".":
+				continue
+			case dropStack > 0:
+				dropStack--
+				continue
+			default:
+				result = append(result, keyp.Elem[i])
+			}
+		}
+	}
+	if dropStack > 0 {
+		return fmt.Errorf("invalid path %s", utils.ToXPath(keyp, false))
+	}
+	slices.Reverse(result)
+	keyp.Elem = result
+	return nil
 }
 
 func (d *Datastore) resolveLeafref(ctx context.Context, candidate string, leafRefPath *sdcpb.Path, value string) error {

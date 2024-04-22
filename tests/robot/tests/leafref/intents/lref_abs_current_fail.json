@@ -16,6 +16,7 @@
             "network-instance": [
                 {
                     "name": "default",
+                    "type": "mac-vrf",
                     "protocols": {
                         "bgp": {
                             "router-id": "1.2.3.4",

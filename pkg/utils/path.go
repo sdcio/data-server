@@ -168,7 +168,7 @@ func parseXPathKeys(s string) (map[string]string, error) {
 			if len(k) == 0 || len(v) == 0 {
 				return nil, errMalformedXPathKey
 			}
-			kvs[escapedBracketsReplacer.Replace(k)] = escapedBracketsReplacer.Replace(v)
+			kvs[strings.TrimSpace(escapedBracketsReplacer.Replace(k))] = strings.TrimSpace(escapedBracketsReplacer.Replace(v))
 			inKey = false
 		}
 		prevRune = r
@@ -369,4 +369,31 @@ func peEqual(pe1, pe2 *sdcpb.PathElem) bool {
 		}
 	}
 	return true
+}
+
+func CopyPath(p *sdcpb.Path) *sdcpb.Path {
+	result := &sdcpb.Path{
+		Origin: p.Origin,
+		Target: p.Target,
+		Elem:   make([]*sdcpb.PathElem, 0, len(p.Elem)),
+	}
+	// copy each path element
+	for _, x := range p.Elem {
+		result.Elem = append(result.Elem, &sdcpb.PathElem{
+			Name: x.GetName(),
+			Key:  CopyMap(x.GetKey()),
+		})
+	}
+	return result
+}
+
+func CopyMap(m map[string]string) map[string]string {
+	if m == nil {
+		return nil
+	}
+	nm := make(map[string]string, len(m))
+	for k, v := range m {
+		nm[k] = v
+	}
+	return nm
 }
