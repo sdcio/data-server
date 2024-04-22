@@ -38,7 +38,7 @@ GetDataStore
     Log    ${result.stderr}
     RETURN  ${result}
 
-CreateDataStoreTarget
+CreateDataStore
     [Documentation]    Create a target in a data-server
     [Arguments]    ${datastore}   ${target-definition-file}    ${target-sync-file}    ${schema-name}     ${schema-vendor}     ${schema-version}
     ${result} =   Run Process    
@@ -166,7 +166,7 @@ Commit
     Log    ${result.stderr}
     RETURN  ${result}
 
-Get
+Datastore Get Data
     [Documentation]    Get a path from the datastore
     [Arguments]    ${datastore}    @{ds-get-flags}
     ${result} =   Run Process
@@ -315,3 +315,25 @@ _ExtractLeafRefStatements
     [Arguments]    ${input}
     ${matches} =	Get Regexp Matches	${input}    leafref:\\s*".*"    flags=IGNORECASE
     RETURN    ${matches}
+
+Wait Until Datastore Data Contains
+    [Documentation]    Issues sdctl data get for the given datastore, with the given path. Retries retry times for a maximum of interval time.
+    ...    Thereby checking that all the provided containsStrings are contained in the output.
+    [Arguments]    ${datastore}    ${path}    ${retry}    ${interval}    @{containStrings}
+    Wait Until Keyword Succeeds
+    ...    ${retry}
+    ...    ${interval}
+    ...    Check Datastore Data Get Contains
+    ...    ${datastore}
+    ...    ${path}
+    ...    @{containStrings}
+
+Check Datastore Data Get Contains
+    [Documentation]    Issues sdctl data get for the given datastore, with the given path.
+    ...    Thereby checking that all the provided containsStrings are contained in the output.
+    [Arguments]    ${datastore}    ${path}    @{containStrings}
+    ${result} =    Datastore Get Data    ${srlinux1-name}    --path    ${path}
+
+    FOR    ${element}    IN    @{containStrings}
+        Should Contain    ${result.stdout}    ${element}
+    END

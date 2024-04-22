@@ -59,6 +59,16 @@ schema-store:
         - ./lab/common/yang/srl-22.11.2/openconfig
       excludes:
         - .*tools.*
+    - name: srl
+      vendor: Nokia
+      version: 23.10.1
+      files:
+        - ./lab/common/yang/srl-23.10.1/srl_nokia/models
+      directories:
+        - ./lab/common/yang/srl-23.10.1/ietf
+        - ./lab/common/yang/srl-23.10.1/openconfig
+      excludes:
+        - .*tools.*
 
 # cache config, defaults to
 # type: local

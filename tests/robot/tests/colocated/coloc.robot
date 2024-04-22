@@ -70,7 +70,7 @@ Create and delete a Datastore
     [Tags]    robot:continue-on-failure
 
     # create first datastore
-    ${result} =    CreateDataStoreTarget
+    ${result} =    CreateDataStore
     ...    ${datastore1}
     ...    ${target-file1}
     ...    ${target-sync-file}
@@ -81,7 +81,7 @@ Create and delete a Datastore
     Should Contain    ${result.stdout}    ${datastore1}
 
     # create second datastore
-    ${result} =    CreateDataStoreTarget
+    ${result} =    CreateDataStore
     ...    ${datastore2}
     ...    ${target-file2}
     ...    ${target-sync-file}
@@ -104,7 +104,7 @@ Create and delete a Datastore and candidate
     [Tags]    robot:continue-on-failure
 
     # create first datastore
-    ${result} =    client.CreateDataStoreTarget
+    ${result} =    client.CreateDataStore
     ...    ${datastore1}
     ...    ${target-file1}
     ...    ${target-sync-file}
@@ -116,7 +116,7 @@ Create and delete a Datastore and candidate
     Should Contain    ${result.stdout}    ${datastore1}
 
     # create second datastore
-    ${result} =    client.CreateDataStoreTarget
+    ${result} =    client.CreateDataStore
     ...    ${datastore2}
     ...    ${target-file2}
     ...    ${target-sync-file}
@@ -164,7 +164,7 @@ Configure Router gNMI - Set / Delete Leaf
     ...    --delete    /interface[name=ethernet-1/1]
     Should Be Equal As Integers    ${result.rc}    0
 
-    ${result} =    client.CreateDataStoreTarget
+    ${result} =    client.CreateDataStore
     ...    ${datastore1}
     ...    ${target-file1}
     ...    ${target-sync-file}
@@ -210,7 +210,7 @@ Configure Router gNMI - Set / Delete Leaf
     Should Be Equal As Integers    ${result.rc}    0
 
     # query fom intended store
-    ${result} =    client.Get
+    ${result} =    client.Datastore Get Data
     ...    ${datastore1}
     ...    --intended
     ...    --path     /interface[name=ethernet-1/1]/description
@@ -266,7 +266,7 @@ Configure Router gNMI - Set / Delete Leaf
     Should Be Equal As Integers    ${result.rc}    0
 
     # query fom intended store
-    ${result} =    client.Get
+    ${result} =    client.Datastore Get Data
     ...    ${datastore1}
     ...    --intended 
     ...    --path     /interface[name=ethernet-1/1]/description
@@ -300,7 +300,7 @@ Configure Router gNMI - Create / Delete List item
     ...    --delete    /interface[name=ethernet-1/1]
     Should Be Equal As Integers    ${result.rc}    0
 
-    ${result} =    client.CreateDataStoreTarget
+    ${result} =    client.CreateDataStore
     ...    ${datastore1}
     ...    ${target-file1}
     ...    ${target-sync-file}
@@ -416,7 +416,7 @@ Configure Router gNMI - Create / Delete List item
     Should Be Equal As Integers    ${result.rc}    0
 
     # query fom intended store
-    ${result} =    client.Get
+    ${result} =    client.Datastore Get Data
     ...    ${datastore1}
     ...    --intended
     ...    --path    /interface[name=ethernet-1/1]/description
@@ -436,7 +436,7 @@ Configure Router gNMI - Create / Delete List item
     Should Not Contain    ${result.stdout}    Desc1
 
     # query fom intended store
-    ${result} =    client.Get
+    ${result} =    client.Datastore Get Data
     ...    ${datastore1}
     ...    --intended 
     ...    --path    /interface[name=ethernet-1/1]/subinterface[index=0]/description

@@ -176,6 +176,8 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 						gnSyncConfig.Mode = "sample"
 					case sdcpb.SyncMode_SM_ONCE:
 						gnSyncConfig.Mode = "once"
+					case sdcpb.SyncMode_SM_GET:
+						gnSyncConfig.Mode = "get"
 					}
 					gnSyncConfig.Encoding = pSync.GetEncoding()
 				case "netconf":

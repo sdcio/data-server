@@ -54,7 +54,7 @@ Check Server State
     CheckServerState Colocated    ${data-server-process-alias}
 
 Create SRL1 Target
-    ${result} =    CreateDataStoreTarget    ${srlinux1-name}    ${srlinux1-target-def}    ${srlinux1-sync-def}    ${srlinux1-schema-name}    ${srlinux1-schema-Vendor}     ${srlinux1-schema-version}
+    ${result} =    CreateDataStore    ${srlinux1-name}    ${srlinux1-target-def}    ${srlinux1-sync-def}    ${srlinux1-schema-name}    ${srlinux1-schema-Vendor}     ${srlinux1-schema-version}
     Should Be Equal As Integers    ${result.rc}    0
 
 Set system0 admin-state disable -> Fail
