@@ -231,6 +231,8 @@ github.com/sdcio/schema-server v0.0.16 h1:mBm/hj0WQlNN7/S+tBwsf2Mc0XW4coaah27WDc
 github.com/sdcio/schema-server v0.0.16/go.mod h1:Wp7DRUkX0DQZNARIgcJtCjOuLp5pwUCDVCAuvM5LA5g=
 github.com/sdcio/sdc-protos v0.0.23 h1:vbz4WeMQfPegCDJY2qanpezcmdvJVlm+E3N1lRoG25s=
 github.com/sdcio/sdc-protos v0.0.23/go.mod h1:iVVPmQTRzoCV4abQ4QL5mJethvRVfdV8cHcVyDtSNs4=
+github.com/sdcio/sdc-protos v0.0.24 h1:AEhRfPRQVzb6KMxrFSd+ODiiC605ql7qbg2yxE1ARKQ=
+github.com/sdcio/sdc-protos v0.0.24/go.mod h1:iVVPmQTRzoCV4abQ4QL5mJethvRVfdV8cHcVyDtSNs4=
 github.com/sdcio/yang-parser v0.0.5 h1:YwpgQt2/n3BHFrEa0n0sQ4Q2hLCrTFY2VDKO+2BgoVg=
 github.com/sdcio/yang-parser v0.0.5/go.mod h1:cLYFD8ChaFyn+G0EYpOlGDrI/3J2Zgf7uzO/CKW6l1Q=
 github.com/sirikothe/gotextfsm v1.0.1-0.20200816110946-6aa2cfd355e4 h1:FHUL2HofYJuslFOQdy/JjjP36zxqIpd/dcoiwLMIs7k=
