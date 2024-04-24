@@ -86,18 +86,27 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	r := tree.NewRootEntry()
 	for _, updateList := range allCurrentCacheEntries {
 		for _, u := range updateList {
-			r.AddCacheUpdateRecursive(u)
+			r.AddCacheUpdateRecursive(u, false)
 		}
 	}
+
+	// Mark all the entries that belong to the owner / intent as deleted.
+	// This is to allow for intent updates. We mark all existing entries for deletion up front.
+	r.MarkOwnerDelete(req.GetIntent())
+
 	fmt.Println("tree content:")
 	fmt.Println(r.String())
 
 	// list of updates to be added to the cache later on.
 	// NOT TO MYSELF: Actually I'm asking myself if we can not add it to the intended store a priori
 	// and build the tree then with the highes values we retrieve from the cache.
-	updates := []*cache.Update{}
 
-	for _, upd := range ic.newUpdates {
+	expandedReqUpdates, err := d.expandUpdates(ctx, req.GetUpdate(), true)
+	if err != nil {
+		return err
+	}
+
+	for _, upd := range expandedReqUpdates {
 
 		// make sure typedValue is carrying the correct type
 		err := d.validateUpdate(ctx, upd)
@@ -114,9 +123,8 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 			return err
 		}
 		cUpd := cache.NewUpdate(pathSlice, val, req.GetPriority(), req.GetIntent(), int64(5))
-		updates = append(updates, cUpd)
 
-		err = r.AddCacheUpdateRecursive(cUpd)
+		err = r.AddCacheUpdateRecursive(cUpd, true)
 		if err != nil {
 			return err
 		}
@@ -125,6 +133,20 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	fmt.Println("################")
 	fmt.Println("tree content2 :")
 	fmt.Println(r.String())
+
+	fmt.Println("highes Prio Updates:")
+	updates := r.GetHighesPrio()
+
+	for _, u := range updates {
+		fmt.Printf("Update: %v\n", u)
+	}
+	fmt.Print("\n################\n\n")
+
+	fmt.Printf("Updates of Owner %q:\n", req.GetIntent())
+	updates = tree.LeafEntriesToCacheUpdates(r.GetByOwnerFiltered(req.GetIntent(), tree.FilterNonDeleted))
+	for _, u := range updates {
+		fmt.Printf("Update: %v\n", u)
+	}
 
 	// PH1: go through all updates from the intent to figure out
 	// if they need to be applied based on the intent priority.
