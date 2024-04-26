@@ -30,6 +30,8 @@ type Entry interface {
 	GetByOwner(owner string, result []*LeafEntry) []*LeafEntry
 	// MarkOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
 	MarkOwnerDelete(o string)
+	// GetDeletes returns the cache-updates that are not updated, have no lower priority value left and hence should be deleted completely
+	GetDeletes([][]string) [][]string
 }
 
 func newEntry(parent Entry, pathElemName string) *EntryImpl {
@@ -95,6 +97,16 @@ type sharedEntryAttributes struct {
 
 func (s *sharedEntryAttributes) GetLevel() int {
 	return len(s.Path())
+}
+
+func (s *sharedEntryAttributes) GetDeletes(deletes [][]string) [][]string {
+	if s.LeafVariants.ShouldDelete() {
+		deletes = append(deletes, s.LeafVariants[0].GetPath())
+	}
+	for _, e := range s.Childs {
+		deletes = e.GetDeletes(deletes)
+	}
+	return deletes
 }
 
 func (s *sharedEntryAttributes) GetByOwner(owner string, result []*LeafEntry) []*LeafEntry {
@@ -167,6 +179,26 @@ type LeafVariants []*LeafEntry
 
 func newLeafVariants() LeafVariants {
 	return make([]*LeafEntry, 0)
+}
+
+// ShouldDelete indicates if the entry should be deleted,
+// since it is an entry that represents LeafsVariants but non
+// of these are still valid.
+func (lv LeafVariants) ShouldDelete() bool {
+	// only procede if we have leave variants
+	if len(lv) == 0 {
+		return false
+	}
+
+	// go through all variants
+	for _, e := range lv {
+		// if there is a variant that is not marked as delete, no delete should be issued
+		if !e.Delete {
+			return false
+		}
+	}
+	// return true otherwise
+	return true
 }
 
 // GetHighes returns the LeafEntry with the highes priority
@@ -246,8 +278,13 @@ func (r *sharedEntryAttributes) AddCacheUpdateRecursive(c *cache.Update, new boo
 	if idx == len(c.GetPath()) {
 		// Check if LeafEntry with given owner already exists
 		if leafVariant := r.LeafVariants.GetByOwner(c.Owner()); leafVariant != nil {
-			// if a leafentry of the same owner exists, mark it for update
-			leafVariant.MarkUpdate(c)
+			if leafVariant.EqualSkipPath(c) {
+				// it seems like the element was not deleted, so drop the delete flag
+				leafVariant.Delete = false
+			} else {
+				// if a leafentry of the same owner exists with different value, mark it for update
+				leafVariant.MarkUpdate(c)
+			}
 		} else {
 			// if LeafVaraint with same owner does not exist, add the new entry
 			r.LeafVariants = append(r.LeafVariants, NewLeafEntry(c, new))
@@ -266,7 +303,7 @@ func (r *sharedEntryAttributes) AddCacheUpdateRecursive(c *cache.Update, new boo
 	return nil
 }
 
-func NewRootEntry() *RootEntry {
+func NewTreeRoot() *RootEntry {
 	return &RootEntry{
 		sharedEntryAttributes: newSharedEntryAttributes(nil, ""),
 	}
@@ -280,6 +317,11 @@ func (r *RootEntry) String() string {
 
 func (r *RootEntry) GetHighesPrio() []*cache.Update {
 	return r.sharedEntryAttributes.GetHighesPrio(make([]*cache.Update, 0))
+}
+
+func (r *RootEntry) GetDeletes() [][]string {
+	deletes := [][]string{}
+	return r.sharedEntryAttributes.GetDeletes(deletes)
 }
 
 func (r *RootEntry) GetByOwner(owner string) []*LeafEntry {

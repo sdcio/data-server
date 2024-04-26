@@ -66,6 +66,6 @@ func (s *Server) createLocalCacheClient(ctx context.Context) error {
 func (s *Server) createRemoteCacheClient(ctx context.Context) error {
 	log.Infof("initializing remote cache client")
 	var err error
-	s.cacheClient, err = cache.NewRemoteCache(ctx, s.config.Cache.Address)
+	//s.cacheClient, err = cache.NewRemoteCache(ctx, s.config.Cache.Address)
 	return err
 }

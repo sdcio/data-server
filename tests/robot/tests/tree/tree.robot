@@ -115,3 +115,11 @@ Seven-2
     Should Be Equal As Integers    ${result.rc}    0
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+
+Eight
+    ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    seven    2        ${CURDIR}/intents/three.json
+
+    Should Be Equal As Integers    ${result.rc}    0
+
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}

@@ -20,7 +20,7 @@ func Test_Entry(t *testing.T) {
 	u2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc, int32(99), "me", int64(444))
 	u3 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc, int32(98), "me", int64(88))
 
-	root := NewRootEntry()
+	root := NewTreeRoot()
 
 	for _, u := range []*cache.Update{u1, u2, u3} {
 		err = root.AddCacheUpdateRecursive(u, true)
@@ -51,7 +51,7 @@ func Test_Entry_One(t *testing.T) {
 	u2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc2, prio100, owner1, ts1)
 	u3 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner2, ts1)
 
-	root := NewRootEntry()
+	root := NewTreeRoot()
 
 	// start test
 	for _, u := range []*cache.Update{u1, u2, u3} {
@@ -100,7 +100,7 @@ func Test_Entry_Two(t *testing.T) {
 	ts1 := int64(9999999)
 	u1 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
 
-	root := NewRootEntry()
+	root := NewTreeRoot()
 
 	// start test add "existing" data
 	for _, u := range []*cache.Update{u1} {
@@ -145,7 +145,7 @@ func Test_Entry_Three(t *testing.T) {
 	u3 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "12", "description"}, desc3, prio50, owner1, ts1)
 	u4 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
 
-	root := NewRootEntry()
+	root := NewTreeRoot()
 
 	// start test add "existing" data
 	for _, u := range []*cache.Update{u1, u2, u3, u4} {
@@ -231,7 +231,7 @@ func Test_Entry_Four(t *testing.T) {
 	u1o2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio55, owner2, ts1)
 	u2o2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "11", "description"}, desc3, prio55, owner2, ts1)
 
-	root := NewRootEntry()
+	root := NewTreeRoot()
 
 	// start test add "existing" data
 	for _, u := range []*cache.Update{u1o1, u2o1, u3, u4, u1o2, u2o2} {

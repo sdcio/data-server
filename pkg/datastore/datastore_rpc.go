@@ -120,7 +120,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, scc schema.Client, cc c
 			go ds.Sync(ctx)
 		}
 		// start deviation goroutine
-		ds.DeviationMgr(ctx)
+		// ds.DeviationMgr(ctx)
 	}()
 	return ds
 }
@@ -1071,7 +1071,6 @@ func (d *Datastore) DeviationMgr(ctx context.Context) {
 			}
 			d.m.RUnlock()
 			d.runDeviationUpdate(ctx, dm)
-
 		}
 	}
 }

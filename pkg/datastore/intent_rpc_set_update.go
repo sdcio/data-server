@@ -81,21 +81,43 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		Delete: make([]*sdcpb.Path, 0),
 	}
 
-	allCurrentCacheEntries := d.readNewUpdatesHighestPriority(ctx, ic.newCompletePaths)
+	keys, err := d.readIntendedStoreKeys(ctx)
+	if err != nil {
+		return err
+	}
 
-	r := tree.NewRootEntry()
-	for _, updateList := range allCurrentCacheEntries {
-		for _, u := range updateList {
-			r.AddCacheUpdateRecursive(u, false)
+	// create a new Tree
+	root := tree.NewTreeRoot()
+
+	// Get all entries of the already existing intent
+	allCurrentCacheEntries := d.readNewUpdatesHighestPriority(ctx, keys)
+
+	// add all the existing entries
+	for _, e := range allCurrentCacheEntries {
+		for _, x := range e {
+			root.AddCacheUpdateRecursive(x, false)
 		}
+	}
+
+	// Add Intended content
+	currentCacheEntries := d.cacheClient.Read(ctx, d.Name(),
+		&cache.Opts{
+			Store:         cachepb.Store_INTENDED,
+			PriorityCount: 2,
+		}, ic.newCompletePaths,
+		0)
+
+	// add all the existing entries
+	for _, u := range currentCacheEntries {
+		root.AddCacheUpdateRecursive(u, false)
 	}
 
 	// Mark all the entries that belong to the owner / intent as deleted.
 	// This is to allow for intent updates. We mark all existing entries for deletion up front.
-	r.MarkOwnerDelete(req.GetIntent())
+	root.MarkOwnerDelete(req.GetIntent())
 
 	fmt.Println("tree content:")
-	fmt.Println(r.String())
+	fmt.Println(root.String())
 
 	// list of updates to be added to the cache later on.
 	// NOT TO MYSELF: Actually I'm asking myself if we can not add it to the intended store a priori
@@ -124,7 +146,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		}
 		cUpd := cache.NewUpdate(pathSlice, val, req.GetPriority(), req.GetIntent(), int64(5))
 
-		err = r.AddCacheUpdateRecursive(cUpd, true)
+		err = root.AddCacheUpdateRecursive(cUpd, true)
 		if err != nil {
 			return err
 		}
@@ -132,10 +154,10 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 
 	fmt.Println("################")
 	fmt.Println("tree content2 :")
-	fmt.Println(r.String())
+	fmt.Println(root.String())
 
 	fmt.Println("highes Prio Updates:")
-	updates := r.GetHighesPrio()
+	updates := root.GetHighesPrio()
 
 	for _, u := range updates {
 		fmt.Printf("Update: %v\n", u)
@@ -143,11 +165,16 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	fmt.Print("\n################\n\n")
 
 	fmt.Printf("Updates of Owner %q:\n", req.GetIntent())
-	updates = tree.LeafEntriesToCacheUpdates(r.GetByOwnerFiltered(req.GetIntent(), tree.FilterNonDeleted))
+	updates = tree.LeafEntriesToCacheUpdates(root.GetByOwnerFiltered(req.GetIntent(), tree.FilterNonDeleted))
 	for _, u := range updates {
 		fmt.Printf("Update: %v\n", u)
 	}
 
+	fmt.Println("Deletes:")
+	deletes := root.GetDeletes()
+	for _, u := range deletes {
+		fmt.Printf("Delete: %v\n", strings.Join(u, "/"))
+	}
 	// PH1: go through all updates from the intent to figure out
 	// if they need to be applied based on the intent priority.
 	logger.Debugf("reading intent paths to be updated from intended store; looking for the highest priority values")
@@ -659,6 +686,51 @@ func (d *Datastore) getNextPriority(ctx context.Context, intentPriority int32, i
 			}
 		}
 		return nil
+	}
+}
+
+func (d *Datastore) readIntendedStoreKeysMeta(ctx context.Context) (map[string][]*cache.Update, error) {
+	entryCh, err := d.cacheClient.GetIntendedKeysMeta(ctx, d.config.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	result := map[string][]*cache.Update{}
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case e, ok := <-entryCh:
+			if !ok {
+				return result, nil
+			}
+			key := strings.Join(e.GetPath(), "/")
+			_, exists := result[key]
+			if !exists {
+				result[key] = []*cache.Update{}
+			}
+			result[key] = append(result[key], e)
+		}
+	}
+}
+
+func (d *Datastore) readIntendedStoreKeys(ctx context.Context) ([][]string, error) {
+	entryCh, err := d.cacheClient.GetIntendedKeys(ctx, d.config.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	result := [][]string{}
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case e, ok := <-entryCh:
+			if !ok {
+				return result, nil
+			}
+			result = append(result, e)
+		}
 	}
 }
 

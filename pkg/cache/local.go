@@ -143,6 +143,66 @@ func (c *localCache) Read(ctx context.Context, name string, opts *Opts, paths []
 	}
 }
 
+func (c *localCache) GetIntendedKeys(ctx context.Context, name string) (chan []string, error) {
+	entryCh, err := c.c.ReadIntendedKeys(ctx, name)
+	outCh := make(chan []string)
+	if err != nil {
+		close(outCh)
+		return nil, err
+	}
+	go func() {
+		defer close(outCh)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case e, ok := <-entryCh:
+				if !ok {
+					return
+				}
+				if e == nil {
+					continue //
+				}
+				outCh <- e.P
+			}
+		}
+	}()
+	return outCh, nil
+}
+
+func (c *localCache) GetIntendedKeysMeta(ctx context.Context, name string) (chan *Update, error) {
+	entryCh, err := c.c.ReadIntendedKeys(ctx, name)
+	outCh := make(chan *Update)
+	if err != nil {
+		close(outCh)
+		return nil, err
+	}
+	go func() {
+		defer close(outCh)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case e, ok := <-entryCh:
+				if !ok {
+					return
+				}
+				if e == nil {
+					continue //
+				}
+				outCh <- &Update{
+					path:     e.P,
+					value:    nil,
+					priority: e.Priority,
+					owner:    e.Owner,
+					ts:       int64(e.Timestamp),
+				}
+			}
+		}
+	}()
+	return outCh, nil
+}
+
 func (c *localCache) ReadCh(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) chan *Update {
 	if opts == nil {
 		opts = &Opts{}
