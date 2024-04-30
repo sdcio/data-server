@@ -51,7 +51,7 @@ const (
 )
 
 type jsonBuilder struct {
-	scc *schemaClient.SchemaClientBound
+	scc schemaClient.SchemaClientBound
 }
 
 // pathElem is a path element that carries the keys types as well as their values
@@ -86,7 +86,7 @@ func (pe *pathElem) String() string {
 	return sb.String()
 }
 
-func New(scc *schemaClient.SchemaClientBound) *jsonBuilder {
+func New(scc schemaClient.SchemaClientBound) *jsonBuilder {
 	return &jsonBuilder{
 		scc: scc,
 	}

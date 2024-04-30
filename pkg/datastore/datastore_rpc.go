@@ -59,7 +59,7 @@ type Datastore struct {
 
 	// client, bound to schema and version on the schema side and to datastore name on the cache side
 	// do not use directly use getValidationClient()
-	_validationClientBound *clients.ValidationClient
+	_validationClientBound clients.ValidationClient
 
 	// sync channel, to be passed to the SBI Sync method
 	synCh chan *target.SyncUpdate
@@ -796,7 +796,7 @@ func (d *Datastore) changesToUpdates(ctx context.Context, changes []*cache.Chang
 
 // getValidationClient will create a ValidationClient instance if not already existing
 // save it as part of the datastore and return a valid *clients.ValidationClient
-func (d *Datastore) getValidationClient() *clients.ValidationClient {
+func (d *Datastore) getValidationClient() clients.ValidationClient {
 	// if not initialized, init it, cache it
 	if d._validationClientBound == nil {
 		d._validationClientBound = clients.NewValidationClient(d.Name(), d.cacheClient, d.Schema().GetSchema(), d.schemaClient)

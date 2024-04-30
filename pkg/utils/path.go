@@ -215,6 +215,17 @@ func ToStrings(p *sdcpb.Path, prefix, nokeys bool) []string {
 	return is
 }
 
+// SdcpbPathToKeylessString return the contents of an sdcpb.Path without any key data
+// as a String. This is to build a lookup index for the SchemaElements.
+func SdcpbPathToKeylessString(p *sdcpb.Path) string {
+	sb := strings.Builder{}
+	for _, v := range p.Elem {
+		sb.WriteString("/")
+		sb.WriteString(v.GetName())
+	}
+	return sb.String()
+}
+
 func sortedVals(m map[string]string) []string {
 	// Special case single key lists.
 	if len(m) == 1 {

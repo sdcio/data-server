@@ -1,0 +1,21 @@
+[
+    {
+        "path": "/routing-policy/prefix-set[name=test]",
+        "value": {
+            "prefix": [
+                {
+                    "ip-prefix": "1.2.3.0/24",
+                    "mask-length-range": "25..26"
+                },
+                {
+                    "ip-prefix": "1.2.3.0/24",
+                    "mask-length-range": "26..27"
+                },
+                {
+                    "ip-prefix": "5.6.7.0/24",
+                    "mask-length-range": "24..25"
+                }
+            ]
+        }
+    }
+]

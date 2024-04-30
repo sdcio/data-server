@@ -163,7 +163,7 @@ NEXT_STORE:
 }
 
 func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, req *sdcpb.GetDataRequest, paths [][]string, out chan *sdcpb.GetDataResponse) error {
-	jbuilder := jbuilderv2.New(d.getValidationClient().SchemaClientBound)
+	jbuilder := jbuilderv2.New(d.getValidationClient())
 	rs := make(map[string]any)
 	now := time.Now().UnixNano()
 

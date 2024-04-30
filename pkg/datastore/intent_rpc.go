@@ -222,12 +222,11 @@ func (d *Datastore) applyIntent(ctx context.Context, candidateName string, prior
 
 func (d *Datastore) validateChoiceCases(ctx context.Context, updates []*sdcpb.Update, replaces []*sdcpb.Update, candidateName string) error {
 	_ = replaces
-	scb := d.getValidationClient().SchemaClientBound
-	ccb := d.getValidationClient().CacheClientBound
+	validationClient := d.getValidationClient()
 
 	for _, u := range updates {
 		done := make(chan struct{})
-		schemaElemChan, err := scb.GetSchemaElements(ctx, u.GetPath(), done)
+		schemaElemChan, err := validationClient.GetSchemaElements(ctx, u.GetPath(), done)
 		if err != nil {
 			return err
 		}
@@ -260,7 +259,7 @@ func (d *Datastore) validateChoiceCases(ctx context.Context, updates []*sdcpb.Up
 					}
 					log.Infof("CHOICE-INFO: %s on %s", choiceInfo.String(), p.String())
 
-					tv, err := ccb.GetValues(ctx, candidateName, p)
+					tv, err := validationClient.GetValues(ctx, candidateName, p)
 					if err != nil {
 						return err
 					}

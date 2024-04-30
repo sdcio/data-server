@@ -123,3 +123,18 @@ Eight
     Should Be Equal As Integers    ${result.rc}    0
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+9_1 - Add Double Key
+    ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    nine    10        ${CURDIR}/intents/9-1_double_key_add.json
+
+    Should Be Equal As Integers    ${result.rc}    0
+
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+
+9_2 - Double Key, Remove single entry
+    ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    nine    10        ${CURDIR}/intents/9-2_double_key_remove_single_entry.json
+
+    Should Be Equal As Integers    ${result.rc}    0
+
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}

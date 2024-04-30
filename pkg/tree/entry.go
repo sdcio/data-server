@@ -1,11 +1,15 @@
 package tree
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
 
 	"github.com/sdcio/data-server/pkg/cache"
+	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/utils"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 type EntryImpl struct {
@@ -32,6 +36,10 @@ type Entry interface {
 	MarkOwnerDelete(o string)
 	// GetDeletes returns the cache-updates that are not updated, have no lower priority value left and hence should be deleted completely
 	GetDeletes([][]string) [][]string
+	// Walk takes the EntryVisitor and applies it to every Entry in the tree
+	Walk(f EntryVisitor) error
+	ShouldDelete() bool
+	IsDeleteKeyAttributesInLevelDown(level int, names []string) (bool, [][]string)
 }
 
 func newEntry(parent Entry, pathElemName string) *EntryImpl {
@@ -84,39 +92,123 @@ func NewLeafEntry(c *cache.Update, new bool) *LeafEntry {
 
 // sharedEntryAttributes contains the attributes shared by Entry and RootEntry
 type sharedEntryAttributes struct {
-	// the parent Entry, nil for the root Entry
-	Parent Entry
-	// The path elements name the entry represents
-	PathElemName string
-	// Childs mutual exclusive with LeafVariants
-	Childs map[string]Entry
-	// LeafVariants mutual exclusive with Childs
-	// If Entry is a leaf it can hold multiple LeafVariants
-	LeafVariants LeafVariants
+	// parent entry, nil for the root Entry
+	parent Entry
+	// pathElemName the path elements name the entry represents
+	pathElemName string
+	// childs mutual exclusive with LeafVariants
+	childs map[string]Entry
+	// leafVariants mutual exclusive with Childs
+	// If Entry is a leaf it can hold multiple leafVariants
+	leafVariants LeafVariants
+	// isSchemaElement indicates if this reflects a Schema Element or a Key Element
+	isSchemaElement bool
+	// schema the schema element for this entry
+	schema *sdcpb.SchemaElem
 }
 
 func (s *sharedEntryAttributes) GetLevel() int {
 	return len(s.Path())
 }
 
-func (s *sharedEntryAttributes) GetDeletes(deletes [][]string) [][]string {
-	if s.LeafVariants.ShouldDelete() {
-		deletes = append(deletes, s.LeafVariants[0].GetPath())
+// Walk takes the EntryVisitor and applies it to every Entry in the tree
+func (s *sharedEntryAttributes) Walk(f EntryVisitor) error {
+
+	// TODO: COME UP WITH SOME CLEVER CONCURRENCY
+
+	// execute the function locally
+	err := f(s)
+	if err != nil {
+		return err
 	}
-	for _, e := range s.Childs {
+
+	// trigger the execution on all childs
+	for _, c := range s.childs {
+		err := c.Walk(f)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *sharedEntryAttributes) IsDeleteKeyAttributesInLevelDown(level int, names []string) (bool, [][]string) {
+	if level > 0 {
+		for _, v := range s.childs {
+			return v.IsDeleteKeyAttributesInLevelDown(level-1, names)
+		}
+	}
+	// if we're at the right level, check the keys for deletion
+	for _, n := range names {
+		c, exists := s.childs[n]
+		// these keys should aways exist, so for now we do not catch the non existing key case
+		if exists && !c.ShouldDelete() {
+			return false, nil
+		}
+	}
+	return true, [][]string{s.Path()}
+}
+
+// ShouldDelete flag if the leafvariant or entire branch is marked for deletion
+func (s *sharedEntryAttributes) ShouldDelete() bool {
+	// if leafeVariants exist, delegate the call to the leafVariants
+	if len(s.leafVariants) > 0 {
+		return s.leafVariants.ShouldDelete()
+	}
+	// otherwise query the childs
+	for _, c := range s.childs {
+		// if a single child exists that should not be deleted, exit early with a false
+		if !c.ShouldDelete() {
+			return false
+		}
+	}
+	// otherwise all childs reported true, and we can report true as well
+	return true
+}
+
+func (s *sharedEntryAttributes) GetDeletes(deletes [][]string) [][]string {
+
+	// if entry is a container type, check the keys, to be able to
+	// issue a delte for the whole branch at once via keys
+	switch sch := s.schema.GetSchema().(type) {
+	case *sdcpb.SchemaElem_Container:
+		keySchemas := sch.Container.Keys
+
+		if len(keySchemas) > 0 {
+			var keys []string
+			for _, k := range keySchemas {
+				keys = append(keys, k.Name)
+			}
+
+			for _, c := range s.childs {
+				if doDelete, paths := c.IsDeleteKeyAttributesInLevelDown(len(keys)-1, keys); doDelete {
+					deletes = append(deletes, paths...)
+				} else {
+					deletes = c.GetDeletes(deletes)
+				}
+			}
+			return deletes
+		}
+	}
+
+	if s.leafVariants.ShouldDelete() {
+		return append(deletes, s.leafVariants[0].GetPath())
+	}
+
+	for _, e := range s.childs {
 		deletes = e.GetDeletes(deletes)
 	}
 	return deletes
 }
 
 func (s *sharedEntryAttributes) GetByOwner(owner string, result []*LeafEntry) []*LeafEntry {
-	lv := s.LeafVariants.GetByOwner(owner)
+	lv := s.leafVariants.GetByOwner(owner)
 	if lv != nil {
 		result = append(result, lv)
 	}
 
 	// continue with childs
-	for _, c := range s.Childs {
+	for _, c := range s.childs {
 		result = c.GetByOwner(owner, result)
 	}
 	return result
@@ -124,43 +216,43 @@ func (s *sharedEntryAttributes) GetByOwner(owner string, result []*LeafEntry) []
 
 func (s *sharedEntryAttributes) Path() []string {
 	// special handling for root node
-	if s.Parent == nil {
+	if s.parent == nil {
 		return []string{}
 	}
-	return append(s.Parent.Path(), s.PathElemName)
+	return append(s.parent.Path(), s.pathElemName)
 }
 
 func (s *sharedEntryAttributes) PathName() string {
-	return s.PathElemName
+	return s.pathElemName
 }
 
 func (s *sharedEntryAttributes) String() string {
-	return strings.Join(s.Parent.Path(), "/")
+	return strings.Join(s.parent.Path(), "/")
 }
 
 func (s *sharedEntryAttributes) AddChild(e Entry) error {
 	// make sure Entry should not only hold LeafEntries
-	if len(s.LeafVariants) > 0 {
+	if len(s.leafVariants) > 0 {
 		return fmt.Errorf("cannot add child to %s since it holds Leafs", s)
 	}
 	// check the path of child is a subpath of s
 	if !slices.Equal(s.Path(), e.Path()[:len(e.Path())-1]) {
 		return fmt.Errorf("adding Child with diverging path, parent: %s, child: %s", s, strings.Join(e.Path()[:len(e.Path())-1], "/"))
 	}
-	s.Childs[e.PathName()] = e
+	s.childs[e.PathName()] = e
 	return nil
 }
 
 func (s *sharedEntryAttributes) GetHighesPrio(result []*cache.Update) []*cache.Update {
 	// try to get get the highes prio LeafVariant make sure it exists (!= nil)
 	// and add it to the result if it is NEW
-	lv := s.LeafVariants.GetHighes()
+	lv := s.leafVariants.GetHighes()
 	if lv != nil {
 		result = append(result, lv.Update)
 	}
 
 	// continue with childs
-	for _, c := range s.Childs {
+	for _, c := range s.childs {
 		result = c.GetHighesPrio(result)
 	}
 	return result
@@ -168,10 +260,10 @@ func (s *sharedEntryAttributes) GetHighesPrio(result []*cache.Update) []*cache.U
 
 func newSharedEntryAttributes(parent Entry, pathElemName string) *sharedEntryAttributes {
 	return &sharedEntryAttributes{
-		Parent:       parent,
-		PathElemName: pathElemName,
-		Childs:       map[string]Entry{},
-		LeafVariants: newLeafVariants(),
+		parent:       parent,
+		pathElemName: pathElemName,
+		childs:       map[string]Entry{},
+		leafVariants: newLeafVariants(),
 	}
 }
 
@@ -240,17 +332,17 @@ type RootEntry struct {
 // StringIndent returns the sharedEntryAttributes in its string representation
 // The string is intented according to the nesting level in the yang model
 func (s *sharedEntryAttributes) StringIndent(result []string) []string {
-	result = append(result, strings.Repeat("  ", s.GetLevel())+s.PathElemName)
+	result = append(result, strings.Repeat("  ", s.GetLevel())+s.pathElemName)
 
 	// ranging over children and LeafVariants
 	// then should be mutual exclusive, either a node has children or LeafVariants
 
 	// range over children
-	for _, c := range s.Childs {
+	for _, c := range s.childs {
 		result = c.StringIndent(result)
 	}
 	// range over LeafVariants
-	for _, l := range s.LeafVariants {
+	for _, l := range s.leafVariants {
 		result = append(result, fmt.Sprintf("%s -> %s", strings.Repeat("  ", s.GetLevel()), l.String()))
 	}
 	return result
@@ -258,11 +350,11 @@ func (s *sharedEntryAttributes) StringIndent(result []string) []string {
 
 // MarkOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
 func (s *sharedEntryAttributes) MarkOwnerDelete(o string) {
-	lvEntry := s.LeafVariants.GetByOwner(o)
+	lvEntry := s.leafVariants.GetByOwner(o)
 	if lvEntry != nil {
 		lvEntry.MarkDelete()
 	}
-	for _, child := range s.Childs {
+	for _, child := range s.childs {
 		child.MarkOwnerDelete(o)
 	}
 }
@@ -270,14 +362,14 @@ func (s *sharedEntryAttributes) MarkOwnerDelete(o string) {
 func (r *sharedEntryAttributes) AddCacheUpdateRecursive(c *cache.Update, new bool) error {
 	idx := 0
 	// if it is the root node, index remains == 0
-	if r.Parent != nil {
+	if r.parent != nil {
 		idx = r.GetLevel()
 	}
 	// end of path reached, add LeafEntry
 	// continue with recursive add otherwise
 	if idx == len(c.GetPath()) {
 		// Check if LeafEntry with given owner already exists
-		if leafVariant := r.LeafVariants.GetByOwner(c.Owner()); leafVariant != nil {
+		if leafVariant := r.leafVariants.GetByOwner(c.Owner()); leafVariant != nil {
 			if leafVariant.EqualSkipPath(c) {
 				// it seems like the element was not deleted, so drop the delete flag
 				leafVariant.Delete = false
@@ -287,7 +379,7 @@ func (r *sharedEntryAttributes) AddCacheUpdateRecursive(c *cache.Update, new boo
 			}
 		} else {
 			// if LeafVaraint with same owner does not exist, add the new entry
-			r.LeafVariants = append(r.LeafVariants, NewLeafEntry(c, new))
+			r.leafVariants = append(r.leafVariants, NewLeafEntry(c, new))
 		}
 		return nil
 	}
@@ -295,7 +387,7 @@ func (r *sharedEntryAttributes) AddCacheUpdateRecursive(c *cache.Update, new boo
 	var e Entry
 	var exists bool
 	// if child does not exist, create Entry
-	if e, exists = r.Childs[c.GetPath()[idx]]; !exists {
+	if e, exists = r.childs[c.GetPath()[idx]]; !exists {
 		e = newEntry(r, c.GetPath()[idx])
 	}
 	e.AddCacheUpdateRecursive(c, new)
@@ -303,7 +395,7 @@ func (r *sharedEntryAttributes) AddCacheUpdateRecursive(c *cache.Update, new boo
 	return nil
 }
 
-func NewTreeRoot() *RootEntry {
+func NewTreeRoot(scb SchemaClient.SchemaClientBound) *RootEntry {
 	return &RootEntry{
 		sharedEntryAttributes: newSharedEntryAttributes(nil, ""),
 	}
@@ -345,4 +437,58 @@ NEXTELEMENT:
 		result = append(result, e)
 	}
 	return result
+}
+
+type EntryVisitor func(s *sharedEntryAttributes) error
+
+// TreeWalkerSchemaRetriever returns an EntryVisitor, that populates the tree entries with the corresponding schema entries.
+func TreeWalkerSchemaRetriever(ctx context.Context, scb SchemaClient.SchemaClientBound) EntryVisitor {
+	// the schemaIndex is used as a lookup cache for Schema elements,
+	// to prevent repetetive requests for the same schema element
+	schemaIndex := map[string]*sdcpb.SchemaElem{}
+
+	return func(s *sharedEntryAttributes) error {
+		// if schema is already set, return early
+		if s.schema != nil {
+			return nil
+		}
+
+		// convert the []string path into sdcpb.path for schema retrieval
+		sdcpbPath, err := scb.ToPath(ctx, s.Path())
+		if err != nil {
+			return err
+		}
+
+		// check if the actual path points to a key value (the last path element contains a key)
+		// if so, we can skip querying the schema server
+		if len(sdcpbPath.Elem) > 0 && len(sdcpbPath.Elem[len(sdcpbPath.Elem)-1].Key) > 0 {
+			// s.schema remains nil
+			// s.isSchemaElement remains false
+			return nil
+		}
+
+		// convert the path into a keyless path, for schema index lookups.
+		keylessPath := utils.SdcpbPathToKeylessString(sdcpbPath)
+
+		// lookup schema in schemaindex, preventing consecutive gets from the schema server
+		if v, exists := schemaIndex[keylessPath]; exists {
+			// set the schema retrieved from SchemaIndex
+			s.schema = v
+			// we're done, schema is set, return
+			return nil
+		}
+
+		// if schema wasn't found in index, go and fetch it
+		schemaRsp, err := scb.GetSchema(ctx, sdcpbPath)
+		if err != nil {
+			return err
+		}
+
+		// store schema in schemaindex for next lookup
+		schemaIndex[keylessPath] = schemaRsp.GetSchema()
+		// set the sharedEntryAttributes related values
+		s.schema = schemaRsp.GetSchema()
+		s.isSchemaElement = true
+		return nil
+	}
 }
