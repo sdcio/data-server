@@ -59,6 +59,7 @@ mocks-gen: mocks-rm ## Generate mocks for all the defined interfaces.
 	go install go.uber.org/mock/mockgen@latest
 	mockgen -package=mocknetconf -source=pkg/datastore/target/netconf/driver.go -destination=$(MOCKDIR)/mocknetconf/driver.go
 	mockgen -package=mockschema -source=pkg/schema/schema_client.go -destination=$(MOCKDIR)/mockschema/client.go
+	mockgen -package=mockschemaclientbound -source=pkg/datastore/clients/schema/schemaClientBound.go -destination=$(MOCKDIR)/mockschemaclientbound/client.go
 
 .PHONY: mocks-rm
 mocks-rm: ## remove generated mocks

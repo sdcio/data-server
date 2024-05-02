@@ -5,7 +5,13 @@
             "interface": [
                 {
                     "name": "ethernet-1/1",
-                    "description": "Four"
+                    "description": "Four",
+                    "subinterface": [
+                        {
+                            "index": 0,
+                            "description": "test"
+                        }
+                    ]
                 },
                 {
                     "name": "ethernet-1/2",

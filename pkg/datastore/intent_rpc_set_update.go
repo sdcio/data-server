@@ -64,6 +64,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	for _, keyMeta := range keysMeta {
 		for _, k := range keyMeta {
 			if k.Owner() == req.GetIntent() {
+				keys = append(keys, k.GetPath())
 				keysIndex[strings.Join(k.GetPath(), "")] = struct{}{}
 			}
 		}

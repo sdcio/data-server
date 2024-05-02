@@ -1,11 +1,18 @@
 package tree
 
 import (
+	"context"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
 	"github.com/sdcio/data-server/pkg/cache"
+	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -318,4 +325,201 @@ func Test_Entry_Four(t *testing.T) {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
+}
+
+func Test_Entry_Delete_Aggregation(t *testing.T) {
+	desc3 := getStringTvProto(t, "DescriptionThree")
+	prio50 := int32(50)
+	owner1 := "OwnerOne"
+	ts1 := int64(9999999)
+
+	u1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, desc3, prio50, owner1, ts1)
+	u2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, getStringTvProto(t, "ethernet-0/0"), prio50, owner1, ts1)
+	u3 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "0", "index"}, getStringTvProto(t, "0"), prio50, owner1, ts1)
+	u4 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "0", "description"}, desc3, prio50, owner1, ts1)
+	u5 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "index"}, getStringTvProto(t, "1"), prio50, owner1, ts1)
+	u6 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "description"}, desc3, prio50, owner1, ts1)
+
+	root := NewTreeRoot()
+
+	// start test add "existing" data
+	for _, u := range []*cache.Update{u1, u2, u3, u4, u5, u6} {
+		err := root.AddCacheUpdateRecursive(u, false)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+
+	// get ready to add the new intent data
+	root.MarkOwnerDelete(owner1)
+
+	u1n := cache.NewUpdate([]string{"interface", "ethernet-0/1", "description"}, desc3, prio50, owner1, ts1)
+	u2n := cache.NewUpdate([]string{"interface", "ethernet-0/1", "name"}, getStringTvProto(t, "ethernet-0/1"), prio50, owner1, ts1)
+
+	// start test add "new" / request data
+	for _, u := range []*cache.Update{u1n, u2n} {
+		err := root.AddCacheUpdateRecursive(u, true)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+
+	// get a visitor with the schemaClientBound mock
+	visitor := TreeWalkerSchemaRetriever(context.Background(), getSchemaClientBound(t))
+
+	// populate the tree with the schema entries
+	root.Walk(visitor)
+
+	// retrieve the Deletes
+	deletesSlices := root.GetDeletes()
+
+	// process the result for comparison
+	deletes := make([]string, 0, len(deletesSlices))
+	for _, x := range deletesSlices {
+		deletes = append(deletes, strings.Join(x, "/"))
+	}
+
+	// define the expected result
+	expects := []string{
+		"interface/ethernet-0/0",
+	}
+	// sort both slices for equality check
+	slices.Sort(deletes)
+	slices.Sort(expects)
+
+	// perform comparison
+	if diff := cmp.Diff(expects, deletes); diff != "" {
+		t.Errorf("root.GetDeletes() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// getSchemaClientBound creates a SchemaClientBound mock that responds to certain GetSchema requests
+func getSchemaClientBound(t *testing.T) SchemaClient.SchemaClientBound {
+	mockCtrl := gomock.NewController(t)
+
+	mockscb := mockschemaclientbound.NewMockSchemaClientBound(mockCtrl)
+
+	// index for the ToPath() function
+	responseMap := map[string]*sdcpb.SchemaElem{}
+
+	// root
+	responseMap[""] = createSchemaContainer("__root__", nil)
+
+	// interface
+	responseMap["/interface"] = createSchemaContainer("interface", []string{"name"})
+	responseMap["/interface/name"] = createSchemaField("name")
+	responseMap["/interface/description"] = createSchemaField("description")
+
+	// interface / subinterface
+	responseMap["/interface/subinterface"] = createSchemaContainer("subinterface", []string{"index"})
+	responseMap["/interface/subinterface/index"] = createSchemaField("index")
+	responseMap["/interface/subinterface/description"] = createSchemaField("description")
+
+	// network-instance
+	responseMap["/network-instance"] = createSchemaContainer("network-instance", []string{"name"})
+	responseMap["/network-instance/name"] = createSchemaField("name")
+	responseMap["/network-instance/description"] = createSchemaField("description")
+
+	// make the mock respond to GetSchema requests
+	mockscb.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+		func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+			keylessString := utils.SdcpbPathToKeylessString(path)
+			return &sdcpb.GetSchemaResponse{
+				Schema: responseMap[keylessString],
+			}, nil
+		},
+	)
+
+	// index for the ToPath() function
+	pathMap := map[string]*sdcpb.Path{}
+	pathMap[""] = &sdcpb.Path{}
+
+	pathMap["interface"] = createPath(pathMap[""], "interface", nil)
+
+	// interface ethernet0/0
+	pathMap["interface/ethernet-0/0"] = createPath(pathMap["interface"], "interface", map[string]string{"name": "ethernet-0/0"})
+
+	pathMap["interface/ethernet-0/0/name"] = createPath(pathMap["interface/ethernet-0/0"], "name", nil)
+	pathMap["interface/ethernet-0/0/description"] = createPath(pathMap["interface/ethernet-0/0"], "description", nil)
+
+	pathMap["interface/ethernet-0/0/subinterface"] = createPath(pathMap["interface/ethernet-0/0"], "subinterface", nil)
+	pathMap["interface/ethernet-0/0/subinterface/0"] = createPath(pathMap["interface/ethernet-0/0/subinterface"], "subinterface", map[string]string{"index": "0"})
+	pathMap["interface/ethernet-0/0/subinterface/0/index"] = createPath(pathMap["interface/ethernet-0/0/subinterface/0"], "index", nil)
+	pathMap["interface/ethernet-0/0/subinterface/0/description"] = createPath(pathMap["interface/ethernet-0/0/subinterface/0"], "description", nil)
+	pathMap["interface/ethernet-0/0/subinterface/1"] = createPath(pathMap["interface/ethernet-0/0/subinterface"], "subinterface", map[string]string{"index": "1"})
+	pathMap["interface/ethernet-0/0/subinterface/1/index"] = createPath(pathMap["interface/ethernet-0/0/subinterface/1"], "index", nil)
+	pathMap["interface/ethernet-0/0/subinterface/1/description"] = createPath(pathMap["interface/ethernet-0/0/subinterface/1"], "description", nil)
+	pathMap["interface/ethernet-0/0/subinterface/2"] = createPath(pathMap["interface/ethernet-0/0/subinterface"], "subinterface", map[string]string{"index": "2"})
+	pathMap["interface/ethernet-0/0/subinterface/2/index"] = createPath(pathMap["interface/ethernet-0/0/subinterface/2"], "index", nil)
+	pathMap["interface/ethernet-0/0/subinterface/2/description"] = createPath(pathMap["interface/ethernet-0/0/subinterface/2"], "description", nil)
+
+	// interface ethernet0/1
+	pathMap["interface/ethernet-0/1"] = createPath(pathMap["interface"], "interface", map[string]string{"name": "ethernet-0/1"})
+
+	pathMap["interface/ethernet-0/1/name"] = createPath(pathMap["interface/ethernet-0/1"], "name", nil)
+	pathMap["interface/ethernet-0/1/description"] = createPath(pathMap["interface/ethernet-0/1"], "description", nil)
+
+	pathMap["interface/ethernet-0/1/subinterface"] = createPath(pathMap["interface/ethernet-0/1"], "subinterface", nil)
+	pathMap["interface/ethernet-0/1/subinterface/0"] = createPath(pathMap["interface/ethernet-0/1/subinterface"], "subinterface", map[string]string{"index": "0"})
+	pathMap["interface/ethernet-0/1/subinterface/0/description"] = createPath(pathMap["interface/ethernet-0/1/subinterface/0"], "description", nil)
+	pathMap["interface/ethernet-0/1/subinterface/0/index"] = createPath(pathMap["interface/ethernet-0/1/subinterface/0"], "index", nil)
+	pathMap["interface/ethernet-0/1/subinterface/1"] = createPath(pathMap["interface/ethernet-0/1/subinterface"], "subinterface", map[string]string{"index": "1"})
+	pathMap["interface/ethernet-0/1/subinterface/1/description"] = createPath(pathMap["interface/ethernet-0/1/subinterface/1"], "description", nil)
+	pathMap["interface/ethernet-0/1/subinterface/1/index"] = createPath(pathMap["interface/ethernet-0/1/subinterface/1"], "index", nil)
+	pathMap["interface/ethernet-0/1/subinterface/2"] = createPath(pathMap["interface/ethernet-0/1/subinterface"], "subinterface", map[string]string{"index": "2"})
+	pathMap["interface/ethernet-0/1/subinterface/2/description"] = createPath(pathMap["interface/ethernet-0/1/subinterface/2"], "description", nil)
+	pathMap["interface/ethernet-0/1/subinterface/2/index"] = createPath(pathMap["interface/ethernet-0/1/subinterface/2"], "index", nil)
+
+	// setup the ToPath() responses
+	mockscb.EXPECT().ToPath(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+		func(_ context.Context, path []string) (*sdcpb.Path, error) {
+			return pathMap[strings.Join(path, "/")], nil
+		},
+	)
+
+	// return the mock
+	return mockscb
+}
+
+func createPath(p *sdcpb.Path, elemName string, keys map[string]string) *sdcpb.Path {
+	result := utils.CopyPath(p)
+
+	result.Elem = append(result.Elem, &sdcpb.PathElem{
+		Name: elemName,
+		Key:  keys,
+	})
+	return result
+}
+
+// createSchemaContainer generate a container schema elem
+func createSchemaContainer(name string, keys []string) *sdcpb.SchemaElem {
+
+	// process the keys
+	sKeys := []*sdcpb.LeafSchema{}
+	for _, k := range keys {
+		sKeys = append(sKeys, &sdcpb.LeafSchema{
+			Name: k,
+		})
+	}
+
+	// build and return the schema element
+	return &sdcpb.SchemaElem{
+		Schema: &sdcpb.SchemaElem_Container{
+			Container: &sdcpb.ContainerSchema{
+				Name: name,
+				Keys: sKeys,
+			},
+		},
+	}
+}
+
+// createSchemaField generate a field schema elem
+func createSchemaField(name string) *sdcpb.SchemaElem {
+	return &sdcpb.SchemaElem{
+		Schema: &sdcpb.SchemaElem_Field{
+			Field: &sdcpb.LeafSchema{
+				Name: name,
+			},
+		},
+	}
 }
