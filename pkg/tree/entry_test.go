@@ -83,7 +83,7 @@ func Test_Entry_One(t *testing.T) {
 	})
 
 	t.Run("Test 3 - GetHighesPrio()", func(t *testing.T) {
-		highpri := root.GetHighesPrioNewUpdated()
+		highpri := root.GetHighesPrio(true)
 		// diff the result with the expected
 		if diff := diffCacheUpdates([]*cache.Update{u1, u3}, highpri); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
@@ -126,7 +126,7 @@ func Test_Entry_Two(t *testing.T) {
 	// log the tree
 	t.Log(root.String())
 
-	highpri := root.GetHighesPrioNewUpdated()
+	highpri := root.GetHighesPrio(true)
 
 	// diff the result with the expected
 	if diff := diffCacheUpdates([]*cache.Update{n1}, highpri); diff != "" {
@@ -160,10 +160,23 @@ func Test_Entry_Three(t *testing.T) {
 		// log the tree
 		t.Log(root.String())
 
-		highpri := root.GetHighesPrioNewUpdated()
+		highpri := root.GetHighesPrio(false)
 
 		// diff the result with the expected
 		if diff := diffCacheUpdates([]*cache.Update{u1, u2, u3, u4}, highpri); diff != "" {
+			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("Check non is reported as New or Updated", func(t *testing.T) {
+
+		// log the tree
+		t.Log(root.String())
+
+		highpri := root.GetHighesPrio(true)
+
+		// diff the result with the expected
+		if diff := diffCacheUpdates([]*cache.Update{}, highpri); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -205,7 +218,7 @@ func Test_Entry_Three(t *testing.T) {
 	})
 
 	t.Run("Check the old entries are gone", func(t *testing.T) {
-		highpri := root.GetHighesPrioNewUpdated()
+		highpri := root.GetHighesPrio(true)
 		// diff the result with the expected
 		if diff := diffCacheUpdates([]*cache.Update{n1, n2}, highpri); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
@@ -246,7 +259,7 @@ func Test_Entry_Four(t *testing.T) {
 		// log the tree
 		t.Log(root.String())
 
-		highpri := root.GetHighesPrioNewUpdated()
+		highpri := root.GetHighesPrio(false)
 
 		// diff the result with the expected
 		if diff := diffCacheUpdates([]*cache.Update{u1o1, u2o1, u3, u4}, highpri); diff != "" {
@@ -291,11 +304,18 @@ func Test_Entry_Four(t *testing.T) {
 	})
 
 	t.Run("Check the old entries are gone from highest", func(t *testing.T) {
-		highpri := root.GetHighesPrioNewUpdated()
+		highpri := root.GetHighesPrio(false)
 		// diff the result with the expected
 		if diff := diffCacheUpdates([]*cache.Update{n1, n2, u1o2, u2o2}, highpri); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
 
+	t.Run("Check the old entries are gone from highest (only New Or Updated)", func(t *testing.T) {
+		highpri := root.GetHighesPrio(true)
+		// diff the result with the expected
+		if diff := diffCacheUpdates([]*cache.Update{n1, n2}, highpri); diff != "" {
+			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
+		}
+	})
 }
