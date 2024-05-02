@@ -27,9 +27,10 @@ type Entry interface {
 	AddCacheUpdateRecursive(u *cache.Update, new bool) error
 	// StringIndent debug tree struct as indented string slice
 	StringIndent(result []string) []string
-	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority and new == true.
+	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
+	// If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
 	// It will append to the given list and provide a new pointer to the slice
-	GetHighesPrio([]*cache.Update) []*cache.Update
+	GetHighesPrio(u []*cache.Update, onlyNewOrUpdated bool) []*cache.Update
 	// GetByOwner returns the branches Updates by owner
 	GetByOwner(owner string, result []*LeafEntry) []*LeafEntry
 	// MarkOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
@@ -38,7 +39,9 @@ type Entry interface {
 	GetDeletes([][]string) [][]string
 	// Walk takes the EntryVisitor and applies it to every Entry in the tree
 	Walk(f EntryVisitor) error
+	// ShouldDelete indicated if there is no LeafEntry left and the Entry is to be deleted
 	ShouldDelete() bool
+	// IsDeleteKeyAttributesInLevelDown TODO
 	IsDeleteKeyAttributesInLevelDown(level int, names []string) (bool, [][]string)
 }
 
@@ -243,17 +246,17 @@ func (s *sharedEntryAttributes) AddChild(e Entry) error {
 	return nil
 }
 
-func (s *sharedEntryAttributes) GetHighesPrio(result []*cache.Update) []*cache.Update {
+func (s *sharedEntryAttributes) GetHighesPrio(result []*cache.Update, onlyNewOrUpdated bool) []*cache.Update {
 	// try to get get the highes prio LeafVariant make sure it exists (!= nil)
 	// and add it to the result if it is NEW
-	lv := s.leafVariants.GetHighes()
+	lv := s.leafVariants.GetHighesPrio(onlyNewOrUpdated)
 	if lv != nil {
 		result = append(result, lv.Update)
 	}
 
 	// continue with childs
 	for _, c := range s.childs {
-		result = c.GetHighesPrio(result)
+		result = c.GetHighesPrio(result, onlyNewOrUpdated)
 	}
 	return result
 }
@@ -293,9 +296,9 @@ func (lv LeafVariants) ShouldDelete() bool {
 	return true
 }
 
-// GetHighes returns the LeafEntry with the highes priority
+// GetHighesNewUpdated returns the LeafEntry with the highes priority
 // nil if no leaf entry exists.
-func (lv LeafVariants) GetHighes() *LeafEntry {
+func (lv LeafVariants) GetHighesPrio(onlyNewOrUpdated bool) *LeafEntry {
 	var result *LeafEntry
 	for _, e := range lv {
 		// first entry set result to it
@@ -304,13 +307,29 @@ func (lv LeafVariants) GetHighes() *LeafEntry {
 			result = e
 			continue
 		}
-		// on second start comparing
-		// compare priorities only if the entry is not marked for deletion
-		if !e.Delete && result.Priority() > e.Priority() {
+		// on a result != nil that is then not marked for deletion
+		// start comparing priorities and choose the one with the
+		// higher prio (lower number)
+		if result != nil && !e.Delete && result.Priority() > e.Priority() {
 			result = e
 		}
 	}
-	return result
+
+	// if it does not matter if the highes update is also
+	// New or Updated return it
+	if !onlyNewOrUpdated {
+		return result
+	}
+
+	// Otherwise return it only if it is either marked as
+	// an updated or new entry
+	if result != nil && (result.IsNew || result.IsUpdated) {
+		return result
+	}
+
+	// otherwise return nil
+	return nil
+
 }
 
 // GetByOwner returns the entry that is owned by the given owner,
@@ -395,7 +414,7 @@ func (r *sharedEntryAttributes) AddCacheUpdateRecursive(c *cache.Update, new boo
 	return nil
 }
 
-func NewTreeRoot(scb SchemaClient.SchemaClientBound) *RootEntry {
+func NewTreeRoot() *RootEntry {
 	return &RootEntry{
 		sharedEntryAttributes: newSharedEntryAttributes(nil, ""),
 	}
@@ -407,8 +426,11 @@ func (r *RootEntry) String() string {
 	return strings.Join(s, "\n")
 }
 
-func (r *RootEntry) GetHighesPrio() []*cache.Update {
-	return r.sharedEntryAttributes.GetHighesPrio(make([]*cache.Update, 0))
+// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
+// If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
+// It will append to the given list and provide a new pointer to the slice
+func (r *RootEntry) GetHighesPrio(onlyNewOrUpdated bool) []*cache.Update {
+	return r.sharedEntryAttributes.GetHighesPrio(make([]*cache.Update, 0), onlyNewOrUpdated)
 }
 
 func (r *RootEntry) GetDeletes() [][]string {

@@ -803,12 +803,13 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 func validateLeafListValue(ll *sdcpb.LeafListSchema, v any) error {
 	// TODO: validate Leaflist
 	// TODO: eval must statements
-	for _, must := range ll.MustStatements {
-		_ = must
-	}
+	// for _, must := range ll.MustStatements {
+	// 	_ = must
+	// }
 	return validateLeafTypeValue(ll.GetType(), v)
 }
 
+// expandUpdate Expands the value, in case of json to single typed value updates
 func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update, includeKeysAsLeaf bool) ([]*sdcpb.Update, error) {
 	upds := make([]*sdcpb.Update, 0)
 	if includeKeysAsLeaf {
