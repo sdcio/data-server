@@ -745,18 +745,11 @@ func (d *Datastore) validatePath(ctx context.Context, p *sdcpb.Path) error {
 }
 
 func (d *Datastore) toPath(ctx context.Context, p []string) (*sdcpb.Path, error) {
-	rsp, err := d.schemaClient.ToPath(ctx, &sdcpb.ToPathRequest{
-		PathElement: p,
-		Schema: &sdcpb.Schema{
-			Name:    d.Schema().Name,
-			Vendor:  d.Schema().Vendor,
-			Version: d.Schema().Version,
-		},
-	})
+	path, err := d.getValidationClient().ToPath(ctx, p)
 	if err != nil {
 		return nil, err
 	}
-	return rsp.GetPath(), nil
+	return path, nil
 }
 
 func (d *Datastore) changesToUpdates(ctx context.Context, changes []*cache.Change) (*sdcpb.Notification, error) {
