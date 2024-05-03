@@ -31,6 +31,28 @@ import (
 	"github.com/sdcio/data-server/pkg/utils"
 )
 
+// SetIntentUpdate Processes new and updated intents
+//
+// The main concept is as follows.
+//  1. Get all keys from the cache along with the "metadata" (Owner, Priority, etc.) Note: Requesting the values is the expensive task with the default cache implementation
+//  2. Filter the keys for entries that belong to the intent (Owner) which is necessary for updated intents (delete config entries that do no longer exist)
+//  3. Calculate all the paths that the new intent request touches
+//  4. Combine the keys from the two previous steps to query them from the cache just once.
+//  5. Query the cache with the resulting keys to also get the values.
+//  6. Add the received cache entries to the tree with the new-flag set to false.
+//  7. Mark all entries in the tree for the specific owner as deleted.
+//  8. Add all the new request entries to the tree with the new flag set to true. The tree will evaluate the values and adjust its internal state (new, deleted and updated)
+//     for these entries. If the value remains unchanged, it will reset the new flag if it is a different value, it will set the updated flag and reset the delete flag.
+//  9. The tree will be populated with schema information.
+//  10. Now the tree can be queried for the highes priority values ".GetHighesPrio(true)". It will also consider the deleted flag and only return new or updated values.
+//     This is the calculation the yields the updates that will need to be pushed to the device.
+//  11. .GetDeletes() returns the entries that are still marked for deletion. The Paths will be extracted and then send to the device as deletes (path aggregation is
+//     applied, if e.g. a whole interface is delted, the deleted paths only contains the delete for the interface, not all its leafs)
+//  12. All updates (New & Updated) for the specifc owner / intent are being retrieved from the tree to update the cache.
+//  13. All remaining deletes for the specifc owner / intent are being retrieved from the tree to remove them from the cache.
+//  14. The request towards southbound is created with the device updates / deletes. A candidate is created, and applied to the device.
+//  15. The owner based updates and deletes are being pushed into the cache.
+//  16. The raw intent (as received in the req) is stored as a blob in the cache.
 func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentRequest, candidateName string) error {
 	logger := log.NewEntry(
 		log.New()).WithFields(log.Fields{
