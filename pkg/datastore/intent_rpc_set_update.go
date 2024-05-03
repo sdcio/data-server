@@ -31,6 +31,10 @@ import (
 	"github.com/sdcio/data-server/pkg/utils"
 )
 
+const (
+	keysIndexSep = "_"
+)
+
 // SetIntentUpdate Processes new and updated intents
 //
 // The main concept is as follows.
@@ -87,7 +91,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		for _, k := range keyMeta {
 			if k.Owner() == req.GetIntent() {
 				keys = append(keys, k.GetPath())
-				keysIndex[strings.Join(k.GetPath(), "")] = struct{}{}
+				keysIndex[strings.Join(k.GetPath(), keysIndexSep)] = struct{}{}
 			}
 		}
 	}
@@ -99,14 +103,37 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		return err
 	}
 
+	// temp storage for cache.Update of the req. They are to be added later.
+	newCacheUpdates := make([]*cache.Update, 0, len(expandedReqUpdates))
+
 	for _, u := range expandedReqUpdates {
 		pathslice, err := utils.CompletePath(nil, u.GetPath())
 		if err != nil {
 			return err
 		}
-		if _, exists := keysIndex[strings.Join(pathslice, "")]; !exists {
+
+		// Add to keys
+		if _, exists := keysIndex[strings.Join(pathslice, keysIndexSep)]; !exists {
 			keys = append(keys, pathslice)
 		}
+
+		// since we already have the pathslice, we construct the cache.Update, but keep it for later
+		// addition to the tree. First we need to mark the existing once for deltion
+
+		// make sure typedValue is carrying the correct type
+		err = d.validateUpdate(ctx, u)
+		if err != nil {
+			return err
+		}
+
+		// convert value to []byte for cache insertion
+		val, err := proto.Marshal(u.GetValue())
+		if err != nil {
+			return err
+		}
+
+		// construct the cache.Update
+		newCacheUpdates = append(newCacheUpdates, cache.NewUpdate(pathslice, val, req.GetPriority(), req.GetIntent(), 0))
 	}
 
 	// Get all entries of the already existing intent
@@ -123,29 +150,10 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	// This is to allow for intent updates. We mark all existing entries for deletion up front.
 	root.MarkOwnerDelete(req.GetIntent())
 
-	for _, upd := range expandedReqUpdates {
-
-		// make sure typedValue is carrying the correct type
-		err := d.validateUpdate(ctx, upd)
-		if err != nil {
-			return err
-		}
-
-		// convert value to []byte for cache insertion
-		val, err := proto.Marshal(upd.GetValue())
-		if err != nil {
-			return err
-		}
-		// convert sdcpb.Path to []string for cache insertion
-		pathSlice, err := utils.CompletePath(nil, upd.GetPath())
-		if err != nil {
-			return err
-		}
-		// construct the cache.Update
-		cUpd := cache.NewUpdate(pathSlice, val, req.GetPriority(), req.GetIntent(), 0)
-
+	// now add the cache.Updates from the actual request, after marking the old once for deletion.
+	for _, upd := range newCacheUpdates {
 		// add the cache.Update to the tree
-		err = root.AddCacheUpdateRecursive(cUpd, true)
+		err = root.AddCacheUpdateRecursive(upd, true)
 		if err != nil {
 			return err
 		}
