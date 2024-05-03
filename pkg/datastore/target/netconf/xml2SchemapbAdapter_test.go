@@ -30,9 +30,8 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 
 	GetNewDoc := func() *etree.Document {
 		AddValueDoc1 := etree.NewDocument()
-		data := AddValueDoc1.CreateElement("data")
 		// populate Doc1
-		interfs := data.CreateElement("interfaces")
+		interfs := AddValueDoc1.CreateElement("interfaces")
 		interf1 := interfs.CreateElement("interface")
 		interfname := interf1.CreateElement("name")
 		interfname.SetText("eth0")
