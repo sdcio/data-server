@@ -138,3 +138,9 @@ Eight
     Should Be Equal As Integers    ${result.rc}    0
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+10 - Delete three.json
+    ${result} =    DeleteIntent    ${srlinux1-name}    ${srlinux1-candidate}    seven    2
+    Should Be Equal As Integers    ${result.rc}    0
+
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}

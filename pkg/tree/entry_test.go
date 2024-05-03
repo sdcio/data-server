@@ -311,7 +311,7 @@ func Test_Entry_Four(t *testing.T) {
 	})
 
 	t.Run("Check the old entries are gone from highest", func(t *testing.T) {
-		highpri := root.GetHighesPrio(false)
+		highpri := root.GetHighesPrio(true)
 		// diff the result with the expected
 		if diff := diffCacheUpdates([]*cache.Update{n1, n2, u1o2, u2o2}, highpri); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
@@ -321,7 +321,7 @@ func Test_Entry_Four(t *testing.T) {
 	t.Run("Check the old entries are gone from highest (only New Or Updated)", func(t *testing.T) {
 		highpri := root.GetHighesPrio(true)
 		// diff the result with the expected
-		if diff := diffCacheUpdates([]*cache.Update{n1, n2}, highpri); diff != "" {
+		if diff := diffCacheUpdates([]*cache.Update{u1o2, u2o2, n1, n2}, highpri); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -522,4 +522,200 @@ func createSchemaField(name string) *sdcpb.SchemaElem {
 			},
 		},
 	}
+}
+
+// TestLeafVariants_GetHighesPrio
+func TestLeafVariants_GetHighesPrio(t *testing.T) {
+	owner1 := "owner1"
+	ts := int64(0)
+	path := []string{"firstPathElem"}
+
+	// test that if highes prio is to be deleted, that the second highes is returned,
+	// because thats an update.
+	t.Run("Delete Non New",
+		func(t *testing.T) {
+			lv := LeafVariants{
+				&LeafEntry{
+					Update:    cache.NewUpdate(path, nil, 2, owner1, ts),
+					IsUpdated: false,
+					IsNew:     false,
+					Delete:    false,
+				},
+				&LeafEntry{
+					Update: cache.NewUpdate(path, nil, 1, owner1, ts),
+					Delete: true,
+				},
+			}
+
+			le := lv.GetHighesPrio(true)
+
+			if le != lv[0] {
+				t.Errorf("expected to get entry %v, got %v", lv[0], le)
+			}
+
+		},
+	)
+
+	// Have only a single entry in the list, thats marked for deletion
+	// should return nil
+	t.Run("Single entry thats also marked for deletion",
+		func(t *testing.T) {
+
+			lv := LeafVariants{
+				&LeafEntry{
+					Update: cache.NewUpdate(path, nil, 1, owner1, ts),
+					Delete: true,
+				},
+			}
+
+			le := lv.GetHighesPrio(true)
+
+			if le != nil {
+				t.Errorf("expected to get entry %v, got %v", nil, le)
+			}
+		},
+	)
+
+	// A preferred entry does exist the lower prio entry is updated.
+	// on onlyIfPrioChanged == true we do not expect output.
+	t.Run("New Low Prio IsUpdate OnlyChanged True",
+		func(t *testing.T) {
+			lv := LeafVariants{
+				&LeafEntry{
+					Update:    cache.NewUpdate(path, nil, 5, owner1, ts),
+					Delete:    false,
+					IsNew:     false,
+					IsUpdated: false,
+				},
+				&LeafEntry{
+					Update:    cache.NewUpdate(path, nil, 6, owner1, ts),
+					Delete:    false,
+					IsNew:     false,
+					IsUpdated: true,
+				},
+			}
+
+			le := lv.GetHighesPrio(true)
+
+			if le != nil {
+				t.Errorf("expected to get entry %v, got %v", nil, le)
+			}
+		},
+	)
+
+	// A preferred entry does exist the lower prio entry is updated.
+	// on onlyIfPrioChanged == false we do not expect the highes prio update to be returned.
+	t.Run("New Low Prio IsUpdate OnlyChanged False",
+		func(t *testing.T) {
+			lv := LeafVariants{
+				&LeafEntry{
+					Update:    cache.NewUpdate(path, nil, 5, owner1, ts),
+					Delete:    false,
+					IsNew:     false,
+					IsUpdated: false,
+				},
+				&LeafEntry{
+					Update:    cache.NewUpdate(path, nil, 6, owner1, ts),
+					Delete:    false,
+					IsNew:     false,
+					IsUpdated: true,
+				},
+			}
+
+			le := lv.GetHighesPrio(false)
+
+			if le != lv[0] {
+				t.Errorf("expected to get entry %v, got %v", lv[0], le)
+			}
+		},
+	)
+
+	// A preferred entry does exist the lower prio entry is new.
+	// on onlyIfPrioChanged == true we do not expect output.
+	t.Run("New Low Prio IsNew OnlyChanged == True",
+		func(t *testing.T) {
+			lv := LeafVariants{
+				&LeafEntry{
+					Update:    cache.NewUpdate(path, nil, 5, owner1, ts),
+					Delete:    false,
+					IsNew:     false,
+					IsUpdated: false,
+				},
+				&LeafEntry{
+					Update:    cache.NewUpdate(path, nil, 6, owner1, ts),
+					Delete:    false,
+					IsNew:     true,
+					IsUpdated: false,
+				},
+			}
+
+			le := lv.GetHighesPrio(true)
+
+			if le != nil {
+				t.Errorf("expected to get entry %v, got %v", nil, le)
+			}
+		},
+	)
+
+	t.Run("New Low Prio IsNew OnlyChanged == False",
+		func(t *testing.T) {
+			lv := LeafVariants{
+				&LeafEntry{
+					Update:    cache.NewUpdate(path, nil, 5, owner1, ts),
+					Delete:    false,
+					IsNew:     false,
+					IsUpdated: false,
+				},
+				&LeafEntry{
+					Update:    cache.NewUpdate(path, nil, 6, owner1, ts),
+					Delete:    false,
+					IsNew:     true,
+					IsUpdated: false,
+				},
+			}
+
+			le := lv.GetHighesPrio(false)
+
+			if le != lv[0] {
+				t.Errorf("expected to get entry %v, got %v", lv[0], le)
+			}
+		},
+	)
+
+	// If no entries exist in the list nil should be returned.
+	t.Run("No Entries",
+		func(t *testing.T) {
+			lv := LeafVariants{}
+
+			le := lv.GetHighesPrio(true)
+
+			if le != nil {
+				t.Errorf("expected to get entry %v, got %v", nil, le)
+			}
+		},
+	)
+
+	// make sure the secondhighes is also populated if the highes was the first entry
+	t.Run("No Entries",
+		func(t *testing.T) {
+			lv := LeafVariants{
+				&LeafEntry{
+					Update: cache.NewUpdate(path, nil, 1, owner1, ts),
+					Delete: true,
+				},
+				&LeafEntry{
+					Update:    cache.NewUpdate(path, nil, 2, owner1, ts),
+					IsUpdated: false,
+					IsNew:     false,
+					Delete:    false,
+				},
+			}
+
+			le := lv.GetHighesPrio(true)
+
+			if le != lv[1] {
+				t.Errorf("expected to get entry %v, got %v", lv[1], le)
+			}
+		},
+	)
 }

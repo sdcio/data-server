@@ -35,6 +35,51 @@ const (
 	keysIndexSep = "_"
 )
 
+// populateTreeWithIntentData populates the given tree with intent data thats stored in the cache already
+// Queries the Caches keys, filters out entries that belong to given owner and adds them to the given keys and keyindex structs.
+// Finally queries the values for those entries, adds them to the given tree and marks the owners entries as deleted.
+func (d *Datastore) populateTreeWithIntentData(ctx context.Context, root *tree.RootEntry, owner string, keyIndex map[string]struct{}, keys [][]string) error {
+
+	// read all Intended Store Keys in their extednded format, containing
+	// not just paths but also the owner and priority etc.
+	// !!! Values will not be populated !!!
+	keysMeta, err := d.readIntendedStoreKeysMeta(ctx)
+	if err != nil {
+		return err
+	}
+
+	// range through all the keys and filter out the once that
+	// actually belong to the intent
+	for _, keyMeta := range keysMeta {
+		for _, k := range keyMeta {
+			if k.Owner() == owner {
+				// if the key is not yet listed in the keys slice, add it otherwise skip
+				if _, exists := keyIndex[strings.Join(k.GetPath(), keysIndexSep)]; !exists {
+					keys = append(keys, k.GetPath())
+				}
+			}
+		}
+	}
+
+	// Get all entries of the already existing intent
+	highesCurrentCacheEntries := d.readCurrentUpdatesHighestPriorities(ctx, keys, 2)
+
+	// add all the existing entries
+	for _, entrySlice := range highesCurrentCacheEntries {
+		for _, v := range entrySlice {
+			for _, x := range v {
+				root.AddCacheUpdateRecursive(x, false)
+			}
+		}
+	}
+
+	// Mark all the entries that belong to the owner / intent as deleted.
+	// This is to allow for intent updates. We mark all existing entries for deletion up front.
+	root.MarkOwnerDelete(owner)
+
+	return nil
+}
+
 // SetIntentUpdate Processes new and updated intents
 //
 // The main concept is as follows.
@@ -72,30 +117,6 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	// create a new Tree
 	root := tree.NewTreeRoot()
 
-	// read all Intended Store Keys in their extednded format, containing
-	// not just paths but also the owner and priority etc.
-	// !!! Values will not be populated !!!
-	keysMeta, err := d.readIntendedStoreKeysMeta(ctx)
-	if err != nil {
-		return err
-	}
-
-	// stores the keys that are present in the existing intent,
-	// that is already stored in the cache
-	keys := [][]string{}
-	// index for already added keys
-	keysIndex := map[string]struct{}{}
-	// range through all the keys and filter out the once that
-	// actually belong to the intent
-	for _, keyMeta := range keysMeta {
-		for _, k := range keyMeta {
-			if k.Owner() == req.GetIntent() {
-				keys = append(keys, k.GetPath())
-				keysIndex[strings.Join(k.GetPath(), keysIndexSep)] = struct{}{}
-			}
-		}
-	}
-
 	// list of updates to be added to the cache
 	// Expands the value, in case of json to single typed value updates
 	expandedReqUpdates, err := d.expandUpdates(ctx, req.GetUpdate(), true)
@@ -106,16 +127,20 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	// temp storage for cache.Update of the req. They are to be added later.
 	newCacheUpdates := make([]*cache.Update, 0, len(expandedReqUpdates))
 
+	// stores the keys that are present in the existing intent,
+	// that is already stored in the cache
+	keys := make([][]string, 0, len(expandedReqUpdates))
+	// index for already added keys
+	keyIndex := map[string]struct{}{}
+
 	for _, u := range expandedReqUpdates {
 		pathslice, err := utils.CompletePath(nil, u.GetPath())
 		if err != nil {
 			return err
 		}
 
-		// Add to keys
-		if _, exists := keysIndex[strings.Join(pathslice, keysIndexSep)]; !exists {
-			keys = append(keys, pathslice)
-		}
+		keys = append(keys, pathslice)
+		keyIndex[strings.Join(pathslice, keysIndexSep)] = struct{}{}
 
 		// since we already have the pathslice, we construct the cache.Update, but keep it for later
 		// addition to the tree. First we need to mark the existing once for deltion
@@ -136,19 +161,11 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		newCacheUpdates = append(newCacheUpdates, cache.NewUpdate(pathslice, val, req.GetPriority(), req.GetIntent(), 0))
 	}
 
-	// Get all entries of the already existing intent
-	allCurrentCacheEntries := d.readNewUpdatesHighestPriority(ctx, keys)
-
-	// add all the existing entries
-	for _, e := range allCurrentCacheEntries {
-		for _, x := range e {
-			root.AddCacheUpdateRecursive(x, false)
-		}
+	// populate the tree with all the existing entries from the cache, that match relevant paths (paths from the old intent, and the new request).
+	err = d.populateTreeWithIntentData(ctx, root, req.GetIntent(), keyIndex, keys)
+	if err != nil {
+		return err
 	}
-
-	// Mark all the entries that belong to the owner / intent as deleted.
-	// This is to allow for intent updates. We mark all existing entries for deletion up front.
-	root.MarkOwnerDelete(req.GetIntent())
 
 	// now add the cache.Updates from the actual request, after marking the old once for deletion.
 	for _, upd := range newCacheUpdates {
@@ -253,7 +270,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	}
 	log.Info("intent set into candidate")
 	// apply the resulting config to the device
-	err = d.applyIntent(ctx, candidateName, req.GetPriority(), setDataReq)
+	err = d.applyIntent(ctx, candidateName, setDataReq)
 	if err != nil {
 		return err
 	}
@@ -275,12 +292,21 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		return err
 	}
 
-	// The request intent is also stored in the cache
-	// in the format it was received in
-	err = d.saveRawIntent(ctx, req.GetIntent(), req)
-	if err != nil {
-		return err
+	switch req.Delete {
+	case true:
+		err = d.deleteRawIntent(ctx, req.GetIntent(), req.GetPriority())
+		if err != nil {
+			return err
+		}
+	case false:
+		// The request intent is also stored in the cache
+		// in the format it was received in
+		err = d.saveRawIntent(ctx, req.GetIntent(), req)
+		if err != nil {
+			return err
+		}
 	}
+
 	log.Infof("ds=%s intent=%s: intent saved", req.GetName(), req.GetIntent())
 	return nil
 }

@@ -298,33 +298,53 @@ func (lv LeafVariants) ShouldDelete() bool {
 
 // GetHighesNewUpdated returns the LeafEntry with the highes priority
 // nil if no leaf entry exists.
-func (lv LeafVariants) GetHighesPrio(onlyNewOrUpdated bool) *LeafEntry {
-	var result *LeafEntry
+func (lv LeafVariants) GetHighesPrio(onlyIfPrioChanged bool) *LeafEntry {
+	if len(lv) == 0 {
+		return nil
+	}
+
+	var highest *LeafEntry
+	var secondHighest *LeafEntry
 	for _, e := range lv {
 		// first entry set result to it
 		// if it is not marked for deletion
-		if result == nil && !e.Delete {
-			result = e
+		if highest == nil {
+			highest = e
 			continue
 		}
 		// on a result != nil that is then not marked for deletion
 		// start comparing priorities and choose the one with the
 		// higher prio (lower number)
-		if result != nil && !e.Delete && result.Priority() > e.Priority() {
-			result = e
+		if highest.Priority() > e.Priority() {
+			secondHighest = highest
+			highest = e
+		} else {
+			// check if the update is at least higher prio (lower number) then the secondHighest
+			if secondHighest == nil || secondHighest.Priority() > e.Priority() {
+				secondHighest = e
+			}
 		}
 	}
 
 	// if it does not matter if the highes update is also
 	// New or Updated return it
-	if !onlyNewOrUpdated {
-		return result
+	if !onlyIfPrioChanged {
+		if !highest.Delete {
+			return highest
+		}
+		return secondHighest
 	}
 
-	// Otherwise return it only if it is either marked as
-	// an updated or new entry
-	if result != nil && (result.IsNew || result.IsUpdated) {
-		return result
+	// if the highes is not marked for deletion and new or updated (=PrioChanged) return it
+	if !highest.Delete {
+		if highest.IsNew || highest.IsUpdated {
+			return highest
+		}
+		return nil
+	}
+	// otherwise if the secondhighest is not marked for deletion return it
+	if secondHighest != nil && !secondHighest.Delete {
+		return secondHighest
 	}
 
 	// otherwise return nil
