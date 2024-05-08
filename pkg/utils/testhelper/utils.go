@@ -41,6 +41,15 @@ func GetStringTvProto(t *testing.T, s string) []byte {
 	return result
 }
 
+// GetStringTvProto takes a string and returns the sdcpb.TypedValue for it in proto encoding as []byte
+func GetUIntTvProto(t *testing.T, i uint64) []byte {
+	result, err := proto.Marshal(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_UintVal{UintVal: uint64(i)}})
+	if err != nil {
+		t.Error(err)
+	}
+	return result
+}
+
 // PathMapIndex calculates a common map index for string slice based paths
 func PathMapIndex(elems []string) string {
 	return strings.Join(elems, pathSep)

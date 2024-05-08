@@ -31,10 +31,12 @@ import (
 )
 
 func TestDatastore_populateTree(t *testing.T) {
+	prio15 := int32(15)
 	prio10 := int32(10)
 	prio5 := int32(5)
 	owner1 := "owner1"
 	owner2 := "owner2"
+	owner3 := "owner3"
 
 	tests := []struct {
 		name                 string
@@ -48,6 +50,7 @@ func TestDatastore_populateTree(t *testing.T) {
 		expectedOwnerDeletes [][]string
 		expectedOwnerUpdates []*cache.Update
 		intendedStoreUpdates []*cache.Update
+		NotOnlyNewOrUpdated  bool // it negated when used in the call, usually we want it to be true
 	}{
 		{
 			name:          "Simple add to root path",
@@ -155,6 +158,124 @@ func TestDatastore_populateTree(t *testing.T) {
 				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
 			},
 		},
+		{
+			name:          "Mixed, new entry, higher and lower precedence",
+			intentName:    owner2,
+			intentPrio:    prio10,
+			intentReqPath: "/",
+			intentReqValue: &testhelper.TestConfig{
+				Interf: []*testhelper.Interf{
+					{
+						Name:        "ethernet-0/0",
+						Description: "MyOtherDescription",
+						Subinterface: []*testhelper.Subinterface{
+							{
+								Index:       1,
+								Description: "Subinterface Desc",
+							},
+						},
+					},
+					{
+						Name:        "ethernet-0/1",
+						Description: "MyOtherDescription",
+						Subinterface: []*testhelper.Subinterface{
+							{
+								Index:       1,
+								Description: "Subinterface Desc",
+							},
+						},
+					},
+				},
+			},
+			expectedModify: []*cache.Update{
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+			},
+			expectedOwnerUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+			},
+			intendedStoreUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/1"), prio15, owner3, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "description"}, testhelper.GetStringTvProto(t, "Owner3 Description"), prio15, owner3, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(t, 1), prio15, owner3, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "2", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio15, owner3, 0),
+			},
+		},
+		{
+			name:                "Mixed, new entry, higher and lower precedence. notOnlyUpdated set to TRUE",
+			intentName:          owner2,
+			intentPrio:          prio10,
+			intentReqPath:       "/",
+			NotOnlyNewOrUpdated: true,
+			intentReqValue: &testhelper.TestConfig{
+				Interf: []*testhelper.Interf{
+					{
+						Name:        "ethernet-0/0",
+						Description: "MyOtherDescription",
+						Subinterface: []*testhelper.Subinterface{
+							{
+								Index:       1,
+								Description: "Subinterface Desc",
+							},
+						},
+					},
+					{
+						Name:        "ethernet-0/1",
+						Description: "MyOtherDescription",
+						Subinterface: []*testhelper.Subinterface{
+							{
+								Index:       1,
+								Description: "Subinterface Desc",
+							},
+						},
+					},
+				},
+			},
+			expectedModify: []*cache.Update{
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+				// the next two are not part of the result, we might want to add the behaviour, such that one can query the entire intended.
+				// cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(t, 1), prio15, owner3, 0),
+				// cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "2", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio15, owner3, 0),
+			},
+			expectedOwnerUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+			},
+			intendedStoreUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/1"), prio15, owner3, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "description"}, testhelper.GetStringTvProto(t, "Owner3 Description"), prio15, owner3, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(t, 1), prio15, owner3, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "2", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio15, owner3, 0),
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -226,7 +347,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			}
 
 			// get the updates that are meant to be send down towards the device
-			updates := root.GetHighesPrio(true)
+			updates := root.GetHighesPrio(!tt.NotOnlyNewOrUpdated)
 			if diff := testhelper.DiffCacheUpdates(tt.expectedModify, updates); diff != "" {
 				t.Errorf("root.GetHighesPrio(true) mismatch (-want +got):\n%s", diff)
 			}

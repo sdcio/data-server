@@ -102,14 +102,20 @@ func GetSchemaMap() map[string]*sdcpb.SchemaElem {
 	)
 
 	// interface / subinterface
-	responseMap[PathMapIndex([]string{"interface", "subinterface"})] = createSchemaContainer("subinterface", []string{"index"}, []string{"index", "description"}, nil)
 	responseMap[PathMapIndex([]string{"interface", "subinterface", "index"})] = createSchemaField("index", "uint8")
 	responseMap[PathMapIndex([]string{"interface", "subinterface", "description"})] = createSchemaField("description", "string")
+	responseMap[PathMapIndex([]string{"interface", "subinterface"})] = createSchemaContainer("subinterface", []string{"index"}, []string{"index", "description"}, []*sdcpb.LeafSchema{
+		responseMap[PathMapIndex([]string{"interface", "subinterface", "index"})].GetField(),
+		responseMap[PathMapIndex([]string{"interface", "subinterface", "description"})].GetField(),
+	})
 
 	// network-instance
-	responseMap[PathMapIndex([]string{"network-instance"})] = createSchemaContainer("network-instance", []string{"name"}, []string{"name", "description"}, nil)
 	responseMap[PathMapIndex([]string{"network-instance", "name"})] = createSchemaField("name", "string")
 	responseMap[PathMapIndex([]string{"network-instance", "description"})] = createSchemaField("description", "string")
+	responseMap[PathMapIndex([]string{"network-instance"})] = createSchemaContainer("network-instance", []string{"name"}, []string{"name", "description"}, []*sdcpb.LeafSchema{
+		responseMap[PathMapIndex([]string{"network-instance", "name"})].GetField(),
+		responseMap[PathMapIndex([]string{"network-instance", "description"})].GetField(),
+	})
 
 	return responseMap
 }
