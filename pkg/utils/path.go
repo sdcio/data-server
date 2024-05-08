@@ -16,6 +16,7 @@ package utils
 
 import (
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 
@@ -215,17 +216,6 @@ func ToStrings(p *sdcpb.Path, prefix, nokeys bool) []string {
 	return is
 }
 
-// SdcpbPathToKeylessString return the contents of an sdcpb.Path without any key data
-// as a String. This is to build a lookup index for the SchemaElements.
-func SdcpbPathToKeylessString(p *sdcpb.Path) string {
-	sb := strings.Builder{}
-	for _, v := range p.Elem {
-		sb.WriteString("/")
-		sb.WriteString(v.GetName())
-	}
-	return sb.String()
-}
-
 func sortedVals(m map[string]string) []string {
 	// Special case single key lists.
 	if len(m) == 1 {
@@ -292,11 +282,20 @@ func ToXPath(p *sdcpb.Path, noKeys bool) string {
 	for i, pe := range elems {
 		sb.WriteString(pe.GetName())
 		if !noKeys {
-			for k, v := range pe.GetKey() {
+
+			// need to sort the keys to get them in the correct order
+			kvMap := pe.GetKey()
+			keySlice := make([]string, 0, len(pe.GetKey()))
+			for k := range kvMap {
+				keySlice = append(keySlice, k)
+			}
+			slices.Sort(keySlice)
+
+			for _, k := range keySlice {
 				sb.WriteString("[")
 				sb.WriteString(k)
 				sb.WriteString("=")
-				sb.WriteString(v)
+				sb.WriteString(kvMap[k])
 				sb.WriteString("]")
 			}
 		}

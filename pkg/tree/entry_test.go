@@ -406,7 +406,8 @@ func getSchemaClientBound(t *testing.T) SchemaClient.SchemaClientBound {
 	// make the mock respond to GetSchema requests
 	mockscb.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
 		func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
-			keylessString := utils.SdcpbPathToKeylessString(path)
+			keylessStringSlice := utils.ToStrings(path, false, true)
+			keylessString := testhelper.PathMapIndex(keylessStringSlice)
 			return &sdcpb.GetSchemaResponse{
 				Schema: responseMap[keylessString],
 			}, nil

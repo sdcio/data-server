@@ -534,7 +534,8 @@ func TreeWalkerSchemaRetriever(ctx context.Context, scb SchemaClient.SchemaClien
 		}
 
 		// convert the path into a keyless path, for schema index lookups.
-		keylessPath := utils.SdcpbPathToKeylessString(sdcpbPath)
+		keylessPathSlice := utils.ToStrings(sdcpbPath, false, true)
+		keylessPath := strings.Join(keylessPathSlice, "/")
 
 		// lookup schema in schemaindex, preventing consecutive gets from the schema server
 		if v, exists := schemaIndex[keylessPath]; exists {
