@@ -354,20 +354,12 @@ func (d *Datastore) Diff(ctx context.Context, req *sdcpb.DiffRequest) (*sdcpb.Di
 				log.Debugf("read values %v: %v", change.Update.GetPath(), values)
 				switch len(values) {
 				case 0: // value does not exist in main
-					p, err := d.schemaClient.ToPath(ctx,
-						&sdcpb.ToPathRequest{
-							PathElement: change.Update.GetPath(),
-							Schema: &sdcpb.Schema{
-								Name:    d.config.Schema.Name,
-								Vendor:  d.config.Schema.Vendor,
-								Version: d.config.Schema.Version,
-							},
-						})
+					p, err := d.getValidationClient().ToPath(ctx, change.Update.GetPath())
 					if err != nil {
 						return nil, err
 					}
 					diffup := &sdcpb.DiffUpdate{
-						Path:           p.GetPath(),
+						Path:           p,
 						CandidateValue: candVal,
 					}
 					diffRsp.Diff = append(diffRsp.Diff, diffup)
@@ -383,20 +375,14 @@ func (d *Datastore) Diff(ctx context.Context, req *sdcpb.DiffRequest) (*sdcpb.Di
 						continue
 					}
 					// get path from schema server
-					p, err := d.schemaClient.ToPath(ctx,
-						&sdcpb.ToPathRequest{
-							PathElement: change.Update.GetPath(),
-							Schema: &sdcpb.Schema{
-								Name:    d.config.Schema.Name,
-								Vendor:  d.config.Schema.Vendor,
-								Version: d.config.Schema.Version,
-							},
-						})
+					p, err := d.getValidationClient().ToPath(ctx,
+						change.Update.GetPath(),
+					)
 					if err != nil {
 						return nil, err
 					}
 					diffup := &sdcpb.DiffUpdate{
-						Path:           p.GetPath(),
+						Path:           p,
 						MainValue:      mainVal,
 						CandidateValue: candVal,
 					}
@@ -420,21 +406,13 @@ func (d *Datastore) Diff(ctx context.Context, req *sdcpb.DiffRequest) (*sdcpb.Di
 				}
 
 				// get path from schema server
-				p, err := d.schemaClient.ToPath(ctx,
-					&sdcpb.ToPathRequest{
-						PathElement: change.Delete,
-						Schema: &sdcpb.Schema{
-							Name:    d.config.Schema.Name,
-							Vendor:  d.config.Schema.Vendor,
-							Version: d.config.Schema.Version,
-						},
-					})
+				p, err := d.getValidationClient().ToPath(ctx, change.Delete)
 				if err != nil {
 					return nil, err
 				}
 
 				diffup := &sdcpb.DiffUpdate{
-					Path:      p.GetPath(),
+					Path:      p,
 					MainValue: val,
 				}
 				diffRsp.Diff = append(diffRsp.Diff, diffup)
@@ -820,11 +798,7 @@ func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update, include
 		}
 		upds = append(upds, intUpd...)
 	}
-	rsp, err := d.schemaClient.GetSchema(ctx,
-		&sdcpb.GetSchemaRequest{
-			Path:   upd.GetPath(),
-			Schema: d.Schema().GetSchema(),
-		})
+	rsp, err := d.getValidationClient().GetSchema(ctx, upd.GetPath())
 	if err != nil {
 		return nil, err
 	}
@@ -1027,11 +1001,7 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				log.Debugf("handling child container %s", item)
 				np := proto.Clone(p).(*sdcpb.Path)
 				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item})
-				rsp, err := d.schemaClient.GetSchema(ctx,
-					&sdcpb.GetSchemaRequest{
-						Path:   np,
-						Schema: d.Schema().GetSchema(),
-					})
+				rsp, err := d.getValidationClient().GetSchema(ctx, np)
 				if err != nil {
 					return nil, err
 				}
@@ -1119,10 +1089,7 @@ func (d *Datastore) getChild(ctx context.Context, s string, cs *sdcpb.SchemaElem
 	}
 	if cs.Container.Name == "__root__" {
 		for _, c := range cs.Container.GetChildren() {
-			rsp, err := d.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
-				Path:   &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: c}}},
-				Schema: d.Schema().GetSchema(),
-			})
+			rsp, err := d.getValidationClient().GetSchema(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: c}}})
 			if err != nil {
 				log.Errorf("Failed to get schema object %s: %v", c, err)
 				return "", false

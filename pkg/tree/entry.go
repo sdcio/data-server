@@ -446,6 +446,30 @@ func (r *RootEntry) String() string {
 	return strings.Join(s, "\n")
 }
 
+// GetUpdatesForOwner returns the updates that have been calculated for the given intent / owner
+func (r *RootEntry) GetUpdatesForOwner(owner string) []*cache.Update {
+	// retrieve all the entries from the tree that belong to the given
+	// Owner / Intent, skipping the once marked for deletion
+	// this is to insert / update entries in the cache.
+	return LeafEntriesToCacheUpdates(r.getByOwnerFiltered(owner, FilterNonDeleted))
+}
+
+// GetDeletesForOwner returns the deletes that have been calculated for the given intent / owner
+func (r *RootEntry) GetDeletesForOwner(owner string) [][]string {
+	// retrieve all entries from the tree that belong to the given user
+	// and that are marked for deletion.
+	// This is to cover all the cases where an intent was changed and certain
+	// part of the config got deleted.
+	deletesOwnerUpdates := LeafEntriesToCacheUpdates(r.getByOwnerFiltered(owner, FilterDeleted))
+	// they are retrieved as cache.update, we just need the path for deletion from cache
+	deletesOwner := make([][]string, 0, len(deletesOwnerUpdates))
+	// so collect the paths
+	for _, d := range deletesOwnerUpdates {
+		deletesOwner = append(deletesOwner, d.GetPath())
+	}
+	return deletesOwner
+}
+
 // GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
 // If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
 // It will append to the given list and provide a new pointer to the slice
@@ -458,11 +482,11 @@ func (r *RootEntry) GetDeletes() [][]string {
 	return r.sharedEntryAttributes.GetDeletes(deletes)
 }
 
-func (r *RootEntry) GetByOwner(owner string) []*LeafEntry {
-	return r.GetByOwnerFiltered(owner, Unfiltered)
+func (r *RootEntry) getByOwner(owner string) []*LeafEntry {
+	return r.getByOwnerFiltered(owner, Unfiltered)
 }
 
-func (r *RootEntry) GetByOwnerFiltered(owner string, f ...LeafEntryFilter) []*LeafEntry {
+func (r *RootEntry) getByOwnerFiltered(owner string, f ...LeafEntryFilter) []*LeafEntry {
 	result := []*LeafEntry{}
 	// retrieve all leafentries for the owner
 	leafEntries := r.sharedEntryAttributes.GetByOwner(owner, result)

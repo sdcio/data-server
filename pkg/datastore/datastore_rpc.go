@@ -631,10 +631,7 @@ func (d *Datastore) resolveLeafref(ctx context.Context, candidate string, leafRe
 	// with the value of the item that we're validating the leafref for
 
 	// get the schema for results paths last element
-	schemaResp, err := d.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
-		Path:   &sdcpb.Path{Elem: leafRefPath.Elem[:len(leafRefPath.Elem)-1]},
-		Schema: d.Schema().GetSchema(),
-	})
+	schemaResp, err := d.getValidationClient().GetSchema(ctx, &sdcpb.Path{Elem: leafRefPath.Elem[:len(leafRefPath.Elem)-1]})
 	if err != nil {
 		return err
 	}
@@ -733,10 +730,7 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 
 // helper for GetSchema
 func (d *Datastore) getSchema(ctx context.Context, p *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
-	return d.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
-		Path:   p,
-		Schema: d.Schema().GetSchema(),
-	})
+	return d.getValidationClient().GetSchema(ctx, p)
 }
 
 func (d *Datastore) validatePath(ctx context.Context, p *sdcpb.Path) error {

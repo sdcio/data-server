@@ -80,6 +80,83 @@ func (d *Datastore) populateTreeWithIntentData(ctx context.Context, root *tree.R
 	return nil
 }
 
+func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentRequest) (r *tree.RootEntry, err error) {
+	// create a new Tree
+	root := tree.NewTreeRoot()
+
+	// list of updates to be added to the cache
+	// Expands the value, in case of json to single typed value updates
+	expandedReqUpdates, err := d.expandUpdates(ctx, req.GetUpdate(), true)
+	if err != nil {
+		return nil, err
+	}
+
+	// temp storage for cache.Update of the req. They are to be added later.
+	newCacheUpdates := make([]*cache.Update, 0, len(expandedReqUpdates))
+
+	// stores the keys that are present in the existing intent,
+	// that is already stored in the cache
+	keys := make([][]string, 0, len(expandedReqUpdates))
+	// index for already added keys
+	keyIndex := map[string]struct{}{}
+
+	for _, u := range expandedReqUpdates {
+		pathslice, err := utils.CompletePath(nil, u.GetPath())
+		if err != nil {
+			return nil, err
+		}
+
+		keyIndexKey := strings.Join(pathslice, keysIndexSep)
+		if _, exists := keyIndex[keyIndexKey]; !exists {
+			keys = append(keys, pathslice)
+			keyIndex[keyIndexKey] = struct{}{}
+		}
+
+		// since we already have the pathslice, we construct the cache.Update, but keep it for later
+		// addition to the tree. First we need to mark the existing once for deltion
+
+		// make sure typedValue is carrying the correct type
+		err = d.validateUpdate(ctx, u)
+		if err != nil {
+			return nil, err
+		}
+
+		// convert value to []byte for cache insertion
+		val, err := proto.Marshal(u.GetValue())
+		if err != nil {
+			return nil, err
+		}
+
+		// construct the cache.Update
+		newCacheUpdates = append(newCacheUpdates, cache.NewUpdate(pathslice, val, req.GetPriority(), req.GetIntent(), 0))
+	}
+
+	// populate the tree with all the existing entries from the cache, that match relevant paths (paths from the old intent, and the new request).
+	err = d.populateTreeWithIntentData(ctx, root, req.GetIntent(), keyIndex, keys)
+	if err != nil {
+		return nil, err
+	}
+
+	// now add the cache.Updates from the actual request, after marking the old once for deletion.
+	for _, upd := range newCacheUpdates {
+		// add the cache.Update to the tree
+		err = root.AddCacheUpdateRecursive(upd, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// populate schema within the tree
+	err = root.Walk(tree.TreeWalkerSchemaRetriever(ctx, d.getValidationClient()))
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("Tree:%s\n", root.String())
+
+	return root, nil
+}
+
 // SetIntentUpdate Processes new and updated intents
 //
 // The main concept is as follows.
@@ -114,120 +191,18 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	logger.Debugf("set intent update start")
 	defer logger.Debugf("set intent update end")
 
-	// create a new Tree
-	root := tree.NewTreeRoot()
-
-	// list of updates to be added to the cache
-	// Expands the value, in case of json to single typed value updates
-	expandedReqUpdates, err := d.expandUpdates(ctx, req.GetUpdate(), true)
-	if err != nil {
-		return err
-	}
-
-	// temp storage for cache.Update of the req. They are to be added later.
-	newCacheUpdates := make([]*cache.Update, 0, len(expandedReqUpdates))
-
-	// stores the keys that are present in the existing intent,
-	// that is already stored in the cache
-	keys := make([][]string, 0, len(expandedReqUpdates))
-	// index for already added keys
-	keyIndex := map[string]struct{}{}
-
-	for _, u := range expandedReqUpdates {
-		pathslice, err := utils.CompletePath(nil, u.GetPath())
-		if err != nil {
-			return err
-		}
-
-		keys = append(keys, pathslice)
-		keyIndex[strings.Join(pathslice, keysIndexSep)] = struct{}{}
-
-		// since we already have the pathslice, we construct the cache.Update, but keep it for later
-		// addition to the tree. First we need to mark the existing once for deltion
-
-		// make sure typedValue is carrying the correct type
-		err = d.validateUpdate(ctx, u)
-		if err != nil {
-			return err
-		}
-
-		// convert value to []byte for cache insertion
-		val, err := proto.Marshal(u.GetValue())
-		if err != nil {
-			return err
-		}
-
-		// construct the cache.Update
-		newCacheUpdates = append(newCacheUpdates, cache.NewUpdate(pathslice, val, req.GetPriority(), req.GetIntent(), 0))
-	}
-
-	// populate the tree with all the existing entries from the cache, that match relevant paths (paths from the old intent, and the new request).
-	err = d.populateTreeWithIntentData(ctx, root, req.GetIntent(), keyIndex, keys)
-	if err != nil {
-		return err
-	}
-
-	// now add the cache.Updates from the actual request, after marking the old once for deletion.
-	for _, upd := range newCacheUpdates {
-		// add the cache.Update to the tree
-		err = root.AddCacheUpdateRecursive(upd, true)
-		if err != nil {
-			return err
-		}
-	}
-
-	// populate schema within the tree
-	err = root.Walk(tree.TreeWalkerSchemaRetriever(ctx, d.getValidationClient()))
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("Tree:%s\n", root.String())
-
-	// retrieve updates with highes priority
-	// this is the config thats is to be pushed to the device
-	updates := root.GetHighesPrio(true)
-
-	fmt.Println("highes Prio Updates:")
-	for _, u := range updates {
-		fmt.Printf("Update: %v\n", u)
-	}
-
-	// Get the entries that are to be deleted from the device config
-	// This is because a certain value was deleted and there is no
-	// lower priority / shadowed value in the cache anymore
-	deletes := root.GetDeletes()
-
-	fmt.Println("Deletes:")
-	for _, d := range deletes {
-		fmt.Printf("Delete: %v\n", d)
-	}
-
-	// retrieve all the entries from the tree that belong to the given
-	// Owner / Intent, skipping the once marked for deletion
-	// this is to insert / update entries in the cache.
-	updatesOwner := tree.LeafEntriesToCacheUpdates(root.GetByOwnerFiltered(req.GetIntent(), tree.FilterNonDeleted))
-
-	fmt.Printf("Updates of Owner %q:\n", req.GetIntent())
-	for _, u := range updatesOwner {
-		fmt.Printf("Update: %v\n", u)
-	}
-
-	// retrieve all entries from the tree that belong to the given user
-	// and that are marked for deletion.
-	// This is to cover all the cases where an intent was changed and certain
-	// part of the config got deleted.
-	deletesOwnerUpdates := tree.LeafEntriesToCacheUpdates(root.GetByOwnerFiltered(req.GetIntent(), tree.FilterDeleted))
-	// they are retrieved as cache.update, we just need the path for deletion from cache
-	deletesOwner := make([][]string, 0, len(deletesOwnerUpdates))
-	// so collect the paths
-	for _, d := range deletesOwnerUpdates {
-		deletesOwner = append(deletesOwner, d.GetPath())
-	}
-
 	// PH1: go through all updates from the intent to figure out
 	// if they need to be applied based on the intent priority.
 	logger.Debugf("reading intent paths to be updated from intended store; looking for the highest priority values")
+
+	root, err := d.populateTree(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	// retrieve the data that is meant to be send southbound (towards the device)
+	updates := root.GetHighesPrio(true)
+	deletes := root.GetDeletes()
 
 	// set request to be applied into the candidate
 	setDataReq := &sdcpb.SetDataRequest{
@@ -242,7 +217,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		Delete: make([]*sdcpb.Path, 0, len(deletes)),
 	}
 
-	// add all the updates to the setDataReq
+	// add all the highes priority updates to the setDataReq
 	for _, u := range updates {
 		sdcpbUpd, err := d.cacheUpdateToUpdate(ctx, u)
 		if err != nil {
@@ -282,6 +257,10 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	/////////////////////////////////////
 	// update intent in intended store //
 	/////////////////////////////////////
+
+	// retrieve the data that is meant to be send towards the cache
+	updatesOwner := root.GetUpdatesForOwner(req.GetIntent())
+	deletesOwner := root.GetDeletesForOwner(req.GetIntent())
 
 	err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
 		Store:    cachepb.Store_INTENDED,
