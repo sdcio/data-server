@@ -144,3 +144,56 @@ Eight
     Should Be Equal As Integers    ${result.rc}    0
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+11 - Presence - Accept
+    ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    eleven    10        ${CURDIR}/intents/acl_accept.json
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+11 - Presence - Accept with Subelement
+    ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    eleven    10        ${CURDIR}/intents/acl_accept_with_subelements.json
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+11 - Presence - Drop
+    ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    eleven    10        ${CURDIR}/intents/acl_drop.json
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+11 - Presence - Drop with Subelement
+    ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    eleven    10        ${CURDIR}/intents/acl_drop_with_subelements.json
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+11 - Presence - Delete intent
+    ${result} =    DeleteIntent    ${srlinux1-name}    ${srlinux1-candidate}    eleven    10
+    Should Be Equal As Integers    ${result.rc}    0
+
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+12 - Choices - Accept - Low Precedence
+    ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    twelve-1    10        ${CURDIR}/intents/acl_accept.json
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+12 - Choices - Accept - High Precedence
+    ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    twelve-1    5        ${CURDIR}/intents/acl_accept.json
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+12 - Choices - Drop - Low Precedence
+    ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    twelve-2    10        ${CURDIR}/intents/acl_drop.json
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+12 - Choices - Drop - High Precedence
+    ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    twelve-2    5        ${CURDIR}/intents/acl_drop.json
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+12 - Choices - Delete All
+    ${result} =    DeleteIntent    ${srlinux1-name}    ${srlinux1-candidate}    twelve-1    10
+    Should Be Equal As Integers    ${result.rc}    0
+    ${result} =    DeleteIntent    ${srlinux1-name}    ${srlinux1-candidate}    twelve-2    5
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}

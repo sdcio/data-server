@@ -16,6 +16,7 @@ package CacheClient
 
 import (
 	"context"
+	"time"
 
 	"github.com/sdcio/cache/proto/cachepb"
 	"github.com/sdcio/schema-server/pkg/utils"
@@ -34,6 +35,8 @@ type CacheClientBound interface {
 	GetValue(ctx context.Context, candidateName string, path *sdcpb.Path) (*sdcpb.TypedValue, error)
 	// GetValues retrieves config value from the provided path. If path is not a leaf path, all the sub paths will be returned.
 	GetValues(ctx context.Context, candidateName string, path *sdcpb.Path) ([]*sdcpb.TypedValue, error)
+	// ReadIntended retrieves the highes priority value from the intended store
+	ReadIntended(ctx context.Context, opts *cache.Opts, paths [][]string, period time.Duration) []*cache.Update
 }
 
 func NewCacheClientBound(name string, c cache.Client) *CacheClientBoundImpl {
@@ -87,4 +90,14 @@ func (ccb *CacheClientBoundImpl) getValues(ctx context.Context, candidateName st
 		return nil, nil
 	}
 	return cacheupds, nil
+}
+
+// Read
+func (ccb *CacheClientBoundImpl) ReadIntended(ctx context.Context, opts *cache.Opts, paths [][]string, period time.Duration) []*cache.Update {
+	if opts == nil {
+		opts = &cache.Opts{}
+	}
+	opts.Store = cachepb.Store_INTENDED
+	opts.PriorityCount = 1
+	return ccb.cacheClient.Read(ctx, ccb.name, opts, paths, period)
 }

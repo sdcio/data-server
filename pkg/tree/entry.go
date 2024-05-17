@@ -3,13 +3,16 @@ package tree
 import (
 	"context"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 
 	"github.com/sdcio/data-server/pkg/cache"
-	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
-	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+)
+
+const (
+	KeysIndexSep = "_"
 )
 
 type EntryImpl struct {
@@ -22,9 +25,9 @@ type Entry interface {
 	// PathName returns the last Path element, the name of the Entry
 	PathName() string
 	// AddChild Add a child entry
-	AddChild(Entry) error
+	AddChild(context.Context, Entry) error
 	// AddCacheUpdateRecursive Add the given cache.Update to the tree
-	AddCacheUpdateRecursive(u *cache.Update, new bool) error
+	AddCacheUpdateRecursive(ctx context.Context, u *cache.Update, new bool) error
 	// StringIndent debug tree struct as indented string slice
 	StringIndent(result []string) []string
 	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
@@ -43,14 +46,22 @@ type Entry interface {
 	ShouldDelete() bool
 	// IsDeleteKeyAttributesInLevelDown TODO
 	IsDeleteKeyAttributesInLevelDown(level int, names []string) (bool, [][]string)
+	ValidateMandatory() error
+	GetLowestPriorityValueOfBranch() int32
 }
 
-func newEntry(parent Entry, pathElemName string) *EntryImpl {
-	newEntry := &EntryImpl{
-		sharedEntryAttributes: newSharedEntryAttributes(parent, pathElemName),
+func newEntry(ctx context.Context, parent Entry, pathElemName string, tc *TreeContext) (*EntryImpl, error) {
+
+	sea, err := newSharedEntryAttributes(ctx, parent, pathElemName, tc)
+	if err != nil {
+		return nil, err
 	}
-	parent.AddChild(newEntry)
-	return newEntry
+
+	newEntry := &EntryImpl{
+		sharedEntryAttributes: sea,
+	}
+	err = parent.AddChild(ctx, newEntry)
+	return newEntry, err
 }
 
 type LeafEntry struct {
@@ -104,10 +115,72 @@ type sharedEntryAttributes struct {
 	// leafVariants mutual exclusive with Childs
 	// If Entry is a leaf it can hold multiple leafVariants
 	leafVariants LeafVariants
-	// isSchemaElement indicates if this reflects a Schema Element or a Key Element
-	isSchemaElement bool
 	// schema the schema element for this entry
 	schema *sdcpb.SchemaElem
+
+	choicesResolvers choiceCasesResolvers
+
+	treeContext *TreeContext
+}
+
+func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName string, tc *TreeContext) (*sharedEntryAttributes, error) {
+
+	s := &sharedEntryAttributes{
+		parent:       parent,
+		pathElemName: pathElemName,
+		childs:       map[string]Entry{},
+		leafVariants: newLeafVariants(),
+		treeContext:  tc,
+	}
+
+	// TODO: performance - need to go func
+	schemaResp, err := tc.treeSchemaCacheClient.GetSchema(ctx, s.Path())
+	if err != nil {
+		return nil, err
+	}
+
+	s.schema = schemaResp.GetSchema()
+
+	s.initChoiceCasesResolvers()
+
+	return s, nil
+}
+
+// func (s *sharedEntryAttributes) fetchDependencies(ctx context.Context) error {
+// 	// if it is not a schema element (key value), return
+// 	if s.schema == nil {
+// 		return nil
+// 	}
+
+// 	// TODO add other dependencies (mandatory, must, leafref etc.)
+// 	return nil
+// }
+
+func (s *sharedEntryAttributes) fetchDependenciesChoice(ctx context.Context, elem string) error {
+	if len(s.choicesResolvers) == 0 {
+		return nil
+	}
+
+	paths := [][]string{}
+
+	for _, c := range s.choicesResolvers.GetChoiceElementNeighbors(elem) {
+		// add the sub-elements name to the parent path.
+		path := append(s.Path(), c)
+		// add the resulting path to the collected paths
+		paths = append(paths, path)
+	}
+	// query the cache for the data
+	updates := s.treeContext.treeSchemaCacheClient.ReadIntended(ctx, &cache.Opts{}, paths, 0)
+
+	// iterate through the received updates and add them.
+	for _, u := range updates {
+		err := s.AddCacheUpdateRecursive(ctx, u, false)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (s *sharedEntryAttributes) GetLevel() int {
@@ -217,6 +290,20 @@ func (s *sharedEntryAttributes) GetByOwner(owner string, result []*LeafEntry) []
 	return result
 }
 
+func (s *sharedEntryAttributes) GetLowestPriorityValueOfBranch() int32 {
+	result := int32(math.MaxInt32)
+	for _, e := range s.childs {
+		if val := e.GetLowestPriorityValueOfBranch(); val < result {
+			result = val
+		}
+	}
+	if val := s.leafVariants.GetLowestPriorityValue(); val < result {
+		result = val
+	}
+
+	return result
+}
+
 func (s *sharedEntryAttributes) Path() []string {
 	// special handling for root node
 	if s.parent == nil {
@@ -233,16 +320,29 @@ func (s *sharedEntryAttributes) String() string {
 	return strings.Join(s.parent.Path(), "/")
 }
 
-func (s *sharedEntryAttributes) AddChild(e Entry) error {
+func (s *sharedEntryAttributes) AddChild(ctx context.Context, e Entry) error {
 	// make sure Entry should not only hold LeafEntries
 	if len(s.leafVariants) > 0 {
-		return fmt.Errorf("cannot add child to %s since it holds Leafs", s)
+		// An exception are presence containers
+		contSchema, is_container := s.schema.Schema.(*sdcpb.SchemaElem_Container)
+		if !is_container && !contSchema.Container.IsPresence {
+			return fmt.Errorf("cannot add child to %s since it holds Leafs", s)
+		}
 	}
 	// check the path of child is a subpath of s
 	if !slices.Equal(s.Path(), e.Path()[:len(e.Path())-1]) {
 		return fmt.Errorf("adding Child with diverging path, parent: %s, child: %s", s, strings.Join(e.Path()[:len(e.Path())-1], "/"))
 	}
 	s.childs[e.PathName()] = e
+
+	// the child might be part of a choice/case, lets check that and populate the
+	// tree with all the items that belong to the same choice, to then be able to
+	// make priority based decisions for one or the other case solely within the tree.
+	err := s.fetchDependenciesChoice(ctx, e.PathName())
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -261,112 +361,128 @@ func (s *sharedEntryAttributes) GetHighesPrio(result []*cache.Update, onlyNewOrU
 	return result
 }
 
-func newSharedEntryAttributes(parent Entry, pathElemName string) *sharedEntryAttributes {
-	return &sharedEntryAttributes{
-		parent:       parent,
-		pathElemName: pathElemName,
-		childs:       map[string]Entry{},
-		leafVariants: newLeafVariants(),
-	}
-}
+func (s *sharedEntryAttributes) ValidateMandatory() error {
+	if s.schema != nil {
+		switch s.schema.GetSchema().(type) {
+		case *sdcpb.SchemaElem_Container:
+			for _, c := range s.schema.GetContainer().MandatoryChildren {
+				// first check if the mandatory value is set via the intent, e.g. part of the tree already
+				v, existsInTree := s.childs[c]
 
-type LeafVariants []*LeafEntry
-
-func newLeafVariants() LeafVariants {
-	return make([]*LeafEntry, 0)
-}
-
-// ShouldDelete indicates if the entry should be deleted,
-// since it is an entry that represents LeafsVariants but non
-// of these are still valid.
-func (lv LeafVariants) ShouldDelete() bool {
-	// only procede if we have leave variants
-	if len(lv) == 0 {
-		return false
-	}
-
-	// go through all variants
-	for _, e := range lv {
-		// if there is a variant that is not marked as delete, no delete should be issued
-		if !e.Delete {
-			return false
+				// if not the path exists in the tree and is not to be deleted, then lookup in the paths index of the store
+				// and see if such path exists, if not raise the error
+				if !(existsInTree && !v.ShouldDelete()) {
+					if !s.treeContext.PathExists(append(s.Path(), c)) {
+						return fmt.Errorf("%s: mandatory child %s does not exist", s.Path(), c)
+					}
+				}
+			}
 		}
 	}
-	// return true otherwise
-	return true
+	// continue with childs
+	for _, c := range s.childs {
+		err := c.ValidateMandatory()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-// GetHighesNewUpdated returns the LeafEntry with the highes priority
-// nil if no leaf entry exists.
-func (lv LeafVariants) GetHighesPrio(onlyIfPrioChanged bool) *LeafEntry {
-	if len(lv) == 0 {
-		return nil
+func (s *sharedEntryAttributes) initChoiceCasesResolvers() {
+	if s.schema == nil {
+		return
 	}
 
-	var highest *LeafEntry
-	var secondHighest *LeafEntry
-	for _, e := range lv {
-		// first entry set result to it
-		// if it is not marked for deletion
-		if highest == nil {
-			highest = e
-			continue
+	// extract container schema
+	var ci *sdcpb.ChoiceInfo
+	switch s.schema.GetSchema().(type) {
+	case *sdcpb.SchemaElem_Container:
+		ci = s.schema.GetContainer().GetChoiceInfo()
+	}
+
+	// create a new choiceCasesResolvers struct
+	choicesResolvers := choiceCasesResolvers{}
+
+	// iterate through choices defined in schema
+	for choiceName, choice := range ci.GetChoice() {
+		// add the choice to the choiceCasesResolvers
+		actualResolver := choicesResolvers.AddChoice(choiceName)
+		// iterate through cases
+		for caseName, choiceCase := range choice.GetCase() {
+			// add cases and their depending elements / attributes to the case
+			actualResolver.AddCase(caseName, choiceCase.GetElements())
 		}
-		// on a result != nil that is then not marked for deletion
-		// start comparing priorities and choose the one with the
-		// higher prio (lower number)
-		if highest.Priority() > e.Priority() {
-			secondHighest = highest
-			highest = e
-		} else {
-			// check if the update is at least higher prio (lower number) then the secondHighest
-			if secondHighest == nil || secondHighest.Priority() > e.Priority() {
-				secondHighest = e
+	}
+	// set the resolver in the sharedEntryAttributes
+	s.choicesResolvers = choicesResolvers
+}
+
+func (s *sharedEntryAttributes) filterActiveChoiceCaseChilds() map[string]Entry {
+	if s.schema == nil {
+		return s.childs
+	}
+	// if choice/cases exist, process it
+	for _, choiceResolver := range s.choicesResolvers {
+		for _, elem := range choiceResolver.GetElementNames() {
+			child, childExists := s.childs[elem]
+			if childExists {
+				v := child.GetLowestPriorityValueOfBranch()
+				if v < math.MaxInt32 {
+					choiceResolver.SetValue(elem, v)
+				}
+			}
+			// Query the Index, stored in the treeContext for the per branch highes precedence
+			if val := s.treeContext.GetBranchesLowestPriorityValue(s.Path(), CacheUpdateFilterExcludeOwner(s.treeContext.GetActualOwner())); val < math.MaxInt32 {
+				choiceResolver.SetValue(elem, val)
 			}
 		}
 	}
 
-	// if it does not matter if the highes update is also
-	// New or Updated return it
-	if !onlyIfPrioChanged {
-		if !highest.Delete {
-			return highest
+	skipAttributesList := s.choicesResolvers.GetSkipElements()
+	result := map[string]Entry{}
+	// optimization option: sort the slices and forward in parallel, lifts extra burden that the contains call holds.
+	for childName, child := range s.childs {
+		if slices.Contains(skipAttributesList, childName) {
+			continue
 		}
-		return secondHighest
+		result[childName] = child
 	}
-
-	// if the highes is not marked for deletion and new or updated (=PrioChanged) return it
-	if !highest.Delete {
-		if highest.IsNew || highest.IsUpdated {
-			return highest
-		}
-		return nil
-	}
-	// otherwise if the secondhighest is not marked for deletion return it
-	if secondHighest != nil && !secondHighest.Delete {
-		return secondHighest
-	}
-
-	// otherwise return nil
-	return nil
-
+	return result
 }
 
-// GetByOwner returns the entry that is owned by the given owner,
-// returns nil if no entry exists.
-func (lv LeafVariants) GetByOwner(owner string) *LeafEntry {
-	for _, e := range lv {
-		if e.Owner() == owner {
-			return e
-		}
-	}
-	return nil
-}
+// func (s *sharedEntryAttributes) ValidateChoices() error {
+// 	if s.schema != nil {
+// 		switch s.schema.GetSchema().(type) {
+// 		case *sdcpb.SchemaElem_Container:
+// 			choiceCasePrio := map[string]map[string]int32{}
+// 			for choiceName, choice := range s.schema.GetContainer().GetChoiceInfo().GetChoice() {
+// 				for caseName, choiceCase := range choice.GetCase() {
+// 					for _, elem := range choiceCase.GetElements() {
+// 						prioValue := int32(math.MaxInt32)
+// 						child, childExists := s.childs[elem]
+// 						if childExists {
+// 							prioValue = child.GetLowestPriorityValueOfBranch()
+// 						}
+// 						if storeValue := s.treeContext.GetBranchesLowestPriorityValue(append(s.Path(), elem)); storeValue < prioValue {
+// 							prioValue = storeValue
+// 						}
+// 						choiceCasePrio[choiceName][caseName] = prioValue
+// 					}
+// 				}
+// 			}
+// 		}
+// 	}
 
-// RootEntry the root of the cache.Update tree
-type RootEntry struct {
-	*sharedEntryAttributes
-}
+// 	// continue with childs
+// 	for _, c := range s.childs {
+// 		err := c.ValidateChoices()
+// 		if err != nil {
+// 			return err
+// 		}
+// 	}
+// 	return nil
+// }
 
 // StringIndent returns the sharedEntryAttributes in its string representation
 // The string is intented according to the nesting level in the yang model
@@ -398,7 +514,7 @@ func (s *sharedEntryAttributes) MarkOwnerDelete(o string) {
 	}
 }
 
-func (r *sharedEntryAttributes) AddCacheUpdateRecursive(c *cache.Update, new bool) error {
+func (r *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *cache.Update, new bool) error {
 	idx := 0
 	// if it is the root node, index remains == 0
 	if r.parent != nil {
@@ -424,20 +540,45 @@ func (r *sharedEntryAttributes) AddCacheUpdateRecursive(c *cache.Update, new boo
 	}
 
 	var e Entry
+	var err error
 	var exists bool
 	// if child does not exist, create Entry
 	if e, exists = r.childs[c.GetPath()[idx]]; !exists {
-		e = newEntry(r, c.GetPath()[idx])
+		e, err = newEntry(ctx, r, c.GetPath()[idx], r.treeContext)
+		if err != nil {
+			return err
+		}
 	}
-	e.AddCacheUpdateRecursive(c, new)
-
-	return nil
+	return e.AddCacheUpdateRecursive(ctx, c, new)
 }
 
-func NewTreeRoot() *RootEntry {
-	return &RootEntry{
-		sharedEntryAttributes: newSharedEntryAttributes(nil, ""),
+type UpdateSlice []*cache.Update
+
+// GetHighesPriorityValue returns the highes priority value of all the containing Updates
+func (u UpdateSlice) GetLowestPriorityValue(filters []CacheUpdateFilter) int32 {
+	result := int32(math.MaxInt32)
+	for _, entry := range u {
+		if entry.Priority() < result && ApplyCacheUpdateFilters(entry, filters) {
+			result = entry.Priority()
+		}
 	}
+	return result
+}
+
+// RootEntry the root of the cache.Update tree
+type RootEntry struct {
+	*sharedEntryAttributes
+}
+
+func NewTreeRoot(ctx context.Context, tc *TreeContext) (*RootEntry, error) {
+	sea, err := newSharedEntryAttributes(ctx, nil, "", tc)
+	if err != nil {
+		return nil, err
+	}
+
+	return &RootEntry{
+		sharedEntryAttributes: sea,
+	}, nil
 }
 
 func (r *RootEntry) String() string {
@@ -482,8 +623,8 @@ func (r *RootEntry) GetDeletes() [][]string {
 	return r.sharedEntryAttributes.GetDeletes(deletes)
 }
 
-func (r *RootEntry) getByOwner(owner string) []*LeafEntry {
-	return r.getByOwnerFiltered(owner, Unfiltered)
+func (r *RootEntry) GetTreeContext() *TreeContext {
+	return r.treeContext
 }
 
 func (r *RootEntry) getByOwnerFiltered(owner string, f ...LeafEntryFilter) []*LeafEntry {
@@ -507,55 +648,54 @@ NEXTELEMENT:
 
 type EntryVisitor func(s *sharedEntryAttributes) error
 
-// TreeWalkerSchemaRetriever returns an EntryVisitor, that populates the tree entries with the corresponding schema entries.
-func TreeWalkerSchemaRetriever(ctx context.Context, scb SchemaClient.SchemaClientBound) EntryVisitor {
-	// the schemaIndex is used as a lookup cache for Schema elements,
-	// to prevent repetetive requests for the same schema element
-	schemaIndex := map[string]*sdcpb.SchemaElem{}
+// // TreeWalkerSchemaRetriever returns an EntryVisitor, that populates the tree entries with the corresponding schema entries.
+// func TreeWalkerSchemaRetriever(ctx context.Context, scb SchemaClient.SchemaClientBound) EntryVisitor {
+// 	// the schemaIndex is used as a lookup cache for Schema elements,
+// 	// to prevent repetetive requests for the same schema element
+// 	schemaIndex := map[string]*sdcpb.SchemaElem{}
 
-	return func(s *sharedEntryAttributes) error {
-		// if schema is already set, return early
-		if s.schema != nil {
-			return nil
-		}
+// 	return func(s *sharedEntryAttributes) error {
+// 		// if schema is already set, return early
+// 		if s.schema != nil {
+// 			return nil
+// 		}
 
-		// convert the []string path into sdcpb.path for schema retrieval
-		sdcpbPath, err := scb.ToPath(ctx, s.Path())
-		if err != nil {
-			return err
-		}
+// 		// convert the []string path into sdcpb.path for schema retrieval
+// 		sdcpbPath, err := scb.ToPath(ctx, s.Path())
+// 		if err != nil {
+// 			return err
+// 		}
 
-		// check if the actual path points to a key value (the last path element contains a key)
-		// if so, we can skip querying the schema server
-		if len(sdcpbPath.Elem) > 0 && len(sdcpbPath.Elem[len(sdcpbPath.Elem)-1].Key) > 0 {
-			// s.schema remains nil
-			// s.isSchemaElement remains false
-			return nil
-		}
+// 		// // check if the actual path points to a key value (the last path element contains a key)
+// 		// // if so, we can skip querying the schema server
+// 		// if len(sdcpbPath.Elem) > 0 && len(sdcpbPath.Elem[len(sdcpbPath.Elem)-1].Key) > 0 {
+// 		// 	// s.schema remains nil
+// 		// 	// s.isSchemaElement remains false
+// 		// 	return nil
+// 		// }
 
-		// convert the path into a keyless path, for schema index lookups.
-		keylessPathSlice := utils.ToStrings(sdcpbPath, false, true)
-		keylessPath := strings.Join(keylessPathSlice, "/")
+// 		// convert the path into a keyless path, for schema index lookups.
+// 		keylessPathSlice := utils.ToStrings(sdcpbPath, false, true)
+// 		keylessPath := strings.Join(keylessPathSlice, KeysIndexSep)
 
-		// lookup schema in schemaindex, preventing consecutive gets from the schema server
-		if v, exists := schemaIndex[keylessPath]; exists {
-			// set the schema retrieved from SchemaIndex
-			s.schema = v
-			// we're done, schema is set, return
-			return nil
-		}
+// 		// lookup schema in schemaindex, preventing consecutive gets from the schema server
+// 		if v, exists := schemaIndex[keylessPath]; exists {
+// 			// set the schema retrieved from SchemaIndex
+// 			s.schema = v
+// 			// we're done, schema is set, return
+// 			return nil
+// 		}
 
-		// if schema wasn't found in index, go and fetch it
-		schemaRsp, err := scb.GetSchema(ctx, sdcpbPath)
-		if err != nil {
-			return err
-		}
+// 		// if schema wasn't found in index, go and fetch it
+// 		schemaRsp, err := scb.GetSchema(ctx, sdcpbPath)
+// 		if err != nil {
+// 			return err
+// 		}
 
-		// store schema in schemaindex for next lookup
-		schemaIndex[keylessPath] = schemaRsp.GetSchema()
-		// set the sharedEntryAttributes related values
-		s.schema = schemaRsp.GetSchema()
-		s.isSchemaElement = true
-		return nil
-	}
-}
+// 		// store schema in schemaindex for next lookup
+// 		schemaIndex[keylessPath] = schemaRsp.GetSchema()
+// 		// set the sharedEntryAttributes related values
+// 		s.schema = schemaRsp.GetSchema()
+// 		return nil
+// 	}
+// }

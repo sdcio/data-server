@@ -6,7 +6,8 @@
                 "auto-negotiate": true
             },
             "breakout-mode": {
-                "num-breakout-ports": 2
+                "num-breakout-ports": 2,
+                "breakout-port-speed": "10G"
             }
         }
     }

@@ -341,7 +341,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			}
 
 			// Populate the root tree
-			root, err := d.populateTree(ctx, reqOne)
+			root, err := d.populateTree(ctx, reqOne, tc)
 			if err != nil {
 				t.Error(err)
 			}

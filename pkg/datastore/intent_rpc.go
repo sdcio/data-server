@@ -105,57 +105,6 @@ func (d *Datastore) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest
 	}, nil
 }
 
-// func (d *Datastore) getIntentFlatNotifications(ctx context.Context, intentName string, priority int32) ([]*sdcpb.Notification, error) {
-// 	notifications := make([]*sdcpb.Notification, 0)
-
-// 	rawIntent, err := d.getRawIntent(ctx, intentName, priority)
-// 	if errors.Is(err, ErrIntentNotFound) {
-// 		return nil, nil
-// 	}
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	expUpds, err := d.expandUpdates(ctx, rawIntent.GetUpdate(), true)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	paths := make([][]string, 0, len(expUpds))
-// 	for _, expu := range expUpds {
-// 		paths = append(paths, utils.ToStrings(expu.Path, false, false))
-// 	}
-// 	upds := d.cacheClient.Read(ctx, d.config.Name, &cache.Opts{
-// 		Store:    cachepb.Store_INTENDED,
-// 		Owner:    intentName,
-// 		Priority: priority,
-// 	}, paths, 0)
-
-// 	for _, upd := range upds {
-// 		if upd.Owner() != intentName {
-// 			continue // TODO: DIRTY temp(?) workaround for 2 intents with the same priority
-// 		}
-// 		scp, err := d.toPath(ctx, upd.GetPath())
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 		tv, err := upd.Value()
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 		n := &sdcpb.Notification{
-// 			Timestamp: time.Now().UnixNano(),
-// 			Update: []*sdcpb.Update{{
-// 				Path:  scp,
-// 				Value: tv,
-// 			}},
-// 		}
-// 		notifications = append(notifications, n)
-// 	}
-// 	log.Debug()
-// 	log.Debugf("ds=%s | %s | current notifications: %v", d.Name(), intentName, notifications)
-// 	log.Debug()
-// 	return notifications, nil
-// }
-
 func (d *Datastore) applyIntent(ctx context.Context, candidateName string, sdreq *sdcpb.SetDataRequest) error {
 	if candidateName == "" {
 		return fmt.Errorf("missing candidate name")
@@ -311,73 +260,6 @@ func (d *Datastore) deleteRawIntent(ctx context.Context, intentName string, prio
 		[][]string{{rawIntentName(intentName, priority)}},
 		nil)
 }
-
-// func (d *Datastore) pathsAddKeysAsLeaves(paths []*sdcpb.Path) []*sdcpb.Path {
-// 	added := make(map[string]struct{})
-// 	npaths := make([]*sdcpb.Path, 0, len(paths))
-// 	for _, p := range paths {
-// 		npaths = append(npaths, p)
-
-// 		for idx, pe := range p.GetElem() {
-// 			if len(pe.GetKey()) == 0 {
-// 				continue
-// 			}
-// 			for k, v := range pe.GetKey() {
-// 				pp := &sdcpb.Path{
-// 					Elem: make([]*sdcpb.PathElem, idx+1),
-// 				}
-// 				for i := 0; i < idx+1; i++ {
-// 					pp.Elem[i] = &sdcpb.PathElem{
-// 						Name: p.GetElem()[i].GetName(),
-// 						Key:  utils.CopyMap(p.GetElem()[i].GetKey()),
-// 					}
-// 				}
-// 				pp.Elem = append(pp.Elem, &sdcpb.PathElem{Name: k})
-
-// 				uniqueID := utils.ToXPath(pp, false) + ":::" + v
-// 				if _, ok := added[uniqueID]; !ok {
-// 					added[uniqueID] = struct{}{}
-// 					npaths = append(npaths, pp)
-// 				}
-// 			}
-// 		}
-// 		// fmt.Println()
-// 	}
-// 	return npaths
-// }
-
-// func (d *Datastore) buildPathsWithKeysAsLeaves(paths []*sdcpb.Path) []*sdcpb.Path {
-// 	added := make(map[string]struct{})
-// 	npaths := make([]*sdcpb.Path, 0, len(paths))
-// 	for _, p := range paths {
-// 		for idx, pe := range p.GetElem() {
-// 			if len(pe.GetKey()) == 0 {
-// 				continue
-// 			}
-// 			for k, v := range pe.GetKey() {
-// 				pp := &sdcpb.Path{
-// 					Elem: make([]*sdcpb.PathElem, idx+1),
-// 				}
-// 				for i := 0; i < idx+1; i++ {
-// 					pp.Elem[i] = &sdcpb.PathElem{
-// 						Name: p.GetElem()[i].GetName(),
-// 						Key:  utils.CopyMap(p.GetElem()[i].GetKey()),
-// 					}
-// 				}
-// 				pp.Elem = append(pp.Elem, &sdcpb.PathElem{Name: k})
-
-// 				uniqueID := utils.ToXPath(pp, false) + ":::" + v
-// 				if _, ok := added[uniqueID]; !ok {
-// 					// fmt.Printf("d | ADDING KEY Path: %v\n", pp)
-// 					added[uniqueID] = struct{}{}
-// 					npaths = append(npaths, pp)
-// 				}
-// 			}
-// 		}
-// 		// fmt.Println()
-// 	}
-// 	return npaths
-// }
 
 func (d *Datastore) cacheUpdateToUpdate(ctx context.Context, cupd *cache.Update) (*sdcpb.Update, error) {
 	scp, err := d.toPath(ctx, cupd.GetPath())

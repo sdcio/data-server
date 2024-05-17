@@ -31,44 +31,24 @@ import (
 	"github.com/sdcio/data-server/pkg/utils"
 )
 
-const (
-	keysIndexSep = "_"
-)
-
 // populateTreeWithIntentData populates the given tree with intent data thats stored in the cache already
 // Queries the Caches keys, filters out entries that belong to given owner and adds them to the given keys and keyindex structs.
 // Finally queries the values for those entries, adds them to the given tree and marks the owners entries as deleted.
-func (d *Datastore) populateTreeWithIntentData(ctx context.Context, root *tree.RootEntry, owner string, keyIndex map[string]struct{}, keys [][]string) error {
+func (d *Datastore) populateTreeWithIntentData(ctx context.Context, root *tree.RootEntry, owner string, pathKeySet *tree.PathSet) error {
 
-	// read all Intended Store Keys in their extednded format, containing
-	// not just paths but also the owner and priority etc.
-	// !!! Values will not be populated !!!
-	keysMeta, err := d.readIntendedStoreKeysMeta(ctx)
-	if err != nil {
-		return err
-	}
+	ownerPaths := root.GetTreeContext().GetPathsOfOwner(owner)
 
-	// range through all the keys and filter out the once that
-	// actually belong to the intent
-	for _, keyMeta := range keysMeta {
-		for _, k := range keyMeta {
-			if k.Owner() == owner {
-				// if the key is not yet listed in the keys slice, add it otherwise skip
-				if _, exists := keyIndex[strings.Join(k.GetPath(), keysIndexSep)]; !exists {
-					keys = append(keys, k.GetPath())
-				}
-			}
-		}
-	}
+	// join owner based and new paths in the pathkeyset
+	pathKeySet.Join(ownerPaths)
 
 	// Get all entries of the already existing intent
-	highesCurrentCacheEntries := d.readCurrentUpdatesHighestPriorities(ctx, keys, 2)
+	highesCurrentCacheEntries := d.readCurrentUpdatesHighestPriorities(ctx, pathKeySet.GetPaths(), 2)
 
 	// add all the existing entries
 	for _, entrySlice := range highesCurrentCacheEntries {
 		for _, v := range entrySlice {
 			for _, x := range v {
-				root.AddCacheUpdateRecursive(x, false)
+				root.AddCacheUpdateRecursive(ctx, x, false)
 			}
 		}
 	}
@@ -80,9 +60,18 @@ func (d *Datastore) populateTreeWithIntentData(ctx context.Context, root *tree.R
 	return nil
 }
 
-func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentRequest) (r *tree.RootEntry, err error) {
+func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentRequest, tc *tree.TreeContext) (r *tree.RootEntry, err error) {
 	// create a new Tree
-	root := tree.NewTreeRoot()
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		return nil, err
+	}
+
+	storeIndex, err := d.readIntendedStoreKeysMeta(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tc.SetStoreIndex(storeIndex)
 
 	// list of updates to be added to the cache
 	// Expands the value, in case of json to single typed value updates
@@ -94,11 +83,8 @@ func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentReques
 	// temp storage for cache.Update of the req. They are to be added later.
 	newCacheUpdates := make([]*cache.Update, 0, len(expandedReqUpdates))
 
-	// stores the keys that are present in the existing intent,
-	// that is already stored in the cache
-	keys := make([][]string, 0, len(expandedReqUpdates))
-	// index for already added keys
-	keyIndex := map[string]struct{}{}
+	// Set of pathKeySet that need to be retrieved from the cache
+	pathKeySet := tree.NewPathSet()
 
 	for _, u := range expandedReqUpdates {
 		pathslice, err := utils.CompletePath(nil, u.GetPath())
@@ -106,11 +92,7 @@ func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentReques
 			return nil, err
 		}
 
-		keyIndexKey := strings.Join(pathslice, keysIndexSep)
-		if _, exists := keyIndex[keyIndexKey]; !exists {
-			keys = append(keys, pathslice)
-			keyIndex[keyIndexKey] = struct{}{}
-		}
+		pathKeySet.AddPath(pathslice)
 
 		// since we already have the pathslice, we construct the cache.Update, but keep it for later
 		// addition to the tree. First we need to mark the existing once for deltion
@@ -132,7 +114,7 @@ func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentReques
 	}
 
 	// populate the tree with all the existing entries from the cache, that match relevant paths (paths from the old intent, and the new request).
-	err = d.populateTreeWithIntentData(ctx, root, req.GetIntent(), keyIndex, keys)
+	err = d.populateTreeWithIntentData(ctx, root, req.GetIntent(), pathKeySet)
 	if err != nil {
 		return nil, err
 	}
@@ -140,17 +122,17 @@ func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentReques
 	// now add the cache.Updates from the actual request, after marking the old once for deletion.
 	for _, upd := range newCacheUpdates {
 		// add the cache.Update to the tree
-		err = root.AddCacheUpdateRecursive(upd, true)
+		err = root.AddCacheUpdateRecursive(ctx, upd, true)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	// populate schema within the tree
-	err = root.Walk(tree.TreeWalkerSchemaRetriever(ctx, d.getValidationClient()))
-	if err != nil {
-		return nil, err
-	}
+	// // populate schema within the tree
+	// err = root.Walk(tree.TreeWalkerSchemaRetriever(ctx, d.getValidationClient()))
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	fmt.Printf("Tree:%s\n", root.String())
 
@@ -195,7 +177,10 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	// if they need to be applied based on the intent priority.
 	logger.Debugf("reading intent paths to be updated from intended store; looking for the highest priority values")
 
-	root, err := d.populateTree(ctx, req)
+	treeCacheSchemaClient := tree.NewTreeSchemaCacheClient(d.Name(), d.cacheClient, d.getValidationClient())
+	tc := tree.NewTreeContext(treeCacheSchemaClient, req.GetIntent())
+
+	root, err := d.populateTree(ctx, req, tc)
 	if err != nil {
 		return err
 	}
@@ -236,6 +221,12 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	}
 
 	fmt.Println(prototext.Format(setDataReq))
+
+	// validate Mandatory attributes are present
+	err = root.ValidateMandatory()
+	if err != nil {
+		return err
+	}
 
 	log.Info("intent setting into candidate")
 	// set the candidate
@@ -360,13 +351,13 @@ func (d *Datastore) getNextPriority(ctx context.Context, intentPriority int32, i
 	}
 }
 
-func (d *Datastore) readIntendedStoreKeysMeta(ctx context.Context) (map[string][]*cache.Update, error) {
+func (d *Datastore) readIntendedStoreKeysMeta(ctx context.Context) (map[string]tree.UpdateSlice, error) {
 	entryCh, err := d.cacheClient.GetIntendedKeysMeta(ctx, d.config.Name)
 	if err != nil {
 		return nil, err
 	}
 
-	result := map[string][]*cache.Update{}
+	result := map[string]tree.UpdateSlice{}
 	for {
 		select {
 		case <-ctx.Done():
@@ -375,10 +366,10 @@ func (d *Datastore) readIntendedStoreKeysMeta(ctx context.Context) (map[string][
 			if !ok {
 				return result, nil
 			}
-			key := strings.Join(e.GetPath(), "/")
+			key := strings.Join(e.GetPath(), tree.KeysIndexSep)
 			_, exists := result[key]
 			if !exists {
-				result[key] = []*cache.Update{}
+				result[key] = tree.UpdateSlice{}
 			}
 			result[key] = append(result[key], e)
 		}

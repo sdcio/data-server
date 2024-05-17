@@ -494,7 +494,7 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *sdcpb.Update) error
 	}
 	switch obj := rsp.GetSchema().Schema.(type) {
 	case *sdcpb.SchemaElem_Container:
-		if !pathIsKeyAsLeaf(upd.GetPath()) {
+		if !pathIsKeyAsLeaf(upd.GetPath()) && !obj.Container.IsPresence {
 			return fmt.Errorf("cannot set value on container %q object", obj.Container.Name)
 		}
 		// TODO: validate key as leaf
@@ -1007,10 +1007,26 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				}
 				switch rsp := rsp.GetSchema().Schema.(type) {
 				case *sdcpb.SchemaElem_Container:
-					rs, err := d.expandContainerValue(ctx, np, v, rsp, includeKeysAsLeaf)
-					if err != nil {
-						return nil, err
+					var rs []*sdcpb.Update
+					// code for presence containers
+					m, ok := v.(map[string]any)
+					if ok && len(m) == 0 && rsp.Container.IsPresence {
+						rs = []*sdcpb.Update{
+							{
+								Path: np,
+								Value: &sdcpb.TypedValue{
+									Value: &sdcpb.TypedValue_JsonVal{
+										JsonVal: []byte("{}"),
+									},
+								},
+							}}
+					} else {
+						rs, err = d.expandContainerValue(ctx, np, v, rsp, includeKeysAsLeaf)
+						if err != nil {
+							return nil, err
+						}
 					}
+
 					upds = append(upds, rs...)
 				default:
 					// should not happen
@@ -1341,7 +1357,7 @@ func convertTypedValueToYANGType(schemaElem *sdcpb.SchemaElem, tv *sdcpb.TypedVa
 		if schemaElem.GetContainer().IsPresence {
 			return &sdcpb.TypedValue{
 				Timestamp: tv.GetTimestamp(),
-				Value:     &sdcpb.TypedValue_JsonVal{JsonVal: nil},
+				Value:     &sdcpb.TypedValue_JsonVal{JsonVal: []byte("{}")},
 			}, nil
 		}
 	case schemaElem.GetLeaflist() != nil:

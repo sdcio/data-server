@@ -9,7 +9,7 @@
                 },
                 {
                     "ip-prefix": "1.2.3.0/24",
-                    "mask-length-range": "26..27"
+                    "mask-length-range": "exact"
                 },
                 {
                     "ip-prefix": "5.6.7.0/24",
