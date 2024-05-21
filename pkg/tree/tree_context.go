@@ -27,7 +27,7 @@ func (t *TreeContext) PathExists(path []string) bool {
 	return exists
 }
 
-func (t *TreeContext) GetBranchesLowestPriorityValue(path []string, filters ...CacheUpdateFilter) int32 {
+func (t *TreeContext) GetBranchesHighesPrecedence(path []string, filters ...CacheUpdateFilter) int32 {
 	result := int32(math.MaxInt32)
 	pathKey := strings.Join(path, KeysIndexSep)
 

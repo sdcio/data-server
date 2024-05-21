@@ -1,6 +1,9 @@
 package tree
 
-import "slices"
+import (
+	"math"
+	"slices"
+)
 
 type choiceCasesResolvers map[string]*choiceCasesResolver
 
@@ -48,7 +51,6 @@ func (c choiceCasesResolvers) GetChoiceElementNeighbors(elemName string) []strin
 // All with the goal of composing a list of elements that do not belong to the prioritised case, for exclusion on tree traversal time.
 type choiceCasesResolver struct {
 	cases                map[string]*choicesCase
-	bestcase             *string
 	elementToCaseMapping map[string]string
 }
 
@@ -64,15 +66,40 @@ func (c *choiceCasesResolver) GetElementNames() []string {
 // choicesCase is the representation of a case in the choiceCasesResolver.
 type choicesCase struct {
 	name     string
-	value    *int32
-	elements []string
+	elements map[string]*choicesCaseElement
+}
+
+func (c *choicesCase) GetLowestPriorityValue() int32 {
+	result := int32(math.MaxInt32)
+	for _, cas := range c.elements {
+		if cas.value < result {
+			result = cas.value
+		}
+	}
+	return result
+}
+
+func (c *choicesCase) GetLowestPriorityValueOld() int32 {
+	result := int32(math.MaxInt32)
+	for _, cas := range c.elements {
+		if !cas.new && cas.value < result {
+			result = cas.value
+		}
+	}
+	return result
+}
+
+type choicesCaseElement struct {
+	name  string
+	value int32
+	new   bool
 }
 
 // newChoiceCasesResolver returns a ready to use choiceCasesResolver.
 func newChoiceCasesResolver() *choiceCasesResolver {
 	return &choiceCasesResolver{
-		cases:                map[string]*choicesCase{},
-		elementToCaseMapping: map[string]string{},
+		cases:                map[string]*choicesCase{}, // case name -> case data
+		elementToCaseMapping: map[string]string{},       // element name -> case name
 	}
 }
 
@@ -80,45 +107,61 @@ func newChoiceCasesResolver() *choiceCasesResolver {
 func (c *choiceCasesResolver) AddCase(name string, elements []string) *choicesCase {
 	c.cases[name] = &choicesCase{
 		name:     name,
-		elements: elements,
+		elements: map[string]*choicesCaseElement{},
 	}
 	for _, e := range elements {
 		c.elementToCaseMapping[e] = name
+		c.cases[name].elements[e] = &choicesCaseElement{
+			name:  e,
+			value: int32(math.MaxInt32),
+		}
 	}
 	return c.cases[name]
 }
 
 // SetValue Sets the priority value that the given elements with its entire branch has calculated
-func (c *choiceCasesResolver) SetValue(elemName string, v int32) {
+
+func (c *choiceCasesResolver) SetValue(elemName string, v int32, new bool) {
 	actualCase := c.elementToCaseMapping[elemName]
-	elem := c.cases[actualCase]
-	if elem.value == nil {
-		elem.value = &v
-	}
-	if c.bestcase == nil {
-		c.bestcase = &actualCase
-		return
-	}
-	if v < *c.cases[*c.bestcase].value {
-		c.bestcase = &actualCase
-	}
+	c.cases[actualCase].elements[elemName].value = v
+	c.cases[actualCase].elements[elemName].new = new
 }
 
 // GetBestCaseName returns the name of the case, that has the highes priority
-func (c *choiceCasesResolver) GetBestCaseName() string {
-	return *c.bestcase
+func (c *choiceCasesResolver) getBestCaseName() string {
+	var bestCaseName string
+	bestCasePrio := int32(math.MaxInt32)
+	for caseName, cas := range c.cases {
+		if cas.GetLowestPriorityValue() < bestCasePrio {
+			bestCaseName = caseName
+			bestCasePrio = cas.GetLowestPriorityValue()
+		}
+	}
+	return bestCaseName
+}
+
+func (c *choiceCasesResolver) getOldBestCaseName() string {
+	var bestCaseName string
+	bestCasePrio := int32(math.MaxInt32)
+	for caseName, cas := range c.cases {
+		lowestPrioOld := cas.GetLowestPriorityValueOld()
+		if lowestPrioOld < bestCasePrio {
+			bestCaseName = caseName
+			bestCasePrio = lowestPrioOld
+		}
+	}
+	return bestCaseName
 }
 
 // GetSkipElements returns the names of all the elements that belong to
 // cases that have not the best priority
 func (c *choiceCasesResolver) GetSkipElements() []string {
 	result := make([]string, 0, len(c.elementToCaseMapping))
+
+	bestCase := c.getBestCaseName()
+
 	for elem, cas := range c.elementToCaseMapping {
-		if cas == *c.bestcase {
-			continue
-		}
-		// optimization, add to the skip list only items that do exist.
-		if c.cases[cas].value == nil {
+		if cas == bestCase {
 			continue
 		}
 		result = append(result, elem)

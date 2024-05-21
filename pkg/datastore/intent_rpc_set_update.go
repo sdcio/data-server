@@ -185,8 +185,10 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		return err
 	}
 
+	root.FinishInsertionPhase()
+
 	// retrieve the data that is meant to be send southbound (towards the device)
-	updates := root.GetHighesPrio(true)
+	updates := root.GetHighesPrecedence(true)
 	deletes := root.GetDeletes()
 
 	// set request to be applied into the candidate

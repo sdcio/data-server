@@ -172,7 +172,7 @@ Eight
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
 
 12 - Choices - Accept - Low Precedence
-    ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    twelve-1    10        ${CURDIR}/intents/acl_accept.json
+    ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    twelve-1    10        ${CURDIR}/intents/acl_accept_with_subelements.json
     Should Be Equal As Integers    ${result.rc}    0
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
 
