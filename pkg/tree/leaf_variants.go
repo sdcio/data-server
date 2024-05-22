@@ -31,7 +31,7 @@ func (lv LeafVariants) ShouldDelete() bool {
 func (lv LeafVariants) GetHighestPrecedenceValue() int32 {
 	result := int32(math.MaxInt32)
 	for _, e := range lv {
-		if e.Update.Priority() < result {
+		if !e.Delete && e.Update.Priority() < result {
 			result = e.Update.Priority()
 		}
 	}
@@ -40,7 +40,7 @@ func (lv LeafVariants) GetHighestPrecedenceValue() int32 {
 
 // GetHighesNewUpdated returns the LeafEntry with the highes priority
 // nil if no leaf entry exists.
-func (lv LeafVariants) GetHighesPrecedence(onlyIfPrioChanged bool) *LeafEntry {
+func (lv LeafVariants) GetHighestPrecedence(onlyIfPrioChanged bool) *LeafEntry {
 	if len(lv) == 0 {
 		return nil
 	}

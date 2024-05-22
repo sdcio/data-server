@@ -129,9 +129,9 @@ func (u *Update) TS() int64 {
 
 // EqualSkipPath checks the equality of two updates.
 // It however skips comparing paths and timestamps.
-// This is a shortcut for mperformace, for cases in which it is already clear that the path is definately equal.
+// This is a shortcut for performace, for cases in which it is already clear that the path is definately equal.
 func (u *Update) EqualSkipPath(other *Update) bool {
-	return u.owner != other.owner && u.priority == other.priority && bytes.Equal(u.value, other.value)
+	return u.owner == other.owner && u.priority == other.priority && bytes.Equal(u.value, other.value)
 }
 
 type Change struct {

@@ -120,8 +120,12 @@ func (c *choiceCasesResolver) AddCase(name string, elements []string) *choicesCa
 }
 
 // SetValue Sets the priority value that the given elements with its entire branch has calculated
-
 func (c *choiceCasesResolver) SetValue(elemName string, v int32, new bool) {
+	// math.MaxInt32 indicates that the branch is not populated,
+	// so we skip adding it
+	if v == math.MaxInt32 {
+		return
+	}
 	actualCase := c.elementToCaseMapping[elemName]
 	c.cases[actualCase].elements[elemName].value = v
 	c.cases[actualCase].elements[elemName].new = new

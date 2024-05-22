@@ -450,7 +450,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 				},
 			}
 
-			le := lv.GetHighesPrio(true)
+			le := lv.GetHighestPrio(true)
 
 			if le != lv[0] {
 				t.Errorf("expected to get entry %v, got %v", lv[0], le)
@@ -471,7 +471,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 				},
 			}
 
-			le := lv.GetHighesPrio(true)
+			le := lv.GetHighesPrecedence(true)
 
 			if le != nil {
 				t.Errorf("expected to get entry %v, got %v", nil, le)
@@ -498,7 +498,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 				},
 			}
 
-			le := lv.GetHighesPrio(true)
+			le := lv.GetHighestPrio(true)
 
 			if le != nil {
 				t.Errorf("expected to get entry %v, got %v", nil, le)
@@ -525,7 +525,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 				},
 			}
 
-			le := lv.GetHighesPrio(false)
+			le := lv.GetHighestPrio(false)
 
 			if le != lv[0] {
 				t.Errorf("expected to get entry %v, got %v", lv[0], le)
@@ -552,7 +552,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 				},
 			}
 
-			le := lv.GetHighesPrio(true)
+			le := lv.GetHighestPrio(true)
 
 			if le != nil {
 				t.Errorf("expected to get entry %v, got %v", nil, le)
@@ -577,7 +577,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 				},
 			}
 
-			le := lv.GetHighesPrio(false)
+			le := lv.GetHighestPrio(false)
 
 			if le != lv[0] {
 				t.Errorf("expected to get entry %v, got %v", lv[0], le)
