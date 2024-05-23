@@ -515,7 +515,7 @@ func (d *Datastore) makeLeafRefAbs(ctx context.Context, base, lref *sdcpb.Path, 
 	if err != nil {
 		return nil, err
 	}
-	p, err = d.makeLeafRefAbsPath(base, p)
+	p, err = makeLeafRefAbsPath(base, p)
 	if err != nil {
 		return nil, err
 	}
@@ -559,7 +559,7 @@ func (d *Datastore) makeLeafRefAbsPathKeys(ctx context.Context, base, lref *sdcp
 	return lrefResult, nil
 }
 
-func (d *Datastore) makeLeafRefAbsPath(base, lref *sdcpb.Path) (*sdcpb.Path, error) {
+func makeLeafRefAbsPath(base, lref *sdcpb.Path) (*sdcpb.Path, error) {
 
 	// if the path is relative, the .. would start in the start of the path
 	if lref.Elem[0].Name != ".." {
@@ -576,23 +576,6 @@ func (d *Datastore) makeLeafRefAbsPath(base, lref *sdcpb.Path) (*sdcpb.Path, err
 		return nil, err
 	}
 
-	// // process leafref elements and adjust result
-	// for _, lrefElem := range lref.Elem {
-	// 	switch {
-	// 	// if .. in path, remove last elem from result (move up)
-	// 	case lrefElem.GetName() == "..":
-	// 		if len(result.Elem) == 0 {
-	// 			return nil, fmt.Errorf("invalid leafref path %s based on %s", lref.String(), base.String())
-	// 		}
-	// 		result.Elem = result.Elem[:len(result.Elem)-1]
-	// 	case lrefElem.GetName() == ".":
-	// 		// no one knows if this is a valid case, but we voted and here it is :-P
-	// 		continue
-	// 	default:
-	// 		// if proper path elem, add to path
-	// 		result.Elem = append(result.Elem, lrefElem)
-	// 	}
-	// }
 	return result, nil
 }
 
