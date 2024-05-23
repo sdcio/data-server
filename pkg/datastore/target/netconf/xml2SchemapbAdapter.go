@@ -47,7 +47,7 @@ func (x *XML2sdcpbConfigAdapter) Transform(ctx context.Context, doc *etree.Docum
 		return nil, nil
 	}
 
-	for _, e := range doc.ChildElements() {
+	for _, e := range doc.Root().ChildElements() {
 		r := &sdcpb.Notification{}
 		err := x.transformRecursive(ctx, e, []*sdcpb.PathElem{}, r, nil)
 		if err != nil {

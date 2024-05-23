@@ -28,7 +28,13 @@ func Test_Entry(t *testing.T) {
 	u2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc, int32(99), "me", int64(444))
 	u3 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc, int32(98), "me", int64(88))
 
-	root := NewTreeRoot()
+	ctx := context.Background()
+
+	// tc:= NewTreeContext(&TreeSchemaCacheClientImpl{
+	// 	,
+	// })
+
+	root := NewTreeRoot(ctx, tc)
 
 	for _, u := range []*cache.Update{u1, u2, u3} {
 		err = root.AddCacheUpdateRecursive(u, true)
@@ -365,12 +371,6 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 		}
 	}
 
-	// get a visitor with the schemaClientBound mock
-	visitor := TreeWalkerSchemaRetriever(context.Background(), getSchemaClientBound(t))
-
-	// populate the tree with the schema entries
-	root.Walk(visitor)
-
 	// retrieve the Deletes
 	deletesSlices := root.GetDeletes()
 
@@ -450,7 +450,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 				},
 			}
 
-			le := lv.GetHighestPrio(true)
+			le := lv.GetHighestPrecedence(true)
 
 			if le != lv[0] {
 				t.Errorf("expected to get entry %v, got %v", lv[0], le)
@@ -471,7 +471,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 				},
 			}
 
-			le := lv.GetHighesPrecedence(true)
+			le := lv.GetHighestPrecedence(true)
 
 			if le != nil {
 				t.Errorf("expected to get entry %v, got %v", nil, le)
@@ -498,7 +498,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 				},
 			}
 
-			le := lv.GetHighestPrio(true)
+			le := lv.GetHighestPrecedence(true)
 
 			if le != nil {
 				t.Errorf("expected to get entry %v, got %v", nil, le)
@@ -525,7 +525,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 				},
 			}
 
-			le := lv.GetHighestPrio(false)
+			le := lv.GetHighestPrecedence(false)
 
 			if le != lv[0] {
 				t.Errorf("expected to get entry %v, got %v", lv[0], le)
@@ -552,7 +552,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 				},
 			}
 
-			le := lv.GetHighestPrio(true)
+			le := lv.GetHighestPrecedence(true)
 
 			if le != nil {
 				t.Errorf("expected to get entry %v, got %v", nil, le)
@@ -577,7 +577,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 				},
 			}
 
-			le := lv.GetHighestPrio(false)
+			le := lv.GetHighestPrecedence(false)
 
 			if le != lv[0] {
 				t.Errorf("expected to get entry %v, got %v", lv[0], le)
@@ -590,7 +590,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 		func(t *testing.T) {
 			lv := LeafVariants{}
 
-			le := lv.GetHighesPrio(true)
+			le := lv.GetHighestPrecedence(true)
 
 			if le != nil {
 				t.Errorf("expected to get entry %v, got %v", nil, le)
@@ -614,7 +614,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 				},
 			}
 
-			le := lv.GetHighesPrio(true)
+			le := lv.GetHighestPrecedence(true)
 
 			if le != lv[1] {
 				t.Errorf("expected to get entry %v, got %v", lv[1], le)
