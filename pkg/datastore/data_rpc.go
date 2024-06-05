@@ -996,7 +996,33 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				}
 				upds = append(upds, upd)
 			case *sdcpb.LeafListSchema: // leaflist
-				log.Debugf("TODO: handling leafList %s", item.Name)
+				// log.Debugf("TODO: handling leafList %s", item.Name)
+				np := proto.Clone(p).(*sdcpb.Path)
+				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item.Name})
+
+				list := []*sdcpb.TypedValue{}
+
+				// iterate through the elements
+				// ATTENTION: assuming its all strings
+				// add them to the Leaflist value
+				for _, e := range v.([]any) {
+					tv := &sdcpb.TypedValue{
+						Value: &sdcpb.TypedValue_StringVal{
+							StringVal: fmt.Sprintf("%v", e.(string)),
+						},
+					}
+					list = append(list, tv)
+				}
+
+				upd := &sdcpb.Update{
+					Path: np,
+					Value: &sdcpb.TypedValue{
+						Timestamp: 0,
+						Value:     &sdcpb.TypedValue_LeaflistVal{LeaflistVal: &sdcpb.ScalarArray{Element: list}},
+					},
+				}
+				upds = append(upds, upd)
+
 			case string: // child container
 				log.Debugf("handling child container %s", item)
 				np := proto.Clone(p).(*sdcpb.Path)
