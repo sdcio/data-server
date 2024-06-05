@@ -12,6 +12,10 @@ import (
 	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
+	"github.com/sdcio/schema-server/pkg/config"
+	"github.com/sdcio/schema-server/pkg/schema"
+	schemaStore "github.com/sdcio/schema-server/pkg/store"
+	"github.com/sdcio/schema-server/pkg/store/memstore"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
@@ -30,14 +34,15 @@ func Test_Entry(t *testing.T) {
 
 	ctx := context.Background()
 
-	// tc:= NewTreeContext(&TreeSchemaCacheClientImpl{
-	// 	,
-	// })
+	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, getSchemaClientBound(t)), "foo")
 
-	root := NewTreeRoot(ctx, tc)
+	root, err := NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Error(err)
+	}
 
 	for _, u := range []*cache.Update{u1, u2, u3} {
-		err = root.AddCacheUpdateRecursive(u, true)
+		err = root.AddCacheUpdateRecursive(ctx, u, true)
 		if err != nil {
 			t.Error(err)
 		}
@@ -65,11 +70,18 @@ func Test_Entry_One(t *testing.T) {
 	u2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc2, prio100, owner1, ts1)
 	u3 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner2, ts1)
 
-	root := NewTreeRoot()
+	ctx := context.Background()
+
+	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, getSchemaClientBound(t)), "foo")
+
+	root, err := NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Error(err)
+	}
 
 	// start test
 	for _, u := range []*cache.Update{u1, u2, u3} {
-		err := root.AddCacheUpdateRecursive(u, true)
+		err := root.AddCacheUpdateRecursive(ctx, u, true)
 		if err != nil {
 			t.Error(err)
 		}
@@ -79,7 +91,8 @@ func Test_Entry_One(t *testing.T) {
 	t.Log(root.String())
 
 	t.Run("Test 1 - expect 2 entry for owner1", func(t *testing.T) {
-		o1Le := root.getByOwner(owner1)
+		o1Le := []*LeafEntry{}
+		o1Le = root.GetByOwner(owner1, o1Le)
 		o1 := LeafEntriesToCacheUpdates(o1Le)
 		// diff the result with the expected
 		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u2, u1}, o1); diff != "" {
@@ -88,7 +101,8 @@ func Test_Entry_One(t *testing.T) {
 	})
 
 	t.Run("Test 2 - expect 1 entry for owner2", func(t *testing.T) {
-		o2Le := root.getByOwner(owner2)
+		o2Le := []*LeafEntry{}
+		o2Le = root.GetByOwner(owner2, o2Le)
 		o2 := LeafEntriesToCacheUpdates(o2Le)
 		// diff the result with the expected
 		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u3}, o2); diff != "" {
@@ -97,9 +111,10 @@ func Test_Entry_One(t *testing.T) {
 	})
 
 	t.Run("Test 3 - GetHighesPrio()", func(t *testing.T) {
-		highpri := root.GetHighesPrio(true)
+
+		highprec := root.GetHighestPrecedence(true)
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1, u3}, highpri); diff != "" {
+		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1, u3}, highprec); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -114,11 +129,18 @@ func Test_Entry_Two(t *testing.T) {
 	ts1 := int64(9999999)
 	u1 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
 
-	root := NewTreeRoot()
+	ctx := context.Background()
+
+	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, getSchemaClientBound(t)), "foo")
+
+	root, err := NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Error(err)
+	}
 
 	// start test add "existing" data
 	for _, u := range []*cache.Update{u1} {
-		err := root.AddCacheUpdateRecursive(u, false)
+		err := root.AddCacheUpdateRecursive(ctx, u, false)
 		if err != nil {
 			t.Error(err)
 		}
@@ -131,7 +153,7 @@ func Test_Entry_Two(t *testing.T) {
 	n1 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*cache.Update{n1} {
-		err := root.AddCacheUpdateRecursive(u, true)
+		err := root.AddCacheUpdateRecursive(ctx, u, true)
 		if err != nil {
 			t.Error(err)
 		}
@@ -139,11 +161,10 @@ func Test_Entry_Two(t *testing.T) {
 
 	// log the tree
 	t.Log(root.String())
-
-	highpri := root.GetHighesPrio(true)
+	highprec := root.GetHighestPrecedence(true)
 
 	// diff the result with the expected
-	if diff := testhelper.DiffCacheUpdates([]*cache.Update{n1}, highpri); diff != "" {
+	if diff := testhelper.DiffCacheUpdates([]*cache.Update{n1}, highprec); diff != "" {
 		t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -159,11 +180,18 @@ func Test_Entry_Three(t *testing.T) {
 	u3 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "12", "description"}, desc3, prio50, owner1, ts1)
 	u4 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
 
-	root := NewTreeRoot()
+	ctx := context.Background()
+
+	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, getSchemaClientBound(t)), "foo")
+
+	root, err := NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Error(err)
+	}
 
 	// start test add "existing" data
 	for _, u := range []*cache.Update{u1, u2, u3, u4} {
-		err := root.AddCacheUpdateRecursive(u, false)
+		err := root.AddCacheUpdateRecursive(ctx, u, false)
 		if err != nil {
 			t.Error(err)
 		}
@@ -174,7 +202,7 @@ func Test_Entry_Three(t *testing.T) {
 		// log the tree
 		t.Log(root.String())
 
-		highpri := root.GetHighesPrio(false)
+		highpri := root.GetHighestPrecedence(false)
 
 		// diff the result with the expected
 		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1, u2, u3, u4}, highpri); diff != "" {
@@ -187,7 +215,7 @@ func Test_Entry_Three(t *testing.T) {
 		// log the tree
 		t.Log(root.String())
 
-		highpri := root.GetHighesPrio(true)
+		highpri := root.GetHighestPrecedence(true)
 
 		// diff the result with the expected
 		if diff := testhelper.DiffCacheUpdates([]*cache.Update{}, highpri); diff != "" {
@@ -207,7 +235,7 @@ func Test_Entry_Three(t *testing.T) {
 	n2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "11", "description"}, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*cache.Update{n1, n2} {
-		err := root.AddCacheUpdateRecursive(u, true)
+		err := root.AddCacheUpdateRecursive(ctx, u, true)
 		if err != nil {
 			t.Error(err)
 		}
@@ -232,7 +260,7 @@ func Test_Entry_Three(t *testing.T) {
 	})
 
 	t.Run("Check the old entries are gone", func(t *testing.T) {
-		highpri := root.GetHighesPrio(true)
+		highpri := root.GetHighestPrecedence(true)
 		// diff the result with the expected
 		if diff := testhelper.DiffCacheUpdates([]*cache.Update{n1, n2}, highpri); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
@@ -258,11 +286,18 @@ func Test_Entry_Four(t *testing.T) {
 	u1o2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio55, owner2, ts1)
 	u2o2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "11", "description"}, desc3, prio55, owner2, ts1)
 
-	root := NewTreeRoot()
+	ctx := context.Background()
+
+	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, getSchemaClientBound(t)), "foo")
+
+	root, err := NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Error(err)
+	}
 
 	// start test add "existing" data
 	for _, u := range []*cache.Update{u1o1, u2o1, u3, u4, u1o2, u2o2} {
-		err := root.AddCacheUpdateRecursive(u, false)
+		err := root.AddCacheUpdateRecursive(ctx, u, false)
 		if err != nil {
 			t.Error(err)
 		}
@@ -273,10 +308,10 @@ func Test_Entry_Four(t *testing.T) {
 		// log the tree
 		t.Log(root.String())
 
-		highpri := root.GetHighesPrio(false)
+		highprec := root.GetHighestPrecedence(false)
 
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1o1, u2o1, u3, u4}, highpri); diff != "" {
+		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1o1, u2o1, u3, u4}, highprec); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -293,7 +328,7 @@ func Test_Entry_Four(t *testing.T) {
 	n2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/1", "subinterface", "11", "description"}, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*cache.Update{n1, n2} {
-		err := root.AddCacheUpdateRecursive(u, true)
+		err := root.AddCacheUpdateRecursive(ctx, u, true)
 		if err != nil {
 			t.Error(err)
 		}
@@ -318,7 +353,7 @@ func Test_Entry_Four(t *testing.T) {
 	})
 
 	t.Run("Check the old entries are gone from highest", func(t *testing.T) {
-		highpri := root.GetHighesPrio(true)
+		highpri := root.GetHighestPrecedence(true)
 		// diff the result with the expected
 		if diff := testhelper.DiffCacheUpdates([]*cache.Update{n1, n2, u1o2, u2o2}, highpri); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
@@ -326,7 +361,7 @@ func Test_Entry_Four(t *testing.T) {
 	})
 
 	t.Run("Check the old entries are gone from highest (only New Or Updated)", func(t *testing.T) {
-		highpri := root.GetHighesPrio(true)
+		highpri := root.GetHighestPrecedence(true)
 		// diff the result with the expected
 		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1o2, u2o2, n1, n2}, highpri); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
@@ -347,11 +382,18 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	u5 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "index"}, testhelper.GetStringTvProto(t, "1"), prio50, owner1, ts1)
 	u6 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "description"}, desc3, prio50, owner1, ts1)
 
-	root := NewTreeRoot()
+	ctx := context.Background()
+
+	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, getSchemaClientBound(t)), "foo")
+
+	root, err := NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Error(err)
+	}
 
 	// start test add "existing" data
 	for _, u := range []*cache.Update{u1, u2, u3, u4, u5, u6} {
-		err := root.AddCacheUpdateRecursive(u, false)
+		err := root.AddCacheUpdateRecursive(ctx, u, false)
 		if err != nil {
 			t.Error(err)
 		}
@@ -365,7 +407,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 
 	// start test add "new" / request data
 	for _, u := range []*cache.Update{u1n, u2n} {
-		err := root.AddCacheUpdateRecursive(u, true)
+		err := root.AddCacheUpdateRecursive(ctx, u, true)
 		if err != nil {
 			t.Error(err)
 		}
@@ -621,4 +663,37 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 			}
 		},
 	)
+}
+
+func TestFoo(t *testing.T) {
+
+	s, err := InitSDCIOSchema()
+	if err != nil {
+		t.Error(err)
+	}
+
+	if err != nil {
+		t.Error(err)
+	}
+
+}
+
+func InitSDCIOSchema() (schemaStore.Store, error) {
+	schema, err := schema.NewSchema(&config.SchemaConfig{
+		Name:    "testschema",
+		Vendor:  "sdcio",
+		Version: "v0.0.0",
+		Files: []string{
+			"../../tests/schema",
+		},
+	})
+
+	schemaMemStore := memstore.New()
+	err = schemaMemStore.AddSchema(schema)
+	if err != nil {
+		return nil, err
+	}
+
+	return schemaMemStore, nil
+
 }

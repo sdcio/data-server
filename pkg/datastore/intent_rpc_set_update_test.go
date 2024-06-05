@@ -24,6 +24,7 @@ import (
 	"github.com/sdcio/data-server/mocks/mocktarget"
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -341,13 +342,13 @@ func TestDatastore_populateTree(t *testing.T) {
 			}
 
 			// Populate the root tree
-			root, err := d.populateTree(ctx, reqOne, tc)
+			root, err := d.populateTree(ctx, reqOne, tree.NewTreeContext(tree.NewTreeSchemaCacheClient(dsName, d.cacheClient, d.getValidationClient()), tt.intentName))
 			if err != nil {
 				t.Error(err)
 			}
 
 			// get the updates that are meant to be send down towards the device
-			updates := root.GetHighesPrio(!tt.NotOnlyNewOrUpdated)
+			updates := root.GetHighestPrecedence(!tt.NotOnlyNewOrUpdated)
 			if diff := testhelper.DiffCacheUpdates(tt.expectedModify, updates); diff != "" {
 				t.Errorf("root.GetHighesPrio(true) mismatch (-want +got):\n%s", diff)
 			}

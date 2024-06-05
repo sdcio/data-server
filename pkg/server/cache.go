@@ -41,14 +41,14 @@ START:
 			goto START
 		}
 		log.Infof("local cache created")
-	case "remote":
-		err = s.createRemoteCacheClient(ctx)
-		if err != nil {
-			log.Errorf("failed to initialize a remote cache client: %v", err)
-			time.Sleep(time.Second)
-			goto START
-		}
-		log.Infof("connected to remote cache: %s", s.config.Cache.Address)
+		// case "remote":
+		// 	err = s.createRemoteCacheClient(ctx)
+		// 	if err != nil {
+		// 		log.Errorf("failed to initialize a remote cache client: %v", err)
+		// 		time.Sleep(time.Second)
+		// 		goto START
+		// 	}
+		// 	log.Infof("connected to remote cache: %s", s.config.Cache.Address)
 	}
 }
 
@@ -63,9 +63,9 @@ func (s *Server) createLocalCacheClient(ctx context.Context) error {
 	return err
 }
 
-func (s *Server) createRemoteCacheClient(ctx context.Context) error {
-	log.Infof("initializing remote cache client")
-	var err error
-	//s.cacheClient, err = cache.NewRemoteCache(ctx, s.config.Cache.Address)
-	return err
-}
+// func (s *Server) createRemoteCacheClient(ctx context.Context) error {
+// 	log.Infof("initializing remote cache client")
+// 	var err error
+// 	s.cacheClient, err = cache.NewRemoteCache(ctx, s.config.Cache.Address)
+// 	return err
+// }

@@ -197,3 +197,8 @@ Eight
     ${result} =    DeleteIntent    ${srlinux1-name}    ${srlinux1-candidate}    twelve-2    5
     Should Be Equal As Integers    ${result.rc}    0
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+13 - LeafList
+    ${result} =     SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    thirteen    5        ${CURDIR}/intents/leaf-list.json
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}

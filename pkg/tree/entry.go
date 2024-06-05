@@ -65,6 +65,9 @@ type Entry interface {
 	IsDeleteKeyAttributesInLevelDown(level int, names []string) (bool, [][]string)
 	// Validate the Mandatory schema field
 	ValidateMandatory() error
+	// ValidateMandatoryWithKeys is an internally used function that us called by ValidateMandatory in case
+	// the container has keys defined that need to be skipped before the mandatory attributes can be checked
+	ValidateMandatoryWithKeys(level int, attribute string) error
 	// GetHighestPrecedenceValueOfBranch returns the highes Precedence Value (lowest Priority value) of the brach that starts at this Entry
 	GetHighestPrecedenceValueOfBranch() int32
 	// GetSchema returns the *sdcpb.SchemaElem of the Entry
@@ -356,6 +359,30 @@ func (s *sharedEntryAttributes) GetHighestPrecedenceValueOfBranch() int32 {
 	return result
 }
 
+func (s *sharedEntryAttributes) ValidateMandatoryWithKeys(level int, attribute string) error {
+	if level == 0 {
+		// first check if the mandatory value is set via the intent, e.g. part of the tree already
+		v, existsInTree := s.filterActiveChoiceCaseChilds()[attribute]
+
+		// if not the path exists in the tree and is not to be deleted, then lookup in the paths index of the store
+		// and see if such path exists, if not raise the error
+		if !(existsInTree && !v.ShouldDelete()) {
+			if !s.treeContext.PathExists(append(s.Path(), attribute)) {
+				return fmt.Errorf("%s: mandatory child %s does not exist", s.Path(), attribute)
+			}
+		}
+		return nil
+	}
+
+	for _, c := range s.childs {
+		err := c.ValidateMandatoryWithKeys(level-1, attribute)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ValidateMandatory validates that all the mandatory attributes,
 // defined by the schema are present either in the tree or in the index.
 func (s *sharedEntryAttributes) ValidateMandatory() error {
@@ -363,15 +390,9 @@ func (s *sharedEntryAttributes) ValidateMandatory() error {
 		switch s.schema.GetSchema().(type) {
 		case *sdcpb.SchemaElem_Container:
 			for _, c := range s.schema.GetContainer().MandatoryChildren {
-				// first check if the mandatory value is set via the intent, e.g. part of the tree already
-				v, existsInTree := s.filterActiveChoiceCaseChilds()[c]
-
-				// if not the path exists in the tree and is not to be deleted, then lookup in the paths index of the store
-				// and see if such path exists, if not raise the error
-				if !(existsInTree && !v.ShouldDelete()) {
-					if !s.treeContext.PathExists(append(s.Path(), c)) {
-						return fmt.Errorf("%s: mandatory child %s does not exist", s.Path(), c)
-					}
+				err := s.ValidateMandatoryWithKeys(len(s.GetSchema().GetContainer().GetKeys()), c)
+				if err != nil {
+					return err
 				}
 			}
 		}
@@ -606,7 +627,7 @@ func (r *RootEntry) GetDeletesForOwner(owner string) [][]string {
 // GetHighesPrecedence return the new cache.Update entried from the tree that are the highes priority.
 // If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
 // It will append to the given list and provide a new pointer to the slice
-func (r *RootEntry) GetHighesPrecedence(onlyNewOrUpdated bool) UpdateSlice {
+func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) UpdateSlice {
 	return r.sharedEntryAttributes.GetHighestPrecedence(make(UpdateSlice, 0), onlyNewOrUpdated)
 }
 

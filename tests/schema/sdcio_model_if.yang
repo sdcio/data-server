@@ -1,0 +1,82 @@
+
+module sdcio_model_if {
+  yang-version 1.1;
+  namespace "urn:sdcio/sdcio_model_if";
+  prefix sdcio_model_if;
+
+    import sdcio_model_common {
+    prefix sdcio_model_common;
+  }
+
+   grouping interface-top {
+    description
+      "Top-level grouping for interface configuration and operational state data";
+    list interface {
+      key "name";
+      description
+        "The list of named interfaces on the device.";
+      leaf name {
+        type sdcio_model_common:interface-name;
+        description
+          "The name of the interface";
+      }
+          leaf admin-state {
+      type sdcio_model_common:admin-state;
+      default "enable";
+      description
+        "The configured, desired state of the interface";
+      reference
+        "RFC 2863: The Interfaces Group MIB - ifAdminStatus";
+      must "((. = 'enable') and starts-with(../name, 'system0')) or not(starts-with(../name, 'system0'))" {
+        error-message "admin-state must be enable";
+      }
+    }
+          leaf description {
+        type sdcio_model_common:description;
+        description
+          "A user-entered description of this network instance.";
+      }
+      uses subinterface-top;
+    }
+  }
+
+    grouping subinterface-top {
+    description
+      "Subinterface data for logical interfaces associated with a given interface";
+    list subinterface {
+      max-elements 4095;
+      key "index";
+      description
+        "The list of subinterfaces (logical interfaces) associated with a physical interface";
+      leaf index {
+        type uint32 {
+          range "0..9999";
+        }
+        description
+          "The index of the subinterface, or logical interface number";
+        must "((. = 0) and starts-with(../../name, 'system0')) or not(starts-with(../../name, 'system0'))" {
+          error-message "subinterface index must be 0 for system0 interface";
+        }
+      }
+      leaf type {
+        type identityref {
+          base sdcio_model_common:si-type;
+        }
+        description
+          "Indicates the context in which the ethernet subinterface will be used";
+        must "(starts-with(../../name, 'irb') or starts-with(../../name, 'ethernet') or starts-with(../../name, 'lag') or starts-with(../../name, 'lif') or starts-with(../../name, 'enp') or starts-with(../../name, 'vhn'))" {
+          error-message "type not supported on this interface";
+        }
+        must "(. != 'local-mirror-dest') or (starts-with(../../name, 'ethernet') or starts-with(../../name, 'lag'))" {
+          error-message "local-mirror-dest is not supported on this interface";
+        }
+      }
+          leaf description {
+        type sdcio_model_common:description;
+        description
+          "A user-entered description of this network instance.";
+      }
+    }
+    }
+
+}
