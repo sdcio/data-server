@@ -62,7 +62,7 @@ type Entry interface {
 	// ShouldDelete indicated if there is no LeafEntry left and the Entry is to be deleted
 	ShouldDelete() bool
 	// IsDeleteKeyAttributesInLevelDown TODO
-	IsDeleteKeyAttributesInLevelDown(level int, names []string) (bool, [][]string)
+	IsDeleteKeyAttributesInLevelDown(level int, names []string) [][]string
 	// Validate the Mandatory schema field
 	ValidateMandatory() error
 	// ValidateMandatoryWithKeys is an internally used function that us called by ValidateMandatory in case
@@ -190,24 +190,27 @@ func (s *sharedEntryAttributes) Walk(f EntryVisitor) error {
 // IsDeleteKeyAttributesInLevelDown On a container that has keys, this function is there to check if the keys
 // are being deleted, such that we do not have to delete all entries and attributes, but issue a delete for the path with the specifc keys
 // and therby delete the whole branch.
-func (s *sharedEntryAttributes) IsDeleteKeyAttributesInLevelDown(level int, names []string) (bool, [][]string) {
+func (s *sharedEntryAttributes) IsDeleteKeyAttributesInLevelDown(level int, names []string) [][]string {
 	// in the tree, we have Entries with schemas but also the keys as levels in the tree.
 	// so level is used to skip the key elements in the tree. Only when level is down to zero, we have the
 	// final container at hand.
+
+	result := [][]string{}
+
 	if level > 0 {
 		for _, v := range s.childs {
-			return v.IsDeleteKeyAttributesInLevelDown(level-1, names)
+			result = append(result, v.IsDeleteKeyAttributesInLevelDown(level-1, names)...)
 		}
 	}
 	// if we're at the right level, check the keys for deletion
 	for _, n := range names {
 		c, exists := s.childs[n]
 		// these keys should aways exist, so for now we do not catch the non existing key case
-		if exists && !c.ShouldDelete() {
-			return false, nil
+		if exists && c.ShouldDelete() {
+			result = append(result, s.Path())
 		}
 	}
-	return true, [][]string{s.Path()}
+	return result
 }
 
 // ShouldDelete flag if the leafvariant or entire branch is marked for deletion
@@ -254,13 +257,14 @@ func (s *sharedEntryAttributes) GetDeletes(deletes [][]string) [][]string {
 				keys = append(keys, k.Name)
 			}
 
-			for _, c := range s.filterActiveChoiceCaseChilds() {
-				if doDelete, paths := c.IsDeleteKeyAttributesInLevelDown(len(keys)-1, keys); doDelete {
-					deletes = append(deletes, paths...)
-				} else {
-					deletes = c.GetDeletes(deletes)
+			if paths := s.IsDeleteKeyAttributesInLevelDown(len(keys)-1, keys); len(paths) > 0 {
+				deletes = append(deletes, paths...)
+			} else {
+				for _, c := range s.filterActiveChoiceCaseChilds() {
+					deletes = append(deletes, c.GetDeletes(deletes)...)
 				}
 			}
+
 			return deletes
 		}
 	}

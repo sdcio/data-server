@@ -16,17 +16,17 @@ package datastore
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
+	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/mocks/mockcacheclient"
-	"github.com/sdcio/data-server/mocks/mockschema"
 	"github.com/sdcio/data-server/mocks/mocktarget"
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
+	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 )
@@ -41,7 +41,7 @@ func TestDatastore_populateTree(t *testing.T) {
 
 	tests := []struct {
 		name                 string
-		intentReqValue       interface{} // depending on the path, this should be *testhelper.TestConfig or any sub-value
+		intentReqValue       func() (string, error) // depending on the path, this should be *testhelper.TestConfig or any sub-value
 		intentReqPath        string
 		intentName           string
 		intentPrio           int32
@@ -58,21 +58,27 @@ func TestDatastore_populateTree(t *testing.T) {
 			intentName:    owner1,
 			intentPrio:    prio10,
 			intentReqPath: "/",
-			intentReqValue: &testhelper.TestConfig{
-				Interf: []*testhelper.Interf{
-					{
-						Name:        "ethernet-0/0",
-						Description: "MyDescription",
-					},
-				},
+			intentReqValue: func() (string, error) {
+				d := &sdcio_schema.Device{
+					Interface: map[string]*sdcio_schema.SdcioModel_Interface{},
+				}
+				d.Interface["ethernet-1/1"] = &sdcio_schema.SdcioModel_Interface{
+					Name:        ygot.String("ethernet-1/1"),
+					Description: ygot.String("MyDescription"),
+				}
+				return ygot.EmitJSON(d, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false,
+				})
 			},
+
 			expectedModify: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio10, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
 			},
 			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio10, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
 			},
 			intendedStoreUpdates: nil,
 		},
@@ -81,17 +87,24 @@ func TestDatastore_populateTree(t *testing.T) {
 			intentName:    owner1,
 			intentPrio:    prio10,
 			intentReqPath: "interface",
-			intentReqValue: &testhelper.Interf{
-				Name:        "ethernet-0/0",
-				Description: "MyDescription",
+
+			intentReqValue: func() (string, error) {
+				i := &sdcio_schema.SdcioModel_Interface{
+					Name:        ygot.String("ethernet-1/1"),
+					Description: ygot.String("MyDescription"),
+				}
+				return ygot.EmitJSON(i, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false,
+				})
 			},
 			expectedModify: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio10, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
 			},
 			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio10, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
 			},
 			intendedStoreUpdates: nil,
 		},
@@ -100,45 +113,76 @@ func TestDatastore_populateTree(t *testing.T) {
 			intentName:    owner1,
 			intentPrio:    prio10,
 			intentReqPath: "interface",
-			intentReqValue: &testhelper.Interf{
-				Name:        "ethernet-0/0",
-				Description: "MyDescription",
+			intentReqValue: func() (string, error) {
+				i := &sdcio_schema.SdcioModel_Interface{
+					Name:        ygot.String("ethernet-1/1"),
+					Description: ygot.String("MyDescription"),
+				}
+				return ygot.EmitJSON(i, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false,
+				})
 			},
 			expectedModify: []*cache.Update{
 				// Right now, although the value stays the same, but the priority changes, we'll receive an update for these values.
 				// This maybe needs to be mitigated, but is not considered harmfull atm.
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio10, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
 			},
 			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio10, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
 			},
 			intendedStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
 			},
 		},
 		{
-			name:           "Delete the highes priority values, making shadowed values become active",
-			intentName:     owner1,
-			intentPrio:     prio10,
-			intentReqPath:  "/",
-			intentReqValue: struct{}{},
-			intentDelete:   true,
+			name:          "Delete the highes priority values, making shadowed values become active",
+			intentName:    owner1,
+			intentPrio:    prio10,
+			intentReqPath: "/",
+			intentReqValue: func() (string, error) {
+				return "{}", nil
+			},
+			intentDelete: true,
 			expectedModify: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
 			},
 			expectedOwnerDeletes: [][]string{
-				{"interface", "ethernet-0/0", "name"},
-				{"interface", "ethernet-0/0", "description"},
+				{"interface", "ethernet-1/1", "name"},
+				{"interface", "ethernet-1/1", "description"},
 			},
 			intendedStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
+			},
+		},
+		{
+			name:          "Delete - aggregate branch via keys",
+			intentName:    owner2,
+			intentPrio:    prio10,
+			intentReqPath: "/",
+			intentReqValue: func() (string, error) {
+				return "{}", nil
+			},
+			intentDelete: true,
+			expectedDeletes: [][]string{
+				{"interface", "ethernet-1/1"},
+			},
+			expectedOwnerDeletes: [][]string{
+				{"interface", "ethernet-1/1", "name"},
+				{"interface", "ethernet-1/1", "description"},
+				{"interface", "ethernet-1/1", "admin-state"},
+			},
+			intendedStoreUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "admin-state"}, testhelper.GetStringTvProto(t, "enable"), prio10, owner2, 0),
 			},
 		},
 		{
@@ -146,17 +190,23 @@ func TestDatastore_populateTree(t *testing.T) {
 			intentName:    owner2,
 			intentPrio:    prio10,
 			intentReqPath: "interface",
-			intentReqValue: &testhelper.Interf{
-				Name:        "ethernet-0/0",
-				Description: "MyNonappliedDescription",
+			intentReqValue: func() (string, error) {
+				i := &sdcio_schema.SdcioModel_Interface{
+					Name:        ygot.String("ethernet-1/1"),
+					Description: ygot.String("MyNonappliedDescription"),
+				}
+				return ygot.EmitJSON(i, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false,
+				})
 			},
 			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyNonappliedDescription"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyNonappliedDescription"), prio10, owner2, 0),
 			},
 			intendedStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
 			},
 		},
 		{
@@ -164,55 +214,63 @@ func TestDatastore_populateTree(t *testing.T) {
 			intentName:    owner2,
 			intentPrio:    prio10,
 			intentReqPath: "/",
-			intentReqValue: &testhelper.TestConfig{
-				Interf: []*testhelper.Interf{
-					{
-						Name:        "ethernet-0/0",
-						Description: "MyOtherDescription",
-						Subinterface: []*testhelper.Subinterface{
-							{
-								Index:       1,
-								Description: "Subinterface Desc",
-							},
+
+			intentReqValue: func() (string, error) {
+				d := &sdcio_schema.Device{
+					Interface: map[string]*sdcio_schema.SdcioModel_Interface{},
+				}
+				d.Interface["ethernet-1/1"] = &sdcio_schema.SdcioModel_Interface{
+					Name:        ygot.String("ethernet-1/1"),
+					Description: ygot.String("MyOtherDescription"),
+					Subinterface: map[uint32]*sdcio_schema.SdcioModel_Interface_Subinterface{
+						1: {
+							Index:       ygot.Uint32(1),
+							Description: ygot.String("Subinterface Desc"),
 						},
 					},
-					{
-						Name:        "ethernet-0/1",
-						Description: "MyOtherDescription",
-						Subinterface: []*testhelper.Subinterface{
-							{
-								Index:       1,
-								Description: "Subinterface Desc",
-							},
+				}
+
+				d.Interface["ethernet-1/2"] = &sdcio_schema.SdcioModel_Interface{
+					Name:        ygot.String("ethernet-1/2"),
+					Description: ygot.String("MyOtherDescription"),
+					Subinterface: map[uint32]*sdcio_schema.SdcioModel_Interface_Subinterface{
+						1: {
+							Index:       ygot.Uint32(1),
+							Description: ygot.String("Subinterface Desc"),
 						},
 					},
-				},
+				}
+				return ygot.EmitJSON(d, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false,
+				})
 			},
+
 			expectedModify: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
 			},
 			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
 			},
 			intendedStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/1"), prio15, owner3, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "description"}, testhelper.GetStringTvProto(t, "Owner3 Description"), prio15, owner3, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(t, 1), prio15, owner3, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "2", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio15, owner3, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio15, owner3, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "Owner3 Description"), prio15, owner3, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(t, 1), prio15, owner3, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio15, owner3, 0),
 			},
 		},
 		{
@@ -221,60 +279,68 @@ func TestDatastore_populateTree(t *testing.T) {
 			intentPrio:          prio10,
 			intentReqPath:       "/",
 			NotOnlyNewOrUpdated: true,
-			intentReqValue: &testhelper.TestConfig{
-				Interf: []*testhelper.Interf{
-					{
-						Name:        "ethernet-0/0",
-						Description: "MyOtherDescription",
-						Subinterface: []*testhelper.Subinterface{
-							{
-								Index:       1,
-								Description: "Subinterface Desc",
-							},
+
+			intentReqValue: func() (string, error) {
+				d := &sdcio_schema.Device{
+					Interface: map[string]*sdcio_schema.SdcioModel_Interface{},
+				}
+				d.Interface["ethernet-1/1"] = &sdcio_schema.SdcioModel_Interface{
+					Name:        ygot.String("ethernet-1/1"),
+					Description: ygot.String("MyOtherDescription"),
+					Subinterface: map[uint32]*sdcio_schema.SdcioModel_Interface_Subinterface{
+						1: {
+							Index:       ygot.Uint32(1),
+							Description: ygot.String("Subinterface Desc"),
 						},
 					},
-					{
-						Name:        "ethernet-0/1",
-						Description: "MyOtherDescription",
-						Subinterface: []*testhelper.Subinterface{
-							{
-								Index:       1,
-								Description: "Subinterface Desc",
-							},
+				}
+
+				d.Interface["ethernet-1/2"] = &sdcio_schema.SdcioModel_Interface{
+					Name:        ygot.String("ethernet-1/2"),
+					Description: ygot.String("MyOtherDescription"),
+					Subinterface: map[uint32]*sdcio_schema.SdcioModel_Interface_Subinterface{
+						1: {
+							Index:       ygot.Uint32(1),
+							Description: ygot.String("Subinterface Desc"),
 						},
 					},
-				},
+				}
+				return ygot.EmitJSON(d, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false,
+				})
 			},
+
 			expectedModify: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
 				// the next two are not part of the result, we might want to add the behaviour, such that one can query the entire intended.
 				// cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(t, 1), prio15, owner3, 0),
 				// cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "2", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio15, owner3, 0),
 			},
 			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
 			},
 			intendedStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/1"), prio15, owner3, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "description"}, testhelper.GetStringTvProto(t, "Owner3 Description"), prio15, owner3, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(t, 1), prio15, owner3, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "2", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio15, owner3, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio15, owner3, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "Owner3 Description"), prio15, owner3, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(t, 1), prio15, owner3, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio15, owner3, 0),
 			},
 		},
 	}
@@ -289,20 +355,21 @@ func TestDatastore_populateTree(t *testing.T) {
 			testhelper.ConfigureCacheClientMock(t, cacheClient, tt.intendedStoreUpdates, tt.expectedModify, tt.expectedDeletes)
 
 			// create a schema client mock
-			schemaClient := mockschema.NewMockClient(controller)
-			testhelper.ConfigureSchemaClientMock(t, schemaClient)
+			// schemaClient := mockschema.NewMockClient(controller)
+			// testhelper.ConfigureSchemaClientMock(t, schemaClient)
+
+			schemaClient, schema, err := testhelper.InitSDCIOSchema()
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			dsName := "dev1"
 
 			// create a datastore
 			d := &Datastore{
 				config: &config.DatastoreConfig{
-					Name: dsName,
-					Schema: &config.SchemaConfig{
-						Name:    "test",
-						Vendor:  "test",
-						Version: "v0.0.0",
-					},
+					Name:   dsName,
+					Schema: schema,
 				},
 
 				sbi:          mocktarget.NewMockTarget(controller),
@@ -313,7 +380,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			ctx := context.Background()
 
 			// marshall the intentReqValue into a byte slice
-			byteConfig, err := json.Marshal(tt.intentReqValue)
+			jsonConf, err := tt.intentReqValue()
 			if err != nil {
 				t.Error(err)
 			}
@@ -334,7 +401,7 @@ func TestDatastore_populateTree(t *testing.T) {
 						Path: path,
 						Value: &sdcpb.TypedValue{
 							Value: &sdcpb.TypedValue_JsonVal{
-								JsonVal: byteConfig},
+								JsonVal: []byte(jsonConf)},
 						},
 					},
 				},

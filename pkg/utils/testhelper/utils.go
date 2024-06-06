@@ -89,9 +89,9 @@ func DiffDoubleStringPathSlice(s1, s2 [][]string) string {
 		},
 	}
 
-	for _, x := range y {
+	for idx, x := range y {
 		for _, entry := range x.Double {
-			x.Single = append(x.Single, PathMapIndex(entry))
+			y[idx].Single = append(y[idx].Single, PathMapIndex(entry))
 		}
 	}
 	return DiffStringSlice(y[0].Single, y[1].Single, false)

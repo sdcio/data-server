@@ -2,20 +2,18 @@ package tree
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
 	"github.com/sdcio/data-server/pkg/cache"
 	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
-	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
-	"github.com/sdcio/schema-server/pkg/config"
-	"github.com/sdcio/schema-server/pkg/schema"
-	schemaStore "github.com/sdcio/schema-server/pkg/store"
-	"github.com/sdcio/schema-server/pkg/store/memstore"
+	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
@@ -32,9 +30,14 @@ func Test_Entry(t *testing.T) {
 	u2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc, int32(99), "me", int64(444))
 	u3 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc, int32(98), "me", int64(88))
 
+	scb, err := getSchemaClientBound(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	ctx := context.Background()
 
-	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, getSchemaClientBound(t)), "foo")
+	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "foo")
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -70,9 +73,14 @@ func Test_Entry_One(t *testing.T) {
 	u2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc2, prio100, owner1, ts1)
 	u3 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner2, ts1)
 
+	scb, err := getSchemaClientBound(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	ctx := context.Background()
 
-	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, getSchemaClientBound(t)), "foo")
+	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "foo")
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -129,9 +137,14 @@ func Test_Entry_Two(t *testing.T) {
 	ts1 := int64(9999999)
 	u1 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
 
+	scb, err := getSchemaClientBound(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	ctx := context.Background()
 
-	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, getSchemaClientBound(t)), "foo")
+	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "foo")
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -180,9 +193,14 @@ func Test_Entry_Three(t *testing.T) {
 	u3 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "12", "description"}, desc3, prio50, owner1, ts1)
 	u4 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
 
+	scb, err := getSchemaClientBound(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	ctx := context.Background()
 
-	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, getSchemaClientBound(t)), "foo")
+	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "foo")
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -288,7 +306,12 @@ func Test_Entry_Four(t *testing.T) {
 
 	ctx := context.Background()
 
-	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, getSchemaClientBound(t)), "foo")
+	scb, err := getSchemaClientBound(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "foo")
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -382,20 +405,47 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	u5 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "index"}, testhelper.GetStringTvProto(t, "1"), prio50, owner1, ts1)
 	u6 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "description"}, desc3, prio50, owner1, ts1)
 
+	dev1 := &sdcio_schema.Device{
+		Interface: map[string]*sdcio_schema.SdcioModel_Interface{},
+	}
+
+	dev1.Interface["ethernet-1/1"] = &sdcio_schema.SdcioModel_Interface{
+		Name:        ygot.String("ethernet-1/1"),
+		Description: ygot.String("DescriptionThree"),
+	}
+
+	json, err := ygot.EmitJSON(dev1, &ygot.EmitJSONConfig{
+		Format: ygot.RFC7951,
+		Indent: "  ",
+		RFC7951Config: &ygot.RFC7951JSONConfig{
+			AppendModuleName: false,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(json)
+
 	ctx := context.Background()
 
-	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, getSchemaClientBound(t)), "foo")
+	scb, err := getSchemaClientBound(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "foo")
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	// start test add "existing" data
 	for _, u := range []*cache.Update{u1, u2, u3, u4, u5, u6} {
 		err := root.AddCacheUpdateRecursive(ctx, u, false)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 	}
 
@@ -409,7 +459,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	for _, u := range []*cache.Update{u1n, u2n} {
 		err := root.AddCacheUpdateRecursive(ctx, u, true)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 	}
 
@@ -437,36 +487,42 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 }
 
 // getSchemaClientBound creates a SchemaClientBound mock that responds to certain GetSchema requests
-func getSchemaClientBound(t *testing.T) SchemaClient.SchemaClientBound {
+func getSchemaClientBound(t *testing.T) (SchemaClient.SchemaClientBound, error) {
+
+	x, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		return nil, err
+	}
+
 	mockCtrl := gomock.NewController(t)
-
 	mockscb := mockschemaclientbound.NewMockSchemaClientBound(mockCtrl)
-
-	// index for the ToPath() function
-	responseMap := testhelper.GetSchemaMap()
 
 	// make the mock respond to GetSchema requests
 	mockscb.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
 		func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
-			keylessStringSlice := utils.ToStrings(path, false, true)
-			keylessString := testhelper.PathMapIndex(keylessStringSlice)
-			return &sdcpb.GetSchemaResponse{
-				Schema: responseMap[keylessString],
-			}, nil
+			return x.GetSchema(ctx, &sdcpb.GetSchemaRequest{
+				Path:   path,
+				Schema: schema,
+			})
 		},
 	)
 
-	pathMap := testhelper.GetToPathMap()
-
 	// setup the ToPath() responses
 	mockscb.EXPECT().ToPath(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-		func(_ context.Context, path []string) (*sdcpb.Path, error) {
-			return pathMap[strings.Join(path, "/")], nil
+		func(ctx context.Context, path []string) (*sdcpb.Path, error) {
+			pr, err := x.ToPath(ctx, &sdcpb.ToPathRequest{
+				PathElement: path,
+				Schema:      schema,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return pr.GetPath(), nil
 		},
 	)
 
 	// return the mock
-	return mockscb
+	return mockscb, nil
 }
 
 // TestLeafVariants_GetHighesPrio
@@ -663,37 +719,4 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 			}
 		},
 	)
-}
-
-func TestFoo(t *testing.T) {
-
-	s, err := InitSDCIOSchema()
-	if err != nil {
-		t.Error(err)
-	}
-
-	if err != nil {
-		t.Error(err)
-	}
-
-}
-
-func InitSDCIOSchema() (schemaStore.Store, error) {
-	schema, err := schema.NewSchema(&config.SchemaConfig{
-		Name:    "testschema",
-		Vendor:  "sdcio",
-		Version: "v0.0.0",
-		Files: []string{
-			"../../tests/schema",
-		},
-	})
-
-	schemaMemStore := memstore.New()
-	err = schemaMemStore.AddSchema(schema)
-	if err != nil {
-		return nil, err
-	}
-
-	return schemaMemStore, nil
-
 }
