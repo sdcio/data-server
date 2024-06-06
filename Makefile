@@ -73,3 +73,8 @@ unit-tests: mocks-gen
 	rm -rf /tmp/sdcio/dataserver-tests/coverage
 	mkdir -p /tmp/sdcio/dataserver-tests/coverage
 	CGO_ENABLED=1 go test -cover -race ./... -v -covermode atomic -args -test.gocoverdir="/tmp/sdcio/dataserver-tests/coverage"
+
+.PHONY: ygot
+ygot:
+	go install github.com/openconfig/ygot/generator@latest
+	generator -output_file=tests/sdcioygot/sdcio_schema.go -package_name=sdcio_schema -generate_fakeroot -fakeroot_name=device ./tests/schema/*
