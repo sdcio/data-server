@@ -119,6 +119,12 @@ func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName st
 	// hence skip this part if IsRoot
 	if !s.IsRoot() {
 
+		// we can and should skip schema retrieval if we have a
+		// terminal value that is a key value.
+		// to check for that, we query the parent for the schema even multiple levels up
+		// because we can have multiple keys. we remember the number of levels we moved up
+		// and if that is within the len of keys, we're still in a key level, and need to skip
+		// querying the schema. Otherwise we need to query the schema.
 		ancestor := parent
 		levelUp := 0
 		for ancestor.GetSchema() == nil && !ancestor.IsRoot() {
