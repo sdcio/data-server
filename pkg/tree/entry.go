@@ -80,6 +80,8 @@ type Entry interface {
 	FinishInsertionPhase()
 	// GetParent returns the parent entry
 	GetParent() Entry
+	// Navigate navigates the tree according to the given path and returns the referenced entry or nil if it does not exist.
+	Navigate(path []string) (Entry, error)
 }
 
 // sharedEntryAttributes contains the attributes shared by Entry and RootEntry
@@ -116,25 +118,20 @@ func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName st
 	// on the root element we cannot query the parent schema.
 	// hence skip this part if IsRoot
 	if !s.IsRoot() {
-		switch schem := parent.GetSchema().GetSchema().(type) {
-		case *sdcpb.SchemaElem_Container:
-			if len(schem.Container.GetKeys()) > 0 {
-				getSchema = false
-			}
-		}
-		// lets check that the path does end with a Schema elem, not a
-		// key element
-		// therefor convert to path
-		pathResponse, err := tc.treeSchemaCacheClient.ToPath(ctx, s.Path())
-		if err != nil {
-			return nil, err
-		}
-		// retrieve the keys of the last element
-		lastElemKeys := pathResponse.Elem[len(pathResponse.Elem)-1].Key
 
-		// if no keys are defined, the path points to a schema entry not a key entry
-		if len(lastElemKeys) > 0 {
-			getSchema = false
+		ancestor := parent
+		levelUp := 0
+		for ancestor.GetSchema() == nil && !ancestor.IsRoot() {
+			levelUp += 1
+			ancestor = ancestor.GetParent()
+		}
+
+		switch schem := ancestor.GetSchema().GetSchema().(type) {
+		case *sdcpb.SchemaElem_Container:
+			if len(schem.Container.GetKeys()) > levelUp {
+				getSchema = false
+				break
+			}
 		}
 	}
 
@@ -159,7 +156,7 @@ func (s *sharedEntryAttributes) GetSchema() *sdcpb.SchemaElem {
 
 // GetParent returns the parent entry
 func (s *sharedEntryAttributes) GetParent() Entry {
-	return s
+	return s.parent
 }
 
 // IsRoot returns true if the element has no parent elements, hence is the root of the tree
@@ -341,6 +338,34 @@ func (s *sharedEntryAttributes) AddChild(ctx context.Context, e Entry) error {
 	return nil
 }
 
+// Navigate move through the tree, returns the Entry that is present under the given path
+// the path itself can be absolute or relative
+func (s *sharedEntryAttributes) Navigate(path []string) (Entry, error) {
+	if len(path) == 0 {
+		return s, nil
+	}
+	cont := false
+	idx := 0
+	for cont {
+		switch path[idx] {
+		case ".":
+			idx += 1
+			// we need to iterate again
+			cont = true
+			continue
+		case "..":
+			return s.parent.Navigate(path[1:])
+		default:
+			e, exists := s.childs[path[0]]
+			if !exists {
+				return nil, fmt.Errorf("reached %v but child %s does not exist", s.Path(), path[0])
+			}
+			return e.Navigate(path[1:])
+		}
+	}
+	return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist", s.Path(), path)
+}
+
 // GetHighestPrecedence goes through the whole branch and returns the new and updated cache.Updates.
 // These are the updated that will be send to the device.
 func (s *sharedEntryAttributes) GetHighestPrecedence(result UpdateSlice, onlyNewOrUpdated bool) UpdateSlice {
@@ -411,6 +436,7 @@ func (s *sharedEntryAttributes) ValidateMandatory() error {
 			}
 		}
 	}
+
 	// continue with childs
 	for _, c := range s.childs {
 		err := c.ValidateMandatory()
