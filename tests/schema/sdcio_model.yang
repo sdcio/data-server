@@ -12,6 +12,9 @@ import sdcio_model_if {
 import sdcio_model_choice {
   prefix sdcio_model_choice;
 }
+import sdcio_model_doublekey {
+  prefix sdcio_model_doublekey;
+}
 
 
   description
@@ -26,5 +29,6 @@ import sdcio_model_choice {
   uses sdcio_model_if:interface-top;
   uses sdcio_model_ni:network-instance-top;
   uses sdcio_model_choice:choicecase-top;
+  uses sdcio_model_doublekey:doublekey-top;
 
 }

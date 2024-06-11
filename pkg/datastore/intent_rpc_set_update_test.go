@@ -29,7 +29,20 @@ import (
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/protobuf/proto"
 )
+
+var (
+	// TypedValue Bool True and false
+	TypedValueTrue  []byte
+	TypedValueFalse []byte
+)
+
+func init() {
+	// Calculate the TypedValues for true and false
+	TypedValueTrue, _ = proto.Marshal(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: true}})
+	TypedValueFalse, _ = proto.Marshal(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: true}})
+}
 
 func TestDatastore_populateTree(t *testing.T) {
 	prio15 := int32(15)
@@ -38,6 +51,13 @@ func TestDatastore_populateTree(t *testing.T) {
 	owner1 := "owner1"
 	owner2 := "owner2"
 	owner3 := "owner3"
+
+	_ = prio15
+	_ = prio10
+	_ = prio5
+	_ = owner1
+	_ = owner2
+	_ = owner3
 
 	tests := []struct {
 		name                 string
@@ -53,6 +73,172 @@ func TestDatastore_populateTree(t *testing.T) {
 		intendedStoreUpdates []*cache.Update
 		NotOnlyNewOrUpdated  bool // it negated when used in the call, usually we want it to be true
 	}{
+		{
+			name:          "DoubleKey - Delete Single item",
+			intentName:    owner2,
+			intentPrio:    prio10,
+			intentReqPath: "/",
+			intentReqValue: func() (string, error) {
+				d := &sdcio_schema.Device{
+					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
+						{
+							Key1: "k1.1",
+							Key2: "k1.2",
+						}: {
+							Key1:    ygot.String("k1.1"),
+							Key2:    ygot.String("k1.2"),
+							Mandato: ygot.String("TheMandatoryValueOther"),
+							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+								Value1: ygot.String("containerval1.1"),
+								Value2: ygot.String("containerval1.2"),
+							},
+						},
+						{
+							Key1: "k2.1",
+							Key2: "k2.2",
+						}: {
+							Key1:    ygot.String("k2.1"),
+							Key2:    ygot.String("k2.2"),
+							Mandato: ygot.String("TheMandatoryValue2"),
+							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+								Value1: ygot.String("containerval2.1"),
+								Value2: ygot.String("containerval2.2"),
+							},
+						},
+					},
+				}
+				return ygot.EmitJSON(d, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false,
+				})
+			},
+			expectedDeletes: [][]string{
+				{"doublekey", "k1.1", "k1.3"},
+			},
+			expectedModify: []*cache.Update{
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValueOther"), prio10, owner2, 0),
+			},
+			expectedOwnerUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValueOther"), prio10, owner2, 0),
+			},
+			expectedOwnerDeletes: [][]string{
+				{"doublekey", "k1.1", "k1.3", "key1"},
+				{"doublekey", "k1.1", "k1.3", "key2"},
+				{"doublekey", "k1.1", "k1.3", "mandato"},
+				{"doublekey", "k1.1", "k1.3", "cont", "value1"},
+				{"doublekey", "k1.1", "k1.3", "cont", "value2"},
+			},
+			intendedStoreUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key1"}, testhelper.GetStringTvProto(t, "k1.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key2"}, testhelper.GetStringTvProto(t, "k1.2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval1.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval1.2"), prio10, owner2, 0),
+
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key1"}, testhelper.GetStringTvProto(t, "k1.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key2"}, testhelper.GetStringTvProto(t, "k1.3"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval1.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval1.2"), prio10, owner2, 0),
+
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key1"}, testhelper.GetStringTvProto(t, "k2.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key2"}, testhelper.GetStringTvProto(t, "k2.2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval2.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval2.2"), prio10, owner2, 0),
+			},
+		},
+		{
+			name:          "DoubleKey - New Data",
+			intentName:    owner2,
+			intentPrio:    prio10,
+			intentReqPath: "/",
+			intentReqValue: func() (string, error) {
+				d := &sdcio_schema.Device{
+					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
+						{
+							Key1: "k1.1",
+							Key2: "k1.2",
+						}: {
+							Key1:    ygot.String("k1.1"),
+							Key2:    ygot.String("k1.2"),
+							Mandato: ygot.String("TheMandatoryValue1"),
+							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+								Value1: ygot.String("containerval1.1"),
+								Value2: ygot.String("containerval1.2"),
+							},
+						},
+						{
+							Key1: "k2.1",
+							Key2: "k2.2",
+						}: {
+							Key1:    ygot.String("k2.1"),
+							Key2:    ygot.String("k2.2"),
+							Mandato: ygot.String("TheMandatoryValue2"),
+							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+								Value1: ygot.String("containerval2.1"),
+								Value2: ygot.String("containerval2.2"),
+							},
+						},
+						{
+							Key1: "k1.1",
+							Key2: "k1.3",
+						}: {
+							Key1:    ygot.String("k1.1"),
+							Key2:    ygot.String("k1.3"),
+							Mandato: ygot.String("TheMandatoryValue1"),
+							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+								Value1: ygot.String("containerval1.1"),
+								Value2: ygot.String("containerval1.2"),
+							},
+						},
+					},
+				}
+				return ygot.EmitJSON(d, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false,
+				})
+			},
+			expectedModify: []*cache.Update{
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key1"}, testhelper.GetStringTvProto(t, "k1.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key2"}, testhelper.GetStringTvProto(t, "k1.2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval1.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval1.2"), prio10, owner2, 0),
+
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key1"}, testhelper.GetStringTvProto(t, "k1.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key2"}, testhelper.GetStringTvProto(t, "k1.3"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval1.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval1.2"), prio10, owner2, 0),
+
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key1"}, testhelper.GetStringTvProto(t, "k2.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key2"}, testhelper.GetStringTvProto(t, "k2.2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval2.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval2.2"), prio10, owner2, 0),
+			},
+			expectedOwnerUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key1"}, testhelper.GetStringTvProto(t, "k1.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key2"}, testhelper.GetStringTvProto(t, "k1.2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval1.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval1.2"), prio10, owner2, 0),
+
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key1"}, testhelper.GetStringTvProto(t, "k1.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key2"}, testhelper.GetStringTvProto(t, "k1.3"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval1.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval1.2"), prio10, owner2, 0),
+
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key1"}, testhelper.GetStringTvProto(t, "k2.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key2"}, testhelper.GetStringTvProto(t, "k2.2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval2.1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval2.2"), prio10, owner2, 0),
+			},
+			intendedStoreUpdates: []*cache.Update{},
+		},
 		{
 			name:          "Simple add to root path",
 			intentName:    owner1,
@@ -183,6 +369,58 @@ func TestDatastore_populateTree(t *testing.T) {
 				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
 				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
 				cache.NewUpdate([]string{"interface", "ethernet-1/1", "admin-state"}, testhelper.GetStringTvProto(t, "enable"), prio10, owner2, 0),
+			},
+		},
+		{
+			name:          "Delete - aggregate branch via keys, multiple entries (different keys)",
+			intentName:    owner2,
+			intentPrio:    prio10,
+			intentReqPath: "/",
+			intentReqValue: func() (string, error) {
+				d := &sdcio_schema.Device{
+					Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+						"ethernet-1/1": {
+							Name:        ygot.String("ethernet-1/1"),
+							Description: ygot.String("MyNonappliedDescription"),
+						},
+					},
+				}
+				return ygot.EmitJSON(d, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false,
+				})
+			},
+			intentDelete: true,
+			expectedDeletes: [][]string{
+				{"interface", "ethernet-1/1", "admin-state"},
+				{"interface", "ethernet-1/2"},
+				{"interface", "ethernet-1/3"},
+			},
+			expectedOwnerDeletes: [][]string{
+				{"interface", "ethernet-1/1", "admin-state"},
+				{"interface", "ethernet-1/2", "name"},
+				{"interface", "ethernet-1/2", "description"},
+				{"interface", "ethernet-1/2", "admin-state"},
+				{"interface", "ethernet-1/3", "name"},
+				{"interface", "ethernet-1/3", "description"},
+				{"interface", "ethernet-1/3", "admin-state"},
+			},
+			expectedOwnerUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyNonappliedDescription"), prio10, owner2, 0),
+			},
+			expectedModify: []*cache.Update{
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyNonappliedDescription"), prio10, owner2, 0),
+			},
+			intendedStoreUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "admin-state"}, testhelper.GetStringTvProto(t, "enable"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "admin-state"}, testhelper.GetStringTvProto(t, "enable"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/3", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/3"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/3", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/3", "admin-state"}, testhelper.GetStringTvProto(t, "enable"), prio10, owner2, 0),
 			},
 		},
 		{
@@ -343,6 +581,67 @@ func TestDatastore_populateTree(t *testing.T) {
 				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio15, owner3, 0),
 			},
 		},
+		{
+			name:          "ChoiceCase - new highes case",
+			intentName:    owner2,
+			intentPrio:    prio10,
+			intentReqPath: "/",
+			intentReqValue: func() (string, error) {
+				d := &sdcio_schema.Device{
+					Choices: &sdcio_schema.SdcioModel_Choices{
+						Case2: &sdcio_schema.SdcioModel_Choices_Case2{
+							Log: ygot.Bool(true),
+						},
+					},
+				}
+				return ygot.EmitJSON(d, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false,
+				})
+			},
+			expectedModify: []*cache.Update{
+				cache.NewUpdate([]string{"choices", "case2", "log"}, TypedValueTrue, prio10, owner2, 0),
+			},
+			expectedDeletes: [][]string{
+				{"choices", "case1"},
+			},
+			expectedOwnerUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"choices", "case2", "log"}, TypedValueTrue, prio10, owner2, 0),
+			},
+			intendedStoreUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"choices", "case1", "case-elem", "elem"}, testhelper.GetStringTvProto(t, "case1-content"), prio15, owner1, 0),
+				cache.NewUpdate([]string{"choices", "case1", "log"}, TypedValueFalse, prio15, owner1, 0),
+			},
+		},
+		{
+			name:          "ChoiceCase - old highes case",
+			intentName:    owner2,
+			intentPrio:    prio10,
+			intentReqPath: "/",
+			intentReqValue: func() (string, error) {
+				d := &sdcio_schema.Device{
+					Choices: &sdcio_schema.SdcioModel_Choices{
+						Case2: &sdcio_schema.SdcioModel_Choices_Case2{
+							Log: ygot.Bool(true),
+						},
+					},
+				}
+				return ygot.EmitJSON(d, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false,
+				})
+			},
+			expectedModify: []*cache.Update{
+				// no mods expected
+			},
+			expectedOwnerUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"choices", "case2", "log"}, TypedValueTrue, prio10, owner2, 0),
+			},
+			intendedStoreUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"choices", "case1", "case-elem", "elem"}, testhelper.GetStringTvProto(t, "case1-content"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"choices", "case1", "log"}, TypedValueFalse, prio5, owner1, 0),
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -414,10 +713,12 @@ func TestDatastore_populateTree(t *testing.T) {
 				t.Error(err)
 			}
 
+			root.FinishInsertionPhase()
+
 			// get the updates that are meant to be send down towards the device
 			updates := root.GetHighestPrecedence(!tt.NotOnlyNewOrUpdated)
 			if diff := testhelper.DiffCacheUpdates(tt.expectedModify, updates); diff != "" {
-				t.Errorf("root.GetHighesPrio(true) mismatch (-want +got):\n%s", diff)
+				t.Errorf("root.GetHighestPrecedence(true) mismatch (-want +got):\n%s", diff)
 			}
 
 			// get the deletes that are meant to be send down towards the device
@@ -439,5 +740,4 @@ func TestDatastore_populateTree(t *testing.T) {
 			}
 		})
 	}
-
 }

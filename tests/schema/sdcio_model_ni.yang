@@ -1,6 +1,6 @@
 module sdcio_model_ni {
   yang-version 1.1;
-  namespace "urn:sdcio/sdcio_model_ni";
+  namespace "urn:sdcio/model_ni";
   prefix sdcio_model_ni;
 
   import sdcio_model_common {

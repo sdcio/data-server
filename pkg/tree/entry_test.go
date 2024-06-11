@@ -2,18 +2,15 @@ package tree
 
 import (
 	"context"
-	"fmt"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
 	"github.com/sdcio/data-server/pkg/cache"
 	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
-	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
@@ -26,9 +23,9 @@ func Test_Entry(t *testing.T) {
 		t.Error(err)
 	}
 
-	u1 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "9", "description"}, desc, int32(100), "me", int64(9999999))
-	u2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc, int32(99), "me", int64(444))
-	u3 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc, int32(98), "me", int64(88))
+	u1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "9", "description"}, desc, int32(100), "me", int64(9999999))
+	u2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc, int32(99), "me", int64(444))
+	u3 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc, int32(98), "me", int64(88))
 
 	scb, err := getSchemaClientBound(t)
 	if err != nil {
@@ -51,6 +48,8 @@ func Test_Entry(t *testing.T) {
 		}
 	}
 
+	root.FinishInsertionPhase()
+
 	r := []string{}
 	r = root.StringIndent(r)
 	t.Log(strings.Join(r, "\n"))
@@ -69,9 +68,9 @@ func Test_Entry_One(t *testing.T) {
 
 	ts1 := int64(9999999)
 
-	u1 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "9", "description"}, desc1, prio100, owner1, ts1)
-	u2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc2, prio100, owner1, ts1)
-	u3 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner2, ts1)
+	u1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "9", "description"}, desc1, prio100, owner1, ts1)
+	u2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc2, prio100, owner1, ts1)
+	u3 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner2, ts1)
 
 	scb, err := getSchemaClientBound(t)
 	if err != nil {
@@ -94,6 +93,8 @@ func Test_Entry_One(t *testing.T) {
 			t.Error(err)
 		}
 	}
+
+	root.FinishInsertionPhase()
 
 	// log the tree
 	t.Log(root.String())
@@ -135,7 +136,7 @@ func Test_Entry_Two(t *testing.T) {
 	prio50 := int32(50)
 	owner1 := "OwnerOne"
 	ts1 := int64(9999999)
-	u1 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
+	u1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
 
 	scb, err := getSchemaClientBound(t)
 	if err != nil {
@@ -163,7 +164,7 @@ func Test_Entry_Two(t *testing.T) {
 	overwriteDesc := testhelper.GetStringTvProto(t, "Owerwrite Description")
 
 	// adding a new Update with same owner and priority with different value
-	n1 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
+	n1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*cache.Update{n1} {
 		err := root.AddCacheUpdateRecursive(ctx, u, true)
@@ -171,6 +172,8 @@ func Test_Entry_Two(t *testing.T) {
 			t.Error(err)
 		}
 	}
+
+	root.FinishInsertionPhase()
 
 	// log the tree
 	t.Log(root.String())
@@ -188,10 +191,10 @@ func Test_Entry_Three(t *testing.T) {
 	prio50 := int32(50)
 	owner1 := "OwnerOne"
 	ts1 := int64(9999999)
-	u1 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
-	u2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "11", "description"}, desc3, prio50, owner1, ts1)
-	u3 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "12", "description"}, desc3, prio50, owner1, ts1)
-	u4 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
+	u1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
+	u2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "11", "description"}, desc3, prio50, owner1, ts1)
+	u3 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "12", "description"}, desc3, prio50, owner1, ts1)
+	u4 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
 
 	scb, err := getSchemaClientBound(t)
 	if err != nil {
@@ -214,6 +217,8 @@ func Test_Entry_Three(t *testing.T) {
 			t.Error(err)
 		}
 	}
+
+	root.FinishInsertionPhase()
 
 	t.Run("Check the data is present", func(t *testing.T) {
 
@@ -249,8 +254,8 @@ func Test_Entry_Three(t *testing.T) {
 	overwriteDesc := testhelper.GetStringTvProto(t, "Owerwrite Description")
 
 	// adding a new Update with same owner and priority with different value
-	n1 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
-	n2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "11", "description"}, overwriteDesc, prio50, owner1, ts1)
+	n1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
+	n2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "11", "description"}, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*cache.Update{n1, n2} {
 		err := root.AddCacheUpdateRecursive(ctx, u, true)
@@ -258,6 +263,8 @@ func Test_Entry_Three(t *testing.T) {
 			t.Error(err)
 		}
 	}
+
+	root.FinishInsertionPhase()
 
 	// log the tree
 	t.Log(root.String())
@@ -296,13 +303,13 @@ func Test_Entry_Four(t *testing.T) {
 	owner2 := "OwnerTwo"
 	ts1 := int64(9999999)
 
-	u1o1 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
-	u2o1 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "11", "description"}, desc3, prio50, owner1, ts1)
-	u3 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "12", "description"}, desc3, prio50, owner1, ts1)
-	u4 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
+	u1o1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
+	u2o1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "11", "description"}, desc3, prio50, owner1, ts1)
+	u3 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "12", "description"}, desc3, prio50, owner1, ts1)
+	u4 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
 
-	u1o2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio55, owner2, ts1)
-	u2o2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/0", "subinterface", "11", "description"}, desc3, prio55, owner2, ts1)
+	u1o2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio55, owner2, ts1)
+	u2o2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "11", "description"}, desc3, prio55, owner2, ts1)
 
 	ctx := context.Background()
 
@@ -326,6 +333,8 @@ func Test_Entry_Four(t *testing.T) {
 		}
 	}
 
+	root.FinishInsertionPhase()
+
 	t.Run("Check the data is present", func(t *testing.T) {
 
 		// log the tree
@@ -347,8 +356,8 @@ func Test_Entry_Four(t *testing.T) {
 	overwriteDesc := testhelper.GetStringTvProto(t, "Owerwrite Description")
 
 	// adding a new Update with same owner and priority with different value
-	n1 := cache.NewUpdate([]string{"interfaces", "ethernet-0/1", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
-	n2 := cache.NewUpdate([]string{"interfaces", "ethernet-0/1", "subinterface", "11", "description"}, overwriteDesc, prio50, owner1, ts1)
+	n1 := cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
+	n2 := cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "11", "description"}, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*cache.Update{n1, n2} {
 		err := root.AddCacheUpdateRecursive(ctx, u, true)
@@ -356,6 +365,7 @@ func Test_Entry_Four(t *testing.T) {
 			t.Error(err)
 		}
 	}
+	root.FinishInsertionPhase()
 
 	// log the tree
 	t.Log(root.String())
@@ -405,28 +415,6 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	u5 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "index"}, testhelper.GetStringTvProto(t, "1"), prio50, owner1, ts1)
 	u6 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "description"}, desc3, prio50, owner1, ts1)
 
-	dev1 := &sdcio_schema.Device{
-		Interface: map[string]*sdcio_schema.SdcioModel_Interface{},
-	}
-
-	dev1.Interface["ethernet-1/1"] = &sdcio_schema.SdcioModel_Interface{
-		Name:        ygot.String("ethernet-1/1"),
-		Description: ygot.String("DescriptionThree"),
-	}
-
-	json, err := ygot.EmitJSON(dev1, &ygot.EmitJSONConfig{
-		Format: ygot.RFC7951,
-		Indent: "  ",
-		RFC7951Config: &ygot.RFC7951JSONConfig{
-			AppendModuleName: false,
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	fmt.Println(json)
-
 	ctx := context.Background()
 
 	scb, err := getSchemaClientBound(t)
@@ -463,6 +451,8 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 		}
 	}
 
+	root.FinishInsertionPhase()
+
 	// retrieve the Deletes
 	deletesSlices := root.GetDeletes()
 
@@ -494,6 +484,12 @@ func getSchemaClientBound(t *testing.T) (SchemaClient.SchemaClientBound, error) 
 		return nil, err
 	}
 
+	sdcpbSchema := &sdcpb.Schema{
+		Name:    schema.Name,
+		Vendor:  schema.Vendor,
+		Version: schema.Version,
+	}
+
 	mockCtrl := gomock.NewController(t)
 	mockscb := mockschemaclientbound.NewMockSchemaClientBound(mockCtrl)
 
@@ -502,7 +498,7 @@ func getSchemaClientBound(t *testing.T) (SchemaClient.SchemaClientBound, error) 
 		func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 			return x.GetSchema(ctx, &sdcpb.GetSchemaRequest{
 				Path:   path,
-				Schema: schema,
+				Schema: sdcpbSchema,
 			})
 		},
 	)
@@ -512,7 +508,7 @@ func getSchemaClientBound(t *testing.T) (SchemaClient.SchemaClientBound, error) 
 		func(ctx context.Context, path []string) (*sdcpb.Path, error) {
 			pr, err := x.ToPath(ctx, &sdcpb.ToPathRequest{
 				PathElement: path,
-				Schema:      schema,
+				Schema:      sdcpbSchema,
 			})
 			if err != nil {
 				return nil, err
@@ -697,7 +693,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	)
 
 	// make sure the secondhighes is also populated if the highes was the first entry
-	t.Run("No Entries",
+	t.Run("secondhighes populated if highes was first",
 		func(t *testing.T) {
 			lv := LeafVariants{
 				&LeafEntry{

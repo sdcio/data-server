@@ -76,5 +76,6 @@ unit-tests: mocks-gen
 
 .PHONY: ygot
 ygot:
+	pyang tests/schema/*
 	go install github.com/openconfig/ygot/generator@latest
 	generator -output_file=tests/sdcioygot/sdcio_schema.go -package_name=sdcio_schema -generate_fakeroot -fakeroot_name=device ./tests/schema/*

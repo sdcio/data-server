@@ -61,8 +61,9 @@ type Entry interface {
 	Walk(f EntryVisitor) error
 	// ShouldDelete indicated if there is no LeafEntry left and the Entry is to be deleted
 	ShouldDelete() bool
-	// IsDeleteKeyAttributesInLevelDown TODO
-	IsDeleteKeyAttributesInLevelDown(level int, names []string) [][]string
+	// IsDeleteKeyAttributesInLevelDown Go down the Tree, skipping all the key value levels. Then on the level 0 check if the keys are removed. If so, the
+	// entry is clearly removed, hence a delete can be issued for the top level path + keys
+	IsDeleteKeyAttributesInLevelDown(level int, keys []string, result [][]string) [][]string
 	// Validate the Mandatory schema field
 	ValidateMandatory() error
 	// ValidateMandatoryWithKeys is an internally used function that us called by ValidateMandatory in case
@@ -77,6 +78,8 @@ type Entry interface {
 	// FinishInsertionPhase indicates, that the insertion of Entries into the tree is over
 	// Hence calculations for e.g. choice/case can be performed.
 	FinishInsertionPhase()
+	// GetParent returns the parent entry
+	GetParent() Entry
 }
 
 // sharedEntryAttributes contains the attributes shared by Entry and RootEntry
@@ -115,26 +118,23 @@ func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName st
 	if !s.IsRoot() {
 		switch schem := parent.GetSchema().GetSchema().(type) {
 		case *sdcpb.SchemaElem_Container:
+			if len(schem.Container.GetKeys()) > 0 {
+				getSchema = false
+			}
+		}
+		// lets check that the path does end with a Schema elem, not a
+		// key element
+		// therefor convert to path
+		pathResponse, err := tc.treeSchemaCacheClient.ToPath(ctx, s.Path())
+		if err != nil {
+			return nil, err
+		}
+		// retrieve the keys of the last element
+		lastElemKeys := pathResponse.Elem[len(pathResponse.Elem)-1].Key
+
+		// if no keys are defined, the path points to a schema entry not a key entry
+		if len(lastElemKeys) > 0 {
 			getSchema = false
-			if slices.Contains(schem.Container.Children, pathElemName) {
-				getSchema = true
-			}
-
-			fields := []string{}
-			for _, y := range schem.Container.Fields {
-				fields = append(fields, y.Name)
-			}
-			if slices.Contains(fields, pathElemName) {
-				getSchema = true
-			}
-
-			fields = []string{}
-			for _, y := range schem.Container.Leaflists {
-				fields = append(fields, y.Name)
-			}
-			if slices.Contains(fields, pathElemName) {
-				getSchema = true
-			}
 		}
 	}
 
@@ -143,6 +143,7 @@ func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName st
 		if err != nil {
 			return nil, err
 		}
+
 		s.schema = schemaResp.GetSchema()
 	}
 	// initialize the choice case resolvers with the schema information
@@ -154,6 +155,11 @@ func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName st
 // GetSchema return the schema fiels of the Entry
 func (s *sharedEntryAttributes) GetSchema() *sdcpb.SchemaElem {
 	return s.schema
+}
+
+// GetParent returns the parent entry
+func (s *sharedEntryAttributes) GetParent() Entry {
+	return s
 }
 
 // IsRoot returns true if the element has no parent elements, hence is the root of the tree
@@ -190,17 +196,16 @@ func (s *sharedEntryAttributes) Walk(f EntryVisitor) error {
 // IsDeleteKeyAttributesInLevelDown On a container that has keys, this function is there to check if the keys
 // are being deleted, such that we do not have to delete all entries and attributes, but issue a delete for the path with the specifc keys
 // and therby delete the whole branch.
-func (s *sharedEntryAttributes) IsDeleteKeyAttributesInLevelDown(level int, names []string) [][]string {
+func (s *sharedEntryAttributes) IsDeleteKeyAttributesInLevelDown(level int, names []string, result [][]string) [][]string {
+
 	// in the tree, we have Entries with schemas but also the keys as levels in the tree.
 	// so level is used to skip the key elements in the tree. Only when level is down to zero, we have the
 	// final container at hand.
-
-	result := [][]string{}
-
 	if level > 0 {
 		for _, v := range s.childs {
-			result = append(result, v.IsDeleteKeyAttributesInLevelDown(level-1, names)...)
+			result = v.IsDeleteKeyAttributesInLevelDown(level-1, names, result)
 		}
+		return result
 	}
 	// if we're at the right level, check the keys for deletion
 	for _, n := range names {
@@ -253,18 +258,23 @@ func (s *sharedEntryAttributes) GetDeletes(deletes [][]string) [][]string {
 		keySchemas := sch.Container.Keys
 		if len(keySchemas) > 0 {
 			var keys []string
+			// collect the key names as a slice
 			for _, k := range keySchemas {
 				keys = append(keys, k.Name)
 			}
 
-			if paths := s.IsDeleteKeyAttributesInLevelDown(len(keys)-1, keys); len(paths) > 0 {
-				deletes = append(deletes, paths...)
-			} else {
-				for _, c := range s.filterActiveChoiceCaseChilds() {
-					deletes = append(deletes, c.GetDeletes(deletes)...)
+			var preCountDeletes int
+			// we need to iterate through the childs, which will be the different key values (first level)
+			for _, c := range s.childs {
+				preCountDeletes = len(deletes)
+				deletes = c.IsDeleteKeyAttributesInLevelDown(len(keys)-1, keys, deletes)
+				// check if we got additional paths in the deletes,
+				// if the count remained stable, recurse the get deletes call
+				if len(deletes) == preCountDeletes {
+					// otherwise recurse the GetDeletes call to the childs
+					deletes = c.GetDeletes(deletes)
 				}
 			}
-
 			return deletes
 		}
 	}
@@ -273,7 +283,7 @@ func (s *sharedEntryAttributes) GetDeletes(deletes [][]string) [][]string {
 		return append(deletes, s.leafVariants[0].GetPath())
 	}
 
-	for _, e := range s.filterActiveChoiceCaseChilds() {
+	for _, e := range s.childs {
 		deletes = e.GetDeletes(deletes)
 	}
 	return deletes
@@ -609,7 +619,7 @@ func (r *RootEntry) GetUpdatesForOwner(owner string) []*cache.Update {
 	// retrieve all the entries from the tree that belong to the given
 	// Owner / Intent, skipping the once marked for deletion
 	// this is to insert / update entries in the cache.
-	return LeafEntriesToCacheUpdates(r.getByOwnerFiltered(owner, FilterNonDeleted))
+	return LeafEntriesToCacheUpdates(r.getByOwnerFiltered(owner, FilterNonDeletedButNewOrUpdated))
 }
 
 // GetDeletesForOwner returns the deletes that have been calculated for the given intent / owner

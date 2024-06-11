@@ -9,6 +9,11 @@ func FilterNonDeleted(l *LeafEntry) bool {
 	return !l.Delete
 }
 
+// FilterNonDeletedButNewOrUpdated Accepts all Entries that are New or Updated and not Deleted.
+func FilterNonDeletedButNewOrUpdated(l *LeafEntry) bool {
+	return !l.Delete && (l.IsUpdated || l.IsNew)
+}
+
 // FilterDeleted Accepts all Entries that are marked as deleted
 func FilterDeleted(l *LeafEntry) bool {
 	return l.Delete
