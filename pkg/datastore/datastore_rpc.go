@@ -820,7 +820,7 @@ func (d *Datastore) convertNotificationTypedValues(ctx context.Context, n *sdcpb
 	return nn, nil
 }
 
-func (d *Datastore) convertUpdateTypedValue(ctx context.Context, upd *sdcpb.Update, scRsp *sdcpb.GetSchemaResponse, leaflists map[string]*leafListNotification) (*sdcpb.Update, error) {
+func (d *Datastore) convertUpdateTypedValue(_ context.Context, upd *sdcpb.Update, scRsp *sdcpb.GetSchemaResponse, leaflists map[string]*leafListNotification) (*sdcpb.Update, error) {
 	switch {
 	case scRsp.GetSchema().GetContainer() != nil:
 		if !scRsp.GetSchema().GetContainer().GetIsPresence() {

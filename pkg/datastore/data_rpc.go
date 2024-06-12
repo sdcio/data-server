@@ -873,7 +873,7 @@ func (d *Datastore) expandUpdates(ctx context.Context, updates []*sdcpb.Update, 
 	return outUpdates, nil
 }
 
-func (d *Datastore) expandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
+func (d *Datastore) expandUpdateKeysAsLeaf(_ context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
 	upds := make([]*sdcpb.Update, 0)
 	// expand update path if it contains keys
 	for i, pe := range upd.GetPath().GetElem() {
