@@ -127,13 +127,19 @@ func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName st
 		// querying the schema. Otherwise we need to query the schema.
 		ancestor := parent
 		levelUp := 0
+		// walk up in the tree try finding an existing schema
+		// as long as the ancestor schema is nil but we have not
+		// reached the root, move up a level
 		for ancestor.GetSchema() == nil && !ancestor.IsRoot() {
 			levelUp += 1
 			ancestor = ancestor.GetParent()
 		}
 
+		// check the found schema
 		switch schem := ancestor.GetSchema().GetSchema().(type) {
 		case *sdcpb.SchemaElem_Container:
+			// if it is a container and level up is less or equal the levelUp count
+			// this means, we are on a level this is for sure still a key level in the tree
 			if len(schem.Container.GetKeys()) > levelUp {
 				getSchema = false
 				break
@@ -142,6 +148,7 @@ func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName st
 	}
 
 	if getSchema {
+		// trieve if the getSchema var is still true
 		schemaResp, err := tc.treeSchemaCacheClient.GetSchema(ctx, s.Path())
 		if err != nil {
 			return nil, err
