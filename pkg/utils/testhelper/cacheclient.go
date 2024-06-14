@@ -18,9 +18,9 @@ import (
 func ConfigureCacheClientMock(t *testing.T, cacheClient *mockcacheclient.MockClient, updatesIntended []*cache.Update, expectedModify []*cache.Update, expectedDeletes [][]string) {
 
 	// mock the .GetIntendedKeysMeta() call
-	cacheClient.EXPECT().GetIntendedKeysMeta(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+	cacheClient.EXPECT().GetKeys(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
 
-		func(_ context.Context, datastoreName string) (chan *cache.Update, error) {
+		func(_ context.Context, datastoreName string, store cachepb.Store) (chan *cache.Update, error) {
 			rsCh := make(chan *cache.Update)
 			go func() {
 				for _, u := range updatesIntended {

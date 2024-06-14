@@ -81,7 +81,11 @@ type Entry interface {
 	// GetParent returns the parent entry
 	GetParent() Entry
 	// Navigate navigates the tree according to the given path and returns the referenced entry or nil if it does not exist.
-	Navigate(path []string) (Entry, error)
+	Navigate(ctx context.Context, path []string) (Entry, error)
+	// GetAncestorSchema returns the schema of the parent node if the schema is set.
+	// if the parent has no schema (is a key element in the tree) it will recurs the call to the parents parent.
+	// the level of recursion is indicated via the levelUp attribute
+	GetAncestorSchema() (schema *sdcpb.SchemaElem, levelUp int)
 }
 
 // sharedEntryAttributes contains the attributes shared by Entry and RootEntry
@@ -125,18 +129,10 @@ func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName st
 		// because we can have multiple keys. we remember the number of levels we moved up
 		// and if that is within the len of keys, we're still in a key level, and need to skip
 		// querying the schema. Otherwise we need to query the schema.
-		ancestor := parent
-		levelUp := 0
-		// walk up in the tree try finding an existing schema
-		// as long as the ancestor schema is nil but we have not
-		// reached the root, move up a level
-		for ancestor.GetSchema() == nil && !ancestor.IsRoot() {
-			levelUp += 1
-			ancestor = ancestor.GetParent()
-		}
+		ancesterschema, levelUp := s.GetAncestorSchema()
 
 		// check the found schema
-		switch schem := ancestor.GetSchema().GetSchema().(type) {
+		switch schem := ancesterschema.GetSchema().(type) {
 		case *sdcpb.SchemaElem_Container:
 			// if it is a container and level up is less or equal the levelUp count
 			// this means, we are on a level this is for sure still a key level in the tree
@@ -299,6 +295,22 @@ func (s *sharedEntryAttributes) GetDeletes(deletes [][]string) [][]string {
 	return deletes
 }
 
+// GetAncestorSchema returns the schema of the parent node if the schema is set.
+// if the parent has no schema (is a key element in the tree) it will recurs the call to the parents parent.
+// the level of recursion is indicated via the levelUp attribute
+func (s *sharedEntryAttributes) GetAncestorSchema() (*sdcpb.SchemaElem, int) {
+	// check if the parent has a schema
+	if s.parent.GetSchema() != nil {
+		// if so return it with level 1
+		return s.parent.GetSchema(), 1
+	}
+	// direct parent does not have a schema, recurse the call
+	schema, level := s.parent.GetAncestorSchema()
+	// increate the level returned by the parent to
+	// reflect this entry as a level and return
+	return schema, level + 1
+}
+
 // GetByOwner returns all the LeafEntries that belong to a certain owner.
 func (s *sharedEntryAttributes) GetByOwner(owner string, result []*LeafEntry) []*LeafEntry {
 	lv := s.leafVariants.GetByOwner(owner)
@@ -353,7 +365,8 @@ func (s *sharedEntryAttributes) AddChild(ctx context.Context, e Entry) error {
 
 // Navigate move through the tree, returns the Entry that is present under the given path
 // the path itself can be absolute or relative
-func (s *sharedEntryAttributes) Navigate(path []string) (Entry, error) {
+func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string) (Entry, error) {
+	var err error
 	if len(path) == 0 {
 		return s, nil
 	}
@@ -367,16 +380,35 @@ func (s *sharedEntryAttributes) Navigate(path []string) (Entry, error) {
 			cont = true
 			continue
 		case "..":
-			return s.parent.Navigate(path[1:])
+			return s.parent.Navigate(ctx, path[1:])
 		default:
-			e, exists := s.childs[path[0]]
+			e, exists := s.filterActiveChoiceCaseChilds()[path[0]]
 			if !exists {
-				return nil, fmt.Errorf("reached %v but child %s does not exist", s.Path(), path[0])
+				e, err = s.tryLoading(ctx, path)
+				if err != nil {
+					return nil, err
+				}
 			}
-			return e.Navigate(path[1:])
+			return e.Navigate(ctx, path[1:])
 		}
 	}
 	return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist", s.Path(), path)
+}
+
+func (s *sharedEntryAttributes) tryLoading(ctx context.Context, path []string) (Entry, error) {
+	upd, err := s.treeContext.ReadRunning(ctx, append(s.Path(), path...))
+	if err != nil {
+		return nil, err
+	}
+	if upd == nil {
+		return nil, fmt.Errorf("reached %v but child %s does not exist", s.Path(), path[0])
+	}
+	err = s.treeContext.root.AddCacheUpdateRecursive(ctx, upd, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.childs[path[0]], nil
 }
 
 // GetHighestPrecedence goes through the whole branch and returns the new and updated cache.Updates.
@@ -426,7 +458,7 @@ func (s *sharedEntryAttributes) ValidateMandatoryWithKeys(level int, attribute s
 		return nil
 	}
 
-	for _, c := range s.childs {
+	for _, c := range s.filterActiveChoiceCaseChilds() {
 		err := c.ValidateMandatoryWithKeys(level-1, attribute)
 		if err != nil {
 			return err
@@ -641,9 +673,16 @@ func NewTreeRoot(ctx context.Context, tc *TreeContext) (*RootEntry, error) {
 		return nil, err
 	}
 
-	return &RootEntry{
+	root := &RootEntry{
 		sharedEntryAttributes: sea,
-	}, nil
+	}
+
+	err = tc.SetRoot(sea)
+	if err != nil {
+		return nil, err
+	}
+
+	return root, nil
 }
 
 // String returns the string representation of the Tree.
@@ -693,6 +732,10 @@ func (r *RootEntry) GetDeletes() [][]string {
 // GetTreeContext returns the handle to the TreeContext
 func (r *RootEntry) GetTreeContext() *TreeContext {
 	return r.treeContext
+}
+
+func (r *RootEntry) GetAncestorSchema() (*sdcpb.SchemaElem, int) {
+	return nil, 0
 }
 
 // getByOwnerFiltered returns the Tree content filtered by owner, whilst allowing to filter further

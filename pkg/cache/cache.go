@@ -62,9 +62,8 @@ type Client interface {
 	Commit(ctx context.Context, name, candidate string) error
 	// NewUpdate build a cache update from a sdcpb.Update
 	NewUpdate(*sdcpb.Update) (*Update, error)
-	// GetIntendedKeys retrieve the Intended Store Keys
-	GetIntendedKeys(ctx context.Context, name string) (chan []string, error)
-	GetIntendedKeysMeta(ctx context.Context, name string) (chan *Update, error)
+	// GetKeys retrieve the Keys of the specified store
+	GetKeys(ctx context.Context, name string, store cachepb.Store) (chan *Update, error)
 	// disconnect from the cache
 	Close() error
 }

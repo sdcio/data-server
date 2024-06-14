@@ -3,9 +3,7 @@ package tree
 import (
 	"context"
 	"strings"
-	"time"
 
-	"github.com/sdcio/cache/proto/cachepb"
 	"github.com/sdcio/data-server/pkg/cache"
 	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -15,7 +13,7 @@ import (
 type TreeSchemaCacheClient interface {
 	// CACHE based Functions
 	// ReadIntended retrieves the highes priority value from the intended store
-	ReadIntended(ctx context.Context, opts *cache.Opts, paths [][]string, period time.Duration) []*cache.Update
+	Read(ctx context.Context, opts *cache.Opts, paths [][]string) []*cache.Update
 
 	// SCHEMA based Functions
 	GetSchema(ctx context.Context, path []string) (*sdcpb.GetSchemaResponse, error)
@@ -38,13 +36,14 @@ func NewTreeSchemaCacheClient(datastore string, cc cache.Client, scb SchemaClien
 	}
 }
 
-func (c *TreeSchemaCacheClientImpl) ReadIntended(ctx context.Context, opts *cache.Opts, paths [][]string, period time.Duration) []*cache.Update {
+func (c *TreeSchemaCacheClientImpl) Read(ctx context.Context, opts *cache.Opts, paths [][]string) []*cache.Update {
 	if opts == nil {
-		opts = &cache.Opts{}
+		opts = &cache.Opts{
+			PriorityCount: 1,
+		}
 	}
-	opts.PriorityCount = 1
-	opts.Store = cachepb.Store_INTENDED
-	return c.cc.Read(ctx, c.datastore, opts, paths, period)
+
+	return c.cc.Read(ctx, c.datastore, opts, paths, 1)
 }
 
 func (c *TreeSchemaCacheClientImpl) ToPath(ctx context.Context, path []string) (*sdcpb.Path, error) {

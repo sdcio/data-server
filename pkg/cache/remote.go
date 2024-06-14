@@ -53,6 +53,45 @@ func (c *remoteCache) List(ctx context.Context) ([]string, error) {
 	return c.c.List(ctx)
 }
 
+func (c *remoteCache) GetKeys(ctx context.Context, name string, store cachepb.Store) (chan *Update, error) {
+
+	if store != cachepb.Store_CONFIG && store != cachepb.Store_INTENDED {
+		return nil, fmt.Errorf("getkeys only available with config or intended store")
+	}
+
+	outCh := make(chan *Update)
+	entryCh, err := c.c.ReadKeys(ctx, name, store)
+	if err != nil {
+		close(outCh)
+		return nil, err
+	}
+
+	go func() {
+		defer close(outCh)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case e, ok := <-entryCh:
+				if !ok {
+					return
+				}
+				if e == nil {
+					continue //
+				}
+				outCh <- &Update{
+					path:     e.Path,
+					value:    nil,
+					priority: e.Priority,
+					owner:    e.Owner,
+					ts:       int64(e.Timestamp),
+				}
+			}
+		}
+	}()
+	return outCh, nil
+}
+
 func (c *remoteCache) GetCandidates(ctx context.Context, name string) ([]*cache.CandidateDetails, error) {
 	rsp, err := c.c.Get(ctx, name)
 	if err != nil {

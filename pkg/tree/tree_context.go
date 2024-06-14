@@ -1,12 +1,19 @@
 package tree
 
 import (
+	"context"
+	"fmt"
 	"math"
 	"strings"
+
+	"github.com/sdcio/cache/proto/cachepb"
+	"github.com/sdcio/data-server/pkg/cache"
 )
 
 type TreeContext struct {
-	storeIndex            map[string]UpdateSlice // contains the
+	root                  Entry                    // the trees root element
+	KeysIntendedStore     map[string]UpdateSlice   // contains the keys that the intended store holds in the cache
+	KeysRunningStore      map[string]*cache.Update // contains the keys of the running config
 	treeSchemaCacheClient TreeSchemaCacheClient
 	actualOwner           string
 }
@@ -18,12 +25,20 @@ func NewTreeContext(tscc TreeSchemaCacheClient, actualOwner string) *TreeContext
 	}
 }
 
+func (t *TreeContext) SetRoot(e Entry) error {
+	if t.root != nil {
+		return fmt.Errorf("trying to set treecontexts root, although it is already set")
+	}
+	t.root = e
+	return nil
+}
+
 func (t *TreeContext) GetActualOwner() string {
 	return t.actualOwner
 }
 
 func (t *TreeContext) PathExists(path []string) bool {
-	_, exists := t.storeIndex[strings.Join(path, KeysIndexSep)]
+	_, exists := t.KeysIntendedStore[strings.Join(path, KeysIndexSep)]
 	return exists
 }
 
@@ -32,7 +47,7 @@ func (t *TreeContext) GetBranchesHighesPrecedence(path []string, filters ...Cach
 	pathKey := strings.Join(path, KeysIndexSep)
 
 	// TODO: Improve this, since it is probably an expensive operation
-	for key, entries := range t.storeIndex {
+	for key, entries := range t.KeysIntendedStore {
 		if strings.HasPrefix(key, pathKey) {
 			if prio := entries.GetLowestPriorityValue(filters); prio < result {
 				result = prio
@@ -44,7 +59,7 @@ func (t *TreeContext) GetBranchesHighesPrecedence(path []string, filters ...Cach
 
 func (t *TreeContext) GetPathsOfOwner(owner string) *PathSet {
 	p := NewPathSet()
-	for _, keyMeta := range t.storeIndex {
+	for _, keyMeta := range t.KeysIntendedStore {
 		for _, k := range keyMeta {
 			if k.Owner() == owner {
 				// if the key is not yet listed in the keys slice, add it otherwise skip
@@ -56,5 +71,21 @@ func (t *TreeContext) GetPathsOfOwner(owner string) *PathSet {
 }
 
 func (t *TreeContext) SetStoreIndex(si map[string]UpdateSlice) {
-	t.storeIndex = si
+	t.KeysIntendedStore = si
+}
+
+// ReadRunning reads the value from running if the value does not exist, nil is returned
+func (t *TreeContext) ReadRunning(ctx context.Context, path []string) (*cache.Update, error) {
+	// check if the value exists in running
+	_, exists := t.KeysRunningStore[strings.Join(path, KeysIndexSep)]
+	if !exists {
+		return nil, nil
+	}
+
+	updates := t.treeSchemaCacheClient.Read(ctx, &cache.Opts{
+		Store:         cachepb.Store_CONFIG,
+		PriorityCount: 1,
+	}, [][]string{path})
+
+	return updates[0], nil
 }

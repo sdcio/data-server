@@ -21,14 +21,13 @@ import (
 	"strings"
 
 	"github.com/sdcio/cache/proto/cachepb"
+	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
-
-	"github.com/sdcio/data-server/pkg/cache"
-	"github.com/sdcio/data-server/pkg/tree"
-	"github.com/sdcio/data-server/pkg/utils"
 )
 
 // populateTreeWithIntentData populates the given tree with intent data thats stored in the cache already
@@ -294,7 +293,7 @@ func pathIsKeyAsLeaf(p *sdcpb.Path) bool {
 }
 
 func (d *Datastore) readIntendedStoreKeysMeta(ctx context.Context) (map[string]tree.UpdateSlice, error) {
-	entryCh, err := d.cacheClient.GetIntendedKeysMeta(ctx, d.config.Name)
+	entryCh, err := d.cacheClient.GetKeys(ctx, d.config.Name, cachepb.Store_INTENDED)
 	if err != nil {
 		return nil, err
 	}

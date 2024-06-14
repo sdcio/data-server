@@ -144,7 +144,7 @@ func (x *XML2sdcpbConfigAdapter) transformContainer(ctx context.Context, e *etre
 }
 
 // transformField transforms an etree.element of a configuration as an update into the provided *sdcpb.Notification.
-func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, ls *sdcpb.LeafSchema, result *sdcpb.Notification) error {
+func (x *XML2sdcpbConfigAdapter) transformField(_ context.Context, e *etree.Element, pelems []*sdcpb.PathElem, ls *sdcpb.LeafSchema, result *sdcpb.Notification) error {
 	// process terminal values
 	tv, err := StringElementToTypedValue(e.Text(), ls)
 	if err != nil {
@@ -172,7 +172,7 @@ func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.El
 // transformLeafList processes LeafList entries. These will be store in the TransformationContext.
 // A new TransformationContext is created when entering a new container. And the appropriate actions are taken when a container is exited.
 // Meaning the LeafLists will then be transformed into a single update with a sdcpb.TypedValue_LeaflistVal with all the values.
-func (x *XML2sdcpbConfigAdapter) transformLeafList(ctx context.Context, e *etree.Element, sr *sdcpb.GetSchemaResponse, pelems []*sdcpb.PathElem, result *sdcpb.Notification, tc *TransformationContext) error {
+func (x *XML2sdcpbConfigAdapter) transformLeafList(_ context.Context, e *etree.Element, sr *sdcpb.GetSchemaResponse, pelems []*sdcpb.PathElem, result *sdcpb.Notification, tc *TransformationContext) error {
 
 	// process terminal values
 	data := strings.TrimSpace(e.Text())
