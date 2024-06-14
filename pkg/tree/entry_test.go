@@ -2,6 +2,7 @@ package tree
 
 import (
 	"context"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -32,7 +33,7 @@ func Test_Entry(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx := context.Background()
+	ctx := context.TODO()
 
 	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "foo")
 
@@ -77,7 +78,7 @@ func Test_Entry_One(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx := context.Background()
+	ctx := context.TODO()
 
 	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "foo")
 
@@ -143,7 +144,7 @@ func Test_Entry_Two(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx := context.Background()
+	ctx := context.TODO()
 
 	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "foo")
 
@@ -201,7 +202,7 @@ func Test_Entry_Three(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx := context.Background()
+	ctx := context.TODO()
 
 	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "foo")
 
@@ -311,7 +312,7 @@ func Test_Entry_Four(t *testing.T) {
 	u1o2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio55, owner2, ts1)
 	u2o2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "11", "description"}, desc3, prio55, owner2, ts1)
 
-	ctx := context.Background()
+	ctx := context.TODO()
 
 	scb, err := getSchemaClientBound(t)
 	if err != nil {
@@ -415,7 +416,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	u5 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "index"}, testhelper.GetStringTvProto(t, "1"), prio50, owner1, ts1)
 	u6 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "description"}, desc3, prio50, owner1, ts1)
 
-	ctx := context.Background()
+	ctx := context.TODO()
 
 	scb, err := getSchemaClientBound(t)
 	if err != nil {
@@ -715,4 +716,90 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 			}
 		},
 	)
+}
+
+func expectNil(t *testing.T, a any, name string) {
+	fail := true
+	switch reflect.TypeOf(a).Kind() {
+	case reflect.Ptr, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
+		fail = !reflect.ValueOf(a).IsNil()
+	default:
+		if a != nil {
+			fail = true
+		}
+	}
+
+	if fail {
+		t.Errorf("expected %s to be nil, but is %v", name, a)
+	}
+}
+
+func expectNotNil(t *testing.T, a any, name string) {
+	fail := true
+	switch reflect.TypeOf(a).Kind() {
+	case reflect.Ptr, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
+		fail = reflect.ValueOf(a).IsNil()
+	default:
+		if a != nil {
+			fail = false
+		}
+	}
+
+	if fail {
+		t.Errorf("expected %s to not be nil", name)
+	}
+}
+
+func Test_Schema_Population(t *testing.T) {
+
+	ctx := context.TODO()
+
+	scb, err := getSchemaClientBound(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "foo")
+
+	root, err := NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	interf, err := newSharedEntryAttributes(ctx, root.sharedEntryAttributes, "interface", tc)
+	if err != nil {
+		t.Error(err)
+	}
+	expectNotNil(t, interf.schema, "/interface schema")
+
+	e00, err := newSharedEntryAttributes(ctx, interf, "ethernet-0/0", tc)
+	if err != nil {
+		t.Error(err)
+	}
+	expectNil(t, e00.schema, "/interface/ethernet-0/0 schema")
+
+	dk, err := newSharedEntryAttributes(ctx, root.sharedEntryAttributes, "doublekey", tc)
+	if err != nil {
+		t.Error(err)
+	}
+	expectNotNil(t, dk.schema, "/doublekey schema")
+
+	dkk1, err := newSharedEntryAttributes(ctx, dk, "key1", tc)
+	if err != nil {
+		t.Error(err)
+	}
+	expectNil(t, dkk1.schema, "/doublekey/key1 schema")
+
+	dkk2, err := newSharedEntryAttributes(ctx, dkk1, "key2", tc)
+	if err != nil {
+		t.Error(err)
+	}
+	expectNil(t, dkk2.schema, "/doublekey/key2 schema")
+
+	dkkv, err := newSharedEntryAttributes(ctx, dkk2, "mandato", tc)
+	if err != nil {
+		t.Error(err)
+	}
+	expectNotNil(t, dkkv.schema, "/doublekey[key1,key2]mandato schema")
+
 }
