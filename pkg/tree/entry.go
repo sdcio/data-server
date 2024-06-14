@@ -63,7 +63,7 @@ type Entry interface {
 	ShouldDelete() bool
 	// IsDeleteKeyAttributesInLevelDown Go down the Tree, skipping all the key value levels. Then on the level 0 check if the keys are removed. If so, the
 	// entry is clearly removed, hence a delete can be issued for the top level path + keys
-	IsDeleteKeyAttributesInLevelDown(level int, keys []string, result [][]string) [][]string
+	IsDeleteKeyAttributesInLevelDown(keys []string, result [][]string) [][]string
 	// Validate the Mandatory schema field
 	ValidateMandatory() error
 	// ValidateMandatoryWithKeys is an internally used function that us called by ValidateMandatory in case
@@ -136,7 +136,7 @@ func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName st
 		case *sdcpb.SchemaElem_Container:
 			// if it is a container and level up is less or equal the levelUp count
 			// this means, we are on a level this is for sure still a key level in the tree
-			if len(schem.Container.GetKeys()) > levelUp {
+			if len(schem.Container.GetKeys()) >= levelUp {
 				getSchema = false
 				break
 			}
@@ -202,24 +202,18 @@ func (s *sharedEntryAttributes) Walk(f EntryVisitor) error {
 // IsDeleteKeyAttributesInLevelDown On a container that has keys, this function is there to check if the keys
 // are being deleted, such that we do not have to delete all entries and attributes, but issue a delete for the path with the specifc keys
 // and therby delete the whole branch.
-func (s *sharedEntryAttributes) IsDeleteKeyAttributesInLevelDown(level int, names []string, result [][]string) [][]string {
-
-	// in the tree, we have Entries with schemas but also the keys as levels in the tree.
-	// so level is used to skip the key elements in the tree. Only when level is down to zero, we have the
-	// final container at hand.
-	if level > 0 {
-		for _, v := range s.childs {
-			result = v.IsDeleteKeyAttributesInLevelDown(level-1, names, result)
-		}
-		return result
-	}
+func (s *sharedEntryAttributes) IsDeleteKeyAttributesInLevelDown(keyAttributes []string, result [][]string) [][]string {
+	doDelete := true
 	// if we're at the right level, check the keys for deletion
-	for _, n := range names {
+	for _, n := range keyAttributes {
 		c, exists := s.childs[n]
 		// these keys should aways exist, so for now we do not catch the non existing key case
-		if exists && c.ShouldDelete() {
-			result = append(result, s.Path())
+		if exists && !c.ShouldDelete() {
+			doDelete = false
 		}
+	}
+	if doDelete {
+		result = append(result, s.Path())
 	}
 	return result
 }
@@ -243,9 +237,45 @@ func (s *sharedEntryAttributes) ShouldDelete() bool {
 
 // GetDeletes calculate the deletes that need to be send to the device.
 func (s *sharedEntryAttributes) GetDeletes(deletes [][]string) [][]string {
+
+	// if the actual level has no schema assigned
+	if s.schema == nil {
+		// we take a look into the level(s) up
+		// trying to get the schema
+		schema, level := s.GetAncestorSchema()
+		// if there is no schema present we simply continue furhter down with regular
+		// deletion processing
+		if schema != nil {
+			// if the schema is a container schema, we need to process the aggregation logic
+			if contschema := schema.GetContainer(); contschema != nil {
+				// if the level equals the amount of keys defined, we're at the right level, where the
+				// actual elements start (not in a key level within the tree)
+				if level == len(contschema.GetKeys()) {
+					var keys []string
+					for _, k := range contschema.GetKeys() {
+						keys = append(keys, k.Name)
+					}
+
+					preCountDeletes := len(deletes)
+					deletes = s.IsDeleteKeyAttributesInLevelDown(keys, deletes)
+					// check if we got additional paths in the deletes,
+					// if the count remained stable, recurse the get deletes call
+					if len(deletes) == preCountDeletes {
+						// otherwise recurse the GetDeletes call to the childs
+						for _, c := range s.childs {
+							deletes = c.GetDeletes(deletes)
+						}
+					}
+
+					return deletes
+				}
+			}
+		}
+	}
+
 	// if entry is a container type, check the keys, to be able to
 	// issue a delte for the whole branch at once via keys
-	switch sch := s.schema.GetSchema().(type) {
+	switch s.schema.GetSchema().(type) {
 	case *sdcpb.SchemaElem_Container:
 
 		// deletes for child elements (choice cases) that newly became inactive.
@@ -257,31 +287,6 @@ func (s *sharedEntryAttributes) GetDeletes(deletes [][]string) [][]string {
 			if oldBestCase != "" && newBestCase != "" && oldBestCase != newBestCase {
 				deletes = append(deletes, append(s.Path(), oldBestCase))
 			}
-		}
-
-		// now we check if all the keys of the container are to be deleted,
-		// if so, simply delete the key path and we do not need to step futher down into the branch.
-		keySchemas := sch.Container.Keys
-		if len(keySchemas) > 0 {
-			var keys []string
-			// collect the key names as a slice
-			for _, k := range keySchemas {
-				keys = append(keys, k.Name)
-			}
-
-			var preCountDeletes int
-			// we need to iterate through the childs, which will be the different key values (first level)
-			for _, c := range s.childs {
-				preCountDeletes = len(deletes)
-				deletes = c.IsDeleteKeyAttributesInLevelDown(len(keys)-1, keys, deletes)
-				// check if we got additional paths in the deletes,
-				// if the count remained stable, recurse the get deletes call
-				if len(deletes) == preCountDeletes {
-					// otherwise recurse the GetDeletes call to the childs
-					deletes = c.GetDeletes(deletes)
-				}
-			}
-			return deletes
 		}
 	}
 
