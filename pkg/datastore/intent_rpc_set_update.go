@@ -260,7 +260,15 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		Priority: req.GetPriority(),
 	}, deletesOwner, updatesOwner)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed updating the intended store for %s: %w", d.Name(), err)
+	}
+
+	// fast and optimistic writeback to the config store
+	err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
+		Store: cachepb.Store_CONFIG,
+	}, deletes, updates)
+	if err != nil {
+		return fmt.Errorf("failed updating the running config store for %s: %w", d.Name(), err)
 	}
 
 	switch req.Delete {
