@@ -222,6 +222,9 @@ func (s *sharedEntryAttributes) ShouldDelete() bool {
 	return true
 }
 
+// getAggregatedDeletes is called on levels that have no schema attached, meaning key schemas.
+// here we might delete the whole branch of the tree, if all key elements are being deleted
+// if not, we continue with regular deltes
 func (s *sharedEntryAttributes) getAggregatedDeletes(deletes [][]string) [][]string {
 	// we take a look into the level(s) up
 	// trying to get the schema
@@ -268,6 +271,7 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes [][]string) [][]str
 	return s.getRegularDeletes(deletes)
 }
 
+// getRegularDeletes performs deletion calculation on elements that have a schema attached.
 func (s *sharedEntryAttributes) getRegularDeletes(deletes [][]string) [][]string {
 	// if entry is a container type, check the keys, to be able to
 	// issue a delte for the whole branch at once via keys

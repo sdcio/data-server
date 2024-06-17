@@ -1015,13 +1015,6 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 						}
 						list = append(list, tv)
 					}
-				case string:
-					tv := &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_StringVal{
-							StringVal: fmt.Sprintf("%v", x),
-						},
-					}
-					list = append(list, tv)
 				}
 
 				upd := &sdcpb.Update{
