@@ -21,7 +21,7 @@ import (
 	"github.com/beevik/etree"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 
-	"github.com/sdcio/data-server/pkg/schema"
+	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 )
 
 const (
@@ -38,8 +38,7 @@ const (
 type XMLConfigBuilder struct {
 	cfg          *XMLConfigBuilderOpts
 	doc          *etree.Document
-	schemaClient schema.Client
-	schema       *sdcpb.Schema
+	schemaClient SchemaClient.SchemaClientBound
 }
 
 type XMLConfigBuilderOpts struct {
@@ -52,12 +51,11 @@ type XMLConfigBuilderOpts struct {
 }
 
 // NewXMLConfigBuilder returns a new XMLConfigBuilder instance
-func NewXMLConfigBuilder(ssc schema.Client, schema *sdcpb.Schema, cfgOpts *XMLConfigBuilderOpts) *XMLConfigBuilder {
+func NewXMLConfigBuilder(ssc SchemaClient.SchemaClientBound, cfgOpts *XMLConfigBuilderOpts) *XMLConfigBuilder {
 	return &XMLConfigBuilder{
 		cfg:          cfgOpts,
 		doc:          etree.NewDocument(),
 		schemaClient: ssc,
-		schema:       schema,
 	}
 }
 
@@ -147,14 +145,33 @@ func (x *XMLConfigBuilder) AddValue(ctx context.Context, p *sdcpb.Path, v *sdcpb
 	}
 	// get the string representation of the value
 	// cause xml is all string
-	value, err := valueAsString(v)
-	if err != nil {
-		return err
+	switch val := v.GetValue().(type) {
+	case *sdcpb.TypedValue_LeaflistVal:
+		// we add all the leaflist entries as their own values
+		for _, tv := range val.LeaflistVal.GetElement() {
+			subelem := elem.Parent().CreateElement(p.Elem[len(p.Elem)-1].Name)
+			value, err := valueAsString(tv)
+			if err != nil {
+				return err
+			}
+			// set the respective value
+			// use SetText instead of CreateText to properly handle paths
+			// with a key as leaf.
+			subelem.SetText(value)
+		}
+		// since fastForward did create an initial element, but we created all we
+		// need in the loop, we delete the element from its parent
+		elem.Parent().RemoveChild(elem)
+	default:
+		value, err := valueAsString(v)
+		if err != nil {
+			return err
+		}
+		// set the respective value
+		// use SetText instead of CreateText to properly handle paths
+		// with a key as leaf.
+		elem.SetText(value)
 	}
-	// set the respective value
-	// use SetText instead of CreateText to properly handle paths
-	// with a key as leaf.
-	elem.SetText(value)
 
 	return nil
 }
@@ -176,14 +193,13 @@ func (x *XMLConfigBuilder) resolveNamespace(ctx context.Context, p *sdcpb.Path, 
 	}
 
 	// Perform schema queries
-	sr, err := x.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
-		Path: &sdcpb.Path{
+	sr, err := x.schemaClient.GetSchema(ctx,
+		&sdcpb.Path{
 			Elem:   p.Elem[:peIdx+1],
 			Origin: p.Origin,
 			Target: p.Target,
 		},
-		Schema: x.schema,
-	})
+	)
 	if err != nil {
 		return "", err
 	}

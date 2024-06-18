@@ -3,6 +3,8 @@ package testhelper
 import (
 	"context"
 	"fmt"
+	"path"
+	"runtime"
 
 	dConfig "github.com/sdcio/data-server/pkg/config"
 	dataschema "github.com/sdcio/data-server/pkg/schema"
@@ -15,7 +17,8 @@ import (
 )
 
 var (
-	SDCIO_SCHEMA_LOCATION = "../../tests/schema"
+	// location of the test schema from the projects root
+	SDCIO_SCHEMA_LOCATION = "tests/schema"
 )
 
 type SchemaClient struct {
@@ -80,7 +83,7 @@ func InitSDCIOSchema() (dataschema.Client, *dConfig.SchemaConfig, error) {
 		Vendor:  "sdcio",
 		Version: "v0.0.0",
 		Files: []string{
-			SDCIO_SCHEMA_LOCATION,
+			path.Join("/home/mava/projects/data-server", SDCIO_SCHEMA_LOCATION),
 		},
 	}
 
@@ -103,4 +106,9 @@ func InitSDCIOSchema() (dataschema.Client, *dConfig.SchemaConfig, error) {
 	}
 
 	return &SchemaClient{Store: schemaMemStore}, dsc, nil
+}
+
+func GetTestFilename() string {
+	_, filename, _, _ := runtime.Caller(0)
+	return path.Dir(filename)
 }

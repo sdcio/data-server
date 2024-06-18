@@ -22,25 +22,13 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/google/go-cmp/cmp"
-	"github.com/sdcio/data-server/mocks/mockschema"
-	"github.com/sdcio/data-server/pkg/schema"
+	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
-	"google.golang.org/grpc"
-)
-
-const (
-	SchemaName    = "TestModel"
-	SchemaVendor  = "TestVendor"
-	SchemaVersion = "TestVersion"
 )
 
 var (
-	TestSchema = &sdcpb.Schema{
-		Name:    SchemaName,
-		Vendor:  SchemaVendor,
-		Version: SchemaVersion,
-	}
 	TestCtx = context.TODO()
 )
 
@@ -54,8 +42,8 @@ func TestXMLConfigBuilder_GetDoc(t *testing.T) {
 		{
 			name: "Empty Document",
 			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
-				schemaClientMock := mockschema.NewMockClient(ctrl)
-				return NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: false})
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
+				return NewXMLConfigBuilder(schemaClientMock, &XMLConfigBuilderOpts{HonorNamespace: false})
 			},
 			want:    ``,
 			wantErr: false,
@@ -63,8 +51,8 @@ func TestXMLConfigBuilder_GetDoc(t *testing.T) {
 		{
 			name: "Non-Empty Document",
 			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
-				schemaClientMock := mockschema.NewMockClient(ctrl)
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: false})
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
+				cb := NewXMLConfigBuilder(schemaClientMock, &XMLConfigBuilderOpts{HonorNamespace: false})
 
 				// create doc elements
 				people := cb.doc.CreateElement("get-config")
@@ -178,8 +166,8 @@ func TestXMLConfigBuilder_fastForward(t *testing.T) {
 		{
 			name: "Valid Document get vlan-id",
 			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
-				schemaClientMock := mockschema.NewMockClient(ctrl)
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: false})
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
+				cb := NewXMLConfigBuilder(schemaClientMock, &XMLConfigBuilderOpts{HonorNamespace: false})
 				cb.doc = Doc1
 				return cb
 			},
@@ -199,8 +187,8 @@ func TestXMLConfigBuilder_fastForward(t *testing.T) {
 		{
 			name: "Valid Document get interfaces",
 			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
-				schemaClientMock := mockschema.NewMockClient(ctrl)
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: false})
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
+				cb := NewXMLConfigBuilder(schemaClientMock, &XMLConfigBuilderOpts{HonorNamespace: false})
 				cb.doc = Doc1
 				return cb
 			},
@@ -220,13 +208,13 @@ func TestXMLConfigBuilder_fastForward(t *testing.T) {
 		{
 			name: "GetSchema Error",
 			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
-				schemaClientMock := mockschema.NewMockClient(ctrl)
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
 				schemaClientMock.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-					func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
+					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 						return nil, fmt.Errorf("GetSchema Error")
 					},
 				)
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: false})
+				cb := NewXMLConfigBuilder(schemaClientMock, &XMLConfigBuilderOpts{HonorNamespace: false})
 				return cb
 			},
 			checkResult: func(got *etree.Element, tt *testStruct, xmlbuilder *XMLConfigBuilder) error {
@@ -242,9 +230,9 @@ func TestXMLConfigBuilder_fastForward(t *testing.T) {
 		{
 			name: "Non-Existing Path - Empty Namespace",
 			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
-				schemaClientMock := mockschema.NewMockClient(ctrl)
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
 				schemaClientMock.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-					func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
+					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 						return &sdcpb.GetSchemaResponse{
 							Schema: &sdcpb.SchemaElem{
 								Schema: &sdcpb.SchemaElem_Container{
@@ -257,7 +245,7 @@ func TestXMLConfigBuilder_fastForward(t *testing.T) {
 					},
 				)
 
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: false})
+				cb := NewXMLConfigBuilder(schemaClientMock, &XMLConfigBuilderOpts{HonorNamespace: false})
 				return cb
 			},
 			checkResult: func(got *etree.Element, tt *testStruct, xmlbuilder *XMLConfigBuilder) error {
@@ -292,9 +280,9 @@ func TestXMLConfigBuilder_fastForward(t *testing.T) {
 			name: "Non-Existing Path - All different Namespaces",
 			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
 				namespaceCounter := 0
-				schemaClientMock := mockschema.NewMockClient(ctrl)
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
 				schemaClientMock.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-					func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
+					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 						namespaceCounter++
 						return &sdcpb.GetSchemaResponse{
 							Schema: &sdcpb.SchemaElem{
@@ -308,7 +296,7 @@ func TestXMLConfigBuilder_fastForward(t *testing.T) {
 					},
 				)
 
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: true})
+				cb := NewXMLConfigBuilder(schemaClientMock, &XMLConfigBuilderOpts{HonorNamespace: true})
 				return cb
 			},
 			checkResult: func(got *etree.Element, tt *testStruct, xmlbuilder *XMLConfigBuilder) error {
@@ -366,9 +354,9 @@ func TestXMLConfigBuilder_fastForward(t *testing.T) {
 func TestXMLConfigBuilder_fastForward_multipleExecutions(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
-	schemaClientMock := mockschema.NewMockClient(mockCtrl)
+	schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(mockCtrl)
 	schemaClientMock.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-		func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
+		func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 			return &sdcpb.GetSchemaResponse{
 				Schema: &sdcpb.SchemaElem{
 					Schema: &sdcpb.SchemaElem_Container{
@@ -381,7 +369,7 @@ func TestXMLConfigBuilder_fastForward_multipleExecutions(t *testing.T) {
 		},
 	)
 
-	xmlbuilder := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: true})
+	xmlbuilder := NewXMLConfigBuilder(schemaClientMock, &XMLConfigBuilderOpts{HonorNamespace: true})
 
 	// fastForward the first path
 	elem1, err := xmlbuilder.fastForward(TestCtx, PathVlanId)
@@ -447,9 +435,9 @@ func TestXMLConfigBuilder_resolveNamespace(t *testing.T) {
 		{
 			name: "one",
 			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
-				schemaClientMock := mockschema.NewMockClient(ctrl)
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
 				schemaClientMock.EXPECT().GetSchema(TestCtx, gomock.Any()).AnyTimes().DoAndReturn(
-					func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
+					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 						return &sdcpb.GetSchemaResponse{
 							Schema: &sdcpb.SchemaElem{
 								Schema: &sdcpb.SchemaElem_Container{
@@ -462,7 +450,7 @@ func TestXMLConfigBuilder_resolveNamespace(t *testing.T) {
 					},
 				)
 
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: true})
+				cb := NewXMLConfigBuilder(schemaClientMock, &XMLConfigBuilderOpts{HonorNamespace: true})
 				return cb
 			},
 			args: args{
@@ -476,10 +464,10 @@ func TestXMLConfigBuilder_resolveNamespace(t *testing.T) {
 		{
 			name: "exceeding PE index - expect error",
 			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
-				schemaClientMock := mockschema.NewMockClient(ctrl)
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
 				schemaClientMock.EXPECT().GetSchema(TestCtx, gomock.Any()).AnyTimes()
 
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: true})
+				cb := NewXMLConfigBuilder(schemaClientMock, &XMLConfigBuilderOpts{HonorNamespace: true})
 				return cb
 			},
 			args: args{
@@ -493,9 +481,9 @@ func TestXMLConfigBuilder_resolveNamespace(t *testing.T) {
 		{
 			name: "exceeding PE index - at max",
 			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
-				schemaClientMock := mockschema.NewMockClient(ctrl)
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
 				schemaClientMock.EXPECT().GetSchema(TestCtx, gomock.Any()).AnyTimes().DoAndReturn(
-					func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
+					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 						return &sdcpb.GetSchemaResponse{
 							Schema: &sdcpb.SchemaElem{
 								Schema: &sdcpb.SchemaElem_Container{
@@ -508,7 +496,7 @@ func TestXMLConfigBuilder_resolveNamespace(t *testing.T) {
 					},
 				)
 
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: true})
+				cb := NewXMLConfigBuilder(schemaClientMock, &XMLConfigBuilderOpts{HonorNamespace: true})
 				return cb
 			},
 			args: args{
@@ -581,13 +569,13 @@ func TestXMLConfigBuilder_AddValue(t *testing.T) {
 		{
 			name: "GetSchema Error",
 			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
-				schemaClientMock := mockschema.NewMockClient(ctrl)
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
 				schemaClientMock.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-					func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
+					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 						return nil, fmt.Errorf("GetSchema Error")
 					},
 				)
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: false})
+				cb := NewXMLConfigBuilder(schemaClientMock, &XMLConfigBuilderOpts{HonorNamespace: false})
 				return cb
 			},
 			checkResult: func(tt *testStruct, xmlbuilder *XMLConfigBuilder) error {
@@ -603,9 +591,9 @@ func TestXMLConfigBuilder_AddValue(t *testing.T) {
 		{
 			name: "Non-Existing Path - Empty Namespace",
 			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
-				schemaClientMock := mockschema.NewMockClient(ctrl)
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
 				schemaClientMock.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-					func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
+					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 						return &sdcpb.GetSchemaResponse{
 							Schema: &sdcpb.SchemaElem{
 								Schema: &sdcpb.SchemaElem_Container{
@@ -618,7 +606,7 @@ func TestXMLConfigBuilder_AddValue(t *testing.T) {
 					},
 				)
 
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: false})
+				cb := NewXMLConfigBuilder(schemaClientMock, &XMLConfigBuilderOpts{HonorNamespace: false})
 				return cb
 			},
 			checkResult: func(tt *testStruct, xmlbuilder *XMLConfigBuilder) error {
@@ -658,9 +646,9 @@ func TestXMLConfigBuilder_AddValue(t *testing.T) {
 			name: "Non-Existing Path - All different Namespaces",
 			getXmlBuilder: func(ctrl *gomock.Controller) *XMLConfigBuilder {
 				namespaceCounter := 0
-				schemaClientMock := mockschema.NewMockClient(ctrl)
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
 				schemaClientMock.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-					func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
+					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 						namespaceCounter++
 						return &sdcpb.GetSchemaResponse{
 							Schema: &sdcpb.SchemaElem{
@@ -674,7 +662,7 @@ func TestXMLConfigBuilder_AddValue(t *testing.T) {
 					},
 				)
 
-				cb := NewXMLConfigBuilder(schemaClientMock, TestSchema, &XMLConfigBuilderOpts{HonorNamespace: true})
+				cb := NewXMLConfigBuilder(schemaClientMock, &XMLConfigBuilderOpts{HonorNamespace: true})
 				return cb
 			},
 			checkResult: func(tt *testStruct, xmlbuilder *XMLConfigBuilder) error {
@@ -759,8 +747,7 @@ func TestXMLConfigBuilder_Delete(t *testing.T) {
 	type fields struct {
 		cfg          *XMLConfigBuilderOpts
 		doc          *etree.Document
-		schemaClient schema.Client
-		schema       *sdcpb.Schema
+		schemaClient schemaClient.SchemaClientBound
 	}
 	type args struct {
 		ctx context.Context
@@ -912,7 +899,6 @@ func TestXMLConfigBuilder_Delete(t *testing.T) {
 				cfg:          tt.fields.cfg,
 				doc:          tt.fields.doc,
 				schemaClient: tt.fields.schemaClient,
-				schema:       tt.fields.schema,
 			}
 			if err := x.Delete(tt.args.ctx, tt.args.p); (err != nil) != tt.wantErr {
 				t.Errorf("XMLConfigBuilder.Delete() error = %v, wantErr %v", err, tt.wantErr)

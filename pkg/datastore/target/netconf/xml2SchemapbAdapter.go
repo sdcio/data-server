@@ -22,21 +22,20 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/sdcio/data-server/pkg/schema"
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 )
 
 // XML2sdcpbConfigAdapter is used to transform the provided XML configuration data into the gnmi-like sdcpb.Notifications.
 // This transformation is done via schema information acquired throughout the SchemaServerClient throughout the transformation process.
 type XML2sdcpbConfigAdapter struct {
-	schemaClient schema.Client
+	schemaClient schemaClient.SchemaClientBound
 	schema       *sdcpb.Schema
 }
 
 // NewXML2sdcpbConfigAdapter constructs a new XML2sdcpbConfigAdapter
-func NewXML2sdcpbConfigAdapter(ssc schema.Client, schema *sdcpb.Schema) *XML2sdcpbConfigAdapter {
+func NewXML2sdcpbConfigAdapter(ssc schemaClient.SchemaClientBound) *XML2sdcpbConfigAdapter {
 	return &XML2sdcpbConfigAdapter{
 		schemaClient: ssc,
-		schema:       schema,
 	}
 }
 
@@ -64,12 +63,11 @@ func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etre
 	pelems = append(pelems, &sdcpb.PathElem{Name: e.Tag})
 
 	// retrieve schema
-	sr, err := x.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
-		Path: &sdcpb.Path{
+	sr, err := x.schemaClient.GetSchema(ctx,
+		&sdcpb.Path{
 			Elem: pelems,
 		},
-		Schema: x.schema,
-	})
+	)
 	if err != nil {
 		return err
 	}

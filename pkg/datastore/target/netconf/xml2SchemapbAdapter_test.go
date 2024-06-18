@@ -19,11 +19,10 @@ import (
 	"testing"
 
 	"github.com/beevik/etree"
-	"github.com/sdcio/data-server/mocks/mockschema"
+	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
-	"google.golang.org/grpc"
 )
 
 func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
@@ -71,16 +70,11 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 
 				var expectedPath string
 
-				schemaClientMock := mockschema.NewMockClient(ctrl)
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
 				counter := 0
-				schemaClientMock.EXPECT().GetSchema(TestCtx, gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-					func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
+				schemaClientMock.EXPECT().GetSchema(TestCtx, gomock.Any()).AnyTimes().DoAndReturn(
+					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 						selem := &sdcpb.SchemaElem{}
-						// Test that the provided schema equals the expected Schema
-						if in.Schema != TestSchema {
-							t.Errorf("Schema provide to GetSchema is wrong %s vs. %s", in.Schema.String(), TestSchema.String())
-						}
-
 						switch counter {
 						case 0:
 							selem.Schema = &sdcpb.SchemaElem_Container{
@@ -113,7 +107,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 							expectedPath = "interfaces/interface[name=eth0]/name"
 						}
 						// check for the right input
-						if rp := utils.ToXPath(in.GetPath(), false); rp != expectedPath {
+						if rp := utils.ToXPath(path, false); rp != expectedPath {
 							t.Errorf("getSchema expected path %s but got %s", expectedPath, rp)
 						}
 
@@ -123,7 +117,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 						}, nil
 					},
 				)
-				return NewXML2sdcpbConfigAdapter(schemaClientMock, TestSchema)
+				return NewXML2sdcpbConfigAdapter(schemaClientMock)
 			},
 			want: []*sdcpb.Notification{
 				{

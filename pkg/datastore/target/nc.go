@@ -26,9 +26,9 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/sdcio/data-server/pkg/config"
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/datastore/target/netconf"
 	"github.com/sdcio/data-server/pkg/datastore/target/netconf/driver/scrapligo"
-	"github.com/sdcio/data-server/pkg/schema"
 	"github.com/sdcio/data-server/pkg/utils"
 )
 
@@ -39,21 +39,20 @@ type ncTarget struct {
 	m         *sync.Mutex
 	connected bool
 
-	schemaClient     schema.Client
+	schemaClient     schemaClient.SchemaClientBound
 	schema           *sdcpb.Schema
 	sbiConfig        *config.SBI
 	xml2sdcpbAdapter *netconf.XML2sdcpbConfigAdapter
 }
 
-func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient schema.Client, schema *sdcpb.Schema) (*ncTarget, error) {
+func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient schemaClient.SchemaClientBound) (*ncTarget, error) {
 	t := &ncTarget{
 		name:             name,
 		m:                new(sync.Mutex),
 		connected:        false,
 		schemaClient:     schemaClient,
-		schema:           schema,
 		sbiConfig:        cfg,
-		xml2sdcpbAdapter: netconf.NewXML2sdcpbConfigAdapter(schemaClient, schema),
+		xml2sdcpbAdapter: netconf.NewXML2sdcpbConfigAdapter(schemaClient),
 	}
 	var err error
 	// create a new NETCONF driver
@@ -79,7 +78,7 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	}
 
 	// init a new XMLConfigBuilder for the pathfilter
-	pathfilterXmlBuilder := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema,
+	pathfilterXmlBuilder := netconf.NewXMLConfigBuilder(t.schemaClient,
 		&netconf.XMLConfigBuilderOpts{
 			HonorNamespace:         t.sbiConfig.IncludeNS,
 			OperationWithNamespace: t.sbiConfig.OperationWithNamespace,
@@ -273,7 +272,7 @@ func (t *ncTarget) setRunning(ctx context.Context, req *sdcpb.SetDataRequest) (*
 		UseOperationRemove:     t.sbiConfig.UseOperationRemove,
 	}
 
-	xmlBuilder := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, xcbCfg)
+	xmlBuilder := netconf.NewXMLConfigBuilder(t.schemaClient, xcbCfg)
 
 	// iterate over the update array
 	for _, u := range req.GetUpdate() {
@@ -321,14 +320,14 @@ func (t *ncTarget) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest) 
 		OperationWithNamespace: t.sbiConfig.OperationWithNamespace,
 		UseOperationRemove:     t.sbiConfig.UseOperationRemove,
 	}
-	xmlCBDelete := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, xcbCfg)
+	xmlCBDelete := netconf.NewXMLConfigBuilder(t.schemaClient, xcbCfg)
 
 	// iterate over the delete array
 	for _, p := range req.GetDelete() {
 		xmlCBDelete.Delete(ctx, p)
 	}
 
-	xmlCBAdd := netconf.NewXMLConfigBuilder(t.schemaClient, t.schema, xcbCfg)
+	xmlCBAdd := netconf.NewXMLConfigBuilder(t.schemaClient, xcbCfg)
 
 	// iterate over the update array
 	for _, u := range req.Update {

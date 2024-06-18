@@ -15,7 +15,9 @@ import sdcio_model_choice {
 import sdcio_model_doublekey {
   prefix sdcio_model_doublekey;
 }
-
+import sdcio_model_leaflist {
+  prefix sdcio_model_leaflist;
+}
 
   description
     "This is the test schema for sdcio";
@@ -30,5 +32,6 @@ import sdcio_model_doublekey {
   uses sdcio_model_ni:network-instance-top;
   uses sdcio_model_choice:choicecase-top;
   uses sdcio_model_doublekey:doublekey-top;
+  uses sdcio_model_leaflist:leaflist-top;
 
 }

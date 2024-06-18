@@ -150,8 +150,7 @@ CREATE:
 
 func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) error {
 	var err error
-	sc := d.Schema().GetSchema()
-	d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, sc, opts...)
+	d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.getValidationClient(), opts...)
 	if err == nil {
 		return nil
 	}
@@ -165,7 +164,7 @@ func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) err
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, sc, opts...)
+			d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.getValidationClient(), opts...)
 			if err != nil {
 				log.Errorf("failed to create DS %s target: %v", d.config.Name, err)
 				continue

@@ -21,29 +21,19 @@ import (
 	"testing"
 
 	"github.com/beevik/etree"
+	"github.com/google/go-cmp/cmp"
 	"github.com/sdcio/data-server/mocks/mocknetconf"
-	"github.com/sdcio/data-server/mocks/mockschema"
+	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
 	"github.com/sdcio/data-server/pkg/config"
+	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/datastore/target/netconf"
 	"github.com/sdcio/data-server/pkg/datastore/target/netconf/types"
-	"github.com/sdcio/data-server/pkg/schema"
+	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
-	"google.golang.org/grpc"
-)
-
-const (
-	SchemaName    = "TestModel"
-	SchemaVendor  = "TestVendor"
-	SchemaVersion = "TestVersion"
 )
 
 var (
-	TestSchema = &sdcpb.Schema{
-		Name:    SchemaName,
-		Vendor:  SchemaVendor,
-		Version: SchemaVersion,
-	}
 	TestCtx = context.TODO()
 )
 
@@ -52,7 +42,7 @@ func Test_ncTarget_Get(t *testing.T) {
 		name            string
 		getDriver       func(*gomock.Controller, *testing.T) netconf.Driver
 		connected       bool
-		getSchemaClient func(*gomock.Controller, *testing.T) schema.Client
+		getSchemaClient func(*gomock.Controller, *testing.T) SchemaClient.SchemaClientBound
 		schema          *sdcpb.Schema
 		sbiConfig       *config.SBI
 	}
@@ -86,18 +76,17 @@ func Test_ncTarget_Get(t *testing.T) {
 				},
 				name:      "TestDev",
 				connected: true,
-				schema:    &sdcpb.Schema{},
 				sbiConfig: &config.SBI{
 					IncludeNS:              false,
 					OperationWithNamespace: false,
 					UseOperationRemove:     false,
 				},
-				getSchemaClient: func(c *gomock.Controller, t *testing.T) schema.Client {
-					s := mockschema.NewMockClient(c)
+				getSchemaClient: func(c *gomock.Controller, t *testing.T) SchemaClient.SchemaClientBound {
+					s := mockschemaclientbound.NewMockSchemaClientBound(c)
 					gomock.InOrder(
 						s.EXPECT().GetSchema(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
-							func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
-								fmt.Println(in.String())
+							func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+								fmt.Println(path.String())
 								return &sdcpb.GetSchemaResponse{
 									Schema: &sdcpb.SchemaElem{
 										Schema: &sdcpb.SchemaElem_Container{
@@ -115,8 +104,8 @@ func Test_ncTarget_Get(t *testing.T) {
 							},
 						),
 						s.EXPECT().GetSchema(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
-							func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
-								fmt.Println(in.String())
+							func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+								fmt.Println(path.String())
 								return &sdcpb.GetSchemaResponse{
 									Schema: &sdcpb.SchemaElem{
 										Schema: &sdcpb.SchemaElem_Container{
@@ -134,8 +123,8 @@ func Test_ncTarget_Get(t *testing.T) {
 							},
 						),
 						s.EXPECT().GetSchema(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
-							func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
-								fmt.Println(in.String())
+							func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+								fmt.Println(path.String())
 								return &sdcpb.GetSchemaResponse{
 									Schema: &sdcpb.SchemaElem{
 										Schema: &sdcpb.SchemaElem_Field{
@@ -151,15 +140,14 @@ func Test_ncTarget_Get(t *testing.T) {
 							},
 						),
 						s.EXPECT().GetSchema(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
-							func(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
-								fmt.Println(in.String())
+							func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+								fmt.Println(path.String())
 								return &sdcpb.GetSchemaResponse{
 									Schema: &sdcpb.SchemaElem{
 										Schema: &sdcpb.SchemaElem_Field{
 											Field: &sdcpb.LeafSchema{
 												Name: "mtu",
 												Type: &sdcpb.SchemaLeafType{
-
 													Type: "string",
 												},
 											},
@@ -255,9 +243,8 @@ func Test_ncTarget_Get(t *testing.T) {
 				driver:           tt.fields.getDriver(mockCtrl, t),
 				connected:        tt.fields.connected,
 				schemaClient:     sc,
-				schema:           tt.fields.schema,
 				sbiConfig:        tt.fields.sbiConfig,
-				xml2sdcpbAdapter: netconf.NewXML2sdcpbConfigAdapter(sc, tt.fields.schema),
+				xml2sdcpbAdapter: netconf.NewXML2sdcpbConfigAdapter(sc),
 			}
 			got, err := tr.Get(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
@@ -270,4 +257,113 @@ func Test_ncTarget_Get(t *testing.T) {
 			mockCtrl.Finish()
 		})
 	}
+}
+
+func TestLeafList(t *testing.T) {
+
+	ctx := context.TODO()
+
+	scb, err := getSchemaClientBound(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaflistValue := &sdcpb.TypedValue{
+		Value: &sdcpb.TypedValue_LeaflistVal{
+			LeaflistVal: &sdcpb.ScalarArray{
+				Element: []*sdcpb.TypedValue{
+					{
+						Value: &sdcpb.TypedValue_StringVal{
+							StringVal: "entry-one",
+						},
+					},
+					{
+						Value: &sdcpb.TypedValue_StringVal{
+							StringVal: "entry-two",
+						},
+					},
+					{
+						Value: &sdcpb.TypedValue_StringVal{
+							StringVal: "entry-three",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	xmlBuilder := netconf.NewXMLConfigBuilder(scb, &netconf.XMLConfigBuilderOpts{
+		UseOperationRemove: true,
+		HonorNamespace:     true,
+	})
+
+	xmlBuilder.AddValue(ctx, &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			{
+				Name: "leaflist",
+			},
+			{
+				Name: "entry",
+			},
+		},
+	}, leaflistValue)
+
+	expectedResult := `<leaflist xmlns="urn:sdcio/model">
+  <entry>entry-one</entry>
+  <entry>entry-two</entry>
+  <entry>entry-three</entry>
+</leaflist>
+`
+	result, err := xmlBuilder.GetDoc()
+	if err != nil {
+		t.Error(err)
+	}
+	if diff := cmp.Diff(result, expectedResult); diff != "" {
+		t.Error(diff)
+	}
+}
+
+// getSchemaClientBound creates a SchemaClientBound mock that responds to certain GetSchema requests
+func getSchemaClientBound(t *testing.T) (SchemaClient.SchemaClientBound, error) {
+
+	x, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		return nil, err
+	}
+
+	sdcpbSchema := &sdcpb.Schema{
+		Name:    schema.Name,
+		Vendor:  schema.Vendor,
+		Version: schema.Version,
+	}
+
+	mockCtrl := gomock.NewController(t)
+	mockscb := mockschemaclientbound.NewMockSchemaClientBound(mockCtrl)
+
+	// make the mock respond to GetSchema requests
+	mockscb.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+		func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+			return x.GetSchema(ctx, &sdcpb.GetSchemaRequest{
+				Path:   path,
+				Schema: sdcpbSchema,
+			})
+		},
+	)
+
+	// setup the ToPath() responses
+	mockscb.EXPECT().ToPath(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+		func(ctx context.Context, path []string) (*sdcpb.Path, error) {
+			pr, err := x.ToPath(ctx, &sdcpb.ToPathRequest{
+				PathElement: path,
+				Schema:      sdcpbSchema,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return pr.GetPath(), nil
+		},
+	)
+
+	// return the mock
+	return mockscb, nil
 }
