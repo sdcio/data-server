@@ -17,6 +17,7 @@ package cache
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/sdcio/cache/pkg/cache"
@@ -124,6 +125,16 @@ func (u *Update) Owner() string {
 
 func (u *Update) TS() int64 {
 	return u.ts
+}
+
+func (u *Update) String() string {
+	val := "error decoding value"
+	v, err := u.Value()
+	if err == nil {
+		// if no error occured we use the value
+		val = v.String()
+	}
+	return fmt.Sprintf("path: %s, owner: %s, priority: %d, value: %s", u.path, u.owner, u.priority, val)
 }
 
 // EqualSkipPath checks the equality of two updates.

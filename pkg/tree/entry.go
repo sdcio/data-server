@@ -3,11 +3,13 @@ package tree
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"slices"
 	"strings"
 
 	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/dslog"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -56,7 +58,7 @@ type Entry interface {
 	// MarkOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
 	MarkOwnerDelete(o string)
 	// GetDeletes returns the cache-updates that are not updated, have no lower priority value left and hence should be deleted completely
-	GetDeletes([][]string) [][]string
+	GetDeletes(PathSlice) PathSlice
 	// Walk takes the EntryVisitor and applies it to every Entry in the tree
 	Walk(f EntryVisitor) error
 	// ShouldDelete indicated if there is no LeafEntry left and the Entry is to be deleted
@@ -83,6 +85,8 @@ type Entry interface {
 	// if the parent has no schema (is a key element in the tree) it will recurs the call to the parents parent.
 	// the level of recursion is indicated via the levelUp attribute
 	GetAncestorSchema() (schema *sdcpb.SchemaElem, levelUp int)
+	SdcpbPath() (*sdcpb.Path, error)
+	SdcpbPathInternal(spath []string) (*sdcpb.Path, error)
 }
 
 // sharedEntryAttributes contains the attributes shared by Entry and RootEntry
@@ -160,6 +164,8 @@ func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 			return err
 		}
 		s.schema = schemaResp.GetSchema()
+
+		slog.LogAttrs(ctx, dslog.TraceLevel, "retrieved schema", slog.String("schema", s.schema.String()))
 	}
 	return nil
 }
@@ -225,7 +231,7 @@ func (s *sharedEntryAttributes) ShouldDelete() bool {
 // getAggregatedDeletes is called on levels that have no schema attached, meaning key schemas.
 // here we might delete the whole branch of the tree, if all key elements are being deleted
 // if not, we continue with regular deltes
-func (s *sharedEntryAttributes) getAggregatedDeletes(deletes [][]string) [][]string {
+func (s *sharedEntryAttributes) getAggregatedDeletes(deletes PathSlice) PathSlice {
 	// we take a look into the level(s) up
 	// trying to get the schema
 	schema, level := s.GetAncestorSchema()
@@ -272,7 +278,7 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes [][]string) [][]str
 }
 
 // getRegularDeletes performs deletion calculation on elements that have a schema attached.
-func (s *sharedEntryAttributes) getRegularDeletes(deletes [][]string) [][]string {
+func (s *sharedEntryAttributes) getRegularDeletes(deletes PathSlice) PathSlice {
 	// if entry is a container type, check the keys, to be able to
 	// issue a delte for the whole branch at once via keys
 	switch s.schema.GetSchema().(type) {
@@ -301,7 +307,7 @@ func (s *sharedEntryAttributes) getRegularDeletes(deletes [][]string) [][]string
 }
 
 // GetDeletes calculate the deletes that need to be send to the device.
-func (s *sharedEntryAttributes) GetDeletes(deletes [][]string) [][]string {
+func (s *sharedEntryAttributes) GetDeletes(deletes PathSlice) PathSlice {
 
 	// if the actual level has no schema assigned we're on a key level
 	// element. Hence we try deletion via aggregation
@@ -368,8 +374,8 @@ func (s *sharedEntryAttributes) AddChild(ctx context.Context, e Entry) error {
 	// make sure Entry should not only hold LeafEntries
 	if len(s.leafVariants) > 0 {
 		// An exception are presence containers
-		contSchema, is_container := s.schema.Schema.(*sdcpb.SchemaElem_Container)
-		if !is_container && !contSchema.Container.IsPresence {
+		_, is_container := s.schema.Schema.(*sdcpb.SchemaElem_Container)
+		if !is_container && !s.schema.GetContainer().IsPresence {
 			return fmt.Errorf("cannot add child to %s since it holds Leafs", s)
 		}
 	}
@@ -389,28 +395,23 @@ func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string) (En
 	if len(path) == 0 {
 		return s, nil
 	}
-	cont := false
-	idx := 0
-	for cont {
-		switch path[idx] {
-		case ".":
-			idx += 1
-			// we need to iterate again
-			cont = true
-			continue
-		case "..":
-			return s.parent.Navigate(ctx, path[1:])
-		default:
-			e, exists := s.filterActiveChoiceCaseChilds()[path[0]]
-			if !exists {
-				e, err = s.tryLoading(ctx, path)
-				if err != nil {
-					return nil, err
-				}
+
+	switch path[0] {
+	case ".":
+		s.Navigate(ctx, path[1:])
+	case "..":
+		return s.parent.Navigate(ctx, path[1:])
+	default:
+		e, exists := s.filterActiveChoiceCaseChilds()[path[0]]
+		if !exists {
+			e, err = s.tryLoading(ctx, path)
+			if err != nil {
+				return nil, err
 			}
-			return e.Navigate(ctx, path[1:])
 		}
+		return e.Navigate(ctx, path[1:])
 	}
+
 	return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist", s.Path(), path)
 }
 
@@ -640,19 +641,86 @@ func (s *sharedEntryAttributes) MarkOwnerDelete(o string) {
 	}
 }
 
+// SdcpbPath returns the sdcpb.Path, with its elements and keys based on the local schema
+func (s *sharedEntryAttributes) SdcpbPath() (*sdcpb.Path, error) {
+	return s.SdcpbPathInternal(s.Path())
+}
+
+// sdcpbPathInternal is the internale recursive function to calculate and the sdcpb.Path,
+// with its elements and keys based on the local schema
+func (s *sharedEntryAttributes) SdcpbPathInternal(spath []string) (*sdcpb.Path, error) {
+	// if we moved all the way up to the root
+	// we create a new sdcpb.Path and return it.
+	if s.IsRoot() {
+		return &sdcpb.Path{
+			Elem: []*sdcpb.PathElem{},
+		}, nil
+	}
+	// if not root, we take the parents result of this
+	// recursive call and add our (s) information to the Path.
+	p, err := s.parent.SdcpbPathInternal(spath)
+	if err != nil {
+		return nil, err
+	}
+
+	// the element has a schema attached, so we need to add a new element to the
+	// path.
+	if s.schema != nil {
+		switch s.schema.GetSchema().(type) {
+		case *sdcpb.SchemaElem_Container:
+			pe := &sdcpb.PathElem{
+				Name: s.pathElemName,
+				Key:  map[string]string{},
+			}
+			p.Elem = append(p.Elem, pe)
+		}
+		// the element does not have a schema attached, hence we need to add a key to
+		// the last element that was pushed to the pathElems
+	} else {
+		name, err := s.getKeyName()
+		if err != nil {
+			return nil, err
+		}
+		p.Elem[len(p.Elem)-1].Key[name] = s.PathName()
+	}
+	return p, err
+}
+
+// getKeyName checks if s is a key level element in the tree, if not an error is throw
+// if it is a key level element, the name of the key is determined via the ancestor schemas
+func (s *sharedEntryAttributes) getKeyName() (string, error) {
+	// if the entry has a schema, it cannot be a Key attribute
+	if s.schema != nil {
+		return "", fmt.Errorf("error %s is a schema element, can only get KeyNames for key element", strings.Join(s.Path(), " "))
+	}
+
+	// get ancestro schema
+	ancestSchema, levelUp := s.GetAncestorSchema()
+
+	// only Contaieners have keys, so check for that
+	switch sch := ancestSchema.Schema.(type) {
+	case *sdcpb.SchemaElem_Container:
+		// return the name of the levelUp-1 key
+		return sch.Container.GetKeys()[levelUp-1].Name, nil
+	}
+
+	// we probably called the function on a LeafList or LeafEntry which is not a valid call to be made.
+	return "", fmt.Errorf("error LeafList and Field should not have keys %s", strings.Join(s.Path(), " "))
+}
+
 // AddCacheUpdateRecursive recursively adds the given cache.Update to the tree. Thereby creating all the entries along the path.
 // if the entries along th path already exist, the existing entries are called to add the Update.
-func (r *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *cache.Update, new bool) error {
+func (s *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *cache.Update, new bool) error {
 	idx := 0
 	// if it is the root node, index remains == 0
-	if r.parent != nil {
-		idx = r.GetLevel()
+	if s.parent != nil {
+		idx = s.GetLevel()
 	}
 	// end of path reached, add LeafEntry
 	// continue with recursive add otherwise
 	if idx == len(c.GetPath()) {
 		// Check if LeafEntry with given owner already exists
-		if leafVariant := r.leafVariants.GetByOwner(c.Owner()); leafVariant != nil {
+		if leafVariant := s.leafVariants.GetByOwner(c.Owner()); leafVariant != nil {
 			if leafVariant.EqualSkipPath(c) {
 				// it seems like the element was not deleted, so drop the delete flag
 				leafVariant.Delete = false
@@ -662,7 +730,7 @@ func (r *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *
 			}
 		} else {
 			// if LeafVaraint with same owner does not exist, add the new entry
-			r.leafVariants = append(r.leafVariants, NewLeafEntry(c, new))
+			s.leafVariants = append(s.leafVariants, NewLeafEntry(c, new))
 		}
 		return nil
 	}
@@ -671,8 +739,8 @@ func (r *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *
 	var err error
 	var exists bool
 	// if child does not exist, create Entry
-	if e, exists = r.childs[c.GetPath()[idx]]; !exists {
-		e, err = newEntry(ctx, r, c.GetPath()[idx], r.treeContext)
+	if e, exists = s.childs[c.GetPath()[idx]]; !exists {
+		e, err = newEntry(ctx, s, c.GetPath()[idx], s.treeContext)
 		if err != nil {
 			return err
 		}
@@ -712,7 +780,7 @@ func (r *RootEntry) String() string {
 }
 
 // GetUpdatesForOwner returns the updates that have been calculated for the given intent / owner
-func (r *RootEntry) GetUpdatesForOwner(owner string) []*cache.Update {
+func (r *RootEntry) GetUpdatesForOwner(owner string) UpdateSlice {
 	// retrieve all the entries from the tree that belong to the given
 	// Owner / Intent, skipping the once marked for deletion
 	// this is to insert / update entries in the cache.
@@ -720,14 +788,14 @@ func (r *RootEntry) GetUpdatesForOwner(owner string) []*cache.Update {
 }
 
 // GetDeletesForOwner returns the deletes that have been calculated for the given intent / owner
-func (r *RootEntry) GetDeletesForOwner(owner string) [][]string {
+func (r *RootEntry) GetDeletesForOwner(owner string) PathSlice {
 	// retrieve all entries from the tree that belong to the given user
 	// and that are marked for deletion.
 	// This is to cover all the cases where an intent was changed and certain
 	// part of the config got deleted.
 	deletesOwnerUpdates := LeafEntriesToCacheUpdates(r.getByOwnerFiltered(owner, FilterDeleted))
 	// they are retrieved as cache.update, we just need the path for deletion from cache
-	deletesOwner := make([][]string, 0, len(deletesOwnerUpdates))
+	deletesOwner := make(PathSlice, 0, len(deletesOwnerUpdates))
 	// so collect the paths
 	for _, d := range deletesOwnerUpdates {
 		deletesOwner = append(deletesOwner, d.GetPath())
@@ -743,8 +811,8 @@ func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) UpdateSlice {
 }
 
 // GetDeletes returns the paths that due to the Tree content are to be deleted from the southbound device.
-func (r *RootEntry) GetDeletes() [][]string {
-	deletes := [][]string{}
+func (r *RootEntry) GetDeletes() PathSlice {
+	deletes := PathSlice{}
 	return r.sharedEntryAttributes.GetDeletes(deletes)
 }
 

@@ -19,3 +19,11 @@ func (u UpdateSlice) GetLowestPriorityValue(filters []CacheUpdateFilter) int32 {
 	}
 	return result
 }
+
+func Map[T any](u UpdateSlice, f func(*cache.Update) T) []T {
+	vsm := make([]T, len(u))
+	for i, v := range u {
+		vsm[i] = f(v)
+	}
+	return vsm
+}

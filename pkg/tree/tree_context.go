@@ -3,6 +3,7 @@ package tree
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"strings"
 
@@ -12,8 +13,8 @@ import (
 
 type TreeContext struct {
 	root                  Entry                    // the trees root element
-	KeysIntendedStore     map[string]UpdateSlice   // contains the keys that the intended store holds in the cache
-	KeysRunningStore      map[string]*cache.Update // contains the keys of the running config
+	IntendedStoreIndex    map[string]UpdateSlice   // contains the keys that the intended store holds in the cache
+	RunningStoreIndex     map[string]*cache.Update // contains the keys of the running config
 	treeSchemaCacheClient TreeSchemaCacheClient
 	actualOwner           string
 }
@@ -38,7 +39,7 @@ func (t *TreeContext) GetActualOwner() string {
 }
 
 func (t *TreeContext) PathExists(path []string) bool {
-	_, exists := t.KeysIntendedStore[strings.Join(path, KeysIndexSep)]
+	_, exists := t.IntendedStoreIndex[strings.Join(path, KeysIndexSep)]
 	return exists
 }
 
@@ -47,7 +48,7 @@ func (t *TreeContext) GetBranchesHighesPrecedence(path []string, filters ...Cach
 	pathKey := strings.Join(path, KeysIndexSep)
 
 	// TODO: Improve this, since it is probably an expensive operation
-	for key, entries := range t.KeysIntendedStore {
+	for key, entries := range t.IntendedStoreIndex {
 		if strings.HasPrefix(key, pathKey) {
 			if prio := entries.GetLowestPriorityValue(filters); prio < result {
 				result = prio
@@ -59,7 +60,7 @@ func (t *TreeContext) GetBranchesHighesPrecedence(path []string, filters ...Cach
 
 func (t *TreeContext) GetPathsOfOwner(owner string) *PathSet {
 	p := NewPathSet()
-	for _, keyMeta := range t.KeysIntendedStore {
+	for _, keyMeta := range t.IntendedStoreIndex {
 		for _, k := range keyMeta {
 			if k.Owner() == owner {
 				// if the key is not yet listed in the keys slice, add it otherwise skip
@@ -71,13 +72,14 @@ func (t *TreeContext) GetPathsOfOwner(owner string) *PathSet {
 }
 
 func (t *TreeContext) SetStoreIndex(si map[string]UpdateSlice) {
-	t.KeysIntendedStore = si
+	slog.Debug("setting intended store index", slog.Int("length", len(si)))
+	t.IntendedStoreIndex = si
 }
 
 // ReadRunning reads the value from running if the value does not exist, nil is returned
 func (t *TreeContext) ReadRunning(ctx context.Context, path []string) (*cache.Update, error) {
 	// check if the value exists in running
-	_, exists := t.KeysRunningStore[strings.Join(path, KeysIndexSep)]
+	_, exists := t.RunningStoreIndex[strings.Join(path, KeysIndexSep)]
 	if !exists {
 		return nil, nil
 	}

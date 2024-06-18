@@ -801,5 +801,216 @@ func Test_Schema_Population(t *testing.T) {
 		t.Error(err)
 	}
 	expectNotNil(t, dkkv.schema, "/doublekey[key1,key2]mandato schema")
+}
+
+func Test_sharedEntryAttributes_SdcpbPath(t *testing.T) {
+	ctx := context.TODO()
+
+	scb, err := getSchemaClientBound(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "foo")
+
+	root, err := NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	interf, err := newSharedEntryAttributes(ctx, root.sharedEntryAttributes, "interface", tc)
+	if err != nil {
+		t.Error(err)
+	}
+
+	e00, err := newSharedEntryAttributes(ctx, interf, "ethernet-0/0", tc)
+	if err != nil {
+		t.Error(err)
+	}
+
+	e00desc, err := newSharedEntryAttributes(ctx, e00, "description", tc)
+	if err != nil {
+		t.Error(err)
+	}
+
+	dk, err := newSharedEntryAttributes(ctx, root.sharedEntryAttributes, "doublekey", tc)
+	if err != nil {
+		t.Error(err)
+	}
+
+	dkk1, err := newSharedEntryAttributes(ctx, dk, "key1", tc)
+	if err != nil {
+		t.Error(err)
+	}
+
+	dkk2, err := newSharedEntryAttributes(ctx, dkk1, "key2", tc)
+	if err != nil {
+		t.Error(err)
+	}
+
+	dkkv, err := newSharedEntryAttributes(ctx, dkk2, "mandato", tc)
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Run("singlekey",
+		func(t *testing.T) {
+			p, err := e00.SdcpbPath()
+			if err != nil {
+				t.Error(err)
+			}
+			cmpPath := &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
+					{
+						Name: "interface",
+						Key: map[string]string{
+							"name": "ethernet-0/0",
+						},
+					},
+				},
+			}
+
+			cmp.Diff(p.String(), cmpPath.String)
+		},
+	)
+
+	t.Run("singlekey - leaf",
+		func(t *testing.T) {
+			p, err := e00desc.SdcpbPath()
+			if err != nil {
+				t.Error(err)
+			}
+			cmpPath := &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
+					{
+						Name: "interface",
+						Key: map[string]string{
+							"name": "ethernet-0/0",
+						},
+					},
+					{
+						Name: "description",
+					},
+				},
+			}
+
+			cmp.Diff(p.String(), cmpPath.String)
+		},
+	)
+
+	t.Run("doublekey",
+		func(t *testing.T) {
+
+			p, err := dkkv.SdcpbPath()
+			if err != nil {
+				t.Error(err)
+			}
+
+			cmpPath := &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
+					{
+						Name: "doublekey",
+						Key: map[string]string{
+							"key1": "key1",
+							"key2": "key2",
+						},
+					},
+					{
+						Name: "mandato",
+					},
+				},
+			}
+
+			cmp.Diff(p.String(), cmpPath.String)
+		},
+	)
+
+}
+
+func Test_sharedEntryAttributes_getKeyName(t *testing.T) {
+	ctx := context.TODO()
+
+	scb, err := getSchemaClientBound(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "foo")
+
+	root, err := NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	interf, err := newSharedEntryAttributes(ctx, root.sharedEntryAttributes, "interface", tc)
+	if err != nil {
+		t.Error(err)
+	}
+
+	e00, err := newSharedEntryAttributes(ctx, interf, "ethernet-0/0", tc)
+	if err != nil {
+		t.Error(err)
+	}
+
+	e00desc, err := newSharedEntryAttributes(ctx, e00, "description", tc)
+	if err != nil {
+		t.Error(err)
+	}
+
+	dk, err := newSharedEntryAttributes(ctx, root.sharedEntryAttributes, "doublekey", tc)
+	if err != nil {
+		t.Error(err)
+	}
+
+	dkk1, err := newSharedEntryAttributes(ctx, dk, "key1", tc)
+	if err != nil {
+		t.Error(err)
+	}
+
+	dkk2, err := newSharedEntryAttributes(ctx, dkk1, "key2", tc)
+	if err != nil {
+		t.Error(err)
+	}
+
+	dkkv, err := newSharedEntryAttributes(ctx, dkk2, "mandato", tc)
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Run("double key", func(t *testing.T) {
+		_, err := dkkv.getKeyName()
+		if err == nil {
+			t.Errorf("expected an error when getKeyName on %s", strings.Join(dkkv.Path(), " "))
+		}
+	})
+
+	t.Run("double key - key1", func(t *testing.T) {
+		s, err := dkk1.getKeyName()
+		if err != nil {
+			t.Errorf("expected no error getKeyName on %s", strings.Join(dkkv.Path(), " "))
+		}
+		expected := "key1"
+		if s != expected {
+			t.Errorf("expected %s key value to be %s but got %s", strings.Join(dkkv.Path(), " "), expected, s)
+		}
+	})
+
+	t.Run("double key - key2", func(t *testing.T) {
+		s, err := dkk2.getKeyName()
+		if err != nil {
+			t.Errorf("expected no error getKeyName on %s", strings.Join(dkkv.Path(), " "))
+		}
+		expected := "key2"
+		if s != expected {
+			t.Errorf("expected %s key value to be %s but got %s", strings.Join(dkkv.Path(), " "), expected, s)
+		}
+	})
+
+	t.Run("Leaf", func(t *testing.T) {
+		_, err := e00desc.getKeyName()
+		if err == nil {
+			t.Errorf("expected an error when getKeyName on %s", strings.Join(e00desc.Path(), " "))
+		}
+	})
 
 }

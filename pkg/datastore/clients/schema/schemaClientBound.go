@@ -46,8 +46,9 @@ func NewSchemaClientBound(s *sdcpb.Schema, sc schema.Client) *SchemaClientBoundI
 // GetSchema retrieves the schema for the given path
 func (scb *SchemaClientBoundImpl) GetSchema(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 	return scb.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
-		Schema: scb.getSchema(),
-		Path:   path,
+		Schema:          scb.getSchema(),
+		Path:            path,
+		WithDescription: false,
 	})
 }
 

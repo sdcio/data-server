@@ -184,6 +184,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		return err
 	}
 
+	log.Debugf("finish insertion phase")
 	root.FinishInsertionPhase()
 
 	// retrieve the data that is meant to be send southbound (towards the device)
@@ -241,10 +242,9 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	if err != nil {
 		return err
 	}
-	logger.Debug()
+
 	logger.Debug("intent is validated")
 	log.Infof("ds=%s intent=%s: intent applied", req.GetName(), req.GetIntent())
-	logger.Debug()
 
 	/////////////////////////////////////
 	// update intent in intended store //
@@ -253,6 +253,19 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	// retrieve the data that is meant to be send towards the cache
 	updatesOwner := root.GetUpdatesForOwner(req.GetIntent())
 	deletesOwner := root.GetDeletesForOwner(req.GetIntent())
+
+	// logging
+	strSl := tree.Map(updates, func(u *cache.Update) string { return u.String() })
+	log.Debugf("Updates\n%s", strings.Join(strSl, "\n"))
+
+	strSl = deletes.StringSlice()
+	log.Debugf("Deletes:\n%s", strings.Join(strSl, "\n"))
+
+	strSl = tree.Map(updatesOwner, func(u *cache.Update) string { return u.String() })
+	log.Debugf("Updates Owner:\n%s", strings.Join(strSl, "\n"))
+
+	strSl = deletesOwner.StringSlice()
+	log.Debugf("Deletes Owner:\n%s", strings.Join(strSl, "\n"))
 
 	err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
 		Store:    cachepb.Store_INTENDED,
@@ -325,7 +338,7 @@ func (d *Datastore) readIntendedStoreKeysMeta(ctx context.Context) (map[string]t
 	}
 }
 
-func (d *Datastore) readCurrentUpdatesHighestPriorities(ctx context.Context, ccp [][]string, count uint64) map[string][][]*cache.Update {
+func (d *Datastore) readCurrentUpdatesHighestPriorities(ctx context.Context, ccp [][]string, count uint64) map[string][]tree.UpdateSlice {
 	currentCacheEntries := d.cacheClient.Read(ctx, d.Name(),
 		&cache.Opts{
 			Store:         cachepb.Store_INTENDED,
@@ -335,19 +348,19 @@ func (d *Datastore) readCurrentUpdatesHighestPriorities(ctx context.Context, ccp
 	if len(currentCacheEntries) == 0 {
 		return nil
 	}
-	rs := make(map[string][][]*cache.Update)
-	groupings := make(map[string]map[int32][]*cache.Update)
+	rs := make(map[string][]tree.UpdateSlice)
+	groupings := make(map[string]map[int32]tree.UpdateSlice)
 
 	for _, cce := range currentCacheEntries {
 		sp := strings.Join(cce.GetPath(), ",")
 		if _, ok := rs[sp]; !ok {
-			rs[sp] = make([][]*cache.Update, 0, 1)
+			rs[sp] = make([]tree.UpdateSlice, 0, 1)
 		}
 		if _, ok := groupings[sp]; !ok {
-			groupings[sp] = make(map[int32][]*cache.Update)
+			groupings[sp] = make(map[int32]tree.UpdateSlice)
 		}
 		if _, ok := groupings[sp][cce.Priority()]; !ok {
-			groupings[sp][cce.Priority()] = make([]*cache.Update, 0, 1)
+			groupings[sp][cce.Priority()] = make(tree.UpdateSlice, 0, 1)
 		}
 		groupings[sp][cce.Priority()] = append(groupings[sp][cce.Priority()], cce)
 	}
