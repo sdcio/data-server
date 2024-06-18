@@ -1005,16 +1005,13 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				// iterate through the elements
 				// ATTENTION: assuming its all strings
 				// add them to the Leaflist value
-				switch x := v.(type) {
-				case []any:
-					for _, e := range x {
-						tv := &sdcpb.TypedValue{
-							Value: &sdcpb.TypedValue_StringVal{
-								StringVal: fmt.Sprintf("%v", e.(string)),
-							},
-						}
-						list = append(list, tv)
+				for _, e := range v.([]any) {
+					tv := &sdcpb.TypedValue{
+						Value: &sdcpb.TypedValue_StringVal{
+							StringVal: fmt.Sprintf("%v", e.(string)),
+						},
 					}
+					list = append(list, tv)
 				}
 
 				upd := &sdcpb.Update{
