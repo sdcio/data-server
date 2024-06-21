@@ -1,0 +1,51 @@
+[
+    {
+        "path": "/",
+        "value": {
+            "configure": {
+                "policy-options": {
+                    "policy-statement": [
+                        {
+                            "default-action": {
+                                "action-type": "accept"
+                            },
+                            "description": "foo",
+                            "entry": [
+                                {
+                                    "description": "foo",
+                                    "entry-id": 5
+                                }
+                            ],
+                            "name": "foo"
+                        },
+                        {
+                            "default-action": {
+                                "action-type": "accept"
+                            },
+                            "description": "bar",
+                            "entry": [
+                                {
+                                    "description": "foo",
+                                    "entry-id": 5
+                                }
+                            ],
+                            "name": "bar"
+                        }
+                    ]
+                },
+                "router": [
+                    {
+                        "bgp": {
+                            "import": {
+                                "policy": [
+                                    "bar"
+                                ]
+                            }
+                        },
+                        "router-name": "Base"
+                    }
+                ]
+            }
+        }
+    }
+]

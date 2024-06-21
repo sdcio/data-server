@@ -7,8 +7,10 @@ import (
 	"math"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/sdcio/data-server/pkg/cache"
+
 	"github.com/sdcio/data-server/pkg/dslog"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -33,7 +35,7 @@ func newEntry(ctx context.Context, parent Entry, pathElemName string, tc *TreeCo
 		sharedEntryAttributes: sea,
 	}
 	// add the Entry as a child to the parent Entry
-	err = parent.AddChild(ctx, newEntry)
+	err = parent.addChild(ctx, newEntry)
 	return newEntry, err
 }
 
@@ -43,8 +45,8 @@ type Entry interface {
 	Path() []string
 	// PathName returns the last Path element, the name of the Entry
 	PathName() string
-	// AddChild Add a child entry
-	AddChild(context.Context, Entry) error
+	// addChild Add a child entry
+	addChild(context.Context, Entry) error
 	// AddCacheUpdateRecursive Add the given cache.Update to the tree
 	AddCacheUpdateRecursive(ctx context.Context, u *cache.Update, new bool) error
 	// StringIndent debug tree struct as indented string slice
@@ -55,21 +57,23 @@ type Entry interface {
 	GetHighestPrecedence(u UpdateSlice, onlyNewOrUpdated bool) UpdateSlice
 	// GetByOwner returns the branches Updates by owner
 	GetByOwner(owner string, result []*LeafEntry) []*LeafEntry
-	// MarkOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
-	MarkOwnerDelete(o string)
+	// markOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
+	markOwnerDelete(o string)
 	// GetDeletes returns the cache-updates that are not updated, have no lower priority value left and hence should be deleted completely
 	GetDeletes(PathSlice) PathSlice
 	// Walk takes the EntryVisitor and applies it to every Entry in the tree
 	Walk(f EntryVisitor) error
-	// ShouldDelete indicated if there is no LeafEntry left and the Entry is to be deleted
-	ShouldDelete() bool
-	// Validate the Mandatory schema field
-	ValidateMandatory() error
-	// ValidateMandatoryWithKeys is an internally used function that us called by ValidateMandatory in case
+	// shouldDelete indicated if there is no LeafEntry left and the Entry is to be deleted
+	shouldDelete() bool
+	// Validate kicks off validation
+	Validate(errchan chan<- error)
+	// validateMandatory the Mandatory schema field
+	validateMandatory() error
+	// validateMandatoryWithKeys is an internally used function that us called by validateMandatory in case
 	// the container has keys defined that need to be skipped before the mandatory attributes can be checked
-	ValidateMandatoryWithKeys(level int, attribute string) error
-	// GetHighestPrecedenceValueOfBranch returns the highes Precedence Value (lowest Priority value) of the brach that starts at this Entry
-	GetHighestPrecedenceValueOfBranch() int32
+	validateMandatoryWithKeys(level int, attribute string) error
+	// getHighestPrecedenceValueOfBranch returns the highes Precedence Value (lowest Priority value) of the brach that starts at this Entry
+	getHighestPrecedenceValueOfBranch() int32
 	// GetSchema returns the *sdcpb.SchemaElem of the Entry
 	GetSchema() *sdcpb.SchemaElem
 	// IsRoot returns true if the Entry is the root of the tree
@@ -81,12 +85,16 @@ type Entry interface {
 	GetParent() Entry
 	// Navigate navigates the tree according to the given path and returns the referenced entry or nil if it does not exist.
 	Navigate(ctx context.Context, path []string) (Entry, error)
-	// GetAncestorSchema returns the schema of the parent node if the schema is set.
+	// GetFirstAncestorWithSchema returns the first parent node which has a schema set.
 	// if the parent has no schema (is a key element in the tree) it will recurs the call to the parents parent.
 	// the level of recursion is indicated via the levelUp attribute
-	GetAncestorSchema() (schema *sdcpb.SchemaElem, levelUp int)
+	GetFirstAncestorWithSchema() (ancestor Entry, levelUp int)
+	// SdcpbPath returns the sdcpb.Path struct for the Entry
 	SdcpbPath() (*sdcpb.Path, error)
+	// SdcpbPathInternal is the internal function to calculate the SdcpbPath
 	SdcpbPathInternal(spath []string) (*sdcpb.Path, error)
+	// GetSchemaKeys checks for the schema of the entry, and returns the defined keys
+	GetSchemaKeys() []string
 }
 
 // sharedEntryAttributes contains the attributes shared by Entry and RootEntry
@@ -143,10 +151,10 @@ func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 		// because we can have multiple keys. we remember the number of levels we moved up
 		// and if that is within the len of keys, we're still in a key level, and need to skip
 		// querying the schema. Otherwise we need to query the schema.
-		ancesterschema, levelUp := s.GetAncestorSchema()
+		ancesterschema, levelUp := s.GetFirstAncestorWithSchema()
 
 		// check the found schema
-		switch schem := ancesterschema.GetSchema().(type) {
+		switch schem := ancesterschema.GetSchema().GetSchema().(type) {
 		case *sdcpb.SchemaElem_Container:
 			// if it is a container and level up is less or equal the levelUp count
 			// this means, we are on a level this is for sure still a key level in the tree
@@ -211,21 +219,38 @@ func (s *sharedEntryAttributes) Walk(f EntryVisitor) error {
 	return nil
 }
 
-// ShouldDelete flag if the leafvariant or entire branch is marked for deletion
-func (s *sharedEntryAttributes) ShouldDelete() bool {
+// shouldDelete flag if the leafvariant or entire branch is marked for deletion
+func (s *sharedEntryAttributes) shouldDelete() bool {
 	// if leafeVariants exist, delegate the call to the leafVariants
 	if len(s.leafVariants) > 0 {
-		return s.leafVariants.ShouldDelete()
+		return s.leafVariants.shouldDelete()
 	}
 	// otherwise query the childs
 	for _, c := range s.childs {
 		// if a single child exists that should not be deleted, exit early with a false
-		if !c.ShouldDelete() {
+		if !c.shouldDelete() {
 			return false
 		}
 	}
 	// otherwise all childs reported true, and we can report true as well
 	return true
+}
+
+// GetSchemaKeys checks for the schema of the entry, and returns the defined keys
+func (s *sharedEntryAttributes) GetSchemaKeys() []string {
+	if s.schema != nil {
+		// if the schema is a container schema, we need to process the aggregation logic
+		if contschema := s.schema.GetContainer(); contschema != nil {
+			// if the level equals the amount of keys defined, we're at the right level, where the
+			// actual elements start (not in a key level within the tree)
+			var keys []string
+			for _, k := range contschema.GetKeys() {
+				keys = append(keys, k.Name)
+			}
+			return keys
+		}
+	}
+	return nil
 }
 
 // getAggregatedDeletes is called on levels that have no schema attached, meaning key schemas.
@@ -234,45 +259,37 @@ func (s *sharedEntryAttributes) ShouldDelete() bool {
 func (s *sharedEntryAttributes) getAggregatedDeletes(deletes PathSlice) PathSlice {
 	// we take a look into the level(s) up
 	// trying to get the schema
-	schema, level := s.GetAncestorSchema()
-	// if there is no schema present we simply continue furhter down with regular
-	// deletion processing
-	if schema != nil {
-		// if the schema is a container schema, we need to process the aggregation logic
-		if contschema := schema.GetContainer(); contschema != nil {
-			// if the level equals the amount of keys defined, we're at the right level, where the
-			// actual elements start (not in a key level within the tree)
-			if level == len(contschema.GetKeys()) {
-				// collect the key of the ancestor
-				var keys []string
-				for _, k := range contschema.GetKeys() {
-					keys = append(keys, k.Name)
-				}
+	ancestor, level := s.GetFirstAncestorWithSchema()
 
-				doAggregateDelete := true
-				//  check the keys for deletion
-				for _, n := range keys {
-					c, exists := s.childs[n]
-					// these keys should aways exist, so for now we do not catch the non existing key case
-					if exists && !c.ShouldDelete() {
-						// if not all the keys are marked for deletion, we need to revert to regular deletion
-						doAggregateDelete = false
-						break
-					}
-				}
-				// if aggregate delet is possible do it
-				if doAggregateDelete {
-					// by adding the key path to the deletes
-					deletes = append(deletes, s.Path())
-				} else {
-					// otherwise continue with deletion on the childs.
-					for _, c := range s.childs {
-						deletes = c.GetDeletes(deletes)
-					}
-				}
-				return deletes
+	// check if the first schema on the path upwards (parents)
+	// has keys defined (meaning is a contianer with keys)
+	keys := ancestor.GetSchemaKeys()
+
+	// if keys exist and we're on the last level of the keys, validate
+	// if aggregation can happen
+	if len(keys) > 0 && level == len(keys) {
+		doAggregateDelete := true
+		//  check the keys for deletion
+		for _, n := range keys {
+			c, exists := s.childs[n]
+			// these keys should aways exist, so for now we do not catch the non existing key case
+			if exists && !c.shouldDelete() {
+				// if not all the keys are marked for deletion, we need to revert to regular deletion
+				doAggregateDelete = false
+				break
 			}
 		}
+		// if aggregate delet is possible do it
+		if doAggregateDelete {
+			// by adding the key path to the deletes
+			deletes = append(deletes, s.Path())
+		} else {
+			// otherwise continue with deletion on the childs.
+			for _, c := range s.childs {
+				deletes = c.GetDeletes(deletes)
+			}
+		}
+		return deletes
 	}
 	return s.getRegularDeletes(deletes)
 }
@@ -296,7 +313,7 @@ func (s *sharedEntryAttributes) getRegularDeletes(deletes PathSlice) PathSlice {
 		}
 	}
 
-	if s.leafVariants.ShouldDelete() {
+	if s.leafVariants.shouldDelete() {
 		return append(deletes, s.leafVariants[0].GetPath())
 	}
 
@@ -323,14 +340,14 @@ func (s *sharedEntryAttributes) GetDeletes(deletes PathSlice) PathSlice {
 // GetAncestorSchema returns the schema of the parent node if the schema is set.
 // if the parent has no schema (is a key element in the tree) it will recurs the call to the parents parent.
 // the level of recursion is indicated via the levelUp attribute
-func (s *sharedEntryAttributes) GetAncestorSchema() (*sdcpb.SchemaElem, int) {
+func (s *sharedEntryAttributes) GetFirstAncestorWithSchema() (Entry, int) {
 	// check if the parent has a schema
 	if s.parent.GetSchema() != nil {
 		// if so return it with level 1
-		return s.parent.GetSchema(), 1
+		return s.parent, 1
 	}
 	// direct parent does not have a schema, recurse the call
-	schema, level := s.parent.GetAncestorSchema()
+	schema, level := s.parent.GetFirstAncestorWithSchema()
 	// increate the level returned by the parent to
 	// reflect this entry as a level and return
 	return schema, level + 1
@@ -369,8 +386,8 @@ func (s *sharedEntryAttributes) String() string {
 	return strings.Join(s.parent.Path(), "/")
 }
 
-// AddChild add an entry to the list of child entries for the entry.
-func (s *sharedEntryAttributes) AddChild(ctx context.Context, e Entry) error {
+// addChild add an entry to the list of child entries for the entry.
+func (s *sharedEntryAttributes) addChild(ctx context.Context, e Entry) error {
 	// make sure Entry should not only hold LeafEntries
 	if len(s.leafVariants) > 0 {
 		// An exception are presence containers
@@ -447,12 +464,12 @@ func (s *sharedEntryAttributes) GetHighestPrecedence(result UpdateSlice, onlyNew
 	return result
 }
 
-// GetHighestPrecedenceValueOfBranch goes through all the child branches to find the highes
+// getHighestPrecedenceValueOfBranch goes through all the child branches to find the highes
 // precedence value (lowest priority value) for the entire branch and returns it.
-func (s *sharedEntryAttributes) GetHighestPrecedenceValueOfBranch() int32 {
+func (s *sharedEntryAttributes) getHighestPrecedenceValueOfBranch() int32 {
 	result := int32(math.MaxInt32)
 	for _, e := range s.childs {
-		if val := e.GetHighestPrecedenceValueOfBranch(); val < result {
+		if val := e.getHighestPrecedenceValueOfBranch(); val < result {
 			result = val
 		}
 	}
@@ -463,14 +480,14 @@ func (s *sharedEntryAttributes) GetHighestPrecedenceValueOfBranch() int32 {
 	return result
 }
 
-func (s *sharedEntryAttributes) ValidateMandatoryWithKeys(level int, attribute string) error {
+func (s *sharedEntryAttributes) validateMandatoryWithKeys(level int, attribute string) error {
 	if level == 0 {
 		// first check if the mandatory value is set via the intent, e.g. part of the tree already
 		v, existsInTree := s.filterActiveChoiceCaseChilds()[attribute]
 
 		// if not the path exists in the tree and is not to be deleted, then lookup in the paths index of the store
 		// and see if such path exists, if not raise the error
-		if !(existsInTree && !v.ShouldDelete()) {
+		if !(existsInTree && !v.shouldDelete()) {
 			if !s.treeContext.PathExists(append(s.Path(), attribute)) {
 				return fmt.Errorf("%s: mandatory child %s does not exist", s.Path(), attribute)
 			}
@@ -479,7 +496,7 @@ func (s *sharedEntryAttributes) ValidateMandatoryWithKeys(level int, attribute s
 	}
 
 	for _, c := range s.filterActiveChoiceCaseChilds() {
-		err := c.ValidateMandatoryWithKeys(level-1, attribute)
+		err := c.validateMandatoryWithKeys(level-1, attribute)
 		if err != nil {
 			return err
 		}
@@ -487,14 +504,36 @@ func (s *sharedEntryAttributes) ValidateMandatoryWithKeys(level int, attribute s
 	return nil
 }
 
-// ValidateMandatory validates that all the mandatory attributes,
+// Validate is the highlevel function to perform validation.
+// it will multiplex all the different Validations that need to happen
+func (s *sharedEntryAttributes) Validate(errchan chan<- error) {
+
+	// recurse the call to the child elements
+	wg := sync.WaitGroup{}
+	defer wg.Wait()
+	for _, c := range s.filterActiveChoiceCaseChilds() {
+		wg.Add(1)
+		go func(x Entry) {
+			x.Validate(errchan)
+			wg.Done()
+		}(c)
+	}
+
+	// validate the mandatory statement on this entry
+	err := s.validateMandatory()
+	if err != nil {
+		errchan <- err
+	}
+}
+
+// validateMandatory validates that all the mandatory attributes,
 // defined by the schema are present either in the tree or in the index.
-func (s *sharedEntryAttributes) ValidateMandatory() error {
+func (s *sharedEntryAttributes) validateMandatory() error {
 	if s.schema != nil {
 		switch s.schema.GetSchema().(type) {
 		case *sdcpb.SchemaElem_Container:
 			for _, c := range s.schema.GetContainer().MandatoryChildren {
-				err := s.ValidateMandatoryWithKeys(len(s.GetSchema().GetContainer().GetKeys()), c)
+				err := s.validateMandatoryWithKeys(len(s.GetSchema().GetContainer().GetKeys()), c)
 				if err != nil {
 					return err
 				}
@@ -504,7 +543,7 @@ func (s *sharedEntryAttributes) ValidateMandatory() error {
 
 	// continue with childs
 	for _, c := range s.childs {
-		err := c.ValidateMandatory()
+		err := c.validateMandatory()
 		if err != nil {
 			return err
 		}
@@ -582,7 +621,7 @@ func (s *sharedEntryAttributes) populateChoiceCaseResolvers() {
 			}
 			// set the value from the tree as well
 			if childExists {
-				v := child.GetHighestPrecedenceValueOfBranch()
+				v := child.getHighestPrecedenceValueOfBranch()
 				choiceResolver.SetValue(elem, v, true)
 			}
 		}
@@ -628,8 +667,8 @@ func (s *sharedEntryAttributes) StringIndent(result []string) []string {
 	return result
 }
 
-// MarkOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
-func (s *sharedEntryAttributes) MarkOwnerDelete(o string) {
+// markOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
+func (s *sharedEntryAttributes) markOwnerDelete(o string) {
 	lvEntry := s.leafVariants.GetByOwner(o)
 	// if an entry for the given user exists, mark it for deletion
 	if lvEntry != nil {
@@ -637,7 +676,7 @@ func (s *sharedEntryAttributes) MarkOwnerDelete(o string) {
 	}
 	// recurse into childs
 	for _, child := range s.childs {
-		child.MarkOwnerDelete(o)
+		child.markOwnerDelete(o)
 	}
 }
 
@@ -695,10 +734,10 @@ func (s *sharedEntryAttributes) getKeyName() (string, error) {
 	}
 
 	// get ancestro schema
-	ancestSchema, levelUp := s.GetAncestorSchema()
+	ancestorWithSchema, levelUp := s.GetFirstAncestorWithSchema()
 
 	// only Contaieners have keys, so check for that
-	switch sch := ancestSchema.Schema.(type) {
+	switch sch := ancestorWithSchema.GetSchema().GetSchema().(type) {
 	case *sdcpb.SchemaElem_Container:
 		// return the name of the levelUp-1 key
 		return sch.Container.GetKeys()[levelUp-1].Name, nil
@@ -772,6 +811,26 @@ func NewTreeRoot(ctx context.Context, tc *TreeContext) (*RootEntry, error) {
 	return root, nil
 }
 
+func (r *RootEntry) LoadIntendedStoreOwnerData(ctx context.Context, owner string, pathKeySet *PathSet) {
+	tc := r.getTreeContext()
+	ownerPaths := tc.GetPathsOfOwner(owner)
+
+	// addd thw given paths as well
+	ownerPaths.Join(pathKeySet)
+
+	// Get all entries of the already existing intent
+	highesCurrentCacheEntries := tc.ReadCurrentUpdatesHighestPriorities(ctx, ownerPaths.GetPaths(), 2)
+
+	// add all the existing entries
+	for _, entry := range highesCurrentCacheEntries {
+		r.AddCacheUpdateRecursive(ctx, entry, false)
+	}
+
+	// Mark all the entries that belong to the owner / intent as deleted.
+	// This is to allow for intent updates. We mark all existing entries for deletion up front.
+	r.markOwnerDelete(owner)
+}
+
 // String returns the string representation of the Tree.
 func (r *RootEntry) String() string {
 	s := []string{}
@@ -816,8 +875,8 @@ func (r *RootEntry) GetDeletes() PathSlice {
 	return r.sharedEntryAttributes.GetDeletes(deletes)
 }
 
-// GetTreeContext returns the handle to the TreeContext
-func (r *RootEntry) GetTreeContext() *TreeContext {
+// getTreeContext returns the handle to the TreeContext
+func (r *RootEntry) getTreeContext() *TreeContext {
 	return r.treeContext
 }
 

@@ -249,7 +249,7 @@ func Test_Entry_Three(t *testing.T) {
 
 	// indicate that the intent is receiving an update
 	// therefor invalidate all the present entries of the owner / intent
-	root.MarkOwnerDelete(owner1)
+	root.markOwnerDelete(owner1)
 
 	// add incomming set intent reques data
 	overwriteDesc := testhelper.GetStringTvProto(t, "Owerwrite Description")
@@ -351,7 +351,7 @@ func Test_Entry_Four(t *testing.T) {
 
 	// indicate that the intent is receiving an update
 	// therefor invalidate all the present entries of the owner / intent
-	root.MarkOwnerDelete(owner1)
+	root.markOwnerDelete(owner1)
 
 	// add incomming set intent reques data
 	overwriteDesc := testhelper.GetStringTvProto(t, "Owerwrite Description")
@@ -439,7 +439,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	}
 
 	// get ready to add the new intent data
-	root.MarkOwnerDelete(owner1)
+	root.markOwnerDelete(owner1)
 
 	u1n := cache.NewUpdate([]string{"interface", "ethernet-0/1", "description"}, desc3, prio50, owner1, ts1)
 	u2n := cache.NewUpdate([]string{"interface", "ethernet-0/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/1"), prio50, owner1, ts1)

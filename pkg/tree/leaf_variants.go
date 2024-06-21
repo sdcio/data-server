@@ -11,7 +11,7 @@ func newLeafVariants() LeafVariants {
 // ShouldDelete indicates if the entry should be deleted,
 // since it is an entry that represents LeafsVariants but non
 // of these are still valid.
-func (lv LeafVariants) ShouldDelete() bool {
+func (lv LeafVariants) shouldDelete() bool {
 	// only procede if we have leave variants
 	if len(lv) == 0 {
 		return false

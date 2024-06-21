@@ -43,7 +43,6 @@ func Test_ncTarget_Get(t *testing.T) {
 		getDriver       func(*gomock.Controller, *testing.T) netconf.Driver
 		connected       bool
 		getSchemaClient func(*gomock.Controller, *testing.T) SchemaClient.SchemaClientBound
-		schema          *sdcpb.Schema
 		sbiConfig       *config.SBI
 	}
 	type args struct {

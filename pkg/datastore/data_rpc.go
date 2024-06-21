@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -1005,13 +1006,18 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				// iterate through the elements
 				// ATTENTION: assuming its all strings
 				// add them to the Leaflist value
-				for _, e := range v.([]any) {
-					tv := &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_StringVal{
-							StringVal: fmt.Sprintf("%v", e.(string)),
-						},
+				switch x := v.(type) {
+				case []any:
+					for _, e := range x {
+						tv := &sdcpb.TypedValue{
+							Value: &sdcpb.TypedValue_StringVal{
+								StringVal: fmt.Sprintf("%v", e.(string)),
+							},
+						}
+						list = append(list, tv)
 					}
-					list = append(list, tv)
+				default:
+					return nil, fmt.Errorf("leaflist %s expects array as input, but %v of type %v was given", np.String(), x, reflect.TypeOf(x).Name())
 				}
 
 				upd := &sdcpb.Update{

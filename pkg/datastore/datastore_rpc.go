@@ -120,7 +120,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, scc schema.Client, cc c
 			go ds.Sync(ctx)
 		}
 		// start deviation goroutine
-		// ds.DeviationMgr(ctx)
+		ds.DeviationMgr(ctx)
 	}()
 	return ds
 }
@@ -1023,6 +1023,7 @@ func (d *Datastore) StopDeviationsWatch(peer string) {
 }
 
 func (d *Datastore) DeviationMgr(ctx context.Context) {
+	return
 	log.Infof("%s: starting deviationMgr...", d.Name())
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()

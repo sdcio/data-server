@@ -43,6 +43,21 @@ ${srlinux1-schema-vendor}    Nokia
 ${srlinux1-target-def}    ${CURDIR}/../colocated/robot_srl1.json
 ${srlinux1-sync-def}    ${CURDIR}/../colocated/sync.json
 
+${srlinux1-name}    srl1
+${srlinux1-candidate}    default
+${srlinux1-schema-name}    srl
+${srlinux1-schema-version}    23.10.1
+${srlinux1-schema-vendor}    Nokia
+${srlinux1-target-def}    ${CURDIR}/../colocated/robot_srl1.json
+${srlinux1-sync-def}    ${CURDIR}/../colocated/sync.json
+
+${sros-name}    sros
+${sros-candidate}    default
+${sros-schema-name}    sros
+${sros-schema-version}    23.7
+${sros-schema-vendor}    Nokia
+${sros-target-def}    ${CURDIR}/../colocated/robot_sros.json
+${sros-sync-def}    ${CURDIR}/../colocated/sync_sros.json
 
 # internal vars
 ${data-server-process-alias}    dsa
@@ -57,6 +72,11 @@ Check Server State
 Create SRL1 Target
     ${result} =    CreateDataStore    ${srlinux1-name}    ${srlinux1-target-def}    ${srlinux1-sync-def}    ${srlinux1-schema-name}    ${srlinux1-schema-Vendor}     ${srlinux1-schema-version}
     Should Be Equal As Integers    ${result.rc}    0
+
+Create SROS Target
+    ${result} =    CreateDataStore    ${sros-name}    ${sros-target-def}    ${sros-sync-def}    ${sros-schema-name}    ${sros-schema-Vendor}     ${sros-schema-version}
+    Should Be Equal As Integers    ${result.rc}    0
+
 
 One
     ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    test    100        ${CURDIR}/intents/one.json
@@ -198,7 +218,43 @@ Eight
     Should Be Equal As Integers    ${result.rc}    0
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
 
-13 - LeafList
-    ${result} =     SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    thirteen    5        ${CURDIR}/intents/leaf-list.json
+14.1 - Union int
+    ${result} =     SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    fourteen    5        ${CURDIR}/intents/union_int.json
     Should Be Equal As Integers    ${result.rc}    0
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+14.1 - Union String
+    ${result} =     SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    fourteen    5        ${CURDIR}/intents/union_string.json
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+15.1 - Integration1
+    ${result} =     SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    fifteen    5        ${CURDIR}/intents/integration1.json
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+15.2 - Integration1
+    ${result} =     SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    fifteen    5        ${CURDIR}/intents/integration2.json
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+16 - Wim Issue
+    ${result} =     SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    sixteen    5        ${CURDIR}/intents/wim_issue.json
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+17 - Leaf-List as String
+    ${result} =     SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    seventeen    5        ${CURDIR}/intents/leaf-list-string.json
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+18-1 - SROS Add LeafList
+    ${result} =     SetIntent    ${sros-name}    ${sros-candidate}    eighteen    5        ${CURDIR}/intents/18-sros-leaflist.json
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+18-2 - SROS Delete LeafList
+    ${result} =    DeleteIntent    ${sros-name}    ${sros-candidate}    eighteen    5
+    Should Be Equal As Integers    ${result.rc}    0
+
+    DeleteCandidate    ${sros-name}    ${sros-candidate}

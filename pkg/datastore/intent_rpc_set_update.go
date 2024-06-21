@@ -16,6 +16,7 @@ package datastore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -29,35 +30,6 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 )
-
-// populateTreeWithIntentData populates the given tree with intent data thats stored in the cache already
-// Queries the Caches keys, filters out entries that belong to given owner and adds them to the given keys and keyindex structs.
-// Finally queries the values for those entries, adds them to the given tree and marks the owners entries as deleted.
-func (d *Datastore) populateTreeWithIntentData(ctx context.Context, root *tree.RootEntry, owner string, pathKeySet *tree.PathSet) error {
-
-	ownerPaths := root.GetTreeContext().GetPathsOfOwner(owner)
-
-	// join owner based and new paths in the pathkeyset
-	pathKeySet.Join(ownerPaths)
-
-	// Get all entries of the already existing intent
-	highesCurrentCacheEntries := d.readCurrentUpdatesHighestPriorities(ctx, pathKeySet.GetPaths(), 2)
-
-	// add all the existing entries
-	for _, entrySlice := range highesCurrentCacheEntries {
-		for _, v := range entrySlice {
-			for _, x := range v {
-				root.AddCacheUpdateRecursive(ctx, x, false)
-			}
-		}
-	}
-
-	// Mark all the entries that belong to the owner / intent as deleted.
-	// This is to allow for intent updates. We mark all existing entries for deletion up front.
-	root.MarkOwnerDelete(owner)
-
-	return nil
-}
 
 func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentRequest, tc *tree.TreeContext) (r *tree.RootEntry, err error) {
 	// create a new Tree
@@ -112,11 +84,7 @@ func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentReques
 		newCacheUpdates = append(newCacheUpdates, cache.NewUpdate(pathslice, val, req.GetPriority(), req.GetIntent(), 0))
 	}
 
-	// populate the tree with all the existing entries from the cache, that match relevant paths (paths from the old intent, and the new request).
-	err = d.populateTreeWithIntentData(ctx, root, req.GetIntent(), pathKeySet)
-	if err != nil {
-		return nil, err
-	}
+	root.LoadIntendedStoreOwnerData(ctx, req.GetIntent(), pathKeySet)
 
 	// now add the cache.Updates from the actual request, after marking the old once for deletion.
 	for _, upd := range newCacheUpdates {
@@ -213,6 +181,26 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		setDataReq.Update = append(setDataReq.Update, sdcpbUpd)
 	}
 
+	// perform validation
+	// we use a channel and cumulate all the errors
+	validationErrors := []error{}
+	validationErrChan := make(chan error)
+	go func() {
+		root.Validate(validationErrChan)
+		close(validationErrChan)
+	}()
+
+	// read from the Error channel
+	for e := range validationErrChan {
+		validationErrors = append(validationErrors, e)
+	}
+
+	// check if errors are received
+	// If so, join them and return the cumulated errors
+	if len(validationErrors) > 0 {
+		return fmt.Errorf("cumulated validation errors:\n%v", errors.Join(validationErrors...))
+	}
+
 	// add all the deletes to the setDataReq
 	for _, u := range deletes {
 		sdcpbUpd, err := d.cacheUpdateToUpdate(ctx, cache.NewUpdate(u, []byte{}, req.Priority, req.Intent, 0))
@@ -223,12 +211,6 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	}
 
 	fmt.Println(prototext.Format(setDataReq))
-
-	// validate Mandatory attributes are present
-	err = root.ValidateMandatory()
-	if err != nil {
-		return err
-	}
 
 	log.Info("intent setting into candidate")
 	// set the candidate
