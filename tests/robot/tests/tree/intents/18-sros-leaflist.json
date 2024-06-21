@@ -38,7 +38,7 @@
                         "bgp": {
                             "import": {
                                 "policy": [
-                                    "bar"
+                                    "foo", "bar"
                                 ]
                             }
                         },

@@ -28,8 +28,9 @@ const (
 	//
 	ncBase1_0 = "urn:ietf:params:xml:ns:netconf:base:1.0"
 	//
-	operationDelete = "delete"
-	operationRemove = "remove"
+	operationDelete  = "delete"
+	operationRemove  = "remove"
+	operationReplace = "replace"
 )
 
 // XMLConfigBuilder is used to builds XML configuration or XML Filter documents
@@ -147,9 +148,11 @@ func (x *XMLConfigBuilder) AddValue(ctx context.Context, p *sdcpb.Path, v *sdcpb
 	// cause xml is all string
 	switch val := v.GetValue().(type) {
 	case *sdcpb.TypedValue_LeaflistVal:
+		parent := elem.Parent()
 		// we add all the leaflist entries as their own values
 		for _, tv := range val.LeaflistVal.GetElement() {
-			subelem := elem.Parent().CreateElement(p.Elem[len(p.Elem)-1].Name)
+			subelem := parent.CreateElement(p.Elem[len(p.Elem)-1].Name)
+
 			value, err := valueAsString(tv)
 			if err != nil {
 				return err
@@ -159,9 +162,18 @@ func (x *XMLConfigBuilder) AddValue(ctx context.Context, p *sdcpb.Path, v *sdcpb
 			// with a key as leaf.
 			subelem.SetText(value)
 		}
+		operKey := "operation"
+		// add base1.0 as xmlns:nc attr
+		if x.cfg.OperationWithNamespace {
+			parent.CreateAttr("xmlns:nc", ncBase1_0)
+			operKey = "nc:" + operKey
+		}
+		// add the delete operation attribute
+		parent.CreateAttr(operKey, operationReplace)
+
 		// since fastForward did create an initial element, but we created all we
 		// need in the loop, we delete the element from its parent
-		elem.Parent().RemoveChild(elem)
+		parent.RemoveChild(elem)
 	default:
 		value, err := valueAsString(v)
 		if err != nil {

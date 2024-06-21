@@ -112,10 +112,6 @@ func (d *Datastore) applyIntent(ctx context.Context, candidateName string, sdreq
 	log.Debugf("%s: applying intent from candidate %s", d.Name(), sdreq.GetDatastore())
 
 	var err error
-	sbiSet := &sdcpb.SetDataRequest{
-		Update: []*sdcpb.Update{},
-		Delete: []*sdcpb.Path{},
-	}
 
 	log.Debugf("%s: %s notification:\n%s", d.Name(), candidateName, prototext.Format(sdreq))
 	// TODO: consider if leafref validation
@@ -139,18 +135,14 @@ func (d *Datastore) applyIntent(ctx context.Context, candidateName string, sdreq
 	}
 
 	// push updates to sbi
-	sbiSet = &sdcpb.SetDataRequest{
-		Update: sdreq.GetUpdate(),
-		Delete: sdreq.GetDelete(),
-	}
-	log.Debugf("datastore %s/%s applyIntent:\n%s", d.config.Name, candidateName, prototext.Format(sbiSet))
+	log.Debugf("datastore %s/%s applyIntent:\n%s", d.config.Name, candidateName, prototext.Format(sdreq))
 
 	log.Infof("datastore %s/%s applyIntent: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d",
-		d.config.Name, candidateName, len(sbiSet.GetUpdate()), len(sbiSet.GetReplace()), len(sbiSet.GetDelete()))
+		d.config.Name, candidateName, len(sdreq.GetUpdate()), len(sdreq.GetReplace()), len(sdreq.GetDelete()))
 
 	// send set request only if there are updates and/or deletes
-	if len(sbiSet.GetUpdate())+len(sbiSet.GetReplace())+len(sbiSet.GetDelete()) > 0 {
-		rsp, err := d.sbi.Set(ctx, sbiSet)
+	if len(sdreq.GetUpdate())+len(sdreq.GetReplace())+len(sdreq.GetDelete()) > 0 {
+		rsp, err := d.sbi.Set(ctx, sdreq)
 		if err != nil {
 			return err
 		}
