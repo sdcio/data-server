@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -163,7 +164,7 @@ NEXT_STORE:
 }
 
 func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, req *sdcpb.GetDataRequest, paths [][]string, out chan *sdcpb.GetDataResponse) error {
-	jbuilder := jbuilderv2.New(d.getValidationClient().SchemaClientBound)
+	jbuilder := jbuilderv2.New(d.getValidationClient())
 	rs := make(map[string]any)
 	now := time.Now().UnixNano()
 
@@ -354,20 +355,12 @@ func (d *Datastore) Diff(ctx context.Context, req *sdcpb.DiffRequest) (*sdcpb.Di
 				log.Debugf("read values %v: %v", change.Update.GetPath(), values)
 				switch len(values) {
 				case 0: // value does not exist in main
-					p, err := d.schemaClient.ToPath(ctx,
-						&sdcpb.ToPathRequest{
-							PathElement: change.Update.GetPath(),
-							Schema: &sdcpb.Schema{
-								Name:    d.config.Schema.Name,
-								Vendor:  d.config.Schema.Vendor,
-								Version: d.config.Schema.Version,
-							},
-						})
+					p, err := d.getValidationClient().ToPath(ctx, change.Update.GetPath())
 					if err != nil {
 						return nil, err
 					}
 					diffup := &sdcpb.DiffUpdate{
-						Path:           p.GetPath(),
+						Path:           p,
 						CandidateValue: candVal,
 					}
 					diffRsp.Diff = append(diffRsp.Diff, diffup)
@@ -383,20 +376,14 @@ func (d *Datastore) Diff(ctx context.Context, req *sdcpb.DiffRequest) (*sdcpb.Di
 						continue
 					}
 					// get path from schema server
-					p, err := d.schemaClient.ToPath(ctx,
-						&sdcpb.ToPathRequest{
-							PathElement: change.Update.GetPath(),
-							Schema: &sdcpb.Schema{
-								Name:    d.config.Schema.Name,
-								Vendor:  d.config.Schema.Vendor,
-								Version: d.config.Schema.Version,
-							},
-						})
+					p, err := d.getValidationClient().ToPath(ctx,
+						change.Update.GetPath(),
+					)
 					if err != nil {
 						return nil, err
 					}
 					diffup := &sdcpb.DiffUpdate{
-						Path:           p.GetPath(),
+						Path:           p,
 						MainValue:      mainVal,
 						CandidateValue: candVal,
 					}
@@ -420,21 +407,13 @@ func (d *Datastore) Diff(ctx context.Context, req *sdcpb.DiffRequest) (*sdcpb.Di
 				}
 
 				// get path from schema server
-				p, err := d.schemaClient.ToPath(ctx,
-					&sdcpb.ToPathRequest{
-						PathElement: change.Delete,
-						Schema: &sdcpb.Schema{
-							Name:    d.config.Schema.Name,
-							Vendor:  d.config.Schema.Vendor,
-							Version: d.config.Schema.Version,
-						},
-					})
+				p, err := d.getValidationClient().ToPath(ctx, change.Delete)
 				if err != nil {
 					return nil, err
 				}
 
 				diffup := &sdcpb.DiffUpdate{
-					Path:      p.GetPath(),
+					Path:      p,
 					MainValue: val,
 				}
 				diffRsp.Diff = append(diffRsp.Diff, diffup)
@@ -516,7 +495,7 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *sdcpb.Update) error
 	}
 	switch obj := rsp.GetSchema().Schema.(type) {
 	case *sdcpb.SchemaElem_Container:
-		if !pathIsKeyAsLeaf(upd.GetPath()) {
+		if !pathIsKeyAsLeaf(upd.GetPath()) && !obj.Container.IsPresence {
 			return fmt.Errorf("cannot set value on container %q object", obj.Container.Name)
 		}
 		// TODO: validate key as leaf
@@ -803,12 +782,13 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 func validateLeafListValue(ll *sdcpb.LeafListSchema, v any) error {
 	// TODO: validate Leaflist
 	// TODO: eval must statements
-	for _, must := range ll.MustStatements {
-		_ = must
-	}
+	// for _, must := range ll.MustStatements {
+	// 	_ = must
+	// }
 	return validateLeafTypeValue(ll.GetType(), v)
 }
 
+// expandUpdate Expands the value, in case of json to single typed value updates
 func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update, includeKeysAsLeaf bool) ([]*sdcpb.Update, error) {
 	upds := make([]*sdcpb.Update, 0)
 	if includeKeysAsLeaf {
@@ -819,11 +799,7 @@ func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update, include
 		}
 		upds = append(upds, intUpd...)
 	}
-	rsp, err := d.schemaClient.GetSchema(ctx,
-		&sdcpb.GetSchemaRequest{
-			Path:   upd.GetPath(),
-			Schema: d.Schema().GetSchema(),
-		})
+	rsp, err := d.getValidationClient().GetSchema(ctx, upd.GetPath())
 	if err != nil {
 		return nil, err
 	}
@@ -898,7 +874,7 @@ func (d *Datastore) expandUpdates(ctx context.Context, updates []*sdcpb.Update, 
 	return outUpdates, nil
 }
 
-func (d *Datastore) expandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
+func (d *Datastore) expandUpdateKeysAsLeaf(_ context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
 	upds := make([]*sdcpb.Update, 0)
 	// expand update path if it contains keys
 	for i, pe := range upd.GetPath().GetElem() {
@@ -1021,25 +997,68 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				}
 				upds = append(upds, upd)
 			case *sdcpb.LeafListSchema: // leaflist
-				log.Debugf("TODO: handling leafList %s", item.Name)
+				// log.Debugf("TODO: handling leafList %s", item.Name)
+				np := proto.Clone(p).(*sdcpb.Path)
+				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item.Name})
+
+				list := []*sdcpb.TypedValue{}
+
+				// iterate through the elements
+				// ATTENTION: assuming its all strings
+				// add them to the Leaflist value
+				switch x := v.(type) {
+				case []any:
+					for _, e := range x {
+						tv := &sdcpb.TypedValue{
+							Value: &sdcpb.TypedValue_StringVal{
+								StringVal: fmt.Sprintf("%v", e.(string)),
+							},
+						}
+						list = append(list, tv)
+					}
+				default:
+					return nil, fmt.Errorf("leaflist %s expects array as input, but %v of type %v was given", np.String(), x, reflect.TypeOf(x).Name())
+				}
+
+				upd := &sdcpb.Update{
+					Path: np,
+					Value: &sdcpb.TypedValue{
+						Timestamp: 0,
+						Value:     &sdcpb.TypedValue_LeaflistVal{LeaflistVal: &sdcpb.ScalarArray{Element: list}},
+					},
+				}
+				upds = append(upds, upd)
+
 			case string: // child container
 				log.Debugf("handling child container %s", item)
 				np := proto.Clone(p).(*sdcpb.Path)
 				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item})
-				rsp, err := d.schemaClient.GetSchema(ctx,
-					&sdcpb.GetSchemaRequest{
-						Path:   np,
-						Schema: d.Schema().GetSchema(),
-					})
+				rsp, err := d.getValidationClient().GetSchema(ctx, np)
 				if err != nil {
 					return nil, err
 				}
 				switch rsp := rsp.GetSchema().Schema.(type) {
 				case *sdcpb.SchemaElem_Container:
-					rs, err := d.expandContainerValue(ctx, np, v, rsp, includeKeysAsLeaf)
-					if err != nil {
-						return nil, err
+					var rs []*sdcpb.Update
+					// code for presence containers
+					m, ok := v.(map[string]any)
+					if ok && len(m) == 0 && rsp.Container.IsPresence {
+						rs = []*sdcpb.Update{
+							{
+								Path: np,
+								Value: &sdcpb.TypedValue{
+									Value: &sdcpb.TypedValue_JsonVal{
+										JsonVal: []byte("{}"),
+									},
+								},
+							}}
+					} else {
+						rs, err = d.expandContainerValue(ctx, np, v, rsp, includeKeysAsLeaf)
+						if err != nil {
+							return nil, err
+						}
 					}
+
 					upds = append(upds, rs...)
 				default:
 					// should not happen
@@ -1118,10 +1137,7 @@ func (d *Datastore) getChild(ctx context.Context, s string, cs *sdcpb.SchemaElem
 	}
 	if cs.Container.Name == "__root__" {
 		for _, c := range cs.Container.GetChildren() {
-			rsp, err := d.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
-				Path:   &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: c}}},
-				Schema: d.Schema().GetSchema(),
-			})
+			rsp, err := d.getValidationClient().GetSchema(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: c}}})
 			if err != nil {
 				log.Errorf("Failed to get schema object %s: %v", c, err)
 				return "", false
@@ -1373,7 +1389,7 @@ func convertTypedValueToYANGType(schemaElem *sdcpb.SchemaElem, tv *sdcpb.TypedVa
 		if schemaElem.GetContainer().IsPresence {
 			return &sdcpb.TypedValue{
 				Timestamp: tv.GetTimestamp(),
-				Value:     &sdcpb.TypedValue_JsonVal{JsonVal: nil},
+				Value:     &sdcpb.TypedValue_JsonVal{JsonVal: []byte("{}")},
 			}, nil
 		}
 	case schemaElem.GetLeaflist() != nil:

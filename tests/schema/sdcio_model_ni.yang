@@ -1,0 +1,219 @@
+module sdcio_model_ni {
+  yang-version 1.1;
+  namespace "urn:sdcio/model_ni";
+  prefix sdcio_model_ni;
+
+  import sdcio_model_common {
+     prefix sdcio_model_common;
+  }
+
+  description
+    "This is part of the test schema for sdcio";
+
+  revision 2024-06-03 {
+    description
+      "Test schema first attempt";
+  }
+
+  identity ni-type {
+    description
+      "Base type for network instance types.";
+  }
+
+  identity host {
+    base ni-type;
+    description
+      "A special routing instances that refers to the hosts network instance (i.e. the network namespace of PID 1)";
+  }
+
+  identity default {
+    base ni-type;
+    description
+      "A special routing instance which acts as the 'default' routing instance for a network device.";
+  }
+
+  identity ip-vrf {
+    base ni-type;
+    description
+      "A private Layer 3 only routing instance.";
+  }
+
+  identity mac-vrf {
+    base ni-type;
+    description
+      "A private Layer 2 only switching instance.";
+  }
+
+grouping network-instance-top {
+    description
+      "Top-level grouping containing a list of network instances.";
+    list network-instance {
+      key "name";
+      description
+        "Network instances configured on the local system";
+      leaf name {
+        type sdcio_model_common:restricted-name;
+        description
+          "A unique name identifying the network instance";
+      }
+      leaf type {
+        type identityref {
+          base ni-type;
+        }
+        default "default";
+        description
+          "The type of network instance. The value of this leaf
+           indicates the type of forwarding entries that should be
+           supported by this network instance";
+      }
+      leaf admin-state {
+        type sdcio_model_common:admin-state;
+        default "enable";
+        description
+          "This leaf contains the configured, desired state of the
+           network instance.";
+      }
+       leaf description {
+        type sdcio_model_common:description;
+        description
+          "A user-entered description of this network instance.";
+      }
+            list interface {
+        must "../type != 'sdcio_model_ni:host'" {
+          error-message "Interfaces cannot be added to a network instance of type host";
+        }
+        key "name";
+        description
+          "List of subinterfaces used by this network-instance";
+        leaf name {
+          type sdcio_model_common:network-instance-subintf-name;
+          description
+            "Name of the subinterface bound to this network-instance";
+          must "../interface-ref/interface or not(starts-with(.,'lo') and ../../type = 'sdcio_model_ni:mac-vrf')" {
+            error-message "Loopback interfaces cannot be configured on network-instance of type mac-vrf";
+          }
+          must "../interface-ref/interface or not(starts-with(.,'system') and ../../type != 'sdcio_model_ni:default')" {
+            error-message "System interfaces can only be configured on network-instance of type default";
+          }
+          must "../interface-ref/interface or /interface[name=substring-before(current(), '.')]/subinterface[index=substring-after(current(), '.')]/type != 'local-mirror-dest'" {
+            error-message "subinterface with type local-mirror-dest cannot be configured on network-instance";
+          }
+        }
+        container interface-ref {
+          description
+            "Reference to a subinterface";
+          leaf interface {
+            type leafref {
+              path "/interface/name";
+            }
+            must '../subinterface >= 0' {
+              error-message "subinterface must be configured when interface is set";
+            }
+            must "not(starts-with(.,'lo') and ../../../type = 'sdcio_model_common:mac-vrf')" {
+              error-message "Loopback interfaces cannot be configured on network-instance of type mac-vrf";
+            }
+            must "not(starts-with(.,'system') and ../../../type != 'sdcio_model_common:default')" {
+              error-message "System interfaces can only be configured on network-instance of type default";
+            }
+            must "/interface[name=current()]/subinterface[index=current()/../subinterface]/type != 'local-mirror-dest'" {
+              error-message "subinterface with type local-mirror-dest cannot be configured on network-instance";
+            }
+            description
+              "Reference to a base interface, for example a port or LAG";
+          }
+          leaf subinterface {
+            type leafref {
+              path "/interface[name=current()/../interface]/subinterface/index";
+            }
+            description
+              "Reference to a subinterface
+               This requires the base interface to be specified using the interface leaf in this container.";
+            must '../interface' {
+              error-message "interface must be configured when subinterface is set";
+            }
+          }
+        }
+      }
+    }
+}
+
+grouping bgp-top {
+    container bgp {
+      presence "Configure BGP";
+      must 'not(/network-instance[name = current()/../../name]/type = "mac-vrf")' {
+        error-message "BGP configuration is not possible on network-instance of type mac-vrf ";
+      }
+      must "../../type != 'sdcio_model_common:host'" {
+        error-message "BGP not supported with network-instance of type host";
+      }
+      leaf admin-state {
+        type sdcio_model_common:admin-state;
+        default "enable";
+        must " (. = 'disable') or
+               (../afi-safi[afi-safi-name='ipv4-unicast']/admin-state = 'enable') or
+               (../afi-safi[afi-safi-name='ipv6-unicast']/admin-state = 'enable') or
+               (../afi-safi[afi-safi-name='evpn']/admin-state = 'enable') or
+               (../afi-safi[afi-safi-name='ipv4-labeled-unicast']/admin-state = 'enable') or
+               (../afi-safi[afi-safi-name='ipv6-labeled-unicast']/admin-state = 'enable') or
+               (../afi-safi[afi-safi-name='l3vpn-ipv4-unicast']/admin-state = 'enable') or
+               (../afi-safi[afi-safi-name='l3vpn-ipv6-unicast']/admin-state = 'enable') or
+               (../afi-safi[afi-safi-name='route-target']/admin-state = 'enable')" {
+          error-message "One of the address families must be enabled.";
+        }
+        description
+          "Administratively enable or disable the entire BGP instance";
+      }
+            leaf autonomous-system {
+        type sdcio_model_common:as-number;
+        mandatory true;
+        description
+          "The global AS number of the BGP instance
+           Values greater than 65535 must be entered in ASPLAIN format.";
+      }
+            leaf router-id {
+        type sdcio_model_common:ip-address;
+        mandatory true;
+        description
+          "The BGP identifier used by this BGP instance in all of its OPEN messages
+           Any non-zero value is supported.";
+      }
+
+      list afi-safi {
+        key "afi-safi-name";
+        description
+          "List of address families supported by the BGP instance";
+        leaf afi-safi-name {
+          type identityref {
+            base sdcio_model_common:bgp-address-family;
+          }
+          description
+            "The name of a BGP address family, which translates to a specific AFI value and a specific SAFI value";
+          must "not(. = 'evpn') or /network-instance[name = current()/../../../../name]/type = 'default'" {
+            error-message "EVPN is not supported in network instances other than default";
+          }
+          must "not(. = 'route-target') or /network-instance[name = current()/../../../../name]/type = 'default'" {
+            error-message "route-target is not supported in network instances other than default";
+          }
+          must "not(. = 'l3vpn-ipv4-unicast')  or /network-instance[name = current()/../../../../name]/type = 'default'" {
+            error-message "L3VPN is not supported in network instances other than default";
+          }
+          must "not(. = 'l3vpn-ipv6-unicast') or /network-instance[name = current()/../../../../name]/type = 'default'" {
+            error-message "L3VPN is not supported in network instances other than default";
+          }
+          must "not(. = 'ipv4-labeled-unicast') or /network-instance[name = current()/../../../../name]/type = 'default'" {
+            error-message "Label-IPv4 is not supported in network instances other than default";
+          }
+          must "not(. = 'ipv6-labeled-unicast') or /network-instance[name = current()/../../../../name]/type = 'default'" {
+            error-message "Label-IPv6 is not supported in network instances other than default";
+          }
+        }
+        leaf admin-state {
+          type sdcio_model_common:admin-state;
+          default "disable";
+          description
+            "This leaf indicates whether the AFI-SAFI is enabled for the instance";
+        }
+      }
+}
+}
+}

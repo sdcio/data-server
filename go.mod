@@ -2,6 +2,8 @@ module github.com/sdcio/data-server
 
 go 1.21.4
 
+toolchain go1.22.2
+
 require (
 	github.com/AlekSi/pointer v1.2.0
 	github.com/beevik/etree v1.3.0
@@ -16,11 +18,13 @@ require (
 	github.com/openconfig/gnmic/pkg/api v0.1.2
 	github.com/openconfig/gnmic/pkg/target v0.1.4
 	github.com/openconfig/gnmic/pkg/types v0.1.2
+	github.com/openconfig/goyang v1.4.5
+	github.com/openconfig/ygot v0.29.19
 	github.com/prometheus/client_golang v1.18.0
 	github.com/scrapli/scrapligo v1.2.0
-	github.com/sdcio/cache v0.0.33
-	github.com/sdcio/schema-server v0.0.17
-	github.com/sdcio/sdc-protos v0.0.24
+	github.com/sdcio/cache v0.0.34
+	github.com/sdcio/schema-server v0.0.18
+	github.com/sdcio/sdc-protos v0.0.25
 	github.com/sdcio/yang-parser v0.0.5
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.0
@@ -28,7 +32,7 @@ require (
 	go.uber.org/mock v0.4.0
 	golang.org/x/sync v0.6.0
 	google.golang.org/grpc v1.61.0
-	google.golang.org/protobuf v1.32.0
+	google.golang.org/protobuf v1.33.0
 	gopkg.in/yaml.v2 v2.4.0
 	sigs.k8s.io/controller-runtime v0.17.0
 )
@@ -58,7 +62,6 @@ require (
 	github.com/google/flatbuffers v23.5.26+incompatible // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
-	github.com/google/pprof v0.0.0-20240125082051-42cd04596328 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jhump/protoreflect v1.15.5 // indirect
@@ -71,9 +74,10 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/onsi/ginkgo/v2 v2.17.2 // indirect
+	github.com/onsi/gomega v1.33.1 // indirect
 	github.com/openconfig/gnmic/pkg/path v0.34.1 // indirect
 	github.com/openconfig/gnmic/pkg/utils v0.1.0 // indirect
-	github.com/openconfig/goyang v1.4.5 // indirect
 	github.com/openconfig/grpctunnel v0.1.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_model v0.5.0 // indirect
@@ -83,11 +87,12 @@ require (
 	github.com/rs/xid v1.5.0 // indirect
 	github.com/sirikothe/gotextfsm v1.0.1-0.20200816110946-6aa2cfd355e4 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/crypto v0.18.0 // indirect
-	golang.org/x/net v0.20.0 // indirect
+	golang.org/x/crypto v0.22.0 // indirect
+	golang.org/x/exp v0.0.0-20230801115018-d63ba01acd4b // indirect
+	golang.org/x/net v0.24.0 // indirect
 	golang.org/x/oauth2 v0.16.0 // indirect
-	golang.org/x/sys v0.16.0 // indirect
-	golang.org/x/term v0.16.0 // indirect
+	golang.org/x/sys v0.19.0 // indirect
+	golang.org/x/term v0.19.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect

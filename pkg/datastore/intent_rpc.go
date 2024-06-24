@@ -32,7 +32,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/sdcio/data-server/pkg/cache"
-	"github.com/sdcio/data-server/pkg/utils"
 )
 
 var rawIntentPrefix = "__raw_intent__"
@@ -85,15 +84,13 @@ func (d *Datastore) SetIntent(ctx context.Context, req *sdcpb.SetIntentRequest) 
 			log.Errorf("%s: failed to delete candidate %s: %v", d.Name(), candidateName, err)
 		}
 	}()
-	switch {
-	case len(req.GetUpdate()) > 0:
-		err = d.SetIntentUpdate(ctx, req, candidateName)
-	case req.GetDelete():
-		err = d.SetIntentDelete(ctx, req, candidateName)
-	}
+
+	err = d.SetIntentUpdate(ctx, req, candidateName)
 	if err != nil {
+		log.Errorf("%s: failed to SetIntentUpdate: %v", d.Name(), err)
 		return nil, err
 	}
+
 	return &sdcpb.SetIntentResponse{}, nil
 }
 
@@ -108,76 +105,21 @@ func (d *Datastore) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest
 	}, nil
 }
 
-func (d *Datastore) getIntentFlatNotifications(ctx context.Context, intentName string, priority int32) ([]*sdcpb.Notification, error) {
-	notifications := make([]*sdcpb.Notification, 0)
-
-	rawIntent, err := d.getRawIntent(ctx, intentName, priority)
-	if errors.Is(err, ErrIntentNotFound) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	expUpds, err := d.expandUpdates(ctx, rawIntent.GetUpdate(), true)
-	if err != nil {
-		return nil, err
-	}
-	paths := make([][]string, 0, len(expUpds))
-	for _, expu := range expUpds {
-		paths = append(paths, utils.ToStrings(expu.Path, false, false))
-	}
-	upds := d.cacheClient.Read(ctx, d.config.Name, &cache.Opts{
-		Store:    cachepb.Store_INTENDED,
-		Owner:    intentName,
-		Priority: priority,
-	}, paths, 0)
-
-	for _, upd := range upds {
-		if upd.Owner() != intentName {
-			continue // TODO: DIRTY temp(?) workaround for 2 intents with the same priority
-		}
-		scp, err := d.toPath(ctx, upd.GetPath())
-		if err != nil {
-			return nil, err
-		}
-		tv, err := upd.Value()
-		if err != nil {
-			return nil, err
-		}
-		n := &sdcpb.Notification{
-			Timestamp: time.Now().UnixNano(),
-			Update: []*sdcpb.Update{{
-				Path:  scp,
-				Value: tv,
-			}},
-		}
-		notifications = append(notifications, n)
-	}
-	log.Debug()
-	log.Debugf("ds=%s | %s | current notifications: %v", d.Name(), intentName, notifications)
-	log.Debug()
-	return notifications, nil
-}
-
-func (d *Datastore) applyIntent(ctx context.Context, candidateName string, priority int32, sdreq *sdcpb.SetDataRequest) error {
+func (d *Datastore) applyIntent(ctx context.Context, candidateName string, sdreq *sdcpb.SetDataRequest) error {
 	if candidateName == "" {
 		return fmt.Errorf("missing candidate name")
 	}
 	log.Debugf("%s: applying intent from candidate %s", d.Name(), sdreq.GetDatastore())
 
 	var err error
-	sbiSet := &sdcpb.SetDataRequest{
-		Update: []*sdcpb.Update{},
-		Delete: []*sdcpb.Path{},
-	}
 
 	log.Debugf("%s: %s notification:\n%s", d.Name(), candidateName, prototext.Format(sdreq))
 	// TODO: consider if leafref validation
 	// needs to run before must statements validation
-	log.Infof("%s: validating must statements candidate %s", d.Name(), sdreq.GetDatastore())
 	// validate MUST statements
+	log.Infof("%s: validating must statements candidate %s", d.Name(), sdreq.GetDatastore())
 	for _, upd := range sdreq.GetUpdate() {
-		log.Debugf("%s: %s validating must statement on path: %v", d.Name(), candidateName, upd.GetPath())
+		log.Debugf("%s: %s validating must statement on: %v", d.Name(), candidateName, upd)
 		_, err = d.validateMustStatement(ctx, candidateName, upd.GetPath(), false)
 		if err != nil {
 			return err
@@ -193,18 +135,14 @@ func (d *Datastore) applyIntent(ctx context.Context, candidateName string, prior
 	}
 
 	// push updates to sbi
-	sbiSet = &sdcpb.SetDataRequest{
-		Update: sdreq.GetUpdate(),
-		Delete: sdreq.GetDelete(),
-	}
-	log.Debugf("datastore %s/%s applyIntent:\n%s", d.config.Name, candidateName, prototext.Format(sbiSet))
+	log.Debugf("datastore %s/%s applyIntent:\n%s", d.config.Name, candidateName, prototext.Format(sdreq))
 
 	log.Infof("datastore %s/%s applyIntent: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d",
-		d.config.Name, candidateName, len(sbiSet.GetUpdate()), len(sbiSet.GetReplace()), len(sbiSet.GetDelete()))
+		d.config.Name, candidateName, len(sdreq.GetUpdate()), len(sdreq.GetReplace()), len(sdreq.GetDelete()))
 
 	// send set request only if there are updates and/or deletes
-	if len(sbiSet.GetUpdate())+len(sbiSet.GetReplace())+len(sbiSet.GetDelete()) > 0 {
-		rsp, err := d.sbi.Set(ctx, sbiSet)
+	if len(sdreq.GetUpdate())+len(sdreq.GetReplace())+len(sdreq.GetDelete()) > 0 {
+		rsp, err := d.sbi.Set(ctx, sdreq)
 		if err != nil {
 			return err
 		}
@@ -313,73 +251,6 @@ func (d *Datastore) deleteRawIntent(ctx context.Context, intentName string, prio
 		},
 		[][]string{{rawIntentName(intentName, priority)}},
 		nil)
-}
-
-func (d *Datastore) pathsAddKeysAsLeaves(paths []*sdcpb.Path) []*sdcpb.Path {
-	added := make(map[string]struct{})
-	npaths := make([]*sdcpb.Path, 0, len(paths))
-	for _, p := range paths {
-		npaths = append(npaths, p)
-
-		for idx, pe := range p.GetElem() {
-			if len(pe.GetKey()) == 0 {
-				continue
-			}
-			for k, v := range pe.GetKey() {
-				pp := &sdcpb.Path{
-					Elem: make([]*sdcpb.PathElem, idx+1),
-				}
-				for i := 0; i < idx+1; i++ {
-					pp.Elem[i] = &sdcpb.PathElem{
-						Name: p.GetElem()[i].GetName(),
-						Key:  utils.CopyMap(p.GetElem()[i].GetKey()),
-					}
-				}
-				pp.Elem = append(pp.Elem, &sdcpb.PathElem{Name: k})
-
-				uniqueID := utils.ToXPath(pp, false) + ":::" + v
-				if _, ok := added[uniqueID]; !ok {
-					added[uniqueID] = struct{}{}
-					npaths = append(npaths, pp)
-				}
-			}
-		}
-		// fmt.Println()
-	}
-	return npaths
-}
-
-func (d *Datastore) buildPathsWithKeysAsLeaves(paths []*sdcpb.Path) []*sdcpb.Path {
-	added := make(map[string]struct{})
-	npaths := make([]*sdcpb.Path, 0, len(paths))
-	for _, p := range paths {
-		for idx, pe := range p.GetElem() {
-			if len(pe.GetKey()) == 0 {
-				continue
-			}
-			for k, v := range pe.GetKey() {
-				pp := &sdcpb.Path{
-					Elem: make([]*sdcpb.PathElem, idx+1),
-				}
-				for i := 0; i < idx+1; i++ {
-					pp.Elem[i] = &sdcpb.PathElem{
-						Name: p.GetElem()[i].GetName(),
-						Key:  utils.CopyMap(p.GetElem()[i].GetKey()),
-					}
-				}
-				pp.Elem = append(pp.Elem, &sdcpb.PathElem{Name: k})
-
-				uniqueID := utils.ToXPath(pp, false) + ":::" + v
-				if _, ok := added[uniqueID]; !ok {
-					// fmt.Printf("d | ADDING KEY Path: %v\n", pp)
-					added[uniqueID] = struct{}{}
-					npaths = append(npaths, pp)
-				}
-			}
-		}
-		// fmt.Println()
-	}
-	return npaths
 }
 
 func (d *Datastore) cacheUpdateToUpdate(ctx context.Context, cupd *cache.Update) (*sdcpb.Update, error) {

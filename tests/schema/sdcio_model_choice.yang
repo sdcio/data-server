@@ -1,0 +1,54 @@
+module sdcio_model_choice {
+  yang-version 1.1;
+  namespace "urn:sdcio/model_choice";
+  prefix sdcio_model_choice;
+
+  //   import sdcio_model_common {
+  //   prefix sdcio_model_common;
+  // }
+
+
+  description
+    "This is part of the test schema for sdcio";
+
+  revision 2024-06-03 {
+    description
+      "Test schema first attempt";
+  }
+
+
+    grouping choicecase-top {
+      container choices {
+        description
+          "here we have a choice with two cases";
+        choice choicecase {
+          container case1 {
+            presence "case1 is active";
+            description
+              "case 1 of the choicecase";
+            leaf log {
+              type boolean;
+              default "false";
+              description "When this is true, a log is created for each packet matching the entry";
+            }
+            container case-elem {
+              leaf elem {
+                type string;
+                description "some element under the case";
+              }
+            }
+          }
+          container case2 {
+            presence "case1 is active";
+            description
+              "case 1 of the choicecase";
+            leaf log {
+              type boolean;
+              default "false";
+              description "When this is true, a log is created for each packet matching the entry";
+            }
+          }
+        }
+      }
+    }
+}

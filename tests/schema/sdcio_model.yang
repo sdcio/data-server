@@ -1,0 +1,37 @@
+module sdcio_model {
+  yang-version 1.1;
+  namespace "urn:sdcio/model";
+  prefix sdcio_model;
+
+import sdcio_model_ni {
+  prefix sdcio_model_ni;
+}
+import sdcio_model_if {
+  prefix sdcio_model_if;
+}
+import sdcio_model_choice {
+  prefix sdcio_model_choice;
+}
+import sdcio_model_doublekey {
+  prefix sdcio_model_doublekey;
+}
+import sdcio_model_leaflist {
+  prefix sdcio_model_leaflist;
+}
+
+  description
+    "This is the test schema for sdcio";
+
+  revision 2024-06-03 {
+    description
+      "Test schema first attempt";
+  }
+
+
+  uses sdcio_model_if:interface-top;
+  uses sdcio_model_ni:network-instance-top;
+  uses sdcio_model_choice:choicecase-top;
+  uses sdcio_model_doublekey:doublekey-top;
+  uses sdcio_model_leaflist:leaflist-top;
+
+}

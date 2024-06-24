@@ -59,7 +59,7 @@ type Datastore struct {
 
 	// client, bound to schema and version on the schema side and to datastore name on the cache side
 	// do not use directly use getValidationClient()
-	_validationClientBound *clients.ValidationClient
+	_validationClientBound clients.ValidationClient
 
 	// sync channel, to be passed to the SBI Sync method
 	synCh chan *target.SyncUpdate
@@ -150,8 +150,7 @@ CREATE:
 
 func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) error {
 	var err error
-	sc := d.Schema().GetSchema()
-	d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, sc, opts...)
+	d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.getValidationClient(), opts...)
 	if err == nil {
 		return nil
 	}
@@ -165,7 +164,7 @@ func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) err
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, sc, opts...)
+			d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.getValidationClient(), opts...)
 			if err != nil {
 				log.Errorf("failed to create DS %s target: %v", d.config.Name, err)
 				continue
@@ -515,7 +514,7 @@ func (d *Datastore) makeLeafRefAbs(ctx context.Context, base, lref *sdcpb.Path, 
 	if err != nil {
 		return nil, err
 	}
-	p, err = d.makeLeafRefAbsPath(base, p)
+	p, err = makeLeafRefAbsPath(base, p)
 	if err != nil {
 		return nil, err
 	}
@@ -559,7 +558,7 @@ func (d *Datastore) makeLeafRefAbsPathKeys(ctx context.Context, base, lref *sdcp
 	return lrefResult, nil
 }
 
-func (d *Datastore) makeLeafRefAbsPath(base, lref *sdcpb.Path) (*sdcpb.Path, error) {
+func makeLeafRefAbsPath(base, lref *sdcpb.Path) (*sdcpb.Path, error) {
 
 	// if the path is relative, the .. would start in the start of the path
 	if lref.Elem[0].Name != ".." {
@@ -576,23 +575,6 @@ func (d *Datastore) makeLeafRefAbsPath(base, lref *sdcpb.Path) (*sdcpb.Path, err
 		return nil, err
 	}
 
-	// // process leafref elements and adjust result
-	// for _, lrefElem := range lref.Elem {
-	// 	switch {
-	// 	// if .. in path, remove last elem from result (move up)
-	// 	case lrefElem.GetName() == "..":
-	// 		if len(result.Elem) == 0 {
-	// 			return nil, fmt.Errorf("invalid leafref path %s based on %s", lref.String(), base.String())
-	// 		}
-	// 		result.Elem = result.Elem[:len(result.Elem)-1]
-	// 	case lrefElem.GetName() == ".":
-	// 		// no one knows if this is a valid case, but we voted and here it is :-P
-	// 		continue
-	// 	default:
-	// 		// if proper path elem, add to path
-	// 		result.Elem = append(result.Elem, lrefElem)
-	// 	}
-	// }
 	return result, nil
 }
 
@@ -631,10 +613,7 @@ func (d *Datastore) resolveLeafref(ctx context.Context, candidate string, leafRe
 	// with the value of the item that we're validating the leafref for
 
 	// get the schema for results paths last element
-	schemaResp, err := d.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
-		Path:   &sdcpb.Path{Elem: leafRefPath.Elem[:len(leafRefPath.Elem)-1]},
-		Schema: d.Schema().GetSchema(),
-	})
+	schemaResp, err := d.getValidationClient().GetSchema(ctx, &sdcpb.Path{Elem: leafRefPath.Elem[:len(leafRefPath.Elem)-1]})
 	if err != nil {
 		return err
 	}
@@ -733,10 +712,7 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 
 // helper for GetSchema
 func (d *Datastore) getSchema(ctx context.Context, p *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
-	return d.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
-		Path:   p,
-		Schema: d.Schema().GetSchema(),
-	})
+	return d.getValidationClient().GetSchema(ctx, p)
 }
 
 func (d *Datastore) validatePath(ctx context.Context, p *sdcpb.Path) error {
@@ -745,18 +721,11 @@ func (d *Datastore) validatePath(ctx context.Context, p *sdcpb.Path) error {
 }
 
 func (d *Datastore) toPath(ctx context.Context, p []string) (*sdcpb.Path, error) {
-	rsp, err := d.schemaClient.ToPath(ctx, &sdcpb.ToPathRequest{
-		PathElement: p,
-		Schema: &sdcpb.Schema{
-			Name:    d.Schema().Name,
-			Vendor:  d.Schema().Vendor,
-			Version: d.Schema().Version,
-		},
-	})
+	path, err := d.getValidationClient().ToPath(ctx, p)
 	if err != nil {
 		return nil, err
 	}
-	return rsp.GetPath(), nil
+	return path, nil
 }
 
 func (d *Datastore) changesToUpdates(ctx context.Context, changes []*cache.Change) (*sdcpb.Notification, error) {
@@ -796,7 +765,7 @@ func (d *Datastore) changesToUpdates(ctx context.Context, changes []*cache.Chang
 
 // getValidationClient will create a ValidationClient instance if not already existing
 // save it as part of the datastore and return a valid *clients.ValidationClient
-func (d *Datastore) getValidationClient() *clients.ValidationClient {
+func (d *Datastore) getValidationClient() clients.ValidationClient {
 	// if not initialized, init it, cache it
 	if d._validationClientBound == nil {
 		d._validationClientBound = clients.NewValidationClient(d.Name(), d.cacheClient, d.Schema().GetSchema(), d.schemaClient)
@@ -850,7 +819,7 @@ func (d *Datastore) convertNotificationTypedValues(ctx context.Context, n *sdcpb
 	return nn, nil
 }
 
-func (d *Datastore) convertUpdateTypedValue(ctx context.Context, upd *sdcpb.Update, scRsp *sdcpb.GetSchemaResponse, leaflists map[string]*leafListNotification) (*sdcpb.Update, error) {
+func (d *Datastore) convertUpdateTypedValue(_ context.Context, upd *sdcpb.Update, scRsp *sdcpb.GetSchemaResponse, leaflists map[string]*leafListNotification) (*sdcpb.Update, error) {
 	switch {
 	case scRsp.GetSchema().GetContainer() != nil:
 		if !scRsp.GetSchema().GetContainer().GetIsPresence() {
@@ -1071,7 +1040,6 @@ func (d *Datastore) DeviationMgr(ctx context.Context) {
 			}
 			d.m.RUnlock()
 			d.runDeviationUpdate(ctx, dm)
-
 		}
 	}
 }

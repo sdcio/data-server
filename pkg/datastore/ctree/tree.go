@@ -407,7 +407,7 @@ func (t *Tree) internalDelete(subpath []string, condition func(interface{}) bool
 				// unwinds for this leaf that will be deleted in its parent.
 				f(t.leafBranch)
 				if retDeletedPaths {
-					return true, [][]string{[]string{}}
+					return true, [][]string{{}}
 				}
 				return true, nil
 			}

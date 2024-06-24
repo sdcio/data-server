@@ -22,21 +22,20 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/sdcio/data-server/pkg/schema"
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 )
 
 // XML2sdcpbConfigAdapter is used to transform the provided XML configuration data into the gnmi-like sdcpb.Notifications.
 // This transformation is done via schema information acquired throughout the SchemaServerClient throughout the transformation process.
 type XML2sdcpbConfigAdapter struct {
-	schemaClient schema.Client
+	schemaClient schemaClient.SchemaClientBound
 	schema       *sdcpb.Schema
 }
 
 // NewXML2sdcpbConfigAdapter constructs a new XML2sdcpbConfigAdapter
-func NewXML2sdcpbConfigAdapter(ssc schema.Client, schema *sdcpb.Schema) *XML2sdcpbConfigAdapter {
+func NewXML2sdcpbConfigAdapter(ssc schemaClient.SchemaClientBound) *XML2sdcpbConfigAdapter {
 	return &XML2sdcpbConfigAdapter{
 		schemaClient: ssc,
-		schema:       schema,
 	}
 }
 
@@ -46,6 +45,7 @@ func (x *XML2sdcpbConfigAdapter) Transform(ctx context.Context, doc *etree.Docum
 	if doc.Root() == nil {
 		return nil, nil
 	}
+
 	for _, e := range doc.Root().ChildElements() {
 		r := &sdcpb.Notification{}
 		err := x.transformRecursive(ctx, e, []*sdcpb.PathElem{}, r, nil)
@@ -63,12 +63,11 @@ func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etre
 	pelems = append(pelems, &sdcpb.PathElem{Name: e.Tag})
 
 	// retrieve schema
-	sr, err := x.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
-		Path: &sdcpb.Path{
+	sr, err := x.schemaClient.GetSchema(ctx,
+		&sdcpb.Path{
 			Elem: pelems,
 		},
-		Schema: x.schema,
-	})
+	)
 	if err != nil {
 		return err
 	}
@@ -143,7 +142,7 @@ func (x *XML2sdcpbConfigAdapter) transformContainer(ctx context.Context, e *etre
 }
 
 // transformField transforms an etree.element of a configuration as an update into the provided *sdcpb.Notification.
-func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, ls *sdcpb.LeafSchema, result *sdcpb.Notification) error {
+func (x *XML2sdcpbConfigAdapter) transformField(_ context.Context, e *etree.Element, pelems []*sdcpb.PathElem, ls *sdcpb.LeafSchema, result *sdcpb.Notification) error {
 	// process terminal values
 	tv, err := StringElementToTypedValue(e.Text(), ls)
 	if err != nil {
@@ -171,7 +170,7 @@ func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.El
 // transformLeafList processes LeafList entries. These will be store in the TransformationContext.
 // A new TransformationContext is created when entering a new container. And the appropriate actions are taken when a container is exited.
 // Meaning the LeafLists will then be transformed into a single update with a sdcpb.TypedValue_LeaflistVal with all the values.
-func (x *XML2sdcpbConfigAdapter) transformLeafList(ctx context.Context, e *etree.Element, sr *sdcpb.GetSchemaResponse, pelems []*sdcpb.PathElem, result *sdcpb.Notification, tc *TransformationContext) error {
+func (x *XML2sdcpbConfigAdapter) transformLeafList(_ context.Context, e *etree.Element, sr *sdcpb.GetSchemaResponse, pelems []*sdcpb.PathElem, result *sdcpb.Notification, tc *TransformationContext) error {
 
 	// process terminal values
 	data := strings.TrimSpace(e.Text())

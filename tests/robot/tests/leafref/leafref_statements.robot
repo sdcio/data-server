@@ -18,8 +18,8 @@ Resource          ../../keywords/client.robot
 Library           OperatingSystem
 Library           String
 Library           Process
-# Suite Setup       SetupColocated    True    ${DATA-SERVER-BIN}    ${DATA-SERVER-CONFIG}    ${data-server-process-alias}    ${data-server-stderr}
-# Suite Teardown    Teardown
+Suite Setup       SetupColocated    True    ${DATA-SERVER-BIN}    ${DATA-SERVER-CONFIG}    ${data-server-process-alias}    ${data-server-stderr}
+Suite Teardown    Teardown
 
 *** Variables ***
 ${DATA-SERVER-BIN}    ${CURDIR}/../../../../bin/data-server

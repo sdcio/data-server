@@ -59,6 +59,10 @@ mocks-gen: mocks-rm ## Generate mocks for all the defined interfaces.
 	go install go.uber.org/mock/mockgen@latest
 	mockgen -package=mocknetconf -source=pkg/datastore/target/netconf/driver.go -destination=$(MOCKDIR)/mocknetconf/driver.go
 	mockgen -package=mockschema -source=pkg/schema/schema_client.go -destination=$(MOCKDIR)/mockschema/client.go
+	mockgen -package=mockschemaclientbound -source=pkg/datastore/clients/schema/schemaClientBound.go -destination=$(MOCKDIR)/mockschemaclientbound/client.go
+	mockgen -package=mockcacheclient -source=pkg/cache/cache.go -destination=$(MOCKDIR)/mockcacheclient/client.go
+	mockgen -package=mocktarget -source=pkg/datastore/target/target.go -destination=$(MOCKDIR)/mocktarget/target.go
+	mockgen -package=mockvalidationclient -source=pkg/datastore/clients/validationClient.go -destination=$(MOCKDIR)/mockvalidationclient/client.go
 
 .PHONY: mocks-rm
 mocks-rm: ## remove generated mocks
@@ -69,3 +73,9 @@ unit-tests: mocks-gen
 	rm -rf /tmp/sdcio/dataserver-tests/coverage
 	mkdir -p /tmp/sdcio/dataserver-tests/coverage
 	CGO_ENABLED=1 go test -cover -race ./... -v -covermode atomic -args -test.gocoverdir="/tmp/sdcio/dataserver-tests/coverage"
+
+.PHONY: ygot
+ygot:
+	pyang tests/schema/*
+	go install github.com/openconfig/ygot/generator@latest
+	generator -output_file=tests/sdcioygot/sdcio_schema.go -package_name=sdcio_schema -generate_fakeroot -fakeroot_name=device ./tests/schema/*
