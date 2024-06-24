@@ -4,9 +4,9 @@ import (
 	"strings"
 )
 
-type PathSlice [][]string
+type PathsSlice [][]string
 
-func (p PathSlice) StringSlice() []string {
+func (p PathsSlice) StringSlice() []string {
 	result := make([]string, 0, len(p))
 	for _, x := range p {
 		result = append(result, strings.Join(x, "/"))

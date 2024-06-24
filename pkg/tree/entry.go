@@ -60,7 +60,7 @@ type Entry interface {
 	// markOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
 	markOwnerDelete(o string)
 	// GetDeletes returns the cache-updates that are not updated, have no lower priority value left and hence should be deleted completely
-	GetDeletes(PathSlice) PathSlice
+	GetDeletes(PathsSlice) PathsSlice
 	// Walk takes the EntryVisitor and applies it to every Entry in the tree
 	Walk(f EntryVisitor) error
 	// shouldDelete indicated if there is no LeafEntry left and the Entry is to be deleted
@@ -256,7 +256,7 @@ func (s *sharedEntryAttributes) GetSchemaKeys() []string {
 // getAggregatedDeletes is called on levels that have no schema attached, meaning key schemas.
 // here we might delete the whole branch of the tree, if all key elements are being deleted
 // if not, we continue with regular deltes
-func (s *sharedEntryAttributes) getAggregatedDeletes(deletes PathSlice) PathSlice {
+func (s *sharedEntryAttributes) getAggregatedDeletes(deletes PathsSlice) PathsSlice {
 	// we take a look into the level(s) up
 	// trying to get the schema
 	ancestor, level := s.GetFirstAncestorWithSchema()
@@ -295,7 +295,7 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes PathSlice) PathSlic
 }
 
 // getRegularDeletes performs deletion calculation on elements that have a schema attached.
-func (s *sharedEntryAttributes) getRegularDeletes(deletes PathSlice) PathSlice {
+func (s *sharedEntryAttributes) getRegularDeletes(deletes PathsSlice) PathsSlice {
 	// if entry is a container type, check the keys, to be able to
 	// issue a delte for the whole branch at once via keys
 	switch s.schema.GetSchema().(type) {
@@ -324,7 +324,7 @@ func (s *sharedEntryAttributes) getRegularDeletes(deletes PathSlice) PathSlice {
 }
 
 // GetDeletes calculate the deletes that need to be send to the device.
-func (s *sharedEntryAttributes) GetDeletes(deletes PathSlice) PathSlice {
+func (s *sharedEntryAttributes) GetDeletes(deletes PathsSlice) PathsSlice {
 
 	// if the actual level has no schema assigned we're on a key level
 	// element. Hence we try deletion via aggregation
@@ -850,14 +850,14 @@ func (r *RootEntry) GetUpdatesForOwner(owner string) UpdateSlice {
 }
 
 // GetDeletesForOwner returns the deletes that have been calculated for the given intent / owner
-func (r *RootEntry) GetDeletesForOwner(owner string) PathSlice {
+func (r *RootEntry) GetDeletesForOwner(owner string) PathsSlice {
 	// retrieve all entries from the tree that belong to the given user
 	// and that are marked for deletion.
 	// This is to cover all the cases where an intent was changed and certain
 	// part of the config got deleted.
 	deletesOwnerUpdates := LeafEntriesToCacheUpdates(r.getByOwnerFiltered(owner, FilterDeleted))
 	// they are retrieved as cache.update, we just need the path for deletion from cache
-	deletesOwner := make(PathSlice, 0, len(deletesOwnerUpdates))
+	deletesOwner := make(PathsSlice, 0, len(deletesOwnerUpdates))
 	// so collect the paths
 	for _, d := range deletesOwnerUpdates {
 		deletesOwner = append(deletesOwner, d.GetPath())
@@ -873,8 +873,8 @@ func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) UpdateSlice {
 }
 
 // GetDeletes returns the paths that due to the Tree content are to be deleted from the southbound device.
-func (r *RootEntry) GetDeletes() PathSlice {
-	deletes := PathSlice{}
+func (r *RootEntry) GetDeletes() PathsSlice {
+	deletes := PathsSlice{}
 	return r.sharedEntryAttributes.GetDeletes(deletes)
 }
 
