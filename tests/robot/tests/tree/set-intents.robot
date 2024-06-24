@@ -258,3 +258,23 @@ Eight
     Should Be Equal As Integers    ${result.rc}    0
 
     DeleteCandidate    ${sros-name}    ${sros-candidate}
+
+
+
+
+
+19-1 - SROS Add List
+    ${result} =     SetIntent    ${sros-name}    ${sros-candidate}    nineteen    5        ${CURDIR}/intents/19-sros-lists.json
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+19-2 - SROS Add List
+    ${result} =     SetIntent    ${sros-name}    ${sros-candidate}    nineteen    5        ${CURDIR}/intents/19-sros-lists-entry-removed.json
+    Should Be Equal As Integers    ${result.rc}    0
+    DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
+
+19-3 - SROS Delete List
+    ${result} =    DeleteIntent    ${sros-name}    ${sros-candidate}    nineteen    5
+    Should Be Equal As Integers    ${result.rc}    0
+
+    DeleteCandidate    ${sros-name}    ${sros-candidate}

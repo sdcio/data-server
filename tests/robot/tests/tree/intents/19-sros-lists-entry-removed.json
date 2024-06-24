@@ -1,0 +1,28 @@
+[
+    {
+      "path": "/",
+      "value": {
+        "configure": {
+          "filter": {
+            "ip-filter": [
+              {
+                "filter-name": "test2",
+                "description": "intent2",
+                "filter-id": 2
+              },
+              {
+                "filter-name": "test3",
+                "description": "MyIntentintent3",
+                "filter-id": 3
+              },
+              {
+                "filter-name": "test4",
+                "description": "intent4",
+                "filter-id": 4
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
