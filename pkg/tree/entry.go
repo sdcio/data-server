@@ -519,11 +519,14 @@ func (s *sharedEntryAttributes) Validate(errchan chan<- error) {
 		}(c)
 	}
 
-	// validate the mandatory statement on this entry
-	err := s.validateMandatory()
-	if err != nil {
-		errchan <- err
-	}
+	// TODO: Validate Mandatory is skipped for now, until we have running
+	// configuration information in the tree, to perform proper validation
+
+	// // validate the mandatory statement on this entry
+	// err := s.validateMandatory()
+	// if err != nil {
+	// 	errchan <- err
+	// }
 }
 
 // validateMandatory validates that all the mandatory attributes,

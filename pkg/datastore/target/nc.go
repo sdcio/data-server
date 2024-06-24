@@ -151,10 +151,11 @@ func (t *ncTarget) Status() string {
 }
 
 func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
-	log.Infof("starting target %s sync", t.sbiConfig.Address)
+	log.Infof("starting target %s [%s] sync", t.name, t.sbiConfig.Address)
 
 	for _, ncc := range syncConfig.Config {
 		// periodic get
+		log.Debugf("target %s, starting sync: %s, Interval: %s, Paths: [ \"%s\" ]", t.name, ncc.Name, ncc.Interval.String(), strings.Join(ncc.Paths, "\", \""))
 		go func(ncSync *config.SyncProtocol) {
 			t.internalSync(ctx, ncSync, true, syncCh)
 			ticker := time.NewTicker(ncSync.Interval)

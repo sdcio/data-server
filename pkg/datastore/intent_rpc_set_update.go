@@ -38,6 +38,7 @@ func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentReques
 		return nil, err
 	}
 
+	// read all the keys from the cache intended store but just the keys, no values are populated
 	storeIndex, err := d.readIntendedStoreKeysMeta(ctx)
 	if err != nil {
 		return nil, err
