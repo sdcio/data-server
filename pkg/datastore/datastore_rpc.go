@@ -1045,6 +1045,9 @@ func (d *Datastore) DeviationMgr(ctx context.Context) {
 }
 
 func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.DataServer_WatchDeviationsServer) {
+
+	sep := "/"
+
 	// send deviation START
 	for _, dc := range dm {
 		err := dc.Send(&sdcpb.WatchDeviationResponse{
@@ -1058,8 +1061,14 @@ func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.
 	}
 	// collect intent deviations and store them for clearing
 	newDeviations := make(map[string][]*sdcpb.WatchDeviationResponse)
+
+	configPaths := map[string]struct{}{}
+
 	// go through config and calculate deviations
 	for upd := range d.cacheClient.ReadCh(ctx, d.Name(), &cache.Opts{Store: cachepb.Store_CONFIG}, [][]string{nil}, 0) {
+		// save the updates path as an already checked path
+		configPaths[strings.Join(upd.GetPath(), sep)] = struct{}{}
+
 		v, err := upd.Value()
 		if err != nil {
 			log.Errorf("%s: failed to convert value: %v", d.Name(), err)
@@ -1203,6 +1212,60 @@ func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.
 			}
 		}
 	}
+
+	intendedUpdates, err := d.readIntendedStoreKeysMeta(ctx)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	for _, upds := range intendedUpdates {
+		for _, upd := range upds {
+			path := strings.Join(upd.GetPath(), sep)
+			if _, exists := configPaths[path]; !exists {
+
+				// iv, err := upd.Value()
+				// if err != nil {
+				// 	log.Errorf("%s: failed to convert intent value: %v", d.Name(), err)
+				// 	continue
+				// }
+
+				path, err := d.toPath(ctx, upd.GetPath())
+				if err != nil {
+					log.Error(err)
+					continue
+				}
+				// scRsp, err := d.getSchema(ctx, path)
+				// if err != nil {
+				// 	log.Errorf("%s: failed to get path schema: %v ", d.Name(), err)
+				// 	continue
+				// }
+				// niv, err := d.typedValueToYANGType(iv, scRsp.GetSchema())
+				// if err != nil {
+				// 	log.Errorf("%s: failed to convert value to its YANG type: %v ", d.Name(), err)
+				// 	continue
+				// }
+
+				rsp := &sdcpb.WatchDeviationResponse{
+					Name:          d.Name(),
+					Intent:        upd.Owner(),
+					Event:         sdcpb.DeviationEvent_UPDATE,
+					Reason:        sdcpb.DeviationReason_NOT_APPLIED,
+					Path:          path,
+					ExpectedValue: nil, // TODO this need to be fixed
+					CurrentValue:  nil,
+				}
+				for _, dc := range dm {
+					err = dc.Send(rsp)
+					if err != nil {
+						log.Errorf("%s: failed to send deviation: %v", d.Name(), err)
+						continue
+					}
+				}
+			}
+		}
+	}
+
 	// send deviation event END
 	for _, dc := range dm {
 		err := dc.Send(&sdcpb.WatchDeviationResponse{

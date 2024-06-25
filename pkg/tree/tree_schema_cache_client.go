@@ -13,7 +13,7 @@ import (
 type TreeSchemaCacheClient interface {
 	// CACHE based Functions
 	// ReadIntended retrieves the highes priority value from the intended store
-	Read(ctx context.Context, opts *cache.Opts, paths PathSlice) []*cache.Update
+	Read(ctx context.Context, opts *cache.Opts, paths [][]string) []*cache.Update
 
 	// SCHEMA based Functions
 	GetSchema(ctx context.Context, path []string) (*sdcpb.GetSchemaResponse, error)
@@ -36,7 +36,7 @@ func NewTreeSchemaCacheClient(datastore string, cc cache.Client, scb SchemaClien
 	}
 }
 
-func (c *TreeSchemaCacheClientImpl) Read(ctx context.Context, opts *cache.Opts, paths PathSlice) []*cache.Update {
+func (c *TreeSchemaCacheClientImpl) Read(ctx context.Context, opts *cache.Opts, paths [][]string) []*cache.Update {
 	if opts == nil {
 		opts = &cache.Opts{
 			PriorityCount: 1,

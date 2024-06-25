@@ -4,13 +4,13 @@ import "strings"
 
 type PathSet struct {
 	index map[string]struct{}
-	paths [][]string
+	paths PathSlices
 }
 
 func NewPathSet() *PathSet {
 	return &PathSet{
 		index: map[string]struct{}{},
-		paths: [][]string{},
+		paths: PathSlices{},
 	}
 }
 
@@ -28,6 +28,6 @@ func (p *PathSet) Join(other *PathSet) {
 	}
 }
 
-func (p *PathSet) GetPaths() [][]string {
+func (p *PathSet) GetPaths() PathSlices {
 	return p.paths
 }
