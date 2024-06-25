@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -526,6 +527,7 @@ func (s *sharedEntryAttributes) Validate(errchan chan<- error) {
 	// s.validateMandatory(errchan)
 
 	s.validateLeafListMinMaxAttributes(errchan)
+	s.validatePattern(errchan)
 }
 
 // validateLeafListMinMaxAttributes validates the Min-, and Max-Elements attribute of the Entry if it is a Leaflists.
@@ -548,6 +550,51 @@ func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(errchan chan<- 
 					}
 				}
 			}
+		}
+	}
+}
+
+// func (s *sharedEntryAttributes) validateLength(errchan chan<- error) {
+// 	if schema := s.schema.GetField(); schema != nil {
+// 		if schema.GetType().GetLength() == "" {
+// 			return
+// 		}
+
+// 		lv := s.leafVariants.GetByOwner(s.treeContext.actualOwner)
+// 		tv, err := lv.Value()
+// 		if err != nil {
+// 			errchan <- fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err)
+// 			return
+// 		}
+// 		value := tv.GetStringVal()
+
+// 	}
+// }
+
+func (s *sharedEntryAttributes) validatePattern(errchan chan<- error) {
+	if schema := s.schema.GetField(); schema != nil {
+		if len(schema.Type.Patterns) == 0 {
+			return
+		}
+		lv := s.leafVariants.GetByOwner(s.treeContext.actualOwner)
+		tv, err := lv.Update.Value()
+		if err != nil {
+			errchan <- fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err)
+			return
+		}
+		value := tv.GetStringVal()
+		for _, pattern := range schema.Type.Patterns {
+			if p := pattern.GetPattern(); p != "" {
+				matched, err := regexp.MatchString(p, value)
+				if err != nil {
+					errchan <- fmt.Errorf("failed compiling regex %s defined for %s", p, s.Path())
+					continue
+				}
+				if (!matched && !pattern.Inverted) || (pattern.GetInverted() && matched) {
+					errchan <- fmt.Errorf("value %s of %s does not match regex %s (inverted: %t)", value, s.Path(), p, pattern.GetInverted())
+				}
+			}
+
 		}
 	}
 }
