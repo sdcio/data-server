@@ -58,11 +58,11 @@ func (t *TreeContext) GetBranchesHighesPrecedence(path []string, filters ...Cach
 	return result
 }
 
-func (tc *TreeContext) ReadCurrentUpdatesHighestPriorities(ctx context.Context, ccp PathsSlice, count uint64) UpdateSlice {
+func (tc *TreeContext) ReadCurrentUpdatesHighestPriorities(ctx context.Context, ccp PathSlices, count uint64) UpdateSlice {
 	return tc.treeSchemaCacheClient.Read(ctx, &cache.Opts{
 		Store:         cachepb.Store_INTENDED,
 		PriorityCount: count,
-	}, ccp)
+	}, ccp.ToStringSlice())
 }
 
 func (t *TreeContext) GetPathsOfOwner(owner string) *PathSet {
@@ -84,7 +84,7 @@ func (t *TreeContext) SetStoreIndex(si map[string]UpdateSlice) {
 }
 
 // ReadRunning reads the value from running if the value does not exist, nil is returned
-func (t *TreeContext) ReadRunning(ctx context.Context, path []string) (*cache.Update, error) {
+func (t *TreeContext) ReadRunning(ctx context.Context, path PathSlice) (*cache.Update, error) {
 	// check if the value exists in running
 	_, exists := t.RunningStoreIndex[strings.Join(path, KeysIndexSep)]
 	if !exists {

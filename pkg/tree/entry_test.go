@@ -402,6 +402,171 @@ func Test_Entry_Four(t *testing.T) {
 		}
 	})
 }
+func Test_Validation_Leaflist_Min_Max(t *testing.T) {
+	prio50 := int32(50)
+	owner1 := "OwnerOne"
+	ts1 := int64(9999999)
+
+	ctx := context.TODO()
+
+	scb, err := getSchemaClientBound(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), owner1)
+
+	t.Run("Test Leaflist min- & max- elements - One",
+		func(t *testing.T) {
+
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			leaflistval := testhelper.GetLeafListTvProto(t,
+				[]*sdcpb.TypedValue{
+					{
+						Value: &sdcpb.TypedValue_StringVal{StringVal: "data"},
+					},
+				},
+			)
+
+			u1 := cache.NewUpdate([]string{"leaflist", "entry"}, leaflistval, prio50, owner1, ts1)
+
+			// start test add "existing" data
+			for _, u := range []*cache.Update{u1} {
+				err := root.AddCacheUpdateRecursive(ctx, u, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			root.FinishInsertionPhase()
+
+			validationErrors := []error{}
+			validationErrChan := make(chan error)
+			go func() {
+				root.Validate(validationErrChan)
+				close(validationErrChan)
+			}()
+
+			// read from the Error channel
+			for e := range validationErrChan {
+				validationErrors = append(validationErrors, e)
+			}
+
+			// check if errors are received
+			// If so, join them and return the cumulated errors
+			if len(validationErrors) != 1 {
+				t.Errorf("expected 1 error but got %d, %v", len(validationErrors), validationErrors)
+			}
+		},
+	)
+
+	t.Run("Test Leaflist min- & max- elements - Two",
+		func(t *testing.T) {
+
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			leaflistval := testhelper.GetLeafListTvProto(t,
+				[]*sdcpb.TypedValue{
+					{
+						Value: &sdcpb.TypedValue_StringVal{StringVal: "data1"},
+					},
+					{
+						Value: &sdcpb.TypedValue_StringVal{StringVal: "data2"},
+					},
+				},
+			)
+
+			u1 := cache.NewUpdate([]string{"leaflist", "entry"}, leaflistval, prio50, owner1, ts1)
+
+			// start test add "existing" data
+			for _, u := range []*cache.Update{u1} {
+				err := root.AddCacheUpdateRecursive(ctx, u, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			validationErrors := []error{}
+			validationErrChan := make(chan error)
+			go func() {
+				root.Validate(validationErrChan)
+				close(validationErrChan)
+			}()
+
+			// read from the Error channel
+			for e := range validationErrChan {
+				validationErrors = append(validationErrors, e)
+			}
+
+			// check if errors are received
+			// If so, join them and return the cumulated errors
+			if len(validationErrors) > 0 {
+				t.Errorf("expected no error but got %v", validationErrors)
+			}
+		},
+	)
+	t.Run("Test Leaflist min- & max- elements - Four",
+		func(t *testing.T) {
+
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			leaflistval := testhelper.GetLeafListTvProto(t,
+				[]*sdcpb.TypedValue{
+					{
+						Value: &sdcpb.TypedValue_StringVal{StringVal: "data1"},
+					},
+					{
+						Value: &sdcpb.TypedValue_StringVal{StringVal: "data2"},
+					},
+					{
+						Value: &sdcpb.TypedValue_StringVal{StringVal: "data3"},
+					},
+					{
+						Value: &sdcpb.TypedValue_StringVal{StringVal: "data4"},
+					},
+				},
+			)
+
+			u1 := cache.NewUpdate([]string{"leaflist", "entry"}, leaflistval, prio50, owner1, ts1)
+
+			// start test add "existing" data
+			for _, u := range []*cache.Update{u1} {
+				err := root.AddCacheUpdateRecursive(ctx, u, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			validationErrors := []error{}
+			validationErrChan := make(chan error)
+			go func() {
+				root.Validate(validationErrChan)
+				close(validationErrChan)
+			}()
+
+			// read from the Error channel
+			for e := range validationErrChan {
+				validationErrors = append(validationErrors, e)
+			}
+
+			// check if errors are received
+			// If so, join them and return the cumulated errors
+			if len(validationErrors) != 1 {
+				t.Errorf("expected 1 error but got %d, %v", len(validationErrors), validationErrors)
+			}
+		},
+	)
+}
 
 func Test_Entry_Delete_Aggregation(t *testing.T) {
 	desc3 := testhelper.GetStringTvProto(t, "DescriptionThree")

@@ -7,6 +7,8 @@ module sdcio_model_leaflist {
         container leaflist {
             leaf-list entry  {
                 type string;
+                min-elements 2;
+                max-elements 3;
             }
         }
     }
