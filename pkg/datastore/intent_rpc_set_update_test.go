@@ -653,10 +653,6 @@ func TestDatastore_populateTree(t *testing.T) {
 			cacheClient := mockcacheclient.NewMockClient(controller)
 			testhelper.ConfigureCacheClientMock(t, cacheClient, tt.intendedStoreUpdates, tt.expectedModify, tt.expectedDeletes)
 
-			// create a schema client mock
-			// schemaClient := mockschema.NewMockClient(controller)
-			// testhelper.ConfigureSchemaClientMock(t, schemaClient)
-
 			schemaClient, schema, err := testhelper.InitSDCIOSchema()
 			if err != nil {
 				t.Fatal(err)
