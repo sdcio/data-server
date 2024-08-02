@@ -622,6 +622,7 @@ func (s *sharedEntryAttributes) populateChoiceCaseResolvers() {
 			if val := s.treeContext.GetBranchesHighesPrecedence(s.Path(), CacheUpdateFilterExcludeOwner(s.treeContext.GetActualOwner())); val < math.MaxInt32 {
 				choiceResolver.SetValue(elem, val, false)
 			}
+
 			// set the value from the tree as well
 			if childExists {
 				v := child.getHighestPrecedenceValueOfBranch()

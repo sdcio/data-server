@@ -1130,11 +1130,7 @@ func getLeafList(s string, cs *sdcpb.SchemaElem_Container) (*sdcpb.LeafListSchem
 }
 
 func (d *Datastore) getChild(ctx context.Context, s string, cs *sdcpb.SchemaElem_Container) (string, bool) {
-	for _, c := range cs.Container.GetChildren() {
-		if c == s {
-			return c, true
-		}
-	}
+
 	if cs.Container.Name == "__root__" {
 		for _, c := range cs.Container.GetChildren() {
 			rsp, err := d.getValidationClient().GetSchema(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: c}}})
@@ -1152,6 +1148,11 @@ func (d *Datastore) getChild(ctx context.Context, s string, cs *sdcpb.SchemaElem
 			default:
 				continue
 			}
+		}
+	}
+	for _, c := range cs.Container.GetChildren() {
+		if c == s {
+			return c, true
 		}
 	}
 	return "", false
