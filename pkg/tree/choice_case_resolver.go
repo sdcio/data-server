@@ -57,8 +57,8 @@ type choiceCasesResolver struct {
 // GetElementNames retrieve all the Element names involved in the Choice
 func (c *choiceCasesResolver) GetElementNames() []string {
 	result := make([]string, 0, len(c.cases))
-	for k := range c.cases {
-		result = append(result, k)
+	for elemName := range c.elementToCaseMapping {
+		result = append(result, elemName)
 	}
 	return result
 }
