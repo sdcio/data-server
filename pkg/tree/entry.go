@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -41,8 +42,8 @@ func newEntry(ctx context.Context, parent Entry, pathElemName string, tc *TreeCo
 
 // Entry is the primary Element of the Tree.
 type Entry interface {
-	// Path returns the Path as []string
-	Path() []string
+	// Path returns the Path as PathSlice
+	Path() PathSlice
 	// PathName returns the last Path element, the name of the Entry
 	PathName() string
 	// addChild Add a child entry
@@ -60,7 +61,7 @@ type Entry interface {
 	// markOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
 	markOwnerDelete(o string)
 	// GetDeletes returns the cache-updates that are not updated, have no lower priority value left and hence should be deleted completely
-	GetDeletes(PathSlice) PathSlice
+	GetDeletes(PathSlices) PathSlices
 	// Walk takes the EntryVisitor and applies it to every Entry in the tree
 	Walk(f EntryVisitor) error
 	// shouldDelete indicated if there is no LeafEntry left and the Entry is to be deleted
@@ -68,7 +69,7 @@ type Entry interface {
 	// Validate kicks off validation
 	Validate(errchan chan<- error)
 	// validateMandatory the Mandatory schema field
-	validateMandatory() error
+	validateMandatory(errchan chan<- error)
 	// validateMandatoryWithKeys is an internally used function that us called by validateMandatory in case
 	// the container has keys defined that need to be skipped before the mandatory attributes can be checked
 	validateMandatoryWithKeys(level int, attribute string) error
@@ -256,7 +257,7 @@ func (s *sharedEntryAttributes) GetSchemaKeys() []string {
 // getAggregatedDeletes is called on levels that have no schema attached, meaning key schemas.
 // here we might delete the whole branch of the tree, if all key elements are being deleted
 // if not, we continue with regular deltes
-func (s *sharedEntryAttributes) getAggregatedDeletes(deletes PathSlice) PathSlice {
+func (s *sharedEntryAttributes) getAggregatedDeletes(deletes PathSlices) PathSlices {
 	// we take a look into the level(s) up
 	// trying to get the schema
 	ancestor, level := s.GetFirstAncestorWithSchema()
@@ -295,7 +296,7 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes PathSlice) PathSlic
 }
 
 // getRegularDeletes performs deletion calculation on elements that have a schema attached.
-func (s *sharedEntryAttributes) getRegularDeletes(deletes PathSlice) PathSlice {
+func (s *sharedEntryAttributes) getRegularDeletes(deletes PathSlices) PathSlices {
 	// if entry is a container type, check the keys, to be able to
 	// issue a delte for the whole branch at once via keys
 	switch s.schema.GetSchema().(type) {
@@ -324,7 +325,7 @@ func (s *sharedEntryAttributes) getRegularDeletes(deletes PathSlice) PathSlice {
 }
 
 // GetDeletes calculate the deletes that need to be send to the device.
-func (s *sharedEntryAttributes) GetDeletes(deletes PathSlice) PathSlice {
+func (s *sharedEntryAttributes) GetDeletes(deletes PathSlices) PathSlices {
 
 	// if the actual level has no schema assigned we're on a key level
 	// element. Hence we try deletion via aggregation
@@ -368,10 +369,10 @@ func (s *sharedEntryAttributes) GetByOwner(owner string, result []*LeafEntry) []
 }
 
 // Path returns the root based path of the Entry
-func (s *sharedEntryAttributes) Path() []string {
+func (s *sharedEntryAttributes) Path() PathSlice {
 	// special handling for root node
 	if s.parent == nil {
-		return []string{}
+		return PathSlice{}
 	}
 	return append(s.parent.Path(), s.pathElemName)
 }
@@ -523,35 +524,95 @@ func (s *sharedEntryAttributes) Validate(errchan chan<- error) {
 	// configuration information in the tree, to perform proper validation
 
 	// // validate the mandatory statement on this entry
-	// err := s.validateMandatory()
-	// if err != nil {
-	// 	errchan <- err
-	// }
+	// s.validateMandatory(errchan)
+
+	s.validateLeafListMinMaxAttributes(errchan)
+	s.validatePattern(errchan)
+}
+
+// validateLeafListMinMaxAttributes validates the Min-, and Max-Elements attribute of the Entry if it is a Leaflists.
+func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(errchan chan<- error) {
+	if schema := s.schema.GetLeaflist(); schema != nil {
+		if schema.MinElements > 0 {
+			if lv := s.leafVariants.GetByOwner(s.treeContext.actualOwner); lv != nil {
+				tv, err := lv.Update.Value()
+				if err != nil {
+					errchan <- fmt.Errorf("validating LeafList Min Attribute: %v", err)
+				}
+				if val := tv.GetLeaflistVal(); val != nil {
+					// check minelements if set
+					if schema.MinElements > 0 && len(val.GetElement()) < int(schema.GetMinElements()) {
+						errchan <- fmt.Errorf("leaflist %s defines %d min-elements but only %d elements are present", s.Path().String(), schema.MinElements, len(val.GetElement()))
+					}
+					// check maxelements if set
+					if len(val.GetElement()) > int(schema.GetMaxElements()) {
+						errchan <- fmt.Errorf("leaflist %s defines %d max-elements but %d elements are present", s.Path().String(), schema.GetMaxElements(), len(val.GetElement()))
+					}
+				}
+			}
+		}
+	}
+}
+
+// func (s *sharedEntryAttributes) validateLength(errchan chan<- error) {
+// 	if schema := s.schema.GetField(); schema != nil {
+// 		if schema.GetType().GetLength() == "" {
+// 			return
+// 		}
+
+// 		lv := s.leafVariants.GetByOwner(s.treeContext.actualOwner)
+// 		tv, err := lv.Value()
+// 		if err != nil {
+// 			errchan <- fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err)
+// 			return
+// 		}
+// 		value := tv.GetStringVal()
+
+// 	}
+// }
+
+func (s *sharedEntryAttributes) validatePattern(errchan chan<- error) {
+	if schema := s.schema.GetField(); schema != nil {
+		if len(schema.Type.Patterns) == 0 {
+			return
+		}
+		lv := s.leafVariants.GetByOwner(s.treeContext.actualOwner)
+		tv, err := lv.Update.Value()
+		if err != nil {
+			errchan <- fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err)
+			return
+		}
+		value := tv.GetStringVal()
+		for _, pattern := range schema.Type.Patterns {
+			if p := pattern.GetPattern(); p != "" {
+				matched, err := regexp.MatchString(p, value)
+				if err != nil {
+					errchan <- fmt.Errorf("failed compiling regex %s defined for %s", p, s.Path())
+					continue
+				}
+				if (!matched && !pattern.Inverted) || (pattern.GetInverted() && matched) {
+					errchan <- fmt.Errorf("value %s of %s does not match regex %s (inverted: %t)", value, s.Path(), p, pattern.GetInverted())
+				}
+			}
+
+		}
+	}
 }
 
 // validateMandatory validates that all the mandatory attributes,
 // defined by the schema are present either in the tree or in the index.
-func (s *sharedEntryAttributes) validateMandatory() error {
+func (s *sharedEntryAttributes) validateMandatory(errchan chan<- error) {
 	if s.schema != nil {
 		switch s.schema.GetSchema().(type) {
 		case *sdcpb.SchemaElem_Container:
 			for _, c := range s.schema.GetContainer().MandatoryChildren {
 				err := s.validateMandatoryWithKeys(len(s.GetSchema().GetContainer().GetKeys()), c)
 				if err != nil {
-					return err
+					errchan <- err
 				}
 			}
 		}
 	}
-
-	// continue with childs
-	for _, c := range s.childs {
-		err := c.validateMandatory()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // initChoiceCasesResolvers Choices and their cases are defined in the schema.
@@ -819,7 +880,7 @@ func (r *RootEntry) LoadIntendedStoreOwnerData(ctx context.Context, owner string
 	tc := r.getTreeContext()
 	ownerPaths := tc.GetPathsOfOwner(owner)
 
-	// addd thw given paths as well
+	// add the given paths as well
 	ownerPaths.Join(pathKeySet)
 
 	// Get all entries of the already existing intent
@@ -851,14 +912,14 @@ func (r *RootEntry) GetUpdatesForOwner(owner string) UpdateSlice {
 }
 
 // GetDeletesForOwner returns the deletes that have been calculated for the given intent / owner
-func (r *RootEntry) GetDeletesForOwner(owner string) PathSlice {
+func (r *RootEntry) GetDeletesForOwner(owner string) PathSlices {
 	// retrieve all entries from the tree that belong to the given user
 	// and that are marked for deletion.
 	// This is to cover all the cases where an intent was changed and certain
 	// part of the config got deleted.
 	deletesOwnerUpdates := LeafEntriesToCacheUpdates(r.getByOwnerFiltered(owner, FilterDeleted))
 	// they are retrieved as cache.update, we just need the path for deletion from cache
-	deletesOwner := make(PathSlice, 0, len(deletesOwnerUpdates))
+	deletesOwner := make(PathSlices, 0, len(deletesOwnerUpdates))
 	// so collect the paths
 	for _, d := range deletesOwnerUpdates {
 		deletesOwner = append(deletesOwner, d.GetPath())
@@ -874,8 +935,8 @@ func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) UpdateSlice {
 }
 
 // GetDeletes returns the paths that due to the Tree content are to be deleted from the southbound device.
-func (r *RootEntry) GetDeletes() PathSlice {
-	deletes := PathSlice{}
+func (r *RootEntry) GetDeletes() PathSlices {
+	deletes := PathSlices{}
 	return r.sharedEntryAttributes.GetDeletes(deletes)
 }
 

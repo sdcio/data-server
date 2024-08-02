@@ -34,4 +34,15 @@ import sdcio_model_leaflist {
   uses sdcio_model_doublekey:doublekey-top;
   uses sdcio_model_leaflist:leaflist-top;
 
+
+      leaf patterntest {
+        type string {
+          length "7..10";
+          pattern "hallo [0-9a-fA-F]*";
+          pattern 'hallo DU' {
+           // modifier invert-match;
+          }
+        }
+      }
+
 }

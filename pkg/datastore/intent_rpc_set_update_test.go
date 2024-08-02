@@ -719,7 +719,7 @@ func TestDatastore_populateTree(t *testing.T) {
 
 			// get the deletes that are meant to be send down towards the device
 			deletes := root.GetDeletes()
-			if diff := testhelper.DiffDoubleStringPathSlice(tt.expectedDeletes, deletes); diff != "" {
+			if diff := testhelper.DiffDoubleStringPathSlice(tt.expectedDeletes, deletes.ToStringSlice()); diff != "" {
 				t.Errorf("root.GetDeletes() mismatch (-want +got):\n%s", diff)
 			}
 
@@ -731,7 +731,7 @@ func TestDatastore_populateTree(t *testing.T) {
 
 			// get the deletes that are meant to be send down towards the cache (INTENDED)
 			deletesOwner := root.GetDeletesForOwner(tt.intentName)
-			if diff := testhelper.DiffDoubleStringPathSlice(tt.expectedOwnerDeletes, deletesOwner); diff != "" {
+			if diff := testhelper.DiffDoubleStringPathSlice(tt.expectedOwnerDeletes, deletesOwner.ToStringSlice()); diff != "" {
 				t.Errorf("root.GetDeletesForOwner mismatch (-want +got):\n%s", diff)
 			}
 		})

@@ -211,7 +211,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		setDataReq.Delete = append(setDataReq.Delete, sdcpbUpd.GetPath())
 	}
 
-	fmt.Println(prototext.Format(setDataReq))
+	log.Debug(prototext.Format(setDataReq))
 
 	log.Info("intent setting into candidate")
 	// set the candidate
@@ -254,7 +254,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		Store:    cachepb.Store_INTENDED,
 		Owner:    req.GetIntent(),
 		Priority: req.GetPriority(),
-	}, deletesOwner, updatesOwner)
+	}, deletesOwner.ToStringSlice(), updatesOwner)
 	if err != nil {
 		return fmt.Errorf("failed updating the intended store for %s: %w", d.Name(), err)
 	}
@@ -262,7 +262,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	// fast and optimistic writeback to the config store
 	err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
 		Store: cachepb.Store_CONFIG,
-	}, deletes, updates)
+	}, deletes.ToStringSlice(), updates)
 	if err != nil {
 		return fmt.Errorf("failed updating the running config store for %s: %w", d.Name(), err)
 	}
