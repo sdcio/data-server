@@ -21,15 +21,16 @@ import (
 	"github.com/beevik/etree"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 
-	"github.com/sdcio/data-server/pkg/schema"
+	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 )
 
 const (
 	//
 	ncBase1_0 = "urn:ietf:params:xml:ns:netconf:base:1.0"
 	//
-	operationDelete = "delete"
-	operationRemove = "remove"
+	operationDelete  = "delete"
+	operationRemove  = "remove"
+	operationReplace = "replace"
 )
 
 // XMLConfigBuilder is used to builds XML configuration or XML Filter documents
@@ -38,8 +39,7 @@ const (
 type XMLConfigBuilder struct {
 	cfg          *XMLConfigBuilderOpts
 	doc          *etree.Document
-	schemaClient schema.Client
-	schema       *sdcpb.Schema
+	schemaClient SchemaClient.SchemaClientBound
 }
 
 type XMLConfigBuilderOpts struct {
@@ -52,12 +52,11 @@ type XMLConfigBuilderOpts struct {
 }
 
 // NewXMLConfigBuilder returns a new XMLConfigBuilder instance
-func NewXMLConfigBuilder(ssc schema.Client, schema *sdcpb.Schema, cfgOpts *XMLConfigBuilderOpts) *XMLConfigBuilder {
+func NewXMLConfigBuilder(ssc SchemaClient.SchemaClientBound, cfgOpts *XMLConfigBuilderOpts) *XMLConfigBuilder {
 	return &XMLConfigBuilder{
 		cfg:          cfgOpts,
 		doc:          etree.NewDocument(),
 		schemaClient: ssc,
-		schema:       schema,
 	}
 }
 
@@ -147,14 +146,44 @@ func (x *XMLConfigBuilder) AddValue(ctx context.Context, p *sdcpb.Path, v *sdcpb
 	}
 	// get the string representation of the value
 	// cause xml is all string
-	value, err := valueAsString(v)
-	if err != nil {
-		return err
+	switch val := v.GetValue().(type) {
+	case *sdcpb.TypedValue_LeaflistVal:
+		parent := elem.Parent()
+		// we add all the leaflist entries as their own values
+		for _, tv := range val.LeaflistVal.GetElement() {
+			subelem := parent.CreateElement(p.Elem[len(p.Elem)-1].Name)
+
+			value, err := valueAsString(tv)
+			if err != nil {
+				return err
+			}
+			// set the respective value
+			// use SetText instead of CreateText to properly handle paths
+			// with a key as leaf.
+			subelem.SetText(value)
+		}
+		operKey := "operation"
+		// add base1.0 as xmlns:nc attr
+		if x.cfg.OperationWithNamespace {
+			parent.CreateAttr("xmlns:nc", ncBase1_0)
+			operKey = "nc:" + operKey
+		}
+		// add the delete operation attribute
+		parent.CreateAttr(operKey, operationReplace)
+
+		// since fastForward did create an initial element, but we created all we
+		// need in the loop, we delete the element from its parent
+		parent.RemoveChild(elem)
+	default:
+		value, err := valueAsString(v)
+		if err != nil {
+			return err
+		}
+		// set the respective value
+		// use SetText instead of CreateText to properly handle paths
+		// with a key as leaf.
+		elem.SetText(value)
 	}
-	// set the respective value
-	// use SetText instead of CreateText to properly handle paths
-	// with a key as leaf.
-	elem.SetText(value)
 
 	return nil
 }
@@ -176,14 +205,13 @@ func (x *XMLConfigBuilder) resolveNamespace(ctx context.Context, p *sdcpb.Path, 
 	}
 
 	// Perform schema queries
-	sr, err := x.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
-		Path: &sdcpb.Path{
+	sr, err := x.schemaClient.GetSchema(ctx,
+		&sdcpb.Path{
 			Elem:   p.Elem[:peIdx+1],
 			Origin: p.Origin,
 			Target: p.Target,
 		},
-		Schema: x.schema,
-	})
+	)
 	if err != nil {
 		return "", err
 	}

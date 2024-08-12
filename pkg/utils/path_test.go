@@ -107,7 +107,7 @@ func TestStripPathElemPrefix(t *testing.T) {
 			args: args{
 				p: "/srl_nokia-netinst:network-instance[srl_nokia-netinst:name = current()/../../../../../srl_nokia-netinst:name]/srl_nokia-netinst:interface/srl_nokia-netinst:name",
 			},
-			want:    "/network-instance[name = current()/../../../../../name]/interface/name",
+			want:    "/network-instance[name=current()/../../../../../name]/interface/name",
 			wantErr: false,
 		},
 	}

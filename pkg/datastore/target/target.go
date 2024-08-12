@@ -22,7 +22,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/sdcio/data-server/pkg/config"
-	"github.com/sdcio/data-server/pkg/schema"
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 )
 
 const (
@@ -39,12 +39,12 @@ type Target interface {
 	Close() error
 }
 
-func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schema.Client, schema *sdcpb.Schema, opts ...grpc.DialOption) (Target, error) {
+func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemaClient.SchemaClientBound, opts ...grpc.DialOption) (Target, error) {
 	switch cfg.Type {
 	case targetTypeGNMI:
 		return newGNMITarget(ctx, name, cfg, opts...)
 	case targetTypeNETCONF:
-		return newNCTarget(ctx, name, cfg, schemaClient, schema)
+		return newNCTarget(ctx, name, cfg, schemaClient)
 	case targetTypeNOOP, "":
 		return newNoopTarget(ctx, name)
 	}

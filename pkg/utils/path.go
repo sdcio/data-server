@@ -16,6 +16,7 @@ package utils
 
 import (
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 
@@ -281,11 +282,24 @@ func ToXPath(p *sdcpb.Path, noKeys bool) string {
 	for i, pe := range elems {
 		sb.WriteString(pe.GetName())
 		if !noKeys {
-			for k, v := range pe.GetKey() {
+
+			// need to sort the keys to get them in the correct order
+			kvMap := pe.GetKey()
+			// create a slice for the keys
+			keySlice := make([]string, 0, len(pe.GetKey()))
+			// add the keys
+			for k := range kvMap {
+				keySlice = append(keySlice, k)
+			}
+			// sort the keys
+			slices.Sort(keySlice)
+
+			// iterate over the sorted keys slice
+			for _, k := range keySlice {
 				sb.WriteString("[")
 				sb.WriteString(k)
 				sb.WriteString("=")
-				sb.WriteString(v)
+				sb.WriteString(kvMap[k])
 				sb.WriteString("]")
 			}
 		}

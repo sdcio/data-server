@@ -23,14 +23,20 @@ import (
 	"github.com/sdcio/data-server/pkg/schema"
 )
 
-type ValidationClient struct {
-	*CacheClient.CacheClientBound
-	*SchemaClient.SchemaClientBound
+type ValidationClientImpl struct {
+	CacheClient.CacheClientBound
+	SchemaClient.SchemaClientBound
 }
 
-func NewValidationClient(datastoreName string, c cache.Client, s *schema_server.Schema, sc schema.Client) *ValidationClient {
-	return &ValidationClient{
+func NewValidationClient(datastoreName string, c cache.Client, s *schema_server.Schema, sc schema.Client) *ValidationClientImpl {
+	return &ValidationClientImpl{
 		CacheClientBound:  CacheClient.NewCacheClientBound(datastoreName, c),
 		SchemaClientBound: SchemaClient.NewSchemaClientBound(s, sc),
 	}
+}
+
+// ValidationClient provides a client that bundles the bound clients for the cache as well as for the schema, of a certain device.
+type ValidationClient interface {
+	CacheClient.CacheClientBound
+	SchemaClient.SchemaClientBound
 }

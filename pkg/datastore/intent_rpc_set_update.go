@@ -16,34 +16,119 @@ package datastore
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/sdcio/cache/proto/cachepb"
+	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
-
-	"github.com/sdcio/data-server/pkg/cache"
-	"github.com/sdcio/data-server/pkg/datastore/ctree"
-	"github.com/sdcio/data-server/pkg/utils"
 )
 
-type intentContext struct {
-	req           *sdcpb.SetIntentRequest
-	candidateName string
+func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentRequest, tc *tree.TreeContext) (r *tree.RootEntry, err error) {
+	// create a new Tree
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		return nil, err
+	}
 
-	newUpdates       []*sdcpb.Update
-	newCompletePaths [][]string
-	//
-	currentUpdates        []*sdcpb.Update
-	currentPaths          []*sdcpb.Path
-	currentKeyAsLeafPaths []*sdcpb.Path
-	//
-	// removedPaths    []*sdcpb.Path
-	removedPathsMap map[string]struct{}
+	// read all the keys from the cache intended store but just the keys, no values are populated
+	storeIndex, err := d.readIntendedStoreKeysMeta(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tc.SetStoreIndex(storeIndex)
+
+	// list of updates to be added to the cache
+	// Expands the value, in case of json to single typed value updates
+	expandedReqUpdates, err := d.expandUpdates(ctx, req.GetUpdate(), true)
+	if err != nil {
+		return nil, err
+	}
+
+	// temp storage for cache.Update of the req. They are to be added later.
+	newCacheUpdates := make([]*cache.Update, 0, len(expandedReqUpdates))
+
+	// Set of pathKeySet that need to be retrieved from the cache
+	pathKeySet := tree.NewPathSet()
+
+	for _, u := range expandedReqUpdates {
+		pathslice, err := utils.CompletePath(nil, u.GetPath())
+		if err != nil {
+			return nil, err
+		}
+
+		pathKeySet.AddPath(pathslice)
+
+		// since we already have the pathslice, we construct the cache.Update, but keep it for later
+		// addition to the tree. First we need to mark the existing once for deltion
+
+		// make sure typedValue is carrying the correct type
+		err = d.validateUpdate(ctx, u)
+		if err != nil {
+			return nil, err
+		}
+
+		// convert value to []byte for cache insertion
+		val, err := proto.Marshal(u.GetValue())
+		if err != nil {
+			return nil, err
+		}
+
+		// construct the cache.Update
+		newCacheUpdates = append(newCacheUpdates, cache.NewUpdate(pathslice, val, req.GetPriority(), req.GetIntent(), 0))
+	}
+
+	root.LoadIntendedStoreOwnerData(ctx, req.GetIntent(), pathKeySet)
+
+	// now add the cache.Updates from the actual request, after marking the old once for deletion.
+	for _, upd := range newCacheUpdates {
+		// add the cache.Update to the tree
+		err = root.AddCacheUpdateRecursive(ctx, upd, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// // populate schema within the tree
+	// err = root.Walk(tree.TreeWalkerSchemaRetriever(ctx, d.getValidationClient()))
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	fmt.Printf("Tree:%s\n", root.String())
+
+	return root, nil
 }
 
+// SetIntentUpdate Processes new and updated intents
+//
+// The main concept is as follows.
+//  1. Get all keys from the cache along with the "metadata" (Owner, Priority, etc.) Note: Requesting the values is the expensive task with the default cache implementation
+//  2. Filter the keys for entries that belong to the intent (Owner) which is necessary for updated intents (delete config entries that do no longer exist)
+//  3. Calculate all the paths that the new intent request touches
+//  4. Combine the keys from the two previous steps to query them from the cache just once.
+//  5. Query the cache with the resulting keys to also get the values.
+//  6. Add the received cache entries to the tree with the new-flag set to false.
+//  7. Mark all entries in the tree for the specific owner as deleted.
+//  8. Add all the new request entries to the tree with the new flag set to true. The tree will evaluate the values and adjust its internal state (new, deleted and updated)
+//     for these entries. If the value remains unchanged, it will reset the new flag if it is a different value, it will set the updated flag and reset the delete flag.
+//  9. The tree will be populated with schema information.
+//  10. Now the tree can be queried for the highes priority values ".GetHighesPrio(true)". It will also consider the deleted flag and only return new or updated values.
+//     This is the calculation the yields the updates that will need to be pushed to the device.
+//  11. .GetDeletes() returns the entries that are still marked for deletion. The Paths will be extracted and then send to the device as deletes (path aggregation is
+//     applied, if e.g. a whole interface is delted, the deleted paths only contains the delete for the interface, not all its leafs)
+//  12. All updates (New & Updated) for the specifc owner / intent are being retrieved from the tree to update the cache.
+//  13. All remaining deletes for the specifc owner / intent are being retrieved from the tree to remove them from the cache.
+//  14. The request towards southbound is created with the device updates / deletes. A candidate is created, and applied to the device.
+//  15. The owner based updates and deletes are being pushed into the cache.
+//  16. The raw intent (as received in the req) is stored as a blob in the cache.
 func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentRequest, candidateName string) error {
 	logger := log.NewEntry(
 		log.New()).WithFields(log.Fields{
@@ -56,12 +141,24 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	logger.Debugf("set intent update start")
 	defer logger.Debugf("set intent update end")
 
-	ic, err := d.newIntentContext(ctx, req, candidateName)
+	// PH1: go through all updates from the intent to figure out
+	// if they need to be applied based on the intent priority.
+	logger.Debugf("reading intent paths to be updated from intended store; looking for the highest priority values")
+
+	treeCacheSchemaClient := tree.NewTreeSchemaCacheClient(d.Name(), d.cacheClient, d.getValidationClient())
+	tc := tree.NewTreeContext(treeCacheSchemaClient, req.GetIntent())
+
+	root, err := d.populateTree(ctx, req, tc)
 	if err != nil {
 		return err
 	}
 
-	// TODO: validate updates earlier
+	log.Debugf("finish insertion phase")
+	root.FinishInsertionPhase()
+
+	// retrieve the data that is meant to be send southbound (towards the device)
+	updates := root.GetHighestPrecedence(true)
+	deletes := root.GetDeletes()
 
 	// set request to be applied into the candidate
 	setDataReq := &sdcpb.SetDataRequest{
@@ -72,369 +169,120 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 			Owner:    req.GetIntent(),
 			Priority: req.GetPriority(),
 		},
-		Update: make([]*sdcpb.Update, 0),
-		Delete: make([]*sdcpb.Path, 0),
-	}
-	//
-	allCurrentCacheEntries := d.readNewUpdatesHighestPriority(ctx, ic.newCompletePaths)
-	// PH1: go through all updates from the intent to figure out
-	// if they need to be applied based on the intent priority.
-	logger.Debugf("reading intent paths to be updated from intended store; looking for the highest priority values")
-
-	for i, upd := range ic.newUpdates {
-		cp := ic.newCompletePaths[i]
-		// get the current highest priority value(s) for this path
-		currentCacheEntries := allCurrentCacheEntries[strings.Join(cp, ",")]
-		logger.Debugf("highest update (p=updates): %v=%v", cp, currentCacheEntries)
-		// check if an update with "higher" priority exists
-		switch lcce := len(currentCacheEntries); lcce {
-		case 0:
-			logger.Debugf("path %v has no entries in the intended store: goes in setData update", cp)
-			// does not exist, apply new intent update
-			setDataReq.Update = append(setDataReq.Update, upd)
-			// add delete to remove previous value, TODO: not needed ? deviation ?
-			// setDataReq.Delete = append(setDataReq.Delete, upd.GetPath())
-		case 1:
-			logger.Debugf("path %v has an entry in the intended store: checking priority", cp)
-			switch {
-			case currentCacheEntries[0].Priority() < req.GetPriority():
-				logger.Debugf("path %v | current intended value has a `higher` priority that the intent: current intended value goes in the setData update", cp)
-				// there is a current value with higher priority.
-				// add it to the candidate to allow for proper validation.
-				cupd, err := d.cacheUpdateToUpdate(ctx, currentCacheEntries[0])
-				if err != nil {
-					return err
-				}
-				setDataReq.Update = append(setDataReq.Update, cupd)
-			case currentCacheEntries[0].Priority() == req.GetPriority():
-				logger.Debugf("path %v | current intended value has an equal priority to the intent: goes in the setData update and delete", cp)
-				// exists with same priority
-
-				// if the highest priority is the current intent being applied,
-				// set the new received value
-				if currentCacheEntries[0].Owner() == req.GetIntent() {
-					setDataReq.Update = append(setDataReq.Update, upd)
-				} else {
-					// else: the highest priority is owned by another intent
-					// set the value from cache for validation
-					cupd, err := d.cacheUpdateToUpdate(ctx, currentCacheEntries[0])
-					if err != nil {
-						return err
-					}
-					setDataReq.Update = append(setDataReq.Update, cupd)
-				}
-			case currentCacheEntries[0].Priority() > req.GetPriority():
-				logger.Debugf("path %v | current intended value has an `lower` priority than the intent: new intent update goes in the setData update and delete", cp)
-				// exists with a "lower" priority, apply current
-				setDataReq.Update = append(setDataReq.Update, upd)
-				// add delete to remove previous value
-				setDataReq.Delete = append(setDataReq.Delete, upd.GetPath())
-			}
-		default:
-			logger.Debugf("path %v has %d entries in the intended store: checking priority and owner", cp, lcce)
-			for i, cce := range currentCacheEntries {
-				logger.Debugf("path %v has entry.%d: %v", cp, i, cce)
-			}
-
-			switch {
-			case currentCacheEntries[0].Priority() < req.GetPriority():
-				logger.Debugf("path %v | current intended value has a `higher` priority that the intent: current intended value goes in the setData update", cp)
-				// there is a current value with higher priority
-				// add it to the candidate to allow for proper validation
-				cupd, err := d.cacheUpdateToUpdate(ctx, currentCacheEntries[0])
-				if err != nil {
-					return err
-				}
-				setDataReq.Update = append(setDataReq.Update, cupd)
-			case currentCacheEntries[0].Priority() == req.GetPriority():
-				logger.Debugf("path %v | current intended value has an equal priority to the intent: goes in the setData update and delete", cp)
-				// if the highest priority is the current intent being applied,
-				// set the new received value
-				if currentCacheEntries[0].Owner() == req.GetIntent() {
-					setDataReq.Update = append(setDataReq.Update, upd)
-				} else {
-					// else: the highest priority is owned by another intent
-					// set the value from cache for validation
-					cupd, err := d.cacheUpdateToUpdate(ctx, currentCacheEntries[0])
-					if err != nil {
-						return err
-					}
-					setDataReq.Update = append(setDataReq.Update, cupd)
-				}
-			case currentCacheEntries[0].Priority() > req.GetPriority():
-				logger.Debugf("path %v | current intended value has an `lower` priority than the intent: new intent update goes in the setData update and delete", cp)
-				// exists with a "lower" priority, apply current
-				setDataReq.Update = append(setDataReq.Update, upd)
-			}
-		}
+		Update: make([]*sdcpb.Update, 0, len(updates)),
+		Delete: make([]*sdcpb.Path, 0, len(deletes)),
 	}
 
-	//
-	currentPaths := make([][]string, 0, len(ic.currentPaths))
-	for _, p := range ic.currentPaths {
-		cp, _ := utils.CompletePath(nil, p)
-		currentPaths = append(currentPaths, cp)
-	}
-
-	currentUpdatesHighestPriorities := d.readCurrentUpdatesHighestPriorities(ctx, currentPaths, 2)
-	// go though current paths to figure out
-	for i, cp := range currentPaths {
-		logger.Debugf("D | has applied path: %v", cp)
-		// cp, _ := utils.CompletePath(nil, p)
-		// get the 2 current highest priorities values for this path
-		rsrs := currentUpdatesHighestPriorities[strings.Join(cp, ",")]
-
-		// debug start
-		for i, rs := range rsrs {
-			for j, r := range rs {
-				logger.Debugf("DDDD | %d.%d: %v", i, j, r)
-			}
-		}
-		// debug end
-		logger.Debugf("D | got %d set(s) of highest priorities", len(rsrs))
-		switch lrs := len(rsrs); lrs {
-		case 0: // there should be no current paths in this case, intent created for the first time
-		case 1:
-			logger.Debugf("D1 | applied path highest update %v=%v", cp, rsrs[0])
-			switch lcce := len(rsrs[0]); lcce {
-			case 0:
-			case 1:
-				logger.Debugf("D | path %v has 1 entry in the intended store: %v", cp, rsrs[0][0])
-				switch {
-				// exist with a "higher" priority, do not delete
-				case rsrs[0][0].Priority() < req.GetPriority():
-					logger.Debugf("D | path %v | exists with a `higher` priority: do nothing", cp)
-				case rsrs[0][0].Priority() == req.GetPriority():
-					logger.Debugf("D | path %v | exists with an equal priority: check owner", cp)
-					// TODO: here? check next priority and apply it if it exists
-					if rsrs[0][0].Owner() == req.GetIntent() {
-						// same priority and same owner, add it to deletes
-						logger.Debugf("D | path %v | exists with an equal priority and same owner: add to set data request delete", cp)
-						setDataReq.Delete = append(setDataReq.Delete, ic.currentPaths[i])
-					}
-				case rsrs[0][0].Priority() > req.GetPriority():
-					logger.Debugf("D | path %v | exists with a `lower` priority; goes in the set data request delete", cp)
-					// intent has higher priority, delete
-					setDataReq.Delete = append(setDataReq.Delete, ic.currentPaths[i])
-					// TODO: here? check next priority and apply it if it exists
-				}
-			default:
-				logger.Debugf("D | paths %v has %d entries in the intended store", cp, lcce)
-				for i, cce := range rsrs[0] {
-					logger.Debugf("D | path %v has entry.%d: %v", cp, i, cce)
-				}
-				switch {
-				// exist with a "higher" priority, do not delete
-				case rsrs[0][0].Priority() < req.GetPriority():
-					logger.Debugf("D | path %v | exists with a `higher` priority: do nothing", cp)
-				case rsrs[0][0].Priority() == req.GetPriority():
-					logger.Debugf("D | path %v | exists with an equal priority: check owner", cp)
-					// check if the latest update is owned by this intent
-					selectedCacheUpdate := rsrs[0][lcce-1]
-					if selectedCacheUpdate.Owner() == req.GetIntent() { // this intent owns the latest update
-						rmcp := strings.Join(cp, ",")
-						if _, ok := ic.removedPathsMap[rmcp]; ok { // this intent is removing this leaf
-							selectedCacheUpdate = rsrs[0][lcce-2] // replace with the next update in the intended store
-							logger.Debugf("D | path %v | exists with an equal priority and this intent is the latest; pick next cacheUpdate: %v", cp, selectedCacheUpdate)
-							delete(ic.removedPathsMap, rmcp) // delete path from removed paths map
-							upd, err := d.cacheUpdateToUpdate(ctx, selectedCacheUpdate)
-							if err != nil {
-								return err
-							}
-							setDataReq.Update = append(setDataReq.Update, upd)
-						}
-					}
-				case rsrs[0][0].Priority() > req.GetPriority(): // Can this happen ????
-					logger.Debugf("D | path %v | !! UNHANDLED !! : exists with a `lower` priority; goes in the set data request delete", cp)
-					logger.Debugf("D | path %v | %v", cp, rsrs[0][0])
-					// intent has higher priority, delete
-					// setDataReq.Delete = append(setDataReq.Delete, p)
-				}
-			}
-		case 2:
-			logger.Debugf("D2 | applied path highest update %v=%+v", cp, rsrs)
-		}
-	}
-
-	// update context with new updates
-	// TODO: add removed paths as deletes if they are not present in the setDataReq.Update
-	pathsToRemove := make([]*sdcpb.Path, 0, len(ic.removedPathsMap))
-	uniqueAdded := map[string]struct{}{}
-	// TODO: retrieve all next priorities
-	for rmcp := range ic.removedPathsMap {
-		logger.Debugf("RMP1: %s", rmcp)
-		rmp, err := d.toPath(ctx, strings.Split(rmcp, ","))
+	// add all the highes priority updates to the setDataReq
+	for _, u := range updates {
+		sdcpbUpd, err := d.cacheUpdateToUpdate(ctx, u)
 		if err != nil {
 			return err
 		}
-		logger.Debugf("RMP2: %s", rmp)
-		keyPaths := d.buildPathsWithKeysAsLeaves([]*sdcpb.Path{rmp})
-		logger.Debugf("RMP3: keyPaths: %v", keyPaths)
-		if len(keyPaths) == 0 {
-			continue
+		setDataReq.Update = append(setDataReq.Update, sdcpbUpd)
+	}
+
+	// perform validation
+	// we use a channel and cumulate all the errors
+	validationErrors := []error{}
+	validationErrChan := make(chan error)
+	go func() {
+		root.Validate(validationErrChan)
+		close(validationErrChan)
+	}()
+
+	// read from the Error channel
+	for e := range validationErrChan {
+		validationErrors = append(validationErrors, e)
+	}
+
+	// check if errors are received
+	// If so, join them and return the cumulated errors
+	if len(validationErrors) > 0 {
+		return fmt.Errorf("cumulated validation errors:\n%v", errors.Join(validationErrors...))
+	}
+
+	// add all the deletes to the setDataReq
+	for _, u := range deletes {
+		sdcpbUpd, err := d.cacheUpdateToUpdate(ctx, cache.NewUpdate(u, []byte{}, req.Priority, req.Intent, 0))
+		if err != nil {
+			return err
 		}
-		// check next intended entry after the current one
-		nextUpdate := d.getNextPriority(ctx, req.GetPriority(), req.GetIntent(), strings.Split(rmcp, ","))
-		logger.Debugf("RMP4: next update %v = %v", rmcp, nextUpdate)
-		if nextUpdate != nil {
-			nu, err := d.cacheUpdateToUpdate(ctx, nextUpdate)
-			if err != nil {
-				return err
-			}
-			setDataReq.Update = append(setDataReq.Update, nu)
-			continue
-		}
-
-		// no next update, check if the removed paths are referenced by any other
-		// update. if not delete they keyPaths.
-
-		// ugly start
-	NEXT_PATH:
-		for _, kp := range keyPaths {
-			logger.Debugf("keyPath: %v", kp)
-			kpNOKey := proto.Clone(kp).(*sdcpb.Path)
-			kpNOKey.Elem = kpNOKey.Elem[:len(kp.Elem)-1]
-			logger.Debugf("keyPathNOKey: %v", kpNOKey)
-			kpxp := utils.ToXPath(kpNOKey, false)
-
-			for _, upd := range setDataReq.GetUpdate() {
-				updxp := utils.ToXPath(upd.GetPath(), false)
-				if strings.HasPrefix(updxp, kpxp) {
-					continue NEXT_PATH // the removed path is being updated
-				}
-			}
-
-			if _, ok := uniqueAdded[kpxp]; ok {
-				continue NEXT_PATH // the path has been added to the list already
-			}
-			uniqueAdded[kpxp] = struct{}{}
-			// the removed path is not being updated
-			pathsToRemove = append(pathsToRemove, kpNOKey)
-		}
-		// ugly end
+		setDataReq.Delete = append(setDataReq.Delete, sdcpbUpd.GetPath())
 	}
 
-	logger.Debugf("got %d paths to remove", len(pathsToRemove))
-	for i, ptrm := range pathsToRemove {
-		logger.Debugf("path to remove: %d: %v", i, ptrm)
-		setDataReq.Delete = append(setDataReq.Delete, ptrm)
-	}
-	//
+	log.Debug(prototext.Format(setDataReq))
 
-	// TODO: cleanup set data request:
-	// - remove redundant deletes
-	// - group updates into updates with JSON TypedValues?
-
-	logger.Debug()
-	logger.Debugf("done building set data request for the candidate")
-	logger.Debugf("set data request: START")
-
-	for i, upd := range setDataReq.GetUpdate() {
-		logger.Debugf("set data request update.%d: %v", i, upd)
-	}
-	for i, del := range setDataReq.GetDelete() {
-		logger.Debugf("set data request delete.%d: %v", i, del)
-	}
-
-	logger.Debugf("set data request: END")
-	logger.Debug()
-	// fmt.Println(prototext.Format(setDataReq))
 	log.Info("intent setting into candidate")
+	// set the candidate
 	_, err = d.setCandidate(ctx, setDataReq, false)
 	if err != nil {
 		return err
 	}
 	log.Info("intent set into candidate")
-	// apply intent
-	err = d.applyIntent(ctx, candidateName, req.GetPriority(), setDataReq)
+	// apply the resulting config to the device
+	err = d.applyIntent(ctx, candidateName, setDataReq)
 	if err != nil {
 		return err
 	}
-	logger.Debug()
+
 	logger.Debug("intent is validated")
 	log.Infof("ds=%s intent=%s: intent applied", req.GetName(), req.GetIntent())
-	logger.Debug()
 
 	/////////////////////////////////////
 	// update intent in intended store //
 	/////////////////////////////////////
 
-	//// deletes
-	delPaths := make([]*sdcpb.Path, 0)
-	for _, upd := range ic.currentUpdates {
-		delPaths = append(delPaths, upd.GetPath())
-	}
+	// retrieve the data that is meant to be send towards the cache
+	updatesOwner := root.GetUpdatesForOwner(req.GetIntent())
+	deletesOwner := root.GetDeletesForOwner(req.GetIntent())
 
-	// add paths ending with keys to deletes,
-	// to be used to delete intended notifications
-	delPaths = d.pathsAddKeysAsLeaves(delPaths)
-	dels := make([][]string, 0, len(delPaths))
-	for _, dp := range delPaths {
-		dcp, err := utils.CompletePath(nil, dp)
-		if err != nil {
-			return err
-		}
-		dels = append(dels, dcp)
-	}
+	// logging
+	strSl := tree.Map(updates, func(u *cache.Update) string { return u.String() })
+	log.Debugf("Updates\n%s", strings.Join(strSl, "\n"))
 
-	// add paths ending with keys to updates
-	cacheUpdates := make([]*cache.Update, 0, len(ic.newUpdates))
-	for _, upd := range ic.newUpdates {
-		cup, err := d.cacheClient.NewUpdate(upd)
-		if err != nil {
-			return err
-		}
-		cacheUpdates = append(cacheUpdates, cup)
-	}
-	for _, del := range dels {
-		logger.Debugf("on intended deleting: %v", del)
-	}
-	// 	logger.Debugf()
-	for _, update := range cacheUpdates {
-		logger.Debugf("on intended updating: %v", update)
-	}
-	// logger.Debugf()
+	strSl = deletes.StringSlice()
+	log.Debugf("Deletes:\n%s", strings.Join(strSl, "\n"))
+
+	strSl = tree.Map(updatesOwner, func(u *cache.Update) string { return u.String() })
+	log.Debugf("Updates Owner:\n%s", strings.Join(strSl, "\n"))
+
+	strSl = deletesOwner.StringSlice()
+	log.Debugf("Deletes Owner:\n%s", strings.Join(strSl, "\n"))
+
 	err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
 		Store:    cachepb.Store_INTENDED,
 		Owner:    req.GetIntent(),
 		Priority: req.GetPriority(),
-	}, dels, cacheUpdates)
+	}, deletesOwner.ToStringSlice(), updatesOwner)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed updating the intended store for %s: %w", d.Name(), err)
 	}
-	// replace intent in metadata store
-	err = d.saveRawIntent(ctx, req.GetIntent(), req)
-	if err != nil {
-		return err
-	}
-	log.Infof("ds=%s intent=%s: intent saved", req.GetName(), req.GetIntent())
-	return nil
-}
 
-// buildRemovedPaths populates the removedPaths field without the keys as leaves.
-// it adds explicit deletes for each leaf missing in an update.
-func (ic *intentContext) buildRemovedPaths(ctx context.Context) error {
-	var err error
-	// this tree is used to figure out the
-	// paths that don't exist anymore in an intent update.
-	t := ctree.Tree{}
-	// build new tree
-	for _, nu := range ic.newUpdates {
-		err = t.AddSchemaUpdate(nu)
+	// fast and optimistic writeback to the config store
+	err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
+		Store: cachepb.Store_CONFIG,
+	}, deletes.ToStringSlice(), updates)
+	if err != nil {
+		return fmt.Errorf("failed updating the running config store for %s: %w", d.Name(), err)
+	}
+
+	switch req.Delete {
+	case true:
+		err = d.deleteRawIntent(ctx, req.GetIntent(), req.GetPriority())
+		if err != nil {
+			return err
+		}
+	case false:
+		// The request intent is also stored in the cache
+		// in the format it was received in
+		err = d.saveRawIntent(ctx, req.GetIntent(), req)
 		if err != nil {
 			return err
 		}
 	}
-	// query current paths from new tree
-	// the ones that don't exist are added to removedPaths
-	for _, rmps := range [][]*sdcpb.Path{ic.currentPaths, ic.currentKeyAsLeafPaths} {
-		for _, p := range rmps {
-			cp, _ := utils.CompletePath(nil, p)
-			if t.GetLeaf(cp) == nil {
-				ic.removedPathsMap[strings.Join(cp, ",")] = struct{}{}
-			}
-		}
-	}
+
+	log.Infof("ds=%s intent=%s: intent saved", req.GetName(), req.GetIntent())
 	return nil
 }
 
@@ -448,168 +296,32 @@ func pathIsKeyAsLeaf(p *sdcpb.Path) bool {
 	return ok
 }
 
-func (d *Datastore) newIntentContext(ctx context.Context, req *sdcpb.SetIntentRequest, candidate string) (*intentContext, error) {
-	var err error
-	ic := &intentContext{
-		req:           req,
-		candidateName: candidate,
-
-		newUpdates:       []*sdcpb.Update{},
-		newCompletePaths: [][]string{},
-
-		currentUpdates:        []*sdcpb.Update{},
-		currentPaths:          []*sdcpb.Path{},
-		currentKeyAsLeafPaths: []*sdcpb.Path{},
-
-		removedPathsMap: map[string]struct{}{},
-	}
-	// expand intent updates values
-	ic.newUpdates, err = d.expandUpdates(ctx, req.GetUpdate(), true)
+func (d *Datastore) readIntendedStoreKeysMeta(ctx context.Context) (map[string]tree.UpdateSlice, error) {
+	entryCh, err := d.cacheClient.GetKeys(ctx, d.config.Name, cachepb.Store_INTENDED)
 	if err != nil {
 		return nil, err
 	}
-	// build new complete paths ([]string)
-	ic.newCompletePaths = make([][]string, 0, len(ic.newUpdates))
-	for _, upd := range ic.newUpdates {
-		// build complete path (as []string) from update path
-		cp, _ := utils.CompletePath(nil, upd.GetPath())
-		ic.newCompletePaths = append(ic.newCompletePaths, cp)
-	}
 
-	// get current intent notifications
-	intentNotifications, err := d.getIntentFlatNotifications(ctx, req.GetIntent(), req.GetPriority())
-	if err != nil {
-		return nil, err
-	}
-	// init currentUpdates and currentPaths
-	for _, n := range intentNotifications {
-		for _, upd := range n.GetUpdate() {
-			ic.currentUpdates = append(ic.currentUpdates, upd)
-			if pathIsKeyAsLeaf(upd.GetPath()) {
-				ic.currentKeyAsLeafPaths = append(ic.currentKeyAsLeafPaths, upd.GetPath())
-				continue
+	result := map[string]tree.UpdateSlice{}
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case e, ok := <-entryCh:
+			if !ok {
+				return result, nil
 			}
-			ic.currentPaths = append(ic.currentPaths, upd.GetPath())
-		}
-	}
-
-	err = ic.buildRemovedPaths(ctx)
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("intent=%s: %d new updates", req.GetIntent(), len(ic.newUpdates))
-	log.Infof("intent=%s: %d new cPaths", req.GetIntent(), len(ic.newCompletePaths))
-	log.Infof("intent=%s: %d current updates", req.GetIntent(), len(ic.currentUpdates))
-	log.Infof("intent=%s: %d current paths", req.GetIntent(), len(ic.currentPaths))
-	log.Infof("intent=%s: %d current paths with key as leaf", req.GetIntent(), len(ic.currentKeyAsLeafPaths))
-	log.Infof("intent=%s: %d removed paths", req.GetIntent(), len(ic.removedPathsMap))
-	// debug start
-	log.Debug()
-	for i, upd := range ic.newUpdates {
-		log.Debugf("set intent expanded update.%d: %s", i, upd)
-	}
-	// logger.Debug()
-	log.Debug()
-	for i, upd := range ic.currentUpdates {
-		log.Debugf("set intent current update.%d: %s", i, upd)
-	}
-	log.Debug()
-	for i, p := range ic.currentPaths {
-		log.Debugf("set intent current path.%d: %s", i, p)
-	}
-	log.Debug()
-	for i, p := range ic.currentKeyAsLeafPaths {
-		log.Debugf("set intent currentKeyAsLeaf path.%d: %s", i, p)
-	}
-	log.Debug()
-
-	log.Debugf("has %d removed paths", len(ic.removedPathsMap))
-	for rmp := range ic.removedPathsMap {
-		log.Debugf("removed path: %s", rmp)
-	}
-	// debug stop
-	return ic, nil
-}
-
-func (d *Datastore) readIntendedPathHighestPriorities(ctx context.Context, cp []string, count uint64) [][]*cache.Update {
-	currentCacheEntries := d.cacheClient.Read(ctx, d.Name(),
-		&cache.Opts{
-			Store:         cachepb.Store_INTENDED,
-			PriorityCount: count,
-		}, [][]string{cp},
-		0)
-	if len(currentCacheEntries) == 0 {
-		return nil
-	}
-
-	groupping := make(map[int32][]*cache.Update)
-	for _, cce := range currentCacheEntries {
-		if _, ok := groupping[cce.Priority()]; !ok {
-			groupping[cce.Priority()] = make([]*cache.Update, 0, 1)
-		}
-		groupping[cce.Priority()] = append(groupping[cce.Priority()], cce)
-	}
-	priorities := make([]int32, 0, count)
-	for k := range groupping {
-		priorities = append(priorities, k)
-	}
-	sort.Slice(priorities, func(i, j int) bool {
-		return priorities[i] < priorities[j]
-	})
-	rs := make([][]*cache.Update, 0, count)
-	for _, pr := range priorities {
-		rs = append(rs, groupping[pr])
-	}
-	return rs
-}
-
-func (d *Datastore) getNextPriority(ctx context.Context, intentPriority int32, intentName string, cp []string) *cache.Update {
-	ccu := d.readIntendedPathHighestPriorities(ctx, cp, 2)
-	switch lccu := len(ccu); lccu {
-	case 0:
-		return nil
-	case 1:
-		// the update to be applied is the first update that's not owned by the current intent
-		for _, cu := range ccu[0] {
-			if cu.Owner() != intentName {
-				return cu
+			key := strings.Join(e.GetPath(), tree.KeysIndexSep)
+			_, exists := result[key]
+			if !exists {
+				result[key] = tree.UpdateSlice{}
 			}
+			result[key] = append(result[key], e)
 		}
-		return nil
-	default: // case 2:
-		// check if the first received priority is the same as the intent's
-		updatesSet := ccu[1]
-		if ccu[0][0].Priority() != intentPriority {
-			updatesSet = ccu[0] // use first updates set
-		}
-		for _, cu := range updatesSet {
-			if cu.Owner() != intentName {
-				return cu
-			}
-		}
-		return nil
 	}
 }
 
-func (d *Datastore) readNewUpdatesHighestPriority(ctx context.Context, ccp [][]string) map[string][]*cache.Update {
-	currentCacheEntries := d.cacheClient.Read(ctx, d.Name(),
-		&cache.Opts{
-			Store: cachepb.Store_INTENDED,
-		}, ccp,
-		0)
-	rs := make(map[string][]*cache.Update, len(ccp))
-
-	for _, cce := range currentCacheEntries {
-		sp := strings.Join(cce.GetPath(), ",")
-		if _, ok := rs[sp]; !ok {
-			rs[sp] = make([]*cache.Update, 0, 1)
-		}
-		rs[sp] = append(rs[sp], cce)
-	}
-	return rs
-}
-
-func (d *Datastore) readCurrentUpdatesHighestPriorities(ctx context.Context, ccp [][]string, count uint64) map[string][][]*cache.Update {
+func (d *Datastore) readCurrentUpdatesHighestPriorities(ctx context.Context, ccp [][]string, count uint64) map[string][]tree.UpdateSlice {
 	currentCacheEntries := d.cacheClient.Read(ctx, d.Name(),
 		&cache.Opts{
 			Store:         cachepb.Store_INTENDED,
@@ -619,19 +331,19 @@ func (d *Datastore) readCurrentUpdatesHighestPriorities(ctx context.Context, ccp
 	if len(currentCacheEntries) == 0 {
 		return nil
 	}
-	rs := make(map[string][][]*cache.Update)
-	groupings := make(map[string]map[int32][]*cache.Update)
+	rs := make(map[string][]tree.UpdateSlice)
+	groupings := make(map[string]map[int32]tree.UpdateSlice)
 
 	for _, cce := range currentCacheEntries {
 		sp := strings.Join(cce.GetPath(), ",")
 		if _, ok := rs[sp]; !ok {
-			rs[sp] = make([][]*cache.Update, 0, 1)
+			rs[sp] = make([]tree.UpdateSlice, 0, 1)
 		}
 		if _, ok := groupings[sp]; !ok {
-			groupings[sp] = make(map[int32][]*cache.Update)
+			groupings[sp] = make(map[int32]tree.UpdateSlice)
 		}
 		if _, ok := groupings[sp][cce.Priority()]; !ok {
-			groupings[sp][cce.Priority()] = make([]*cache.Update, 0, 1)
+			groupings[sp][cce.Priority()] = make(tree.UpdateSlice, 0, 1)
 		}
 		groupings[sp][cce.Priority()] = append(groupings[sp][cce.Priority()], cce)
 	}

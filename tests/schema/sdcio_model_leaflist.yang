@@ -1,0 +1,16 @@
+module sdcio_model_leaflist {
+  yang-version 1.1;
+  namespace "urn:sdcio/model_leaflist";
+  prefix sdcio_model_leaflist;
+
+    grouping leaflist-top {
+        container leaflist {
+            leaf-list entry  {
+                type string;
+                min-elements 2;
+                max-elements 3;
+            }
+        }
+    }
+
+}

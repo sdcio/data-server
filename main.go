@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -27,6 +28,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/dslog"
 	"github.com/sdcio/data-server/pkg/server"
 )
 
@@ -55,9 +57,11 @@ func main() {
 	log.SetLevel(log.InfoLevel)
 	if debug {
 		log.SetLevel(log.DebugLevel)
+		slog.SetLogLoggerLevel(slog.LevelDebug)
 	}
 	if trace {
 		log.SetLevel(log.TraceLevel)
+		slog.SetLogLoggerLevel(dslog.TraceLevel)
 	}
 	log.Infof("data-server %s-%s", version, commit)
 

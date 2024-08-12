@@ -8,7 +8,7 @@
                     "protocols": {
                         "bgp": {
                             "router-id": "1.2.3.4",
-                            "autonomous-system":"65001",
+                            "autonomous-system": "65001",
                             "dynamic-neighbors": {
                                 "accept": {
                                     "match": [

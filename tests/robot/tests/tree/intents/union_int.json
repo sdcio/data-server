@@ -1,0 +1,25 @@
+[
+    {
+        "path": "/",
+        "value": {
+            "interface": [
+                {
+                    "name": "ethernet-1/2",
+                    "vlan-tagging": true,
+                    "subinterface": [
+                        {
+                            "index": 6,
+                            "vlan": {
+                                "encap": {
+                                    "single-tagged": {
+                                        "vlan-id": 8000
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+]

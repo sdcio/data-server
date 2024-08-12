@@ -361,10 +361,7 @@ func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*
 		rsp.Target.Status = sdcpb.TargetStatus_NOT_CONNECTED
 		rsp.Target.StatusDetails = ds.ConnectionState()
 	}
-	rsp.Schema = &sdcpb.Schema{
-		Name:    ds.Config().Schema.Name,
-		Vendor:  ds.Config().Schema.Vendor,
-		Version: ds.Config().Schema.Version,
-	}
+
+	rsp.Schema = ds.Config().Schema.GetSchema()
 	return rsp, nil
 }

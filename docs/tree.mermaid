@@ -1,0 +1,124 @@
+---
+title: sdcio -- pkg/tree
+---
+classDiagram
+
+    class sharedEntryAttributes {
+        parent Entry
+        pathElemName string
+        childs map[string]Entry
+        leafVariants LeafVariants
+        schema *sdcpb.SchemaElem
+        choicesResolvers choiceCasesResolvers
+        treeContext *TreeContext
+    }
+
+    class Entry {
+        <<interface>>
+	    Path() []string
+        PathName() string
+        AddChild(context.Context, Entry) error
+        AddCacheUpdateRecursive(ctx context.Context, u *cache.Update, new bool) error
+        StringIndent(result []string) []string
+        GetHighestPrecedence(u UpdateSlice, onlyNewOrUpdated bool) UpdateSlice
+        GetByOwner(owner string, result []*LeafEntry) []*LeafEntry
+        MarkOwnerDelete(o string)
+        GetDeletes([][]string) [][]string
+        Walk(f EntryVisitor) error
+        ShouldDelete() bool
+        IsDeleteKeyAttributesInLevelDown(level int, keys []string, result [][]string) [][]string
+        ValidateMandatory() error
+        ValidateMandatoryWithKeys(level int, attribute string) error
+        GetHighestPrecedenceValueOfBranch() int32
+        GetSchema() *sdcpb.SchemaElem
+        IsRoot() bool
+        FinishInsertionPhase()
+        GetParent() Entry
+    }
+
+    class EntryImpl {
+        s sharedEntryAttributes
+    }
+
+    class RootEntry {
+        s sharedEntryAttributes
+    }
+
+
+
+    class LeafVariants {
+        <<type>>
+        []*LeafEntry
+
+        GetHighestPrecedenceValue() int32
+        GetHighestPrecedence(onlyIfPrioChanged bool) *LeafEntry
+        GetByOwner(owner string) *LeafEntry
+        ShouldDelete() bool
+    }
+
+    class LeafEntry {
+        *cache.Update
+        IsNew     bool
+        Delete    bool
+        IsUpdated bool
+        MarkUpdate(u *cache.Update)
+        MarkDelete()
+        String() string
+    }
+
+    class choiceCasesResolvers {
+        <<type>>
+        map[string]*choiceCasesResolver
+
+        AddChoice(name string) *choiceCasesResolver
+        GetSkipElements() []string
+        GetChoiceElementNeighbors(elemName string) []string
+    }
+
+    class choiceCaseResolver {
+        cases                map[string]*choicesCase
+	    elementToCaseMapping map[string]string
+
+        GetElementNames() []string
+
+    }
+
+    class choicesCase {
+        name     string
+        elements map[string]*choicesCaseElement
+
+        GetLowestPriorityValue() int32
+        GetLowestPriorityValueOld() int32
+    }
+
+    class choicesCaseElement {
+        name  string
+        value int32
+        new   bool
+
+        AddCase(name string, elements []string) *choicesCase
+        SetValue(elemName string, v int32, new bool)
+        getBestCaseName() string
+        getOldBestCaseName() string
+        GetSkipElements() []string
+    }
+
+LeafEntry ..o LeafVariants
+
+LeafVariants ..o sharedEntryAttributes 
+
+choiceCaseResolver ..o choiceCasesResolvers
+
+choiceCasesResolvers <-- sharedEntryAttributes : uses
+
+choicesCase ..o  choiceCaseResolver 
+
+choicesCaseElement ..o choicesCase
+
+
+Entry <|.. RootEntry
+Entry <|.. sharedEntryAttributes
+
+EntryImpl ..> sharedEntryAttributes : «refine»
+RootEntry ..> sharedEntryAttributes : «refine»
+

@@ -16,6 +16,7 @@ package CacheClient
 
 import (
 	"context"
+	"time"
 
 	"github.com/sdcio/cache/proto/cachepb"
 	"github.com/sdcio/schema-server/pkg/utils"
@@ -24,20 +25,62 @@ import (
 	"github.com/sdcio/data-server/pkg/cache"
 )
 
-type CacheClientBound struct {
+type CacheClientBoundImpl struct {
 	cacheClient cache.Client
 	name        string
 }
 
-func NewCacheClientBound(name string, c cache.Client) *CacheClientBound {
-	return &CacheClientBound{
+type CacheClientBound interface {
+	// GetValue retrieves config value for the provided path
+	GetValue(ctx context.Context, candidateName string, path *sdcpb.Path) (*sdcpb.TypedValue, error)
+	// GetValues retrieves config value from the provided path. If path is not a leaf path, all the sub paths will be returned.
+	GetValues(ctx context.Context, candidateName string, path *sdcpb.Path) ([]*sdcpb.TypedValue, error)
+	// ReadIntended retrieves the highes priority value from the intended store
+	ReadIntended(ctx context.Context, opts *cache.Opts, paths [][]string, period time.Duration) []*cache.Update
+}
+
+func NewCacheClientBound(name string, c cache.Client) *CacheClientBoundImpl {
+	return &CacheClientBoundImpl{
 		cacheClient: c,
 		name:        name, // the datastore name
 	}
 }
 
 // GetValue retrieves config value for the provided path
-func (ccb *CacheClientBound) GetValue(ctx context.Context, candidateName string, path *sdcpb.Path) (*sdcpb.TypedValue, error) {
+func (ccb *CacheClientBoundImpl) GetValue(ctx context.Context, candidateName string, path *sdcpb.Path) (*sdcpb.TypedValue, error) {
+	cacheupds, err := ccb.getValues(ctx, candidateName, path)
+	if err != nil {
+		return nil, err
+	}
+	if len(cacheupds) == 0 {
+		return nil, nil
+	}
+	return cacheupds[0].Value()
+}
+
+// GetValues retrieves config value from the provided path. If path is not a leaf path, all the sub paths will be returned.
+func (ccb *CacheClientBoundImpl) GetValues(ctx context.Context, candidateName string, path *sdcpb.Path) ([]*sdcpb.TypedValue, error) {
+	cacheupds, err := ccb.getValues(ctx, candidateName, path)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*sdcpb.TypedValue, 0, len(cacheupds))
+
+	// collect the cachupdate Values to return them
+	for _, c := range cacheupds {
+		val, err := c.Value()
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, val)
+	}
+
+	return result, nil
+}
+
+// getValues internal function that retrieves config value for the provided path, with its sub-paths
+func (ccb *CacheClientBoundImpl) getValues(ctx context.Context, candidateName string, path *sdcpb.Path) ([]*cache.Update, error) {
 	spath, err := utils.CompletePath(nil, path)
 	if err != nil {
 		return nil, err
@@ -46,5 +89,15 @@ func (ccb *CacheClientBound) GetValue(ctx context.Context, candidateName string,
 	if len(cacheupds) == 0 {
 		return nil, nil
 	}
-	return cacheupds[0].Value()
+	return cacheupds, nil
+}
+
+// Read
+func (ccb *CacheClientBoundImpl) ReadIntended(ctx context.Context, opts *cache.Opts, paths [][]string, period time.Duration) []*cache.Update {
+	if opts == nil {
+		opts = &cache.Opts{}
+	}
+	opts.Store = cachepb.Store_INTENDED
+	opts.PriorityCount = 1
+	return ccb.cacheClient.Read(ctx, ccb.name, opts, paths, period)
 }
