@@ -1,0 +1,22 @@
+[
+    {
+        "path": "/",
+        "value": {
+            "acl": {
+                "ipv4-filter": [
+                    {
+                        "name": "test",
+                        "entry": [
+                            {
+                                "sequence-id": 50,
+                                "action": {
+                                    "accept": {}
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    }
+]

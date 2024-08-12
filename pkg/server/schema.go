@@ -1,80 +1,128 @@
+// Copyright 2024 Nokia
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package server
 
 import (
 	"context"
+	"os"
 	"sync"
 	"time"
 
-	schemaConfig "github.com/iptecharch/schema-server/config"
-	schemaStore "github.com/iptecharch/schema-server/schema"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	schemaConfig "github.com/sdcio/schema-server/pkg/config"
+	schemaServerSchema "github.com/sdcio/schema-server/pkg/schema"
+	schemaStore "github.com/sdcio/schema-server/pkg/store"
+	schemaMemoryStore "github.com/sdcio/schema-server/pkg/store/memstore"
+	schemaPersistentStore "github.com/sdcio/schema-server/pkg/store/persiststore"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/iptecharch/data-server/pkg/schema"
+	"github.com/sdcio/data-server/pkg/schema"
 )
 
 func (s *Server) createSchemaClient(ctx context.Context) {
 	switch {
-	case s.config.Schemas != nil:
+	case s.config.SchemaStore != nil:
 		// local schema store
-		store := schemaStore.NewStore()
-		numSchemas := len(s.config.Schemas)
-		log.Infof("parsing %d schema(s)...", numSchemas)
-
-		wg := new(sync.WaitGroup)
-		wg.Add(numSchemas)
-		for _, sCfg := range s.config.Schemas {
-			go func(sCfg *schemaConfig.SchemaConfig) {
-				defer wg.Done()
-				sc, err := schemaStore.NewSchema(sCfg)
-				if err != nil {
-					log.Errorf("schema %s parsing failed: %v", sCfg.Name, err)
-					return
-				}
-				store.AddSchema(sc)
-			}(sCfg)
-		}
-		wg.Wait()
-		s.schemaClient = schema.NewLocalClient(store)
+		s.createLocalSchemaStore(ctx)
 	default:
 		// remote schema store
-	SCHEMA_CONNECT:
-		opts := []grpc.DialOption{
-			grpc.WithBlock(),
-		}
-		switch s.config.SchemaServer.TLS {
-		case nil:
-			opts = append(opts,
-				grpc.WithTransportCredentials(
-					insecure.NewCredentials(),
-				))
-		default:
-			tlsCfg, err := s.config.SchemaServer.TLS.NewConfig(ctx)
-			if err != nil {
-				log.Errorf("failed to read schema server TLS config: %v", err)
-				time.Sleep(time.Second)
-				goto SCHEMA_CONNECT
-			}
-			opts = append(opts,
-				grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
-			)
-		}
+		s.createRemoteSchemaClient(ctx)
+	}
+}
 
-		dialCtx, cancel := context.WithTimeout(ctx, schemaServerConnectRetry)
-		defer cancel()
-		cc, err := grpc.DialContext(dialCtx, s.config.SchemaServer.Address, opts...)
+func (s *Server) createLocalSchemaStore(ctx context.Context) {
+	var store schemaStore.Store
+	switch s.config.SchemaStore.Type {
+	case schemaConfig.StoreTypeMemory:
+		store = schemaMemoryStore.New()
+	case schemaConfig.StoreTypePersistent:
+		var err error
+		store, err = schemaPersistentStore.New(ctx, s.config.SchemaStore.Path, s.config.SchemaStore.Cache)
 		if err != nil {
-			log.Errorf("failed to connect DS to schema server: %v", err)
+			log.Errorf("failed to create a persistent schema store: %v", err)
+			os.Exit(1)
+		}
+	default:
+		log.Errorf("unknown schema store type %s", s.config.SchemaStore.Type)
+		os.Exit(1)
+	}
+	numSchemas := len(s.config.SchemaStore.Schemas)
+	log.Infof("parsing %d schema(s)...", numSchemas)
+
+	wg := new(sync.WaitGroup)
+	wg.Add(numSchemas)
+	for _, sCfg := range s.config.SchemaStore.Schemas {
+		go func(sCfg *schemaConfig.SchemaConfig, store schemaStore.Store) {
+			defer wg.Done()
+			sck := schemaStore.SchemaKey{
+				Name:    sCfg.Name,
+				Vendor:  sCfg.Vendor,
+				Version: sCfg.Version,
+			}
+			if store.HasSchema(sck) {
+				log.Infof("schema %s already exists in the store: not reloading it...", sck)
+				return
+			}
+			sc, err := schemaServerSchema.NewSchema(sCfg)
+			if err != nil {
+				log.Errorf("schema %s parsing failed: %v", sCfg.Name, err)
+				return
+			}
+			store.AddSchema(sc)
+		}(sCfg, store)
+	}
+	wg.Wait()
+	s.schemaClient = schema.NewLocalClient(store)
+}
+
+func (s *Server) createRemoteSchemaClient(ctx context.Context) {
+SCHEMA_CONNECT:
+	opts := []grpc.DialOption{
+		grpc.WithBlock(),
+	}
+	switch s.config.SchemaServer.TLS {
+	case nil:
+		opts = append(opts,
+			grpc.WithTransportCredentials(
+				insecure.NewCredentials(),
+			))
+	default:
+		tlsCfg, err := s.config.SchemaServer.TLS.NewConfig(ctx)
+		if err != nil {
+			log.Errorf("failed to read schema server TLS config: %v", err)
 			time.Sleep(time.Second)
 			goto SCHEMA_CONNECT
 		}
-		log.Infof("connected to schema server: %s", s.config.SchemaServer.Address)
-		// s.remoteSchemaClient = sdcpb.NewSchemaServerClient(cc)
-		s.schemaClient = schema.NewRemoteClient(cc)
+		opts = append(opts,
+			grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
+		)
 	}
+
+	dialCtx, cancel := context.WithTimeout(ctx, schemaServerConnectRetry)
+	defer cancel()
+	cc, err := grpc.DialContext(dialCtx, s.config.SchemaServer.Address, opts...)
+	if err != nil {
+		log.Errorf("failed to connect DS to schema server: %v", err)
+		time.Sleep(time.Second)
+		goto SCHEMA_CONNECT
+	}
+	log.Infof("connected to schema server: %s", s.config.SchemaServer.Address)
+	s.schemaClient = schema.NewRemoteClient(cc, s.config.SchemaServer.Cache)
 }
 
 func (s *Server) GetSchema(ctx context.Context, req *sdcpb.GetSchemaRequest) (*sdcpb.GetSchemaResponse, error) {

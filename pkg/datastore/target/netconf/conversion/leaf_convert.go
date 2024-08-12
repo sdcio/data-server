@@ -1,3 +1,17 @@
+// Copyright 2024 Nokia
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package conversion
 
 import (
@@ -6,7 +20,8 @@ import (
 	"regexp"
 	"strings"
 
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	"github.com/sdcio/data-server/pkg/utils"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -42,6 +57,9 @@ func Convert(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error)
 	case "empty":
 		// TODO https://www.rfc-editor.org/rfc/rfc6020.html#section-9.11
 		// I'm not sure what should be returned atm.
+		// KR:use an empty string for a leaf of type "empty"
+		//    probably need to add typedValue of type Empty in the protos
+		return ConvertString(value, lst)
 	case "bits":
 	// TODO: https://www.rfc-editor.org/rfc/rfc6020.html#section-9.7
 	case "binary": // https://www.rfc-editor.org/rfc/rfc6020.html#section-9.8
@@ -54,8 +72,10 @@ func Convert(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error)
 		return ConvertIdentityRef(value, lst)
 	case "instance-identifier": //TODO: https://www.rfc-editor.org/rfc/rfc6020.html#section-9.13
 		return ConvertInstanceIdentifier(value, lst)
+	case "decimal64":
+		return ConvertDecimal64(value, lst)
 	}
-	log.Errorf("type %q not implemented", lst.Type)
+	log.Warnf("type %q not implemented", lst.Type)
 	return ConvertString(value, lst)
 }
 
@@ -261,6 +281,19 @@ func ConvertString(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, 
 	}
 	return nil, fmt.Errorf("%q does not match patterns", value)
 
+}
+
+func ConvertDecimal64(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+	d64, err := utils.ParseDecimal64(value)
+	if err != nil {
+		return nil, err
+	}
+
+	return &sdcpb.TypedValue{
+		Value: &sdcpb.TypedValue_DecimalVal{
+			DecimalVal: d64,
+		},
+	}, nil
 }
 
 func ConvertUnion(value string, slts []*sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {

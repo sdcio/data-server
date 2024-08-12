@@ -1,11 +1,24 @@
+// Copyright 2024 Nokia
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package netconf
 
 import (
-	"reflect"
 	"testing"
 
-	"github.com/beevik/etree"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	"github.com/google/go-cmp/cmp"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 func Test_pathElem2Xpath(t *testing.T) {
@@ -16,11 +29,22 @@ func Test_pathElem2Xpath(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    etree.Path
+		want    string
 		wantErr bool
 	}{
 		{
-			name: "one",
+			name: "PathElem without keys",
+			args: args{
+				pe: &sdcpb.PathElem{
+					Name: "interfaces",
+				},
+				namespace: "",
+			},
+			want:    "./interfaces",
+			wantErr: false,
+		},
+		{
+			name: "PathElem with single key",
 			args: args{
 				pe: &sdcpb.PathElem{
 					Name: "interface",
@@ -30,20 +54,36 @@ func Test_pathElem2Xpath(t *testing.T) {
 				},
 				namespace: "",
 			},
-			want:    etree.MustCompilePath("./interface[name=eth0]"),
+			want:    "./interface[name='eth0']",
+			wantErr: false,
+		},
+		{
+			name: "PathElem with two keys",
+			args: args{
+				pe: &sdcpb.PathElem{
+					Name: "interface",
+					Key: map[string]string{
+						"name":  "eth0",
+						"state": "up",
+					},
+				},
+				namespace: "",
+			},
+			want:    "./interface[name='eth0',state='up']",
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := pathElem2Xpath(tt.args.pe, tt.args.namespace)
+			got, err := pathElem2XPath(tt.args.pe)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("pathElem2Xpath() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("pathElem2Xpath() = %v, want %v", got, tt.want)
+			if d := cmp.Diff(got, tt.want); d != "" {
+				t.Errorf(d)
 			}
+
 		})
 	}
 }
@@ -141,3 +181,68 @@ func Test_pathElem2Xpath(t *testing.T) {
 // 	})
 // }
 //}
+
+func Test_getNamespaceFromGetSchemaResponse(t *testing.T) {
+	tests := []struct {
+		name string
+		sr   *sdcpb.GetSchemaResponse
+		want string
+	}{
+
+		{
+			name: "ContainerSchema",
+			sr: &sdcpb.GetSchemaResponse{
+				Schema: &sdcpb.SchemaElem{
+					Schema: &sdcpb.SchemaElem_Container{
+						Container: &sdcpb.ContainerSchema{
+							Namespace: "Container",
+						},
+					},
+				},
+			},
+			want: "Container",
+		},
+		{
+			name: "FieldSchema",
+			sr: &sdcpb.GetSchemaResponse{
+				Schema: &sdcpb.SchemaElem{
+					Schema: &sdcpb.SchemaElem_Field{
+						Field: &sdcpb.LeafSchema{
+							Namespace: "Field",
+						},
+					},
+				},
+			},
+			want: "Field",
+		},
+		{
+			name: "LeafListSchema",
+			sr: &sdcpb.GetSchemaResponse{
+				Schema: &sdcpb.SchemaElem{
+					Schema: &sdcpb.SchemaElem_Leaflist{
+						Leaflist: &sdcpb.LeafListSchema{
+							Namespace: "LeafList",
+						},
+					},
+				},
+			},
+			want: "LeafList",
+		},
+		{
+			name: "Unknown",
+			sr: &sdcpb.GetSchemaResponse{
+				Schema: &sdcpb.SchemaElem{
+					Schema: nil,
+				},
+			},
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := getNamespaceFromGetSchemaResponse(tt.sr); got != tt.want {
+				t.Errorf("getNamespaceFromGetSchemaResponse() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

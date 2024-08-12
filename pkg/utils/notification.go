@@ -1,8 +1,22 @@
+// Copyright 2024 Nokia
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package utils
 
 import (
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
 	"github.com/openconfig/gnmi/proto/gnmi"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -19,9 +33,6 @@ func ToSchemaNotification(n *gnmi.Notification) *sdcpb.Notification {
 		sn.Delete = append(sn.Delete, FromGNMIPath(n.GetPrefix(), del))
 	}
 	for _, upd := range n.GetUpdate() {
-		if upd.GetVal() == nil || upd.GetVal().GetValue() == nil {
-			continue
-		}
 		scUpd := &sdcpb.Update{
 			Path:  FromGNMIPath(n.GetPrefix(), upd.GetPath()),
 			Value: FromGNMITypedValue(upd.GetVal()),
@@ -220,3 +231,32 @@ func ToGNMIPath(p *sdcpb.Path) *gnmi.Path {
 // 	}
 // 	return nil
 // }
+
+func NotificationsEqual(n1, n2 *sdcpb.Notification) bool {
+	if n1 == nil && n2 == nil {
+		return true
+	}
+	if n1 == nil || n2 == nil {
+		return false
+	}
+	if len(n1.GetDelete()) != len(n2.GetDelete()) {
+		return false
+	}
+	for i, dp := range n1.GetDelete() {
+		if !PathsEqual(dp, n2.GetDelete()[i]) {
+			return false
+		}
+	}
+	if len(n1.GetUpdate()) != len(n2.GetUpdate()) {
+		return false
+	}
+	for i, upd := range n1.GetUpdate() {
+		if !PathsEqual(upd.GetPath(), n2.GetUpdate()[i].GetPath()) {
+			return false
+		}
+		if !EqualTypedValues(upd.GetValue(), n2.GetUpdate()[i].GetValue()) {
+			return false
+		}
+	}
+	return true
+}

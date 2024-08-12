@@ -1,6 +1,17 @@
-/*
-Copyright © 2023 NAME HERE <EMAIL ADDRESS>
-*/
+// Copyright 2024 Nokia
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package cmd
 
 import (
@@ -9,8 +20,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/iptecharch/schema-server/utils"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	"github.com/sdcio/schema-server/pkg/utils"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/prototext"
 )
@@ -19,6 +30,7 @@ var paths []string
 var dataType string
 var format string
 var intended bool
+var encoding string
 
 // dataGetCmd represents the get command
 var dataGetCmd = &cobra.Command{
@@ -40,9 +52,22 @@ var dataGetCmd = &cobra.Command{
 			return fmt.Errorf("invalid flag value --type %s", dataType)
 		}
 
+		var enc sdcpb.Encoding
+		switch encoding {
+		case "STRING":
+			enc = sdcpb.Encoding_STRING
+		case "JSON":
+			enc = sdcpb.Encoding_JSON
+		case "JSON_IETF":
+			enc = sdcpb.Encoding_JSON_IETF
+		case "PROTO":
+			enc = sdcpb.Encoding_PROTO
+		}
+
 		req := &sdcpb.GetDataRequest{
 			Name:     datastoreName,
 			DataType: dt,
+			Encoding: enc,
 		}
 		for _, p := range paths {
 			xp, err := utils.ParsePath(p)
@@ -117,7 +142,8 @@ func init() {
 	dataCmd.AddCommand(dataGetCmd)
 	dataGetCmd.Flags().StringArrayVarP(&paths, "path", "", []string{}, "get path(s)")
 	dataGetCmd.Flags().StringVarP(&dataType, "type", "", "ALL", "data type, one of: ALL, CONFIG, STATE")
-	dataGetCmd.Flags().StringVarP(&format, "format", "", "", "print format, '', 'flat' or 'json'")
+	dataGetCmd.Flags().StringVarP(&encoding, "encoding", "", "STRING", "encoding of the returned data: STRING, JSON, JSON_IETF or PROTO")
+
 	// intended store
 	dataGetCmd.Flags().BoolVarP(&intended, "intended", "", false, "get data from intended store")
 	dataGetCmd.Flags().StringVarP(&owner, "owner", "", "", "intended store owner to query")

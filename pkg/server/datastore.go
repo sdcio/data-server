@@ -1,16 +1,34 @@
+// Copyright 2024 Nokia
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package server
 
 import (
 	"context"
+	"fmt"
+	"math"
+	"strings"
 	"time"
 
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
-	"github.com/iptecharch/data-server/pkg/config"
-	"github.com/iptecharch/data-server/pkg/datastore"
+	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/datastore"
 )
 
 // datastore
@@ -51,7 +69,11 @@ func (s *Server) GetDataStore(ctx context.Context, req *sdcpb.GetDataStoreReques
 func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStoreRequest) (*sdcpb.CreateDataStoreResponse, error) {
 	log.Debugf("Received CreateDataStoreRequest: %v", req)
 	name := req.GetName()
-	if name == "" {
+	lName := len(name)
+	if lName == 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
+	}
+	if lName > math.MaxUint16 {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
 	}
 	switch {
@@ -65,6 +87,17 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		}
 		switch req.GetDatastore().GetType() {
 		case sdcpb.Type_CANDIDATE:
+			owner := req.GetDatastore().GetOwner()
+			lOwner := len(owner)
+			if lOwner == 0 {
+				return nil, status.Error(codes.InvalidArgument, "missing owner name attribute")
+			}
+			if lOwner > math.MaxUint16 {
+				return nil, status.Errorf(codes.InvalidArgument, "owner name too long(%d>%d)", lOwner, math.MaxUint16)
+			}
+			if strings.HasPrefix(owner, "__") && owner != datastore.DefaultOwner {
+				return nil, status.Error(codes.InvalidArgument, "owner name cannot start with `__`")
+			}
 			err := ds.CreateCandidate(ctx, req.GetDatastore())
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "%v", err)
@@ -80,9 +113,21 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		if _, ok := s.datastores[name]; ok {
 			return nil, status.Errorf(codes.InvalidArgument, "datastore %s already exists", name)
 		}
+		commitDatastore := "candidate"
+		switch req.GetTarget().GetCommitCandidate() {
+		case sdcpb.CommitCandidate_COMMIT_CANDIDATE:
+		case sdcpb.CommitCandidate_COMMIT_RUNNING:
+			commitDatastore = "running"
+		default:
+			return nil, fmt.Errorf("unknown commitDatastore: %v", req.GetTarget().GetCommitCandidate())
+		}
 		sbi := &config.SBI{
-			Type:    req.GetTarget().GetType(),
-			Address: req.GetTarget().GetAddress(),
+			Type:                   req.GetTarget().GetType(),
+			Address:                req.GetTarget().GetAddress(),
+			IncludeNS:              req.GetTarget().GetIncludeNs(),
+			OperationWithNamespace: req.GetTarget().GetOperationWithNs(),
+			UseOperationRemove:     req.GetTarget().GetUseOperationRemove(),
+			CommitDatastore:        commitDatastore,
 		}
 		if req.GetTarget().GetTls() != nil {
 			sbi.TLS = &config.TLS{
@@ -108,31 +153,38 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 			},
 			SBI: sbi,
 		}
-		sync := req.GetSync()
-		if sync != nil {
+		if req.GetSync() != nil {
 			dsConfig.Sync = &config.Sync{
 				Validate:     req.GetSync().GetValidate(),
 				Buffer:       req.GetSync().GetBuffer(),
 				WriteWorkers: req.GetSync().GetWriteWorkers(),
-				GNMI:         make([]*config.GNMISync, 0, len(sync.GetGnmi())),
+				Config:       make([]*config.SyncProtocol, 0, len(req.GetSync().GetConfig())),
 			}
-			for _, gnSync := range sync.GetGnmi() {
-				mode := "on-change"
-				switch gnSync.GetMode() {
-				case sdcpb.SyncMode_SM_ON_CHANGE:
-				case sdcpb.SyncMode_SM_SAMPLE:
-					mode = "sample"
-				case sdcpb.SyncMode_SM_ONCE:
-					mode = "once"
+			for _, pSync := range req.GetSync().GetConfig() {
+				gnSyncConfig := &config.SyncProtocol{
+					Protocol: pSync.GetProtocol(),
+					Name:     pSync.GetName(),
+					Paths:    pSync.GetPath(),
+					Interval: time.Duration(pSync.GetInterval()),
 				}
-				gnSyncConfig := &config.GNMISync{
-					Name:     gnSync.GetName(),
-					Paths:    gnSync.GetPath(),
-					Mode:     mode,
-					Interval: time.Duration(gnSync.GetInterval()),
-					Encoding: gnSync.GetEncoding(),
+				switch pSync.Protocol {
+				case "gnmi":
+					gnSyncConfig.Mode = "on-change"
+					switch pSync.GetMode() {
+					case sdcpb.SyncMode_SM_ON_CHANGE:
+					case sdcpb.SyncMode_SM_SAMPLE:
+						gnSyncConfig.Mode = "sample"
+					case sdcpb.SyncMode_SM_ONCE:
+						gnSyncConfig.Mode = "once"
+					case sdcpb.SyncMode_SM_GET:
+						gnSyncConfig.Mode = "get"
+					}
+					gnSyncConfig.Encoding = pSync.GetEncoding()
+				case "netconf":
+				default:
+					return nil, status.Errorf(codes.InvalidArgument, "unknown sync protocol: %q", pSync.Protocol)
 				}
-				dsConfig.Sync.GNMI = append(dsConfig.Sync.GNMI, gnSyncConfig)
+				dsConfig.Sync.Config = append(dsConfig.Sync.Config, gnSyncConfig)
 			}
 		}
 		err := dsConfig.ValidateSetDefaults()
@@ -170,8 +222,12 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 		if err != nil {
 			log.Errorf("failed to stop datastore %s: %v", name, err)
 		}
+		err = ds.DeleteCache(ctx)
+		if err != nil {
+			log.Errorf("failed to delete the datastore %s cache: %v", name, err)
+		}
 		delete(s.datastores, name)
-		log.Infof("deleted main %s", name)
+		log.Infof("deleted datastore %s", name)
 		return &sdcpb.DeleteDataStoreResponse{}, nil
 	default:
 		switch req.GetDatastore().GetType() {
@@ -184,7 +240,7 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 				log.Errorf("failed to stop datastore %s: %v", name, err)
 			}
 			delete(s.datastores, name)
-			log.Infof("deleted main %s", name)
+			log.Infof("deleted datastore %s", name)
 		}
 		return &sdcpb.DeleteDataStoreResponse{}, nil
 	}
@@ -247,6 +303,28 @@ func (s *Server) Discard(ctx context.Context, req *sdcpb.DiscardRequest) (*sdcpb
 	return &sdcpb.DiscardResponse{}, nil
 }
 
+func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.DataServer_WatchDeviationsServer) error {
+	log.Debugf("Received WatchDeviationRequest: %v", req)
+	ctx := stream.Context()
+	peerInfo, ok := peer.FromContext(ctx)
+	if !ok {
+		return status.Errorf(codes.InvalidArgument, "missing peer info")
+	}
+	if req.GetName() == nil {
+		return status.Errorf(codes.InvalidArgument, "missing datastore name")
+	}
+	s.md.RLock()
+	ds, ok := s.datastores[req.GetName()[0]]
+	s.md.RUnlock()
+	if !ok {
+		return status.Errorf(codes.InvalidArgument, "unknown datastore name: %s", req.GetName()[0])
+	}
+	_ = ds.WatchDeviations(req, stream)
+	<-stream.Context().Done()
+	ds.StopDeviationsWatch(peerInfo.Addr.String())
+	return nil
+}
+
 //
 
 func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*sdcpb.GetDataStoreResponse, error) {
@@ -268,26 +346,22 @@ func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*
 	rsp.Target = &sdcpb.Target{
 		Type:    ds.Config().SBI.Type,
 		Address: ds.Config().SBI.Address,
-		// Tls: &sdcpb.TLS{
-		// 	Ca:         ds.Config().SBI.TLS.CA,
-		// 	Cert:       ds.Config().SBI.TLS.Cert,
-		// 	Key:        ds.Config().SBI.TLS.Key,
-		// 	SkipVerify: ds.Config().SBI.TLS.SkipVerify,
-		// },
-		// Credentials: &sdcpb.Credentials{},
 	}
-	rsp.Schema = &sdcpb.Schema{
-		Name:    ds.Config().Schema.Name,
-		Vendor:  ds.Config().Schema.Vendor,
-		Version: ds.Config().Schema.Version,
+	// map datastore sbi conn state to sdcpb.TargetStatus
+	switch ds.ConnectionState() {
+	// netconf
+	case "CONNECTED":
+		rsp.Target.Status = sdcpb.TargetStatus_CONNECTED
+	case "NOT_CONNECTED":
+		// gnmi
+	case "READY", "IDLE":
+		rsp.Target.Status = sdcpb.TargetStatus_CONNECTED
+		rsp.Target.StatusDetails = ds.ConnectionState()
+	default:
+		rsp.Target.Status = sdcpb.TargetStatus_NOT_CONNECTED
+		rsp.Target.StatusDetails = ds.ConnectionState()
 	}
-	// for _, cand := range cands {
-	// 	rsp.Datastore = append(rsp.Datastore,
-	// 		&sdcpb.DataStore{
-	// 			Type: *sdcpb.Type_CANDIDATE.Enum(),
-	// 			Name: cand,
-	// 		},
-	// 	)
-	// }
+
+	rsp.Schema = ds.Config().Schema.GetSchema()
 	return rsp, nil
 }

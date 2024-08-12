@@ -1,9 +1,23 @@
+// Copyright 2024 Nokia
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package server
 
 import (
 	"context"
 
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
@@ -20,6 +34,9 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 	if req.GetIntent() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing intent name")
 	}
+	if req.GetPriority() == 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing intent priority")
+	}
 	s.md.RLock()
 	defer s.md.RUnlock()
 	ds, ok := s.datastores[req.GetName()]
@@ -31,7 +48,7 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 
 func (s *Server) SetIntent(ctx context.Context, req *sdcpb.SetIntentRequest) (*sdcpb.SetIntentResponse, error) {
 	pr, _ := peer.FromContext(ctx)
-	log.Debugf("received GetIntent request %v from peer %s", req, pr.Addr.String())
+	log.Debugf("received SetIntent request %v from peer %s", req, pr.Addr.String())
 
 	if req.GetName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
@@ -52,4 +69,20 @@ func (s *Server) SetIntent(ctx context.Context, req *sdcpb.SetIntentRequest) (*s
 		return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %s", req.GetName())
 	}
 	return ds.SetIntent(ctx, req)
+}
+
+func (s *Server) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (*sdcpb.ListIntentResponse, error) {
+	pr, _ := peer.FromContext(ctx)
+	log.Debugf("received ListIntent request %v from peer %s", req, pr.Addr.String())
+
+	if req.GetName() == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
+	}
+	s.md.RLock()
+	defer s.md.RUnlock()
+	ds, ok := s.datastores[req.GetName()]
+	if !ok {
+		return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %s", req.GetName())
+	}
+	return ds.ListIntent(ctx, req)
 }

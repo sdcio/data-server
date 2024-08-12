@@ -1,9 +1,24 @@
+// Copyright 2024 Nokia
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,8 +27,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
-	"github.com/iptecharch/data-server/pkg/config"
-	"github.com/iptecharch/data-server/pkg/server"
+	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/dslog"
+	"github.com/sdcio/data-server/pkg/server"
 )
 
 var configFile string
@@ -21,20 +37,33 @@ var debug bool
 var trace bool
 var stop bool
 
+var versionFlag bool
+var version = "dev"
+var commit = ""
+
 func main() {
-	pflag.StringVarP(&configFile, "config", "c", "data-server.yaml", "config file path")
+	pflag.StringVarP(&configFile, "config", "c", "", "config file path")
 	pflag.BoolVarP(&debug, "debug", "d", false, "set log level to DEBUG")
 	pflag.BoolVarP(&trace, "trace", "t", false, "set log level to TRACE")
+	pflag.BoolVarP(&versionFlag, "version", "v", false, "print version")
 	pflag.Parse()
+
+	if versionFlag {
+		fmt.Println(version + "-" + commit)
+		return
+	}
 
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	log.SetLevel(log.InfoLevel)
 	if debug {
 		log.SetLevel(log.DebugLevel)
+		slog.SetLogLoggerLevel(slog.LevelDebug)
 	}
 	if trace {
 		log.SetLevel(log.TraceLevel)
+		slog.SetLogLoggerLevel(dslog.TraceLevel)
 	}
+	log.Infof("data-server %s-%s", version, commit)
 
 	var s *server.Server
 START:

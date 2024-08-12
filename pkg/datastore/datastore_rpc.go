@@ -1,24 +1,47 @@
+// Copyright 2024 Nokia
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package datastore
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 
-	"github.com/iptecharch/cache/proto/cachepb"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	"github.com/sdcio/cache/proto/cachepb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
+	status "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/iptecharch/data-server/pkg/cache"
-	"github.com/iptecharch/data-server/pkg/config"
-	"github.com/iptecharch/data-server/pkg/datastore/clients"
-	"github.com/iptecharch/data-server/pkg/datastore/target"
-	"github.com/iptecharch/data-server/pkg/schema"
-	"github.com/iptecharch/data-server/pkg/utils"
+	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/datastore/clients"
+	"github.com/sdcio/data-server/pkg/datastore/target"
+	"github.com/sdcio/data-server/pkg/schema"
+	"github.com/sdcio/data-server/pkg/utils"
 )
 
 type Datastore struct {
@@ -36,22 +59,41 @@ type Datastore struct {
 
 	// client, bound to schema and version on the schema side and to datastore name on the cache side
 	// do not use directly use getValidationClient()
-	_validationClientBound *clients.ValidationClient
+	_validationClientBound clients.ValidationClient
 
 	// sync channel, to be passed to the SBI Sync method
 	synCh chan *target.SyncUpdate
 
 	// stop cancel func
 	cfn context.CancelFunc
+
+	// intent semaphore.
+	// Used by SetIntent to guarantee that
+	// only one SetIntent
+	// is applied at a time.
+	intentMutex *sync.Mutex
+
+	// keeps track of clients watching deviation updates
+	m                *sync.RWMutex
+	deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer
+
+	// per path intent deviations (no unhandled)
+	md                       *sync.RWMutex
+	currentIntentsDeviations map[string][]*sdcpb.WatchDeviationResponse
 }
 
 // New creates a new datastore, its schema server client and initializes the SBI target
 // func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Datastore {
 func New(ctx context.Context, c *config.DatastoreConfig, scc schema.Client, cc cache.Client, opts ...grpc.DialOption) *Datastore {
 	ds := &Datastore{
-		config:       c,
-		schemaClient: scc,
-		cacheClient:  cc,
+		config:                   c,
+		schemaClient:             scc,
+		cacheClient:              cc,
+		intentMutex:              new(sync.Mutex),
+		m:                        new(sync.RWMutex),
+		deviationClients:         make(map[string]sdcpb.DataServer_WatchDeviationsServer),
+		md:                       new(sync.RWMutex),
+		currentIntentsDeviations: make(map[string][]*sdcpb.WatchDeviationResponse),
 	}
 	if c.Sync != nil {
 		ds.synCh = make(chan *target.SyncUpdate, c.Sync.Buffer)
@@ -77,6 +119,8 @@ func New(ctx context.Context, c *config.DatastoreConfig, scc schema.Client, cc c
 		if c.Sync != nil {
 			go ds.Sync(ctx)
 		}
+		// start deviation goroutine
+		ds.DeviationMgr(ctx)
 	}()
 	return ds
 }
@@ -106,15 +150,9 @@ CREATE:
 
 func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) error {
 	var err error
-	sc := d.Schema().GetSchema()
-	d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, sc, opts...)
+	d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.getValidationClient(), opts...)
 	if err == nil {
 		return nil
-	}
-	// err not nil
-	//
-	if !errors.Is(err, context.DeadlineExceeded) {
-		return err
 	}
 
 	log.Errorf("failed to create DS %s target: %v", d.config.Name, err)
@@ -126,7 +164,7 @@ func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) err
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, sc, opts...)
+			d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.getValidationClient(), opts...)
 			if err != nil {
 				log.Errorf("failed to create DS %s target: %v", d.config.Name, err)
 				continue
@@ -174,6 +212,7 @@ func (d *Datastore) Commit(ctx context.Context, req *sdcpb.CommitRequest) error 
 	if err != nil {
 		return err
 	}
+
 	notification, err := d.changesToUpdates(ctx, changes)
 	if err != nil {
 		return err
@@ -185,7 +224,7 @@ func (d *Datastore) Commit(ctx context.Context, req *sdcpb.CommitRequest) error 
 	// validate MUST statements
 	for _, upd := range notification.GetUpdate() {
 		log.Debugf("%s:%s validating must statement on path: %v", d.Name(), name, upd.GetPath())
-		_, err = d.validateMustStatement(ctx, req.GetDatastore().GetName(), upd.GetPath())
+		_, err = d.validateMustStatement(ctx, req.GetDatastore().GetName(), upd.GetPath(), true)
 		if err != nil {
 			return err
 		}
@@ -255,6 +294,15 @@ func (d *Datastore) Discard(ctx context.Context, req *sdcpb.DiscardRequest) erro
 }
 
 func (d *Datastore) CreateCandidate(ctx context.Context, ds *sdcpb.DataStore) error {
+	if ds.GetPriority() < 0 {
+		return fmt.Errorf("invalid priority value must be >0")
+	}
+	if ds.GetPriority() <= 0 {
+		ds.Priority = 1
+	}
+	if ds.GetOwner() == "" {
+		ds.Owner = DefaultOwner
+	}
 	return d.cacheClient.CreateCandidate(ctx, d.Name(), ds.GetName(), ds.GetOwner(), ds.GetPriority())
 }
 
@@ -262,9 +310,30 @@ func (d *Datastore) DeleteCandidate(ctx context.Context, name string) error {
 	return d.cacheClient.DeleteCandidate(ctx, d.Name(), name)
 }
 
+func (d *Datastore) ConnectionState() string {
+	if d.sbi == nil {
+		return ""
+	}
+	return d.sbi.Status()
+}
+
 func (d *Datastore) Stop() error {
+	if d == nil {
+		return nil
+	}
 	d.cfn()
-	return d.cacheClient.Delete(context.TODO(), d.Config().Name)
+	if d.sbi == nil {
+		return nil
+	}
+	err := d.sbi.Close()
+	if err != nil {
+		log.Errorf("datastore %s failed to close the target connection: %v", d.Name(), err)
+	}
+	return nil
+}
+
+func (d *Datastore) DeleteCache(ctx context.Context) error {
+	return d.cacheClient.Delete(ctx, d.config.Name)
 }
 
 func (d *Datastore) Sync(ctx context.Context) {
@@ -274,13 +343,47 @@ func (d *Datastore) Sync(ctx context.Context) {
 		d.config.Sync,
 		d.synCh,
 	)
+
 	var err error
+	var pruneID string
+MAIN:
 	for {
 		select {
 		case <-ctx.Done():
-			log.Errorf("datastore %s sync stopped: %v", d.config.Name, ctx.Err())
+			if !errors.Is(ctx.Err(), context.Canceled) {
+				log.Errorf("datastore %s sync stopped: %v", d.Name(), ctx.Err())
+			}
 			return
 		case syncup := <-d.synCh:
+			if syncup.Start {
+				log.Debugf("%s: sync start", d.Name())
+				for {
+					pruneID, err = d.cacheClient.CreatePruneID(ctx, d.Name(), syncup.Force)
+					if err != nil {
+						log.Errorf("datastore %s failed to create prune ID: %v", d.Name(), err)
+						time.Sleep(time.Second)
+						continue // retry
+					}
+					continue MAIN
+				}
+			}
+			if syncup.End && pruneID != "" {
+				log.Debugf("%s: sync end", d.Name())
+				for {
+					err = d.cacheClient.ApplyPrune(ctx, d.Name(), pruneID)
+					if err != nil {
+						log.Errorf("datastore %s failed to prune cache after update: %v", d.Name(), err)
+						time.Sleep(time.Second)
+						continue // retry
+					}
+					break
+				}
+				log.Debugf("%s: sync resetting pruneID", d.Name())
+				pruneID = ""
+				continue // MAIN FOR loop
+			}
+			// a regular notification
+			log.Debugf("%s: sync acquire semaphore", d.Name())
 			err = sem.Acquire(ctx, 1)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
@@ -290,6 +393,7 @@ func (d *Datastore) Sync(ctx context.Context) {
 				log.Errorf("failed to acquire semaphore: %v", err)
 				continue
 			}
+			log.Debugf("%s: sync acquired semaphore", d.Name())
 			go d.storeSyncMsg(ctx, syncup, sem)
 		}
 	}
@@ -346,8 +450,22 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, cand
 					pe := upd.GetPath().GetElem()[peIndex-1]
 					// get leafRef value
 					leafRefValue := pe.GetKey()[keySchema.GetName()]
-					//
-					err = d.resolveLeafref(ctx, candidate, leafRefPath, leafRefValue)
+
+					lrefSdcpbPath, err := utils.ParsePath(leafRefPath)
+					if err != nil {
+						return err
+					}
+					// if it contains "./" or "../" like any relative path stuff
+					// we need to resolve that
+					if strings.Contains(leafRefPath, "./") {
+						// make leafref path absolute
+						lrefSdcpbPath, err = d.makeLeafRefAbs(ctx, upd.GetPath(), lrefSdcpbPath, utils.TypedValueToString(upd.GetValue()), candidate)
+						if err != nil {
+							return err
+						}
+					}
+
+					err = d.resolveLeafref(ctx, candidate, lrefSdcpbPath, leafRefValue)
 					if err != nil {
 						return err
 					}
@@ -362,11 +480,21 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, cand
 					return err
 				}
 
-				err = d.resolveLeafref(ctx, candidate, leafRefPath, upd.GetValue().GetStringVal())
+				// convert leafref Path to sdcpb Path
+				lrefSdcpbPath, err := utils.ParsePath(leafRefPath)
+				if err != nil {
+					return err
+				}
+				// make leafref path absolute
+				lrefSdcpbPath, err = d.makeLeafRefAbs(ctx, upd.GetPath(), lrefSdcpbPath, utils.TypedValueToString(upd.GetValue()), candidate)
 				if err != nil {
 					return err
 				}
 
+				err = d.resolveLeafref(ctx, candidate, lrefSdcpbPath, utils.TypedValueToString(upd.GetValue()))
+				if err != nil {
+					return err
+				}
 			case *sdcpb.SchemaElem_Leaflist:
 				if sch.Leaflist.GetType().GetType() != "leafref" {
 					continue
@@ -381,33 +509,132 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, cand
 	}
 }
 
-func (d *Datastore) resolveLeafref(ctx context.Context, candidate, leafRefPath string, value string) error {
-	// parse the string into a *sdcpb.Path
-	p, err := utils.ParsePath(leafRefPath)
+func (d *Datastore) makeLeafRefAbs(ctx context.Context, base, lref *sdcpb.Path, value string, candidate string) (*sdcpb.Path, error) {
+	p, err := d.makeLeafRefAbsPathKeys(ctx, base, lref, value, candidate)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	p, err = makeLeafRefAbsPath(base, p)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func (d *Datastore) makeLeafRefAbsPathKeys(ctx context.Context, base, lref *sdcpb.Path, value string, candidate string) (*sdcpb.Path, error) {
+
+	lrefResult := utils.CopyPath(lref)
+
+	// process leafref elements and adjust result
+	for _, lrefElem := range lrefResult.Elem {
+
+		// resolve keys
+		for k, v := range lrefElem.Key {
+
+			keyp, err := utils.ParsePath(v)
+			if err != nil {
+				return nil, err
+			}
+
+			// replace current() with its actual value
+			if strings.ToLower(keyp.Elem[0].Name) == "current()" {
+				keyp.Elem = append(base.Elem, keyp.Elem[1:]...)
+			}
+
+			// remove .. in key paths
+			err = removeDotDot(keyp)
+			if err != nil {
+				return nil, err
+			}
+
+			data, err := d.getValidationClient().GetValue(ctx, candidate, keyp)
+			if err != nil {
+				return nil, fmt.Errorf("invalid leafref path %s based on %s", lref.String(), base.String())
+			}
+
+			lrefElem.Key[k] = data.GetStringVal()
+		}
+	}
+	return lrefResult, nil
+}
+
+func makeLeafRefAbsPath(base, lref *sdcpb.Path) (*sdcpb.Path, error) {
+
+	// if the path is relative, the .. would start in the start of the path
+	if lref.Elem[0].Name != ".." {
+		return lref, nil
+	}
+
+	// copy base into result
+	result := utils.CopyPath(base)
+
+	result.Elem = append(result.Elem, lref.Elem...)
+
+	err := removeDotDot(result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func removeDotDot(keyp *sdcpb.Path) error {
+	dropStack := 0
+	result := make([]*sdcpb.PathElem, 0, len(keyp.Elem))
+	// iterate through the path in reverse order
+	for i := len(keyp.Elem) - 1; i >= 0; i-- {
+		{
+			switch {
+			case keyp.Elem[i].Name == "..":
+				dropStack++
+			case keyp.Elem[i].Name == ".":
+				continue
+			case dropStack > 0:
+				dropStack--
+				continue
+			default:
+				result = append(result, keyp.Elem[i])
+			}
+		}
+	}
+	if dropStack > 0 {
+		return fmt.Errorf("invalid path %s", utils.ToXPath(keyp, false))
+	}
+	slices.Reverse(result)
+	keyp.Elem = result
+	return nil
+}
+
+func (d *Datastore) resolveLeafref(ctx context.Context, candidate string, leafRefPath *sdcpb.Path, value string) error {
 
 	// Subsequent Process:
 	// now we remove the last element of the referenced path
 	// adding its name to the one before last element as a key
 	// with the value of the item that we're validating the leafref for
 
-	pLen := len(p.GetElem())
-	// extract one before the last path elements element
-	keyAddedLastElem := p.GetElem()[pLen-2]
-	// add the Key map
-	if keyAddedLastElem.GetKey() == nil {
-		keyAddedLastElem.Key = map[string]string{}
+	// get the schema for results paths last element
+	schemaResp, err := d.getValidationClient().GetSchema(ctx, &sdcpb.Path{Elem: leafRefPath.Elem[:len(leafRefPath.Elem)-1]})
+	if err != nil {
+		return err
 	}
-	// add the updates value as the value under the key, which is the initial last element of the leafref path
-	keyAddedLastElem.Key[p.GetElem()[pLen-1].GetName()] = value
-	// reconstruct the path, the leafref points to, with the path except for the last two elements
-	// and the altered penultimate element
-	p.Elem = append(p.GetElem()[:pLen-2], keyAddedLastElem)
+	// check for the schema defined keys
+	for _, k := range schemaResp.GetSchema().GetContainer().GetKeys() {
+		// if the last element of results path is a key
+		if k.Name == leafRefPath.GetElem()[len(leafRefPath.Elem)-1].GetName() {
+			// check if the one before last has a key map initialized
+			if leafRefPath.Elem[len(leafRefPath.Elem)-2].GetKey() == nil {
+				// create map otherwise
+				leafRefPath.Elem[len(leafRefPath.Elem)-2].Key = map[string]string{}
+			}
+			// add the value as a key value under the last elements name to the one before last elemnt key list
+			leafRefPath.Elem[len(leafRefPath.Elem)-2].Key[leafRefPath.Elem[len(leafRefPath.Elem)-1].Name] = value
+			// remove the last elem, we now have the key value stored in the one before last
+			leafRefPath.Elem = leafRefPath.Elem[:len(leafRefPath.Elem)-1]
+		}
+	}
 
 	// TODO: update when stored values are not stringVal anymore
-	data, err := d.getValidationClient().GetValue(ctx, candidate, p)
+	data, err := d.getValidationClient().GetValue(ctx, candidate, leafRefPath)
 	if err != nil {
 		return err
 	}
@@ -420,8 +647,14 @@ func (d *Datastore) resolveLeafref(ctx context.Context, candidate, leafRefPath s
 
 func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate, sem *semaphore.Weighted) {
 	defer sem.Release(1)
-	var err error
-	for _, del := range syncup.Update.GetDelete() {
+
+	cNotification, err := d.convertNotificationTypedValues(ctx, syncup.Update)
+	if err != nil {
+		log.Errorf("failed to convert notification typedValue: %v", err)
+		return
+	}
+
+	for _, del := range cNotification.GetDelete() {
 		store := cachepb.Store_CONFIG
 		if d.config.Sync != nil && d.config.Sync.Validate {
 			scRsp, err := d.getSchema(ctx, del)
@@ -446,7 +679,7 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 		}
 	}
 
-	for _, upd := range syncup.Update.GetUpdate() {
+	for _, upd := range cNotification.GetUpdate() {
 		store := cachepb.Store_CONFIG
 		if d.config.Sync != nil && d.config.Sync.Validate {
 			scRsp, err := d.getSchema(ctx, upd.GetPath())
@@ -454,23 +687,19 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 				log.Errorf("datastore %s failed to get schema for update path %v: %v", d.config.Name, upd.GetPath(), err)
 				continue
 			}
-			// workaround, skip presence containers
-			// switch r := scRsp.GetSchema().Schema.(type) {
-			// case *sdcpb.SchemaElem_Container:
-			// 	if r.Container.IsPresence {
-			// 		continue
-			// 	}
-			// }
 			if isState(scRsp) {
 				store = cachepb.Store_STATE
 			}
 		}
+
+		// TODO:[KR] convert update typedValue if needed
 		cUpd, err := d.cacheClient.NewUpdate(upd)
 		if err != nil {
 			log.Errorf("datastore %s failed to create update from %v: %v", d.config.Name, upd, err)
 			continue
 		}
-		rctx, cancel := context.WithTimeout(ctx, time.Minute) // TODO:
+
+		rctx, cancel := context.WithTimeout(ctx, time.Minute) // TODO:[KR] make this timeout configurable ?
 		defer cancel()
 		err = d.cacheClient.Modify(rctx, d.Config().Name, &cache.Opts{
 			Store: store,
@@ -478,16 +707,12 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 		if err != nil {
 			log.Errorf("datastore %s failed to send modify request to cache: %v", d.config.Name, err)
 		}
-		// upds = append(upds, cUpd)
 	}
 }
 
 // helper for GetSchema
 func (d *Datastore) getSchema(ctx context.Context, p *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
-	return d.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
-		Path:   p,
-		Schema: d.Schema().GetSchema(),
-	})
+	return d.getValidationClient().GetSchema(ctx, p)
 }
 
 func (d *Datastore) validatePath(ctx context.Context, p *sdcpb.Path) error {
@@ -496,18 +721,11 @@ func (d *Datastore) validatePath(ctx context.Context, p *sdcpb.Path) error {
 }
 
 func (d *Datastore) toPath(ctx context.Context, p []string) (*sdcpb.Path, error) {
-	rsp, err := d.schemaClient.ToPath(ctx, &sdcpb.ToPathRequest{
-		PathElement: p,
-		Schema: &sdcpb.Schema{
-			Name:    d.Schema().Name,
-			Vendor:  d.Schema().Vendor,
-			Version: d.Schema().Version,
-		},
-	})
+	path, err := d.getValidationClient().ToPath(ctx, p)
 	if err != nil {
 		return nil, err
 	}
-	return rsp.GetPath(), nil
+	return path, nil
 }
 
 func (d *Datastore) changesToUpdates(ctx context.Context, changes []*cache.Change) (*sdcpb.Notification, error) {
@@ -547,11 +765,519 @@ func (d *Datastore) changesToUpdates(ctx context.Context, changes []*cache.Chang
 
 // getValidationClient will create a ValidationClient instance if not already existing
 // save it as part of the datastore and return a valid *clients.ValidationClient
-func (d *Datastore) getValidationClient() *clients.ValidationClient {
+func (d *Datastore) getValidationClient() clients.ValidationClient {
 	// if not initialized, init it, cache it
 	if d._validationClientBound == nil {
 		d._validationClientBound = clients.NewValidationClient(d.Name(), d.cacheClient, d.Schema().GetSchema(), d.schemaClient)
 	}
 	// return the bound validation client
 	return d._validationClientBound
+}
+
+// conversion
+type leafListNotification struct {
+	path      *sdcpb.Path
+	leaflists []*sdcpb.TypedValue
+}
+
+func (d *Datastore) convertNotificationTypedValues(ctx context.Context, n *sdcpb.Notification) (*sdcpb.Notification, error) {
+	// this map serves as a context to group leaf-lists
+	// sent as keys in separate updates.
+	leaflists := map[string]*leafListNotification{}
+	nn := &sdcpb.Notification{
+		Timestamp: n.GetTimestamp(),
+		Update:    make([]*sdcpb.Update, 0, len(n.GetUpdate())),
+		Delete:    n.GetDelete(),
+	}
+	// convert typed values to their YANG type
+	for _, upd := range n.GetUpdate() {
+		scRsp, err := d.getSchema(ctx, upd.GetPath())
+		if err != nil {
+			return nil, err
+		}
+		nup, err := d.convertUpdateTypedValue(ctx, upd, scRsp, leaflists)
+		if err != nil {
+			return nil, err
+		}
+		log.Debugf("%s: converted update from: %v, to: %v", d.Name(), upd, nup)
+		if nup == nil { // filters out notification ending in non-presence containers
+			continue
+		}
+		nn.Update = append(nn.Update, nup)
+	}
+	// add accumulated leaf-lists
+	for _, lfnotif := range leaflists {
+		nn.Update = append(nn.Update, &sdcpb.Update{
+			Path: lfnotif.path,
+			Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{
+				LeaflistVal: &sdcpb.ScalarArray{Element: lfnotif.leaflists},
+			},
+			},
+		})
+	}
+
+	return nn, nil
+}
+
+func (d *Datastore) convertUpdateTypedValue(_ context.Context, upd *sdcpb.Update, scRsp *sdcpb.GetSchemaResponse, leaflists map[string]*leafListNotification) (*sdcpb.Update, error) {
+	switch {
+	case scRsp.GetSchema().GetContainer() != nil:
+		if !scRsp.GetSchema().GetContainer().GetIsPresence() {
+			return nil, nil
+		}
+		return upd, nil
+	case scRsp.GetSchema().GetLeaflist() != nil:
+		// leaf-list received as a key
+		if upd.GetValue() == nil {
+			// clone path
+			p := proto.Clone(upd.GetPath()).(*sdcpb.Path)
+			// grab the key from the last elem, that's the leaf-list value
+			var lftv *sdcpb.TypedValue
+			for _, v := range p.GetElem()[len(p.GetElem())-1].GetKey() {
+				lftv = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
+				break
+			}
+			if lftv == nil {
+				return nil, fmt.Errorf("malformed leaf-list update: %v", upd)
+			}
+			// delete the key from the last elem (that's the leaf-list value)
+			p.GetElem()[len(p.GetElem())-1].Key = nil
+			// build unique path
+			sp := utils.ToXPath(p, false)
+			if _, ok := leaflists[sp]; !ok {
+				leaflists[sp] = &leafListNotification{
+					path:      p,                               // modified path
+					leaflists: make([]*sdcpb.TypedValue, 0, 1), // at least one elem
+				}
+			}
+			// convert leaf-list to its YANG type
+			clftv, err := d.typedValueToYANGType(lftv, scRsp.GetSchema())
+			if err != nil {
+				return nil, err
+			}
+			// append leaf-list
+			leaflists[sp].leaflists = append(leaflists[sp].leaflists, clftv)
+			return nil, nil
+		}
+		// regular leaf list
+		switch upd.GetValue().Value.(type) {
+		case *sdcpb.TypedValue_LeaflistVal:
+			return upd, nil
+		default:
+			return nil, fmt.Errorf("unexpected leaf-list typedValue: %v", upd.GetValue())
+		}
+	case scRsp.GetSchema().GetField() != nil:
+		ctv, err := d.typedValueToYANGType(upd.GetValue(), scRsp.GetSchema())
+		if err != nil {
+			return nil, err
+		}
+		return &sdcpb.Update{
+			Path:  upd.GetPath(),
+			Value: ctv,
+		}, nil
+	}
+	return nil, nil
+}
+
+func (d *Datastore) typedValueToYANGType(tv *sdcpb.TypedValue, schemaObject *sdcpb.SchemaElem) (*sdcpb.TypedValue, error) {
+	switch tv.Value.(type) {
+	case *sdcpb.TypedValue_AsciiVal:
+		return convertToTypedValue(schemaObject, tv.GetAsciiVal(), tv.GetTimestamp())
+	case *sdcpb.TypedValue_BoolVal:
+		return tv, nil
+	case *sdcpb.TypedValue_BytesVal:
+		return tv, nil
+	case *sdcpb.TypedValue_DecimalVal:
+		return tv, nil
+	case *sdcpb.TypedValue_FloatVal:
+		return tv, nil
+	case *sdcpb.TypedValue_DoubleVal:
+		return tv, nil
+	case *sdcpb.TypedValue_IntVal:
+		return tv, nil
+	case *sdcpb.TypedValue_StringVal:
+		return convertToTypedValue(schemaObject, tv.GetStringVal(), tv.GetTimestamp())
+	case *sdcpb.TypedValue_UintVal:
+		return tv, nil
+	case *sdcpb.TypedValue_JsonIetfVal: // TODO:
+	case *sdcpb.TypedValue_JsonVal: // TODO:
+	case *sdcpb.TypedValue_LeaflistVal:
+		return tv, nil
+	case *sdcpb.TypedValue_ProtoBytes:
+		return tv, nil
+	case *sdcpb.TypedValue_AnyVal:
+		return tv, nil
+	}
+	return tv, nil
+}
+
+func convertToTypedValue(schemaObject *sdcpb.SchemaElem, v string, ts uint64) (*sdcpb.TypedValue, error) {
+	var schemaType *sdcpb.SchemaLeafType
+	switch {
+	case schemaObject.GetField() != nil:
+		schemaType = schemaObject.GetField().GetType()
+	case schemaObject.GetLeaflist() != nil:
+		schemaType = schemaObject.GetLeaflist().GetType()
+	case schemaObject.GetContainer() != nil:
+		if !schemaObject.GetContainer().IsPresence {
+			return nil, errors.New("non presence container update")
+		}
+		return nil, nil
+	}
+	return convertStringToTv(schemaType, v, ts)
+}
+
+func convertStringToTv(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*sdcpb.TypedValue, error) {
+	// convert field or leaf-list schema elem
+	switch schemaType.GetType() {
+	case "string":
+		return &sdcpb.TypedValue{
+
+			Value: &sdcpb.TypedValue_StringVal{StringVal: v},
+		}, nil
+	case "uint64", "uint32", "uint16", "uint8":
+		i, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, err
+		}
+		return &sdcpb.TypedValue{
+			Timestamp: ts,
+			Value:     &sdcpb.TypedValue_UintVal{UintVal: uint64(i)},
+		}, nil
+	case "int64", "int32", "int16", "int8":
+		i, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, err
+		}
+		return &sdcpb.TypedValue{
+			Timestamp: ts,
+			Value:     &sdcpb.TypedValue_IntVal{IntVal: int64(i)},
+		}, nil
+	case "boolean":
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, err
+		}
+		return &sdcpb.TypedValue{
+			Timestamp: ts,
+			Value:     &sdcpb.TypedValue_BoolVal{BoolVal: b},
+		}, nil
+	case "decimal64":
+		// TODO: convert string to decimal
+		return &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_DecimalVal{DecimalVal: &sdcpb.Decimal64{}},
+		}, nil
+	case "identityref":
+		return &sdcpb.TypedValue{
+			Timestamp: ts,
+			Value:     &sdcpb.TypedValue_StringVal{StringVal: v},
+		}, nil
+	case "leafref": // TODO: query leafref type
+		return &sdcpb.TypedValue{
+			Timestamp: ts,
+			Value:     &sdcpb.TypedValue_StringVal{StringVal: v},
+		}, nil
+	case "union":
+		for _, ut := range schemaType.GetUnionTypes() {
+			tv, err := convertStringToTv(ut, v, ts)
+			if err == nil {
+				return tv, nil
+			}
+		}
+		return nil, fmt.Errorf("invalid value %s for union type: %v", v, schemaType)
+	case "enumeration":
+		// TODO: get correct type, assuming string
+		return &sdcpb.TypedValue{
+			Timestamp: ts,
+			Value:     &sdcpb.TypedValue_StringVal{StringVal: v},
+		}, nil
+	case "": // presence ?
+		return &sdcpb.TypedValue{}, nil
+	}
+	return nil, nil
+}
+
+func (d *Datastore) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.DataServer_WatchDeviationsServer) error {
+	d.m.Lock()
+	defer d.m.Unlock()
+
+	ctx := stream.Context()
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return status.Errorf(codes.InvalidArgument, "missing peer info")
+	}
+	pName := p.Addr.String()
+
+	if oStream, ok := d.deviationClients[pName]; ok {
+		_ = oStream // TODO:
+	}
+
+	d.deviationClients[pName] = stream
+	return nil
+}
+
+func (d *Datastore) StopDeviationsWatch(peer string) {
+	d.m.Lock()
+	defer d.m.Unlock()
+	delete(d.deviationClients, peer)
+}
+
+func (d *Datastore) DeviationMgr(ctx context.Context) {
+	log.Infof("%s: starting deviationMgr...", d.Name())
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// TODO: send deviation START
+			d.m.RLock()
+			// copy deviation streams
+			dm := make(map[string]sdcpb.DataServer_WatchDeviationsServer)
+			for n, devStream := range d.deviationClients {
+				dm[n] = devStream
+			}
+			d.m.RUnlock()
+			d.runDeviationUpdate(ctx, dm)
+		}
+	}
+}
+
+func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.DataServer_WatchDeviationsServer) {
+
+	sep := "/"
+
+	// send deviation START
+	for _, dc := range dm {
+		err := dc.Send(&sdcpb.WatchDeviationResponse{
+			Name:  d.Name(),
+			Event: sdcpb.DeviationEvent_START,
+		})
+		if err != nil {
+			log.Errorf("%s: failed to send deviation start: %v", d.Name(), err)
+			continue
+		}
+	}
+	// collect intent deviations and store them for clearing
+	newDeviations := make(map[string][]*sdcpb.WatchDeviationResponse)
+
+	configPaths := map[string]struct{}{}
+
+	// go through config and calculate deviations
+	for upd := range d.cacheClient.ReadCh(ctx, d.Name(), &cache.Opts{Store: cachepb.Store_CONFIG}, [][]string{nil}, 0) {
+		// save the updates path as an already checked path
+		configPaths[strings.Join(upd.GetPath(), sep)] = struct{}{}
+
+		v, err := upd.Value()
+		if err != nil {
+			log.Errorf("%s: failed to convert value: %v", d.Name(), err)
+			continue
+		}
+
+		intentsUpdates := d.cacheClient.Read(ctx, d.Name(), &cache.Opts{
+			Store:         cachepb.Store_INTENDED,
+			Owner:         "",
+			Priority:      0,
+			PriorityCount: 0,
+		}, [][]string{upd.GetPath()}, 0)
+		if len(intentsUpdates) == 0 {
+			log.Debugf("%s: has unhandled config %v: %v", d.Name(), upd.GetPath(), v)
+			// TODO: generate an unhandled config deviation
+			sp, err := d.toPath(ctx, upd.GetPath())
+			if err != nil {
+				log.Errorf("%s: failed to convert cached path to xpath: %v", d.Name(), err)
+			}
+
+			rsp := &sdcpb.WatchDeviationResponse{
+				Name:         d.Name(),
+				Intent:       upd.Owner(),
+				Event:        sdcpb.DeviationEvent_UPDATE,
+				Reason:       sdcpb.DeviationReason_UNHANDLED,
+				Path:         sp,
+				CurrentValue: v,
+			}
+			for _, dc := range dm {
+				err = dc.Send(rsp)
+				if err != nil {
+					log.Errorf("%s: failed to send deviation: %v", d.Name(), err)
+					continue
+				}
+			}
+			continue
+		}
+		// NOT_APPLIED or OVERRULED deviation
+		// sort intent updates by priority/TS
+		sort.Slice(intentsUpdates, func(i, j int) bool {
+			if intentsUpdates[i].Priority() == intentsUpdates[j].Priority() {
+				return intentsUpdates[i].TS() < intentsUpdates[j].TS()
+			}
+			return intentsUpdates[i].Priority() < intentsUpdates[j].Priority()
+		})
+		// first intent
+		// // compare values with config
+		fiv, err := intentsUpdates[0].Value()
+		if err != nil {
+			log.Errorf("%s: failed to convert intent value: %v", d.Name(), err)
+			continue
+		}
+		sp, err := d.toPath(ctx, intentsUpdates[0].GetPath())
+		if err != nil {
+			log.Errorf("%s: failed to convert path %v: %v", d.Name(), intentsUpdates[0].GetPath(), err)
+			continue
+		}
+		scRsp, err := d.getSchema(ctx, sp)
+		if err != nil {
+			log.Errorf("%s: failed to get path schema: %v ", d.Name(), err)
+			continue
+		}
+		nfiv, err := d.typedValueToYANGType(fiv, scRsp.GetSchema())
+		if err != nil {
+			log.Errorf("%s: failed to convert value to its YANG type: %v ", d.Name(), err)
+			continue
+		}
+		if !utils.EqualTypedValues(nfiv, v) {
+			log.Debugf("%s: intent %s has a NOT_APPLIED deviation: configured: %v -> expected %v",
+				d.Name(), intentsUpdates[0].Owner(), v, nfiv)
+			rsp := &sdcpb.WatchDeviationResponse{
+				Name:          d.Name(),
+				Intent:        intentsUpdates[0].Owner(),
+				Event:         sdcpb.DeviationEvent_UPDATE,
+				Reason:        sdcpb.DeviationReason_NOT_APPLIED,
+				Path:          sp,
+				ExpectedValue: nfiv,
+				CurrentValue:  v,
+			}
+			for _, dc := range dm {
+				err = dc.Send(rsp)
+				if err != nil {
+					log.Errorf("%s: failed to send deviation: %v", d.Name(), err)
+					continue
+				}
+			}
+			xp := utils.ToXPath(sp, false)
+			if _, ok := newDeviations[xp]; !ok {
+				newDeviations[xp] = make([]*sdcpb.WatchDeviationResponse, 0, 1)
+			}
+			newDeviations[xp] = append(newDeviations[xp], rsp)
+		}
+		// remaining intents
+		for _, intUpd := range intentsUpdates[1:] {
+			iv, err := intUpd.Value()
+			if err != nil {
+				log.Errorf("%s: failed to convert intent value: %v", d.Name(), err)
+				continue
+			}
+			sp, err := d.toPath(ctx, intUpd.GetPath())
+			if err != nil {
+				log.Errorf("%s: failed to convert path %v: %v", d.Name(), intUpd.GetPath(), err)
+				continue
+			}
+			scRsp, err := d.getSchema(ctx, sp)
+			if err != nil {
+				log.Errorf("%s: failed to get path schema: %v ", d.Name(), err)
+				continue
+			}
+			niv, err := d.typedValueToYANGType(iv, scRsp.GetSchema())
+			if err != nil {
+				log.Errorf("%s: failed to convert value to its YANG type: %v ", d.Name(), err)
+				continue
+			}
+			if !utils.EqualTypedValues(nfiv, niv) {
+				log.Debugf("%s: intent %s has an OVERRULED deviation: ruling intent has: %v -> overruled intent has: %v",
+					d.Name(), intUpd.Owner(), nfiv, niv)
+				// TODO: generate an OVERRULED deviation
+
+				rsp := &sdcpb.WatchDeviationResponse{
+					Name:          d.Name(),
+					Intent:        intUpd.Owner(),
+					Event:         sdcpb.DeviationEvent_UPDATE,
+					Reason:        sdcpb.DeviationReason_OVERRULED,
+					Path:          sp,
+					ExpectedValue: iv,
+					CurrentValue:  fiv,
+				}
+				for _, dc := range dm {
+					err = dc.Send(rsp)
+					if err != nil {
+						log.Errorf("%s: failed to send deviation: %v", d.Name(), err)
+						continue
+					}
+				}
+				xp := utils.ToXPath(sp, false)
+				if _, ok := newDeviations[xp]; !ok {
+					newDeviations[xp] = make([]*sdcpb.WatchDeviationResponse, 0, 1)
+				}
+				newDeviations[xp] = append(newDeviations[xp], rsp)
+			}
+		}
+	}
+
+	intendedUpdates, err := d.readIntendedStoreKeysMeta(ctx)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	for _, upds := range intendedUpdates {
+		for _, upd := range upds {
+			path := strings.Join(upd.GetPath(), sep)
+			if _, exists := configPaths[path]; !exists {
+
+				// iv, err := upd.Value()
+				// if err != nil {
+				// 	log.Errorf("%s: failed to convert intent value: %v", d.Name(), err)
+				// 	continue
+				// }
+
+				path, err := d.toPath(ctx, upd.GetPath())
+				if err != nil {
+					log.Error(err)
+					continue
+				}
+				// scRsp, err := d.getSchema(ctx, path)
+				// if err != nil {
+				// 	log.Errorf("%s: failed to get path schema: %v ", d.Name(), err)
+				// 	continue
+				// }
+				// niv, err := d.typedValueToYANGType(iv, scRsp.GetSchema())
+				// if err != nil {
+				// 	log.Errorf("%s: failed to convert value to its YANG type: %v ", d.Name(), err)
+				// 	continue
+				// }
+
+				rsp := &sdcpb.WatchDeviationResponse{
+					Name:          d.Name(),
+					Intent:        upd.Owner(),
+					Event:         sdcpb.DeviationEvent_UPDATE,
+					Reason:        sdcpb.DeviationReason_NOT_APPLIED,
+					Path:          path,
+					ExpectedValue: nil, // TODO this need to be fixed
+					CurrentValue:  nil,
+				}
+				for _, dc := range dm {
+					err = dc.Send(rsp)
+					if err != nil {
+						log.Errorf("%s: failed to send deviation: %v", d.Name(), err)
+						continue
+					}
+				}
+			}
+		}
+	}
+
+	// send deviation event END
+	for _, dc := range dm {
+		err := dc.Send(&sdcpb.WatchDeviationResponse{
+			Name:  d.Name(),
+			Event: sdcpb.DeviationEvent_END,
+		})
+		if err != nil {
+			log.Errorf("%s: failed to send deviation end: %v", d.Name(), err)
+			continue
+		}
+	}
+	d.md.Lock()
+	d.currentIntentsDeviations = newDeviations
+	d.md.Unlock()
 }

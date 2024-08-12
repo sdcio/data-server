@@ -1,0 +1,11 @@
+[
+    {
+        "path": "interface[name=lag1]/lag",
+        "value": {
+            "lag-type": "lacp",
+            "lacp": {
+                "admin-key": 1
+            }
+        }
+    }
+]

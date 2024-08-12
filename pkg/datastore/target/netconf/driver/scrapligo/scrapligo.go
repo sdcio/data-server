@@ -1,15 +1,31 @@
+// Copyright 2024 Nokia
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package scrapligo
 
 import (
 	"fmt"
+	"net"
+	"strconv"
 
 	"github.com/beevik/etree"
 	scraplinetconf "github.com/scrapli/scrapligo/driver/netconf"
 	"github.com/scrapli/scrapligo/driver/options"
 	"github.com/scrapli/scrapligo/util"
 
-	"github.com/iptecharch/data-server/pkg/config"
-	"github.com/iptecharch/data-server/pkg/datastore/target/netconf/types"
+	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/datastore/target/netconf/types"
 )
 
 type ScrapligoNetconfTarget struct {
@@ -18,11 +34,20 @@ type ScrapligoNetconfTarget struct {
 
 // NewScrapligoNetconfTarget inits a new ScrapligoNetconfTarget which is already connected to the target node
 func NewScrapligoNetconfTarget(cfg *config.SBI) (*ScrapligoNetconfTarget, error) {
+	addr, p, err := net.SplitHostPort(cfg.Address)
+	if err != nil {
+		return nil, err
+	}
+	pi, err := strconv.Atoi(p)
+	if err != nil {
+		return nil, err
+	}
 	opts := []util.Option{
 		options.WithAuthNoStrictKey(),
 		options.WithNetconfForceSelfClosingTags(),
 		options.WithTransportType("standard"),
-		options.WithPort(cfg.Port),
+		options.WithPort(pi),
+		options.WithTimeoutOps(cfg.Timeout),
 	}
 
 	if cfg.Credentials != nil {
@@ -37,7 +62,7 @@ func NewScrapligoNetconfTarget(cfg *config.SBI) (*ScrapligoNetconfTarget, error)
 		)
 	}
 	// init the netconf driver
-	d, err := scraplinetconf.NewDriver(cfg.Address, opts...)
+	d, err := scraplinetconf.NewDriver(addr, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +78,23 @@ func NewScrapligoNetconfTarget(cfg *config.SBI) (*ScrapligoNetconfTarget, error)
 }
 
 func (snt *ScrapligoNetconfTarget) Close() error {
+	if snt == nil {
+		return nil
+	}
+	if snt.driver == nil {
+		return nil
+	}
 	return snt.driver.Close()
+}
+
+func (snt *ScrapligoNetconfTarget) IsAlive() bool {
+	if snt == nil || snt.driver == nil {
+		return false
+	}
+	if snt.driver.Transport == nil {
+		return false
+	}
+	return snt.driver.Transport.IsAlive()
 }
 
 // EditConfig transforms the generalized EditConfig into the scrapligo implementation
@@ -103,7 +144,7 @@ func (snt *ScrapligoNetconfTarget) GetConfig(source string, filter string) (*typ
 
 	// the actual config is contained under /rpc-reply/data/ in the result document.
 	// so we are extracting that portion
-	newRootXpath := "/rpc-reply/data/*"
+	newRootXpath := "/rpc-reply/data"
 	r := x.FindElement(newRootXpath)
 	if r == nil {
 		return nil, fmt.Errorf("unable to find %q in %s", newRootXpath, resp.Result)
@@ -153,7 +194,7 @@ func (snt *ScrapligoNetconfTarget) Get(filter string) (*types.NetconfResponse, e
 		return nil, err
 	}
 
-	newRootXpath := "/rpc-reply/data/*"
+	newRootXpath := "/rpc-reply/data"
 	r := x.FindElement(newRootXpath)
 	if r == nil {
 		return nil, fmt.Errorf("unable to find %q in %s", newRootXpath, resp.Result)

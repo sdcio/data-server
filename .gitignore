@@ -18,3 +18,10 @@ output.xml
 report.html
 intra/
 nbn/
+mocks/*
+.vscode
+schema-dir
+dist/
+.*.bak
+clab-*
+tests/robot/*-yang-models/

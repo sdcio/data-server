@@ -1,3 +1,17 @@
+// Copyright 2024 Nokia
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package config
 
 import (
@@ -9,19 +23,21 @@ import (
 	"os"
 	"time"
 
-	schemaConfig "github.com/iptecharch/schema-server/config"
+	schemaConfig "github.com/sdcio/schema-server/pkg/config"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 )
 
+const ()
+
 type Config struct {
-	GRPCServer   *GRPCServer                  `yaml:"grpc-server,omitempty" json:"grpc-server,omitempty"`
-	Schemas      []*schemaConfig.SchemaConfig `yaml:"schemas,omitempty" json:"schemas,omitempty"`
-	Datastores   []*DatastoreConfig           `yaml:"datastores,omitempty" json:"datastores,omitempty"`
-	SchemaServer *RemoteSchemaServer          `yaml:"schema-server,omitempty" json:"schema-server,omitempty"`
-	Cache        *CacheConfig                 `yaml:"cache,omitempty" json:"cache,omitempty"`
-	Prometheus   *PromConfig                  `yaml:"prometheus,omitempty" json:"prometheus,omitempty"`
+	GRPCServer   *GRPCServer                     `yaml:"grpc-server,omitempty" json:"grpc-server,omitempty"`
+	SchemaStore  *schemaConfig.SchemaStoreConfig `yaml:"schema-store,omitempty" json:"schema-store,omitempty"`
+	Datastores   []*DatastoreConfig              `yaml:"datastores,omitempty" json:"datastores,omitempty"`
+	SchemaServer *RemoteSchemaServer             `yaml:"schema-server,omitempty" json:"schema-server,omitempty"`
+	Cache        *CacheConfig                    `yaml:"cache,omitempty" json:"cache,omitempty"`
+	Prometheus   *PromConfig                     `yaml:"prometheus,omitempty" json:"prometheus,omitempty"`
 }
 
 type TLS struct {
@@ -32,43 +48,70 @@ type TLS struct {
 }
 
 func New(file string) (*Config, error) {
-	b, err := os.ReadFile(file)
-	if err != nil {
-		return nil, err
-	}
 	c := new(Config)
-	err = yaml.Unmarshal(b, c)
-	if err != nil {
-		return nil, err
+	if file != "" {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			return nil, err
+		}
+
+		err = yaml.Unmarshal(b, c)
+		if err != nil {
+			return nil, err
+		}
 	}
-	err = c.validateSetDefaults()
+	err := c.validateSetDefaults()
 	return c, err
 }
 
 func (c *Config) validateSetDefaults() error {
 	if c.GRPCServer == nil {
-		return errors.New("grpc-server definition is required")
+		c.GRPCServer = &GRPCServer{}
 	}
-	if c.GRPCServer.Address == "" {
-		c.GRPCServer.Address = ":56000"
+	err := c.GRPCServer.validateSetDefaults()
+	if err != nil {
+		return err
 	}
-	if c.GRPCServer.MaxRecvMsgSize <= 0 {
-		c.GRPCServer.MaxRecvMsgSize = 4 * 1024 * 1024
-	}
-	if c.GRPCServer.RPCTimeout <= 0 {
-		c.GRPCServer.RPCTimeout = time.Minute
-	}
+
 	// make sure either local or remote schema stores are enabled
-	if c.Schemas != nil && c.SchemaServer != nil {
-		return errors.New("cannot define local schemas and a remote schema server at the same time")
+	if c.SchemaStore != nil && c.SchemaServer != nil {
+		return errors.New("cannot define local schema-store and a remote schema server at the same time")
 	}
-	if c.Schemas == nil && c.SchemaServer == nil {
-		return errors.New("missing `schemas` or `schema-server` sections")
+	// set local schema server config
+	if c.SchemaStore == nil && c.SchemaServer == nil {
+		c.SchemaStore = &schemaConfig.SchemaStoreConfig{
+			Type:    schemaConfig.StoreTypePersistent,
+			Schemas: make([]*schemaConfig.SchemaConfig, 0),
+		}
+		if c.GRPCServer.SchemaServer == nil {
+			c.GRPCServer.SchemaServer = &SchemaServer{
+				Enabled:          true,
+				SchemasDirectory: "/schemas",
+			}
+		}
 	}
-	if c.SchemaServer == nil && (c.GRPCServer.SchemaServer == nil || !c.GRPCServer.SchemaServer.Enabled) {
+	if c.SchemaStore != nil {
+		switch c.SchemaStore.Type {
+		case "":
+			c.SchemaStore.Type = schemaConfig.StoreTypeMemory
+		case schemaConfig.StoreTypeMemory:
+		case schemaConfig.StoreTypePersistent:
+			if c.SchemaStore.Path == "" {
+				c.SchemaStore.Path = defaultSchemaStorePath
+			}
+		default:
+			return fmt.Errorf("unknown schema store type %q", c.SchemaStore.Type)
+		}
+	}
+	if c.SchemaStore == nil && (c.GRPCServer.SchemaServer == nil || !c.GRPCServer.SchemaServer.Enabled) {
 		return errors.New("schema-server RPCs cannot be exposed if the schema server is not enabled")
 	}
-	var err error
+	//
+	if c.SchemaServer != nil {
+		if err = c.SchemaServer.validateSetDefaults(); err != nil {
+			return err
+		}
+	}
 	for _, ds := range c.Datastores {
 		if err = ds.ValidateSetDefaults(); err != nil {
 			return err
@@ -84,8 +127,31 @@ func (c *Config) validateSetDefaults() error {
 }
 
 type RemoteSchemaServer struct {
-	Address string `yaml:"address,omitempty" json:"address,omitempty"`
-	TLS     *TLS   `yaml:"tls,omitempty" json:"tls,omitempty"`
+	Address string             `yaml:"address,omitempty" json:"address,omitempty"`
+	TLS     *TLS               `yaml:"tls,omitempty" json:"tls,omitempty"`
+	Cache   *RemoteSchemaCache `yaml:"cache,omitempty" json:"cache,omitempty"`
+}
+
+type RemoteSchemaCache struct {
+	TTL             time.Duration `yaml:"ttl,omitempty" json:"ttl,omitempty"`
+	Capacity        uint64        `yaml:"capacity,omitempty" json:"capacity,omitempty"`
+	WithDescription bool          `yaml:"with-description,omitempty" json:"with-description,omitempty"`
+	RefreshOnHit    bool          `yaml:"refresh-on-hit,omitempty" json:"refresh-on-hit,omitempty"`
+}
+
+func (r *RemoteSchemaServer) validateSetDefaults() error {
+	if r.Address == "" {
+		return fmt.Errorf("missing remote schema server address")
+	}
+	if r.Cache != nil {
+		if r.Cache.TTL <= 0 {
+			r.Cache.TTL = defaultRemoteSchemaServerCacheTTL
+		}
+		if r.Cache.Capacity == 0 {
+			r.Cache.Capacity = defaultRemoteSchemaServerCacheCapacity
+		}
+	}
+	return nil
 }
 
 type GRPCServer struct {
@@ -95,6 +161,19 @@ type GRPCServer struct {
 	DataServer     *DataServer   `yaml:"data-server,omitempty" json:"data-server,omitempty"`
 	MaxRecvMsgSize int           `yaml:"max-recv-msg-size,omitempty" json:"max-recv-msg-size,omitempty"`
 	RPCTimeout     time.Duration `yaml:"rpc-timeout,omitempty" json:"rpc-timeout,omitempty"`
+}
+
+func (g *GRPCServer) validateSetDefaults() error {
+	if g.Address == "" {
+		g.Address = defaultGRPCAddress
+	}
+	if g.MaxRecvMsgSize <= 0 {
+		g.MaxRecvMsgSize = defaultMaxRecvMsgSize
+	}
+	if g.RPCTimeout <= 0 {
+		g.RPCTimeout = defaultRPCTimeout
+	}
+	return nil
 }
 
 func (t *TLS) NewConfig(ctx context.Context) (*tls.Config, error) {

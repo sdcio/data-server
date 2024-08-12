@@ -1,3 +1,17 @@
+// Copyright 2024 Nokia
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package datastore
 
 import (
@@ -5,69 +19,53 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
-	"github.com/iptecharch/cache/proto/cachepb"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	"github.com/sdcio/cache/proto/cachepb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/iptecharch/data-server/pkg/cache"
-	"github.com/iptecharch/data-server/pkg/utils"
+	"github.com/sdcio/data-server/pkg/cache"
 )
 
-var rawIntentPrefix = "__raw_intent_"
+var rawIntentPrefix = "__raw_intent__"
+
+const (
+	intentRawNameSep = "_"
+)
+
+var ErrIntentNotFound = errors.New("intent not found")
 
 func (d *Datastore) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*sdcpb.GetIntentResponse, error) {
-	r, err := d.getRawIntent(ctx, req.GetIntent())
+	r, err := d.getRawIntent(ctx, req.GetIntent(), req.GetPriority())
 	if err != nil {
 		return nil, err
 	}
+
 	rsp := &sdcpb.GetIntentResponse{
-		Notification: []*sdcpb.Notification{
-			{
-				Update: r.GetUpdate(),
-			},
+		Name: d.Name(),
+		Intent: &sdcpb.Intent{
+			Intent:   r.GetIntent(),
+			Priority: r.GetPriority(),
+			Update:   r.GetUpdate(),
 		},
 	}
 	return rsp, nil
 }
 
-func (d *Datastore) getIntentFlat(ctx context.Context, intentName string) ([]*sdcpb.Notification, error) {
-	notifications := make([]*sdcpb.Notification, 0)
-	upds := d.cacheClient.Read(ctx, d.config.Name, &cache.Opts{
-		Store: cachepb.Store_INTENDED,
-		Owner: intentName,
-		// Priority: -1, // TODO: related to next TODO in line 47 (skip owner)
-	}, [][]string{{"*"}}, 0)
-
-	for _, upd := range upds {
-		if upd.Owner() != intentName {
-			continue // TODO: DIRTY temp(?) workaround for 2 intents with the same priority
-		}
-		scp, err := d.toPath(ctx, upd.GetPath())
-		if err != nil {
-			return nil, err
-		}
-		tv, err := upd.Value()
-		if err != nil {
-			return nil, err
-		}
-		n := &sdcpb.Notification{
-			Timestamp: time.Now().UnixNano(),
-			Update: []*sdcpb.Update{{
-				Path:  scp,
-				Value: tv,
-			}},
-		}
-		notifications = append(notifications, n)
-	}
-	log.Debugf("intent %s current notifications: %v", intentName, notifications)
-	return notifications, nil
-}
-
 func (d *Datastore) SetIntent(ctx context.Context, req *sdcpb.SetIntentRequest) (*sdcpb.SetIntentResponse, error) {
+	if !d.intentMutex.TryLock() {
+		return nil, status.Errorf(codes.ResourceExhausted, "datastore %s has an ongoing SetIntentRequest", d.Name())
+	}
+	defer d.intentMutex.Unlock()
+
+	log.Infof("received SetIntentRequest: ds=%s intent=%s", req.GetName(), req.GetIntent())
 	now := time.Now().UnixNano()
 	candidateName := fmt.Sprintf("%s-%d", req.GetIntent(), now)
 	err := d.CreateCandidate(ctx, &sdcpb.DataStore{
@@ -86,403 +84,65 @@ func (d *Datastore) SetIntent(ctx context.Context, req *sdcpb.SetIntentRequest) 
 			log.Errorf("%s: failed to delete candidate %s: %v", d.Name(), candidateName, err)
 		}
 	}()
-	switch {
-	case len(req.GetUpdate()) > 0:
-		err = d.SetIntentUpdate(ctx, req, candidateName)
-	case req.GetDelete():
-		err = d.SetIntentDelete(ctx, req, candidateName)
-	}
+
+	err = d.SetIntentUpdate(ctx, req, candidateName)
 	if err != nil {
+		log.Errorf("%s: failed to SetIntentUpdate: %v", d.Name(), err)
 		return nil, err
 	}
+
 	return &sdcpb.SetIntentResponse{}, nil
 }
 
-func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentRequest, candidateName string) error {
-	// set request to be applied into the candidate
-	setDataReq := &sdcpb.SetDataRequest{
-		Name: req.GetName(),
-		Datastore: &sdcpb.DataStore{
-			Type:     sdcpb.Type_CANDIDATE,
-			Name:     candidateName,
-			Owner:    req.GetIntent(),
-			Priority: req.GetPriority(),
-		},
-		Update: make([]*sdcpb.Update, 0),
-		Delete: make([]*sdcpb.Path, 0),
-	}
-
-	// expand intent update values
-	updates := make([]*sdcpb.Update, 0, len(req.GetUpdate()))
-	for _, upd := range req.GetUpdate() {
-		expUpds, err := d.expandUpdate(ctx, upd)
-		if err != nil {
-			return err
-		}
-		updates = append(updates, expUpds...)
-	}
-
-	// debug start
-	if log.GetLevel() >= log.DebugLevel {
-		for i, upd := range updates {
-			log.Debugf("ds=%s | %s | set intent expanded update.%d: %s", d.Name(), req.GetIntent(), i, upd)
-		}
-	}
-	// debug stop
-
-	// go through all updates from the intent to figure out if they need to be applied
-	// based on priority
-	for _, upd := range updates {
-		cp, err := utils.CompletePath(nil, upd.GetPath())
-		if err != nil {
-			return err
-		}
-		// get the current highest priority value for this path
-		currentCacheEntries := d.cacheClient.Read(ctx, d.Config().Name, &cache.Opts{
-			Store: cachepb.Store_INTENDED,
-		}, [][]string{cp}, 0)
-
-		switch len(currentCacheEntries) {
-		case 0:
-			// does not exist, apply new intent update
-			setDataReq.Update = append(setDataReq.Update, upd)
-			// add delete to remove previous value, TODO: not needed ?
-			setDataReq.Delete = append(setDataReq.Delete, upd.GetPath())
-		case 1:
-			switch {
-			case currentCacheEntries[0].Priority() < req.GetPriority():
-			case currentCacheEntries[0].Priority() == req.GetPriority():
-				// exists with same priority, apply current
-				setDataReq.Update = append(setDataReq.Update, upd)
-				// add delete to remove previous value
-				setDataReq.Delete = append(setDataReq.Delete, upd.GetPath())
-			case currentCacheEntries[0].Priority() > req.GetPriority():
-				// exists with a "lower" priority, apply current
-				setDataReq.Update = append(setDataReq.Update, upd)
-				// add delete to remove previous value
-				setDataReq.Delete = append(setDataReq.Delete, upd.GetPath())
-			}
-		default:
-			panic(currentCacheEntries)
-		}
-	}
-	//
-	// get current intent notifications
-	intentNotifications, err := d.getIntentFlat(ctx, req.GetIntent())
+func (d *Datastore) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (*sdcpb.ListIntentResponse, error) {
+	intents, err := d.listRawIntent(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	// build deletes from the current intent
-	// // collect applied paths
-	appliedPaths := make([]*sdcpb.Path, 0, len(intentNotifications))
-	for _, n := range intentNotifications {
-		for _, upd := range n.GetUpdate() {
-			appliedPaths = append(appliedPaths, upd.GetPath())
-		}
-	}
-	for _, p := range appliedPaths {
-		cp, err := utils.CompletePath(nil, p)
-		if err != nil {
-			return err
-		}
-		// get the current highest priority value for this path
-		currentCacheEntries := d.cacheClient.Read(ctx, d.Config().Name, &cache.Opts{
-			Store: cachepb.Store_INTENDED,
-		}, [][]string{cp}, 0)
-		switch len(currentCacheEntries) {
-		case 0:
-		case 1:
-			switch {
-			case currentCacheEntries[0].Priority() < req.GetPriority(): // exist with a "higher" priority, do not delete
-			case currentCacheEntries[0].Priority() == req.GetPriority():
-				// same priority, add it to deletes
-				setDataReq.Delete = append(setDataReq.Delete, p)
-			case currentCacheEntries[0].Priority() > req.GetPriority():
-				setDataReq.Delete = append(setDataReq.Delete, p)
-			}
-		default:
-			panic(currentCacheEntries)
-		}
-	}
-	setDataReq.Delete = d.buildDeletePaths(setDataReq.Delete)
-	_, err = d.Set(ctx, setDataReq)
-	if err != nil {
-		return err
-	}
-	// apply intent
-	err = d.applyIntent(ctx, candidateName, setDataReq)
-	if err != nil {
-		return err
-	}
-	// update intent in intended store
-	dels := make([][]string, 0)
-	update := make([]*cache.Update, 0)
-	for _, dp := range intentNotifications {
-		for _, upd := range dp.GetUpdate() {
-			dcp, err := utils.CompletePath(nil, upd.GetPath())
-			if err != nil {
-				return err
-			}
-			dels = append(dels, dcp)
-		}
-	}
-	for _, upd := range updates {
-		cup, err := d.cacheClient.NewUpdate(upd)
-		if err != nil {
-			return err
-		}
-		update = append(update, cup)
-	}
-	err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
-		Store:    cachepb.Store_INTENDED,
-		Owner:    req.GetIntent(),
-		Priority: req.GetPriority(),
-	}, dels, update)
-	if err != nil {
-		return err
-	}
-	// replace intent in metadata store
-	err = d.saveRawIntent(ctx, req.GetIntent(), req)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (d *Datastore) SetIntentDelete(ctx context.Context, req *sdcpb.SetIntentRequest, candidateName string) error {
-	// set request to be applied into the candidate
-	setDataReq := &sdcpb.SetDataRequest{
-		Name: req.GetName(),
-		Datastore: &sdcpb.DataStore{
-			Type:     sdcpb.Type_CANDIDATE,
-			Name:     candidateName,
-			Owner:    req.GetIntent(),
-			Priority: req.GetPriority(),
-		},
-		Delete: make([]*sdcpb.Path, 0),
-		Update: make([]*sdcpb.Update, 0),
-	}
-	// get current intent notifications
-	intentNotifications, err := d.getIntentFlat(ctx, req.GetIntent())
-	if err != nil {
-		return err
-	}
-
-	// get paths of the current intent
-	appliedCompletePaths := make([][]string, 0, len(intentNotifications))
-	appliedPaths := make([]*sdcpb.Path, 0, len(intentNotifications))
-	for _, n := range intentNotifications {
-		for i, upd := range n.GetUpdate() {
-			log.Debugf("intent=%s has applied update.%d: %v", req.GetIntent(), i, upd)
-			cp, err := utils.CompletePath(nil, upd.GetPath())
-			if err != nil {
-				return err
-			}
-			appliedCompletePaths = append(appliedCompletePaths, cp)
-			appliedPaths = append(appliedPaths, upd.GetPath())
-		}
-	}
-
-	// go through applied paths and check if they are the highest priority
-	for idx, cp := range appliedCompletePaths {
-		// get the current highest priority value for this path
-		currentCacheEntries := d.cacheClient.Read(ctx, d.Config().Name, &cache.Opts{
-			Store: cachepb.Store_INTENDED,
-		}, [][]string{cp}, 0)
-
-		switch len(currentCacheEntries) {
-		case 0:
-			// should not happen
-			// panic(currentCacheEntries)
-		case 1:
-			if currentCacheEntries[0].Owner() == req.GetIntent() {
-				setDataReq.Delete = append(setDataReq.Delete, appliedPaths[idx])
-			}
-		default:
-			// should not happen
-			// panic(currentCacheEntries)
-		}
-
-	}
-	// delete intent from intended store
-	err = d.cacheClient.Modify(ctx, d.Config().Name, &cache.Opts{
-		Store:    cachepb.Store_INTENDED,
-		Owner:    req.GetIntent(),
-		Priority: req.GetPriority(),
-	}, appliedCompletePaths, nil)
-	if err != nil {
-		return err
-	}
-
-	// This defer function writes back the intent notification
-	// in the intended store if one of the following steps fail:
-	// - write to candidate and initial validations
-	// - apply intent: further validations and send to southbound
-	// assume will fail
-	var failed = true
-	defer func() {
-		if !failed {
-			return
-		}
-		log.Debugf("ds: %s: intent %s: reverting back intended notifications", d.Name(), req.GetIntent())
-		cacheUpdates := make([]*cache.Update, 0, len(intentNotifications))
-		for _, n := range intentNotifications {
-			for _, upd := range n.GetUpdate() {
-				cup, err := d.cacheClient.NewUpdate(upd)
-				if err != nil { // this should not fail
-					log.Errorf("failed to revert the intent back: %v", err)
-					return
-				}
-				cacheUpdates = append(cacheUpdates, cup)
-			}
-		}
-		err := d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
-			Store:    cachepb.Store_INTENDED,
-			Owner:    req.GetIntent(),
-			Priority: req.GetPriority(),
-		}, nil, cacheUpdates)
-		if err != nil {
-			log.Errorf("failed to revert the intent back: %v", err)
-		}
-	}()
-
-	// add delete paths
-	setDataReq.Delete = d.buildDeletePaths(setDataReq.Delete)
-
-	// go through the applied paths again and get the highest priority (path,value) after deletion
-	for _, cp := range appliedCompletePaths {
-		currentCacheEntries := d.cacheClient.Read(ctx, d.Config().Name, &cache.Opts{
-			Store: cachepb.Store_INTENDED,
-		}, [][]string{cp}, 0)
-		switch len(currentCacheEntries) {
-		case 0:
-			// no next highest
-		case 1:
-			// there is a next highest
-			// fmt.Println("there is a next highest: ", currentCacheEntries[0])
-			scp, err := d.toPath(ctx, currentCacheEntries[0].GetPath())
-			if err != nil {
-				return err
-			}
-			val, err := currentCacheEntries[0].Value()
-			if err != nil {
-				return err
-			}
-			upd := &sdcpb.Update{
-				Path:  scp,
-				Value: val,
-			}
-			setDataReq.Update = append(setDataReq.Update, upd)
-		default:
-			// should not happen
-			// panic(currentCacheEntries)
-		}
-	}
-
-	// write to candidate
-	_, err = d.Set(ctx, setDataReq)
-	if err != nil {
-		return err
-	}
-
-	// apply intent
-	err = d.applyIntent(ctx, candidateName, setDataReq)
-	if err != nil {
-		return err
-	}
-	failed = false
-	// delete raw intent
-	return d.deleteRawIntent(ctx, req.GetIntent())
-}
-
-func (d *Datastore) buildDeletePaths(appliedPaths []*sdcpb.Path) []*sdcpb.Path {
-	// sort paths by length
-	sort.Slice(appliedPaths, func(i, j int) bool {
-		return len(appliedPaths[i].GetElem()) < len(appliedPaths[j].GetElem())
-	})
-
-	// this map keeps track of paths added as deletes
-	added := make(map[string]struct{})
-
-	deletePaths := make([]*sdcpb.Path, 0, len(appliedPaths))
-	for _, p := range appliedPaths {
-		for i, pe := range p.GetElem() {
-			if pe.GetKey() != nil {
-				add := &sdcpb.Path{Elem: p.GetElem()[:i+1]}
-				xpAdd := utils.ToXPath(add, false)
-				if _, ok := added[xpAdd]; ok {
-					continue
-				}
-				added[xpAdd] = struct{}{}
-				deletePaths = append(deletePaths, add)
-			}
-		}
-		xpAdd := utils.ToXPath(p, false)
-		if _, ok := added[xpAdd]; ok {
-			continue
-		}
-		added[xpAdd] = struct{}{}
-		deletePaths = append(deletePaths, p)
-	}
-
-	return deletePaths
+	return &sdcpb.ListIntentResponse{
+		Name:   req.GetName(),
+		Intent: intents,
+	}, nil
 }
 
 func (d *Datastore) applyIntent(ctx context.Context, candidateName string, sdreq *sdcpb.SetDataRequest) error {
-	// debug start
-	// for _, n := range sdreq.GetDelete() {
-	// 	fmt.Printf("set delete: %v\n", n)
-	// }
-	// for _, n := range sdreq.GetUpdate() {
-	// 	fmt.Printf("set update: %v\n", n)
-	// }
-	// debug end
 	if candidateName == "" {
 		return fmt.Errorf("missing candidate name")
 	}
-	var err error
-	sbiSet := &sdcpb.SetDataRequest{
-		Update: []*sdcpb.Update{},
-		Delete: []*sdcpb.Path{},
-	}
+	log.Debugf("%s: applying intent from candidate %s", d.Name(), sdreq.GetDatastore())
 
-	newDeletePaths := make([]*sdcpb.Path, 0, len(sdreq.GetDelete()))
-	newDeletePaths = append(newDeletePaths, sdreq.GetDelete()...)
-	sdreq.Delete = d.buildDeletePaths(newDeletePaths)
-	log.Debugf("%s:%s notification:\n%s", d.Name(), candidateName, prototext.Format(sdreq))
+	var err error
+
+	log.Debugf("%s: %s notification:\n%s", d.Name(), candidateName, prototext.Format(sdreq))
 	// TODO: consider if leafref validation
 	// needs to run before must statements validation
-
 	// validate MUST statements
+	log.Infof("%s: validating must statements candidate %s", d.Name(), sdreq.GetDatastore())
 	for _, upd := range sdreq.GetUpdate() {
-		log.Debugf("%s:%s validating must statement on path: %v", d.Name(), candidateName, upd.GetPath())
-		_, err = d.validateMustStatement(ctx, candidateName, upd.GetPath())
+		log.Debugf("%s: %s validating must statement on: %v", d.Name(), candidateName, upd)
+		_, err = d.validateMustStatement(ctx, candidateName, upd.GetPath(), false)
 		if err != nil {
 			return err
 		}
 	}
-
+	log.Infof("%s: validating leafrefs candidate %s", d.Name(), sdreq.GetDatastore())
 	for _, upd := range sdreq.GetUpdate() {
-		log.Debugf("%s:%s validating leafRef on update: %v", d.Name(), candidateName, upd)
+		log.Debugf("%s: %s validating leafRef on update: %v", d.Name(), candidateName, upd)
 		err = d.validateLeafRef(ctx, upd, candidateName)
 		if err != nil {
 			return err
 		}
 	}
+
 	// push updates to sbi
-	sbiSet = &sdcpb.SetDataRequest{
-		Update: sdreq.GetUpdate(),
-		Delete: sdreq.GetDelete(),
-	}
-	log.Debugf("datastore %s/%s applyIntent:\n%s", d.config.Name, candidateName, prototext.Format(sbiSet))
+	log.Debugf("datastore %s/%s applyIntent:\n%s", d.config.Name, candidateName, prototext.Format(sdreq))
 
 	log.Infof("datastore %s/%s applyIntent: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d",
-		d.config.Name, candidateName, len(sbiSet.GetUpdate()), len(sbiSet.GetReplace()), len(sbiSet.GetDelete()))
+		d.config.Name, candidateName, len(sdreq.GetUpdate()), len(sdreq.GetReplace()), len(sdreq.GetDelete()))
 
 	// send set request only if there are updates and/or deletes
-	if len(sbiSet.GetUpdate())+len(sbiSet.GetReplace())+len(sbiSet.GetDelete()) > 0 {
-		rsp, err := d.sbi.Set(ctx, sbiSet)
+	if len(sdreq.GetUpdate())+len(sdreq.GetReplace())+len(sdreq.GetDelete()) > 0 {
+		rsp, err := d.sbi.Set(ctx, sdreq)
 		if err != nil {
 			return err
 		}
@@ -498,10 +158,11 @@ func (d *Datastore) saveRawIntent(ctx context.Context, intentName string, req *s
 		return err
 	}
 	//
+	rin := rawIntentName(intentName, req.GetPriority())
 	upd, err := d.cacheClient.NewUpdate(
 		&sdcpb.Update{
 			Path: &sdcpb.Path{
-				Elem: []*sdcpb.PathElem{{Name: rawIntentPrefix + intentName}},
+				Elem: []*sdcpb.PathElem{{Name: rin}},
 			},
 			Value: &sdcpb.TypedValue{
 				Value: &sdcpb.TypedValue_BytesVal{BytesVal: b},
@@ -513,7 +174,7 @@ func (d *Datastore) saveRawIntent(ctx context.Context, intentName string, req *s
 	}
 	err = d.cacheClient.Modify(ctx, d.config.Name,
 		&cache.Opts{
-			Store: cachepb.Store_METADATA,
+			Store: cachepb.Store_INTENTS,
 		},
 		nil,
 		[]*cache.Update{upd})
@@ -523,12 +184,13 @@ func (d *Datastore) saveRawIntent(ctx context.Context, intentName string, req *s
 	return nil
 }
 
-func (d *Datastore) getRawIntent(ctx context.Context, intentName string) (*sdcpb.SetIntentRequest, error) {
+func (d *Datastore) getRawIntent(ctx context.Context, intentName string, priority int32) (*sdcpb.SetIntentRequest, error) {
+	rin := rawIntentName(intentName, priority)
 	upds := d.cacheClient.Read(ctx, d.config.Name, &cache.Opts{
-		Store: cachepb.Store_METADATA,
-	}, [][]string{{rawIntentPrefix + intentName}}, 0)
+		Store: cachepb.Store_INTENTS,
+	}, [][]string{{rin}}, 0)
 	if len(upds) == 0 {
-		return nil, errors.New("not found")
+		return nil, ErrIntentNotFound
 	}
 
 	val, err := upds[0].Value()
@@ -543,11 +205,69 @@ func (d *Datastore) getRawIntent(ctx context.Context, intentName string) (*sdcpb
 	return req, nil
 }
 
-func (d *Datastore) deleteRawIntent(ctx context.Context, intentName string) error {
+func (d *Datastore) listRawIntent(ctx context.Context) ([]*sdcpb.Intent, error) {
+	upds := d.cacheClient.Read(ctx, d.config.Name, &cache.Opts{
+		Store:    cachepb.Store_INTENTS,
+		KeysOnly: true,
+	}, [][]string{{"*"}}, 0)
+	numUpds := len(upds)
+	if numUpds == 0 {
+		return nil, nil
+	}
+	intents := make([]*sdcpb.Intent, 0, numUpds)
+	for _, upd := range upds {
+		if len(upd.GetPath()) == 0 {
+			return nil, fmt.Errorf("malformed raw intent name: %q", upd.GetPath()[0])
+		}
+		intentRawName := strings.TrimPrefix(upd.GetPath()[0], rawIntentPrefix)
+		intentNameComp := strings.Split(intentRawName, intentRawNameSep)
+		inc := len(intentNameComp)
+		if inc < 2 {
+			return nil, fmt.Errorf("malformed raw intent name: %q", upd.GetPath()[0])
+		}
+		pr, err := strconv.Atoi(intentNameComp[inc-1])
+		if err != nil {
+			return nil, fmt.Errorf("malformed raw intent name: %q: %v", upd.GetPath()[0], err)
+		}
+		in := &sdcpb.Intent{
+			Intent:   strings.Join(intentNameComp[:inc-1], intentRawNameSep),
+			Priority: int32(pr),
+		}
+		intents = append(intents, in)
+	}
+	sort.Slice(intents, func(i, j int) bool {
+		if intents[i].GetPriority() == intents[j].GetPriority() {
+			return intents[i].GetIntent() < intents[j].GetIntent()
+		}
+		return intents[i].GetPriority() < intents[j].GetPriority()
+	})
+	return intents, nil
+}
+
+func (d *Datastore) deleteRawIntent(ctx context.Context, intentName string, priority int32) error {
 	return d.cacheClient.Modify(ctx, d.config.Name,
 		&cache.Opts{
-			Store: cachepb.Store_METADATA,
+			Store: cachepb.Store_INTENTS,
 		},
-		[][]string{{rawIntentPrefix + intentName}},
+		[][]string{{rawIntentName(intentName, priority)}},
 		nil)
+}
+
+func (d *Datastore) cacheUpdateToUpdate(ctx context.Context, cupd *cache.Update) (*sdcpb.Update, error) {
+	scp, err := d.toPath(ctx, cupd.GetPath())
+	if err != nil {
+		return nil, err
+	}
+	val, err := cupd.Value()
+	if err != nil {
+		return nil, err
+	}
+	return &sdcpb.Update{
+		Path:  scp,
+		Value: val,
+	}, nil
+}
+
+func rawIntentName(name string, pr int32) string {
+	return fmt.Sprintf("%s%s%s%d", rawIntentPrefix, name, intentRawNameSep, pr)
 }

@@ -1,7 +1,21 @@
+# Copyright 2024 Nokia
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 grpc-server:
   # gRPC listening address
   # address: ":56000"
-
+  # rpc-timeout: 5m
   ## TLS config
   # tls:
   #   ca:
@@ -26,28 +40,28 @@ grpc-server:
   # If this is not set, it defaults to 4 * 1024 * 1024 (4MB)
   max-recv-msg-size: 25165824 # 24 * 1024 * 1024 (24MB)
 
-datastores: # this specifies MAIN datastores
-#   - name: srl1
-#     schema:
-#       name: srl
-#       vendor: Nokia
-#       version: 22.11.2
-#     sbi:
-#       type: gnmi # nc, nats, redis
-#       address: clab-schema-srl1:57400
-#       credentials:
-#         username: admin
-#         password: NokiaSrl1!
-#       tls:
-#         skip-verify: true
-#     sync:
-#       validate: true
-#       gnmi:
-#         - path:
-#           - /
-#           name: config
-#           mode: on-change
-#           encoding: 45
+# datastores: # this specifies MAIN datastores
+  # - name: sr1
+  #   schema:
+  #     name: sros
+  #     vendor: Nokia
+  #     version: 23.3
+  #   sbi:
+  #     type: nc # gnmic, nc, ### nats, redis
+  #     address: clab-nc-sr1
+  #     include-ns: true
+  #     # timeout: 5m
+  #     credentials:
+  #       username: admin
+  #       password: admin
+  #   sync:
+  #     validate: true
+  #     config:
+  #     - name: config
+  #       protocol: netconf
+  #       paths:
+  #       - /
+  #       interval: 1m
 #         # - path:
 #         #   - /
 #         #   name: state
@@ -94,83 +108,95 @@ datastores: # this specifies MAIN datastores
 # # schemas definitions
 # # for local schema store only
 
-# starts a local schema client
-schemas:
-  - name: sros
-    vendor: Nokia
-    version: 22.10
-    files:
-      - ./lab/common/yang/sros_22.10/YANG/nokia-combined
-    directories:
-      - ./lab/common/yang/sros_22.10/YANG/ietf
-      - ./lab/common/yang/sros_22.10/YANG/nokia-sros-yang-extensions.yang
-  - name: srl
-    vendor: Nokia
-    version: 22.11.2
-    files:
-      - ./lab/common/yang/srl-22.11.2/srl_nokia/models
-    directories:
-      - ./lab/common/yang/srl-22.11.2/ietf
-    excludes:
-      - .*tools.*
-  - name: srl
-    vendor: Nokia
-    version: 23.10.1
-    files:
-      - ./lab/common/yang/srl-23.10.1/srl_nokia/models
-    directories:
-      - ./lab/common/yang/srl-23.10.1/ietf
-      - ./lab/common/yang/srl-23.10.1/openconfig/extensions
-      - ./lab/common/yang/srl-23.10.1/openconfig/openconfig-extensions.yang
-    excludes:
-      - .*tools.*
-  - name: srl
-    vendor: Nokia
-    version: 22.11.1
-    files:
-      - ./lab/common/yang/srl-22.11.1/srl_nokia/models
-    directories:
-      - ./lab/common/yang/srl-22.11.1/ietf
-    excludes:
-      - .*tools.*
+# starts a local schema store/client
+schema-store:
+  # type is either memory or persistent (default)
+  type: persistent
+  cache: 
+    ttl: 60s
+    capacity: 100
+  schemas:
+    - name: sros
+      vendor: Nokia
+      version: 23.3
+      files:
+        - ./lab/common/yang/sros_23.3/YANG/nokia-combined
+      directories:
+        - ./lab/common/yang/sros_23.3/YANG/ietf
+        - ./lab/common/yang/sros_23.3/YANG
+    - name: sros
+      vendor: Nokia
+      version: 23.7
+      files:
+        - ./lab/common/yang/sros_23.7/YANG/nokia-combined
+      directories:
+        - ./lab/common/yang/sros_23.7/YANG/ietf
+        - ./lab/common/yang/sros_23.7/YANG
+    - name: sros
+      vendor: Nokia
+      version: 23.10
+      files:
+        - ./lab/common/yang/sros_23.10/YANG/nokia-combined
+      directories:
+        - ./lab/common/yang/sros_23.10/YANG/ietf
+        - ./lab/common/yang/sros_23.10/YANG
+    - name: srl
+      vendor: Nokia
+      version: 22.11.2
+      files:
+        - ./lab/common/yang/srl-22.11.2/srl_nokia/models
+      directories:
+        - ./lab/common/yang/srl-22.11.2/ietf
+      excludes:
+        - .*tools.*
+    - name: srl
+      vendor: Nokia
+      version: 23.10.1
+      files:
+        - ./lab/common/yang/srl-23.10.1/srl_nokia/models
+      directories:
+        - ./lab/common/yang/srl-23.10.1/ietf
+        - ./lab/common/yang/srl-23.10.1/openconfig/extensions
+        - ./lab/common/yang/srl-23.10.1/openconfig
+      excludes:
+        - .*tools.*
+    - name: srl
+      vendor: Nokia
+      version: 22.11.1
+      files:
+        - ./lab/common/yang/srl-22.11.1/srl_nokia/models
+      directories:
+        - ./lab/common/yang/srl-22.11.1/ietf
+      excludes:
+        - .*tools.*
 
-  - name: srl
-    vendor: Nokia
-    version: 22.6.4
-    files:
-      - ./lab/common/yang/srl-22.6.4/srl_nokia/models
-    directories:
-      - ./lab/common/yang/srl-22.6.4/ietf
-    excludes:
-      - .*tools.*
-  - name: srl
-    vendor: Nokia
-    version: 22.3.2
-    files:
-      - ./lab/common/yang/srl-22.3.2/srl_nokia/models
-    directories:
-      - ./lab/common/yang/srl-22.3.2/ietf
-    excludes:
-      - .*tools.*
-  - name: srl
-    vendor: Nokia
-    version: 21.11.3
-    files:
-      - ./lab/common/yang/srl-21.11.3/srl_nokia/models
-    directories:
-      - ./lab/common/yang/srl-21.11.3/ietf
-    excludes:
-      - .*tools.*
-
-# remote schema server
-# schema-server:
-#   address: localhost:55000
-  # TLS config
-  # tls:
-  #   ca:
-  #   cert:
-  #   key:
-  #   skip-verify:
+    - name: srl
+      vendor: Nokia
+      version: 22.6.4
+      files:
+        - ./lab/common/yang/srl-22.6.4/srl_nokia/models
+      directories:
+        - ./lab/common/yang/srl-22.6.4/ietf
+      excludes:
+        - .*tools.*
+    - name: srl
+      vendor: Nokia
+      version: 22.3.2
+      files:
+        - ./lab/common/yang/srl-22.3.2/srl_nokia/models
+      directories:
+        - ./lab/common/yang/srl-22.3.2/ietf
+      excludes:
+        - .*tools.*
+    - name: srl
+      vendor: Nokia
+      version: 21.11.3
+      files:
+        - ./lab/common/yang/srl-21.11.3/srl_nokia/models
+      directories:
+        - ./lab/common/yang/srl-21.11.3/ietf
+      excludes:
+        - .*tools.*
 
 # cache config, defaults to
 # type: local
@@ -180,7 +206,7 @@ cache:
   # type: remote
   type: local
   # store-type if type == local
-  store-type: badgerdbsingle
+  store-type: badgerdb
   # local directory for caches if type == local
   dir: "./cached/caches"
   # remote cache address, if type == remote

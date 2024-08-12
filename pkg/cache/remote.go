@@ -1,15 +1,32 @@
+// Copyright 2024 Nokia
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sort"
 	"time"
 
-	"github.com/iptecharch/cache/pkg/cache"
-	"github.com/iptecharch/cache/pkg/client"
-	"github.com/iptecharch/cache/proto/cachepb"
-	"github.com/iptecharch/schema-server/utils"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	"github.com/sdcio/cache/pkg/cache"
+	"github.com/sdcio/cache/pkg/client"
+	"github.com/sdcio/cache/proto/cachepb"
+	"github.com/sdcio/schema-server/pkg/utils"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -34,6 +51,45 @@ func (c *remoteCache) Create(ctx context.Context, name string, ephemeral bool, c
 
 func (c *remoteCache) List(ctx context.Context) ([]string, error) {
 	return c.c.List(ctx)
+}
+
+func (c *remoteCache) GetKeys(ctx context.Context, name string, store cachepb.Store) (chan *Update, error) {
+
+	if store != cachepb.Store_CONFIG && store != cachepb.Store_INTENDED {
+		return nil, fmt.Errorf("getkeys only available with config or intended store")
+	}
+
+	outCh := make(chan *Update)
+	entryCh, err := c.c.ReadKeys(ctx, name, store)
+	if err != nil {
+		close(outCh)
+		return nil, err
+	}
+
+	go func() {
+		defer close(outCh)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case e, ok := <-entryCh:
+				if !ok {
+					return
+				}
+				if e == nil {
+					continue //
+				}
+				outCh <- &Update{
+					path:     e.Path,
+					value:    nil,
+					priority: e.Priority,
+					owner:    e.Owner,
+					ts:       int64(e.Timestamp),
+				}
+			}
+		}
+	}()
+	return outCh, nil
 }
 
 func (c *remoteCache) GetCandidates(ctx context.Context, name string) ([]*cache.CandidateDetails, error) {
@@ -98,10 +154,12 @@ func (c *remoteCache) Modify(ctx context.Context, name string, opts *Opts, dels 
 			},
 		)
 	}
+
 	wo := &client.ClientOpts{
-		Owner:    opts.Owner,
-		Priority: opts.Priority,
-		Store:    getStore(opts.Store),
+		Owner:         opts.Owner,
+		Priority:      opts.Priority,
+		Store:         getStore(opts.Store),
+		PriorityCount: opts.PriorityCount,
 	}
 
 	return c.c.Modify(ctx, name, wo, dels, pbUpds)
@@ -116,6 +174,9 @@ func (c *remoteCache) Read(ctx context.Context, name string, opts *Opts, paths [
 			return nil
 		case upd, ok := <-outCh:
 			if !ok {
+				sort.Slice(updates, func(i, j int) bool {
+					return updates[i].ts < updates[j].ts
+				})
 				return updates
 			}
 			updates = append(updates, upd)
@@ -125,18 +186,22 @@ func (c *remoteCache) Read(ctx context.Context, name string, opts *Opts, paths [
 
 func (c *remoteCache) ReadCh(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) chan *Update {
 	ro := &client.ClientOpts{
-		Owner:    opts.Owner,
-		Priority: opts.Priority,
-		Store:    getStore(opts.Store),
+		Owner:         opts.Owner,
+		Priority:      opts.Priority,
+		Store:         getStore(opts.Store),
+		PriorityCount: opts.PriorityCount,
+		KeysOnly:      opts.KeysOnly,
 	}
-
 	inCh := c.c.Read(ctx, name, ro, paths, period)
-	outCh := make(chan *Update)
+	outCh := make(chan *Update, len(paths))
 	go func() {
 		defer close(outCh)
 		for {
 			select {
 			case <-ctx.Done():
+				if !errors.Is(ctx.Err(), context.Canceled) {
+					log.Errorf("ctx done: %v", ctx.Err())
+				}
 				return
 			case readResponse, ok := <-inCh:
 				if !ok {
@@ -147,9 +212,13 @@ func (c *remoteCache) ReadCh(ctx context.Context, name string, opts *Opts, paths
 					value:    readResponse.GetValue().GetValue(),
 					priority: readResponse.GetPriority(),
 					owner:    readResponse.GetOwner(),
+					ts:       readResponse.GetTimestamp(),
 				}
 				select {
 				case <-ctx.Done():
+					if !errors.Is(ctx.Err(), context.Canceled) {
+						log.Errorf("ctx done: %v", ctx.Err())
+					}
 					return
 				case outCh <- rUpd:
 				}
@@ -183,6 +252,22 @@ func (c *remoteCache) Discard(ctx context.Context, name, candidate string) error
 
 func (c *remoteCache) Commit(ctx context.Context, name, candidate string) error {
 	return c.c.Commit(ctx, name, candidate)
+}
+
+func (c *remoteCache) CreatePruneID(ctx context.Context, name string, force bool) (string, error) {
+	rsp, err := c.c.Prune(ctx, name, "", force)
+	if err != nil {
+		return "", err
+	}
+	return rsp.GetId(), nil
+}
+
+func (c *remoteCache) ApplyPrune(ctx context.Context, name, id string) error {
+	_, err := c.c.Prune(ctx, name, id, false)
+	if err != nil {
+		return err
+	}
+	return err
 }
 
 func (c *remoteCache) NewUpdate(upd *sdcpb.Update) (*Update, error) {

@@ -1,9 +1,33 @@
+// Copyright 2024 Nokia
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package config
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"time"
+)
+
+const (
+	sbiNOOP    = "noop"
+	sbiNETCONF = "netconf"
+	sbiGNMI    = "gnmi"
+
+	ncCommitDatastoreRunning   = "running"
+	ncCommitDatastoreCandidate = "candidate"
 )
 
 type DatastoreConfig struct {
@@ -18,8 +42,6 @@ type SBI struct {
 	Type string `yaml:"type,omitempty" json:"type,omitempty"`
 	// gNMI or netconf address
 	Address string `yaml:"address,omitempty" json:"address,omitempty"`
-	// netconf port
-	Port int `yaml:"port,omitempty" json:"port,omitempty"`
 	// TLS config
 	TLS *TLS `yaml:"tls,omitempty" json:"tls,omitempty"`
 	// Target SBI credentials
@@ -28,8 +50,16 @@ type SBI struct {
 	IncludeNS bool `yaml:"include-ns,omitempty" json:"include-ns,omitempty"`
 	// sets the preferred NC version: 1.0 or 1.1
 	PreferredNCVersion string `yaml:"preferred-nc-version,omitempty" json:"preferred-nc-version,omitempty"`
+	// add a namespace when specifying a netconf operation such as 'delete' or 'remove'
+	OperationWithNamespace bool `yaml:"operation-with-namespace,omitempty" json:"operation-with-namespace,omitempty"`
+	// use 'remove' operation instead of 'delete'
+	UseOperationRemove bool `yaml:"use-operation-remove,omitempty" json:"use-operation-remove,omitempty"`
+	// for netconf targets: defines whether to commit to running or use a candidate.
+	CommitDatastore string `yaml:"commit-datastore,omitempty" json:"commit-datastore,omitempty"`
 	// ConnectRetry
 	ConnectRetry time.Duration `yaml:"connect-retry,omitempty" json:"connect-retry,omitempty"`
+	// Timeout
+	Timeout time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 }
 
 type Creds struct {
@@ -39,17 +69,18 @@ type Creds struct {
 }
 
 type Sync struct {
-	Validate     bool        `yaml:"validate,omitempty" json:"validate,omitempty"`
-	Buffer       int64       `yaml:"buffer,omitempty" json:"buffer,omitempty"`
-	WriteWorkers int64       `yaml:"write-workers,omitempty" json:"write-workers,omitempty"`
-	GNMI         []*GNMISync `yaml:"gnmi,omitempty" json:"gnmi,omitempty"`
+	Validate     bool            `yaml:"validate,omitempty" json:"validate,omitempty"`
+	Buffer       int64           `yaml:"buffer,omitempty" json:"buffer,omitempty"`
+	WriteWorkers int64           `yaml:"write-workers,omitempty" json:"write-workers,omitempty"`
+	Config       []*SyncProtocol `yaml:"config,omitempty" json:"config,omitempty"`
 }
 
-type GNMISync struct {
+type SyncProtocol struct {
 	Name     string        `yaml:"name,omitempty" json:"name,omitempty"`
+	Protocol string        `yaml:"protocol,omitempty" json:"protocol,omitempty"`
 	Paths    []string      `yaml:"paths,omitempty" json:"paths,omitempty"`
-	Mode     string        `yaml:"mode,omitempty" json:"mode,omitempty"`
 	Interval time.Duration `yaml:"interval,omitempty" json:"interval,omitempty"`
+	Mode     string        `yaml:"mode,omitempty" json:"mode,omitempty"`
 	Encoding string        `yaml:"encoding,omitempty" json:"encoding,omitempty"`
 }
 
@@ -77,30 +108,48 @@ func (ds *DatastoreConfig) ValidateSetDefaults() error {
 }
 
 func (s *SBI) validateSetDefaults() error {
-	if s.Type == "noop" {
+	switch s.Type {
+	case sbiNOOP:
 		return nil
+	case sbiNETCONF:
+	case sbiGNMI:
+	default:
+		return fmt.Errorf("unknown sbi type: %q", s.Type)
 	}
+
 	if s.Address == "" {
 		return errors.New("missing SBI address")
+	}
+
+	_, _, err := net.SplitHostPort(s.Address)
+	if err != nil {
+		return err
+	}
+
+	if s.Type == sbiNETCONF {
+		switch s.CommitDatastore {
+		case "":
+			s.CommitDatastore = ncCommitDatastoreCandidate
+		case ncCommitDatastoreRunning:
+		case ncCommitDatastoreCandidate:
+		default:
+			return fmt.Errorf("unknown commit-datastore: %s. Must be one of %s, %s",
+				s.CommitDatastore, ncCommitDatastoreCandidate, ncCommitDatastoreRunning)
+		}
 	}
 	if s.ConnectRetry < time.Second {
 		s.ConnectRetry = time.Second
 	}
-	switch s.Type {
-	case "gnmi":
-		return nil
-	case "nc":
-		if s.Port <= 0 {
-			s.Port = defaultNCPort
-		}
-		return nil
-	default:
-		return nil
+
+	if s.Timeout <= 0 {
+		s.Timeout = defaultTimeout
 	}
+	return nil
 }
 
 func (s *Sync) validateSetDefaults() error {
-	if s == nil || len(s.GNMI) == 0 {
+	// no sync
+	if s == nil || len(s.Config) == 0 {
 		return nil
 	}
 	if s.Buffer <= 0 {

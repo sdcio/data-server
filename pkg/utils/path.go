@@ -1,11 +1,26 @@
+// Copyright 2024 Nokia
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package utils
 
 import (
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 var errMalformedXPath = errors.New("malformed xpath")
@@ -14,7 +29,7 @@ var errMalformedXPathKey = errors.New("malformed xpath key")
 var escapedBracketsReplacer = strings.NewReplacer(`\]`, `]`, `\[`, `[`)
 
 // ParsePath creates a sdcpb.Path out of a p string, check if the first element is prefixed by an origin,
-// removes it from the xpath and adds it to the returned mgmt_serverPath
+// removes it from the xpath and adds it to the returned sdcpb.Path
 func ParsePath(p string) (*sdcpb.Path, error) {
 	lp := len(p)
 	if lp == 0 {
@@ -94,7 +109,7 @@ func toPathElems(p string) ([]*sdcpb.PathElem, error) {
 	return pElems, nil
 }
 
-// toPathElem take a xpath formatted path element such as "elem1[k=v]" and returns the corresponding mgmt_server.PathElem
+// toPathElem take a xpath formatted path element such as "elem1[k=v]" and returns the corresponding sdcpb.PathElem
 func toPathElem(s string) (*sdcpb.PathElem, error) {
 	idx := -1
 	prevC := rune(0)
@@ -154,7 +169,7 @@ func parseXPathKeys(s string) (map[string]string, error) {
 			if len(k) == 0 || len(v) == 0 {
 				return nil, errMalformedXPathKey
 			}
-			kvs[escapedBracketsReplacer.Replace(k)] = escapedBracketsReplacer.Replace(v)
+			kvs[strings.TrimSpace(escapedBracketsReplacer.Replace(k))] = strings.TrimSpace(escapedBracketsReplacer.Replace(v))
 			inKey = false
 		}
 		prevRune = r
@@ -267,11 +282,24 @@ func ToXPath(p *sdcpb.Path, noKeys bool) string {
 	for i, pe := range elems {
 		sb.WriteString(pe.GetName())
 		if !noKeys {
-			for k, v := range pe.GetKey() {
+
+			// need to sort the keys to get them in the correct order
+			kvMap := pe.GetKey()
+			// create a slice for the keys
+			keySlice := make([]string, 0, len(pe.GetKey()))
+			// add the keys
+			for k := range kvMap {
+				keySlice = append(keySlice, k)
+			}
+			// sort the keys
+			slices.Sort(keySlice)
+
+			// iterate over the sorted keys slice
+			for _, k := range keySlice {
 				sb.WriteString("[")
 				sb.WriteString(k)
 				sb.WriteString("=")
-				sb.WriteString(v)
+				sb.WriteString(kvMap[k])
 				sb.WriteString("]")
 			}
 		}
@@ -291,12 +319,24 @@ func StripPathElemPrefix(p string) (string, error) {
 		if i := strings.Index(pe.Name, ":"); i > 0 {
 			pe.Name = pe.Name[i+1:]
 		}
-		// delete prefix from keys
+		// process keys
 		for k, v := range pe.Key {
+			// delete prefix from key name
 			if i := strings.Index(k, ":"); i > 0 {
 				delete(pe.Key, k)
-				pe.Key[k[i+1:]] = v
+				k = k[i+1:]
 			}
+			// delete prefix from key value
+			if strings.Contains(v, ":") {
+				kelems := strings.Split(v, "/")
+				for idx, kelem := range kelems {
+					if i := strings.Index(kelem, ":"); i > 0 {
+						kelems[idx] = kelem[i+1:]
+					}
+				}
+				v = strings.Join(kelems, "/")
+			}
+			pe.Key[k] = v
 		}
 	}
 	prefix := ""
@@ -304,4 +344,70 @@ func StripPathElemPrefix(p string) (string, error) {
 		prefix = "/"
 	}
 	return prefix + ToXPath(sp, false), nil
+}
+
+func PathsEqual(p1, p2 *sdcpb.Path) bool {
+	if p1 == nil && p2 == nil {
+		return true
+	}
+	if p1 == nil || p2 == nil {
+		return false
+	}
+	if len(p1.GetElem()) != len(p2.GetElem()) {
+		return false
+	}
+	for i, pe := range p1.GetElem() {
+		if !peEqual(pe, p2.GetElem()[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func peEqual(pe1, pe2 *sdcpb.PathElem) bool {
+	if pe1 == nil && pe2 == nil {
+		return true
+	}
+	if pe1 == nil || pe2 == nil {
+		return false
+	}
+	if pe1.GetName() != pe2.GetName() {
+		return false
+	}
+	if len(pe1.GetKey()) != len(pe2.GetKey()) {
+		return false
+	}
+	for k, v := range pe1.GetKey() {
+		if pe2.GetKey()[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+func CopyPath(p *sdcpb.Path) *sdcpb.Path {
+	result := &sdcpb.Path{
+		Origin: p.Origin,
+		Target: p.Target,
+		Elem:   make([]*sdcpb.PathElem, 0, len(p.Elem)),
+	}
+	// copy each path element
+	for _, x := range p.Elem {
+		result.Elem = append(result.Elem, &sdcpb.PathElem{
+			Name: x.GetName(),
+			Key:  CopyMap(x.GetKey()),
+		})
+	}
+	return result
+}
+
+func CopyMap(m map[string]string) map[string]string {
+	if m == nil {
+		return nil
+	}
+	nm := make(map[string]string, len(m))
+	for k, v := range m {
+		nm[k] = v
+	}
+	return nm
 }

@@ -1,15 +1,30 @@
+// Copyright 2024 Nokia
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package cache
 
 import (
 	"context"
 	"fmt"
-	"sync"
+	"sort"
 	"time"
 
-	"github.com/iptecharch/cache/pkg/cache"
-	"github.com/iptecharch/cache/pkg/config"
-	"github.com/iptecharch/schema-server/utils"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
+	"github.com/sdcio/cache/pkg/cache"
+	"github.com/sdcio/cache/pkg/config"
+	"github.com/sdcio/cache/proto/cachepb"
+	"github.com/sdcio/schema-server/pkg/utils"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
@@ -87,7 +102,7 @@ func (c *localCache) Modify(ctx context.Context, name string, opts *Opts, dels [
 	for _, del := range dels {
 		err = c.c.DeletePrefix(ctx, name, &cache.Opts{
 			Store:    getStore(opts.Store),
-			Path:     del,
+			Path:     [][]string{del}, // TODO:
 			Owner:    opts.Owner,
 			Priority: opts.Priority,
 		})
@@ -99,7 +114,7 @@ func (c *localCache) Modify(ctx context.Context, name string, opts *Opts, dels [
 	for _, upd := range upds {
 		err = c.c.WriteValue(ctx, name, &cache.Opts{
 			Store:    getStore(opts.Store),
-			Path:     upd.GetPath(),
+			Path:     [][]string{upd.GetPath()},
 			Owner:    opts.Owner,
 			Priority: opts.Priority,
 		}, upd.Bytes())
@@ -119,6 +134,9 @@ func (c *localCache) Read(ctx context.Context, name string, opts *Opts, paths []
 			return nil
 		case u, ok := <-ch:
 			if !ok {
+				sort.Slice(upds, func(i, j int) bool {
+					return upds[i].ts < upds[j].ts
+				})
 				return upds
 			}
 			upds = append(upds, u)
@@ -126,55 +144,85 @@ func (c *localCache) Read(ctx context.Context, name string, opts *Opts, paths []
 	}
 }
 
+func (c *localCache) GetKeys(ctx context.Context, name string, store cachepb.Store) (chan *Update, error) {
+
+	if store != cachepb.Store_CONFIG && store != cachepb.Store_INTENDED {
+		return nil, fmt.Errorf("getkeys only available with config or intended store")
+	}
+
+	cacheStore := getStore(store)
+	entryCh, err := c.c.ReadKeys(ctx, name, cacheStore)
+	outCh := make(chan *Update)
+	if err != nil {
+		close(outCh)
+		return nil, err
+	}
+	go func() {
+		defer close(outCh)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case e, ok := <-entryCh:
+				if !ok {
+					return
+				}
+				if e == nil {
+					continue //
+				}
+				outCh <- &Update{
+					path:     e.P,
+					value:    nil,
+					priority: e.Priority,
+					owner:    e.Owner,
+					ts:       int64(e.Timestamp),
+				}
+			}
+		}
+	}()
+	return outCh, nil
+}
+
 func (c *localCache) ReadCh(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) chan *Update {
 	if opts == nil {
 		opts = &Opts{}
 	}
-	outCh := make(chan *Update)
-
-	wg := new(sync.WaitGroup)
-	wg.Add(len(paths))
-
+	outCh := make(chan *Update, len(paths))
 	go func() {
-		wg.Wait()
-		close(outCh)
-	}()
-	// TODO: use period
-	for _, p := range paths {
-		go func(p []string) { // TODO: limit num of goroutines ?
-			defer wg.Done()
-			ch, err := c.c.ReadValue(ctx, name, &cache.Opts{
-				Store:    getStore(opts.Store),
-				Path:     p,
-				Owner:    opts.Owner,
-				Priority: opts.Priority,
-			})
-			if err != nil {
-				log.Errorf("failed to read path %v: %v", p, err)
+		defer close(outCh)
+		ch, err := c.c.ReadValue(ctx, name, &cache.Opts{
+			Store:         getStore(opts.Store),
+			Path:          paths,
+			Owner:         opts.Owner,
+			Priority:      opts.Priority,
+			PriorityCount: opts.PriorityCount,
+			KeysOnly:      opts.KeysOnly,
+		})
+		if err != nil {
+			log.Errorf("failed to read path %v: %v", paths, err)
+			return
+		}
+		for {
+			select {
+			case <-ctx.Done():
 				return
-			}
-			for {
-				select {
-				case <-ctx.Done():
+			case e, ok := <-ch:
+				if !ok {
 					return
-				case upd, ok := <-ch:
-					if !ok {
-						return
-					}
-					if upd == nil {
-						continue
-					}
-
-					outCh <- &Update{
-						path:     upd.P,
-						value:    upd.V,
-						priority: upd.Priority,
-						owner:    upd.Owner,
-					}
+				}
+				if e == nil {
+					continue //
+				}
+				outCh <- &Update{
+					path:     e.P,
+					value:    e.V,
+					priority: e.Priority,
+					owner:    e.Owner,
+					ts:       int64(e.Timestamp),
 				}
 			}
-		}(p)
-	}
+		}
+	}()
 	return outCh
 }
 
@@ -202,6 +250,14 @@ func (c *localCache) Discard(ctx context.Context, name, candidate string) error 
 
 func (c *localCache) Commit(ctx context.Context, name, candidate string) error {
 	return c.c.Commit(ctx, name, candidate)
+}
+
+func (c *localCache) CreatePruneID(ctx context.Context, name string, force bool) (string, error) {
+	return c.c.CreatePruneID(ctx, name, force)
+}
+
+func (c *localCache) ApplyPrune(ctx context.Context, name, id string) error {
+	return c.c.ApplyPrune(ctx, name, id)
 }
 
 func (c *localCache) NewUpdate(upd *sdcpb.Update) (*Update, error) {

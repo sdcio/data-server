@@ -1,0 +1,283 @@
+[
+    {
+      "path": "/",
+      "value": {
+        "bfd": {
+          "subinterface": [
+            {
+              "admin-state": "enable",
+              "id": "ethernet-1/49.0"
+            }
+          ]
+        },
+        "interface": [
+          {
+            "admin-state": "enable",
+            "description": "k8s-ethernet-1/49",
+            "ethernet": {},
+            "name": "ethernet-1/49",
+            "subinterface": [
+              {
+                "admin-state": "enable",
+                "description": "k8s-core01.e1-2",
+                "index": 0,
+                "ipv6": {
+                  "admin-state": "enable",
+                  "router-advertisement": {
+                    "router-role": {
+                      "admin-state": "enable"
+                    }
+                  }
+                },
+                "type": "routed"
+              }
+            ]
+          },
+          {
+            "admin-state": "enable",
+            "description": "k8s-irb0",
+            "ethernet": {},
+            "name": "irb0"
+          },
+          {
+            "admin-state": "enable",
+            "description": "k8s-system0",
+            "ethernet": {},
+            "name": "system0",
+            "subinterface": [
+              {
+                "admin-state": "enable",
+                "description": "k8s-",
+                "index": 0,
+                "ipv4": {
+                  "address": [
+                    {
+                      "ip-prefix": "10.0.0.1/32"
+                    }
+                  ],
+                  "admin-state": "enable",
+                  "unnumbered": {
+                    "admin-state": "disable"
+                  }
+                },
+                "ipv6": {
+                  "address": [
+                    {
+                      "ip-prefix": "1000::2/128"
+                    }
+                  ],
+                  "admin-state": "enable",
+                  "router-advertisement": {
+                    "router-role": {
+                      "admin-state": "enable"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "network-instance": [
+          {
+            "admin-state": "enable",
+            "description": "k8s-default",
+            "interface": [
+              {
+                "name": "system0.0"
+              },
+              {
+                "name": "ethernet-1/49.0"
+              }
+            ],
+            "ip-forwarding": {
+              "receive-ipv4-check": false,
+              "receive-ipv6-check": false
+            },
+            "name": "default",
+            "protocols": {
+              "bgp": {
+                "admin-state": "enable",
+                "afi-safi": [
+                  {
+                    "admin-state": "enable",
+                    "afi-safi-name": "ipv4-unicast",
+                    "ipv4-unicast": {
+                      "advertise-ipv6-next-hops": true,
+                      "receive-ipv6-next-hops": true
+                    },
+                    "multipath": {
+                      "allow-multiple-as": true,
+                      "max-paths-level-1": 64,
+                      "max-paths-level-2": 64
+                    }
+                  },
+                  {
+                    "admin-state": "enable",
+                    "afi-safi-name": "ipv6-unicast",
+                    "multipath": {
+                      "allow-multiple-as": true,
+                      "max-paths-level-1": 64,
+                      "max-paths-level-2": 64
+                    }
+                  },
+                  {
+                    "admin-state": "enable",
+                    "afi-safi-name": "evpn"
+                  }
+                ],
+                "autonomous-system": 65001,
+                "dynamic-neighbors": {
+                  "accept": {
+                    "match": []
+                  },
+                  "interface": [
+                    {
+                      "allowed-peer-as": [
+                        "65002"
+                      ],
+                      "interface-name": "ethernet-1/49.0",
+                      "peer-group": "underlay"
+                    }
+                  ]
+                },
+                "ebgp-default-policy": {
+                  "export-reject-all": false,
+                  "import-reject-all": false
+                },
+                "group": [
+                  {
+                    "admin-state": "enable",
+                    "afi-safi": [
+                      {
+                        "admin-state": "disable",
+                        "afi-safi-name": "ipv4-unicast"
+                      },
+                      {
+                        "admin-state": "disable",
+                        "afi-safi-name": "ipv6-unicast"
+                      }
+                    ],
+                    "export-policy": "overlay",
+                    "group-name": "overlay",
+                    "next-hop-self": true
+                  },
+                  {
+                    "admin-state": "enable",
+                    "afi-safi": [
+                      {
+                        "admin-state": "disable",
+                        "afi-safi-name": "evpn"
+                      }
+                    ],
+                    "export-policy": "underlay",
+                    "failure-detection": {
+                      "enable-bfd": true
+                    },
+                    "group-name": "underlay",
+                    "next-hop-self": true
+                  }
+                ],
+                "neighbor": [
+                  {
+                    "local-as": {
+                      "as-number": "65535",
+                      "prepend-global-as": false
+                    },
+                    "peer-address": "10.0.0.0",
+                    "peer-as": 65535,
+                    "peer-group": "overlay",
+                    "transport": {
+                      "local-address": "10.0.0.1"
+                    }
+                  }
+                ],
+                "preference": {
+                  "ebgp": 100,
+                  "ibgp": 170
+                },
+                "router-id": "10.0.0.1"
+              }
+            },
+            "type": "default"
+          }
+        ],
+        "routing-policy": {
+          "policy": [
+            {
+              "name": "overlay",
+              "statement": []
+            },
+            {
+              "name": "underlay",
+              "statement": [
+                {
+                  "action": {
+                    "policy-result": "accept"
+                  },
+                  "match": {
+                    "prefix-set": "underlay-ipv4"
+                  },
+                  "name": "10"
+                },
+                {
+                  "action": {
+                    "policy-result": "accept"
+                  },
+                  "match": {
+                    "prefix-set": "underlay-ipv6"
+                  },
+                  "name": "20"
+                }
+              ]
+            }
+          ],
+          "prefix-set": [
+            {
+              "name": "overlay-ipv4",
+              "prefix": []
+            },
+            {
+              "name": "overlay-ipv6",
+              "prefix": []
+            },
+            {
+              "name": "underlay-ipv4",
+              "prefix": [
+                {
+                  "ip-prefix": "10.0.0.0/16",
+                  "mask-length-range": "32..32"
+                }
+              ]
+            },
+            {
+              "name": "underlay-ipv6",
+              "prefix": [
+                {
+                  "ip-prefix": "1000::/64",
+                  "mask-length-range": "128..128"
+                }
+              ]
+            }
+          ]
+        },
+        "system": {
+          "network-instance": {
+            "protocols": {
+              "bgp-vpn": {
+                "bgp-instance": [
+                  {
+                    "id": 1
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "tunnel-interface": [
+          {
+            "name": "vxlan0"
+          }
+        ]
+      }
+    }
+  ]

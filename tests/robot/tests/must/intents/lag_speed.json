@@ -1,0 +1,6 @@
+[
+    {
+        "path": "interface[name=ethernet-1/1]/ethernet/aggregate-id",
+        "value":"lag1"
+    }
+]

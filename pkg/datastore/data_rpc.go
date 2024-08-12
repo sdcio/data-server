@@ -1,27 +1,48 @@
+// Copyright 2024 Nokia
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package datastore
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/iptecharch/cache/proto/cachepb"
-	sdcpb "github.com/iptecharch/sdc-protos/sdcpb"
-	"github.com/iptecharch/yang-parser/xpath"
-	"github.com/iptecharch/yang-parser/xpath/grammars/expr"
+	"github.com/sdcio/cache/proto/cachepb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/yang-parser/xpath"
+	"github.com/sdcio/yang-parser/xpath/grammars/expr"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/iptecharch/data-server/pkg/cache"
-	"github.com/iptecharch/data-server/pkg/utils"
+	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/datastore/jbuilderv2"
+	"github.com/sdcio/data-server/pkg/utils"
+)
+
+const (
+	// to be used for candidates created without an owner
+	DefaultOwner = "__sdcio"
 )
 
 func (d *Datastore) Get(ctx context.Context, req *sdcpb.GetDataRequest, nCh chan *sdcpb.GetDataResponse) error {
@@ -34,6 +55,17 @@ func (d *Datastore) Get(ctx context.Context, req *sdcpb.GetDataRequest, nCh chan
 			return status.Error(codes.InvalidArgument, "cannot query STATE data from INTENDED store")
 		}
 	}
+
+	switch req.GetEncoding() {
+	case sdcpb.Encoding_STRING:
+	case sdcpb.Encoding_JSON:
+	case sdcpb.Encoding_JSON_IETF:
+		return fmt.Errorf("not implemented")
+	case sdcpb.Encoding_PROTO:
+	default:
+		return fmt.Errorf("unknown encoding: %v", req.GetEncoding())
+	}
+
 	var err error
 	// validate that path(s) exist in the schema
 	for _, p := range req.GetPath() {
@@ -58,35 +90,209 @@ func (d *Datastore) Get(ctx context.Context, req *sdcpb.GetDataRequest, nCh chan
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	switch req.GetEncoding() {
+	case sdcpb.Encoding_STRING:
+		err = d.handleGetDataUpdatesSTRING(ctx, name, req, paths, nCh)
+	case sdcpb.Encoding_JSON:
+		err = d.handleGetDataUpdatesJSON(ctx, name, req, paths, nCh)
+	case sdcpb.Encoding_JSON_IETF:
+	case sdcpb.Encoding_PROTO:
+		err = d.handleGetDataUpdatesPROTO(ctx, name, req, paths, nCh)
+	}
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (d *Datastore) handleGetDataUpdatesSTRING(ctx context.Context, name string, req *sdcpb.GetDataRequest, paths [][]string, out chan *sdcpb.GetDataResponse) error {
+NEXT_STORE:
 	for _, store := range getStores(req) {
-		for upd := range d.cacheClient.ReadCh(ctx, name, &cache.Opts{
+		in := d.cacheClient.ReadCh(ctx, name, &cache.Opts{
 			Store:    store,
 			Owner:    req.GetDatastore().GetOwner(),
 			Priority: req.GetDatastore().GetPriority(),
-		}, paths, 0) {
-			log.Debugf("ds=%s read path=%v from store=%v: %v", name, paths, store, upd)
-			scp, err := d.toPath(ctx, upd.GetPath())
-			if err != nil {
-				return err
-			}
-			tv, err := upd.Value()
-			if err != nil {
-				return err
-			}
-			notification := &sdcpb.Notification{
-				Timestamp: time.Now().UnixNano(),
-				Update: []*sdcpb.Update{{
-					Path:  scp,
-					Value: tv,
-				}},
-			}
-			rsp := &sdcpb.GetDataResponse{
-				Notification: []*sdcpb.Notification{notification},
-			}
+		}, paths, 0)
+
+		for {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case nCh <- rsp:
+			case upd, ok := <-in:
+				//log.Debugf("ds=%s read path=%v from store=%v: %v", name, paths, store, upd)
+				if !ok {
+					continue NEXT_STORE
+				}
+				if len(upd.GetPath()) == 0 {
+					continue
+				}
+				scp, err := d.toPath(ctx, upd.GetPath())
+				if err != nil {
+					return err
+				}
+				switch len(scp.GetElem()) {
+				case 0:
+					continue
+				case 1:
+					if scp.GetElem()[0].GetName() == "" {
+						continue
+					}
+				}
+				tv, err := upd.Value()
+				if err != nil {
+					return err
+				}
+				notification := &sdcpb.Notification{
+					Timestamp: time.Now().UnixNano(),
+					Update: []*sdcpb.Update{{
+						Path:  scp,
+						Value: tv,
+					}},
+				}
+				rsp := &sdcpb.GetDataResponse{
+					Notification: []*sdcpb.Notification{notification},
+				}
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case out <- rsp:
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, req *sdcpb.GetDataRequest, paths [][]string, out chan *sdcpb.GetDataResponse) error {
+	jbuilder := jbuilderv2.New(d.getValidationClient())
+	rs := make(map[string]any)
+	now := time.Now().UnixNano()
+
+	for _, store := range getStores(req) {
+		in := d.cacheClient.ReadCh(ctx, name, &cache.Opts{
+			Store:    store,
+			Owner:    req.GetDatastore().GetOwner(),
+			Priority: req.GetDatastore().GetPriority(),
+		}, paths, 0)
+	OUTER:
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case upd, ok := <-in:
+				if !ok {
+					break OUTER
+				}
+
+				if len(upd.GetPath()) == 0 {
+					continue
+				}
+
+				scp, err := d.toPath(ctx, upd.GetPath())
+				if err != nil {
+					return err
+				}
+				switch len(scp.GetElem()) {
+				case 0:
+					continue
+				case 1:
+					if scp.GetElem()[0].GetName() == "" {
+						continue
+					}
+				}
+				tv, err := upd.Value()
+				if err != nil {
+					return err
+				}
+				err = jbuilder.AddUpdate(ctx, rs, scp, tv)
+				if err != nil {
+					err = fmt.Errorf("failed json builder:path=%s, v=%v, err=%v", scp, tv, err)
+					return err
+				}
+			}
+		}
+	}
+	// marshal map into JSON bytes
+	b, err := json.Marshal(rs)
+	if err != nil {
+		err = fmt.Errorf("failed json builder indent : %v", err)
+		log.Error(err)
+		return err
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case out <- &sdcpb.GetDataResponse{
+		Notification: []*sdcpb.Notification{
+			{
+				Timestamp: now,
+				Update: []*sdcpb.Update{{
+					Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: b}},
+				}},
+			},
+		},
+	}:
+	}
+	return nil
+}
+
+func (d *Datastore) handleGetDataUpdatesPROTO(ctx context.Context, name string, req *sdcpb.GetDataRequest, paths [][]string, out chan *sdcpb.GetDataResponse) error {
+NEXT_STORE:
+	for _, store := range getStores(req) {
+		in := d.cacheClient.ReadCh(ctx, name, &cache.Opts{
+			Store:    store,
+			Owner:    req.GetDatastore().GetOwner(),
+			Priority: req.GetDatastore().GetPriority(),
+		}, paths, 0)
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case upd, ok := <-in:
+				//log.Debugf("ds=%s read path=%v from store=%v: %v", name, paths, store, upd)
+				if !ok {
+					continue NEXT_STORE
+				}
+
+				if len(upd.GetPath()) == 0 {
+					continue
+				}
+				scp, err := d.toPath(ctx, upd.GetPath())
+				if err != nil {
+					return err
+				}
+				switch len(scp.GetElem()) {
+				case 0:
+					continue
+				case 1:
+					if scp.GetElem()[0].GetName() == "" {
+						continue
+					}
+				}
+				tv, err := upd.Value()
+				if err != nil {
+					return err
+				}
+				ctv, err := d.convertTypedValueToProto(ctx, scp, tv)
+				if err != nil {
+					return err
+				}
+				notification := &sdcpb.Notification{
+					Timestamp: time.Now().UnixNano(),
+					Update: []*sdcpb.Update{{
+						Path:  scp,
+						Value: ctv,
+					}},
+				}
+				rsp := &sdcpb.GetDataResponse{
+					Notification: []*sdcpb.Notification{notification},
+				}
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case out <- rsp:
+				}
 			}
 		}
 	}
@@ -100,131 +306,7 @@ func (d *Datastore) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.
 	case sdcpb.Type_INTENDED:
 		return nil, status.Error(codes.InvalidArgument, "cannot set fields in INTENDED datastore")
 	case sdcpb.Type_CANDIDATE:
-		//
-		ok, err := d.cacheClient.HasCandidate(ctx, req.GetName(), req.GetDatastore().GetName())
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDatastore().GetName())
-		}
-
-		replaces := make([]*sdcpb.Update, 0, len(req.GetReplace()))
-		updates := make([]*sdcpb.Update, 0, len(req.GetUpdate()))
-
-		// expand json/json_ietf values
-		for _, upd := range req.GetReplace() {
-			rs, err := d.expandUpdate(ctx, upd)
-			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "%v", err)
-			}
-			replaces = append(replaces, rs...)
-		}
-
-		for _, upd := range req.GetUpdate() {
-			rs, err := d.expandUpdate(ctx, upd)
-			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "%v", err)
-			}
-			updates = append(updates, rs...)
-		}
-
-		// debugging
-		if log.GetLevel() >= log.DebugLevel {
-			for _, upd := range replaces {
-				log.Debugf("expanded replace:\n%s", prototext.Format(upd))
-			}
-			for _, upd := range updates {
-				log.Debugf("expanded update:\n%s", prototext.Format(upd))
-			}
-		}
-
-		// validate individual deletes
-		dels := make([]*sdcpb.Path, 0, len(req.GetDelete()))
-		for _, del := range req.GetDelete() {
-			// err = d.validatePath(ctx, del)
-			rsp, err := d.schemaClient.ExpandPath(ctx, &sdcpb.ExpandPathRequest{
-				Path:     del,
-				Schema:   d.Schema().GetSchema(),
-				DataType: sdcpb.DataType_CONFIG,
-			})
-			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "delete path: %q validation failed: %v", del, err)
-			}
-			dels = append(dels, rsp.GetPath()...)
-		}
-
-		for _, upd := range replaces {
-			err = d.validateUpdate(ctx, upd)
-			if err != nil {
-				log.Debugf("replace %v validation failed: %v", upd, err)
-				return nil, status.Errorf(codes.InvalidArgument, "replace: validation failed: %v", err)
-			}
-		}
-
-		for _, upd := range updates {
-			err = d.validateUpdate(ctx, upd)
-			if err != nil {
-				log.Debugf("update %v validation failed: %v", upd, err)
-				return nil, status.Errorf(codes.InvalidArgument, "update: validation failed: %v", err)
-			}
-		}
-
-		// insert/delete
-		// the order of operations is delete, replace, update
-		rsp := &sdcpb.SetDataResponse{
-			Response: make([]*sdcpb.UpdateResult, 0,
-				len(dels)+len(replaces)+len(updates)),
-		}
-
-		name := fmt.Sprintf("%s/%s", req.GetName(), req.GetDatastore().GetName())
-		cdels := make([][]string, 0, len(dels))
-		upds := make([]*cache.Update, 0, len(replaces)+len(updates))
-		// deletes start
-		for _, del := range dels {
-			cdels = append(cdels, utils.ToStrings(del, false, false))
-		}
-		for _, changes := range [][]*sdcpb.Update{replaces, updates} {
-			for _, upd := range changes {
-				cUpd, err := d.cacheClient.NewUpdate(upd)
-				if err != nil {
-					return nil, err
-				}
-				upds = append(upds, cUpd)
-			}
-		}
-		err = d.cacheClient.Modify(ctx, name, &cache.Opts{
-			Store: cachepb.Store_CONFIG,
-		}, cdels, upds)
-		if err != nil {
-			return nil, err
-		}
-
-		// deletes start
-		for _, del := range req.GetDelete() {
-			rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
-				Path: del,
-				Op:   sdcpb.UpdateResult_DELETE,
-			})
-		}
-		// deletes end
-		// replaces start
-		for _, rep := range req.GetReplace() {
-			rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
-				Path: rep.GetPath(),
-				Op:   sdcpb.UpdateResult_REPLACE,
-			})
-		}
-		// replaces end
-		// updates start
-		for _, upd := range req.GetUpdate() {
-			rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
-				Path: upd.GetPath(),
-				Op:   sdcpb.UpdateResult_UPDATE,
-			})
-		}
-		// updates end
-		return rsp, nil
+		return d.setCandidate(ctx, req, true)
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %v", req.GetDatastore().GetType())
 	}
@@ -273,20 +355,12 @@ func (d *Datastore) Diff(ctx context.Context, req *sdcpb.DiffRequest) (*sdcpb.Di
 				log.Debugf("read values %v: %v", change.Update.GetPath(), values)
 				switch len(values) {
 				case 0: // value does not exist in main
-					p, err := d.schemaClient.ToPath(ctx,
-						&sdcpb.ToPathRequest{
-							PathElement: change.Update.GetPath(),
-							Schema: &sdcpb.Schema{
-								Name:    d.config.Schema.Name,
-								Vendor:  d.config.Schema.Vendor,
-								Version: d.config.Schema.Version,
-							},
-						})
+					p, err := d.getValidationClient().ToPath(ctx, change.Update.GetPath())
 					if err != nil {
 						return nil, err
 					}
 					diffup := &sdcpb.DiffUpdate{
-						Path:           p.GetPath(),
+						Path:           p,
 						CandidateValue: candVal,
 					}
 					diffRsp.Diff = append(diffRsp.Diff, diffup)
@@ -298,24 +372,18 @@ func (d *Datastore) Diff(ctx context.Context, req *sdcpb.DiffRequest) (*sdcpb.Di
 					log.Debugf("read value %v: %v", change.Update.GetPath(), mainVal)
 					log.Debugf("path=%v: main=%v, cand=%v", change.Update.GetPath(), mainVal, candVal)
 					// compare values
-					if equalTypedValues(mainVal, candVal) {
+					if utils.EqualTypedValues(mainVal, candVal) {
 						continue
 					}
 					// get path from schema server
-					p, err := d.schemaClient.ToPath(ctx,
-						&sdcpb.ToPathRequest{
-							PathElement: change.Update.GetPath(),
-							Schema: &sdcpb.Schema{
-								Name:    d.config.Schema.Name,
-								Vendor:  d.config.Schema.Vendor,
-								Version: d.config.Schema.Version,
-							},
-						})
+					p, err := d.getValidationClient().ToPath(ctx,
+						change.Update.GetPath(),
+					)
 					if err != nil {
 						return nil, err
 					}
 					diffup := &sdcpb.DiffUpdate{
-						Path:           p.GetPath(),
+						Path:           p,
 						MainValue:      mainVal,
 						CandidateValue: candVal,
 					}
@@ -339,21 +407,13 @@ func (d *Datastore) Diff(ctx context.Context, req *sdcpb.DiffRequest) (*sdcpb.Di
 				}
 
 				// get path from schema server
-				p, err := d.schemaClient.ToPath(ctx,
-					&sdcpb.ToPathRequest{
-						PathElement: change.Delete,
-						Schema: &sdcpb.Schema{
-							Name:    d.config.Schema.Name,
-							Vendor:  d.config.Schema.Vendor,
-							Version: d.config.Schema.Version,
-						},
-					})
+				p, err := d.getValidationClient().ToPath(ctx, change.Delete)
 				if err != nil {
 					return nil, err
 				}
 
 				diffup := &sdcpb.DiffUpdate{
-					Path:      p.GetPath(),
+					Path:      p,
 					MainValue: val,
 				}
 				diffRsp.Diff = append(diffRsp.Diff, diffup)
@@ -423,6 +483,11 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *sdcpb.Update) error
 	if err != nil {
 		return err
 	}
+	// 2. convert value to its YANG type
+	upd.Value, err = convertTypedValueToYANGType(rsp.GetSchema(), upd.GetValue())
+	if err != nil {
+		return err
+	}
 	// 2. validate value
 	val, err := utils.GetSchemaValue(upd.GetValue())
 	if err != nil {
@@ -430,7 +495,10 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *sdcpb.Update) error
 	}
 	switch obj := rsp.GetSchema().Schema.(type) {
 	case *sdcpb.SchemaElem_Container:
-		return fmt.Errorf("cannot set value on container %q object", obj.Container.Name)
+		if !pathIsKeyAsLeaf(upd.GetPath()) && !obj.Container.IsPresence {
+			return fmt.Errorf("cannot set value on container %q object", obj.Container.Name)
+		}
+		// TODO: validate key as leaf
 	case *sdcpb.SchemaElem_Field:
 		if obj.Field.IsState {
 			return fmt.Errorf("cannot set state field: %v", obj.Field.Name)
@@ -448,16 +516,16 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *sdcpb.Update) error
 	return nil
 }
 
-func (d *Datastore) validateMustStatement(ctx context.Context, candidateName string, p *sdcpb.Path) (bool, error) {
-	// normalizedPaths will contain the provided path. If the last path.elems contins one or more keys, these will be
+func (d *Datastore) validateMustStatement(ctx context.Context, candidateName string, p *sdcpb.Path, normalizePaths bool) (bool, error) {
+	// normalizedPaths will contain the provided path. If the last path.elems contains one or more keys, these will be
 	// taken and appended to the path. The must statements have to be checked for all of the key elements.
-	var normalizedPaths []*sdcpb.Path
+	var normalizedPaths = make([]*sdcpb.Path, 0, 1)
 
 	// this is to massage for instance
 	// /bfd/subinterface[id=ethernet-1.25] -> /bfd/subinterface[id=ethernet-1.25]/id
 	// because we need to resolve down to id, to retrieve the relevant must statements
 	// further there can be more then just a single key.
-	if len(p.Elem[len(p.Elem)-1].Key) > 0 {
+	if len(p.Elem[len(p.Elem)-1].Key) > 0 && normalizePaths {
 		for k := range p.GetElem()[len(p.Elem)-1].GetKey() {
 			// clone p as new path
 			newPath := proto.Clone(p).(*sdcpb.Path)
@@ -480,7 +548,6 @@ func (d *Datastore) validateMustStatement(ctx context.Context, candidateName str
 		var mustStatements []*sdcpb.MustStatement
 		switch rsp.GetSchema().Schema.(type) {
 		case *sdcpb.SchemaElem_Container:
-			rsp.Schema.GetContainer()
 			mustStatements = rsp.Schema.GetContainer().GetMustStatements()
 		case *sdcpb.SchemaElem_Leaflist:
 			mustStatements = rsp.Schema.GetLeaflist().GetMustStatements()
@@ -501,17 +568,19 @@ func (d *Datastore) validateMustStatement(ctx context.Context, candidateName str
 			if err != nil {
 				return false, err
 			}
-
 			machine := xpath.NewMachine(exprStr, prog, exprStr)
 
 			// run the must statement evaluation virtual machine
-			res1 := xpath.NewCtxFromCurrent(ctx, machine, p.Elem, d.getValidationClient(), candidateName).EnableValidation().Run()
-
+			res1 := xpath.NewCtxFromCurrent(ctx, machine, p.Elem, d.getValidationClient(), candidateName).Run()
 			// retrieve the boolean result of the execution
 			result, err := res1.GetBoolResult()
 			if !result || err != nil {
 				if err == nil {
 					err = fmt.Errorf(must.Error)
+				}
+				if strings.Contains(err.Error(), "Stack underflow") {
+					log.Warnf("stack underflow error: path=%v, mustExpr=%s", checkPath, exprStr)
+					continue
 				}
 				return result, err
 			}
@@ -527,6 +596,7 @@ func validateFieldValue(f *sdcpb.LeafSchema, v any) error {
 func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 	switch lt.GetType() {
 	case "string":
+		// TODO: validate length and range
 		return nil
 	case "int8":
 		switch v := v.(type) {
@@ -534,6 +604,10 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			_, err := strconv.ParseInt(v, 10, 8)
 			if err != nil {
 				return err
+			}
+		case int64:
+			if v > math.MaxInt8 || v < math.MinInt8 {
+				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
 			}
 		default:
 			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
@@ -546,6 +620,10 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			if err != nil {
 				return err
 			}
+		case int64:
+			if v > math.MaxInt16 || v < math.MinInt16 {
+				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
+			}
 		default:
 			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
 		}
@@ -556,6 +634,10 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			_, err := strconv.ParseInt(v, 10, 32)
 			if err != nil {
 				return err
+			}
+		case int64:
+			if v > math.MaxInt32 || v < math.MinInt32 {
+				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
 			}
 		default:
 			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
@@ -579,6 +661,10 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			if err != nil {
 				return err
 			}
+		case uint64:
+			if v > math.MaxUint8 {
+				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
+			}
 		default:
 			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
 		}
@@ -590,6 +676,10 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			if err != nil {
 				return err
 			}
+		case uint64:
+			if v > math.MaxUint16 {
+				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
+			}
 		default:
 			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
 		}
@@ -600,6 +690,10 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			_, err := strconv.ParseUint(v, 10, 32)
 			if err != nil {
 				return err
+			}
+		case uint64:
+			if v > math.MaxUint32 {
+				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
 			}
 		default:
 			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
@@ -619,11 +713,9 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 	case "boolean":
 		switch v := v.(type) {
 		case string:
-			switch {
-			case v == "true":
-			case v == "false":
-			default:
-				return fmt.Errorf("value %v must be a boolean", v)
+			_, err := strconv.ParseBool(v)
+			if err != nil {
+				return fmt.Errorf("value %v must be a boolean: %v", v, err)
 			}
 		case bool:
 			return nil
@@ -668,258 +760,151 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			return fmt.Errorf("value %q does not match identityRef type %q, must be one of [%s]", v, lt.TypeName, strings.Join(lt.Values, ", "))
 		}
 		return nil
+	case "decimal64":
+		switch v := v.(type) {
+		case float64: // if it's a float64 then it's a valid decimal64
+		case string:
+			if c := strings.Count(v, "."); c == 0 || c > 1 {
+				return fmt.Errorf("value %q is not a valid Decimal64", v)
+			}
+		default:
+			return fmt.Errorf("unexpected type for a Decimal64 value %q: %T", v, v)
+		}
+		return nil
 	case "leafref":
 		// TODO: does this need extra validation?
 		return nil
 	default:
-		return fmt.Errorf("unhandled type %v", lt.GetType())
+		return fmt.Errorf("unhandled type %v for value %q", lt.GetType(), v)
 	}
 }
 
 func validateLeafListValue(ll *sdcpb.LeafListSchema, v any) error {
 	// TODO: validate Leaflist
 	// TODO: eval must statements
-	for _, must := range ll.MustStatements {
-		_ = must
-	}
+	// for _, must := range ll.MustStatements {
+	// 	_ = must
+	// }
 	return validateLeafTypeValue(ll.GetType(), v)
 }
 
-func equalTypedValues(v1, v2 *sdcpb.TypedValue) bool {
-	if v1 == nil {
-		return v2 == nil
+// expandUpdate Expands the value, in case of json to single typed value updates
+func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update, includeKeysAsLeaf bool) ([]*sdcpb.Update, error) {
+	upds := make([]*sdcpb.Update, 0)
+	if includeKeysAsLeaf {
+		// expand update path if it contains keys
+		intUpd, err := d.expandUpdateKeysAsLeaf(ctx, upd)
+		if err != nil {
+			return nil, err
+		}
+		upds = append(upds, intUpd...)
 	}
-	if v2 == nil {
-		return v1 == nil
-	}
-
-	switch v1 := v1.GetValue().(type) {
-	case *sdcpb.TypedValue_AnyVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_AnyVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			if v1.AnyVal == nil && v2.AnyVal == nil {
-				return true
-			}
-			if v1.AnyVal == nil || v2.AnyVal == nil {
-				return false
-			}
-			if v1.AnyVal.GetTypeUrl() != v2.AnyVal.GetTypeUrl() {
-				return false
-			}
-			return bytes.Equal(v1.AnyVal.GetValue(), v2.AnyVal.GetValue())
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_AsciiVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_AsciiVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return v1.AsciiVal == v2.AsciiVal
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_BoolVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_BoolVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return v1.BoolVal == v2.BoolVal
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_BytesVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_BytesVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return bytes.Equal(v1.BytesVal, v2.BytesVal)
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_DecimalVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_DecimalVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			if v1.DecimalVal.GetDigits() != v2.DecimalVal.GetDigits() {
-				return false
-			}
-			return v1.DecimalVal.GetPrecision() == v2.DecimalVal.GetPrecision()
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_FloatVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_FloatVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return v1.FloatVal == v2.FloatVal
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_IntVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_IntVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return v1.IntVal == v2.IntVal
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_JsonIetfVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_JsonIetfVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return bytes.Equal(v1.JsonIetfVal, v2.JsonIetfVal)
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_JsonVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_JsonVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return bytes.Equal(v1.JsonVal, v2.JsonVal)
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_LeaflistVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_LeaflistVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			if len(v1.LeaflistVal.GetElement()) != len(v2.LeaflistVal.GetElement()) {
-				return false
-			}
-			for i := range v1.LeaflistVal.GetElement() {
-				if !equalTypedValues(v1.LeaflistVal.Element[i], v2.LeaflistVal.Element[i]) {
-					return false
-				}
-			}
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_ProtoBytes:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_ProtoBytes:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return bytes.Equal(v1.ProtoBytes, v2.ProtoBytes)
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_StringVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_StringVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return v1.StringVal == v2.StringVal
-		default:
-			return false
-		}
-	case *sdcpb.TypedValue_UintVal:
-		switch v2 := v2.GetValue().(type) {
-		case *sdcpb.TypedValue_UintVal:
-			if v1 == nil && v2 == nil {
-				return true
-			}
-			if v1 == nil || v2 == nil {
-				return false
-			}
-			return v1.UintVal == v2.UintVal
-		default:
-			return false
-		}
-	}
-	return true
-}
-
-func (d *Datastore) expandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
-	rsp, err := d.schemaClient.GetSchema(ctx,
-		&sdcpb.GetSchemaRequest{
-			Path:   upd.GetPath(),
-			Schema: d.Schema().GetSchema(),
-		})
+	rsp, err := d.getValidationClient().GetSchema(ctx, upd.GetPath())
 	if err != nil {
 		return nil, err
 	}
+
 	switch rsp := rsp.GetSchema().Schema.(type) {
 	case *sdcpb.SchemaElem_Container:
 		log.Debugf("datastore %s: expanding update %v on container %q", d.config.Name, upd, rsp.Container.Name)
 		var v interface{}
-		err := json.Unmarshal(upd.GetValue().GetJsonVal(), &v)
+		var err error
+		switch upd.GetValue().Value.(type) {
+		case *sdcpb.TypedValue_JsonIetfVal:
+			err = json.Unmarshal(upd.GetValue().GetJsonIetfVal(), &v)
+		case *sdcpb.TypedValue_JsonVal:
+			err = json.Unmarshal(upd.GetValue().GetJsonVal(), &v)
+		default:
+			return []*sdcpb.Update{upd}, nil
+		}
 		if err != nil {
 			return nil, err
 		}
 		log.Debugf("datastore %s: update has jsonVal: %T, %v\n", d.config.Name, v, v)
-		rs, err := d.expandContainerValue(ctx, upd.GetPath(), v, rsp)
+		rs, err := d.expandContainerValue(ctx, upd.GetPath(), v, rsp, includeKeysAsLeaf)
 		if err != nil {
 			return nil, err
 		}
-		return rs, nil
+		upds := append(upds, rs...)
+		return upds, nil
 	case *sdcpb.SchemaElem_Field:
+		var v interface{}
+		var err error
+
+		var jsonValue []byte
+		switch upd.GetValue().Value.(type) {
+		case *sdcpb.TypedValue_JsonVal:
+			jsonValue = upd.GetValue().GetJsonVal()
+		case *sdcpb.TypedValue_JsonIetfVal:
+			jsonValue = upd.GetValue().GetJsonIetfVal()
+		}
+
+		// process value
+		if jsonValue != nil {
+			err = json.Unmarshal(jsonValue, &v)
+			if err != nil {
+				return nil, err
+			}
+			switch v := v.(type) {
+			case string:
+				upd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
+			}
+		}
+
 		// TODO: Check if value is json and convert to String ?
-		return []*sdcpb.Update{upd}, nil
+		upds = append(upds, upd)
+		return upds, nil
 	case *sdcpb.SchemaElem_Leaflist:
 		// TODO: Check if value is json and convert to String ?
-		return []*sdcpb.Update{upd}, nil
+		upds = append(upds, upd)
+		return upds, nil
 	}
 	return nil, nil
 }
 
-func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container) ([]*sdcpb.Update, error) {
+func (d *Datastore) expandUpdates(ctx context.Context, updates []*sdcpb.Update, includeKeysAsLeaf bool) ([]*sdcpb.Update, error) {
+	outUpdates := make([]*sdcpb.Update, 0, len(updates))
+	for _, upd := range updates {
+		expUpds, err := d.expandUpdate(ctx, upd, includeKeysAsLeaf)
+		if err != nil {
+			return nil, err
+		}
+		outUpdates = append(outUpdates, expUpds...)
+	}
+	return outUpdates, nil
+}
+
+func (d *Datastore) expandUpdateKeysAsLeaf(_ context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
+	upds := make([]*sdcpb.Update, 0)
+	// expand update path if it contains keys
+	for i, pe := range upd.GetPath().GetElem() {
+		if len(pe.GetKey()) == 0 {
+			continue
+		}
+		//
+		for k, v := range pe.GetKey() {
+			intUpd := &sdcpb.Update{
+				Path: &sdcpb.Path{
+					Elem: make([]*sdcpb.PathElem, 0, i+1+1),
+				},
+			}
+			for j := 0; j <= i; j++ {
+				intUpd.Path.Elem = append(intUpd.Path.Elem,
+					&sdcpb.PathElem{
+						Name: upd.GetPath().GetElem()[j].GetName(),
+						Key:  upd.GetPath().GetElem()[j].GetKey(),
+					},
+				)
+			}
+			intUpd.Path.Elem = append(intUpd.Path.Elem, &sdcpb.PathElem{Name: k})
+			intUpd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
+			upds = append(upds, intUpd)
+		}
+	}
+	return upds, nil
+}
+
+func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container, includeKeysAsLeaf bool) ([]*sdcpb.Update, error) {
 	log.Debugf("expanding jsonVal %T | %v | %v", jv, jv, p)
 	switch jv := jv.(type) {
 	case string:
@@ -940,25 +925,55 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		if numElems := len(p.GetElem()); numElems > 0 {
 			keysInPath = p.GetElem()[numElems-1].GetKey()
 		}
+		// make sure all keys exist either in the JSON value or
+		// in the path but NOT in both and build keySet
+		keySet := map[string]string{}
+		for _, k := range cs.Container.GetKeys() {
+			if v, ok := jv[k.Name]; ok {
+				if _, ok := keysInPath[k.Name]; ok {
+					return nil, fmt.Errorf("key %q is present in both the path and JSON value", k.Name)
+				}
+				keySet[k.Name] = fmt.Sprintf("%v", v)
+				continue
+			}
+			if v, ok := keysInPath[k.Name]; ok {
+				keySet[k.Name] = v
+				continue
+			}
+			return nil, fmt.Errorf("missing key %s in element %s", k.Name, cs.Container.GetName())
+		}
 		// handling keys in last element of the path or in the json value
 		for _, k := range cs.Container.GetKeys() {
 			if v, ok := jv[k.Name]; ok {
 				log.Debugf("handling key %s", k.Name)
 				if _, ok := keysInPath[k.Name]; ok {
-					return nil, fmt.Errorf("key %q is present in both the path and value", k.Name)
+					return nil, fmt.Errorf("key %q is present in both the path and JSON value", k.Name)
 				}
 				if p.GetElem()[len(p.GetElem())-1].Key == nil {
 					p.GetElem()[len(p.GetElem())-1].Key = make(map[string]string)
 				}
-				p.GetElem()[len(p.GetElem())-1].Key[k.Name] = fmt.Sprintf("%v", v)
+				p.GetElem()[len(p.GetElem())-1].Key = keySet
+				if includeKeysAsLeaf {
+					np := proto.Clone(p).(*sdcpb.Path)
+					np.Elem = append(np.Elem, &sdcpb.PathElem{Name: k.Name})
+					upd := &sdcpb.Update{
+						Path: np,
+						Value: &sdcpb.TypedValue{
+							Value: &sdcpb.TypedValue_StringVal{
+								StringVal: fmt.Sprintf("%v", v),
+							},
+						},
+					}
+					upds = append(upds, upd)
+				}
 				continue
 			}
 			// if key is not in the value it must be set in the path
 			if _, ok := keysInPath[k.Name]; !ok {
-				return nil, fmt.Errorf("missing key %q from container %q", k.Name, cs.Container.Name)
+				return nil, fmt.Errorf("missing key %q from list %q", k.Name, cs.Container.Name)
 			}
 		}
-
+		//
 		for k, v := range jv {
 			if isKey(k, cs) {
 				continue
@@ -982,25 +997,68 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				}
 				upds = append(upds, upd)
 			case *sdcpb.LeafListSchema: // leaflist
-				log.Debugf("TODO: handling leafList %s", item.Name)
+				// log.Debugf("TODO: handling leafList %s", item.Name)
+				np := proto.Clone(p).(*sdcpb.Path)
+				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item.Name})
+
+				list := []*sdcpb.TypedValue{}
+
+				// iterate through the elements
+				// ATTENTION: assuming its all strings
+				// add them to the Leaflist value
+				switch x := v.(type) {
+				case []any:
+					for _, e := range x {
+						tv := &sdcpb.TypedValue{
+							Value: &sdcpb.TypedValue_StringVal{
+								StringVal: fmt.Sprintf("%v", e.(string)),
+							},
+						}
+						list = append(list, tv)
+					}
+				default:
+					return nil, fmt.Errorf("leaflist %s expects array as input, but %v of type %v was given", np.String(), x, reflect.TypeOf(x).Name())
+				}
+
+				upd := &sdcpb.Update{
+					Path: np,
+					Value: &sdcpb.TypedValue{
+						Timestamp: 0,
+						Value:     &sdcpb.TypedValue_LeaflistVal{LeaflistVal: &sdcpb.ScalarArray{Element: list}},
+					},
+				}
+				upds = append(upds, upd)
+
 			case string: // child container
 				log.Debugf("handling child container %s", item)
 				np := proto.Clone(p).(*sdcpb.Path)
 				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item})
-				rsp, err := d.schemaClient.GetSchema(ctx,
-					&sdcpb.GetSchemaRequest{
-						Path:   np,
-						Schema: d.Schema().GetSchema(),
-					})
+				rsp, err := d.getValidationClient().GetSchema(ctx, np)
 				if err != nil {
 					return nil, err
 				}
 				switch rsp := rsp.GetSchema().Schema.(type) {
 				case *sdcpb.SchemaElem_Container:
-					rs, err := d.expandContainerValue(ctx, np, v, rsp)
-					if err != nil {
-						return nil, err
+					var rs []*sdcpb.Update
+					// code for presence containers
+					m, ok := v.(map[string]any)
+					if ok && len(m) == 0 && rsp.Container.IsPresence {
+						rs = []*sdcpb.Update{
+							{
+								Path: np,
+								Value: &sdcpb.TypedValue{
+									Value: &sdcpb.TypedValue_JsonVal{
+										JsonVal: []byte("{}"),
+									},
+								},
+							}}
+					} else {
+						rs, err = d.expandContainerValue(ctx, np, v, rsp, includeKeysAsLeaf)
+						if err != nil {
+							return nil, err
+						}
 					}
+
 					upds = append(upds, rs...)
 				default:
 					// should not happen
@@ -1015,7 +1073,7 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		upds := make([]*sdcpb.Update, 0)
 		for _, v := range jv {
 			np := proto.Clone(p).(*sdcpb.Path)
-			r, err := d.expandContainerValue(ctx, np, v, cs)
+			r, err := d.expandContainerValue(ctx, np, v, cs, includeKeysAsLeaf)
 			if err != nil {
 				return nil, err
 			}
@@ -1072,17 +1130,10 @@ func getLeafList(s string, cs *sdcpb.SchemaElem_Container) (*sdcpb.LeafListSchem
 }
 
 func (d *Datastore) getChild(ctx context.Context, s string, cs *sdcpb.SchemaElem_Container) (string, bool) {
-	for _, c := range cs.Container.GetChildren() {
-		if c == s {
-			return c, true
-		}
-	}
-	if cs.Container.Name == "root" {
+
+	if cs.Container.Name == "__root__" {
 		for _, c := range cs.Container.GetChildren() {
-			rsp, err := d.schemaClient.GetSchema(ctx, &sdcpb.GetSchemaRequest{
-				Path:   &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: c}}},
-				Schema: d.Schema().GetSchema(),
-			})
+			rsp, err := d.getValidationClient().GetSchema(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: c}}})
 			if err != nil {
 				log.Errorf("Failed to get schema object %s: %v", c, err)
 				return "", false
@@ -1097,6 +1148,11 @@ func (d *Datastore) getChild(ctx context.Context, s string, cs *sdcpb.SchemaElem
 			default:
 				continue
 			}
+		}
+	}
+	for _, c := range cs.Container.GetChildren() {
+		if c == s {
+			return c, true
 		}
 	}
 	return "", false
@@ -1184,4 +1240,228 @@ func (d *Datastore) subscribeResponseFromCacheUpdate(ctx context.Context, upd *c
 			Update: notification,
 		},
 	}, nil
+}
+
+func (d *Datastore) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest, expandDeletes bool) (*sdcpb.SetDataResponse, error) {
+	ok, err := d.cacheClient.HasCandidate(ctx, req.GetName(), req.GetDatastore().GetName())
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDatastore().GetName())
+	}
+
+	replaces := make([]*sdcpb.Update, 0, len(req.GetReplace()))
+	updates := make([]*sdcpb.Update, 0, len(req.GetUpdate()))
+
+	// expand json/json_ietf values
+	for _, upd := range req.GetReplace() {
+		rs, err := d.expandUpdate(ctx, upd, false)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "failed expand replace: %v", err)
+		}
+		replaces = append(replaces, rs...)
+	}
+
+	for _, upd := range req.GetUpdate() {
+		rs, err := d.expandUpdate(ctx, upd, false)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "failed expand update: %v", err)
+		}
+		updates = append(updates, rs...)
+	}
+
+	// debugging
+	if log.GetLevel() >= log.DebugLevel {
+		for _, upd := range replaces {
+			log.Debugf("expanded replace:\n%s", prototext.Format(upd))
+		}
+		for _, upd := range updates {
+			log.Debugf("expanded update:\n%s", prototext.Format(upd))
+		}
+	}
+
+	// validate individual deletes
+	dels := make([]*sdcpb.Path, 0, len(req.GetDelete()))
+	for _, del := range req.GetDelete() {
+		if expandDeletes {
+			rsp, err := d.schemaClient.ExpandPath(ctx, &sdcpb.ExpandPathRequest{
+				Path:     del,
+				Schema:   d.Schema().GetSchema(),
+				DataType: sdcpb.DataType_CONFIG,
+			})
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "delete path: %q validation failed: %v", del, err)
+			}
+			dels = append(dels, rsp.GetPath()...)
+			continue
+		}
+		err = d.validatePath(ctx, del)
+		if err != nil {
+			return nil, err
+		}
+		dels = append(dels, del)
+	}
+
+	for _, upd := range replaces {
+		err = d.validateUpdate(ctx, upd)
+		if err != nil {
+			log.Debugf("replace %v validation failed: %v", upd, err)
+			return nil, status.Errorf(codes.InvalidArgument, "replace: validation failed: %v", err)
+		}
+	}
+
+	for _, upd := range updates {
+		err = d.validateUpdate(ctx, upd)
+		if err != nil {
+			log.Debugf("update %v validation failed: %v", upd, err)
+			return nil, status.Errorf(codes.InvalidArgument, "update: validation failed: %v", err)
+		}
+	}
+
+	// insert/delete
+	// the order of operations is delete, replace, update
+	rsp := &sdcpb.SetDataResponse{
+		Response: make([]*sdcpb.UpdateResult, 0,
+			len(dels)+len(replaces)+len(updates)),
+	}
+
+	name := fmt.Sprintf("%s/%s", req.GetName(), req.GetDatastore().GetName())
+	cdels := make([][]string, 0, len(dels))
+	upds := make([]*cache.Update, 0, len(replaces)+len(updates))
+	// deletes start
+	for _, del := range dels {
+		cdels = append(cdels, utils.ToStrings(del, false, false))
+	}
+	for _, changes := range [][]*sdcpb.Update{replaces, updates} {
+		for _, upd := range changes {
+			cUpd, err := d.cacheClient.NewUpdate(upd)
+			if err != nil {
+				return nil, err
+			}
+			upds = append(upds, cUpd)
+		}
+	}
+	err = d.cacheClient.Modify(ctx, name, &cache.Opts{
+		Store: cachepb.Store_CONFIG,
+	}, cdels, upds)
+	if err != nil {
+		return nil, err
+	}
+
+	// deletes start
+	for _, del := range req.GetDelete() {
+		rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
+			Path: del,
+			Op:   sdcpb.UpdateResult_DELETE,
+		})
+	}
+	// deletes end
+	// replaces start
+	for _, rep := range req.GetReplace() {
+		rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
+			Path: rep.GetPath(),
+			Op:   sdcpb.UpdateResult_REPLACE,
+		})
+	}
+	// replaces end
+	// updates start
+	for _, upd := range req.GetUpdate() {
+		rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
+			Path: upd.GetPath(),
+			Op:   sdcpb.UpdateResult_UPDATE,
+		})
+	}
+	// updates end
+	return rsp, nil
+}
+
+func (d *Datastore) convertTypedValueToProto(ctx context.Context, p *sdcpb.Path, tv *sdcpb.TypedValue) (*sdcpb.TypedValue, error) {
+	rsp, err := d.getSchema(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	return convertTypedValueToYANGType(rsp.GetSchema(), tv)
+}
+
+func convertTypedValueToYANGType(schemaElem *sdcpb.SchemaElem, tv *sdcpb.TypedValue) (*sdcpb.TypedValue, error) {
+	switch {
+	case schemaElem.GetContainer() != nil:
+		if schemaElem.GetContainer().IsPresence {
+			return &sdcpb.TypedValue{
+				Timestamp: tv.GetTimestamp(),
+				Value:     &sdcpb.TypedValue_JsonVal{JsonVal: []byte("{}")},
+			}, nil
+		}
+	case schemaElem.GetLeaflist() != nil:
+		switch tv.Value.(type) {
+		case *sdcpb.TypedValue_LeaflistVal:
+			return tv, nil
+		}
+		return &sdcpb.TypedValue{
+			Timestamp: tv.GetTimestamp(),
+			Value: &sdcpb.TypedValue_LeaflistVal{
+				LeaflistVal: &sdcpb.ScalarArray{
+					Element: []*sdcpb.TypedValue{tv},
+				},
+			},
+		}, nil
+	case schemaElem.GetField() != nil:
+		switch schemaElem.GetField().GetType().GetType() {
+		default:
+			return tv, nil
+		case "string", "identityref":
+			return tv, nil
+		case "uint64", "uint32", "uint16", "uint8":
+			i, err := strconv.Atoi(utils.TypedValueToString(tv))
+			if err != nil {
+				return nil, err
+			}
+			ctv := &sdcpb.TypedValue{
+				Timestamp: tv.GetTimestamp(),
+				Value:     &sdcpb.TypedValue_UintVal{UintVal: uint64(i)},
+			}
+			return ctv, nil
+		case "int64", "int32", "int16", "int8":
+			i, err := strconv.Atoi(utils.TypedValueToString(tv))
+			if err != nil {
+				return nil, err
+			}
+			ctv := &sdcpb.TypedValue{
+				Timestamp: tv.GetTimestamp(),
+				Value:     &sdcpb.TypedValue_IntVal{IntVal: int64(i)},
+			}
+			return ctv, nil
+		case "enumeration":
+			return tv, nil
+		case "union":
+			return tv, nil
+		case "boolean":
+			v, err := strconv.ParseBool(utils.TypedValueToString(tv))
+			if err != nil {
+				return nil, err
+			}
+			return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: v}}, nil
+		case "decimal64":
+			d64, err := utils.ParseDecimal64(utils.TypedValueToString(tv))
+			if err != nil {
+				return nil, err
+			}
+			return &sdcpb.TypedValue{
+				Value: &sdcpb.TypedValue_DecimalVal{
+					DecimalVal: d64,
+				},
+			}, nil
+		case "float":
+			v, err := strconv.ParseFloat(utils.TypedValueToString(tv), 32)
+			if err != nil {
+				return nil, err
+			}
+			return &sdcpb.TypedValue{
+				Timestamp: tv.GetTimestamp(),
+				Value:     &sdcpb.TypedValue_FloatVal{FloatVal: float32(v)},
+			}, nil
+		}
+	}
+	return nil, nil
 }
