@@ -510,7 +510,7 @@ func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, cand
 }
 
 func (d *Datastore) makeLeafRefAbs(ctx context.Context, base, lref *sdcpb.Path, value string, candidate string) (*sdcpb.Path, error) {
-	p, err := d.makeLeafRefAbsPathKeys(ctx, base, lref, value, candidate)
+	p, err := d.makeLeafRefAbsPathKeys(ctx, base, lref, candidate)
 	if err != nil {
 		return nil, err
 	}
@@ -521,7 +521,7 @@ func (d *Datastore) makeLeafRefAbs(ctx context.Context, base, lref *sdcpb.Path, 
 	return p, nil
 }
 
-func (d *Datastore) makeLeafRefAbsPathKeys(ctx context.Context, base, lref *sdcpb.Path, value string, candidate string) (*sdcpb.Path, error) {
+func (d *Datastore) makeLeafRefAbsPathKeys(ctx context.Context, base, lref *sdcpb.Path, candidate string) (*sdcpb.Path, error) {
 
 	lrefResult := utils.CopyPath(lref)
 
