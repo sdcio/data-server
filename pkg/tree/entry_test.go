@@ -414,11 +414,10 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), owner1)
-
 	t.Run("Test Leaflist min- & max- elements - One",
 		func(t *testing.T) {
 
+			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), owner1)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -466,7 +465,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 	t.Run("Test Leaflist min- & max- elements - Two",
 		func(t *testing.T) {
-
+			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), owner1)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -515,6 +514,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 	t.Run("Test Leaflist min- & max- elements - Four",
 		func(t *testing.T) {
 
+			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), owner1)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -1192,11 +1192,9 @@ func Test_Validation_String_Pattern(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), owner1)
-
 	t.Run("Test_Validation_String_Pattern - One",
 		func(t *testing.T) {
-
+			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), owner1)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -1237,7 +1235,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 
 	t.Run("Test_Validation_String_Pattern - Two",
 		func(t *testing.T) {
-
+			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), owner1)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)

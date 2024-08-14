@@ -18,6 +18,9 @@ import sdcio_model_doublekey {
 import sdcio_model_leaflist {
   prefix sdcio_model_leaflist;
 }
+import sdcio_model_list_unique {
+  prefix sdcio_model_list_unique;
+}
 
   description
     "This is the test schema for sdcio";
@@ -33,15 +36,15 @@ import sdcio_model_leaflist {
   uses sdcio_model_choice:choicecase-top;
   uses sdcio_model_doublekey:doublekey-top;
   uses sdcio_model_leaflist:leaflist-top;
-
+  uses sdcio_model_list_unique:list-unique-top;
 
       leaf patterntest {
         type string {
           length "7..10";
           pattern "hallo [0-9a-fA-F]*";
-          pattern 'hallo DU' {
-           // modifier invert-match;
-          }
+          // pattern 'hallo DU' {
+          //  // modifier invert-match;
+          // }
         }
       }
 

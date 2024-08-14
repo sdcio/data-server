@@ -61,16 +61,12 @@ func Test_ncTarget_Get(t *testing.T) {
 			fields: fields{
 				getDriver: func(c *gomock.Controller, t *testing.T) netconf.Driver {
 					d := mocknetconf.NewMockDriver(c)
-					filter := `<interface>
-  <name>eth0</name>
-</interface>
-`
 					responseDoc := etree.NewDocument()
-					err := responseDoc.ReadFromString("<interface><name>eth0</name><mtu>1500</mtu></interface>")
+					err := responseDoc.ReadFromString("<data><interface><name>eth0</name><mtu>1500</mtu></interface></data>")
 					if err != nil {
 						t.Errorf("error creating response")
 					}
-					d.EXPECT().GetConfig("running", filter).Return(&types.NetconfResponse{Doc: responseDoc}, nil)
+					d.EXPECT().GetConfig("running", gomock.Any()).Return(&types.NetconfResponse{Doc: responseDoc}, nil)
 					return d
 				},
 				name:      "TestDev",
@@ -307,7 +303,7 @@ func TestLeafList(t *testing.T) {
 		},
 	}, leaflistValue)
 
-	expectedResult := `<leaflist xmlns="urn:sdcio/model">
+	expectedResult := `<leaflist xmlns="urn:sdcio/model" operation="replace">
   <entry>entry-one</entry>
   <entry>entry-two</entry>
   <entry>entry-three</entry>

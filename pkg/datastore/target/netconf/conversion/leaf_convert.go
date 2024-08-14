@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/sdcio/data-server/pkg/utils"
@@ -136,9 +137,42 @@ func ConvertBoolean(value string, _ *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, e
 		},
 	}, nil
 }
-func ConvertUint8(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	// create / parse the ranges
-	ranges := NewUrnges(lst.Range, 0, math.MaxUint8)
+
+func ConvertSdcpbNumberToUint64(mm *sdcpb.Number) (uint64, error) {
+	if mm.Negative {
+		return 0, fmt.Errorf("negative number to uint conversion")
+	}
+	return mm.Value, nil
+}
+
+func ConvertSdcpbNumberToInt64(mm *sdcpb.Number) (int64, error) {
+	if mm.Value > math.MaxInt64 {
+		return 0, fmt.Errorf("error converting %d to int64 overflow", mm.Value)
+	}
+
+	if mm.Negative {
+		return -int64(mm.Value), nil
+	} else {
+		return int64(mm.Value), nil
+	}
+}
+
+func convertUint(value string, minMaxs []*sdcpb.SchemaMinMaxType, ranges *URnges) (*sdcpb.TypedValue, error) {
+	if ranges == nil {
+		ranges = NewUrnges()
+	}
+	for _, x := range minMaxs {
+		min, err := ConvertSdcpbNumberToUint64(x.Min)
+		if err != nil {
+			return nil, err
+		}
+		max, err := ConvertSdcpbNumberToUint64(x.Max)
+		if err != nil {
+			return nil, err
+		}
+		ranges.addRange(min, max)
+	}
+
 	// validate the value against the ranges
 	val, err := ranges.isWithinAnyRange(value)
 	if err != nil {
@@ -146,35 +180,52 @@ func ConvertUint8(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, e
 	}
 	// return the TypedValue
 	return val, nil
+}
+
+func ConvertUint8(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+	// create the ranges
+	ranges := NewUrnges()
+	ranges.addRange(0, math.MaxUint8)
+
+	return convertUint(value, lst.Range, ranges)
 }
 
 func ConvertUint16(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	// create / parse the ranges
-	ranges := NewUrnges(lst.Range, 0, math.MaxUint16)
-	// validate the value against the ranges
-	val, err := ranges.isWithinAnyRange(value)
-	if err != nil {
-		return nil, err
-	}
-	// return the TypedValue
-	return val, nil
+	// create the ranges
+	ranges := NewUrnges()
+	ranges.addRange(0, math.MaxUint16)
+
+	return convertUint(value, lst.Range, ranges)
 }
 
 func ConvertUint32(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	// create / parse the ranges
-	ranges := NewUrnges(lst.Range, 0, math.MaxUint32)
-	// validate the value against the ranges
-	val, err := ranges.isWithinAnyRange(value)
-	if err != nil {
-		return nil, err
-	}
-	// return the TypedValue
-	return val, nil
+	// create the ranges
+	ranges := NewUrnges()
+	ranges.addRange(0, math.MaxUint32)
+
+	return convertUint(value, lst.Range, ranges)
 }
 
 func ConvertUint64(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	// create / parse the ranges
-	ranges := NewUrnges(lst.Range, 0, math.MaxUint64)
+	// create the ranges
+	ranges := NewUrnges()
+
+	return convertUint(value, lst.Range, ranges)
+}
+
+func convertInt(value string, minMaxs []*sdcpb.SchemaMinMaxType, ranges *SRnges) (*sdcpb.TypedValue, error) {
+	for _, x := range minMaxs {
+		min, err := ConvertSdcpbNumberToInt64(x.Min)
+		if err != nil {
+			return nil, err
+		}
+		max, err := ConvertSdcpbNumberToInt64(x.Max)
+		if err != nil {
+			return nil, err
+		}
+		ranges.addRange(min, max)
+	}
+
 	// validate the value against the ranges
 	val, err := ranges.isWithinAnyRange(value)
 	if err != nil {
@@ -185,72 +236,45 @@ func ConvertUint64(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, 
 }
 
 func ConvertInt8(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	// create / parse the ranges
-	ranges := NewSrnges(lst.Range, math.MinInt8, math.MaxInt8)
-	// validate the value against the ranges
-	val, err := ranges.isWithinAnyRange(value)
-	if err != nil {
-		return nil, err
-	}
-	// return the TypedValue
-	return val, nil
+	// create the ranges
+	ranges := NewSrnges()
+	ranges.addRange(math.MinInt8, math.MaxInt8)
+
+	return convertInt(value, lst.Range, ranges)
 }
 
 func ConvertInt16(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	// create / parse the ranges
-	ranges := NewSrnges(lst.Range, math.MinInt16, math.MaxInt16)
-	// validate the value against the ranges
-	val, err := ranges.isWithinAnyRange(value)
-	if err != nil {
-		return nil, err
-	}
-	// return the TypedValue
-	return val, nil
+	// create the ranges
+	ranges := NewSrnges()
+	ranges.addRange(math.MinInt16, math.MaxInt16)
+
+	return convertInt(value, lst.Range, ranges)
 }
 
 func ConvertInt32(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	// create / parse the ranges
-	ranges := NewSrnges(lst.Range, math.MinInt32, math.MaxInt32)
-	// validate the value against the ranges
-	val, err := ranges.isWithinAnyRange(value)
-	if err != nil {
-		return nil, err
-	}
-	// return the TypedValue
-	return val, nil
+	// create the ranges
+	ranges := NewSrnges()
+	ranges.addRange(math.MinInt32, math.MaxInt32)
+
+	return convertInt(value, lst.Range, ranges)
 }
 func ConvertInt64(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	// create / parse the ranges
-	ranges := NewSrnges(lst.Range, math.MinInt64, math.MaxInt64)
-	// validate the value against the ranges
-	val, err := ranges.isWithinAnyRange(value)
-	if err != nil {
-		return nil, err
-	}
-	// return the TypedValue
-	return val, nil
+	// create the ranges
+	ranges := NewSrnges()
+
+	return convertInt(value, lst.Range, ranges)
 }
 
 func ConvertString(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// check length of the string if the length property is set
 	// length will contain a range like string definition "5..60" or "7..10|40..45"
 	if len(lst.Length) != 0 {
-		r := NewUrnges(lst.Length, 0, math.MaxUint64)
+		_, err := convertUint(strconv.Itoa(len(value)), lst.Length, nil)
 
-		inLength := false
-		for _, rng := range r.rnges {
-			if rng.isInRange(uint64(len(value))) {
-				inLength = true
-			}
+		if err != nil {
+			return nil, err
 		}
-		if !inLength {
-			// prepare log message, collecting string rep of the ranges
-			str_ranges := []string{}
-			for _, x := range r.rnges {
-				str_ranges = append(str_ranges, x.String())
-			}
-			return nil, fmt.Errorf("length of the value (%d) is not within the schema defined ranges [ %s ]", len(value), strings.Join(str_ranges, ", "))
-		}
+
 	}
 
 	overallMatch := true
