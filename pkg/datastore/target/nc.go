@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/beevik/etree"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 
@@ -299,7 +300,7 @@ func (t *ncTarget) setRunning(ctx context.Context, req *sdcpb.SetDataRequest) (*
 	log.Debugf("datastore %s XML:\n%s\n", t.name, xdoc)
 
 	// edit the config
-	_, err = t.driver.EditConfig("running", xdoc)
+	resp, err := t.driver.EditConfig("running", xdoc)
 	if err != nil {
 		log.Errorf("datastore %s failed edit-config: %v", t.name, err)
 		if strings.Contains(err.Error(), "EOF") {
@@ -310,9 +311,32 @@ func (t *ncTarget) setRunning(ctx context.Context, req *sdcpb.SetDataRequest) (*
 		}
 		return nil, err
 	}
+
+	// retrieve netconf rpc-error -> warnings as string array
+	warnings, err := filterRPCErrors(resp.Doc, "warning")
+	if err != nil {
+		return nil, fmt.Errorf("filtering netconf rpc-errors with severity warnings: %w", err)
+	}
 	return &sdcpb.SetDataResponse{
+		Warnings:  warnings,
 		Timestamp: time.Now().UnixNano(),
 	}, nil
+}
+
+// filterRPCErrors takes the given etree.Document, filters the document for rpc-errors with the given severity
+// and returns them collectively as a []string
+func filterRPCErrors(xml *etree.Document, severity string) ([]string, error) {
+	var result []string
+	rpcErrs := xml.FindElements(fmt.Sprintf("//rpc-error[error-severity='%s']", severity))
+	for _, rpcErr := range rpcErrs {
+		d := etree.NewDocumentWithRoot(rpcErr)
+		s, err := d.WriteToString()
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, s)
+	}
+	return result, nil
 }
 
 func (t *ncTarget) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
@@ -335,6 +359,8 @@ func (t *ncTarget) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest) 
 		xmlCBAdd.AddValue(ctx, u.Path, u.Value)
 	}
 
+	var warnings []string
+
 	// first apply the deletes before the adds
 	for _, xml := range []*netconf.XMLConfigBuilder{xmlCBDelete, xmlCBAdd} {
 		// finally retrieve the xml config as string
@@ -351,7 +377,7 @@ func (t *ncTarget) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest) 
 		log.Debugf("datastore %s XML:\n%s\n", t.name, xdoc)
 
 		// edit the config
-		_, err = t.driver.EditConfig("candidate", xdoc)
+		resp, err := t.driver.EditConfig("candidate", xdoc)
 		if err != nil {
 			log.Errorf("datastore %s failed edit-config: %v", t.name, err)
 			if strings.Contains(err.Error(), "EOF") {
@@ -367,6 +393,11 @@ func (t *ncTarget) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest) 
 			}
 			return nil, err
 		}
+		rpcWarnings, err := filterRPCErrors(resp.Doc, "warning")
+		if err != nil {
+			return nil, fmt.Errorf("filtering netconf rpc-errors with severity warnings: %w", err)
+		}
+		warnings = append(warnings, rpcWarnings...)
 
 	}
 	log.Infof("datastore %s: committing changes on target", t.name)
@@ -381,6 +412,7 @@ func (t *ncTarget) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest) 
 		return nil, err
 	}
 	return &sdcpb.SetDataResponse{
+		Warnings:  warnings,
 		Timestamp: time.Now().UnixNano(),
 	}, nil
 }
