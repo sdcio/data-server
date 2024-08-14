@@ -219,11 +219,15 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	if err != nil {
 		return err
 	}
-	log.Info("intent set into candidate")
-	// apply the resulting config to the device
-	err = d.applyIntent(ctx, candidateName, setDataReq)
-	if err != nil {
-		return err
+
+	// only if not the OnlyIntended flag is set, we transact to the device
+	if !req.Delete || req.Delete && !req.OnlyIntended {
+		log.Info("intent set into candidate")
+		// apply the resulting config to the device
+		err = d.applyIntent(ctx, candidateName, setDataReq)
+		if err != nil {
+			return err
+		}
 	}
 
 	logger.Debug("intent is validated")
