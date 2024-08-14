@@ -107,7 +107,7 @@ func (snt *ScrapligoNetconfTarget) EditConfig(target string, config string) (*ty
 	if err != nil {
 		return nil, err
 	}
-	if resp.Failed != nil {
+	if len(resp.ErrorMessages) > 0 {
 		return nil, resp.Failed
 	}
 

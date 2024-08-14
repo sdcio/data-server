@@ -362,3 +362,68 @@ func getSchemaClientBound(t *testing.T) (SchemaClient.SchemaClientBound, error) 
 	// return the mock
 	return mockscb, nil
 }
+
+func Test_filterRPCErrors(t *testing.T) {
+
+	xml := `
+	<data>
+	  <rpc-error>
+		<error-severity>warning</error-severity>
+		<error-message>warning1</error-message>
+	  </rpc-error>
+	  <rpc-error>
+		<error-severity>warning</error-severity>
+		<error-message>warning2</error-message>
+	  </rpc-error>
+	  <rpc-error>
+		<error-severity>error</error-severity>
+		<error-message>warning2</error-message>
+	  </rpc-error>
+	</data>
+	`
+
+	doc := etree.NewDocument()
+	doc.ReadFromString(xml)
+
+	type args struct {
+		xml      *etree.Document
+		severity string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantlen int
+		wantErr bool
+	}{
+		{
+			name: "one",
+			args: args{
+				xml:      doc,
+				severity: "warning",
+			},
+			wantlen: 2,
+			wantErr: false,
+		},
+		{
+			name: "one",
+			args: args{
+				xml:      doc,
+				severity: "error",
+			},
+			wantlen: 1,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := filterRPCErrors(tt.args.xml, tt.args.severity)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("filterRPCErrors() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if len(got) != tt.wantlen {
+				t.Errorf("expected %d entries got %d", tt.wantlen, len(got))
+			}
+		})
+	}
+}

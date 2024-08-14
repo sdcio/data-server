@@ -85,13 +85,13 @@ func (d *Datastore) SetIntent(ctx context.Context, req *sdcpb.SetIntentRequest) 
 		}
 	}()
 
-	err = d.SetIntentUpdate(ctx, req, candidateName)
+	setIntentResponse, err := d.SetIntentUpdate(ctx, req, candidateName)
 	if err != nil {
 		log.Errorf("%s: failed to SetIntentUpdate: %v", d.Name(), err)
 		return nil, err
 	}
 
-	return &sdcpb.SetIntentResponse{}, nil
+	return setIntentResponse, nil
 }
 
 func (d *Datastore) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (*sdcpb.ListIntentResponse, error) {
@@ -105,9 +105,9 @@ func (d *Datastore) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest
 	}, nil
 }
 
-func (d *Datastore) applyIntent(ctx context.Context, candidateName string, sdreq *sdcpb.SetDataRequest) error {
+func (d *Datastore) applyIntent(ctx context.Context, candidateName string, sdreq *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
 	if candidateName == "" {
-		return fmt.Errorf("missing candidate name")
+		return nil, fmt.Errorf("missing candidate name")
 	}
 	log.Debugf("%s: applying intent from candidate %s", d.Name(), sdreq.GetDatastore())
 
@@ -122,7 +122,7 @@ func (d *Datastore) applyIntent(ctx context.Context, candidateName string, sdreq
 		log.Debugf("%s: %s validating must statement on: %v", d.Name(), candidateName, upd)
 		_, err = d.validateMustStatement(ctx, candidateName, upd.GetPath(), false)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 	log.Infof("%s: validating leafrefs candidate %s", d.Name(), sdreq.GetDatastore())
@@ -130,7 +130,7 @@ func (d *Datastore) applyIntent(ctx context.Context, candidateName string, sdreq
 		log.Debugf("%s: %s validating leafRef on update: %v", d.Name(), candidateName, upd)
 		err = d.validateLeafRef(ctx, upd, candidateName)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -140,16 +140,17 @@ func (d *Datastore) applyIntent(ctx context.Context, candidateName string, sdreq
 	log.Infof("datastore %s/%s applyIntent: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d",
 		d.config.Name, candidateName, len(sdreq.GetUpdate()), len(sdreq.GetReplace()), len(sdreq.GetDelete()))
 
+	var rsp *sdcpb.SetDataResponse
 	// send set request only if there are updates and/or deletes
 	if len(sdreq.GetUpdate())+len(sdreq.GetReplace())+len(sdreq.GetDelete()) > 0 {
-		rsp, err := d.sbi.Set(ctx, sdreq)
+		rsp, err = d.sbi.Set(ctx, sdreq)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		log.Debugf("datastore %s/%s SetResponse from SBI: %v", d.config.Name, candidateName, rsp)
 	}
 
-	return nil
+	return rsp, nil
 }
 
 func (d *Datastore) saveRawIntent(ctx context.Context, intentName string, req *sdcpb.SetIntentRequest) error {

@@ -129,7 +129,7 @@ func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentReques
 //  14. The request towards southbound is created with the device updates / deletes. A candidate is created, and applied to the device.
 //  15. The owner based updates and deletes are being pushed into the cache.
 //  16. The raw intent (as received in the req) is stored as a blob in the cache.
-func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentRequest, candidateName string) error {
+func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentRequest, candidateName string) (*sdcpb.SetIntentResponse, error) {
 	logger := log.NewEntry(
 		log.New()).WithFields(log.Fields{
 		"ds":       d.Name(),
@@ -150,7 +150,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 
 	root, err := d.populateTree(ctx, req, tc)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	log.Debugf("finish insertion phase")
@@ -177,7 +177,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	for _, u := range updates {
 		sdcpbUpd, err := d.cacheUpdateToUpdate(ctx, u)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		setDataReq.Update = append(setDataReq.Update, sdcpbUpd)
 	}
@@ -199,25 +199,35 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	// check if errors are received
 	// If so, join them and return the cumulated errors
 	if len(validationErrors) > 0 {
-		return fmt.Errorf("cumulated validation errors:\n%v", errors.Join(validationErrors...))
+		return nil, fmt.Errorf("cumulated validation errors:\n%v", errors.Join(validationErrors...))
 	}
 
 	// add all the deletes to the setDataReq
 	for _, u := range deletes {
 		sdcpbUpd, err := d.cacheUpdateToUpdate(ctx, cache.NewUpdate(u, []byte{}, req.Priority, req.Intent, 0))
 		if err != nil {
-			return err
+			return nil, err
 		}
 		setDataReq.Delete = append(setDataReq.Delete, sdcpbUpd.GetPath())
 	}
 
 	log.Debug(prototext.Format(setDataReq))
 
+	setIntentResponse := &sdcpb.SetIntentResponse{
+		Update: append(setDataReq.Update, setDataReq.Replace...),
+		Delete: setDataReq.GetDelete(),
+	}
+
+	// if it is a dry run, return now, skipping updating the device or the cache
+	if req.DryRun {
+		return setIntentResponse, nil
+	}
+
 	log.Info("intent setting into candidate")
 	// set the candidate
 	_, err = d.setCandidate(ctx, setDataReq, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// only if not the OnlyIntended flag is set, we transact to the device
@@ -226,7 +236,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		// apply the resulting config to the device
 		err = d.applyIntent(ctx, candidateName, setDataReq)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -260,7 +270,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		Priority: req.GetPriority(),
 	}, deletesOwner.ToStringSlice(), updatesOwner)
 	if err != nil {
-		return fmt.Errorf("failed updating the intended store for %s: %w", d.Name(), err)
+		return nil, fmt.Errorf("failed updating the intended store for %s: %w", d.Name(), err)
 	}
 
 	// fast and optimistic writeback to the config store
@@ -268,26 +278,26 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		Store: cachepb.Store_CONFIG,
 	}, deletes.ToStringSlice(), updates)
 	if err != nil {
-		return fmt.Errorf("failed updating the running config store for %s: %w", d.Name(), err)
+		return nil, fmt.Errorf("failed updating the running config store for %s: %w", d.Name(), err)
 	}
 
 	switch req.Delete {
 	case true:
 		err = d.deleteRawIntent(ctx, req.GetIntent(), req.GetPriority())
 		if err != nil {
-			return err
+			return nil, err
 		}
 	case false:
 		// The request intent is also stored in the cache
 		// in the format it was received in
 		err = d.saveRawIntent(ctx, req.GetIntent(), req)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	log.Infof("ds=%s intent=%s: intent saved", req.GetName(), req.GetIntent())
-	return nil
+	return setIntentResponse, nil
 }
 
 func pathIsKeyAsLeaf(p *sdcpb.Path) bool {
