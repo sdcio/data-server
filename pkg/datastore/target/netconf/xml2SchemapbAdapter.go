@@ -29,7 +29,6 @@ import (
 // This transformation is done via schema information acquired throughout the SchemaServerClient throughout the transformation process.
 type XML2sdcpbConfigAdapter struct {
 	schemaClient schemaClient.SchemaClientBound
-	schema       *sdcpb.Schema
 }
 
 // NewXML2sdcpbConfigAdapter constructs a new XML2sdcpbConfigAdapter
@@ -92,7 +91,7 @@ func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etre
 	case *sdcpb.SchemaElem_Leaflist:
 		// retrieved schema describes a yang LeafList
 		log.Tracef("transforming leaflist %q", e.Tag)
-		err = x.transformLeafList(ctx, e, sr, pelems, result, tc)
+		err = x.transformLeafList(ctx, e, pelems, tc)
 		if err != nil {
 			return err
 		}
@@ -170,7 +169,7 @@ func (x *XML2sdcpbConfigAdapter) transformField(_ context.Context, e *etree.Elem
 // transformLeafList processes LeafList entries. These will be store in the TransformationContext.
 // A new TransformationContext is created when entering a new container. And the appropriate actions are taken when a container is exited.
 // Meaning the LeafLists will then be transformed into a single update with a sdcpb.TypedValue_LeaflistVal with all the values.
-func (x *XML2sdcpbConfigAdapter) transformLeafList(_ context.Context, e *etree.Element, sr *sdcpb.GetSchemaResponse, pelems []*sdcpb.PathElem, result *sdcpb.Notification, tc *TransformationContext) error {
+func (x *XML2sdcpbConfigAdapter) transformLeafList(_ context.Context, e *etree.Element, pelems []*sdcpb.PathElem, tc *TransformationContext) error {
 
 	// process terminal values
 	data := strings.TrimSpace(e.Text())
