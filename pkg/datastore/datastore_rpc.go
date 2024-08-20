@@ -1213,7 +1213,7 @@ func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.
 		}
 	}
 
-	intendedUpdates, err := d.readIntendedStoreKeysMeta(ctx)
+	intendedUpdates, err := d.readStoreKeysMeta(ctx, cachepb.Store_INTENDED)
 	if err != nil {
 		log.Error(err)
 		return

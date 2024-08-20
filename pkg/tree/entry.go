@@ -55,13 +55,13 @@ type Entry interface {
 	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
 	// If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
 	// It will append to the given list and provide a new pointer to the slice
-	GetHighestPrecedence(u UpdateSlice, onlyNewOrUpdated bool) UpdateSlice
+	GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool) LeafVariantSlice
 	// GetByOwner returns the branches Updates by owner
 	GetByOwner(owner string, result []*LeafEntry) []*LeafEntry
 	// markOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
 	markOwnerDelete(o string)
 	// GetDeletes returns the cache-updates that are not updated, have no lower priority value left and hence should be deleted completely
-	GetDeletes(PathSlices) PathSlices
+	GetDeletes(paths PathSlices, aggregatePaths bool) PathSlices
 	// Walk takes the EntryVisitor and applies it to every Entry in the tree
 	Walk(f EntryVisitor) error
 	// shouldDelete indicated if there is no LeafEntry left and the Entry is to be deleted
@@ -96,6 +96,8 @@ type Entry interface {
 	SdcpbPathInternal(spath []string) (*sdcpb.Path, error)
 	// GetSchemaKeys checks for the schema of the entry, and returns the defined keys
 	GetSchemaKeys() []string
+	// Returns all the entries starting from the root down to the actual Entry.
+	GetRootBasedEntryChain() []Entry
 }
 
 // sharedEntryAttributes contains the attributes shared by Entry and RootEntry
@@ -257,7 +259,7 @@ func (s *sharedEntryAttributes) GetSchemaKeys() []string {
 // getAggregatedDeletes is called on levels that have no schema attached, meaning key schemas.
 // here we might delete the whole branch of the tree, if all key elements are being deleted
 // if not, we continue with regular deltes
-func (s *sharedEntryAttributes) getAggregatedDeletes(deletes PathSlices) PathSlices {
+func (s *sharedEntryAttributes) getAggregatedDeletes(deletes PathSlices, aggregatePaths bool) PathSlices {
 	// we take a look into the level(s) up
 	// trying to get the schema
 	ancestor, level := s.GetFirstAncestorWithSchema()
@@ -287,16 +289,16 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes PathSlices) PathSli
 		} else {
 			// otherwise continue with deletion on the childs.
 			for _, c := range s.childs {
-				deletes = c.GetDeletes(deletes)
+				deletes = c.GetDeletes(deletes, aggregatePaths)
 			}
 		}
 		return deletes
 	}
-	return s.getRegularDeletes(deletes)
+	return s.getRegularDeletes(deletes, aggregatePaths)
 }
 
 // getRegularDeletes performs deletion calculation on elements that have a schema attached.
-func (s *sharedEntryAttributes) getRegularDeletes(deletes PathSlices) PathSlices {
+func (s *sharedEntryAttributes) getRegularDeletes(deletes PathSlices, aggregate bool) PathSlices {
 	// if entry is a container type, check the keys, to be able to
 	// issue a delte for the whole branch at once via keys
 	switch s.schema.GetSchema().(type) {
@@ -319,22 +321,22 @@ func (s *sharedEntryAttributes) getRegularDeletes(deletes PathSlices) PathSlices
 	}
 
 	for _, e := range s.childs {
-		deletes = e.GetDeletes(deletes)
+		deletes = e.GetDeletes(deletes, aggregate)
 	}
 	return deletes
 }
 
 // GetDeletes calculate the deletes that need to be send to the device.
-func (s *sharedEntryAttributes) GetDeletes(deletes PathSlices) PathSlices {
+func (s *sharedEntryAttributes) GetDeletes(deletes PathSlices, aggregatePaths bool) PathSlices {
 
 	// if the actual level has no schema assigned we're on a key level
 	// element. Hence we try deletion via aggregation
-	if s.schema == nil {
-		return s.getAggregatedDeletes(deletes)
+	if s.schema == nil && aggregatePaths {
+		return s.getAggregatedDeletes(deletes, aggregatePaths)
 	}
 
 	// else perform regular deletion
-	return s.getRegularDeletes(deletes)
+	return s.getRegularDeletes(deletes, aggregatePaths)
 
 }
 
@@ -342,6 +344,10 @@ func (s *sharedEntryAttributes) GetDeletes(deletes PathSlices) PathSlices {
 // if the parent has no schema (is a key element in the tree) it will recurs the call to the parents parent.
 // the level of recursion is indicated via the levelUp attribute
 func (s *sharedEntryAttributes) GetFirstAncestorWithSchema() (Entry, int) {
+	// if root node is reached
+	if s.parent == nil {
+		return nil, 0
+	}
 	// check if the parent has a schema
 	if s.parent.GetSchema() != nil {
 		// if so return it with level 1
@@ -451,11 +457,11 @@ func (s *sharedEntryAttributes) tryLoading(ctx context.Context, path []string) (
 
 // GetHighestPrecedence goes through the whole branch and returns the new and updated cache.Updates.
 // These are the updated that will be send to the device.
-func (s *sharedEntryAttributes) GetHighestPrecedence(result UpdateSlice, onlyNewOrUpdated bool) UpdateSlice {
+func (s *sharedEntryAttributes) GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool) LeafVariantSlice {
 	// get the highes precedence LeafeVariant and add it to the list
 	lv := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated)
 	if lv != nil {
-		result = append(result, lv.Update)
+		result = append(result, lv)
 	}
 
 	// continue with childs. Childs are part of choices, process only the "active" (highes precedence) childs
@@ -463,6 +469,13 @@ func (s *sharedEntryAttributes) GetHighestPrecedence(result UpdateSlice, onlyNew
 		result = c.GetHighestPrecedence(result, onlyNewOrUpdated)
 	}
 	return result
+}
+
+func (s *sharedEntryAttributes) GetRootBasedEntryChain() []Entry {
+	if s.IsRoot() {
+		return []Entry{}
+	}
+	return append(s.parent.GetRootBasedEntryChain(), s)
 }
 
 // getHighestPrecedenceValueOfBranch goes through all the child branches to find the highes
@@ -553,6 +566,14 @@ func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(errchan chan<- 
 		}
 	}
 }
+
+// func (s *sharedEntryAttributes) validateUnique(errchan chan<- error) {
+// 	if schema := s.schema.GetLeaflist(); schema != nil {
+// 		if schema. {
+// 			return
+// 		}
+// 	}
+// }
 
 // func (s *sharedEntryAttributes) validateLength(errchan chan<- error) {
 // 	if schema := s.schema.GetField(); schema != nil {
@@ -771,13 +792,14 @@ func (s *sharedEntryAttributes) SdcpbPathInternal(spath []string) (*sdcpb.Path, 
 	// path.
 	if s.schema != nil {
 		switch s.schema.GetSchema().(type) {
-		case *sdcpb.SchemaElem_Container:
+		case *sdcpb.SchemaElem_Container, *sdcpb.SchemaElem_Field, *sdcpb.SchemaElem_Leaflist:
 			pe := &sdcpb.PathElem{
 				Name: s.pathElemName,
 				Key:  map[string]string{},
 			}
 			p.Elem = append(p.Elem, pe)
 		}
+
 		// the element does not have a schema attached, hence we need to add a key to
 		// the last element that was pushed to the pathElems
 	} else {
@@ -834,7 +856,7 @@ func (s *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *
 			}
 		} else {
 			// if LeafVaraint with same owner does not exist, add the new entry
-			s.leafVariants = append(s.leafVariants, NewLeafEntry(c, new))
+			s.leafVariants = append(s.leafVariants, NewLeafEntry(c, new, s))
 		}
 		return nil
 	}
@@ -930,14 +952,14 @@ func (r *RootEntry) GetDeletesForOwner(owner string) PathSlices {
 // GetHighesPrecedence return the new cache.Update entried from the tree that are the highes priority.
 // If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
 // It will append to the given list and provide a new pointer to the slice
-func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) UpdateSlice {
-	return r.sharedEntryAttributes.GetHighestPrecedence(make(UpdateSlice, 0), onlyNewOrUpdated)
+func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) LeafVariantSlice {
+	return r.sharedEntryAttributes.GetHighestPrecedence(make(LeafVariantSlice, 0), onlyNewOrUpdated)
 }
 
 // GetDeletes returns the paths that due to the Tree content are to be deleted from the southbound device.
-func (r *RootEntry) GetDeletes() PathSlices {
+func (r *RootEntry) GetDeletes(aggregatePaths bool) PathSlices {
 	deletes := PathSlices{}
-	return r.sharedEntryAttributes.GetDeletes(deletes)
+	return r.sharedEntryAttributes.GetDeletes(deletes, aggregatePaths)
 }
 
 // getTreeContext returns the handle to the TreeContext

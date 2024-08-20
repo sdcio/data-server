@@ -713,12 +713,12 @@ func TestDatastore_populateTree(t *testing.T) {
 
 			// get the updates that are meant to be send down towards the device
 			updates := root.GetHighestPrecedence(!tt.NotOnlyNewOrUpdated)
-			if diff := testhelper.DiffCacheUpdates(tt.expectedModify, updates); diff != "" {
+			if diff := testhelper.DiffCacheUpdates(tt.expectedModify, updates.ToCacheUpdateSlice()); diff != "" {
 				t.Errorf("root.GetHighestPrecedence(true) mismatch (-want +got):\n%s", diff)
 			}
 
 			// get the deletes that are meant to be send down towards the device
-			deletes := root.GetDeletes()
+			deletes := root.GetDeletes(true)
 			if diff := testhelper.DiffDoubleStringPathSlice(tt.expectedDeletes, deletes.ToStringSlice()); diff != "" {
 				t.Errorf("root.GetDeletes() mismatch (-want +got):\n%s", diff)
 			}
