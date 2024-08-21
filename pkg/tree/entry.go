@@ -537,7 +537,7 @@ func (s *sharedEntryAttributes) Validate(errchan chan<- error) {
 	// configuration information in the tree, to perform proper validation
 
 	// // validate the mandatory statement on this entry
-	s.validateMandatory(errchan)
+	// s.validateMandatory(errchan)
 
 	s.validateLeafListMinMaxAttributes(errchan)
 	s.validatePattern(errchan)
