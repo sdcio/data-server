@@ -537,7 +537,7 @@ func (s *sharedEntryAttributes) Validate(errchan chan<- error) {
 	// configuration information in the tree, to perform proper validation
 
 	// // validate the mandatory statement on this entry
-	// s.validateMandatory(errchan)
+	s.validateMandatory(errchan)
 
 	s.validateLeafListMinMaxAttributes(errchan)
 	s.validatePattern(errchan)
@@ -597,7 +597,7 @@ func (s *sharedEntryAttributes) validatePattern(errchan chan<- error) {
 		if len(schema.Type.Patterns) == 0 {
 			return
 		}
-		lv := s.leafVariants.GetByOwner(s.treeContext.actualOwner)
+		lv := s.leafVariants.GetHighestPrecedence(false)
 		tv, err := lv.Update.Value()
 		if err != nil {
 			errchan <- fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err)
@@ -858,6 +858,7 @@ func (s *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *
 			// if LeafVaraint with same owner does not exist, add the new entry
 			s.leafVariants = append(s.leafVariants, NewLeafEntry(c, new, s))
 		}
+
 		return nil
 	}
 
