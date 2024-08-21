@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 
@@ -30,6 +31,32 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 )
+
+func (d *Datastore) populateTreeWithRunning(ctx context.Context, tc *tree.TreeContext, r *tree.RootEntry) error {
+	// read all the keys from the cache intended store but just the keys, no values are populated
+	configIndex, err := d.readStoreKeysMeta(ctx, cachepb.Store_CONFIG)
+	if err != nil {
+		return err
+	}
+	ps := make([][]string, 0, len(configIndex))
+
+	for _, v := range configIndex {
+		ps = append(ps, v[0].GetPath())
+	}
+	upds, err := tc.ReadRunningMultiple(ctx, ps)
+	if err != nil {
+		return err
+	}
+	for _, upd := range upds {
+		newUpd := cache.NewUpdate(upd.GetPath(), upd.Bytes(), math.MaxInt32, "running", 0)
+		err = r.AddCacheUpdateRecursive(ctx, newUpd, false)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
 
 func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentRequest, tc *tree.TreeContext) (r *tree.RootEntry, err error) {
 	// create a new Tree
@@ -150,6 +177,11 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	log.Debugf("finish insertion phase")
 	root.FinishInsertionPhase()
 
+	err = d.populateTreeWithRunning(ctx, tc, root)
+	if err != nil {
+		return nil, err
+	}
+
 	// perform validation
 	// we use a channel and cumulate all the errors
 	validationErrors := []error{}
@@ -171,6 +203,8 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	}
 
 	logger.Debug("intent is validated")
+
+	fmt.Println(root.String())
 
 	// retrieve the data that is meant to be send southbound (towards the device)
 	updates := root.GetHighestPrecedence(true)
