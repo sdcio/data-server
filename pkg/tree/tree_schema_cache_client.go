@@ -10,6 +10,10 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
+const (
+	PATHSEP = "/"
+)
+
 type TreeSchemaCacheClient interface {
 	// CACHE based Functions
 	// ReadIntended retrieves the highes priority value from the intended store
@@ -47,30 +51,61 @@ func (c *TreeSchemaCacheClientImpl) Read(ctx context.Context, opts *cache.Opts, 
 }
 
 func (c *TreeSchemaCacheClientImpl) ToPath(ctx context.Context, path []string) (*sdcpb.Path, error) {
-	return c.scb.ToPath(ctx, path)
+	var err error
+
+	keylessPathSlice := []string{}
+
+	p := &sdcpb.Path{}
+	for i := 0; i < len(path); i++ {
+		p.Elem = append(p.Elem, &sdcpb.PathElem{Name: path[i]})
+		keylessPathSlice = append(keylessPathSlice, path[i])
+		schema, exists := c.schemaIndex[strings.Join(keylessPathSlice, PATHSEP)]
+		if !exists {
+			schema, err = c.retrieveSchema(ctx, p)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if schemaKeys := schema.GetSchema().GetContainer().GetKeys(); schemaKeys != nil {
+			i += len(schemaKeys)
+		}
+	}
+
+	return p, nil
+}
+
+func (c *TreeSchemaCacheClientImpl) retrieveSchema(ctx context.Context, p *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+	// if schema wasn't found in index, go and fetch it
+	schemaRsp, err := c.scb.GetSchema(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+
+	// convert the path into a keyless path, for schema index lookups.
+	keylessPathSlice := utils.ToStrings(p, false, true)
+	keylessPath := strings.Join(keylessPathSlice, PATHSEP)
+
+	c.schemaIndex[keylessPath] = schemaRsp
+
+	return schemaRsp, nil
 }
 
 func (c *TreeSchemaCacheClientImpl) GetSchema(ctx context.Context, path []string) (*sdcpb.GetSchemaResponse, error) {
 	// convert the []string path into sdcpb.path for schema retrieval
-	sdcpbPath, err := c.scb.ToPath(ctx, path)
+	sdcpbPath, err := c.ToPath(ctx, path)
 	if err != nil {
 		return nil, err
 	}
 
 	// convert the path into a keyless path, for schema index lookups.
 	keylessPathSlice := utils.ToStrings(sdcpbPath, false, true)
-	keylessPath := strings.Join(keylessPathSlice, "/")
+	keylessPath := strings.Join(keylessPathSlice, PATHSEP)
 
 	// lookup schema in schemaindex, preventing consecutive gets from the schema server
 	if v, exists := c.schemaIndex[keylessPath]; exists {
 		return v, nil
 	}
 
-	// if schema wasn't found in index, go and fetch it
-	schemaRsp, err := c.scb.GetSchema(ctx, sdcpbPath)
-	if err != nil {
-		return nil, err
-	}
-
-	return schemaRsp, nil
+	return c.retrieveSchema(ctx, sdcpbPath)
 }
