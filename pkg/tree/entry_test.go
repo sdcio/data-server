@@ -10,7 +10,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
 	"github.com/sdcio/data-server/pkg/cache"
-	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
@@ -643,7 +642,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 }
 
 // getSchemaClientBound creates a SchemaClientBound mock that responds to certain GetSchema requests
-func getSchemaClientBound(t *testing.T) (SchemaClient.SchemaClientBound, error) {
+func getSchemaClientBound(t *testing.T) (*mockschemaclientbound.MockSchemaClientBound, error) {
 
 	x, schema, err := testhelper.InitSDCIOSchema()
 	if err != nil {
