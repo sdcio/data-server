@@ -10,9 +10,14 @@ import (
 // These Attributes indicate if the entry is to be deleted / added (new) or updated.
 type LeafEntry struct {
 	*cache.Update
-	IsNew     bool
-	Delete    bool
-	IsUpdated bool
+	parentEntry Entry
+	IsNew       bool
+	Delete      bool
+	IsUpdated   bool
+}
+
+func (l *LeafEntry) GetEntry() Entry {
+	return l.parentEntry
 }
 
 // MarkUpdate indicate that the entry is an Updated value
@@ -30,6 +35,10 @@ func (l *LeafEntry) MarkDelete() {
 	l.Delete = true
 }
 
+func (l *LeafEntry) GetRootBasedEntryChain() []Entry {
+	return l.parentEntry.GetRootBasedEntryChain()
+}
+
 // String returns a string representation of the LeafEntry
 func (l *LeafEntry) String() string {
 	tv, err := l.Value()
@@ -43,9 +52,10 @@ func (l *LeafEntry) String() string {
 }
 
 // NewLeafEntry constructor for a new LeafEntry
-func NewLeafEntry(c *cache.Update, new bool) *LeafEntry {
+func NewLeafEntry(c *cache.Update, new bool, parent Entry) *LeafEntry {
 	return &LeafEntry{
-		Update: c,
-		IsNew:  new,
+		parentEntry: parent,
+		Update:      c,
+		IsNew:       new,
 	}
 }

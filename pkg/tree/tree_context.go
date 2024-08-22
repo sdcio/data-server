@@ -98,3 +98,13 @@ func (t *TreeContext) ReadRunning(ctx context.Context, path PathSlice) (*cache.U
 
 	return updates[0], nil
 }
+
+// ReadRunning reads the value from running if the value does not exist, nil is returned
+func (t *TreeContext) ReadRunningMultiple(ctx context.Context, paths [][]string) ([]*cache.Update, error) {
+	updates := t.treeSchemaCacheClient.Read(ctx, &cache.Opts{
+		Store:         cachepb.Store_CONFIG,
+		PriorityCount: 1,
+	}, paths)
+
+	return updates, nil
+}

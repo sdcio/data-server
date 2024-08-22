@@ -691,21 +691,27 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 				store = cachepb.Store_STATE
 			}
 		}
-
-		// TODO:[KR] convert update typedValue if needed
-		cUpd, err := d.cacheClient.NewUpdate(upd)
+		expandedUpds, err := d.expandUpdateKeysAsLeaf(ctx, upd)
 		if err != nil {
-			log.Errorf("datastore %s failed to create update from %v: %v", d.config.Name, upd, err)
+			log.Errorf("datastore %s failed expanding Update keys as leafs %v: %v", d.config.Name, upd.GetPath(), err)
 			continue
 		}
+		for _, expUpd := range expandedUpds {
+			// TODO:[KR] convert update typedValue if needed
+			cUpd, err := d.cacheClient.NewUpdate(expUpd)
+			if err != nil {
+				log.Errorf("datastore %s failed to create update from %v: %v", d.config.Name, upd, err)
+				continue
+			}
 
-		rctx, cancel := context.WithTimeout(ctx, time.Minute) // TODO:[KR] make this timeout configurable ?
-		defer cancel()
-		err = d.cacheClient.Modify(rctx, d.Config().Name, &cache.Opts{
-			Store: store,
-		}, nil, []*cache.Update{cUpd})
-		if err != nil {
-			log.Errorf("datastore %s failed to send modify request to cache: %v", d.config.Name, err)
+			rctx, cancel := context.WithTimeout(ctx, time.Minute) // TODO:[KR] make this timeout configurable ?
+			defer cancel()
+			err = d.cacheClient.Modify(rctx, d.Config().Name, &cache.Opts{
+				Store: store,
+			}, nil, []*cache.Update{cUpd})
+			if err != nil {
+				log.Errorf("datastore %s failed to send modify request to cache: %v", d.config.Name, err)
+			}
 		}
 	}
 }
@@ -1213,7 +1219,7 @@ func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.
 		}
 	}
 
-	intendedUpdates, err := d.readIntendedStoreKeysMeta(ctx)
+	intendedUpdates, err := d.readStoreKeysMeta(ctx, cachepb.Store_INTENDED)
 	if err != nil {
 		log.Error(err)
 		return

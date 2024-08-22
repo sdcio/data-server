@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 
@@ -31,6 +32,32 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+func (d *Datastore) populateTreeWithRunning(ctx context.Context, tc *tree.TreeContext, r *tree.RootEntry) error {
+	// read all the keys from the cache intended store but just the keys, no values are populated
+	configIndex, err := d.readStoreKeysMeta(ctx, cachepb.Store_CONFIG)
+	if err != nil {
+		return err
+	}
+	ps := make([][]string, 0, len(configIndex))
+
+	for _, v := range configIndex {
+		ps = append(ps, v[0].GetPath())
+	}
+	upds, err := tc.ReadRunningMultiple(ctx, ps)
+	if err != nil {
+		return err
+	}
+	for _, upd := range upds {
+		newUpd := cache.NewUpdate(upd.GetPath(), upd.Bytes(), math.MaxInt32, "running", 0)
+		err = r.AddCacheUpdateRecursive(ctx, newUpd, false)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentRequest, tc *tree.TreeContext) (r *tree.RootEntry, err error) {
 	// create a new Tree
 	root, err := tree.NewTreeRoot(ctx, tc)
@@ -39,7 +66,7 @@ func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentReques
 	}
 
 	// read all the keys from the cache intended store but just the keys, no values are populated
-	storeIndex, err := d.readIntendedStoreKeysMeta(ctx)
+	storeIndex, err := d.readStoreKeysMeta(ctx, cachepb.Store_INTENDED)
 	if err != nil {
 		return nil, err
 	}
@@ -96,12 +123,6 @@ func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentReques
 		}
 	}
 
-	// // populate schema within the tree
-	// err = root.Walk(tree.TreeWalkerSchemaRetriever(ctx, d.getValidationClient()))
-	// if err != nil {
-	// 	return nil, err
-	// }
-
 	fmt.Printf("Tree:%s\n", root.String())
 
 	return root, nil
@@ -156,30 +177,9 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	log.Debugf("finish insertion phase")
 	root.FinishInsertionPhase()
 
-	// retrieve the data that is meant to be send southbound (towards the device)
-	updates := root.GetHighestPrecedence(true)
-	deletes := root.GetDeletes()
-
-	// set request to be applied into the candidate
-	setDataReq := &sdcpb.SetDataRequest{
-		Name: req.GetName(),
-		Datastore: &sdcpb.DataStore{
-			Type:     sdcpb.Type_CANDIDATE,
-			Name:     candidateName,
-			Owner:    req.GetIntent(),
-			Priority: req.GetPriority(),
-		},
-		Update: make([]*sdcpb.Update, 0, len(updates)),
-		Delete: make([]*sdcpb.Path, 0, len(deletes)),
-	}
-
-	// add all the highes priority updates to the setDataReq
-	for _, u := range updates {
-		sdcpbUpd, err := d.cacheUpdateToUpdate(ctx, u)
-		if err != nil {
-			return nil, err
-		}
-		setDataReq.Update = append(setDataReq.Update, sdcpbUpd)
+	err = d.populateTreeWithRunning(ctx, tc, root)
+	if err != nil {
+		return nil, err
 	}
 
 	// perform validation
@@ -202,17 +202,48 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		return nil, fmt.Errorf("cumulated validation errors:\n%v", errors.Join(validationErrors...))
 	}
 
-	// add all the deletes to the setDataReq
-	for _, u := range deletes {
-		sdcpbUpd, err := d.cacheUpdateToUpdate(ctx, cache.NewUpdate(u, []byte{}, req.Priority, req.Intent, 0))
+	logger.Debug("intent is validated")
+
+	fmt.Println(root.String())
+
+	// retrieve the data that is meant to be send southbound (towards the device)
+	updates := root.GetHighestPrecedence(true)
+	deletes := root.GetDeletes(true)
+
+	// set request to be applied into the candidate
+	setDataReq := &sdcpb.SetDataRequest{
+		Name: req.GetName(),
+		Datastore: &sdcpb.DataStore{
+			Type:     sdcpb.Type_CANDIDATE,
+			Name:     candidateName,
+			Owner:    req.GetIntent(),
+			Priority: req.GetPriority(),
+		},
+		Update: make([]*sdcpb.Update, 0, len(updates)),
+		Delete: make([]*sdcpb.Path, 0, len(deletes)),
+	}
+
+	// add all the highes priority updates to the setDataReq
+	for _, u := range updates {
+		sdcpbUpd, err := d.cacheUpdateToUpdate(ctx, u.Update)
 		if err != nil {
 			return nil, err
 		}
-		setDataReq.Delete = append(setDataReq.Delete, sdcpbUpd.GetPath())
+		setDataReq.Update = append(setDataReq.Update, sdcpbUpd)
+	}
+
+	// add all the deletes to the setDataReq
+	for _, u := range deletes {
+		p, err := d.toPath(ctx, u)
+		if err != nil {
+			return nil, err
+		}
+		setDataReq.Delete = append(setDataReq.Delete, p)
 	}
 
 	log.Debug(prototext.Format(setDataReq))
 
+	// set the response data indicationg the changes to the device
 	setIntentResponse := &sdcpb.SetIntentResponse{
 		Update: append(setDataReq.Update, setDataReq.Replace...),
 		Delete: setDataReq.GetDelete(),
@@ -239,10 +270,9 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 			return nil, err
 		}
 		setIntentResponse.Warnings = dataResp.GetWarnings()
-	}
 
-	logger.Debug("intent is validated")
-	log.Infof("ds=%s intent=%s: intent applied", req.GetName(), req.GetIntent())
+		log.Infof("ds=%s intent=%s: intent applied", req.GetName(), req.GetIntent())
+	}
 
 	/////////////////////////////////////
 	// update intent in intended store //
@@ -253,7 +283,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	deletesOwner := root.GetDeletesForOwner(req.GetIntent())
 
 	// logging
-	strSl := tree.Map(updates, func(u *cache.Update) string { return u.String() })
+	strSl := tree.Map(updates.ToCacheUpdateSlice(), func(u *cache.Update) string { return u.String() })
 	log.Debugf("Updates\n%s", strings.Join(strSl, "\n"))
 
 	strSl = deletes.StringSlice()
@@ -277,7 +307,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	// fast and optimistic writeback to the config store
 	err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
 		Store: cachepb.Store_CONFIG,
-	}, deletes.ToStringSlice(), updates)
+	}, deletes.ToStringSlice(), updates.ToCacheUpdateSlice())
 	if err != nil {
 		return nil, fmt.Errorf("failed updating the running config store for %s: %w", d.Name(), err)
 	}
@@ -311,8 +341,8 @@ func pathIsKeyAsLeaf(p *sdcpb.Path) bool {
 	return ok
 }
 
-func (d *Datastore) readIntendedStoreKeysMeta(ctx context.Context) (map[string]tree.UpdateSlice, error) {
-	entryCh, err := d.cacheClient.GetKeys(ctx, d.config.Name, cachepb.Store_INTENDED)
+func (d *Datastore) readStoreKeysMeta(ctx context.Context, store cachepb.Store) (map[string]tree.UpdateSlice, error) {
+	entryCh, err := d.cacheClient.GetKeys(ctx, d.config.Name, store)
 	if err != nil {
 		return nil, err
 	}
