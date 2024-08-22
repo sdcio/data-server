@@ -20,21 +20,21 @@ require (
 	github.com/openconfig/gnmic/pkg/types v0.1.2
 	github.com/openconfig/goyang v1.6.0
 	github.com/openconfig/ygot v0.29.19
+	github.com/prometheus/client_golang v1.20.1
 	github.com/scrapli/scrapligo v1.3.2
-	github.com/prometheus/client_golang v1.20.0
 	github.com/sdcio/cache v0.0.34
 	github.com/sdcio/schema-server v0.0.20
 	github.com/sdcio/sdc-protos v0.0.27
 	github.com/sdcio/yang-parser v0.0.5
 	github.com/sirupsen/logrus v1.9.3
-	github.com/spf13/cobra v1.8.0
+	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	go.uber.org/mock v0.4.0
 	golang.org/x/sync v0.8.0
 	google.golang.org/grpc v1.65.0
 	google.golang.org/protobuf v1.34.2
 	gopkg.in/yaml.v2 v2.4.0
-	sigs.k8s.io/controller-runtime v0.18.5
+	sigs.k8s.io/controller-runtime v0.19.0
 )
 
 require (
@@ -100,8 +100,8 @@ require (
 	k8s.io/apimachinery v0.31.0 // indirect
 	k8s.io/client-go v0.31.0 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20240812233141-91dab695df6f // indirect
-	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8 // indirect
+	k8s.io/kube-openapi v0.0.0-20240816214639-573285566f34 // indirect
+	k8s.io/utils v0.0.0-20240821151609-f90d01438635 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
