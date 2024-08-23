@@ -10,7 +10,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
 	"github.com/sdcio/data-server/pkg/cache"
-	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
@@ -124,7 +123,7 @@ func Test_Entry_One(t *testing.T) {
 
 		highprec := root.GetHighestPrecedence(true)
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1, u3}, highprec); diff != "" {
+		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1, u3}, highprec.ToCacheUpdateSlice()); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -181,7 +180,7 @@ func Test_Entry_Two(t *testing.T) {
 	highprec := root.GetHighestPrecedence(true)
 
 	// diff the result with the expected
-	if diff := testhelper.DiffCacheUpdates([]*cache.Update{n1}, highprec); diff != "" {
+	if diff := testhelper.DiffCacheUpdates([]*cache.Update{n1}, highprec.ToCacheUpdateSlice()); diff != "" {
 		t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -229,7 +228,7 @@ func Test_Entry_Three(t *testing.T) {
 		highpri := root.GetHighestPrecedence(false)
 
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1, u2, u3, u4}, highpri); diff != "" {
+		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1, u2, u3, u4}, highpri.ToCacheUpdateSlice()); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -242,7 +241,7 @@ func Test_Entry_Three(t *testing.T) {
 		highpri := root.GetHighestPrecedence(true)
 
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{}, highpri); diff != "" {
+		if diff := testhelper.DiffCacheUpdates([]*cache.Update{}, highpri.ToCacheUpdateSlice()); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -288,7 +287,7 @@ func Test_Entry_Three(t *testing.T) {
 	t.Run("Check the old entries are gone", func(t *testing.T) {
 		highpri := root.GetHighestPrecedence(true)
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{n1, n2}, highpri); diff != "" {
+		if diff := testhelper.DiffCacheUpdates([]*cache.Update{n1, n2}, highpri.ToCacheUpdateSlice()); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -344,7 +343,7 @@ func Test_Entry_Four(t *testing.T) {
 		highprec := root.GetHighestPrecedence(false)
 
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1o1, u2o1, u3, u4}, highprec); diff != "" {
+		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1o1, u2o1, u3, u4}, highprec.ToCacheUpdateSlice()); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -389,7 +388,7 @@ func Test_Entry_Four(t *testing.T) {
 	t.Run("Check the old entries are gone from highest", func(t *testing.T) {
 		highpri := root.GetHighestPrecedence(true)
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{n1, n2, u1o2, u2o2}, highpri); diff != "" {
+		if diff := testhelper.DiffCacheUpdates([]*cache.Update{n1, n2, u1o2, u2o2}, highpri.ToCacheUpdateSlice()); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -397,7 +396,7 @@ func Test_Entry_Four(t *testing.T) {
 	t.Run("Check the old entries are gone from highest (only New Or Updated)", func(t *testing.T) {
 		highpri := root.GetHighestPrecedence(true)
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1o2, u2o2, n1, n2}, highpri); diff != "" {
+		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1o2, u2o2, n1, n2}, highpri.ToCacheUpdateSlice()); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -620,7 +619,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	root.FinishInsertionPhase()
 
 	// retrieve the Deletes
-	deletesSlices := root.GetDeletes()
+	deletesSlices := root.GetDeletes(true)
 
 	// process the result for comparison
 	deletes := make([]string, 0, len(deletesSlices))
@@ -643,7 +642,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 }
 
 // getSchemaClientBound creates a SchemaClientBound mock that responds to certain GetSchema requests
-func getSchemaClientBound(t *testing.T) (SchemaClient.SchemaClientBound, error) {
+func getSchemaClientBound(t *testing.T) (*mockschemaclientbound.MockSchemaClientBound, error) {
 
 	x, schema, err := testhelper.InitSDCIOSchema()
 	if err != nil {
