@@ -91,7 +91,6 @@ func (lv LeafVariants) GetHighestPrecedence(onlyIfPrioChanged bool) *LeafEntry {
 
 	// otherwise return nil
 	return nil
-
 }
 
 // GetByOwner returns the entry that is owned by the given owner,

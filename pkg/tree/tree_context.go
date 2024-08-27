@@ -17,6 +17,7 @@ type TreeContext struct {
 	RunningStoreIndex     map[string]*cache.Update // contains the keys of the running config
 	treeSchemaCacheClient TreeSchemaCacheClient
 	actualOwner           string
+	intendedOnly          bool // indicates that if a delete is going on, if the delete will make it through to the device. This info is used for leafref validation
 }
 
 func NewTreeContext(tscc TreeSchemaCacheClient, actualOwner string) *TreeContext {

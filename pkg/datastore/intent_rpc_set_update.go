@@ -182,12 +182,14 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		return nil, err
 	}
 
+	// fmt.Println(root.String())
+
 	// perform validation
 	// we use a channel and cumulate all the errors
 	validationErrors := []error{}
 	validationErrChan := make(chan error)
 	go func() {
-		root.Validate(validationErrChan)
+		root.Validate(ctx, validationErrChan)
 		close(validationErrChan)
 	}()
 
@@ -203,8 +205,6 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	}
 
 	logger.Debug("intent is validated")
-
-	fmt.Println(root.String())
 
 	// retrieve the data that is meant to be send southbound (towards the device)
 	updates := root.GetHighestPrecedence(true)

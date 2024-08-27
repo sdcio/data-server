@@ -445,7 +445,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 			validationErrors := []error{}
 			validationErrChan := make(chan error)
 			go func() {
-				root.Validate(validationErrChan)
+				root.Validate(context.TODO(), validationErrChan)
 				close(validationErrChan)
 			}()
 
@@ -494,7 +494,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 			validationErrors := []error{}
 			validationErrChan := make(chan error)
 			go func() {
-				root.Validate(validationErrChan)
+				root.Validate(context.TODO(), validationErrChan)
 				close(validationErrChan)
 			}()
 
@@ -549,7 +549,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 			validationErrors := []error{}
 			validationErrChan := make(chan error)
 			go func() {
-				root.Validate(validationErrChan)
+				root.Validate(context.TODO(), validationErrChan)
 				close(validationErrChan)
 			}()
 
@@ -1215,7 +1215,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 			validationErrors := []error{}
 			validationErrChan := make(chan error)
 			go func() {
-				root.Validate(validationErrChan)
+				root.Validate(context.TODO(), validationErrChan)
 				close(validationErrChan)
 			}()
 
@@ -1256,7 +1256,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 			validationErrors := []error{}
 			validationErrChan := make(chan error)
 			go func() {
-				root.Validate(validationErrChan)
+				root.Validate(context.TODO(), validationErrChan)
 				close(validationErrChan)
 			}()
 

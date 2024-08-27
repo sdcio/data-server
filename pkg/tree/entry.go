@@ -67,7 +67,7 @@ type Entry interface {
 	// shouldDelete indicated if there is no LeafEntry left and the Entry is to be deleted
 	shouldDelete() bool
 	// Validate kicks off validation
-	Validate(errchan chan<- error)
+	Validate(ctx context.Context, errchan chan<- error)
 	// validateMandatory the Mandatory schema field
 	validateMandatory(errchan chan<- error)
 	// validateMandatoryWithKeys is an internally used function that us called by validateMandatory in case
@@ -85,7 +85,8 @@ type Entry interface {
 	// GetParent returns the parent entry
 	GetParent() Entry
 	// Navigate navigates the tree according to the given path and returns the referenced entry or nil if it does not exist.
-	Navigate(ctx context.Context, path []string) (Entry, error)
+	Navigate(ctx context.Context, path []string, isRootPath bool) (Entry, error)
+	NavigateSdcpbPath(ctx context.Context, path []*sdcpb.PathElem, isRootPath bool) (Entry, error)
 	// GetFirstAncestorWithSchema returns the first parent node which has a schema set.
 	// if the parent has no schema (is a key element in the tree) it will recurs the call to the parents parent.
 	// the level of recursion is indicated via the levelUp attribute
@@ -96,8 +97,16 @@ type Entry interface {
 	SdcpbPathInternal(spath []string) (*sdcpb.Path, error)
 	// GetSchemaKeys checks for the schema of the entry, and returns the defined keys
 	GetSchemaKeys() []string
-	// Returns all the entries starting from the root down to the actual Entry.
+	// GetRootBasedEntryChain returns all the entries starting from the root down to the actual Entry.
 	GetRootBasedEntryChain() []Entry
+	// GetRoot returns the Trees Root Entry
+	GetRoot() Entry
+	// remainsToExist indicates if a LeafEntry for this entry will survive the update.
+	// Since we add running to the tree, there will always be Entries, that will disappear in the
+	// as part of the SetIntent process. We need to consider this, when evaluating e.g. LeafRefs.
+	// The returned boolean will in indicate if the value remains existing (true) after the setintent.
+	// Or will disappear from device (running) as part of the SetIntent action.
+	remainsToExist() bool
 }
 
 // sharedEntryAttributes contains the attributes shared by Entry and RootEntry
@@ -120,7 +129,6 @@ type sharedEntryAttributes struct {
 }
 
 func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName string, tc *TreeContext) (*sharedEntryAttributes, error) {
-
 	s := &sharedEntryAttributes{
 		parent:       parent,
 		pathElemName: pathElemName,
@@ -139,6 +147,13 @@ func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName st
 	s.initChoiceCasesResolvers()
 
 	return s, nil
+}
+
+func (s *sharedEntryAttributes) GetRoot() Entry {
+	if s.parent == nil {
+		return s
+	}
+	return s.parent.GetRoot()
 }
 
 func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
@@ -297,6 +312,23 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes PathSlices, aggrega
 	return s.getRegularDeletes(deletes, aggregatePaths)
 }
 
+func (s *sharedEntryAttributes) remainsToExist() bool {
+
+	deleteExists := false
+	othersExist := false
+	for _, l := range s.leafVariants {
+		if l.Delete {
+			deleteExists = true
+		}
+		if !(l.Delete || l.Update.Owner() == "running") {
+			othersExist = true
+		}
+	}
+
+	// assumption is, that if the entry exists, there is at least a running value available.
+	return s.treeContext.intendedOnly || othersExist || !deleteExists
+}
+
 // getRegularDeletes performs deletion calculation on elements that have a schema attached.
 func (s *sharedEntryAttributes) getRegularDeletes(deletes PathSlices, aggregate bool) PathSlices {
 	// if entry is a container type, check the keys, to be able to
@@ -412,19 +444,67 @@ func (s *sharedEntryAttributes) addChild(ctx context.Context, e Entry) error {
 	return nil
 }
 
+func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, pathElems []*sdcpb.PathElem, isRootPath bool) (Entry, error) {
+	var err error
+	if len(pathElems) == 0 {
+		return s, nil
+	}
+
+	if isRootPath {
+		return s.GetRoot().NavigateSdcpbPath(ctx, pathElems, false)
+	}
+
+	switch pathElems[0].Name {
+	case ".":
+		s.NavigateSdcpbPath(ctx, pathElems[1:], false)
+	case "..":
+		var entry Entry
+		entry = s.parent
+		// we need to skip key levels in the tree
+		// if the next path element is again .. we need to skip key values that are present in the tree
+		// If it is a sub-entry instead, we need to stay in the brach that is defined by the key values
+		// hence only delegate the call to the parent
+		if pathElems[1].Name == ".." {
+			entry, _ = s.GetFirstAncestorWithSchema()
+		}
+		return entry.NavigateSdcpbPath(ctx, pathElems[1:], false)
+	default:
+		e, exists := s.filterActiveChoiceCaseChilds()[pathElems[0].Name]
+		if !exists {
+			e, err = s.tryLoading(ctx, []string{pathElems[0].Name})
+			if err != nil {
+				return nil, err
+			}
+		}
+		for _, v := range pathElems[0].Key {
+			e, err = e.Navigate(ctx, []string{v}, false)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return e.NavigateSdcpbPath(ctx, pathElems[1:], false)
+	}
+
+	return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist", s.Path(), pathElems)
+}
+
 // Navigate move through the tree, returns the Entry that is present under the given path
-// the path itself can be absolute or relative
-func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string) (Entry, error) {
+func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isRootPath bool) (Entry, error) {
 	var err error
 	if len(path) == 0 {
 		return s, nil
 	}
 
+	if isRootPath {
+		return s.GetRoot().Navigate(ctx, path, false)
+	}
+
 	switch path[0] {
 	case ".":
-		s.Navigate(ctx, path[1:])
+		s.Navigate(ctx, path[1:], false)
 	case "..":
-		return s.parent.Navigate(ctx, path[1:])
+		return s.parent.Navigate(ctx, path[1:], false)
 	default:
 		e, exists := s.filterActiveChoiceCaseChilds()[path[0]]
 		if !exists {
@@ -433,7 +513,7 @@ func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string) (En
 				return nil, err
 			}
 		}
-		return e.Navigate(ctx, path[1:])
+		return e.Navigate(ctx, path[1:], false)
 	}
 
 	return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist", s.Path(), path)
@@ -520,7 +600,7 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(level int, attribute s
 
 // Validate is the highlevel function to perform validation.
 // it will multiplex all the different Validations that need to happen
-func (s *sharedEntryAttributes) Validate(errchan chan<- error) {
+func (s *sharedEntryAttributes) Validate(ctx context.Context, errchan chan<- error) {
 
 	// recurse the call to the child elements
 	wg := sync.WaitGroup{}
@@ -528,7 +608,7 @@ func (s *sharedEntryAttributes) Validate(errchan chan<- error) {
 	for _, c := range s.filterActiveChoiceCaseChilds() {
 		wg.Add(1)
 		go func(x Entry) {
-			x.Validate(errchan)
+			x.Validate(ctx, errchan)
 			wg.Done()
 		}(c)
 	}
@@ -538,9 +618,11 @@ func (s *sharedEntryAttributes) Validate(errchan chan<- error) {
 
 	// // validate the mandatory statement on this entry
 	// s.validateMandatory(errchan)
-
-	s.validateLeafListMinMaxAttributes(errchan)
-	s.validatePattern(errchan)
+	if s.remainsToExist() {
+		s.validateLeafRefs(ctx, errchan)
+		s.validateLeafListMinMaxAttributes(errchan)
+		s.validatePattern(errchan)
+	}
 }
 
 // validateLeafListMinMaxAttributes validates the Min-, and Max-Elements attribute of the Entry if it is a Leaflists.
