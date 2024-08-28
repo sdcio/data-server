@@ -310,6 +310,7 @@ func (t *gnmiTarget) getSync(ctx context.Context, gnmiSync *config.SyncProtocol,
 		Datastore: &sdcpb.DataStore{
 			Type: sdcpb.Type_MAIN,
 		},
+		Encoding: sdcpb.Encoding(encoding(gnmiSync.Encoding)),
 	}
 
 	go t.internalGetSync(ctx, req, syncCh)
