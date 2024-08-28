@@ -118,7 +118,6 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 	var err error
 	gnmiReq := &gnmi.GetRequest{
 		Path:     make([]*gnmi.Path, 0, len(req.GetPath())),
-		Encoding: gnmi.Encoding_ASCII,
 	}
 	for _, p := range req.GetPath() {
 		gnmiReq.Path = append(gnmiReq.Path, utils.ToGNMIPath(p))
