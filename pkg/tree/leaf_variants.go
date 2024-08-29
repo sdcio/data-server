@@ -18,13 +18,14 @@ func (lv LeafVariants) shouldDelete() bool {
 	}
 
 	// go through all variants
-	for _, e := range lv {
-		// if there is a variant that is not marked as delete, no delete should be issued
-		if !e.Delete {
+	for _, l := range lv {
+		// if not running is set and not the owner is running then
+		// it should not be deleted
+		if !(l.Delete || l.Update.Owner() == "running") {
 			return false
 		}
 	}
-	// return true otherwise
+
 	return true
 }
 
@@ -42,6 +43,9 @@ func (lv LeafVariants) GetHighestPrecedenceValue() int32 {
 // nil if no leaf entry exists.
 func (lv LeafVariants) GetHighestPrecedence(onlyIfPrioChanged bool) *LeafEntry {
 	if len(lv) == 0 {
+		return nil
+	}
+	if lv.shouldDelete() {
 		return nil
 	}
 

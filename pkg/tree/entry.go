@@ -11,8 +11,9 @@ import (
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/yang-parser/xpath"
+	"github.com/sdcio/yang-parser/xpath/grammars/expr"
 
-	"github.com/sdcio/data-server/pkg/dslog"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -64,8 +65,6 @@ type Entry interface {
 	GetDeletes(paths PathSlices, aggregatePaths bool) PathSlices
 	// Walk takes the EntryVisitor and applies it to every Entry in the tree
 	Walk(f EntryVisitor) error
-	// shouldDelete indicated if there is no LeafEntry left and the Entry is to be deleted
-	shouldDelete() bool
 	// Validate kicks off validation
 	Validate(ctx context.Context, errchan chan<- error)
 	// validateMandatory the Mandatory schema field
@@ -190,8 +189,6 @@ func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 			return err
 		}
 		s.schema = schemaResp.GetSchema()
-
-		slog.LogAttrs(ctx, dslog.TraceLevel, "retrieved schema", slog.String("schema", s.schema.String()))
 	}
 	return nil
 }
@@ -237,23 +234,6 @@ func (s *sharedEntryAttributes) Walk(f EntryVisitor) error {
 	return nil
 }
 
-// shouldDelete flag if the leafvariant or entire branch is marked for deletion
-func (s *sharedEntryAttributes) shouldDelete() bool {
-	// if leafeVariants exist, delegate the call to the leafVariants
-	if len(s.leafVariants) > 0 {
-		return s.leafVariants.shouldDelete()
-	}
-	// otherwise query the childs
-	for _, c := range s.childs {
-		// if a single child exists that should not be deleted, exit early with a false
-		if !c.shouldDelete() {
-			return false
-		}
-	}
-	// otherwise all childs reported true, and we can report true as well
-	return true
-}
-
 // GetSchemaKeys checks for the schema of the entry, and returns the defined keys
 func (s *sharedEntryAttributes) GetSchemaKeys() []string {
 	if s.schema != nil {
@@ -287,11 +267,11 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes PathSlices, aggrega
 	// if aggregation can happen
 	if len(keys) > 0 && level == len(keys) {
 		doAggregateDelete := true
-		//  check the keys for deletion
+		// check the keys for deletion
 		for _, n := range keys {
 			c, exists := s.childs[n]
 			// these keys should aways exist, so for now we do not catch the non existing key case
-			if exists && !c.shouldDelete() {
+			if exists && c.remainsToExist() {
 				// if not all the keys are marked for deletion, we need to revert to regular deletion
 				doAggregateDelete = false
 				break
@@ -314,19 +294,19 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes PathSlices, aggrega
 
 func (s *sharedEntryAttributes) remainsToExist() bool {
 
-	deleteExists := false
-	othersExist := false
-	for _, l := range s.leafVariants {
-		if l.Delete {
-			deleteExists = true
-		}
-		if !(l.Delete || l.Update.Owner() == "running") {
-			othersExist = true
+	leafVariantResult := len(s.leafVariants) > 0 && !s.leafVariants.shouldDelete()
+
+	// handle containers
+	childsRemain := false
+	for _, c := range s.childs {
+		childsRemain = c.remainsToExist()
+		if childsRemain {
+			break
 		}
 	}
 
 	// assumption is, that if the entry exists, there is at least a running value available.
-	return s.treeContext.intendedOnly || othersExist || !deleteExists
+	return leafVariantResult || childsRemain
 }
 
 // getRegularDeletes performs deletion calculation on elements that have a schema attached.
@@ -348,8 +328,8 @@ func (s *sharedEntryAttributes) getRegularDeletes(deletes PathSlices, aggregate 
 		}
 	}
 
-	if s.leafVariants.shouldDelete() {
-		return append(deletes, s.leafVariants[0].GetPath())
+	if !s.remainsToExist() && !s.IsRoot() && len(s.GetSchemaKeys()) == 0 {
+		return append(deletes, s.Path())
 	}
 
 	for _, e := range s.childs {
@@ -489,9 +469,24 @@ func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, pathElems
 	return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist", s.Path(), pathElems)
 }
 
+// func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path []string) (Entry, error) {
+
+// 	schema, err := s.treeContext.treeSchemaCacheClient.GetSchema(ctx, path)
+// 	if err != nil {
+// 		fmt.Errorf("Error tried loading defaults: %s", s.Path().String())
+// 	}
+
+// 	switch schem := schema.GetSchema().(type) {
+// 	case *sdcpb.SchemaElem_Field:
+// 		schem.Field.GetDefault()
+// 	}
+
+// 	return nil
+
+// }
+
 // Navigate move through the tree, returns the Entry that is present under the given path
 func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isRootPath bool) (Entry, error) {
-	var err error
 	if len(path) == 0 {
 		return s, nil
 	}
@@ -502,18 +497,14 @@ func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isR
 
 	switch path[0] {
 	case ".":
-		s.Navigate(ctx, path[1:], false)
+		return s.Navigate(ctx, path[1:], false)
 	case "..":
 		return s.parent.Navigate(ctx, path[1:], false)
 	default:
 		e, exists := s.filterActiveChoiceCaseChilds()[path[0]]
-		if !exists {
-			e, err = s.tryLoading(ctx, path)
-			if err != nil {
-				return nil, err
-			}
+		if exists {
+			return e.Navigate(ctx, path[1:], false)
 		}
-		return e.Navigate(ctx, path[1:], false)
 	}
 
 	return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist", s.Path(), path)
@@ -581,7 +572,7 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(level int, attribute s
 
 		// if not the path exists in the tree and is not to be deleted, then lookup in the paths index of the store
 		// and see if such path exists, if not raise the error
-		if !(existsInTree && !v.shouldDelete()) {
+		if !(existsInTree && v.remainsToExist()) {
 			if !s.treeContext.PathExists(append(s.Path(), attribute)) {
 				return fmt.Errorf("%s: mandatory child %s does not exist", s.Path(), attribute)
 			}
@@ -622,6 +613,7 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, errchan chan<- err
 		s.validateLeafRefs(ctx, errchan)
 		s.validateLeafListMinMaxAttributes(errchan)
 		s.validatePattern(errchan)
+		s.validateMustStatements(ctx, errchan)
 	}
 }
 
@@ -698,6 +690,60 @@ func (s *sharedEntryAttributes) validatePattern(errchan chan<- error) {
 				}
 			}
 
+		}
+	}
+}
+
+func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, errchan chan<- error) {
+
+	// if no schema, then there is nothing to be done, return
+	if s.schema == nil {
+		return
+	}
+
+	var mustStatements []*sdcpb.MustStatement
+	switch schem := s.GetSchema().GetSchema().(type) {
+	case *sdcpb.SchemaElem_Container:
+		mustStatements = schem.Container.GetMustStatements()
+	case *sdcpb.SchemaElem_Leaflist:
+		mustStatements = schem.Leaflist.GetMustStatements()
+	case *sdcpb.SchemaElem_Field:
+		mustStatements = schem.Field.GetMustStatements()
+	}
+
+	for _, must := range mustStatements {
+		// extract actual must statement
+		exprStr := must.Statement
+		// init a ProgramBuilder
+		prgbuilder := xpath.NewProgBuilder(exprStr)
+		// init an ExpressionLexer
+		lexer := expr.NewExprLex(exprStr, prgbuilder, nil)
+		// parse the provided Must-Expression
+		lexer.Parse()
+		prog, err := lexer.CreateProgram(exprStr)
+		if err != nil {
+			errchan <- err
+			return
+		}
+		machine := xpath.NewMachine(exprStr, prog, exprStr)
+
+		// run the must statement evaluation virtual machine
+		yctx := xpath.NewCtxFromCurrent(ctx, machine, newYangParserEntryAdapter(ctx, s))
+		yctx.SetDebug(false)
+
+		res1 := yctx.Run()
+		// retrieve the boolean result of the execution
+		result, err := res1.GetBoolResult()
+		if !result || err != nil {
+			if err == nil {
+				err = fmt.Errorf(must.Error)
+			}
+			if strings.Contains(err.Error(), "Stack underflow") {
+				slog.Debug("stack underflow error: path=%v, mustExpr=%s", s.Path().String(), exprStr)
+				continue
+			}
+			errchan <- err
+			return
 		}
 	}
 }

@@ -123,8 +123,6 @@ func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentReques
 		}
 	}
 
-	fmt.Printf("Tree:%s\n", root.String())
-
 	return root, nil
 }
 
@@ -182,7 +180,11 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		return nil, err
 	}
 
-	// fmt.Println(root.String())
+	fmt.Printf("Tree:%s\n", root.String())
+
+	// retrieve the data that is meant to be send southbound (towards the device)
+	updates := root.GetHighestPrecedence(true)
+	deletes := root.GetDeletes(true)
 
 	// perform validation
 	// we use a channel and cumulate all the errors
@@ -205,10 +207,6 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	}
 
 	logger.Debug("intent is validated")
-
-	// retrieve the data that is meant to be send southbound (towards the device)
-	updates := root.GetHighestPrecedence(true)
-	deletes := root.GetDeletes(true)
 
 	// set request to be applied into the candidate
 	setDataReq := &sdcpb.SetDataRequest{
