@@ -462,6 +462,17 @@ func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, pathElems
 				return nil, err
 			}
 		}
+
+		if !exists {
+			pth := &sdcpb.Path{Elem: pathElems}
+			e, err = s.tryLoadingDefault(ctx, utils.ToStrings(pth, false, false))
+			if err != nil {
+				pathStr := utils.ToXPath(pth, false)
+				return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist, trying to load defaults yielded %v", s.Path(), pathStr, err)
+			}
+			return e, nil
+		}
+
 		for _, v := range pathElems[0].Key {
 			e, err = e.Navigate(ctx, []string{v}, false)
 			if err != nil {
@@ -647,7 +658,7 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, errchan chan<- err
 	defer wg.Wait()
 	for _, c := range s.filterActiveChoiceCaseChilds() {
 		wg.Add(1)
-		go func(x Entry) {
+		go func(x Entry) { // HINT: for Must-Statement debugging, remove "go " such that the debugger is triggered one after the other
 			x.Validate(ctx, errchan)
 			wg.Done()
 		}(c)
@@ -785,7 +796,7 @@ func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, errc
 		result, err := res1.GetBoolResult()
 		if !result || err != nil {
 			if err == nil {
-				err = fmt.Errorf(must.Error)
+				err = fmt.Errorf("error must-statement path: %s: %s", s.Path(), must.Error)
 			}
 			if strings.Contains(err.Error(), "Stack underflow") {
 				slog.Debug("stack underflow error: path=%v, mustExpr=%s", s.Path().String(), exprStr)
