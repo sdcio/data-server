@@ -42,7 +42,7 @@ func Test_Entry(t *testing.T) {
 	}
 
 	for _, u := range []*cache.Update{u1, u2, u3} {
-		err = root.AddCacheUpdateRecursive(ctx, u, true)
+		_, err = root.AddCacheUpdateRecursive(ctx, u, true)
 		if err != nil {
 			t.Error(err)
 		}
@@ -88,7 +88,7 @@ func Test_Entry_One(t *testing.T) {
 
 	// start test
 	for _, u := range []*cache.Update{u1, u2, u3} {
-		err := root.AddCacheUpdateRecursive(ctx, u, true)
+		_, err := root.AddCacheUpdateRecursive(ctx, u, true)
 		if err != nil {
 			t.Error(err)
 		}
@@ -154,7 +154,7 @@ func Test_Entry_Two(t *testing.T) {
 
 	// start test add "existing" data
 	for _, u := range []*cache.Update{u1} {
-		err := root.AddCacheUpdateRecursive(ctx, u, false)
+		_, err := root.AddCacheUpdateRecursive(ctx, u, false)
 		if err != nil {
 			t.Error(err)
 		}
@@ -167,7 +167,7 @@ func Test_Entry_Two(t *testing.T) {
 	n1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*cache.Update{n1} {
-		err := root.AddCacheUpdateRecursive(ctx, u, true)
+		_, err = root.AddCacheUpdateRecursive(ctx, u, true)
 		if err != nil {
 			t.Error(err)
 		}
@@ -212,7 +212,7 @@ func Test_Entry_Three(t *testing.T) {
 
 	// start test add "existing" data
 	for _, u := range []*cache.Update{u1, u2, u3, u4} {
-		err := root.AddCacheUpdateRecursive(ctx, u, false)
+		_, err := root.AddCacheUpdateRecursive(ctx, u, false)
 		if err != nil {
 			t.Error(err)
 		}
@@ -258,7 +258,7 @@ func Test_Entry_Three(t *testing.T) {
 	n2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "11", "description"}, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*cache.Update{n1, n2} {
-		err := root.AddCacheUpdateRecursive(ctx, u, true)
+		_, err := root.AddCacheUpdateRecursive(ctx, u, true)
 		if err != nil {
 			t.Error(err)
 		}
@@ -327,7 +327,7 @@ func Test_Entry_Four(t *testing.T) {
 
 	// start test add "existing" data
 	for _, u := range []*cache.Update{u1o1, u2o1, u3, u4, u1o2, u2o2} {
-		err := root.AddCacheUpdateRecursive(ctx, u, false)
+		_, err := root.AddCacheUpdateRecursive(ctx, u, false)
 		if err != nil {
 			t.Error(err)
 		}
@@ -360,7 +360,7 @@ func Test_Entry_Four(t *testing.T) {
 	n2 := cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "11", "description"}, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*cache.Update{n1, n2} {
-		err := root.AddCacheUpdateRecursive(ctx, u, true)
+		_, err := root.AddCacheUpdateRecursive(ctx, u, true)
 		if err != nil {
 			t.Error(err)
 		}
@@ -434,7 +434,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			// start test add "existing" data
 			for _, u := range []*cache.Update{u1} {
-				err := root.AddCacheUpdateRecursive(ctx, u, false)
+				_, err := root.AddCacheUpdateRecursive(ctx, u, false)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -485,7 +485,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			// start test add "existing" data
 			for _, u := range []*cache.Update{u1} {
-				err := root.AddCacheUpdateRecursive(ctx, u, false)
+				_, err := root.AddCacheUpdateRecursive(ctx, u, false)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -540,7 +540,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			// start test add "existing" data
 			for _, u := range []*cache.Update{u1} {
-				err := root.AddCacheUpdateRecursive(ctx, u, false)
+				_, err := root.AddCacheUpdateRecursive(ctx, u, false)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -596,7 +596,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 
 	// start test add "existing" data
 	for _, u := range []*cache.Update{u1, u2, u3, u4, u5, u6} {
-		err := root.AddCacheUpdateRecursive(ctx, u, false)
+		_, err := root.AddCacheUpdateRecursive(ctx, u, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -610,7 +610,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 
 	// start test add "new" / request data
 	for _, u := range []*cache.Update{u1n, u2n} {
-		err := root.AddCacheUpdateRecursive(ctx, u, true)
+		_, err := root.AddCacheUpdateRecursive(ctx, u, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1204,7 +1204,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 			u1 := cache.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
 
 			for _, u := range []*cache.Update{u1} {
-				err := root.AddCacheUpdateRecursive(ctx, u, true)
+				_, err := root.AddCacheUpdateRecursive(ctx, u, true)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1245,7 +1245,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 			u1 := cache.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
 
 			for _, u := range []*cache.Update{u1} {
-				err := root.AddCacheUpdateRecursive(ctx, u, true)
+				_, err := root.AddCacheUpdateRecursive(ctx, u, true)
 				if err != nil {
 					t.Fatal(err)
 				}

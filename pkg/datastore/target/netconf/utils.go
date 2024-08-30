@@ -21,9 +21,8 @@ import (
 	"strings"
 
 	"github.com/beevik/etree"
+	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-
-	"github.com/sdcio/data-server/pkg/datastore/target/netconf/conversion"
 )
 
 func getNamespaceFromGetSchemaResponse(sr *sdcpb.GetSchemaResponse) string {
@@ -80,7 +79,7 @@ func valueAsString(v *sdcpb.TypedValue) (string, error) {
 }
 
 func StringElementToTypedValue(s string, ls *sdcpb.LeafSchema) (*sdcpb.TypedValue, error) {
-	return conversion.Convert(s, ls.Type)
+	return utils.Convert(s, ls.Type)
 }
 
 // pathElem2EtreePath takes the given pathElem and creates an xpath expression out of it,

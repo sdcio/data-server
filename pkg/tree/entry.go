@@ -11,14 +11,20 @@ import (
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/yang-parser/xpath"
 	"github.com/sdcio/yang-parser/xpath/grammars/expr"
+	"google.golang.org/protobuf/proto"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 const (
-	KeysIndexSep = "_"
+	KeysIndexSep       = "_"
+	DefaultValuesPrio  = int32(math.MaxInt32 - 90)
+	DefaultsIntentName = "default"
+	RunningValuesPrio  = int32(math.MaxInt32 - 100)
+	RunningIntentName  = "running"
 )
 
 type EntryImpl struct {
@@ -50,7 +56,7 @@ type Entry interface {
 	// addChild Add a child entry
 	addChild(context.Context, Entry) error
 	// AddCacheUpdateRecursive Add the given cache.Update to the tree
-	AddCacheUpdateRecursive(ctx context.Context, u *cache.Update, new bool) error
+	AddCacheUpdateRecursive(ctx context.Context, u *cache.Update, new bool) (Entry, error)
 	// StringIndent debug tree struct as indented string slice
 	StringIndent(result []string) []string
 	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
@@ -469,21 +475,61 @@ func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, pathElems
 	return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist", s.Path(), pathElems)
 }
 
-// func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path []string) (Entry, error) {
+func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path []string) (Entry, error) {
 
-// 	schema, err := s.treeContext.treeSchemaCacheClient.GetSchema(ctx, path)
-// 	if err != nil {
-// 		fmt.Errorf("Error tried loading defaults: %s", s.Path().String())
-// 	}
+	schema, err := s.treeContext.treeSchemaCacheClient.GetSchema(ctx, path)
+	if err != nil {
+		return nil, fmt.Errorf("error trying to load defaults for %s: %v", strings.Join(path, "->"), err)
+	}
 
-// 	switch schem := schema.GetSchema().(type) {
-// 	case *sdcpb.SchemaElem_Field:
-// 		schem.Field.GetDefault()
-// 	}
+	var tv *sdcpb.TypedValue
 
-// 	return nil
+	switch schem := schema.GetSchema().GetSchema().(type) {
+	case *sdcpb.SchemaElem_Field:
+		defaultVal := schem.Field.GetDefault()
+		if defaultVal == "" {
+			return nil, fmt.Errorf("error no default defined for %s", strings.Join(path, " -> "))
+		}
+		tv, err = utils.Convert(defaultVal, schem.Field.GetType())
+		if err != nil {
+			return nil, err
+		}
+	case *sdcpb.SchemaElem_Leaflist:
+		listDefaults := schem.Leaflist.GetDefaults()
+		tvlist := make([]*sdcpb.TypedValue, 0, len(listDefaults))
+		for _, dv := range schem.Leaflist.GetDefaults() {
+			tvelem, err := utils.Convert(dv, schem.Leaflist.GetType())
+			if err != nil {
+				return nil, fmt.Errorf("error converting default to typed value for %s, type: %s ; value: %s; err: %v", strings.Join(path, " -> "), schem.Leaflist.GetType().GetTypeName(), dv, err)
+			}
+			tvlist = append(tvlist, tvelem)
+		}
+		tv = &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_LeaflistVal{
+				LeaflistVal: &sdcpb.ScalarArray{
+					Element: tvlist,
+				},
+			},
+		}
+	default:
+		return nil, fmt.Errorf("error no defaults defined for schema path: %s", strings.Join(path, "->"))
+	}
 
-// }
+	// convert value to []byte for cache insertion
+	val, err := proto.Marshal(tv)
+	if err != nil {
+		return nil, err
+	}
+
+	upd := cache.NewUpdate(path, val, DefaultValuesPrio, DefaultsIntentName, 0)
+
+	result, err := s.AddCacheUpdateRecursive(ctx, upd, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed adding default value for %s to tree; %v", strings.Join(path, "/"), err)
+	}
+
+	return result, nil
+}
 
 // Navigate move through the tree, returns the Entry that is present under the given path
 func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isRootPath bool) (Entry, error) {
@@ -494,7 +540,7 @@ func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isR
 	if isRootPath {
 		return s.GetRoot().Navigate(ctx, path, false)
 	}
-
+	var err error
 	switch path[0] {
 	case ".":
 		return s.Navigate(ctx, path[1:], false)
@@ -502,12 +548,15 @@ func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isR
 		return s.parent.Navigate(ctx, path[1:], false)
 	default:
 		e, exists := s.filterActiveChoiceCaseChilds()[path[0]]
-		if exists {
-			return e.Navigate(ctx, path[1:], false)
+		if !exists {
+			e, err = s.tryLoadingDefault(ctx, append(s.Path(), path...))
+			if err != nil {
+				return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist, trying to load defaults yielded %v", s.Path(), path, err)
+			}
+			return e, nil
 		}
+		return e.Navigate(ctx, path[1:], false)
 	}
-
-	return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist", s.Path(), path)
 }
 
 func (s *sharedEntryAttributes) tryLoading(ctx context.Context, path []string) (Entry, error) {
@@ -518,7 +567,7 @@ func (s *sharedEntryAttributes) tryLoading(ctx context.Context, path []string) (
 	if upd == nil {
 		return nil, fmt.Errorf("reached %v but child %s does not exist", s.Path(), path[0])
 	}
-	err = s.treeContext.root.AddCacheUpdateRecursive(ctx, upd, false)
+	_, err = s.treeContext.root.AddCacheUpdateRecursive(ctx, upd, false)
 	if err != nil {
 		return nil, err
 	}
@@ -964,7 +1013,7 @@ func (s *sharedEntryAttributes) getKeyName() (string, error) {
 
 // AddCacheUpdateRecursive recursively adds the given cache.Update to the tree. Thereby creating all the entries along the path.
 // if the entries along th path already exist, the existing entries are called to add the Update.
-func (s *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *cache.Update, new bool) error {
+func (s *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *cache.Update, new bool) (Entry, error) {
 	idx := 0
 	// if it is the root node, index remains == 0
 	if s.parent != nil {
@@ -987,7 +1036,7 @@ func (s *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *
 			s.leafVariants = append(s.leafVariants, NewLeafEntry(c, new, s))
 		}
 
-		return nil
+		return s, nil
 	}
 
 	var e Entry
@@ -997,7 +1046,7 @@ func (s *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *
 	if e, exists = s.childs[c.GetPath()[idx]]; !exists {
 		e, err = newEntry(ctx, s, c.GetPath()[idx], s.treeContext)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 	return e.AddCacheUpdateRecursive(ctx, c, new)
