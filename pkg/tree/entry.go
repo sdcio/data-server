@@ -78,7 +78,7 @@ type Entry interface {
 	validateMandatory(errchan chan<- error)
 	// validateMandatoryWithKeys is an internally used function that us called by validateMandatory in case
 	// the container has keys defined that need to be skipped before the mandatory attributes can be checked
-	validateMandatoryWithKeys(level int, attribute string) error
+	validateMandatoryWithKeys(level int, attribute string, errchan chan<- error)
 	// getHighestPrecedenceValueOfBranch returns the highes Precedence Value (lowest Priority value) of the brach that starts at this Entry
 	getHighestPrecedenceValueOfBranch() int32
 	// GetSchema returns the *sdcpb.SchemaElem of the Entry
@@ -626,30 +626,6 @@ func (s *sharedEntryAttributes) getHighestPrecedenceValueOfBranch() int32 {
 	return result
 }
 
-func (s *sharedEntryAttributes) validateMandatoryWithKeys(level int, attribute string) error {
-	if level == 0 {
-		// first check if the mandatory value is set via the intent, e.g. part of the tree already
-		v, existsInTree := s.filterActiveChoiceCaseChilds()[attribute]
-
-		// if not the path exists in the tree and is not to be deleted, then lookup in the paths index of the store
-		// and see if such path exists, if not raise the error
-		if !(existsInTree && v.remainsToExist()) {
-			if !s.treeContext.PathExists(append(s.Path(), attribute)) {
-				return fmt.Errorf("%s: mandatory child %s does not exist", s.Path(), attribute)
-			}
-		}
-		return nil
-	}
-
-	for _, c := range s.filterActiveChoiceCaseChilds() {
-		err := c.validateMandatoryWithKeys(level-1, attribute)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // Validate is the highlevel function to perform validation.
 // it will multiplex all the different Validations that need to happen
 func (s *sharedEntryAttributes) Validate(ctx context.Context, errchan chan<- error) {
@@ -659,7 +635,7 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, errchan chan<- err
 	defer wg.Wait()
 	for _, c := range s.filterActiveChoiceCaseChilds() {
 		wg.Add(1)
-		go func(x Entry) { // HINT: for Must-Statement debugging, remove "go " such that the debugger is triggered one after the other
+		func(x Entry) { // HINT: for Must-Statement debugging, remove "go " such that the debugger is triggered one after the other
 			x.Validate(ctx, errchan)
 			wg.Done()
 		}(c)
@@ -669,8 +645,8 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, errchan chan<- err
 	// configuration information in the tree, to perform proper validation
 
 	// // validate the mandatory statement on this entry
-	// s.validateMandatory(errchan)
 	if s.remainsToExist() {
+		s.validateMandatory(errchan)
 		s.validateLeafRefs(ctx, errchan)
 		s.validateLeafListMinMaxAttributes(errchan)
 		s.validatePattern(errchan)
@@ -832,13 +808,31 @@ func (s *sharedEntryAttributes) validateMandatory(errchan chan<- error) {
 		switch s.schema.GetSchema().(type) {
 		case *sdcpb.SchemaElem_Container:
 			for _, c := range s.schema.GetContainer().MandatoryChildren {
-				err := s.validateMandatoryWithKeys(len(s.GetSchema().GetContainer().GetKeys()), c)
-				if err != nil {
-					errchan <- err
-				}
+				s.validateMandatoryWithKeys(len(s.GetSchema().GetContainer().GetKeys()), c, errchan)
 			}
 		}
 	}
+}
+
+func (s *sharedEntryAttributes) validateMandatoryWithKeys(level int, attribute string, errchan chan<- error) {
+	if level == 0 {
+		// first check if the mandatory value is set via the intent, e.g. part of the tree already
+		v, existsInTree := s.filterActiveChoiceCaseChilds()[attribute]
+
+		// if not the path exists in the tree and is not to be deleted, then lookup in the paths index of the store
+		// and see if such path exists, if not raise the error
+		if !(existsInTree && v.remainsToExist()) {
+			if !s.treeContext.PathExists(append(s.Path(), attribute)) {
+				errchan <- fmt.Errorf("error mandatory child %s does not exist, path: %s", attribute, s.Path())
+			}
+		}
+		return
+	}
+
+	for _, c := range s.filterActiveChoiceCaseChilds() {
+		c.validateMandatoryWithKeys(level-1, attribute, errchan)
+	}
+
 }
 
 // initChoiceCasesResolvers Choices and their cases are defined in the schema.
