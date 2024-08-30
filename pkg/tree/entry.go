@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -674,6 +675,7 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, errchan chan<- err
 		s.validateLeafListMinMaxAttributes(errchan)
 		s.validatePattern(errchan)
 		s.validateMustStatements(ctx, errchan)
+		s.validateLength(errchan)
 	}
 }
 
@@ -681,7 +683,7 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, errchan chan<- err
 func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(errchan chan<- error) {
 	if schema := s.schema.GetLeaflist(); schema != nil {
 		if schema.MinElements > 0 {
-			if lv := s.leafVariants.GetByOwner(s.treeContext.actualOwner); lv != nil {
+			if lv := s.leafVariants.GetHighestPrecedence(false); lv != nil {
 				tv, err := lv.Update.Value()
 				if err != nil {
 					errchan <- fmt.Errorf("validating LeafList Min Attribute: %v", err)
@@ -709,22 +711,38 @@ func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(errchan chan<- 
 // 	}
 // }
 
-// func (s *sharedEntryAttributes) validateLength(errchan chan<- error) {
-// 	if schema := s.schema.GetField(); schema != nil {
-// 		if schema.GetType().GetLength() == "" {
-// 			return
-// 		}
+func (s *sharedEntryAttributes) validateLength(errchan chan<- error) {
+	if schema := s.schema.GetField(); schema != nil {
 
-// 		lv := s.leafVariants.GetByOwner(s.treeContext.actualOwner)
-// 		tv, err := lv.Value()
-// 		if err != nil {
-// 			errchan <- fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err)
-// 			return
-// 		}
-// 		value := tv.GetStringVal()
+		if len(schema.GetType().Length) == 0 {
+			return
+		}
 
-// 	}
-// }
+		lv := s.leafVariants.GetHighestPrecedence(false)
+		if lv == nil {
+			return
+		}
+
+		tv, err := lv.Value()
+		if err != nil {
+			errchan <- fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err)
+			return
+		}
+		value := tv.GetStringVal()
+		actualLength := utf8.RuneCountInString(value)
+
+		for _, lengthDef := range schema.GetType().Length {
+			if lengthDef.Min.Value <= uint64(actualLength) && uint64(actualLength) <= lengthDef.Max.Value {
+				return
+			}
+		}
+		lenghts := []string{}
+		for _, lengthDef := range schema.GetType().Length {
+			lenghts = append(lenghts, fmt.Sprintf("%d..%d", lengthDef.Min.Value, lengthDef.Max.Value))
+		}
+		errchan <- fmt.Errorf("error length of Path: %s, Value: %s not within allowed length %s", s.Path(), value, strings.Join(lenghts, ", "))
+	}
+}
 
 func (s *sharedEntryAttributes) validatePattern(errchan chan<- error) {
 	if schema := s.schema.GetField(); schema != nil {
@@ -749,7 +767,6 @@ func (s *sharedEntryAttributes) validatePattern(errchan chan<- error) {
 					errchan <- fmt.Errorf("value %s of %s does not match regex %s (inverted: %t)", value, s.Path(), p, pattern.GetInverted())
 				}
 			}
-
 		}
 	}
 }
