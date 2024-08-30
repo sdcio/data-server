@@ -17,6 +17,11 @@ func (lv LeafVariants) shouldDelete() bool {
 		return false
 	}
 
+	// if only running exists return false
+	if lv[0].Update.Owner() == RunningIntentName && len(lv) == 1 {
+		return false
+	}
+
 	// go through all variants
 	for _, l := range lv {
 		// if not running is set and not the owner is running then
