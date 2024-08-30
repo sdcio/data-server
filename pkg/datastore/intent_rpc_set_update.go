@@ -195,6 +195,8 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		validationErrors = append(validationErrors, e)
 	}
 
+	fmt.Printf("Tree after Validate:%s\n", root.String())
+
 	// check if errors are received
 	// If so, join them and return the cumulated errors
 	if len(validationErrors) > 0 {
@@ -202,8 +204,6 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	}
 
 	logger.Debug("intent is validated")
-
-	fmt.Printf("Tree after Validate:%s\n", root.String())
 
 	// retrieve the data that is meant to be send southbound (towards the device)
 	updates := root.GetHighestPrecedence(true)
