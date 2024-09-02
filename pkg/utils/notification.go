@@ -90,14 +90,6 @@ func FromGNMITypedValue(v *gnmi.TypedValue) *sdcpb.TypedValue {
 		return &sdcpb.TypedValue{
 			Value: &sdcpb.TypedValue_BytesVal{BytesVal: v.GetBytesVal()},
 		}
-	// case *sdcpb.TypedValue_DecimalVal:
-	// 	return &sdcpb.TypedValue{
-	// 		Value: &sdcpb.TypedValue_DecimalVal{DecimalVal: v.GetDecimalVal()},
-	// 	}
-	// case *sdcpb.TypedValue_FloatVal:
-	// 	return &sdcpb.TypedValue{
-	// 		Value: &sdcpb.TypedValue_FloatVal{FloatVal: v.GetFloatVal()},
-	// 	}
 	case *gnmi.TypedValue_IntVal:
 		return &sdcpb.TypedValue{
 			Value: &sdcpb.TypedValue_IntVal{IntVal: v.GetIntVal()},

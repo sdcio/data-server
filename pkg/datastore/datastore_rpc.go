@@ -680,7 +680,8 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 			log.Errorf("datastore %s failed expanding Update keys as leafs %v: %v", d.config.Name, upd.GetPath(), err)
 			continue
 		}
-		for _, expUpd := range expandedUpds {
+		upds := append(expandedUpds, upd)
+		for _, expUpd := range upds {
 			// TODO:[KR] convert update typedValue if needed
 			cUpd, err := d.cacheClient.NewUpdate(expUpd)
 			if err != nil {

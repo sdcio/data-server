@@ -46,6 +46,10 @@ func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
 	switch tv.Value.(type) {
 	case *schema_server.TypedValue_BoolVal:
 		result = xpath.NewBoolDatum(tv.GetBoolVal())
+	case *schema_server.TypedValue_StringVal:
+		result = xpath.NewLiteralDatum(tv.GetStringVal())
+	case *schema_server.TypedValue_UintVal:
+		result = xpath.NewNumDatum(float64(tv.GetUintVal()))
 	default:
 		result = xpath.NewLiteralDatum(tv.GetStringVal())
 	}
