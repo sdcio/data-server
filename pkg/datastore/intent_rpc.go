@@ -113,27 +113,6 @@ func (d *Datastore) applyIntent(ctx context.Context, candidateName string, sdreq
 
 	var err error
 
-	log.Debugf("%s: %s notification:\n%s", d.Name(), candidateName, prototext.Format(sdreq))
-	// TODO: consider if leafref validation
-	// needs to run before must statements validation
-	// validate MUST statements
-	log.Infof("%s: validating must statements candidate %s", d.Name(), sdreq.GetDatastore())
-	for _, upd := range sdreq.GetUpdate() {
-		log.Debugf("%s: %s validating must statement on: %v", d.Name(), candidateName, upd)
-		_, err = d.validateMustStatement(ctx, candidateName, upd.GetPath(), false)
-		if err != nil {
-			return nil, err
-		}
-	}
-	log.Infof("%s: validating leafrefs candidate %s", d.Name(), sdreq.GetDatastore())
-	for _, upd := range sdreq.GetUpdate() {
-		log.Debugf("%s: %s validating leafRef on update: %v", d.Name(), candidateName, upd)
-		err = d.validateLeafRef(ctx, upd, candidateName)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	// push updates to sbi
 	log.Debugf("datastore %s/%s applyIntent:\n%s", d.config.Name, candidateName, prototext.Format(sdreq))
 

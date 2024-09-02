@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package conversion
+package utils
 
 import (
 	"fmt"
@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
@@ -308,7 +307,7 @@ func ConvertString(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, 
 }
 
 func ConvertDecimal64(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	d64, err := utils.ParseDecimal64(value)
+	d64, err := ParseDecimal64(value)
 	if err != nil {
 		return nil, err
 	}

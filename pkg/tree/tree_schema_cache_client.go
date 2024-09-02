@@ -3,6 +3,7 @@ package tree
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"github.com/sdcio/data-server/pkg/cache"
 	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
@@ -25,10 +26,11 @@ type TreeSchemaCacheClient interface {
 }
 
 type TreeSchemaCacheClientImpl struct {
-	cc          cache.Client
-	scb         SchemaClient.SchemaClientBound
-	schemaIndex map[string]*sdcpb.GetSchemaResponse
-	datastore   string
+	cc               cache.Client
+	scb              SchemaClient.SchemaClientBound
+	schemaIndex      map[string]*sdcpb.GetSchemaResponse
+	schemaIndexMutex sync.RWMutex
+	datastore        string
 }
 
 func NewTreeSchemaCacheClient(datastore string, cc cache.Client, scb SchemaClient.SchemaClientBound) *TreeSchemaCacheClientImpl {
@@ -65,8 +67,10 @@ func (c *TreeSchemaCacheClientImpl) ToPath(ctx context.Context, path []string) (
 		p.Elem = append(p.Elem, newPathElem)
 		// prepare key lookup in index
 		keylessPathSlice = append(keylessPathSlice, path[i])
+		c.schemaIndexMutex.RLock()
 		// lookup the key in the schema index
 		schema, exists := c.schemaIndex[strings.Join(keylessPathSlice, PATHSEP)]
+		c.schemaIndexMutex.RUnlock()
 		// if it does not exist
 		if !exists {
 			// retrieve the schema
@@ -110,8 +114,10 @@ func (c *TreeSchemaCacheClientImpl) retrieveSchema(ctx context.Context, p *sdcpb
 	keylessPathSlice := utils.ToStrings(p, false, true)
 	keylessPath := strings.Join(keylessPathSlice, PATHSEP)
 
+	c.schemaIndexMutex.Lock()
 	// store the schema in the lookup index
 	c.schemaIndex[keylessPath] = schemaRsp
+	c.schemaIndexMutex.Unlock()
 	return schemaRsp, nil
 }
 
