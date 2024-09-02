@@ -797,11 +797,7 @@ func (d *Datastore) convertNotificationTypedValues(ctx context.Context, n *sdcpb
 	}
 	// convert typed values to their YANG type
 	for _, upd := range n.GetUpdate() {
-		scRsp, err := d.getSchema(ctx, upd.GetPath())
-		if err != nil {
-			return nil, err
-		}
-		nup, err := d.convertUpdateTypedValue(ctx, upd, scRsp, leaflists)
+		nup, err := d.expandUpdate(ctx, upd, true)
 		if err != nil {
 			return nil, err
 		}
@@ -809,7 +805,7 @@ func (d *Datastore) convertNotificationTypedValues(ctx context.Context, n *sdcpb
 		if nup == nil { // filters out notification ending in non-presence containers
 			continue
 		}
-		nn.Update = append(nn.Update, nup)
+		nn.Update = append(nn.Update, nup...)
 	}
 	// add accumulated leaf-lists
 	for _, lfnotif := range leaflists {
