@@ -1199,7 +1199,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			leafval := testhelper.GetStringTvProto(t, "data")
+			leafval := testhelper.GetStringTvProto(t, "data123")
 
 			u1 := cache.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
 
