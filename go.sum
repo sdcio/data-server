@@ -225,12 +225,12 @@ github.com/scrapli/scrapligo v1.3.2 h1:9D5TFM/DlqAijqH18uNHygbNos0ReDsJl/vhMRObk
 github.com/scrapli/scrapligo v1.3.2/go.mod h1:VnmqW27qUU1NOt6PNllZNJqAXQddn2vqZpk7g5qxebw=
 github.com/sdcio/cache v0.0.34 h1:mDxIPN9r339yHykCPJZFKX0va8RMoAscErbEkAcql7E=
 github.com/sdcio/cache v0.0.34/go.mod h1:u/rIbC03e6k+J19VWo8DwJdBWY0vzNZ25viXRmrS+5I=
-github.com/sdcio/schema-server v0.0.20 h1:TpWSuWZA3oJZGTEhcuaWOsuwVDLkpuK0h1aUcPO41I0=
-github.com/sdcio/schema-server v0.0.20/go.mod h1:FUnOY70XgtxpTk37Zdt/aat2GzND0TsLQej6da5sFZo=
+github.com/sdcio/schema-server v0.0.21 h1:hH0wCweYHpIN/nA3P5yaq+LND68jjP7DTKXlB5UDfx8=
+github.com/sdcio/schema-server v0.0.21/go.mod h1:FUnOY70XgtxpTk37Zdt/aat2GzND0TsLQej6da5sFZo=
 github.com/sdcio/sdc-protos v0.0.27 h1:FPXgFLG7euR4Ls5H89omppCTamCaIhX3UU9JwFzxno8=
 github.com/sdcio/sdc-protos v0.0.27/go.mod h1:4m/TbZElS2E05Sv3n4PHt8caJnBHfNyX9I+4jUlLc8k=
-github.com/sdcio/yang-parser v0.0.5 h1:YwpgQt2/n3BHFrEa0n0sQ4Q2hLCrTFY2VDKO+2BgoVg=
-github.com/sdcio/yang-parser v0.0.5/go.mod h1:cLYFD8ChaFyn+G0EYpOlGDrI/3J2Zgf7uzO/CKW6l1Q=
+github.com/sdcio/yang-parser v0.0.6 h1:mvpLgA7D32nlQ910RwDT5j+1s5AXdGYMaO0x+pwU9ms=
+github.com/sdcio/yang-parser v0.0.6/go.mod h1:cLYFD8ChaFyn+G0EYpOlGDrI/3J2Zgf7uzO/CKW6l1Q=
 github.com/sirikothe/gotextfsm v1.0.1-0.20200816110946-6aa2cfd355e4 h1:FHUL2HofYJuslFOQdy/JjjP36zxqIpd/dcoiwLMIs7k=
 github.com/sirikothe/gotextfsm v1.0.1-0.20200816110946-6aa2cfd355e4/go.mod h1:CJYqpTg9u5VPCoD0VEl9E68prCIiWQD8m457k098DdQ=
 github.com/sirupsen/logrus v1.4.2/go.mod h1:tLMulIdttU9McNUspp0xgXVQah82FyeX6MwdIuYE2rE=
