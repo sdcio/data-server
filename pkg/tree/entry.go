@@ -641,10 +641,7 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, errchan chan<- err
 		}(c)
 	}
 
-	// TODO: Validate Mandatory is skipped for now, until we have running
-	// configuration information in the tree, to perform proper validation
-
-	// // validate the mandatory statement on this entry
+	// validate the mandatory statement on this entry
 	if s.remainsToExist() {
 		s.validateMandatory(errchan)
 		s.validateLeafRefs(ctx, errchan)
@@ -652,7 +649,30 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, errchan chan<- err
 		s.validatePattern(errchan)
 		s.validateMustStatements(ctx, errchan)
 		s.validateLength(errchan)
+		s.validateRange(errchan)
 	}
+}
+
+func (s *sharedEntryAttributes) validateRange(errchan chan<- error) {
+
+	lv := s.leafVariants.GetHighestPrecedence(false)
+	if lv == nil {
+		return
+	}
+
+	tv, err := lv.Value()
+	if err != nil {
+		errchan <- fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err)
+		return
+	}
+
+	if schema := s.schema.GetField(); schema != nil {
+		for _, rng := range schema.GetType().Range {
+			_ = tv
+			_ = rng
+		}
+	}
+
 }
 
 // validateLeafListMinMaxAttributes validates the Min-, and Max-Elements attribute of the Entry if it is a Leaflists.
@@ -678,14 +698,6 @@ func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(errchan chan<- 
 		}
 	}
 }
-
-// func (s *sharedEntryAttributes) validateUnique(errchan chan<- error) {
-// 	if schema := s.schema.GetLeaflist(); schema != nil {
-// 		if schema. {
-// 			return
-// 		}
-// 	}
-// }
 
 func (s *sharedEntryAttributes) validateLength(errchan chan<- error) {
 	if schema := s.schema.GetField(); schema != nil {
