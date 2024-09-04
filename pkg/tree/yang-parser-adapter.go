@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	schema_server "github.com/sdcio/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/yang-parser/xpath"
 	"github.com/sdcio/yang-parser/xpath/xutils"
 )
@@ -44,11 +44,15 @@ func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
 
 	var result xpath.Datum
 	switch tv.Value.(type) {
-	case *schema_server.TypedValue_BoolVal:
+	case *sdcpb.TypedValue_BoolVal:
 		result = xpath.NewBoolDatum(tv.GetBoolVal())
-	case *schema_server.TypedValue_StringVal:
-		result = xpath.NewLiteralDatum(tv.GetStringVal())
-	case *schema_server.TypedValue_UintVal:
+	case *sdcpb.TypedValue_StringVal:
+		prefix := ""
+		if y.e.GetSchema().GetField().GetType().GetTypeName() == "identityref" {
+			prefix = fmt.Sprintf("%s:", y.e.GetSchema().GetField().GetType().IdentityPrefix)
+		}
+		result = xpath.NewLiteralDatum(prefix + tv.GetStringVal())
+	case *sdcpb.TypedValue_UintVal:
 		result = xpath.NewNumDatum(float64(tv.GetUintVal()))
 	default:
 		result = xpath.NewLiteralDatum(tv.GetStringVal())
