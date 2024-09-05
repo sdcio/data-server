@@ -1,12 +1,20 @@
 [
     {
-        "path": "interface[name=ethernet-1/1]",
+        "path": "/",
         "value": {
-            "vlan-tagging": true,
-            "ethernet": {
-                "port-speed": "10G",
-                "aggregate-id": "lag1"
-            }
+            "interface": [
+                {
+                    "name": "ethernet-1/1",
+                    "vlan-tagging": true,
+                    "ethernet": {
+                        "port-speed": "10G",
+                        "aggregate-id": "lag1"
+                    }
+                },
+                {
+                    "name": "lag1"
+                }
+            ]
         }
     }
 ]

@@ -1,6 +1,17 @@
 [
     {
-        "path": "/bfd/subinterface/id",
-        "value": "ethernet-1/1.26"
+        "path": "/",
+        "value": {
+            "bfd": {
+                "subinterface": [{
+                    "id": "ethernet-1/1.26"
+                }]
+            },
+            "interface": [
+                {
+                    "name": "ethernet-1/1"
+                }
+            ]
+        }
     }
 ]
