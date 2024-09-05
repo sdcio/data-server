@@ -221,22 +221,6 @@ func (d *Datastore) Commit(ctx context.Context, req *sdcpb.CommitRequest) error 
 	// TODO: consider if leafref validation
 	// needs to run before must statements validation
 
-	// validate MUST statements
-	for _, upd := range notification.GetUpdate() {
-		log.Debugf("%s:%s validating must statement on path: %v", d.Name(), name, upd.GetPath())
-		_, err = d.validateMustStatement(ctx, req.GetDatastore().GetName(), upd.GetPath(), true)
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, upd := range notification.GetUpdate() {
-		log.Debugf("%s:%s validating leafRef on update: %v", d.Name(), name, upd)
-		err = d.validateLeafRef(ctx, upd, name)
-		if err != nil {
-			return err
-		}
-	}
 	// push updates to sbi
 	sbiSet := &sdcpb.SetDataRequest{
 		Update: notification.GetUpdate(),
@@ -696,7 +680,8 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 			log.Errorf("datastore %s failed expanding Update keys as leafs %v: %v", d.config.Name, upd.GetPath(), err)
 			continue
 		}
-		for _, expUpd := range expandedUpds {
+		upds := append(expandedUpds, upd)
+		for _, expUpd := range upds {
 			// TODO:[KR] convert update typedValue if needed
 			cUpd, err := d.cacheClient.NewUpdate(expUpd)
 			if err != nil {

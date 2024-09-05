@@ -1,6 +1,6 @@
 [
     {
-        "path": "interface[name=ethernet-0/1]/ethernet/auto-negotiate",
+        "path": "interface[name=mgmt0]/ethernet/auto-negotiate",
         "value": true
     }
 ]

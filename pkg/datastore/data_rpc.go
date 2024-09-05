@@ -27,8 +27,6 @@ import (
 
 	"github.com/sdcio/cache/proto/cachepb"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	"github.com/sdcio/yang-parser/xpath"
-	"github.com/sdcio/yang-parser/xpath/grammars/expr"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -514,79 +512,6 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *sdcpb.Update) error
 		}
 	}
 	return nil
-}
-
-func (d *Datastore) validateMustStatement(ctx context.Context, candidateName string, p *sdcpb.Path, normalizePaths bool) (bool, error) {
-	// normalizedPaths will contain the provided path. If the last path.elems contains one or more keys, these will be
-	// taken and appended to the path. The must statements have to be checked for all of the key elements.
-	var normalizedPaths = make([]*sdcpb.Path, 0, 1)
-
-	// this is to massage for instance
-	// /bfd/subinterface[id=ethernet-1.25] -> /bfd/subinterface[id=ethernet-1.25]/id
-	// because we need to resolve down to id, to retrieve the relevant must statements
-	// further there can be more then just a single key.
-	if len(p.Elem[len(p.Elem)-1].Key) > 0 && normalizePaths {
-		for k := range p.GetElem()[len(p.Elem)-1].GetKey() {
-			// clone p as new path
-			newPath := proto.Clone(p).(*sdcpb.Path)
-			// take the key attribute name and add it as the new path.elem
-			newPath.Elem = append(newPath.Elem, &sdcpb.PathElem{Name: k})
-			// add the result to the normalized Paths
-			normalizedPaths = append(normalizedPaths, newPath)
-		}
-	} else {
-		// no keys attached to last path.elem, simply add the path
-		normalizedPaths = append(normalizedPaths, p)
-	}
-
-	for _, checkPath := range normalizedPaths {
-		rsp, err := d.getSchema(ctx, checkPath)
-		if err != nil {
-			return false, err
-		}
-
-		var mustStatements []*sdcpb.MustStatement
-		switch rsp.GetSchema().Schema.(type) {
-		case *sdcpb.SchemaElem_Container:
-			mustStatements = rsp.Schema.GetContainer().GetMustStatements()
-		case *sdcpb.SchemaElem_Leaflist:
-			mustStatements = rsp.Schema.GetLeaflist().GetMustStatements()
-		case *sdcpb.SchemaElem_Field:
-			mustStatements = rsp.Schema.GetField().GetMustStatements()
-		}
-
-		for _, must := range mustStatements {
-			// extract actual must statement
-			exprStr := must.Statement
-			// init a ProgramBuilder
-			prgbuilder := xpath.NewProgBuilder(exprStr)
-			// init an ExpressionLexer
-			lexer := expr.NewExprLex(exprStr, prgbuilder, nil)
-			// parse the provided Must-Expression
-			lexer.Parse()
-			prog, err := lexer.CreateProgram(exprStr)
-			if err != nil {
-				return false, err
-			}
-			machine := xpath.NewMachine(exprStr, prog, exprStr)
-
-			// run the must statement evaluation virtual machine
-			res1 := xpath.NewCtxFromCurrent(ctx, machine, p.Elem, d.getValidationClient(), candidateName).Run()
-			// retrieve the boolean result of the execution
-			result, err := res1.GetBoolResult()
-			if !result || err != nil {
-				if err == nil {
-					err = fmt.Errorf(must.Error)
-				}
-				if strings.Contains(err.Error(), "Stack underflow") {
-					log.Warnf("stack underflow error: path=%v, mustExpr=%s", checkPath, exprStr)
-					continue
-				}
-				return result, err
-			}
-		}
-	}
-	return true, nil
 }
 
 func validateFieldValue(f *sdcpb.LeafSchema, v any) error {

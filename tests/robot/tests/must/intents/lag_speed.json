@@ -1,6 +1,18 @@
 [
     {
-        "path": "interface[name=ethernet-1/1]/ethernet/aggregate-id",
-        "value":"lag1"
+        "path": "/",
+        "value": {
+            "interface": [
+                {
+                    "name": "ethernet-1/1",
+                    "ethernet": {
+                        "aggregate-id": "lag1"
+                    }
+                },
+                {
+                    "name": "lag1"
+                }
+            ]
+        }
     }
 ]

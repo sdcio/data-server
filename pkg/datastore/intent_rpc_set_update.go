@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"sort"
 	"strings"
 
@@ -48,8 +47,8 @@ func (d *Datastore) populateTreeWithRunning(ctx context.Context, tc *tree.TreeCo
 		return err
 	}
 	for _, upd := range upds {
-		newUpd := cache.NewUpdate(upd.GetPath(), upd.Bytes(), math.MaxInt32, "running", 0)
-		err = r.AddCacheUpdateRecursive(ctx, newUpd, false)
+		newUpd := cache.NewUpdate(upd.GetPath(), upd.Bytes(), tree.RunningValuesPrio, tree.RunningIntentName, 0)
+		_, err = r.AddCacheUpdateRecursive(ctx, newUpd, false)
 		if err != nil {
 			return err
 		}
@@ -117,13 +116,11 @@ func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentReques
 	// now add the cache.Updates from the actual request, after marking the old once for deletion.
 	for _, upd := range newCacheUpdates {
 		// add the cache.Update to the tree
-		err = root.AddCacheUpdateRecursive(ctx, upd, true)
+		_, err = root.AddCacheUpdateRecursive(ctx, upd, true)
 		if err != nil {
 			return nil, err
 		}
 	}
-
-	fmt.Printf("Tree:%s\n", root.String())
 
 	return root, nil
 }
@@ -182,12 +179,14 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		return nil, err
 	}
 
+	fmt.Printf("Tree before Validate:%s\n", root.String())
+
 	// perform validation
 	// we use a channel and cumulate all the errors
 	validationErrors := []error{}
 	validationErrChan := make(chan error)
 	go func() {
-		root.Validate(validationErrChan)
+		root.Validate(ctx, validationErrChan)
 		close(validationErrChan)
 	}()
 
@@ -196,6 +195,8 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		validationErrors = append(validationErrors, e)
 	}
 
+	fmt.Printf("Tree after Validate:%s\n", root.String())
+
 	// check if errors are received
 	// If so, join them and return the cumulated errors
 	if len(validationErrors) > 0 {
@@ -203,8 +204,6 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	}
 
 	logger.Debug("intent is validated")
-
-	fmt.Println(root.String())
 
 	// retrieve the data that is meant to be send southbound (towards the device)
 	updates := root.GetHighestPrecedence(true)

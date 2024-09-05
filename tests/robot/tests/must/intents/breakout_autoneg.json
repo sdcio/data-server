@@ -7,7 +7,7 @@
             },
             "breakout-mode": {
                 "num-breakout-ports": 2,
-                "breakout-port-speed": "10G"
+                "breakout-port-speed": "100G"
             }
         }
     }
