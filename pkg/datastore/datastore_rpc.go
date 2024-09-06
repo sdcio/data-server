@@ -675,30 +675,23 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 				store = cachepb.Store_STATE
 			}
 		}
-		expandedUpds, err := d.expandUpdateKeysAsLeaf(ctx, upd)
+		// TODO:[KR] convert update typedValue if needed
+		cUpd, err := d.cacheClient.NewUpdate(upd)
 		if err != nil {
-			log.Errorf("datastore %s failed expanding Update keys as leafs %v: %v", d.config.Name, upd.GetPath(), err)
+			log.Errorf("datastore %s failed to create update from %v: %v", d.config.Name, upd, err)
 			continue
 		}
-		upds := append(expandedUpds, upd)
-		for _, expUpd := range upds {
-			// TODO:[KR] convert update typedValue if needed
-			cUpd, err := d.cacheClient.NewUpdate(expUpd)
-			if err != nil {
-				log.Errorf("datastore %s failed to create update from %v: %v", d.config.Name, upd, err)
-				continue
-			}
 
-			rctx, cancel := context.WithTimeout(ctx, time.Minute) // TODO:[KR] make this timeout configurable ?
-			defer cancel()
-			err = d.cacheClient.Modify(rctx, d.Config().Name, &cache.Opts{
-				Store: store,
-			}, nil, []*cache.Update{cUpd})
-			if err != nil {
-				log.Errorf("datastore %s failed to send modify request to cache: %v", d.config.Name, err)
-			}
+		rctx, cancel := context.WithTimeout(ctx, time.Minute) // TODO:[KR] make this timeout configurable ?
+		defer cancel()
+		err = d.cacheClient.Modify(rctx, d.Config().Name, &cache.Opts{
+			Store: store,
+		}, nil, []*cache.Update{cUpd})
+		if err != nil {
+			log.Errorf("datastore %s failed to send modify request to cache: %v", d.config.Name, err)
 		}
 	}
+
 }
 
 // helper for GetSchema
@@ -927,22 +920,22 @@ func convertStringToTv(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*
 			Value: &sdcpb.TypedValue_StringVal{StringVal: v},
 		}, nil
 	case "uint64", "uint32", "uint16", "uint8":
-		i, err := strconv.Atoi(v)
+		i, err := strconv.ParseUint(v, 10, 64)
 		if err != nil {
 			return nil, err
 		}
 		return &sdcpb.TypedValue{
 			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_UintVal{UintVal: uint64(i)},
+			Value:     &sdcpb.TypedValue_UintVal{UintVal: i},
 		}, nil
 	case "int64", "int32", "int16", "int8":
-		i, err := strconv.Atoi(v)
+		i, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
 			return nil, err
 		}
 		return &sdcpb.TypedValue{
 			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_IntVal{IntVal: int64(i)},
+			Value:     &sdcpb.TypedValue_IntVal{IntVal: i},
 		}, nil
 	case "boolean":
 		b, err := strconv.ParseBool(v)

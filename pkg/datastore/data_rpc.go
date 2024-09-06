@@ -799,7 +799,7 @@ func (d *Datastore) expandUpdates(ctx context.Context, updates []*sdcpb.Update, 
 	return outUpdates, nil
 }
 
-func (d *Datastore) expandUpdateKeysAsLeaf(_ context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
+func (d *Datastore) expandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
 	upds := make([]*sdcpb.Update, 0)
 	// expand update path if it contains keys
 	for i, pe := range upd.GetPath().GetElem() {
@@ -822,7 +822,16 @@ func (d *Datastore) expandUpdateKeysAsLeaf(_ context.Context, upd *sdcpb.Update)
 				)
 			}
 			intUpd.Path.Elem = append(intUpd.Path.Elem, &sdcpb.PathElem{Name: k})
+
 			intUpd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
+			schemaRsp, err := d._validationClientBound.GetSchema(ctx, upd.Path)
+			if err != nil {
+				return nil, err
+			}
+			intUpd.Value, err = d.typedValueToYANGType(upd.GetValue(), schemaRsp.GetSchema())
+			if err != nil {
+				return nil, err
+			}
 			upds = append(upds, intUpd)
 		}
 	}
