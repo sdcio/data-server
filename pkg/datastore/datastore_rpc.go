@@ -920,22 +920,22 @@ func convertStringToTv(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*
 			Value: &sdcpb.TypedValue_StringVal{StringVal: v},
 		}, nil
 	case "uint64", "uint32", "uint16", "uint8":
-		i, err := strconv.Atoi(v)
+		i, err := strconv.ParseUint(v, 10, 64)
 		if err != nil {
 			return nil, err
 		}
 		return &sdcpb.TypedValue{
 			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_UintVal{UintVal: uint64(i)},
+			Value:     &sdcpb.TypedValue_UintVal{UintVal: i},
 		}, nil
 	case "int64", "int32", "int16", "int8":
-		i, err := strconv.Atoi(v)
+		i, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
 			return nil, err
 		}
 		return &sdcpb.TypedValue{
 			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_IntVal{IntVal: int64(i)},
+			Value:     &sdcpb.TypedValue_IntVal{IntVal: i},
 		}, nil
 	case "boolean":
 		b, err := strconv.ParseBool(v)
