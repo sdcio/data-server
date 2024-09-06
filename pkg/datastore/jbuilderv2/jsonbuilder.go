@@ -134,8 +134,10 @@ func convertKeyValue(value, valueType string) (interface{}, error) {
 	switch valueType {
 	case stringType:
 		return value, nil
-	case int8Type, int16Type, int32Type, uint8Type, uint16Type, uint32Type:
+	case int8Type, int16Type, int32Type:
 		return strconv.Atoi(value)
+	case uint8Type, uint16Type, uint32Type:
+		return strconv.ParseUint(value, 10, 64)
 	case floatType:
 		return strconv.ParseFloat(value, 64)
 	case boolType:
@@ -219,15 +221,10 @@ func (j *jsonBuilder) addValueToObject(obj map[string]any, path []*pathElem, val
 // the provided keys.
 func findOrCreateMatchingObject(arr []map[string]interface{}, keys map[string]*vt) (map[string]interface{}, bool, error) {
 	for _, obj := range arr {
-		match := true
 		for k, v := range keys {
-			if !reflect.DeepEqual(obj[k], v.conVal) {
-				match = false
-				break
+			if reflect.DeepEqual(obj[k], v.conVal) {
+				return obj, true, nil
 			}
-		}
-		if match {
-			return obj, true, nil
 		}
 	}
 
