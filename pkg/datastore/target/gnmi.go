@@ -143,20 +143,7 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 		Notification: make([]*sdcpb.Notification, 0, len(gnmiRsp.GetNotification())),
 	}
 	for _, n := range gnmiRsp.GetNotification() {
-		sn := &sdcpb.Notification{
-			Timestamp: n.GetTimestamp(),
-			Update:    make([]*sdcpb.Update, 0, len(n.GetUpdate())),
-			Delete:    make([]*sdcpb.Path, 0, len(n.GetDelete())),
-		}
-		for _, upd := range n.GetUpdate() {
-			sn.Update = append(sn.Update, &sdcpb.Update{
-				Path:  utils.FromGNMIPath(n.GetPrefix(), upd.GetPath()),
-				Value: utils.FromGNMITypedValue(upd.GetVal()),
-			})
-		}
-		for _, del := range n.GetDelete() {
-			sn.Delete = append(sn.Delete, utils.FromGNMIPath(n.GetPrefix(), del))
-		}
+		sn := utils.ToSchemaNotification(n)
 		schemaRsp.Notification = append(schemaRsp.Notification, sn)
 	}
 	return schemaRsp, nil
