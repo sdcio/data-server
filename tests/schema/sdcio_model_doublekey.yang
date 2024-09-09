@@ -11,32 +11,31 @@ module sdcio_model_doublekey {
       "Test schema first attempt";
   }
 
-    grouping doublekey-top {
-      list doublekey {
+  grouping doublekey-top {
+    list doublekey {
+      description
+        "here we have a container with two keys";
+      key "key1 key2";
+      leaf key1 {
+        type string;
+      }
+      leaf key2 {
+        type string;
+      }
+      leaf mandato {
+        type string;
+        mandatory true;
+      }
+      container cont {
         description
-          "here we have a container with two keys";
-        key "key1 key2";
-
-        leaf key1 {
-         type string;
-        }
-        leaf key2 {
+          "just a simple container under a double keyed item";
+        leaf value1 {
           type string;
         }
-        leaf mandato {
+        leaf value2 {
           type string;
-          mandatory true;
         }
-        container cont {
-          description "just a simple container under a double keyed item";
-          leaf value1 {
-            type string;
-          }
-          leaf value2 {
-            type string;
-          }
-        }
-
       }
     }
+  }
 }

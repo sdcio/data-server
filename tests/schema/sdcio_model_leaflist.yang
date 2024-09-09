@@ -3,14 +3,13 @@ module sdcio_model_leaflist {
   namespace "urn:sdcio/model_leaflist";
   prefix sdcio_model_leaflist;
 
-    grouping leaflist-top {
-        container leaflist {
-            leaf-list entry  {
-                type string;
-                min-elements 2;
-                max-elements 3;
-            }
-        }
+  grouping leaflist-top {
+    container leaflist {
+      leaf-list entry {
+        type string;
+        min-elements 2;
+        max-elements 3;
+      }
     }
-
+  }
 }
