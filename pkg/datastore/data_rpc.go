@@ -706,17 +706,13 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 		// TODO: does this need extra validation?
 		return nil
 	case "empty":
-		if v == nil {
-			return nil
-		}
 		switch v := v.(type) {
-		case string:
-			// Can we do this? Or does v really have to be nil?
-			if v == "<nil>" {
+		case map[string]any:
+			if len(v) == 0 {
 				return nil
 			}
 		}
-		return fmt.Errorf("value %v is not nil so does not match empty type", v)
+		return fmt.Errorf("value %v is not an empty JSON object '{}' so does not match empty type", v)
 	default:
 		return fmt.Errorf("unhandled type %v for value %q", lt.GetType(), v)
 	}
@@ -930,13 +926,20 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				log.Debugf("handling field %s", item.Name)
 				np := proto.Clone(p).(*sdcpb.Path)
 				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item.Name})
-				upd := &sdcpb.Update{
-					Path: np,
-					Value: &sdcpb.TypedValue{
+				upd := &sdcpb.Update{Path: np}
+				switch item.GetType().GetType() {
+				case "empty":
+					upd.Value = &sdcpb.TypedValue{
+						Value: &sdcpb.TypedValue_JsonVal{
+							JsonVal: []byte("{}"),
+						},
+					}
+				default:
+					upd.Value = &sdcpb.TypedValue{
 						Value: &sdcpb.TypedValue_StringVal{
 							StringVal: fmt.Sprintf("%v", v),
 						},
-					},
+					}
 				}
 				upds = append(upds, upd)
 			case *sdcpb.LeafListSchema: // leaflist
