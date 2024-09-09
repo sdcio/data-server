@@ -20,7 +20,7 @@ require (
 	github.com/openconfig/gnmic/pkg/types v0.1.2
 	github.com/openconfig/goyang v1.6.0
 	github.com/openconfig/ygot v0.29.20
-	github.com/prometheus/client_golang v1.20.2
+	github.com/prometheus/client_golang v1.20.3
 	github.com/scrapli/scrapligo v1.3.2
 	github.com/sdcio/cache v0.0.34
 	github.com/sdcio/schema-server v0.0.21
