@@ -784,6 +784,19 @@ func (d *Datastore) convertNotificationTypedValues(ctx context.Context, n *sdcpb
 			return nil, err
 		}
 		log.Debugf("%s: converted update from: %v, to: %v", d.Name(), upd, nup)
+		// gNMI get() could return a Notification with a single path element containing a JSON/JSON_IETF blob, we need to expand this into several typed values.
+		if nup == nil && upd.GetValue().GetJsonVal() != nil {
+			expUpds, err := d.expandUpdate(ctx, upd, true)
+			if err != nil {
+				return nil, err
+			}
+			expNn := &sdcpb.Notification{
+				Timestamp: n.GetTimestamp(),
+				Update:    expUpds,
+				Delete:    n.GetDelete(),
+			}
+			return d.convertNotificationTypedValues(ctx, expNn)
+		}
 		if nup == nil { // filters out notification ending in non-presence containers
 			continue
 		}
