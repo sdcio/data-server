@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -395,240 +394,6 @@ func isState(r *sdcpb.GetSchemaResponse) bool {
 	return false
 }
 
-func (d *Datastore) validateLeafRef(ctx context.Context, upd *sdcpb.Update, candidate string) error {
-	done := make(chan struct{})
-	ch, err := d.getValidationClient().GetSchemaElements(ctx, upd.GetPath(), done)
-	if err != nil {
-		return err
-	}
-
-	defer close(done)
-	//
-	peIndex := 0
-	numPE := len(upd.GetPath().GetElem())
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case sch, ok := <-ch:
-			if !ok {
-				return nil
-			}
-			if numPE < peIndex+1 {
-				// should not happen if the path has been properly validated
-				return fmt.Errorf("received more schema elements than pathElem")
-			}
-			peIndex++
-			switch sch := sch.GetSchema().GetSchema().(type) {
-			case *sdcpb.SchemaElem_Container:
-				// check if container keys are leafrefs
-				for _, keySchema := range sch.Container.GetKeys() {
-					if keySchema.GetType().GetType() != "leafref" {
-						continue
-					}
-					leafRefPath, err := utils.StripPathElemPrefix(keySchema.GetType().GetLeafref())
-					if err != nil {
-						return err
-					}
-					// get pathElem with leafRef key
-					pe := upd.GetPath().GetElem()[peIndex-1]
-					// get leafRef value
-					leafRefValue := pe.GetKey()[keySchema.GetName()]
-
-					lrefSdcpbPath, err := utils.ParsePath(leafRefPath)
-					if err != nil {
-						return err
-					}
-					// if it contains "./" or "../" like any relative path stuff
-					// we need to resolve that
-					if strings.Contains(leafRefPath, "./") {
-						// make leafref path absolute
-						lrefSdcpbPath, err = d.makeLeafRefAbs(ctx, upd.GetPath(), lrefSdcpbPath, utils.TypedValueToString(upd.GetValue()), candidate)
-						if err != nil {
-							return err
-						}
-					}
-
-					err = d.resolveLeafref(ctx, candidate, lrefSdcpbPath, leafRefValue)
-					if err != nil {
-						return err
-					}
-				}
-			case *sdcpb.SchemaElem_Field:
-				if sch.Field.GetType().GetType() != "leafref" {
-					continue
-				}
-				// remove namespace elements from path /foo:interface/bar:subinterface -> /interface/subinterface
-				leafRefPath, err := utils.StripPathElemPrefix(sch.Field.GetType().GetLeafref())
-				if err != nil {
-					return err
-				}
-
-				// convert leafref Path to sdcpb Path
-				lrefSdcpbPath, err := utils.ParsePath(leafRefPath)
-				if err != nil {
-					return err
-				}
-				// make leafref path absolute
-				lrefSdcpbPath, err = d.makeLeafRefAbs(ctx, upd.GetPath(), lrefSdcpbPath, utils.TypedValueToString(upd.GetValue()), candidate)
-				if err != nil {
-					return err
-				}
-
-				err = d.resolveLeafref(ctx, candidate, lrefSdcpbPath, utils.TypedValueToString(upd.GetValue()))
-				if err != nil {
-					return err
-				}
-			case *sdcpb.SchemaElem_Leaflist:
-				if sch.Leaflist.GetType().GetType() != "leafref" {
-					continue
-				}
-				leafRefPath, err := utils.StripPathElemPrefix(sch.Leaflist.GetType().GetLeafref())
-				if err != nil {
-					return err
-				}
-				log.Warnf("!! found leafref leaflist %s | %s", sch.Leaflist.Name, leafRefPath)
-			}
-		}
-	}
-}
-
-func (d *Datastore) makeLeafRefAbs(ctx context.Context, base, lref *sdcpb.Path, value string, candidate string) (*sdcpb.Path, error) {
-	p, err := d.makeLeafRefAbsPathKeys(ctx, base, lref, candidate)
-	if err != nil {
-		return nil, err
-	}
-	p, err = makeLeafRefAbsPath(base, p)
-	if err != nil {
-		return nil, err
-	}
-	return p, nil
-}
-
-func (d *Datastore) makeLeafRefAbsPathKeys(ctx context.Context, base, lref *sdcpb.Path, candidate string) (*sdcpb.Path, error) {
-
-	lrefResult := utils.CopyPath(lref)
-
-	// process leafref elements and adjust result
-	for _, lrefElem := range lrefResult.Elem {
-
-		// resolve keys
-		for k, v := range lrefElem.Key {
-
-			keyp, err := utils.ParsePath(v)
-			if err != nil {
-				return nil, err
-			}
-
-			// replace current() with its actual value
-			if strings.ToLower(keyp.Elem[0].Name) == "current()" {
-				keyp.Elem = append(base.Elem, keyp.Elem[1:]...)
-			}
-
-			// remove .. in key paths
-			err = removeDotDot(keyp)
-			if err != nil {
-				return nil, err
-			}
-
-			data, err := d.getValidationClient().GetValue(ctx, candidate, keyp)
-			if err != nil {
-				return nil, fmt.Errorf("invalid leafref path %s based on %s", lref.String(), base.String())
-			}
-
-			lrefElem.Key[k] = data.GetStringVal()
-		}
-	}
-	return lrefResult, nil
-}
-
-func makeLeafRefAbsPath(base, lref *sdcpb.Path) (*sdcpb.Path, error) {
-
-	// if the path is relative, the .. would start in the start of the path
-	if lref.Elem[0].Name != ".." {
-		return lref, nil
-	}
-
-	// copy base into result
-	result := utils.CopyPath(base)
-
-	result.Elem = append(result.Elem, lref.Elem...)
-
-	err := removeDotDot(result)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-func removeDotDot(keyp *sdcpb.Path) error {
-	dropStack := 0
-	result := make([]*sdcpb.PathElem, 0, len(keyp.Elem))
-	// iterate through the path in reverse order
-	for i := len(keyp.Elem) - 1; i >= 0; i-- {
-		{
-			switch {
-			case keyp.Elem[i].Name == "..":
-				dropStack++
-			case keyp.Elem[i].Name == ".":
-				continue
-			case dropStack > 0:
-				dropStack--
-				continue
-			default:
-				result = append(result, keyp.Elem[i])
-			}
-		}
-	}
-	if dropStack > 0 {
-		return fmt.Errorf("invalid path %s", utils.ToXPath(keyp, false))
-	}
-	slices.Reverse(result)
-	keyp.Elem = result
-	return nil
-}
-
-func (d *Datastore) resolveLeafref(ctx context.Context, candidate string, leafRefPath *sdcpb.Path, value string) error {
-
-	// Subsequent Process:
-	// now we remove the last element of the referenced path
-	// adding its name to the one before last element as a key
-	// with the value of the item that we're validating the leafref for
-
-	// get the schema for results paths last element
-	schemaResp, err := d.getValidationClient().GetSchema(ctx, &sdcpb.Path{Elem: leafRefPath.Elem[:len(leafRefPath.Elem)-1]})
-	if err != nil {
-		return err
-	}
-	// check for the schema defined keys
-	for _, k := range schemaResp.GetSchema().GetContainer().GetKeys() {
-		// if the last element of results path is a key
-		if k.Name == leafRefPath.GetElem()[len(leafRefPath.Elem)-1].GetName() {
-			// check if the one before last has a key map initialized
-			if leafRefPath.Elem[len(leafRefPath.Elem)-2].GetKey() == nil {
-				// create map otherwise
-				leafRefPath.Elem[len(leafRefPath.Elem)-2].Key = map[string]string{}
-			}
-			// add the value as a key value under the last elements name to the one before last elemnt key list
-			leafRefPath.Elem[len(leafRefPath.Elem)-2].Key[leafRefPath.Elem[len(leafRefPath.Elem)-1].Name] = value
-			// remove the last elem, we now have the key value stored in the one before last
-			leafRefPath.Elem = leafRefPath.Elem[:len(leafRefPath.Elem)-1]
-		}
-	}
-
-	// TODO: update when stored values are not stringVal anymore
-	data, err := d.getValidationClient().GetValue(ctx, candidate, leafRefPath)
-	if err != nil {
-		return err
-	}
-
-	if data == nil {
-		return fmt.Errorf("missing leaf reference %q: %q", leafRefPath, value)
-	}
-	return nil
-}
-
 func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate, sem *semaphore.Weighted) {
 	defer sem.Release(1)
 
@@ -636,6 +401,22 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 	if err != nil {
 		log.Errorf("failed to convert notification typedValue: %v", err)
 		return
+	}
+
+	upds := NewSdcpbUpdateDedup()
+	for _, x := range cNotification.GetUpdate() {
+		addUpds, err := d.expandUpdateKeysAsLeaf(ctx, x)
+		if err != nil {
+			continue
+		}
+		upds.AddUpdate(x)
+		upds.AddUpdates(addUpds)
+
+	}
+	cNotification.Update = upds.Updates()
+
+	for _, x := range cNotification.GetUpdate() {
+		fmt.Printf("%s\n", x.String())
 	}
 
 	for _, del := range cNotification.GetDelete() {
@@ -691,7 +472,39 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 			log.Errorf("datastore %s failed to send modify request to cache: %v", d.config.Name, err)
 		}
 	}
+}
 
+type SdcpbUpdateDedup struct {
+	lookup map[string]*sdcpb.Update
+}
+
+func NewSdcpbUpdateDedup() *SdcpbUpdateDedup {
+	return &SdcpbUpdateDedup{
+		lookup: map[string]*sdcpb.Update{},
+	}
+}
+
+func (s *SdcpbUpdateDedup) AddUpdates(upds []*sdcpb.Update) {
+	for _, upd := range upds {
+		s.AddUpdate(upd)
+	}
+}
+
+func (s *SdcpbUpdateDedup) AddUpdate(upd *sdcpb.Update) {
+	path := upd.Path.String()
+	if _, exists := s.lookup[path]; exists {
+		return
+	}
+	s.lookup[path] = upd
+}
+
+func (s *SdcpbUpdateDedup) Updates() []*sdcpb.Update {
+	result := make([]*sdcpb.Update, 0, len(s.lookup))
+
+	for _, v := range s.lookup {
+		result = append(result, v)
+	}
+	return result
 }
 
 // helper for GetSchema

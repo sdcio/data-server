@@ -18,14 +18,14 @@ module sdcio_model_deref {
           path "/interface/name";
         }
       }
-      leaf typer {
+      leaf type {
         type leafref {
-          path "interface[name=current()/../name]/interface-type";
+          path "/interface[name=current()/../name]/interface-type";
         }
         must 'deref(.)/../admin-state = "enable"' {
           error-message "The management interface cannot be disabled.";
         }
       }
     }
-  } 
+  }
 }

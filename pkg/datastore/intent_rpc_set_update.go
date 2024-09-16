@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/sdcio/cache/proto/cachepb"
@@ -363,46 +362,4 @@ func (d *Datastore) readStoreKeysMeta(ctx context.Context, store cachepb.Store) 
 			result[key] = append(result[key], e)
 		}
 	}
-}
-
-func (d *Datastore) readCurrentUpdatesHighestPriorities(ctx context.Context, ccp [][]string, count uint64) map[string][]tree.UpdateSlice {
-	currentCacheEntries := d.cacheClient.Read(ctx, d.Name(),
-		&cache.Opts{
-			Store:         cachepb.Store_INTENDED,
-			PriorityCount: count,
-		}, ccp,
-		0)
-	if len(currentCacheEntries) == 0 {
-		return nil
-	}
-	rs := make(map[string][]tree.UpdateSlice)
-	groupings := make(map[string]map[int32]tree.UpdateSlice)
-
-	for _, cce := range currentCacheEntries {
-		sp := strings.Join(cce.GetPath(), ",")
-		if _, ok := rs[sp]; !ok {
-			rs[sp] = make([]tree.UpdateSlice, 0, 1)
-		}
-		if _, ok := groupings[sp]; !ok {
-			groupings[sp] = make(map[int32]tree.UpdateSlice)
-		}
-		if _, ok := groupings[sp][cce.Priority()]; !ok {
-			groupings[sp][cce.Priority()] = make(tree.UpdateSlice, 0, 1)
-		}
-		groupings[sp][cce.Priority()] = append(groupings[sp][cce.Priority()], cce)
-	}
-	for sp, groupping := range groupings {
-		priorities := make([]int32, 0, count)
-		for k := range groupping {
-			priorities = append(priorities, k)
-		}
-		sort.Slice(priorities, func(i, j int) bool {
-			return priorities[i] < priorities[j]
-		})
-		for _, pr := range priorities {
-			rs[sp] = append(rs[sp], groupping[pr])
-		}
-	}
-	//
-	return rs
 }

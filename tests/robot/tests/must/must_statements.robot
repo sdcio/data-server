@@ -18,8 +18,8 @@ Resource          ../../keywords/client.robot
 Library           OperatingSystem
 Library           String
 Library           Process
-Suite Setup       SetupColocated    True    ${DATA-SERVER-BIN}    ${DATA-SERVER-CONFIG}    ${data-server-process-alias}    ${data-server-stderr}
-Suite Teardown    Teardown
+# Suite Setup       SetupColocated    True    ${DATA-SERVER-BIN}    ${DATA-SERVER-CONFIG}    ${data-server-process-alias}    ${data-server-stderr}
+# Suite Teardown    Teardown
 
 *** Variables ***
 ${DATA-SERVER-BIN}    ${CURDIR}/../../../../bin/data-server
@@ -104,7 +104,7 @@ Set lag-type with 'interface[name=xyz]/lag/lacp' existence
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
 
 Set auto-negotiate on non allowed interface
-    LogMustStatements    ${srlinux1-schema-name}    ${srlinux1-schema-version}    ${srlinux1-schema-vendor}    interface[name=ethernet-0/1]/ethernet/auto-negotiate
+    LogMustStatements    ${srlinux1-schema-name}    ${srlinux1-schema-version}    ${srlinux1-schema-vendor}    interface[name=mgmt0]/ethernet/auto-negotiate
 
     ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    ${owner}    ${priority}        ${CURDIR}/intents/autoneg_fail.json
 

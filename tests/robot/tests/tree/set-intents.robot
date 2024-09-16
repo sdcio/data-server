@@ -43,14 +43,6 @@ ${srlinux1-schema-vendor}    Nokia
 ${srlinux1-target-def}    ${CURDIR}/../colocated/robot_srl1.json
 ${srlinux1-sync-def}    ${CURDIR}/../colocated/sync.json
 
-${srlinux1-name}    srl1
-${srlinux1-candidate}    default
-${srlinux1-schema-name}    srl
-${srlinux1-schema-version}    23.10.1
-${srlinux1-schema-vendor}    Nokia
-${srlinux1-target-def}    ${CURDIR}/../colocated/robot_srl1.json
-${srlinux1-sync-def}    ${CURDIR}/../colocated/sync.json
-
 ${sros-name}    sros
 ${sros-candidate}    default
 ${sros-schema-name}    sros
@@ -72,6 +64,7 @@ Check Server State
 Create SRL1 Target
     ${result} =    CreateDataStore    ${srlinux1-name}    ${srlinux1-target-def}    ${srlinux1-sync-def}    ${srlinux1-schema-name}    ${srlinux1-schema-Vendor}     ${srlinux1-schema-version}
     Should Be Equal As Integers    ${result.rc}    0
+
 
 Create SROS Target
     ${result} =    CreateDataStore    ${sros-name}    ${sros-target-def}    ${sros-sync-def}    ${sros-schema-name}    ${sros-schema-Vendor}     ${sros-schema-version}
