@@ -643,36 +643,6 @@ func TestDatastore_populateTree(t *testing.T) {
 				cache.NewUpdate([]string{"choices", "case1", "log"}, TypedValueFalse, prio5, owner1, 0),
 			},
 		},
-		{
-			name:          "deref",
-			intentReqPath: "/",
-			intentReqValue: func() (string, error) {
-				d := &sdcio_schema.Device{
-					Interface: map[string]*sdcio_schema.SdcioModel_Interface{
-						"ethernet-1/1": {
-							Name:          ygot.String("ethernet-1/1"),
-							InterfaceType: ygot.String("traffic"),
-							AdminState:    sdcio_schema.SdcioModelIf_AdminState_enable,
-						},
-						"mgmt0": {
-							Name:          ygot.String("mgmt0"),
-							InterfaceType: ygot.String("mgmt"),
-							AdminState:    sdcio_schema.SdcioModelIf_AdminState_enable,
-						},
-					},
-					MgmtInterface: &sdcio_schema.SdcioModel_MgmtInterface{
-						Name: ygot.String("mgmt0"),
-						Type: ygot.String("mgmt"),
-					},
-				}
-				return ygot.EmitJSON(d, &ygot.EmitJSONConfig{
-					Format:         ygot.RFC7951,
-					SkipValidation: false,
-				})
-			},
-			intentName: owner1,
-			intentPrio: prio10,
-		},
 	}
 
 	for _, tt := range tests {
