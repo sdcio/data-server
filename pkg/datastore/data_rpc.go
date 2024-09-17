@@ -575,6 +575,8 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			if err != nil {
 				return err
 			}
+		case int64:
+			// No need to do anything, same type
 		default:
 			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
 		}
@@ -631,6 +633,8 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			if err != nil {
 				return err
 			}
+		case uint64:
+			// No need to do anything, same type
 		default:
 			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
 		}
@@ -692,6 +696,8 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			if c := strings.Count(v, "."); c == 0 || c > 1 {
 				return fmt.Errorf("value %q is not a valid Decimal64", v)
 			}
+		case sdcpb.Decimal64, *sdcpb.Decimal64:
+			// No need to do anything, same type
 		default:
 			return fmt.Errorf("unexpected type for a Decimal64 value %q: %T", v, v)
 		}
@@ -699,6 +705,14 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 	case "leafref":
 		// TODO: does this need extra validation?
 		return nil
+	case "empty":
+		switch v := v.(type) {
+		case map[string]any:
+			if len(v) == 0 {
+				return nil
+			}
+		}
+		return fmt.Errorf("value %v is not an empty JSON object '{}' so does not match empty type", v)
 	default:
 		return fmt.Errorf("unhandled type %v for value %q", lt.GetType(), v)
 	}
@@ -920,13 +934,20 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				log.Debugf("handling field %s", item.Name)
 				np := proto.Clone(p).(*sdcpb.Path)
 				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item.Name})
-				upd := &sdcpb.Update{
-					Path: np,
-					Value: &sdcpb.TypedValue{
+				upd := &sdcpb.Update{Path: np}
+				switch item.GetType().GetType() {
+				case "empty":
+					upd.Value = &sdcpb.TypedValue{
+						Value: &sdcpb.TypedValue_JsonVal{
+							JsonVal: []byte("{}"),
+						},
+					}
+				default:
+					upd.Value = &sdcpb.TypedValue{
 						Value: &sdcpb.TypedValue_StringVal{
 							StringVal: fmt.Sprintf("%v", v),
 						},
-					},
+					}
 				}
 				upds = append(upds, upd)
 			case *sdcpb.LeafListSchema: // leaflist
