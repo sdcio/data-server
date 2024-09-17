@@ -371,9 +371,15 @@ func (s *sharedEntryAttributes) remainsToExist() bool {
 			break
 		}
 	}
+	activeChoiceCase := false
+	// only needs to be checked if it still looks like there
+	// it is to be deleted
+	if !childsRemain {
+		activeChoiceCase = s.choicesResolvers.remainsToExist()
+	}
 
 	// assumption is, that if the entry exists, there is at least a running value available.
-	return leafVariantResult || childsRemain
+	return leafVariantResult || childsRemain || activeChoiceCase
 }
 
 // getRegularDeletes performs deletion calculation on elements that have a schema attached.
