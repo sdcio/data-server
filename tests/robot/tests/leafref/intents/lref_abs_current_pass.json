@@ -17,7 +17,7 @@
             "network-instance": [
                 {
                     "name": "default",
-                    "type": "mac-vrf",
+                    "type": "default",
                     "interface": [
                         {
                             "name": "ethernet-1/1.0"
@@ -30,10 +30,20 @@
                             "dynamic-neighbors": {
                                 "interface": [
                                     {
-                                        "interface-name": "ethernet-1/1.0"
+                                        "interface-name": "ethernet-1/1.0",
+                                        "peer-group": "peergrp"
                                     }
                                 ]
-                            }
+                            },
+                            "group": [
+                                {
+                                    "group-name": "peergrp",
+                                    "admin-state": "enable",
+                                    "ipv6-unicast": {
+                                        "admin-state": "enable"
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
