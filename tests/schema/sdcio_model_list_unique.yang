@@ -3,22 +3,21 @@ module sdcio_model_list_unique {
   namespace "urn:sdcio/model_list_unique";
   prefix sdcio_model_list_unique;
 
-    grouping list-unique-top {
-        container list-unique {
-            list server {
-                key "name";
-                unique "ip port";
-                leaf name {
-                    type string;
-                }
-                leaf ip {
-                    type string;
-                }
-                leaf port {
-                    type uint16;
-                }
-            }
+  grouping list-unique-top {
+    container list-unique {
+      list server {
+        key "name";
+        unique "ip port";
+        leaf name {
+          type string;
         }
+        leaf ip {
+          type string;
+        }
+        leaf port {
+          type uint16;
+        }
+      }
     }
-
+  }
 }

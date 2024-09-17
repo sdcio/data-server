@@ -1,0 +1,13 @@
+{
+  "validate": true,
+  "config": [
+    {
+      "name": "all",
+      "protocol": "netconf",
+      "interval": 30000000000000,
+      "path": [
+        "/configure/system/security/aaa"
+      ]
+    }
+  ]
+}

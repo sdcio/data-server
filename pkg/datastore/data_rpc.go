@@ -806,7 +806,7 @@ func (d *Datastore) expandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Updat
 		if len(pe.GetKey()) == 0 {
 			continue
 		}
-		//
+
 		for k, v := range pe.GetKey() {
 			intUpd := &sdcpb.Update{
 				Path: &sdcpb.Path{
@@ -823,12 +823,11 @@ func (d *Datastore) expandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Updat
 			}
 			intUpd.Path.Elem = append(intUpd.Path.Elem, &sdcpb.PathElem{Name: k})
 
-			intUpd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
-			schemaRsp, err := d._validationClientBound.GetSchema(ctx, upd.Path)
+			schemaRsp, err := d.getValidationClient().GetSchema(ctx, intUpd.Path)
 			if err != nil {
 				return nil, err
 			}
-			intUpd.Value, err = d.typedValueToYANGType(upd.GetValue(), schemaRsp.GetSchema())
+			intUpd.Value, err = d.typedValueToYANGType(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}, schemaRsp.GetSchema())
 			if err != nil {
 				return nil, err
 			}

@@ -19,7 +19,11 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/sdcio/data-server/mocks/mocktarget"
+	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"go.uber.org/mock/gomock"
 )
 
 func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {
@@ -159,14 +163,17 @@ func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {
 					Path: &sdcpb.Path{
 						Elem: []*sdcpb.PathElem{
 							{
-								Name: "foo",
+								Name: "doublekey",
+								Key: map[string]string{
+									"key1": "foo",
+									"key2": "bar",
+								},
 							},
 							{
-								Name: "bar",
-								Key: map[string]string{
-									"name":  "mgmt",
-									"index": "1",
-								},
+								Name: "cont",
+							},
+							{
+								Name: "value1",
 							},
 						},
 					},
@@ -177,44 +184,38 @@ func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {
 					Path: &sdcpb.Path{
 						Elem: []*sdcpb.PathElem{
 							{
-								Name: "foo",
-							},
-							{
-								Name: "bar",
+								Name: "doublekey",
 								Key: map[string]string{
-									"name":  "mgmt",
-									"index": "1",
+									"key1": "foo",
+									"key2": "bar",
 								},
 							},
 							{
-								Name: "name",
+								Name: "key1",
 							},
 						},
 					},
 					Value: &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_StringVal{StringVal: "mgmt"},
+						Value: &sdcpb.TypedValue_StringVal{StringVal: "foo"},
 					},
 				},
 				{
 					Path: &sdcpb.Path{
 						Elem: []*sdcpb.PathElem{
 							{
-								Name: "foo",
-							},
-							{
-								Name: "bar",
+								Name: "doublekey",
 								Key: map[string]string{
-									"name":  "mgmt",
-									"index": "1",
+									"key1": "foo",
+									"key2": "bar",
 								},
 							},
 							{
-								Name: "index",
+								Name: "key2",
 							},
 						},
 					},
 					Value: &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_StringVal{StringVal: "1"},
+						Value: &sdcpb.TypedValue_StringVal{StringVal: "bar"},
 					},
 				},
 			},
@@ -223,7 +224,28 @@ func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := &Datastore{}
+
+			controller := gomock.NewController(t)
+
+			schemaClient, schema, err := testhelper.InitSDCIOSchema()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			dsName := "dev1"
+
+			// create a datastore
+			d := &Datastore{
+				config: &config.DatastoreConfig{
+					Name:   dsName,
+					Schema: schema,
+				},
+
+				sbi:          mocktarget.NewMockTarget(controller),
+				cacheClient:  nil,
+				schemaClient: schemaClient,
+			}
+
 			got, err := d.expandUpdateKeysAsLeaf(tt.args.ctx, tt.args.upd)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Datastore.expandUpdateLeafAsKeys() error = %v, wantErr %v", err, tt.wantErr)

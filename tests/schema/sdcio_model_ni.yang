@@ -4,7 +4,7 @@ module sdcio_model_ni {
   prefix sdcio_model_ni;
 
   import sdcio_model_common {
-     prefix sdcio_model_common;
+    prefix sdcio_model_common;
   }
 
   description
@@ -44,7 +44,7 @@ module sdcio_model_ni {
       "A private Layer 2 only switching instance.";
   }
 
-grouping network-instance-top {
+  grouping network-instance-top {
     description
       "Top-level grouping containing a list of network instances.";
     list network-instance {
@@ -73,12 +73,12 @@ grouping network-instance-top {
           "This leaf contains the configured, desired state of the
            network instance.";
       }
-       leaf description {
+      leaf description {
         type sdcio_model_common:description;
         description
           "A user-entered description of this network instance.";
       }
-            list interface {
+      list interface {
         must "../type != 'sdcio_model_ni:host'" {
           error-message "Interfaces cannot be added to a network instance of type host";
         }
@@ -135,9 +135,9 @@ grouping network-instance-top {
         }
       }
     }
-}
+  }
 
-grouping bgp-top {
+  grouping bgp-top {
     container bgp {
       presence "Configure BGP";
       must 'not(/network-instance[name = current()/../../name]/type = "mac-vrf")' {
@@ -163,21 +163,20 @@ grouping bgp-top {
         description
           "Administratively enable or disable the entire BGP instance";
       }
-            leaf autonomous-system {
+      leaf autonomous-system {
         type sdcio_model_common:as-number;
         mandatory true;
         description
           "The global AS number of the BGP instance
            Values greater than 65535 must be entered in ASPLAIN format.";
       }
-            leaf router-id {
+      leaf router-id {
         type sdcio_model_common:ip-address;
         mandatory true;
         description
           "The BGP identifier used by this BGP instance in all of its OPEN messages
            Any non-zero value is supported.";
       }
-
       list afi-safi {
         key "afi-safi-name";
         description
@@ -214,6 +213,6 @@ grouping bgp-top {
             "This leaf indicates whether the AFI-SAFI is enabled for the instance";
         }
       }
-}
-}
+    }
+  }
 }

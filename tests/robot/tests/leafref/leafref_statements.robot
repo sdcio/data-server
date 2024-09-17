@@ -18,8 +18,8 @@ Resource          ../../keywords/client.robot
 Library           OperatingSystem
 Library           String
 Library           Process
-Suite Setup       SetupColocated    True    ${DATA-SERVER-BIN}    ${DATA-SERVER-CONFIG}    ${data-server-process-alias}    ${data-server-stderr}
-Suite Teardown    Teardown
+# Suite Setup       SetupColocated    True    ${DATA-SERVER-BIN}    ${DATA-SERVER-CONFIG}    ${data-server-process-alias}    ${data-server-stderr}
+# Suite Teardown    Teardown
 
 *** Variables ***
 ${DATA-SERVER-BIN}    ${CURDIR}/../../../../bin/data-server
@@ -87,7 +87,7 @@ BGP export-policy existing
 BGP dynamic-neighbor peer-group - fail
     [Documentation]    This is a LeafRef that contains a relative path.
     LogLeafRefStatements    ${srlinux1-schema-name}    ${srlinux1-schema-version}    ${srlinux1-schema-vendor}    network-instance/protocols/bgp/dynamic-neighbors/accept/match/peer-group
-
+    
     ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    ${owner}    ${priority}        ${CURDIR}/intents/lref_relative_path_fail.json
 
     Should Contain    ${result.stderr}    missing leaf reference
@@ -100,7 +100,6 @@ BGP dynamic-neighbor peer-group - pass
     LogLeafRefStatements    ${srlinux1-schema-name}    ${srlinux1-schema-version}    ${srlinux1-schema-vendor}    network-instance/protocols/bgp/dynamic-neighbors/accept/match/peer-group
 
     ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    ${owner}    ${priority}        ${CURDIR}/intents/lref_relative_path_pass.json
-
     Should Be Equal As Integers    ${result.rc}    0
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
@@ -121,8 +120,6 @@ BGP dynamic-neighbor interface - pass
     LogLeafRefStatements    ${srlinux1-schema-name}    ${srlinux1-schema-version}    ${srlinux1-schema-vendor}    network-instance/protocols/bgp/dynamic-neighbors/interface/interface-name
 
     ${result} =    SetIntent    ${srlinux1-name}    ${srlinux1-candidate}    ${owner}    ${priority}        ${CURDIR}/intents/lref_abs_current_pass.json
-
     Should Be Equal As Integers    ${result.rc}    0
 
     DeleteCandidate    ${srlinux1-name}    ${srlinux1-candidate}
-

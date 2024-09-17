@@ -26,18 +26,18 @@ func (y *yangParserEntryAdapter) Copy() xpath.Entry {
 }
 
 func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
-	if !y.e.remainsToExist() {
-		return xpath.NewNodesetDatum([]xutils.XpathNode{}), nil
-	}
-
 	if y.e.GetSchema().GetContainer() != nil {
 		return xpath.NewBoolDatum(true), nil
 	}
 
-	lvs := LeafVariantSlice{}
-	lvs = y.e.GetHighestPrecedence(lvs, false)
-
-	tv, err := lvs[0].Value()
+	lv, err := y.e.getHighestPrecedenceLeafValue(y.ctx)
+	if err != nil {
+		return nil, err
+	}
+	if lv == nil {
+		return xpath.NewNodesetDatum([]xutils.XpathNode{}), nil
+	}
+	tv, err := lv.Update.Value()
 	if err != nil {
 		return nil, err
 	}
@@ -58,6 +58,23 @@ func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
 		result = xpath.NewLiteralDatum(tv.GetStringVal())
 	}
 	return result, nil
+}
+
+func (y *yangParserEntryAdapter) FollowLeafRef() (xpath.Entry, error) {
+	entries, err := y.e.NavigateLeafRef(y.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("error resolving leafref for %s", y.e.Path())
+	}
+
+	return newYangParserEntryAdapter(y.ctx, entries[0]), nil
+}
+
+func (y *yangParserEntryAdapter) GetPath() []string {
+	return y.e.Path()
 }
 
 func (y *yangParserEntryAdapter) Navigate(p []string) (xpath.Entry, error) {
@@ -109,10 +126,18 @@ func (y *yangParserValueEntry) Copy() xpath.Entry {
 	return y
 }
 
+func (y *yangParserValueEntry) FollowLeafRef() (xpath.Entry, error) {
+	return nil, fmt.Errorf("yangParserValueEntry navigation impossible")
+}
+
 func (y *yangParserValueEntry) Navigate(p []string) (xpath.Entry, error) {
 	return nil, fmt.Errorf("yangParserValueEntry navigation impossible")
 }
 
 func (y *yangParserValueEntry) GetValue() (xpath.Datum, error) {
 	return y.d, nil
+}
+
+func (y *yangParserValueEntry) GetPath() []string {
+	return nil
 }

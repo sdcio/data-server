@@ -6,19 +6,10 @@
       "path": [
         "/"
       ],
-      "name": "config_on-change_ASCII_CONFIG_ONLY",
-      "encoding": "45",
-      "mode": 0
-    },
-    {
-      "protocol": "gnmi",
-      "path": [
-        "/"
-      ],
       "name": "all",
       "encoding": "ascii",
-      "mode": 1,
-      "interval": 600000000000
+      "mode": 3,
+      "interval": 30000000000000 
     }
   ]
 }

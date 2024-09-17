@@ -79,3 +79,7 @@ ygot:
 	pyang tests/schema/*
 	go install github.com/openconfig/ygot/generator@latest
 	generator -output_file=tests/sdcioygot/sdcio_schema.go -package_name=sdcio_schema -generate_fakeroot -fakeroot_name=device ./tests/schema/*
+
+.PHONY: format_yang
+format_yang:
+	cd $(CURDIR)/tests/schema; find ./ -name "*.yang" | xargs -I{} bash -c "cp {} {}.bak ; pyang -f yang {}.bak > {} ; rm {}.bak -f"
