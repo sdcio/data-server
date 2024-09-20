@@ -26,29 +26,29 @@ func (y *yangParserEntryAdapter) Copy() xpath.Entry {
 }
 
 func (y *yangParserEntryAdapter) valueToDatum(tv *sdcpb.TypedValue) xpath.Datum {
-	var result xpath.Datum
 	switch ttv := tv.Value.(type) {
 	case *sdcpb.TypedValue_BoolVal:
-		result = xpath.NewBoolDatum(tv.GetBoolVal())
+		return xpath.NewBoolDatum(tv.GetBoolVal())
 	case *sdcpb.TypedValue_StringVal:
-		prefix := ""
 		if y.e.GetSchema().GetField().GetType().GetTypeName() == "identityref" {
-			prefix = fmt.Sprintf("%s:", y.e.GetSchema().GetField().GetType().IdentityPrefix)
+			identities := y.e.GetSchema().GetField().GetType().GetPossibleIdentities()
+			if id, ok := identities[tv.GetStringVal()]; ok {
+				return xpath.NewLiteralDatum(fmt.Sprintf("%s:%s", id.GetPrefix(), id.GetName()))
+			}
 		}
-		result = xpath.NewLiteralDatum(prefix + tv.GetStringVal())
+		return xpath.NewLiteralDatum(tv.GetStringVal())
 	case *sdcpb.TypedValue_UintVal:
-		result = xpath.NewNumDatum(float64(tv.GetUintVal()))
+		return xpath.NewNumDatum(float64(tv.GetUintVal()))
 	case *sdcpb.TypedValue_LeaflistVal:
 		datums := make([]xpath.Datum, 0, len(ttv.LeaflistVal.GetElement()))
 		for _, e := range ttv.LeaflistVal.GetElement() {
 			datum := y.valueToDatum(e)
 			datums = append(datums, datum)
 		}
-		result = xpath.NewDatumSliceDatum(datums)
+		return xpath.NewDatumSliceDatum(datums)
 	default:
-		result = xpath.NewLiteralDatum(tv.GetStringVal())
+		return xpath.NewLiteralDatum(tv.GetStringVal())
 	}
-	return result
 }
 
 func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
