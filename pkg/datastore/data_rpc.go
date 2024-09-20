@@ -654,14 +654,14 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 		return nil
 	case "enumeration":
 		valid := false
-		for _, vv := range lt.Values {
+		for _, vv := range lt.EnumNames {
 			if fmt.Sprintf("%s", v) == vv {
 				valid = true
 				break
 			}
 		}
 		if !valid {
-			return fmt.Errorf("value %q does not match enum type %q, must be one of [%s]", v, lt.TypeName, strings.Join(lt.Values, ", "))
+			return fmt.Errorf("value %q does not match enum type %q, must be one of [%s]", v, lt.TypeName, strings.Join(lt.EnumNames, ", "))
 		}
 		return nil
 	case "union":
@@ -679,14 +679,16 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 		return nil
 	case "identityref":
 		valid := false
-		for _, vv := range lt.Values {
+		identities := make([]string, 0, len(lt.IdentityPrefixesMap))
+		for vv, _ := range lt.IdentityPrefixesMap {
+			identities = append(identities, vv)
 			if fmt.Sprintf("%s", v) == vv {
 				valid = true
 				break
 			}
 		}
 		if !valid {
-			return fmt.Errorf("value %q does not match identityRef type %q, must be one of [%s]", v, lt.TypeName, strings.Join(lt.Values, ", "))
+			return fmt.Errorf("value %q does not match identityRef type %q, must be one of [%s]", v, lt.TypeName, strings.Join(identities, ", "))
 		}
 		return nil
 	case "decimal64":

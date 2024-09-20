@@ -103,7 +103,7 @@ func ConvertLeafRef(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue,
 
 func ConvertEnumeration(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// iterate the valid values as per schema
-	for _, item := range slt.Values {
+	for _, item := range slt.EnumNames {
 		// if value is found, return a StringVal
 		if value == item {
 			return &sdcpb.TypedValue{
@@ -114,7 +114,7 @@ func ConvertEnumeration(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedVa
 		}
 	}
 	// If value is not found return an error
-	return nil, fmt.Errorf("value %q does not match any valid enum values [%s]", value, strings.Join(slt.Values, ", "))
+	return nil, fmt.Errorf("value %q does not match any valid enum values [%s]", value, strings.Join(slt.EnumNames, ", "))
 }
 
 func ConvertBoolean(value string, _ *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
