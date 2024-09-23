@@ -3,18 +3,16 @@ package tree
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"math"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"unicode/utf8"
 
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/utils"
-	"github.com/sdcio/yang-parser/xpath"
-	"github.com/sdcio/yang-parser/xpath/grammars/expr"
 	"google.golang.org/protobuf/proto"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -64,6 +62,9 @@ type Entry interface {
 	// If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
 	// It will append to the given list and provide a new pointer to the slice
 	GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool) LeafVariantSlice
+	// getHighestPrecedenceLeafValue returns the highest LeafValue of the Entry at hand
+	// will return an error if the Entry is not a Leaf
+	getHighestPrecedenceLeafValue(context.Context) (*LeafEntry, error)
 	// GetByOwner returns the branches Updates by owner
 	GetByOwner(owner string, result []*LeafEntry) []*LeafEntry
 	// markOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
@@ -93,6 +94,8 @@ type Entry interface {
 	// Navigate navigates the tree according to the given path and returns the referenced entry or nil if it does not exist.
 	Navigate(ctx context.Context, path []string, isRootPath bool) (Entry, error)
 	NavigateSdcpbPath(ctx context.Context, path []*sdcpb.PathElem, isRootPath bool) (Entry, error)
+	// NavigateLeafRef follows the leafref and returns the referenced entry
+	NavigateLeafRef(ctx context.Context) ([]Entry, error)
 	// GetFirstAncestorWithSchema returns the first parent node which has a schema set.
 	// if the parent has no schema (is a key element in the tree) it will recurs the call to the parents parent.
 	// the level of recursion is indicated via the levelUp attribute
@@ -113,6 +116,8 @@ type Entry interface {
 	// The returned boolean will in indicate if the value remains existing (true) after the setintent.
 	// Or will disappear from device (running) as part of the SetIntent action.
 	remainsToExist() bool
+	getChildren() map[string]Entry
+	FilterChilds(keys map[string]string) ([]Entry, error)
 }
 
 // sharedEntryAttributes contains the attributes shared by Entry and RootEntry
@@ -203,6 +208,61 @@ func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 // GetSchema return the schema fiels of the Entry
 func (s *sharedEntryAttributes) GetSchema() *sdcpb.SchemaElem {
 	return s.schema
+}
+
+// GetChildren returns the children Map of the Entry
+func (s *sharedEntryAttributes) getChildren() map[string]Entry {
+	return s.childs
+}
+
+// FilterChilds returns the child entries (skipping the key entries in the tree) that
+// match the given keys. The keys do not need to match all levels of keys, in which case the
+// key level is considered a wildcard match (*)
+func (s *sharedEntryAttributes) FilterChilds(keys map[string]string) ([]Entry, error) {
+	if s.schema == nil {
+		return nil, fmt.Errorf("error non schema level %s", s.Path().String())
+	}
+
+	result := []Entry{}
+	// init the processEntries with s
+	processEntries := []Entry{s}
+
+	// retrieve the schema keys
+	schemaKeys := s.GetSchemaKeys()
+	// sort the keys, such that they appear in the order that they
+	// are inserted in the tree
+	sort.Strings(schemaKeys)
+	// iterate through the keys, resolving the key levels
+	for _, key := range schemaKeys {
+		keyVal, exist := keys[key]
+		// if the key exists in the input map meaning has a filter value
+		// associated, the childs map is filtered for that value
+		if exist {
+			// therefor we need to go through the processEntries List
+			// and collect all the matching childs
+			for _, entry := range processEntries {
+				childs := entry.getChildren()
+				matchEntry, childExists := childs[keyVal]
+				// so if such child, that matches the given filter value exists, we append it to the results
+				if childExists {
+					result = append(result, matchEntry)
+				}
+			}
+		} else {
+			// this is basically the wildcard case, so go through all childs and add them
+			for _, entry := range processEntries {
+				childs := entry.getChildren()
+				result = make([]Entry, 0, len(childs))
+				for _, v := range childs {
+					// hence we add all the existing childs to the result list
+					result = append(result, v)
+				}
+			}
+		}
+		// prepare for the next iteration
+		processEntries = result
+	}
+	return result, nil
 }
 
 // GetParent returns the parent entry
@@ -305,15 +365,21 @@ func (s *sharedEntryAttributes) remainsToExist() bool {
 
 	// handle containers
 	childsRemain := false
-	for _, c := range s.childs {
+	for _, c := range s.filterActiveChoiceCaseChilds() {
 		childsRemain = c.remainsToExist()
 		if childsRemain {
 			break
 		}
 	}
+	activeChoiceCase := false
+	// only needs to be checked if it still looks like there
+	// it is to be deleted
+	if !childsRemain {
+		activeChoiceCase = s.choicesResolvers.remainsToExist()
+	}
 
 	// assumption is, that if the entry exists, there is at least a running value available.
-	return leafVariantResult || childsRemain
+	return leafVariantResult || childsRemain || activeChoiceCase
 }
 
 // getRegularDeletes performs deletion calculation on elements that have a schema attached.
@@ -451,7 +517,8 @@ func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, pathElems
 		// if the next path element is again .. we need to skip key values that are present in the tree
 		// If it is a sub-entry instead, we need to stay in the brach that is defined by the key values
 		// hence only delegate the call to the parent
-		if pathElems[1].Name == ".." {
+
+		if len(pathElems) > 1 && pathElems[1].Name == ".." {
 			entry, _ = s.GetFirstAncestorWithSchema()
 		}
 		return entry.NavigateSdcpbPath(ctx, pathElems[1:], false)
@@ -603,6 +670,22 @@ func (s *sharedEntryAttributes) GetHighestPrecedence(result LeafVariantSlice, on
 	return result
 }
 
+func (s *sharedEntryAttributes) getHighestPrecedenceLeafValue(ctx context.Context) (*LeafEntry, error) {
+	for _, x := range []string{"existing", "default"} {
+		lv := s.leafVariants.GetHighestPrecedence(false)
+		if lv != nil {
+			return lv, nil
+		}
+		if x != "default" {
+			_, err := s.tryLoadingDefault(ctx, s.Path())
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return nil, fmt.Errorf("error no value present for %s", s.Path())
+}
+
 func (s *sharedEntryAttributes) GetRootBasedEntryChain() []Entry {
 	if s.IsRoot() {
 		return []Entry{}
@@ -655,23 +738,27 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, errchan chan<- err
 
 func (s *sharedEntryAttributes) validateRange(errchan chan<- error) {
 
-	lv := s.leafVariants.GetHighestPrecedence(false)
-	if lv == nil {
-		return
-	}
+	// lv := s.leafVariants.GetHighestPrecedence(false)
+	// if lv == nil {
+	// 	return
+	// }
 
-	tv, err := lv.Value()
-	if err != nil {
-		errchan <- fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err)
-		return
-	}
+	// tv, err := lv.Value()
+	// if err != nil {
+	// 	errchan <- fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err)
+	// 	return
+	// }
 
-	if schema := s.schema.GetField(); schema != nil {
-		for _, rng := range schema.GetType().Range {
-			_ = tv
-			_ = rng
-		}
-	}
+	// if schema := s.schema.GetField(); schema != nil {
+	// 	switch schema.GetType().TypeName {
+	// 	case "uint8", "uint16", "uint32", "uint64":
+	// 		urange := &utils.NewUrnges()
+	// 	}
+
+	// 	for _, rng := range schema.GetType().Range {
+
+	// 	}
+	// }
 
 }
 
@@ -755,60 +842,6 @@ func (s *sharedEntryAttributes) validatePattern(errchan chan<- error) {
 					errchan <- fmt.Errorf("value %s of %s does not match regex %s (inverted: %t)", value, s.Path(), p, pattern.GetInverted())
 				}
 			}
-		}
-	}
-}
-
-func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, errchan chan<- error) {
-
-	// if no schema, then there is nothing to be done, return
-	if s.schema == nil {
-		return
-	}
-
-	var mustStatements []*sdcpb.MustStatement
-	switch schem := s.GetSchema().GetSchema().(type) {
-	case *sdcpb.SchemaElem_Container:
-		mustStatements = schem.Container.GetMustStatements()
-	case *sdcpb.SchemaElem_Leaflist:
-		mustStatements = schem.Leaflist.GetMustStatements()
-	case *sdcpb.SchemaElem_Field:
-		mustStatements = schem.Field.GetMustStatements()
-	}
-
-	for _, must := range mustStatements {
-		// extract actual must statement
-		exprStr := must.Statement
-		// init a ProgramBuilder
-		prgbuilder := xpath.NewProgBuilder(exprStr)
-		// init an ExpressionLexer
-		lexer := expr.NewExprLex(exprStr, prgbuilder, nil)
-		// parse the provided Must-Expression
-		lexer.Parse()
-		prog, err := lexer.CreateProgram(exprStr)
-		if err != nil {
-			errchan <- err
-			return
-		}
-		machine := xpath.NewMachine(exprStr, prog, exprStr)
-
-		// run the must statement evaluation virtual machine
-		yctx := xpath.NewCtxFromCurrent(ctx, machine, newYangParserEntryAdapter(ctx, s))
-		yctx.SetDebug(false)
-
-		res1 := yctx.Run()
-		// retrieve the boolean result of the execution
-		result, err := res1.GetBoolResult()
-		if !result || err != nil {
-			if err == nil {
-				err = fmt.Errorf("error must-statement path: %s: %s", s.Path(), must.Error)
-			}
-			if strings.Contains(err.Error(), "Stack underflow") {
-				slog.Debug("stack underflow error: path=%v, mustExpr=%s", s.Path().String(), exprStr)
-				continue
-			}
-			errchan <- err
-			return
 		}
 	}
 }

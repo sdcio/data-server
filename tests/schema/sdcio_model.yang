@@ -3,24 +3,27 @@ module sdcio_model {
   namespace "urn:sdcio/model";
   prefix sdcio_model;
 
-import sdcio_model_ni {
-  prefix sdcio_model_ni;
-}
-import sdcio_model_if {
-  prefix sdcio_model_if;
-}
-import sdcio_model_choice {
-  prefix sdcio_model_choice;
-}
-import sdcio_model_doublekey {
-  prefix sdcio_model_doublekey;
-}
-import sdcio_model_leaflist {
-  prefix sdcio_model_leaflist;
-}
-import sdcio_model_list_unique {
-  prefix sdcio_model_list_unique;
-}
+  import sdcio_model_ni {
+    prefix sdcio_model_ni;
+  }
+  import sdcio_model_if {
+    prefix sdcio_model_if;
+  }
+  import sdcio_model_choice {
+    prefix sdcio_model_choice;
+  }
+  import sdcio_model_doublekey {
+    prefix sdcio_model_doublekey;
+  }
+  import sdcio_model_leaflist {
+    prefix sdcio_model_leaflist;
+  }
+  import sdcio_model_list_unique {
+    prefix sdcio_model_list_unique;
+  }
+  import sdcio_model_deref {
+    prefix sdcio_model_deref;
+  }
 
   description
     "This is the test schema for sdcio";
@@ -30,22 +33,20 @@ import sdcio_model_list_unique {
       "Test schema first attempt";
   }
 
-
   uses sdcio_model_if:interface-top;
   uses sdcio_model_ni:network-instance-top;
   uses sdcio_model_choice:choicecase-top;
   uses sdcio_model_doublekey:doublekey-top;
   uses sdcio_model_leaflist:leaflist-top;
   uses sdcio_model_list_unique:list-unique-top;
-
-      leaf patterntest {
-        type string {
-          length "7..10";
-          pattern "hallo [0-9a-fA-F]*";
-          // pattern 'hallo DU' {
-          //  // modifier invert-match;
-          // }
-        }
-      }
-
+  uses sdcio_model_deref:deref-top;
+  leaf patterntest {
+    type string {
+      length "7..10";
+      pattern 'hallo [0-9a-fA-F]*';
+      // pattern 'hallo DU' {
+      //  // modifier invert-match;
+      // }
+    }
+  }
 }

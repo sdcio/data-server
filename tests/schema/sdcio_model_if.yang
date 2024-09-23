@@ -1,14 +1,13 @@
-
 module sdcio_model_if {
   yang-version 1.1;
   namespace "urn:sdcio/model_if";
   prefix sdcio_model_if;
 
-    import sdcio_model_common {
+  import sdcio_model_common {
     prefix sdcio_model_common;
   }
 
-   grouping interface-top {
+  grouping interface-top {
     description
       "Top-level grouping for interface configuration and operational state data";
     list interface {
@@ -20,18 +19,21 @@ module sdcio_model_if {
         description
           "The name of the interface";
       }
-          leaf admin-state {
-      type sdcio_model_common:admin-state;
-      default "enable";
-      description
-        "The configured, desired state of the interface";
-      reference
-        "RFC 2863: The Interfaces Group MIB - ifAdminStatus";
-      must "((. = 'enable') and starts-with(../name, 'system0')) or not(starts-with(../name, 'system0'))" {
-        error-message "admin-state must be enable";
+      leaf admin-state {
+        type sdcio_model_common:admin-state;
+        default "enable";
+        description
+          "The configured, desired state of the interface";
+        reference
+          "RFC 2863: The Interfaces Group MIB - ifAdminStatus";
+        must "((. = 'enable') and starts-with(../name, 'system0')) or not(starts-with(../name, 'system0'))" {
+          error-message "admin-state must be enable";
+        }
       }
-    }
-          leaf description {
+      leaf interface-type {
+        type string;
+      }
+      leaf description {
         type sdcio_model_common:description;
         description
           "A user-entered description of this network instance.";
@@ -40,7 +42,7 @@ module sdcio_model_if {
     }
   }
 
-    grouping subinterface-top {
+  grouping subinterface-top {
     description
       "Subinterface data for logical interfaces associated with a given interface";
     list subinterface {
@@ -71,12 +73,11 @@ module sdcio_model_if {
           error-message "local-mirror-dest is not supported on this interface";
         }
       }
-          leaf description {
+      leaf description {
         type sdcio_model_common:description;
         description
           "A user-entered description of this network instance.";
       }
     }
-    }
-
+  }
 }

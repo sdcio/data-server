@@ -24,6 +24,15 @@ func (c choiceCasesResolvers) GetSkipElements() []string {
 	return result
 }
 
+func (c choiceCasesResolvers) remainsToExist() bool {
+	for _, x := range c {
+		if x.getBestCaseName() != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // GetChoiceElements returns a list of elements that belong to the same choice
 // as the given element. This is used to query the cache for all elements of all cases for the
 // choice.

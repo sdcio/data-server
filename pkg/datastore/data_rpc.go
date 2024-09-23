@@ -575,6 +575,8 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			if err != nil {
 				return err
 			}
+		case int64:
+			// No need to do anything, same type
 		default:
 			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
 		}
@@ -631,6 +633,8 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			if err != nil {
 				return err
 			}
+		case uint64:
+			// No need to do anything, same type
 		default:
 			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
 		}
@@ -692,6 +696,8 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 			if c := strings.Count(v, "."); c == 0 || c > 1 {
 				return fmt.Errorf("value %q is not a valid Decimal64", v)
 			}
+		case sdcpb.Decimal64, *sdcpb.Decimal64:
+			// No need to do anything, same type
 		default:
 			return fmt.Errorf("unexpected type for a Decimal64 value %q: %T", v, v)
 		}
@@ -699,6 +705,14 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 	case "leafref":
 		// TODO: does this need extra validation?
 		return nil
+	case "empty":
+		switch v := v.(type) {
+		case map[string]any:
+			if len(v) == 0 {
+				return nil
+			}
+		}
+		return fmt.Errorf("value %v is not an empty JSON object '{}' so does not match empty type", v)
 	default:
 		return fmt.Errorf("unhandled type %v for value %q", lt.GetType(), v)
 	}
@@ -806,7 +820,7 @@ func (d *Datastore) expandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Updat
 		if len(pe.GetKey()) == 0 {
 			continue
 		}
-		//
+
 		for k, v := range pe.GetKey() {
 			intUpd := &sdcpb.Update{
 				Path: &sdcpb.Path{
@@ -823,12 +837,11 @@ func (d *Datastore) expandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Updat
 			}
 			intUpd.Path.Elem = append(intUpd.Path.Elem, &sdcpb.PathElem{Name: k})
 
-			intUpd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
-			schemaRsp, err := d._validationClientBound.GetSchema(ctx, upd.Path)
+			schemaRsp, err := d.getValidationClient().GetSchema(ctx, intUpd.Path)
 			if err != nil {
 				return nil, err
 			}
-			intUpd.Value, err = d.typedValueToYANGType(upd.GetValue(), schemaRsp.GetSchema())
+			intUpd.Value, err = d.typedValueToYANGType(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}, schemaRsp.GetSchema())
 			if err != nil {
 				return nil, err
 			}
@@ -921,13 +934,20 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				log.Debugf("handling field %s", item.Name)
 				np := proto.Clone(p).(*sdcpb.Path)
 				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item.Name})
-				upd := &sdcpb.Update{
-					Path: np,
-					Value: &sdcpb.TypedValue{
+				upd := &sdcpb.Update{Path: np}
+				switch item.GetType().GetType() {
+				case "empty":
+					upd.Value = &sdcpb.TypedValue{
+						Value: &sdcpb.TypedValue_JsonVal{
+							JsonVal: []byte("{}"),
+						},
+					}
+				default:
+					upd.Value = &sdcpb.TypedValue{
 						Value: &sdcpb.TypedValue_StringVal{
 							StringVal: fmt.Sprintf("%v", v),
 						},
-					},
+					}
 				}
 				upds = append(upds, upd)
 			case *sdcpb.LeafListSchema: // leaflist

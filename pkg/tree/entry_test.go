@@ -1315,3 +1315,58 @@ func Test_Validation_String_Pattern(t *testing.T) {
 	// )
 
 }
+
+func Test_Validation_Deref(t *testing.T) {
+	prio50 := int32(50)
+	owner1 := "OwnerOne"
+	ts1 := int64(9999999)
+
+	ctx := context.TODO()
+
+	scb, err := getSchemaClientBound(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("Test_Validation_String_Pattern - One",
+		func(t *testing.T) {
+			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), owner1)
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			leafval := testhelper.GetStringTvProto(t, "data123")
+
+			u1 := cache.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
+
+			for _, u := range []*cache.Update{u1} {
+				_, err := root.AddCacheUpdateRecursive(ctx, u, true)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			root.FinishInsertionPhase()
+
+			validationErrors := []error{}
+			validationErrChan := make(chan error)
+			go func() {
+				root.Validate(context.TODO(), validationErrChan)
+				close(validationErrChan)
+			}()
+
+			// read from the Error channel
+			for e := range validationErrChan {
+				validationErrors = append(validationErrors, e)
+			}
+
+			// check if errors are received
+			// If so, join them and return the cumulated errors
+			if len(validationErrors) != 1 {
+				t.Errorf("expected 1 error but got %d, %v", len(validationErrors), validationErrors)
+			}
+		},
+	)
+
+}

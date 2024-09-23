@@ -1,0 +1,11 @@
+{
+    "type": "netconf",
+    "address": "172.20.20.6:830",
+    "credentials": {
+        "username": "admin",
+        "password": "admin"
+    },
+    "include_ns": true,
+    "operation_with_ns": true
+
+}

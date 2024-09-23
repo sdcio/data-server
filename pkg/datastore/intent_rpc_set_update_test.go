@@ -712,6 +712,18 @@ func TestDatastore_populateTree(t *testing.T) {
 
 			root.FinishInsertionPhase()
 
+			validationErrors := []error{}
+			validationErrChan := make(chan error)
+			go func() {
+				root.Validate(ctx, validationErrChan)
+				close(validationErrChan)
+			}()
+
+			// read from the Error channel
+			for e := range validationErrChan {
+				validationErrors = append(validationErrors, e)
+			}
+			fmt.Println(validationErrors)
 			fmt.Printf("Tree:%s\n", root.String())
 
 			// get the updates that are meant to be send down towards the device
@@ -737,6 +749,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			if diff := testhelper.DiffDoubleStringPathSlice(tt.expectedOwnerDeletes, deletesOwner.ToStringSlice()); diff != "" {
 				t.Errorf("root.GetDeletesForOwner mismatch (-want +got):\n%s", diff)
 			}
+
 		})
 	}
 }
