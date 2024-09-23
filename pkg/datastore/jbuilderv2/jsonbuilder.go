@@ -134,9 +134,9 @@ func convertKeyValue(value, valueType string) (interface{}, error) {
 	switch valueType {
 	case stringType:
 		return value, nil
-	case int8Type, int16Type, int32Type:
-		return strconv.Atoi(value)
-	case uint8Type, uint16Type, uint32Type:
+	case int8Type, int16Type, int32Type, int64Type:
+		return strconv.ParseInt(value, 10, 64)
+	case uint8Type, uint16Type, uint32Type, uint64Type:
 		return strconv.ParseUint(value, 10, 64)
 	case floatType:
 		return strconv.ParseFloat(value, 64)
