@@ -434,12 +434,12 @@ func (t *gnmiTarget) convertKeyUpdates(upd *sdcpb.Update) *gnmi.Update {
 	b, _ := json.Marshal(valm)
 	var val *sdcpb.TypedValue
 	if _, ok := t.encodings[gnmi.Encoding_JSON_IETF]; ok {
-		val = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonIetfVal{
-			JsonIetfVal: b,
-		}}
-	} else if _, ok := t.encodings[gnmi.Encoding_JSON]; ok {
 		val = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{
 			JsonVal: b,
+		}}
+	} else if _, ok := t.encodings[gnmi.Encoding_JSON_IETF]; ok {
+		val = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonIetfVal{
+			JsonIetfVal: b,
 		}}
 	}
 
