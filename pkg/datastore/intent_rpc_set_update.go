@@ -170,13 +170,13 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		return nil, err
 	}
 
-	log.Debugf("finish insertion phase")
-	root.FinishInsertionPhase()
-
 	err = d.populateTreeWithRunning(ctx, tc, root)
 	if err != nil {
 		return nil, err
 	}
+
+	log.Debugf("finish insertion phase")
+	root.FinishInsertionPhase()
 
 	fmt.Printf("Tree before Validate:%s\n", root.String())
 
