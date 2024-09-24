@@ -30,7 +30,7 @@ func (y *yangParserEntryAdapter) valueToDatum(tv *sdcpb.TypedValue) xpath.Datum 
 	case *sdcpb.TypedValue_BoolVal:
 		return xpath.NewBoolDatum(tv.GetBoolVal())
 	case *sdcpb.TypedValue_StringVal:
-		if y.e.GetSchema().GetField().GetType().GetTypeName() == "identityref" {
+		if y.e.GetSchema().GetField().GetType().GetType() == "identityref" {
 			idPrefixMap := y.e.GetSchema().GetField().GetType().GetIdentityPrefixesMap()
 			if prefix, ok := idPrefixMap[tv.GetStringVal()]; ok {
 				return xpath.NewLiteralDatum(fmt.Sprintf("%s:%s", prefix, tv.GetStringVal()))
