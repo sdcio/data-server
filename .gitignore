@@ -25,3 +25,4 @@ dist/
 .*.bak
 clab-*
 tests/robot/*-yang-models/
+.idea/
