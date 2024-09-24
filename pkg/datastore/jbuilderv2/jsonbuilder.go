@@ -43,6 +43,7 @@ const (
 	boolType        = "boolean"
 	nullType        = "null"
 	presenceType    = "PRESENCE"
+	emptyType       = "empty"
 	decimal64Type   = "decimal64"
 	leafrefType     = "leafref"
 	enumType        = "enumeration"
@@ -109,14 +110,6 @@ func (j *jsonBuilder) AddUpdate(ctx context.Context, obj map[string]any, p *sdcp
 	}
 	value := getValue(tv)
 
-	switch {
-	case psc.GetSchema().GetContainer() != nil:
-		if !psc.GetSchema().GetContainer().GetIsPresence() {
-			return nil
-		}
-		value = map[string]any{}
-	}
-
 	pes, err := j.buildPathElems(ctx, p)
 	if err != nil {
 		return err
@@ -144,7 +137,7 @@ func convertKeyValue(value, valueType string) (interface{}, error) {
 		return strconv.ParseBool(value)
 	case nullType:
 		return nil, nil
-	case presenceType:
+	case presenceType, emptyType:
 		return map[string]any{}, nil
 	case decimal64Type:
 		return value, nil
@@ -282,7 +275,7 @@ func toBasicType(sclt *sdcpb.SchemaLeafType, val string) string {
 		return stringType
 	case unionType:
 		return getTypeUnion(sclt, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: val}})
-	case "leafref":
+	case leafrefType:
 		// TODO: follow leaf ref and return its type
 		//       strip the leafref path from ns and query its schema
 		return stringType
@@ -408,6 +401,8 @@ func getValue(tv *sdcpb.TypedValue) any {
 		return tv.GetBytesVal()
 	case *sdcpb.TypedValue_DecimalVal:
 		return tv.GetDecimalVal()
+	case *sdcpb.TypedValue_EmptyVal:
+		return map[string]any{}
 	case *sdcpb.TypedValue_FloatVal:
 		return tv.GetFloatVal()
 	case *sdcpb.TypedValue_DoubleVal:

@@ -174,6 +174,7 @@ func (x *XMLConfigBuilder) AddValue(ctx context.Context, p *sdcpb.Path, v *sdcpb
 		// since fastForward did create an initial element, but we created all we
 		// need in the loop, we delete the element from its parent
 		parent.RemoveChild(elem)
+
 	default:
 		value, err := valueAsString(v)
 		if err != nil {

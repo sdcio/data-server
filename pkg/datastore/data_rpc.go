@@ -32,6 +32,7 @@ import (
 	status "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/datastore/jbuilderv2"
@@ -708,11 +709,9 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 		// TODO: does this need extra validation?
 		return nil
 	case "empty":
-		switch v := v.(type) {
-		case map[string]any:
-			if len(v) == 0 {
-				return nil
-			}
+		switch v.(type) {
+		case *emptypb.Empty:
+			return nil
 		}
 		return fmt.Errorf("value %v is not an empty JSON object '{}' so does not match empty type", v)
 	default:
@@ -940,9 +939,7 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				switch item.GetType().GetType() {
 				case "empty":
 					upd.Value = &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_JsonVal{
-							JsonVal: []byte("{}"),
-						},
+						Value: &sdcpb.TypedValue_EmptyVal{},
 					}
 				default:
 					upd.Value = &sdcpb.TypedValue{
@@ -1003,9 +1000,7 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 							{
 								Path: np,
 								Value: &sdcpb.TypedValue{
-									Value: &sdcpb.TypedValue_JsonVal{
-										JsonVal: []byte("{}"),
-									},
+									Value: &sdcpb.TypedValue_EmptyVal{},
 								},
 							}}
 					} else {
@@ -1346,7 +1341,7 @@ func convertTypedValueToYANGType(schemaElem *sdcpb.SchemaElem, tv *sdcpb.TypedVa
 		if schemaElem.GetContainer().IsPresence {
 			return &sdcpb.TypedValue{
 				Timestamp: tv.GetTimestamp(),
-				Value:     &sdcpb.TypedValue_JsonVal{JsonVal: []byte("{}")},
+				Value:     &sdcpb.TypedValue_EmptyVal{},
 			}, nil
 		}
 	case schemaElem.GetLeaflist() != nil:

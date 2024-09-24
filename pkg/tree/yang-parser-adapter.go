@@ -46,6 +46,8 @@ func (y *yangParserEntryAdapter) valueToDatum(tv *sdcpb.TypedValue) xpath.Datum 
 			datums = append(datums, datum)
 		}
 		return xpath.NewDatumSliceDatum(datums)
+	case *sdcpb.TypedValue_EmptyVal:
+		return xpath.NewBoolDatum(true)
 	default:
 		return xpath.NewLiteralDatum(tv.GetStringVal())
 	}

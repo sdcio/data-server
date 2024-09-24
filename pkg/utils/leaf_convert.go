@@ -55,11 +55,7 @@ func Convert(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error)
 	case "enumeration":
 		return ConvertEnumeration(value, lst)
 	case "empty":
-		// TODO https://www.rfc-editor.org/rfc/rfc6020.html#section-9.11
-		// I'm not sure what should be returned atm.
-		// KR:use an empty string for a leaf of type "empty"
-		//    probably need to add typedValue of type Empty in the protos
-		return ConvertString(value, lst)
+		return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{}}, nil
 	case "bits":
 	// TODO: https://www.rfc-editor.org/rfc/rfc6020.html#section-9.7
 	case "binary": // https://www.rfc-editor.org/rfc/rfc6020.html#section-9.8

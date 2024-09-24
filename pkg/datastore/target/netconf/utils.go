@@ -74,6 +74,8 @@ func valueAsString(v *sdcpb.TypedValue) (string, error) {
 		return string(v.GetJsonIetfVal()), nil
 	case *sdcpb.TypedValue_ProtoBytes:
 		return "PROTOBYTES", nil
+	case *sdcpb.TypedValue_EmptyVal:
+		return "", nil
 	}
 	return "", fmt.Errorf("TypedValue to String failed")
 }
