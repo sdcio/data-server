@@ -440,7 +440,7 @@ func (s *sharedEntryAttributes) GetFirstAncestorWithSchema() (Entry, int) {
 	}
 	// direct parent does not have a schema, recurse the call
 	schema, level := s.parent.GetFirstAncestorWithSchema()
-	// increate the level returned by the parent to
+	// increase the level returned by the parent to
 	// reflect this entry as a level and return
 	return schema, level + 1
 }
