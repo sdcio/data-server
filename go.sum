@@ -221,8 +221,8 @@ github.com/scrapli/scrapligo v1.3.2 h1:9D5TFM/DlqAijqH18uNHygbNos0ReDsJl/vhMRObk
 github.com/scrapli/scrapligo v1.3.2/go.mod h1:VnmqW27qUU1NOt6PNllZNJqAXQddn2vqZpk7g5qxebw=
 github.com/sdcio/cache v0.0.34 h1:mDxIPN9r339yHykCPJZFKX0va8RMoAscErbEkAcql7E=
 github.com/sdcio/cache v0.0.34/go.mod h1:u/rIbC03e6k+J19VWo8DwJdBWY0vzNZ25viXRmrS+5I=
-github.com/sdcio/schema-server v0.0.22 h1:GCKoxd3zTaTLdkixm9wXZOSPsO0IV1nYvT9HimGzKGE=
-github.com/sdcio/schema-server v0.0.22/go.mod h1:brtqHWZ3YNApsUx9r2f26FnlmKatWiOt/grjv2jZsAU=
+github.com/sdcio/schema-server v0.0.23 h1:1sJLS4LAC4Gdfax9xhxWRAF8z1gv0wNTNyXT87yAPi0=
+github.com/sdcio/schema-server v0.0.23/go.mod h1:r/VhV1fg+y4IuIiGP56g7AJ4YZU7gt/zbBkr6f9N+x0=
 github.com/sdcio/sdc-protos v0.0.31 h1:4qhTjeI+eyOPP1xyP6qJveKnz5ItcmRCdcPdOMqOjJE=
 github.com/sdcio/sdc-protos v0.0.31/go.mod h1:RqUEmq53figRv5AYZkxyZl7Wx+cKy/rIQdOxfwIBI0k=
 github.com/sdcio/yang-parser v0.0.8 h1:n+d012r1+JaemfzzWjEW/sRw41RC8IV4TSEQop+1VII=
