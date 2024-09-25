@@ -32,6 +32,7 @@ import (
 	status "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/datastore/jbuilderv2"
@@ -654,14 +655,14 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 		return nil
 	case "enumeration":
 		valid := false
-		for _, vv := range lt.Values {
+		for _, vv := range lt.EnumNames {
 			if fmt.Sprintf("%s", v) == vv {
 				valid = true
 				break
 			}
 		}
 		if !valid {
-			return fmt.Errorf("value %q does not match enum type %q, must be one of [%s]", v, lt.TypeName, strings.Join(lt.Values, ", "))
+			return fmt.Errorf("value %q does not match enum type %q, must be one of [%s]", v, lt.TypeName, strings.Join(lt.EnumNames, ", "))
 		}
 		return nil
 	case "union":
@@ -679,14 +680,16 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 		return nil
 	case "identityref":
 		valid := false
-		for _, vv := range lt.Values {
+		identities := make([]string, 0, len(lt.IdentityPrefixesMap))
+		for vv, _ := range lt.IdentityPrefixesMap {
+			identities = append(identities, vv)
 			if fmt.Sprintf("%s", v) == vv {
 				valid = true
 				break
 			}
 		}
 		if !valid {
-			return fmt.Errorf("value %q does not match identityRef type %q, must be one of [%s]", v, lt.TypeName, strings.Join(lt.Values, ", "))
+			return fmt.Errorf("value %q does not match identityRef type %q, must be one of [%s]", v, lt.TypeName, strings.Join(identities, ", "))
 		}
 		return nil
 	case "decimal64":
@@ -706,11 +709,9 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 		// TODO: does this need extra validation?
 		return nil
 	case "empty":
-		switch v := v.(type) {
-		case map[string]any:
-			if len(v) == 0 {
-				return nil
-			}
+		switch v.(type) {
+		case *emptypb.Empty:
+			return nil
 		}
 		return fmt.Errorf("value %v is not an empty JSON object '{}' so does not match empty type", v)
 	default:
@@ -938,9 +939,7 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				switch item.GetType().GetType() {
 				case "empty":
 					upd.Value = &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_JsonVal{
-							JsonVal: []byte("{}"),
-						},
+						Value: &sdcpb.TypedValue_EmptyVal{},
 					}
 				default:
 					upd.Value = &sdcpb.TypedValue{
@@ -1001,9 +1000,7 @@ func (d *Datastore) expandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 							{
 								Path: np,
 								Value: &sdcpb.TypedValue{
-									Value: &sdcpb.TypedValue_JsonVal{
-										JsonVal: []byte("{}"),
-									},
+									Value: &sdcpb.TypedValue_EmptyVal{},
 								},
 							}}
 					} else {
@@ -1344,7 +1341,7 @@ func convertTypedValueToYANGType(schemaElem *sdcpb.SchemaElem, tv *sdcpb.TypedVa
 		if schemaElem.GetContainer().IsPresence {
 			return &sdcpb.TypedValue{
 				Timestamp: tv.GetTimestamp(),
-				Value:     &sdcpb.TypedValue_JsonVal{JsonVal: []byte("{}")},
+				Value:     &sdcpb.TypedValue_EmptyVal{},
 			}, nil
 		}
 	case schemaElem.GetLeaflist() != nil:

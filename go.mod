@@ -23,9 +23,9 @@ require (
 	github.com/prometheus/client_golang v1.20.4
 	github.com/scrapli/scrapligo v1.3.2
 	github.com/sdcio/cache v0.0.34
-	github.com/sdcio/schema-server v0.0.22
-	github.com/sdcio/sdc-protos v0.0.28
-	github.com/sdcio/yang-parser v0.0.8
+	github.com/sdcio/schema-server v0.0.23
+	github.com/sdcio/sdc-protos v0.0.32
+	github.com/sdcio/yang-parser v0.0.9
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5

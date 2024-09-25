@@ -11,8 +11,14 @@ import (
 
 // NavigateLeafRef
 func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, error) {
-	lref := s.schema.GetField().GetType().GetLeafref()
-	if s.schema == nil || lref == "" {
+
+	var lref string
+	switch {
+	case s.GetSchema().GetField().GetType().GetLeafref() != "":
+		lref = s.schema.GetField().GetType().GetLeafref()
+	case s.GetSchema().GetLeaflist().GetType().GetLeafref() != "":
+		lref = s.GetSchema().GetLeaflist().GetType().GetLeafref()
+	default:
 		return nil, fmt.Errorf("error not a leafref %s", s.Path().String())
 	}
 
@@ -38,7 +44,16 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 	if err != nil {
 		return nil, fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err)
 	}
-	value := tv.GetStringVal()
+	var values []*sdcpb.TypedValue
+
+	switch ttv := tv.Value.(type) {
+	case *sdcpb.TypedValue_LeaflistVal:
+		for _, v := range ttv.LeaflistVal.GetElement() {
+			values = append(values, v)
+		}
+	default:
+		values = append(values, tv)
+	}
 
 	var resultEntries []Entry
 
@@ -80,7 +95,7 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 			return nil, err
 		}
 
-		// we need to do the forwearding for all the already lookedup paths
+		// we need to do the forwarding for all the already lookedup paths
 		for _, entry := range processEntries {
 			entry, err = entry.Navigate(ctx, []string{elem.Name}, false)
 			if err != nil {
@@ -128,8 +143,11 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 		if err != nil {
 			return nil, err
 		}
-		if val.GetStringVal() == value {
-			resultEntries = append(resultEntries, e)
+		for _, value := range values {
+			if utils.EqualTypedValues(val, value) {
+				resultEntries = append(resultEntries, e)
+				break
+			}
 		}
 	}
 

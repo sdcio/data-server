@@ -87,6 +87,8 @@ func GetSchemaValue(updValue *sdcpb.TypedValue) (interface{}, error) {
 		value = updValue.GetBytesVal()
 	case *sdcpb.TypedValue_DecimalVal:
 		value = updValue.GetDecimalVal()
+	case *sdcpb.TypedValue_EmptyVal:
+		value = updValue.GetEmptyVal()
 	case *sdcpb.TypedValue_FloatVal:
 		value = updValue.GetFloatVal()
 	case *sdcpb.TypedValue_DoubleVal:
@@ -364,6 +366,13 @@ func EqualTypedValues(v1, v2 *sdcpb.TypedValue) bool {
 		default:
 			return false
 		}
+	case *sdcpb.TypedValue_EmptyVal:
+		switch v2.GetValue().(type) {
+		case *sdcpb.TypedValue_EmptyVal:
+			return true
+		default:
+			return false
+		}
 	case *sdcpb.TypedValue_FloatVal:
 		switch v2 := v2.GetValue().(type) {
 		case *sdcpb.TypedValue_FloatVal:
@@ -476,6 +485,7 @@ func EqualTypedValues(v1, v2 *sdcpb.TypedValue) bool {
 			return false
 		}
 	}
+	// TODO: Why is this default case to return true??
 	return true
 }
 
@@ -513,6 +523,8 @@ func TypedValueToString(tv *sdcpb.TypedValue) string {
 		return digitsStr
 	case *sdcpb.TypedValue_DoubleVal:
 		return strconv.FormatFloat(tv.GetDoubleVal(), byte('e'), -1, 64)
+	case *sdcpb.TypedValue_EmptyVal:
+		return "{}"
 	case *sdcpb.TypedValue_FloatVal:
 		return strconv.FormatFloat(float64(tv.GetFloatVal()), byte('e'), -1, 64)
 	case *sdcpb.TypedValue_IntVal:
