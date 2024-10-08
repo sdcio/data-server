@@ -2,15 +2,20 @@ package tree
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
 	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
+	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
@@ -1368,5 +1373,140 @@ func Test_Validation_Deref(t *testing.T) {
 			}
 		},
 	)
+}
+
+func TestToJson(t *testing.T) {
+
+	scb, err := getSchemaClientBound(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "owner1")
+	root, err := NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d := &sdcio_schema.Device{
+		Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+			"ethernet-1/1": {
+				AdminState:  sdcio_schema.SdcioModelIf_AdminState_enable,
+				Description: ygot.String("Foo"),
+				Name:        ygot.String("ethernet-1/1"),
+				Subinterface: map[uint32]*sdcio_schema.SdcioModel_Interface_Subinterface{
+					0: {
+						Description: ygot.String("Subinterface 0"),
+						Type:        sdcio_schema.SdcioModelCommon_SiType_routed,
+						Index:       ygot.Uint32(0),
+					},
+				},
+			},
+		},
+		Choices: &sdcio_schema.SdcioModel_Choices{
+			Case1: &sdcio_schema.SdcioModel_Choices_Case1{
+				CaseElem: &sdcio_schema.SdcioModel_Choices_Case1_CaseElem{
+					Elem: ygot.String("foocaseval"),
+				},
+			},
+		},
+		Leaflist: &sdcio_schema.SdcioModel_Leaflist{
+			Entry: []string{
+				"foo",
+				"bar",
+			},
+		},
+		NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
+			"default": {
+				AdminState:  sdcio_schema.SdcioModelNi_AdminState_disable,
+				Description: ygot.String("Default NI"),
+				Type:        sdcio_schema.SdcioModelNi_NiType_default,
+				Name:        ygot.String("default"),
+			},
+		},
+	}
+
+	notis, err := ygot.TogNMINotifications(d, 0, ygot.GNMINotificationsConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, noti := range notis {
+		for _, upd := range noti.GetUpdate() {
+
+			strPath, err := ygot.PathToStrings(upd.Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			val, err := proto.Marshal(utils.FromGNMITypedValue(upd.GetVal()))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			cacheUpd := cache.NewUpdate(strPath, val, 5, "owner1", 0)
+
+			_, err = root.AddCacheUpdateRecursive(ctx, cacheUpd, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	root.FinishInsertionPhase()
+
+	jsonStruct, err := root.ToJson()
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonStr, err := json.MarshalIndent(jsonStruct, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := `{
+  "choices": {
+    "case1": {
+      "case-elem": {
+        "elem": "foocaseval"
+      }
+    }
+  },
+  "interface": [
+    {
+      "admin-state": "enable",
+      "description": "Foo",
+      "name": "ethernet-1/1",
+      "subinterface": [
+        {
+          "description": "Subinterface 0",
+          "index": 0,
+          "type": "routed"
+        }
+      ]
+    }
+  ],
+  "leaflist": {
+    "entry": [
+      "foo",
+      "bar"
+    ]
+  },
+  "network-instance": [
+    {
+      "admin-state": "disable",
+      "description": "Default NI",
+      "name": "default",
+      "type": "default"
+    }
+  ]
+}`
+
+	fmt.Println(string(jsonStr))
+
+	if diff := cmp.Diff(string(jsonStr), expected); diff != "" {
+		t.Fatalf("ToJson() failed.\nDiff:\n%s", diff)
+	}
 
 }
