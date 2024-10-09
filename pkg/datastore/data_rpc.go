@@ -35,7 +35,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/sdcio/data-server/pkg/cache"
-	"github.com/sdcio/data-server/pkg/datastore/jbuilderv2"
+	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/utils"
 )
 
@@ -59,7 +59,6 @@ func (d *Datastore) Get(ctx context.Context, req *sdcpb.GetDataRequest, nCh chan
 	case sdcpb.Encoding_STRING:
 	case sdcpb.Encoding_JSON:
 	case sdcpb.Encoding_JSON_IETF:
-		return fmt.Errorf("not implemented")
 	case sdcpb.Encoding_PROTO:
 	default:
 		return fmt.Errorf("unknown encoding: %v", req.GetEncoding())
@@ -93,8 +92,9 @@ func (d *Datastore) Get(ctx context.Context, req *sdcpb.GetDataRequest, nCh chan
 	case sdcpb.Encoding_STRING:
 		err = d.handleGetDataUpdatesSTRING(ctx, name, req, paths, nCh)
 	case sdcpb.Encoding_JSON:
-		err = d.handleGetDataUpdatesJSON(ctx, name, req, paths, nCh)
+		err = d.handleGetDataUpdatesJSON(ctx, name, req, paths, nCh, false)
 	case sdcpb.Encoding_JSON_IETF:
+		err = d.handleGetDataUpdatesJSON(ctx, name, req, paths, nCh, true)
 	case sdcpb.Encoding_PROTO:
 		err = d.handleGetDataUpdatesPROTO(ctx, name, req, paths, nCh)
 	}
@@ -162,10 +162,15 @@ NEXT_STORE:
 	return nil
 }
 
-func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, req *sdcpb.GetDataRequest, paths [][]string, out chan *sdcpb.GetDataResponse) error {
-	jbuilder := jbuilderv2.New(d.getValidationClient())
-	rs := make(map[string]any)
+func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, req *sdcpb.GetDataRequest, paths [][]string, out chan *sdcpb.GetDataResponse, ietf bool) error {
 	now := time.Now().UnixNano()
+
+	treeSCC := tree.NewTreeSchemaCacheClient(d.Name(), d.cacheClient, d.getValidationClient())
+	tc := tree.NewTreeContext(treeSCC, "")
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		return err
+	}
 
 	for _, store := range getStores(req) {
 		in := d.cacheClient.ReadCh(ctx, name, &cache.Opts{
@@ -199,20 +204,27 @@ func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, r
 						continue
 					}
 				}
-				tv, err := upd.Value()
-				if err != nil {
-					return err
-				}
-				err = jbuilder.AddUpdate(ctx, rs, scp, tv)
-				if err != nil {
-					err = fmt.Errorf("failed json builder:path=%s, v=%v, err=%v", scp, tv, err)
-					return err
-				}
+				root.AddCacheUpdateRecursive(ctx, upd, false)
 			}
 		}
 	}
+
+	root.FinishInsertionPhase()
+
+	var j any
 	// marshal map into JSON bytes
-	b, err := json.Marshal(rs)
+	if ietf {
+		j, err = root.ToJsonIETF(false)
+		if err != nil {
+			return err
+		}
+	} else {
+		j, err = root.ToJson(false)
+		if err != nil {
+			return err
+		}
+	}
+	b, err := json.Marshal(j)
 	if err != nil {
 		err = fmt.Errorf("failed json builder indent : %v", err)
 		log.Error(err)
