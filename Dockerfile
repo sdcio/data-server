@@ -36,6 +36,10 @@ WORKDIR /build
 RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -ldflags="-s -w" -o data-server .
 RUN mkdir -p /schemas
+# Openshift fix, https://docs.openshift.com/container-platform/4.17/openshift_images/create-images.html
+RUN chgrp -R 0 data-server && chmod -R g=u data-server
+RUN chgrp -R 0 datactl && chmod -R g=u datactl
+RUN chgrp -R 0 /schemas/ && chmod -R g=u /schemas/
 
 FROM scratch
 ARG USERID=10000
@@ -46,11 +50,8 @@ COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 # add-in our ca certificates
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 #
-COPY --from=builder --chown=$USERID:$USERID /build/data-server /app/
-COPY --from=builder --chown=$USERID:$USERID /schemas /schemas
-# Openshift fix, https://docs.openshift.com/container-platform/4.17/openshift_images/create-images.html
-RUN chgrp -R 0 /app/ && chmod -R g=u /app/
-RUN chgrp -R 0 /schemas/ && chmod -R g=u /schemas/
+COPY --from=builder --chown=$USERID:0 /build/data-server /app/
+COPY --from=builder --chown=$USERID:0 /schemas /schemas
 WORKDIR /app
 # from now on, run as the unprivileged user
 USER $USERID

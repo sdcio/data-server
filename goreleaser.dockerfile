@@ -25,7 +25,10 @@ RUN apt-get install --yes --no-install-recommends ca-certificates tzdata
 #    && sed -i -r "/^(app|root)/!d" /etc/group /etc/passwd \
 #    && sed -i -r 's#^(.*):[^:]*$#\1:/bin/false#' /etc/passwd
 RUN mkdir -p /schemas
-#
+# Openshift fix, https://docs.openshift.com/container-platform/4.17/openshift_images/create-images.html
+RUN chgrp -R 0 data-server && chmod -R g=u data-server
+RUN chgrp -R 0 datactl && chmod -R g=u datactl
+RUN chgrp -R 0 /schemas/ && chmod -R g=u /schemas/
 
 FROM scratch
 ARG USERID=10000
@@ -36,12 +39,9 @@ COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 # add-in our ca certificates
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-COPY --chown=$USERID:$USERID data-server /app/
-COPY --chown=$USERID:$USERID datactl /app/
-COPY --from=builder --chown=$USERID:$USERID /schemas /schemas
-# Openshift fix, https://docs.openshift.com/container-platform/4.17/openshift_images/create-images.html
-RUN chgrp -R 0 /app/ && chmod -R g=u /app/
-RUN chgrp -R 0 /schemas/ && chmod -R g=u /schemas/
+COPY --chown=$USERID:0 data-server /app/
+COPY --chown=$USERID:0 datactl /app/
+COPY --from=builder --chown=$USERID:0 /schemas /schemas
 WORKDIR /app
 
 # from now on, run as the unprivileged user
