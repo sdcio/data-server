@@ -1375,97 +1375,22 @@ func Test_Validation_Deref(t *testing.T) {
 	)
 }
 
-func TestToJson(t *testing.T) {
+func TestToJsonTable(t *testing.T) {
 
-	scb, err := getSchemaClientBound(t)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ctx := context.Background()
-
-	tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "owner1")
-	root, err := NewTreeRoot(ctx, tc)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	d := &sdcio_schema.Device{
-		Interface: map[string]*sdcio_schema.SdcioModel_Interface{
-			"ethernet-1/1": {
-				AdminState:  sdcio_schema.SdcioModelIf_AdminState_enable,
-				Description: ygot.String("Foo"),
-				Name:        ygot.String("ethernet-1/1"),
-				Subinterface: map[uint32]*sdcio_schema.SdcioModel_Interface_Subinterface{
-					0: {
-						Description: ygot.String("Subinterface 0"),
-						Type:        sdcio_schema.SdcioModelCommon_SiType_routed,
-						Index:       ygot.Uint32(0),
-					},
-				},
-			},
-		},
-		Choices: &sdcio_schema.SdcioModel_Choices{
-			Case1: &sdcio_schema.SdcioModel_Choices_Case1{
-				CaseElem: &sdcio_schema.SdcioModel_Choices_Case1_CaseElem{
-					Elem: ygot.String("foocaseval"),
-				},
-			},
-		},
-		Leaflist: &sdcio_schema.SdcioModel_Leaflist{
-			Entry: []string{
-				"foo",
-				"bar",
-			},
-		},
-		NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
-			"default": {
-				AdminState:  sdcio_schema.SdcioModelNi_AdminState_disable,
-				Description: ygot.String("Default NI"),
-				Type:        sdcio_schema.SdcioModelNi_NiType_default,
-				Name:        ygot.String("default"),
-			},
-		},
-	}
-
-	notis, err := ygot.TogNMINotifications(d, 0, ygot.GNMINotificationsConfig{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, noti := range notis {
-		for _, upd := range noti.GetUpdate() {
-
-			strPath, err := ygot.PathToStrings(upd.Path)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			val, err := proto.Marshal(utils.FromGNMITypedValue(upd.GetVal()))
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			cacheUpd := cache.NewUpdate(strPath, val, 5, "owner1", 0)
-
-			_, err = root.AddCacheUpdateRecursive(ctx, cacheUpd, true)
-			if err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-
-	root.FinishInsertionPhase()
-
-	jsonStruct, err := root.ToJson()
-	if err != nil {
-		t.Fatal(err)
-	}
-	jsonStr, err := json.MarshalIndent(jsonStruct, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	expected := `{
+	var tests = []struct {
+		name             string
+		ietf             bool
+		onlyNewOrUpdated bool
+		existingConfig   *sdcio_schema.Device
+		newConfig        *sdcio_schema.Device
+		expected         string
+	}{
+		{
+			name:             "JSON All",
+			ietf:             false,
+			onlyNewOrUpdated: false,
+			existingConfig:   config1,
+			expected: `{
   "choices": {
     "case1": {
       "case-elem": {
@@ -1500,13 +1425,287 @@ func TestToJson(t *testing.T) {
       "name": "default",
       "type": "default"
     }
+  ],
+  "patterntest": "foo"
+}`,
+		},
+		{
+			name:             "JsonIETF All",
+			ietf:             true,
+			onlyNewOrUpdated: false,
+			existingConfig:   config1,
+			expected: `{
+  "sdcio_model:patterntest": "foo",
+  "sdcio_model_choice:choices": {
+    "case1": {
+      "case-elem": {
+        "elem": "foocaseval"
+      }
+    }
+  },
+  "sdcio_model_if:interface": [
+    {
+      "admin-state": "enable",
+      "description": "Foo",
+      "name": "ethernet-1/1",
+      "subinterface": [
+        {
+          "description": "Subinterface 0",
+          "index": 0,
+          "type": "routed"
+        }
+      ]
+    }
+  ],
+  "sdcio_model_leaflist:leaflist": {
+    "entry": [
+      "foo",
+      "bar"
+    ]
+  },
+  "sdcio_model_ni:network-instance": [
+    {
+      "admin-state": "disable",
+      "description": "Default NI",
+      "name": "default",
+      "type": "default"
+    }
   ]
-}`
+}`,
+		},
+		{
+			name:             "JSON NewOrUpdated - no new",
+			ietf:             false,
+			onlyNewOrUpdated: true,
+			existingConfig:   config1,
 
-	fmt.Println(string(jsonStr))
+			expected: `{}`,
+		},
+		{
+			name:             "JSON_IETF NewOrUpdated - no new",
+			ietf:             true,
+			onlyNewOrUpdated: true,
+			existingConfig:   config1,
 
-	if diff := cmp.Diff(string(jsonStr), expected); diff != "" {
-		t.Fatalf("ToJson() failed.\nDiff:\n%s", diff)
+			expected: `{}`,
+		},
+		{
+			name:             "JSON NewOrUpdated - with new",
+			ietf:             false,
+			onlyNewOrUpdated: true,
+			existingConfig:   config1,
+			newConfig:        config2,
+			expected: `{
+  "interface": [
+    {
+      "admin-state": "enable",
+      "description": "Foo",
+      "name": "ethernet-1/2",
+      "subinterface": [
+        {
+          "description": "Subinterface 5",
+          "index": 5,
+          "type": "routed"
+        }
+      ]
+    }
+  ],
+  "network-instance": [
+    {
+      "admin-state": "enable",
+      "description": "Other NI",
+      "name": "other",
+      "type": "ip-vrf"
+    }
+  ],
+  "patterntest": "bar"
+}`,
+		},
+		{
+			name:             "JSON_IETF NewOrUpdated - with new",
+			ietf:             true,
+			onlyNewOrUpdated: true,
+			existingConfig:   config1,
+			newConfig:        config2,
+			expected: `{
+  "sdcio_model:patterntest": "bar",
+  "sdcio_model_if:interface": [
+    {
+      "admin-state": "enable",
+      "description": "Foo",
+      "name": "ethernet-1/2",
+      "subinterface": [
+        {
+          "description": "Subinterface 5",
+          "index": 5,
+          "type": "routed"
+        }
+      ]
+    }
+  ],
+  "sdcio_model_ni:network-instance": [
+    {
+      "admin-state": "enable",
+      "description": "Other NI",
+      "name": "other",
+      "type": "ip-vrf"
+    }
+  ]
+}`,
+		},
 	}
 
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scb, err := getSchemaClientBound(t)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ctx := context.Background()
+
+			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "owner1")
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = addToRoot(ctx, root, tt.existingConfig, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = addToRoot(ctx, root, tt.newConfig, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			root.FinishInsertionPhase()
+
+			var jsonStruct any
+
+			if tt.ietf {
+				jsonStruct, err = root.ToJsonIETF(tt.onlyNewOrUpdated)
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				jsonStruct, err = root.ToJson(tt.onlyNewOrUpdated)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			jsonStr, err := json.MarshalIndent(jsonStruct, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			fmt.Println(string(jsonStr))
+
+			if diff := cmp.Diff(tt.expected, string(jsonStr)); diff != "" {
+				var ietfStr = ""
+				if tt.ietf {
+					ietfStr = "IETF"
+				}
+				t.Fatalf("ToJson%s() failed.\nDiff:\n%s", ietfStr, diff)
+			}
+		})
+	}
+}
+
+var config1 = &sdcio_schema.Device{
+	Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+		"ethernet-1/1": {
+			AdminState:  sdcio_schema.SdcioModelIf_AdminState_enable,
+			Description: ygot.String("Foo"),
+			Name:        ygot.String("ethernet-1/1"),
+			Subinterface: map[uint32]*sdcio_schema.SdcioModel_Interface_Subinterface{
+				0: {
+					Description: ygot.String("Subinterface 0"),
+					Type:        sdcio_schema.SdcioModelCommon_SiType_routed,
+					Index:       ygot.Uint32(0),
+				},
+			},
+		},
+	},
+	Choices: &sdcio_schema.SdcioModel_Choices{
+		Case1: &sdcio_schema.SdcioModel_Choices_Case1{
+			CaseElem: &sdcio_schema.SdcioModel_Choices_Case1_CaseElem{
+				Elem: ygot.String("foocaseval"),
+			},
+		},
+	},
+	Leaflist: &sdcio_schema.SdcioModel_Leaflist{
+		Entry: []string{
+			"foo",
+			"bar",
+		},
+	},
+	Patterntest: ygot.String("foo"),
+	NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
+		"default": {
+			AdminState:  sdcio_schema.SdcioModelNi_AdminState_disable,
+			Description: ygot.String("Default NI"),
+			Type:        sdcio_schema.SdcioModelNi_NiType_default,
+			Name:        ygot.String("default"),
+		},
+	},
+}
+
+var config2 = &sdcio_schema.Device{
+	Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+		"ethernet-1/2": {
+			AdminState:  sdcio_schema.SdcioModelIf_AdminState_enable,
+			Description: ygot.String("Foo"),
+			Name:        ygot.String("ethernet-1/2"),
+			Subinterface: map[uint32]*sdcio_schema.SdcioModel_Interface_Subinterface{
+				5: {
+					Description: ygot.String("Subinterface 5"),
+					Type:        sdcio_schema.SdcioModelCommon_SiType_routed,
+					Index:       ygot.Uint32(5),
+				},
+			},
+		},
+	},
+	Patterntest: ygot.String("bar"),
+	NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
+		"other": {
+			AdminState:  sdcio_schema.SdcioModelNi_AdminState_enable,
+			Description: ygot.String("Other NI"),
+			Type:        sdcio_schema.SdcioModelNi_NiType_ip_vrf,
+			Name:        ygot.String("other"),
+		},
+	},
+}
+
+func addToRoot(ctx context.Context, root *RootEntry, conf *sdcio_schema.Device, isNew bool) error {
+	if conf == nil {
+		return nil
+	}
+
+	notis, err := ygot.TogNMINotifications(conf, 0, ygot.GNMINotificationsConfig{})
+	if err != nil {
+		return err
+	}
+
+	for _, noti := range notis {
+		for _, upd := range noti.GetUpdate() {
+
+			strPath, err := ygot.PathToStrings(upd.Path)
+			if err != nil {
+				return err
+			}
+
+			val, err := proto.Marshal(utils.FromGNMITypedValue(upd.GetVal()))
+			if err != nil {
+				return err
+			}
+
+			cacheUpd := cache.NewUpdate(strPath, val, 5, "owner1", 0)
+
+			_, err = root.AddCacheUpdateRecursive(ctx, cacheUpd, isNew)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

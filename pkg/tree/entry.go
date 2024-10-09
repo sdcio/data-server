@@ -109,60 +109,15 @@ type Entry interface {
 	remainsToExist() bool
 	getChildren() map[string]Entry
 	FilterChilds(keys map[string]string) ([]Entry, error)
-	// ToJson returns the Branch of the tree as a struct that can be marshalled as JSON
-	ToJson() (any, error)
+	// ToJson returns the Tree contained structure as JSON
+	// use e.g. json.MarshalIndent() on the returned struct
+	ToJson(onlyNewOrUpdated bool) (any, error)
+	// ToJsonIETF returns the Tree contained structure as JSON_IETF
+	// use e.g. json.MarshalIndent() on the returned struct
+	ToJsonIETF(onlyNewOrUpdated bool) (any, error)
+	// toJsonInternal the internal function that produces JSON and JSON_IETF
+	// Not for external usage
+	toJsonInternal(onlyNewOrUpdated bool, ietf bool, actualPrefix string) (j any, err error)
 }
 
 type EntryVisitor func(s *sharedEntryAttributes) error
-
-// // TreeWalkerSchemaRetriever returns an EntryVisitor, that populates the tree entries with the corresponding schema entries.
-// func TreeWalkerSchemaRetriever(ctx context.Context, scb SchemaClient.SchemaClientBound) EntryVisitor {
-// 	// the schemaIndex is used as a lookup cache for Schema elements,
-// 	// to prevent repetetive requests for the same schema element
-// 	schemaIndex := map[string]*sdcpb.SchemaElem{}
-
-// 	return func(s *sharedEntryAttributes) error {
-// 		// if schema is already set, return early
-// 		if s.schema != nil {
-// 			return nil
-// 		}
-
-// 		// convert the []string path into sdcpb.path for schema retrieval
-// 		sdcpbPath, err := scb.ToPath(ctx, s.Path())
-// 		if err != nil {
-// 			return err
-// 		}
-
-// 		// // check if the actual path points to a key value (the last path element contains a key)
-// 		// // if so, we can skip querying the schema server
-// 		// if len(sdcpbPath.Elem) > 0 && len(sdcpbPath.Elem[len(sdcpbPath.Elem)-1].Key) > 0 {
-// 		// 	// s.schema remains nil
-// 		// 	// s.isSchemaElement remains false
-// 		// 	return nil
-// 		// }
-
-// 		// convert the path into a keyless path, for schema index lookups.
-// 		keylessPathSlice := utils.ToStrings(sdcpbPath, false, true)
-// 		keylessPath := strings.Join(keylessPathSlice, KeysIndexSep)
-
-// 		// lookup schema in schemaindex, preventing consecutive gets from the schema server
-// 		if v, exists := schemaIndex[keylessPath]; exists {
-// 			// set the schema retrieved from SchemaIndex
-// 			s.schema = v
-// 			// we're done, schema is set, return
-// 			return nil
-// 		}
-
-// 		// if schema wasn't found in index, go and fetch it
-// 		schemaRsp, err := scb.GetSchema(ctx, sdcpbPath)
-// 		if err != nil {
-// 			return err
-// 		}
-
-// 		// store schema in schemaindex for next lookup
-// 		schemaIndex[keylessPath] = schemaRsp.GetSchema()
-// 		// set the sharedEntryAttributes related values
-// 		s.schema = schemaRsp.GetSchema()
-// 		return nil
-// 	}
-// }
