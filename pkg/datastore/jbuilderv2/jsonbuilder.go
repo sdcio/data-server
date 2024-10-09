@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
@@ -108,7 +109,7 @@ func (j *jsonBuilder) AddUpdate(ctx context.Context, obj map[string]any, p *sdcp
 	if isDefault(tv, psc.GetSchema()) && tv != nil && tv.GetValue() != nil {
 		return nil
 	}
-	value := getValue(tv)
+	value := utils.GetJsonValue(tv)
 
 	pes, err := j.buildPathElems(ctx, p)
 	if err != nil {
@@ -389,44 +390,4 @@ func tvIsEqual(tv *sdcpb.TypedValue, val string) bool {
 	case *sdcpb.TypedValue_AnyVal:
 	}
 	return false
-}
-
-func getValue(tv *sdcpb.TypedValue) any {
-	switch tv.Value.(type) {
-	case *sdcpb.TypedValue_AsciiVal:
-		return tv.GetAsciiVal()
-	case *sdcpb.TypedValue_BoolVal:
-		return tv.GetBoolVal()
-	case *sdcpb.TypedValue_BytesVal:
-		return tv.GetBytesVal()
-	case *sdcpb.TypedValue_DecimalVal:
-		return tv.GetDecimalVal()
-	case *sdcpb.TypedValue_EmptyVal:
-		return map[string]any{}
-	case *sdcpb.TypedValue_FloatVal:
-		return tv.GetFloatVal()
-	case *sdcpb.TypedValue_DoubleVal:
-		return tv.GetDoubleVal()
-	case *sdcpb.TypedValue_IntVal:
-		return tv.GetIntVal()
-	case *sdcpb.TypedValue_StringVal:
-		return tv.GetStringVal()
-	case *sdcpb.TypedValue_UintVal:
-		return tv.GetUintVal()
-	case *sdcpb.TypedValue_JsonIetfVal:
-		return tv.GetJsonIetfVal()
-	case *sdcpb.TypedValue_JsonVal:
-		return tv.GetJsonVal()
-	case *sdcpb.TypedValue_LeaflistVal:
-		rs := make([]any, 0, len(tv.GetLeaflistVal().GetElement()))
-		for _, e := range tv.GetLeaflistVal().GetElement() {
-			rs = append(rs, getValue(e))
-		}
-		return rs
-	case *sdcpb.TypedValue_ProtoBytes:
-		return tv.GetProtoBytes()
-	case *sdcpb.TypedValue_AnyVal:
-		return tv.GetAnyVal()
-	}
-	return nil
 }
