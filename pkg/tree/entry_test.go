@@ -13,6 +13,7 @@ import (
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
 	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/datastore/target/netconf"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -1708,4 +1709,102 @@ func addToRoot(ctx context.Context, root *RootEntry, conf *sdcio_schema.Device, 
 		}
 	}
 	return nil
+}
+
+func TestToXMLTable(t *testing.T) {
+
+	var tests = []struct {
+		name                   string
+		onlyNewOrUpdated       bool
+		honorNamespace         bool
+		operationWithNamespace bool
+		useOperationRemove     bool
+		existingConfig         *sdcio_schema.Device
+		newConfig              *sdcio_schema.Device
+		expected               string
+	}{
+		// {
+		// 	name:             "XML All",
+		// 	onlyNewOrUpdated: false,
+		// 	existingConfig:   config1,
+		// 	expected:         ``,
+		// },
+		// {
+		// 	name:             "XML - no new",
+		// 	onlyNewOrUpdated: true,
+		// 	existingConfig:   config1,
+		// 	expected: `{}`,
+		// },
+		// {
+		// 	name:             "XML NewOrUpdated - with new",
+		// 	onlyNewOrUpdated: true,
+		// 	existingConfig:   config1,
+		// 	newConfig:        config2,
+		// 	expected:         ``,
+		// },
+		{
+			name:                   "XML All",
+			onlyNewOrUpdated:       false,
+			existingConfig:         config1,
+			expected:               ``,
+			honorNamespace:         true,
+			operationWithNamespace: true,
+			useOperationRemove:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scb, err := getSchemaClientBound(t)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ctx := context.Background()
+
+			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "owner1")
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = addToRoot(ctx, root, tt.existingConfig, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = addToRoot(ctx, root, tt.newConfig, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			root.FinishInsertionPhase()
+
+			xmlB := netconf.NewXMLConfigBuilder(scb, &netconf.XMLConfigBuilderOpts{HonorNamespace: true, OperationWithNamespace: true})
+
+			for _, x := range root.GetHighestPrecedence(false) {
+				val, _ := x.Update.Value()
+				path, _ := x.parentEntry.SdcpbPath()
+				xmlB.AddValue(ctx, path, val)
+			}
+			doc, _ := xmlB.GetDoc()
+			fmt.Println("XMLBUILDER - START")
+			fmt.Println(doc)
+			fmt.Println("XMLBUILDER - END")
+
+			xmlDoc, err := root.ToXML(tt.onlyNewOrUpdated, tt.honorNamespace, tt.operationWithNamespace)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			xmlDoc.Indent(2)
+			xmlDocStr, err := xmlDoc.WriteToString()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			fmt.Println(string(xmlDocStr))
+
+			if diff := cmp.Diff(tt.expected, string(xmlDocStr)); diff != "" {
+				t.Fatalf("ToXML() failed.\nDiff:\n%s", diff)
+			}
+		})
+	}
 }

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
+	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -1049,7 +1050,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool,
 			// if JSON_IETF is requested, acquire prefix
 			if ietf {
 				// get the prefix
-				prefix = getSchemaElemPrefix(c.GetSchema())
+				prefix = getSchemaElemModuleName(c.GetSchema())
 				// only add prefix if it is not empty and is different from the
 				// given actualPrefix
 				if prefix != "" && prefix != actualPrefix {
@@ -1100,7 +1101,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool,
 			key := k
 			if ietf {
 				// get the prefix
-				prefix = getSchemaElemPrefix(c.GetSchema())
+				prefix = getSchemaElemModuleName(c.GetSchema())
 				// only add prefix if it is not empty and is different from the
 				// given actualPrefix
 				if prefix != "" && prefix != actualPrefix {
@@ -1133,14 +1134,129 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool,
 	return nil, fmt.Errorf("unable to convert to json (%s)", s.Path())
 }
 
-func getSchemaElemPrefix(s *sdcpb.SchemaElem) (prefix string) {
+func getSchemaElemModuleName(s *sdcpb.SchemaElem) (moduleName string) {
 	switch x := s.Schema.(type) {
 	case *sdcpb.SchemaElem_Container:
-		return x.Container.GetPrefix()
+		return x.Container.GetModuleName()
 	case *sdcpb.SchemaElem_Leaflist:
-		return x.Leaflist.GetPrefix()
+		return x.Leaflist.GetModuleName()
 	case *sdcpb.SchemaElem_Field:
-		return x.Field.GetPrefix()
+		return x.Field.GetModuleName()
 	}
 	return ""
+}
+
+func (s *sharedEntryAttributes) ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool) (*etree.Document, error) {
+	doc := etree.NewDocument()
+	_, err := s.toXmlInternal(&doc.Element, onlyNewOrUpdated, honorNamespace, operationWithNamespace)
+	if err != nil {
+		return nil, err
+	}
+	return doc, nil
+}
+
+func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool) (doAdd bool, err error) {
+	switch s.schema.GetSchema().(type) {
+	case nil:
+		overAllDoAdd := false
+		for _, c := range s.filterActiveChoiceCaseChilds() {
+			// recurse the call
+			doAdd, err := c.toXmlInternal(parent, onlyNewOrUpdated, honorNamespace, operationWithNamespace)
+			if err != nil {
+				return false, err
+			}
+			overAllDoAdd = doAdd || overAllDoAdd
+		}
+		return overAllDoAdd, nil
+	case *sdcpb.SchemaElem_Container:
+		overAllDoAdd := false
+		if len(s.GetSchemaKeys()) > 0 {
+			// if the container contains keys, then it is a list
+			// hence must be rendered as an array
+			childs, err := s.FilterChilds(nil)
+			if err != nil {
+				return false, err
+			}
+
+			for _, c := range childs {
+				p := etree.NewElement(s.PathName())
+				if honorNamespace && !namespaceIsEqual(s, s.parent) {
+					p.CreateAttr("xmlns", getNamespaceFromGetSchema(s.GetSchema()))
+				}
+				doAdd, err := c.toXmlInternal(p, onlyNewOrUpdated, honorNamespace, operationWithNamespace)
+				if err != nil {
+					return false, err
+				}
+				overAllDoAdd = doAdd || overAllDoAdd
+				if doAdd {
+					parent.AddChild(p)
+				}
+			}
+			return overAllDoAdd, nil
+		}
+
+		for _, c := range s.filterActiveChoiceCaseChilds() {
+			p := etree.NewElement(s.PathName())
+			if s.parent != nil {
+				if honorNamespace && !namespaceIsEqual(s, s.parent) {
+					p.CreateAttr("xmlns", getNamespaceFromGetSchema(s.GetSchema()))
+				}
+			} else {
+				p = parent
+			}
+			doAdd, err := c.toXmlInternal(p, onlyNewOrUpdated, honorNamespace, operationWithNamespace)
+			if err != nil {
+				return false, err
+			}
+			overAllDoAdd = doAdd || overAllDoAdd
+			if doAdd && s.parent != nil {
+				parent.AddChild(p)
+			}
+		}
+		return overAllDoAdd, nil
+	case *sdcpb.SchemaElem_Leaflist, *sdcpb.SchemaElem_Field:
+		le := s.leafVariants.GetHighestPrecedence(false)
+		if onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
+			return false, nil
+		}
+		v, err := le.Update.Value()
+		if err != nil {
+			return false, err
+		}
+		ns := ""
+		if honorNamespace && !namespaceIsEqual(s, s.parent) {
+			ns = getNamespaceFromGetSchema(s.GetSchema())
+		}
+		utils.TypedValueToXML(parent, v, s.PathName(), ns, operationWithNamespace)
+
+		return true, nil
+	}
+	return false, fmt.Errorf("unable to convert to xml (%s)", s.Path())
+}
+
+func getNamespaceFromGetSchema(s *sdcpb.SchemaElem) string {
+	switch s.GetSchema().(type) {
+	case *sdcpb.SchemaElem_Container:
+		return s.GetContainer().GetNamespace()
+	case *sdcpb.SchemaElem_Field:
+		return s.GetField().GetNamespace()
+	case *sdcpb.SchemaElem_Leaflist:
+		return s.GetLeaflist().GetNamespace()
+	}
+	return ""
+}
+
+func namespaceIsEqual(a Entry, b Entry) bool {
+	aSchema := a.GetSchema()
+	bSchema := b.GetSchema()
+
+	if aSchema == nil {
+		aAncest, _ := a.GetFirstAncestorWithSchema()
+		aSchema = aAncest.GetSchema()
+	}
+	if bSchema == nil {
+		bAncest, _ := b.GetFirstAncestorWithSchema()
+		bSchema = bAncest.GetSchema()
+	}
+	return getNamespaceFromGetSchema(aSchema) == getNamespaceFromGetSchema(bSchema)
 }
