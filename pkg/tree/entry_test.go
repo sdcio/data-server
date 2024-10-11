@@ -1390,7 +1390,7 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JSON All",
 			ietf:             false,
 			onlyNewOrUpdated: false,
-			existingConfig:   config1,
+			existingConfig:   config1(),
 			expected: `{
   "choices": {
     "case1": {
@@ -1434,7 +1434,7 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JsonIETF All",
 			ietf:             true,
 			onlyNewOrUpdated: false,
-			existingConfig:   config1,
+			existingConfig:   config1(),
 			expected: `{
   "sdcio_model:patterntest": "foo",
   "sdcio_model_choice:choices": {
@@ -1478,7 +1478,7 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JSON NewOrUpdated - no new",
 			ietf:             false,
 			onlyNewOrUpdated: true,
-			existingConfig:   config1,
+			existingConfig:   config1(),
 
 			expected: `{}`,
 		},
@@ -1486,7 +1486,7 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JSON_IETF NewOrUpdated - no new",
 			ietf:             true,
 			onlyNewOrUpdated: true,
-			existingConfig:   config1,
+			existingConfig:   config1(),
 
 			expected: `{}`,
 		},
@@ -1494,8 +1494,8 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JSON NewOrUpdated - with new",
 			ietf:             false,
 			onlyNewOrUpdated: true,
-			existingConfig:   config1,
-			newConfig:        config2,
+			existingConfig:   config1(),
+			newConfig:        config2(),
 			expected: `{
   "interface": [
     {
@@ -1526,8 +1526,8 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JSON_IETF NewOrUpdated - with new",
 			ietf:             true,
 			onlyNewOrUpdated: true,
-			existingConfig:   config1,
-			newConfig:        config2,
+			existingConfig:   config1(),
+			newConfig:        config2(),
 			expected: `{
   "sdcio_model:patterntest": "bar",
   "sdcio_model_if:interface": [
@@ -1563,18 +1563,20 @@ func TestToJsonTable(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			owner := "owner1"
+
 			ctx := context.Background()
 
-			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "owner1")
+			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), owner)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = addToRoot(ctx, root, tt.existingConfig, false)
+			err = addToRoot(ctx, root, tt.existingConfig, false, owner)
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = addToRoot(ctx, root, tt.newConfig, true)
+			err = addToRoot(ctx, root, tt.newConfig, true, owner)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1612,72 +1614,77 @@ func TestToJsonTable(t *testing.T) {
 	}
 }
 
-var config1 = &sdcio_schema.Device{
-	Interface: map[string]*sdcio_schema.SdcioModel_Interface{
-		"ethernet-1/1": {
-			AdminState:  sdcio_schema.SdcioModelIf_AdminState_enable,
-			Description: ygot.String("Foo"),
-			Name:        ygot.String("ethernet-1/1"),
-			Subinterface: map[uint32]*sdcio_schema.SdcioModel_Interface_Subinterface{
-				0: {
-					Description: ygot.String("Subinterface 0"),
-					Type:        sdcio_schema.SdcioModelCommon_SiType_routed,
-					Index:       ygot.Uint32(0),
+func config1() *sdcio_schema.Device {
+	return &sdcio_schema.Device{
+		Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+			"ethernet-1/1": {
+				AdminState:  sdcio_schema.SdcioModelIf_AdminState_enable,
+				Description: ygot.String("Foo"),
+				Name:        ygot.String("ethernet-1/1"),
+				Subinterface: map[uint32]*sdcio_schema.SdcioModel_Interface_Subinterface{
+					0: {
+						Description: ygot.String("Subinterface 0"),
+						Type:        sdcio_schema.SdcioModelCommon_SiType_routed,
+						Index:       ygot.Uint32(0),
+					},
 				},
 			},
 		},
-	},
-	Choices: &sdcio_schema.SdcioModel_Choices{
-		Case1: &sdcio_schema.SdcioModel_Choices_Case1{
-			CaseElem: &sdcio_schema.SdcioModel_Choices_Case1_CaseElem{
-				Elem: ygot.String("foocaseval"),
-			},
-		},
-	},
-	Leaflist: &sdcio_schema.SdcioModel_Leaflist{
-		Entry: []string{
-			"foo",
-			"bar",
-		},
-	},
-	Patterntest: ygot.String("foo"),
-	NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
-		"default": {
-			AdminState:  sdcio_schema.SdcioModelNi_AdminState_disable,
-			Description: ygot.String("Default NI"),
-			Type:        sdcio_schema.SdcioModelNi_NiType_default,
-			Name:        ygot.String("default"),
-		},
-	},
+		// Choices: &sdcio_schema.SdcioModel_Choices{
+		// 	Case1: &sdcio_schema.SdcioModel_Choices_Case1{
+		// 		CaseElem: &sdcio_schema.SdcioModel_Choices_Case1_CaseElem{
+		// 			Elem: ygot.String("foocaseval"),
+		// 		},
+		// 	},
+		// },
+		// Leaflist: &sdcio_schema.SdcioModel_Leaflist{
+		// 	Entry: []string{
+		// 		"foo",
+		// 		"bar",
+		// 	},
+		// },
+		// Patterntest: ygot.String("foo"),
+		// NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
+		// 	"default": {
+		// 		AdminState:  sdcio_schema.SdcioModelNi_AdminState_disable,
+		// 		Description: ygot.String("Default NI"),
+		// 		Type:        sdcio_schema.SdcioModelNi_NiType_default,
+		// 		Name:        ygot.String("default"),
+		// 	},
+		// },
+	}
 }
 
-var config2 = &sdcio_schema.Device{
-	Interface: map[string]*sdcio_schema.SdcioModel_Interface{
-		"ethernet-1/2": {
-			AdminState:  sdcio_schema.SdcioModelIf_AdminState_enable,
-			Description: ygot.String("Foo"),
-			Name:        ygot.String("ethernet-1/2"),
-			Subinterface: map[uint32]*sdcio_schema.SdcioModel_Interface_Subinterface{
-				5: {
-					Description: ygot.String("Subinterface 5"),
-					Type:        sdcio_schema.SdcioModelCommon_SiType_routed,
-					Index:       ygot.Uint32(5),
+func config2() *sdcio_schema.Device {
+	return &sdcio_schema.Device{
+		Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+			"ethernet-1/2": {
+				AdminState:  sdcio_schema.SdcioModelIf_AdminState_enable,
+				Description: ygot.String("Foo"),
+				Name:        ygot.String("ethernet-1/2"),
+				Subinterface: map[uint32]*sdcio_schema.SdcioModel_Interface_Subinterface{
+					5: {
+						Description: ygot.String("Subinterface 5"),
+						Type:        sdcio_schema.SdcioModelCommon_SiType_routed,
+						Index:       ygot.Uint32(5),
+					},
 				},
 			},
 		},
-	},
-	Patterntest: ygot.String("bar"),
-	NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
-		"other": {
-			AdminState:  sdcio_schema.SdcioModelNi_AdminState_enable,
-			Description: ygot.String("Other NI"),
-			Type:        sdcio_schema.SdcioModelNi_NiType_ip_vrf,
-			Name:        ygot.String("other"),
+		Patterntest: ygot.String("bar"),
+		NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
+			"other": {
+				AdminState:  sdcio_schema.SdcioModelNi_AdminState_enable,
+				Description: ygot.String("Other NI"),
+				Type:        sdcio_schema.SdcioModelNi_NiType_ip_vrf,
+				Name:        ygot.String("other"),
+			},
 		},
-	},
+	}
+
 }
 
-func addToRoot(ctx context.Context, root *RootEntry, conf *sdcio_schema.Device, isNew bool) error {
+func addToRoot(ctx context.Context, root *RootEntry, conf *sdcio_schema.Device, isNew bool, owner string) error {
 	if conf == nil {
 		return nil
 	}
@@ -1700,7 +1707,7 @@ func addToRoot(ctx context.Context, root *RootEntry, conf *sdcio_schema.Device, 
 				return err
 			}
 
-			cacheUpd := cache.NewUpdate(strPath, val, 5, "owner1", 0)
+			cacheUpd := cache.NewUpdate(strPath, val, 5, owner, 0)
 
 			_, err = root.AddCacheUpdateRecursive(ctx, cacheUpd, isNew)
 			if err != nil {
@@ -1712,7 +1719,6 @@ func addToRoot(ctx context.Context, root *RootEntry, conf *sdcio_schema.Device, 
 }
 
 func TestToXMLTable(t *testing.T) {
-
 	var tests = []struct {
 		name                   string
 		onlyNewOrUpdated       bool
@@ -1720,7 +1726,8 @@ func TestToXMLTable(t *testing.T) {
 		operationWithNamespace bool
 		useOperationRemove     bool
 		existingConfig         *sdcio_schema.Device
-		newConfig              *sdcio_schema.Device
+		runningConfig          *sdcio_schema.Device
+		newConfig              func() *sdcio_schema.Device
 		expected               string
 	}{
 		// {
@@ -1744,12 +1751,30 @@ func TestToXMLTable(t *testing.T) {
 		// },
 		{
 			name:                   "XML All",
-			onlyNewOrUpdated:       false,
-			existingConfig:         config1,
+			onlyNewOrUpdated:       true,
+			existingConfig:         config1(),
 			expected:               ``,
 			honorNamespace:         true,
 			operationWithNamespace: true,
 			useOperationRemove:     true,
+			newConfig: func() *sdcio_schema.Device {
+				c := config1()
+				// delete(c.Interface, "ethernet-1/1")
+				c.Interface["ethernet-1/1"].Description = nil
+				c.Interface["ethernet-1/1"].Subinterface[0].Description = nil
+				c.Interface["ethernet-1/1"].Subinterface[0].Type = sdcio_schema.SdcioModelCommon_SiType_bridged
+				// c.Interface["ethernet-1/2"] = &sdcio_schema.SdcioModel_Interface{
+				// 	AdminState:  sdcio_schema.SdcioModelIf_AdminState_enable,
+				// 	Name:        ygot.String("ethernet-1/2"),
+				// 	Description: ygot.String("Test"),
+				// }
+				// c.Patterntest = nil
+				// c.Choices.Case1.CaseElem.Elem = nil
+				// c.Choices.Case2 = &sdcio_schema.SdcioModel_Choices_Case2{
+				// 	Log: ygot.Bool(true),
+				// }
+				return c
+			},
 		},
 	}
 
@@ -1759,19 +1784,30 @@ func TestToXMLTable(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			owner := "owner1"
 
 			ctx := context.Background()
 
-			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "owner1")
+			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), owner)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = addToRoot(ctx, root, tt.existingConfig, false)
+			err = addToRoot(ctx, root, tt.existingConfig, false, owner)
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = addToRoot(ctx, root, tt.newConfig, true)
+
+			if tt.newConfig != nil {
+				root.markOwnerDelete(owner)
+
+				err = addToRoot(ctx, root, tt.newConfig(), false, owner)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			err = addToRoot(ctx, root, tt.runningConfig, true, "running")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1789,7 +1825,7 @@ func TestToXMLTable(t *testing.T) {
 			fmt.Println(doc)
 			fmt.Println("XMLBUILDER - END")
 
-			xmlDoc, err := root.ToXML(tt.onlyNewOrUpdated, tt.honorNamespace, tt.operationWithNamespace)
+			xmlDoc, err := root.ToXML(tt.onlyNewOrUpdated, tt.honorNamespace, tt.operationWithNamespace, tt.useOperationRemove)
 			if err != nil {
 				t.Fatal(err)
 			}

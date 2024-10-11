@@ -20,18 +20,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/beevik/etree"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
-)
-
-const (
-	ncBase1_0 = "urn:ietf:params:xml:ns:netconf:base:1.0"
-
-	operationDelete  = "delete"
-	operationRemove  = "remove"
-	operationReplace = "replace"
 )
 
 func GetValue(updValue *gnmi.TypedValue) (interface{}, error) {
@@ -536,32 +527,6 @@ func EqualTypedValues(v1, v2 *sdcpb.TypedValue) bool {
 	}
 	// TODO: Why is this default case to return true??
 	return true
-}
-
-func TypedValueToXML(parent *etree.Element, tv *sdcpb.TypedValue, name string, namespace string, operationWithNamespace bool) {
-	switch tv.Value.(type) {
-	case *sdcpb.TypedValue_LeaflistVal:
-		// we add all the leaflist entries as their own values
-		for _, tvle := range tv.GetLeaflistVal().GetElement() {
-			TypedValueToXML(parent, tvle, name, namespace, operationWithNamespace)
-		}
-		operKey := "operation"
-		if operationWithNamespace {
-			parent.CreateAttr("xmlns:nc", ncBase1_0)
-			operKey = "nc:" + operKey
-		}
-		// add the delete operation attribute
-		parent.CreateAttr(operKey, operationReplace)
-
-	case *sdcpb.TypedValue_EmptyVal:
-		parent.CreateElement(name)
-	default:
-		subelem := parent.CreateElement(name)
-		if namespace != "" {
-			subelem.CreateAttr("xmlns", namespace)
-		}
-		subelem.SetText(TypedValueToString(tv))
-	}
 }
 
 func TypedValueToString(tv *sdcpb.TypedValue) string {

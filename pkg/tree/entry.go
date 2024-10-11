@@ -119,8 +119,8 @@ type Entry interface {
 	// toJsonInternal the internal function that produces JSON and JSON_IETF
 	// Not for external usage
 	toJsonInternal(onlyNewOrUpdated bool, ietf bool, actualPrefix string) (j any, err error)
-	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool) (*etree.Document, error)
-	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool) (doAdd bool, err error)
+	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
+	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error)
 }
 
 type EntryVisitor func(s *sharedEntryAttributes) error
