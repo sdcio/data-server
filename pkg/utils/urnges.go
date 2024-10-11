@@ -48,6 +48,9 @@ func (r *URng) String() string {
 }
 
 func (r *URnges) isWithinAnyRange(value string) (*sdcpb.TypedValue, error) {
+	if len(value) == 0 {
+		return nil, nil
+	}
 	uintValue, err := strconv.ParseUint(value, 10, 64)
 	if err != nil {
 		return nil, err
