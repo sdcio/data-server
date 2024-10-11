@@ -228,31 +228,6 @@ func ToSchemaTypedValue(v any) *sdcpb.TypedValue {
 	return nil
 }
 
-// func ToGNMITypedValue(v any) *gnmi.TypedValue {
-// 	log.Infof("to gNMI value %T, %v", v, v)
-// 	switch v := v.(type) {
-// 	case *sdcpb.TypedValue_AsciiVal:
-// 		return &gnmi.TypedValue{
-// 			Value: &gnmi.TypedValue_AsciiVal{
-// 				AsciiVal: v.AsciiVal,
-// 			},
-// 		}
-// 	case *sdcpb.TypedValue_StringVal:
-// 		return &gnmi.TypedValue{
-// 			Value: &gnmi.TypedValue_StringVal{
-// 				StringVal: v.StringVal,
-// 			},
-// 		}
-// 	case string:
-// 		return &gnmi.TypedValue{
-// 			Value: &gnmi.TypedValue_AsciiVal{
-// 				AsciiVal: v,
-// 			},
-// 		}
-// 	}
-// 	return nil
-// }
-
 func ToGNMITypedValue(v *sdcpb.TypedValue) *gnmi.TypedValue {
 	if v == nil {
 		return nil
