@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/beevik/etree"
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
 	"github.com/sdcio/data-server/pkg/cache"
-	"github.com/sdcio/data-server/pkg/datastore/target/netconf"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -1630,28 +1630,28 @@ func config1() *sdcio_schema.Device {
 				},
 			},
 		},
-		// Choices: &sdcio_schema.SdcioModel_Choices{
-		// 	Case1: &sdcio_schema.SdcioModel_Choices_Case1{
-		// 		CaseElem: &sdcio_schema.SdcioModel_Choices_Case1_CaseElem{
-		// 			Elem: ygot.String("foocaseval"),
-		// 		},
-		// 	},
-		// },
-		// Leaflist: &sdcio_schema.SdcioModel_Leaflist{
-		// 	Entry: []string{
-		// 		"foo",
-		// 		"bar",
-		// 	},
-		// },
-		// Patterntest: ygot.String("foo"),
-		// NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
-		// 	"default": {
-		// 		AdminState:  sdcio_schema.SdcioModelNi_AdminState_disable,
-		// 		Description: ygot.String("Default NI"),
-		// 		Type:        sdcio_schema.SdcioModelNi_NiType_default,
-		// 		Name:        ygot.String("default"),
-		// 	},
-		// },
+		Choices: &sdcio_schema.SdcioModel_Choices{
+			Case1: &sdcio_schema.SdcioModel_Choices_Case1{
+				CaseElem: &sdcio_schema.SdcioModel_Choices_Case1_CaseElem{
+					Elem: ygot.String("foocaseval"),
+				},
+			},
+		},
+		Leaflist: &sdcio_schema.SdcioModel_Leaflist{
+			Entry: []string{
+				"foo",
+				"bar",
+			},
+		},
+		Patterntest: ygot.String("foo"),
+		NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
+			"default": {
+				AdminState:  sdcio_schema.SdcioModelNi_AdminState_disable,
+				Description: ygot.String("Default NI"),
+				Type:        sdcio_schema.SdcioModelNi_NiType_default,
+				Name:        ygot.String("default"),
+			},
+		},
 	}
 }
 
@@ -1730,49 +1730,186 @@ func TestToXMLTable(t *testing.T) {
 		newConfig              func() *sdcio_schema.Device
 		expected               string
 	}{
-		// {
-		// 	name:             "XML All",
-		// 	onlyNewOrUpdated: false,
-		// 	existingConfig:   config1,
-		// 	expected:         ``,
-		// },
-		// {
-		// 	name:             "XML - no new",
-		// 	onlyNewOrUpdated: true,
-		// 	existingConfig:   config1,
-		// 	expected: `{}`,
-		// },
-		// {
-		// 	name:             "XML NewOrUpdated - with new",
-		// 	onlyNewOrUpdated: true,
-		// 	existingConfig:   config1,
-		// 	newConfig:        config2,
-		// 	expected:         ``,
-		// },
 		{
-			name:                   "XML All",
-			onlyNewOrUpdated:       true,
-			existingConfig:         config1(),
-			expected:               ``,
+			name:             "XML All",
+			onlyNewOrUpdated: false,
+			existingConfig:   config1(),
+			expected: `<choices>
+  <case1>
+    <case-elem>
+      <elem>foocaseval</elem>
+    </case-elem>
+  </case1>
+</choices>
+<interface>
+  <admin-state>enable</admin-state>
+  <description>Foo</description>
+  <name>ethernet-1/1</name>
+  <subinterface>
+    <description>Subinterface 0</description>
+    <index>0</index>
+    <type>routed</type>
+  </subinterface>
+</interface>
+<leaflist operation="delete">
+  <entry>foo</entry>
+  <entry>bar</entry>
+</leaflist>
+<network-instance>
+  <admin-state>disable</admin-state>
+  <description>Default NI</description>
+  <name>default</name>
+  <type>default</type>
+</network-instance>
+<patterntest>foo</patterntest>
+`,
+		},
+		{
+			name:             "XML - no new",
+			onlyNewOrUpdated: true,
+			existingConfig:   config1(),
+			expected:         ``,
+		},
+		{
+			name:             "XML NewOrUpdated - some elements deleted, some updated",
+			onlyNewOrUpdated: true,
+			existingConfig:   config1(),
+			newConfig:        config2,
+			expected: `<choices operation="delete"/>
+<interface operation="delete">
+  <name>ethernet-1/1</name>
+</interface>
+<interface>
+  <admin-state>enable</admin-state>
+  <description>Foo</description>
+  <name>ethernet-1/2</name>
+  <subinterface>
+    <description>Subinterface 5</description>
+    <index>5</index>
+    <type>routed</type>
+  </subinterface>
+</interface>
+<leaflist operation="delete"/>
+<network-instance operation="delete">
+  <name>default</name>
+</network-instance>
+<network-instance>
+  <admin-state>enable</admin-state>
+  <description>Other NI</description>
+  <name>other</name>
+  <type>ip-vrf</type>
+</network-instance>
+<patterntest>bar</patterntest>
+`,
+		},
+		{
+			name:             "XML - delete ethernet-1/1, honor namespace, operatin With namespace, remove",
+			onlyNewOrUpdated: true,
+			existingConfig:   config1(),
+			expected: `<interface xmlns="urn:sdcio/model" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
+`,
 			honorNamespace:         true,
 			operationWithNamespace: true,
 			useOperationRemove:     true,
 			newConfig: func() *sdcio_schema.Device {
 				c := config1()
-				// delete(c.Interface, "ethernet-1/1")
+				delete(c.Interface, "ethernet-1/1")
+				return c
+			},
+		},
+		{
+			name:             "XML - honor namespace, operatin With namespace",
+			onlyNewOrUpdated: true,
+			existingConfig:   config1(),
+			expected: `<interface xmlns="urn:sdcio/model" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="delete"/>
+`,
+			honorNamespace:         true,
+			operationWithNamespace: true,
+			useOperationRemove:     false,
+			newConfig: func() *sdcio_schema.Device {
+				c := config1()
+				delete(c.Interface, "ethernet-1/1")
+				return c
+			},
+		},
+		{
+			name:             "XML - delete certain ethernet-1/1 attributes update another",
+			onlyNewOrUpdated: true,
+			existingConfig:   config1(),
+			expected: `<interface xmlns="urn:sdcio/model">
+  <description xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
+  <name>ethernet-1/1</name>
+  <subinterface>
+    <description xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
+    <index>0</index>
+    <type>bridged</type>
+  </subinterface>
+</interface>
+`,
+			honorNamespace:         true,
+			operationWithNamespace: true,
+			useOperationRemove:     true,
+			newConfig: func() *sdcio_schema.Device {
+				c := config1()
 				c.Interface["ethernet-1/1"].Description = nil
 				c.Interface["ethernet-1/1"].Subinterface[0].Description = nil
 				c.Interface["ethernet-1/1"].Subinterface[0].Type = sdcio_schema.SdcioModelCommon_SiType_bridged
-				// c.Interface["ethernet-1/2"] = &sdcio_schema.SdcioModel_Interface{
-				// 	AdminState:  sdcio_schema.SdcioModelIf_AdminState_enable,
-				// 	Name:        ygot.String("ethernet-1/2"),
-				// 	Description: ygot.String("Test"),
-				// }
-				// c.Patterntest = nil
-				// c.Choices.Case1.CaseElem.Elem = nil
-				// c.Choices.Case2 = &sdcio_schema.SdcioModel_Choices_Case2{
-				// 	Log: ygot.Bool(true),
-				// }
+				return c
+			},
+		},
+		{
+			name:             "XML - delete ethernet-1/1 add ethernet-1/2",
+			onlyNewOrUpdated: true,
+			existingConfig:   config1(),
+			expected: `<choices operation="delete"/>
+<interface operation="delete">
+  <name>ethernet-1/1</name>
+</interface>
+<interface>
+  <admin-state>enable</admin-state>
+  <description>Test</description>
+  <name>ethernet-1/2</name>
+</interface>
+<patterntest operation="delete"/>
+`,
+			honorNamespace:         false,
+			operationWithNamespace: false,
+			useOperationRemove:     false,
+			newConfig: func() *sdcio_schema.Device {
+				c := config1()
+				delete(c.Interface, "ethernet-1/1")
+				c.Interface["ethernet-1/2"] = &sdcio_schema.SdcioModel_Interface{
+					AdminState:  sdcio_schema.SdcioModelIf_AdminState_enable,
+					Name:        ygot.String("ethernet-1/2"),
+					Description: ygot.String("Test"),
+				}
+				c.Patterntest = nil
+				c.Choices.Case1.CaseElem.Elem = nil
+				return c
+			},
+		},
+		{
+			name:             "XML - replace direct leaf and choice",
+			onlyNewOrUpdated: true,
+			existingConfig:   config1(),
+			expected: `<choices xmlns="urn:sdcio/model">
+  <case1 xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
+  <case2>
+    <log>true</log>
+  </case2>
+</choices>
+<patterntest xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
+`,
+			honorNamespace:         true,
+			operationWithNamespace: true,
+			useOperationRemove:     true,
+			newConfig: func() *sdcio_schema.Device {
+				c := config1()
+				c.Patterntest = nil
+				c.Choices.Case1.CaseElem.Elem = nil
+				c.Choices.Case2 = &sdcio_schema.SdcioModel_Choices_Case2{
+					Log: ygot.Bool(true),
+				}
 				return c
 			},
 		},
@@ -1801,34 +1938,25 @@ func TestToXMLTable(t *testing.T) {
 			if tt.newConfig != nil {
 				root.markOwnerDelete(owner)
 
-				err = addToRoot(ctx, root, tt.newConfig(), false, owner)
+				err = addToRoot(ctx, root, tt.newConfig(), true, owner)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
 
-			err = addToRoot(ctx, root, tt.runningConfig, true, "running")
+			err = addToRoot(ctx, root, tt.runningConfig, false, "running")
 			if err != nil {
 				t.Fatal(err)
 			}
 			root.FinishInsertionPhase()
 
-			xmlB := netconf.NewXMLConfigBuilder(scb, &netconf.XMLConfigBuilderOpts{HonorNamespace: true, OperationWithNamespace: true})
-
-			for _, x := range root.GetHighestPrecedence(false) {
-				val, _ := x.Update.Value()
-				path, _ := x.parentEntry.SdcpbPath()
-				xmlB.AddValue(ctx, path, val)
-			}
-			doc, _ := xmlB.GetDoc()
-			fmt.Println("XMLBUILDER - START")
-			fmt.Println(doc)
-			fmt.Println("XMLBUILDER - END")
-
 			xmlDoc, err := root.ToXML(tt.onlyNewOrUpdated, tt.honorNamespace, tt.operationWithNamespace, tt.useOperationRemove)
 			if err != nil {
 				t.Fatal(err)
 			}
+
+			// Make sure the attributes are sorted, otherwise the comparison is an issue
+			recursiveSortXMLElementsByTagName(&xmlDoc.Element)
 
 			xmlDoc.Indent(2)
 			xmlDocStr, err := xmlDoc.WriteToString()
@@ -1842,5 +1970,39 @@ func TestToXMLTable(t *testing.T) {
 				t.Fatalf("ToXML() failed.\nDiff:\n%s", diff)
 			}
 		})
+	}
+}
+
+// Function to recursively sort XML elements by their tag name
+func recursiveSortXMLElementsByTagName(element *etree.Element) {
+
+	// Sort the child elements by their tag name
+	slices.SortStableFunc(element.Child, func(i, j etree.Token) int {
+		ci, oki := i.(*etree.Element)
+		cj, okj := j.(*etree.Element)
+
+		if oki && okj {
+			comp := strings.Compare(ci.Tag, cj.Tag)
+			if comp != 0 {
+				return comp
+			}
+			attributes := []string{"name", "index"}
+			for _, a := range attributes {
+				if cic := ci.SelectElement(a); cic != nil {
+					cjc := cj.SelectElement(a)
+					return strings.Compare(cic.Text(), cjc.Text())
+				}
+			}
+
+		}
+
+		return 0
+	})
+
+	// Recurse into each child element to sort their children
+	for _, child := range element.Child {
+		if celem, ok := child.(*etree.Element); ok {
+			recursiveSortXMLElementsByTagName(celem)
+		}
 	}
 }

@@ -46,7 +46,11 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 		return overAllDoAdd, nil
 	case *sdcpb.SchemaElem_Container:
 		if !s.remainsToExist() {
-			utils.AddXMLOperation(parent.CreateElement(s.pathElemName), operationWithNamespace, useOperationRemove)
+			e := parent.CreateElement(s.pathElemName)
+			if honorNamespace && !namespaceIsEqual(s, s.parent) {
+				e.CreateAttr("xmlns", utils.GetNamespaceFromGetSchema(s.GetSchema()))
+			}
+			utils.AddXMLOperation(e, operationWithNamespace, useOperationRemove)
 			return true, nil
 		}
 		overAllDoAdd := false
