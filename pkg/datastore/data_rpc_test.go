@@ -19,11 +19,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sdcio/data-server/mocks/mocktarget"
-	"github.com/sdcio/data-server/pkg/config"
+	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	"go.uber.org/mock/gomock"
 )
 
 func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {
@@ -225,28 +224,14 @@ func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			controller := gomock.NewController(t)
-
 			schemaClient, schema, err := testhelper.InitSDCIOSchema()
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			dsName := "dev1"
+			converter := utils.NewConverter(SchemaClient.NewSchemaClientBound(schema.GetSchema(), schemaClient))
 
-			// create a datastore
-			d := &Datastore{
-				config: &config.DatastoreConfig{
-					Name:   dsName,
-					Schema: schema,
-				},
-
-				sbi:          mocktarget.NewMockTarget(controller),
-				cacheClient:  nil,
-				schemaClient: schemaClient,
-			}
-
-			got, err := d.expandUpdateKeysAsLeaf(tt.args.ctx, tt.args.upd)
+			got, err := converter.ExpandUpdateKeysAsLeaf(tt.args.ctx, tt.args.upd)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Datastore.expandUpdateLeafAsKeys() error = %v, wantErr %v", err, tt.wantErr)
 				return

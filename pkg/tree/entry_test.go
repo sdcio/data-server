@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/beevik/etree"
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
@@ -1381,15 +1382,18 @@ func TestToJsonTable(t *testing.T) {
 		name             string
 		ietf             bool
 		onlyNewOrUpdated bool
-		existingConfig   *sdcio_schema.Device
-		newConfig        *sdcio_schema.Device
+		existingConfig   func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error)
+		newConfig        func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error)
 		expected         string
 	}{
 		{
 			name:             "JSON All",
 			ietf:             false,
 			onlyNewOrUpdated: false,
-			existingConfig:   config1,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `{
   "choices": {
     "case1": {
@@ -1433,7 +1437,10 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JsonIETF All",
 			ietf:             true,
 			onlyNewOrUpdated: false,
-			existingConfig:   config1,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `{
   "sdcio_model:patterntest": "foo",
   "sdcio_model_choice:choices": {
@@ -1477,7 +1484,10 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JSON NewOrUpdated - no new",
 			ietf:             false,
 			onlyNewOrUpdated: true,
-			existingConfig:   config1,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 
 			expected: `{}`,
 		},
@@ -1485,7 +1495,10 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JSON_IETF NewOrUpdated - no new",
 			ietf:             true,
 			onlyNewOrUpdated: true,
-			existingConfig:   config1,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 
 			expected: `{}`,
 		},
@@ -1493,8 +1506,14 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JSON NewOrUpdated - with new",
 			ietf:             false,
 			onlyNewOrUpdated: true,
-			existingConfig:   config1,
-			newConfig:        config2,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config2()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `{
   "interface": [
     {
@@ -1525,8 +1544,14 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JSON_IETF NewOrUpdated - with new",
 			ietf:             true,
 			onlyNewOrUpdated: true,
-			existingConfig:   config1,
-			newConfig:        config2,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config2()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `{
   "sdcio_model:patterntest": "bar",
   "sdcio_model_if:interface": [
@@ -1553,6 +1578,63 @@ func TestToJsonTable(t *testing.T) {
   ]
 }`,
 		},
+		{
+			name:             "XML - presence",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			expected: `{
+  "network-instance": [
+    {
+      "name": "default",
+      "protocol": {
+        "bgp": {}
+      }
+    }
+  ]
+}`,
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				upds, err := expandUpdateFromConfig(ctx, c, converter)
+				if err != nil {
+					return nil, err
+				}
+				upds = append(upds, &sdcpb.Update{
+					Path: &sdcpb.Path{
+						Elem: []*sdcpb.PathElem{
+							{Name: "network-instance", Key: map[string]string{"name": "default"}},
+							{Name: "protocol"},
+							{Name: "bgp"},
+						},
+					},
+					Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{}},
+				})
+				return upds, nil
+			},
+		},
+		{
+			name:             "JSON - empty",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+
+				upds, err := expandUpdateFromConfig(ctx, c, converter)
+				if err != nil {
+					return nil, err
+				}
+				upds = append(upds, &sdcpb.Update{Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "emptyconf"}}}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{}}})
+				return upds, nil
+			},
+			expected: `{
+  "emptyconf": {}
+}`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1562,20 +1644,36 @@ func TestToJsonTable(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			owner := "owner1"
+
 			ctx := context.Background()
 
-			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), "owner1")
+			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), owner)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = addToRoot(ctx, root, tt.existingConfig, false)
+			converter := utils.NewConverter(scb)
+
+			updsExisting, err := tt.existingConfig(ctx, converter)
+			if err != nil {
+				t.Error(err)
+			}
+
+			err = addToRoot(ctx, root, updsExisting, false, owner)
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = addToRoot(ctx, root, tt.newConfig, true)
-			if err != nil {
-				t.Fatal(err)
+
+			if tt.newConfig != nil {
+				updsNew, err := tt.newConfig(ctx, converter)
+				if err != nil {
+					t.Error(err)
+				}
+				err = addToRoot(ctx, root, updsNew, true, owner)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 			root.FinishInsertionPhase()
 
@@ -1611,101 +1709,510 @@ func TestToJsonTable(t *testing.T) {
 	}
 }
 
-var config1 = &sdcio_schema.Device{
-	Interface: map[string]*sdcio_schema.SdcioModel_Interface{
-		"ethernet-1/1": {
-			AdminState:  sdcio_schema.SdcioModelIf_AdminState_enable,
-			Description: ygot.String("Foo"),
-			Name:        ygot.String("ethernet-1/1"),
-			Subinterface: map[uint32]*sdcio_schema.SdcioModel_Interface_Subinterface{
-				0: {
-					Description: ygot.String("Subinterface 0"),
-					Type:        sdcio_schema.SdcioModelCommon_SiType_routed,
-					Index:       ygot.Uint32(0),
+func config1() *sdcio_schema.Device {
+	return &sdcio_schema.Device{
+		Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+			"ethernet-1/1": {
+				AdminState:  sdcio_schema.SdcioModelIf_AdminState_enable,
+				Description: ygot.String("Foo"),
+				Name:        ygot.String("ethernet-1/1"),
+				Subinterface: map[uint32]*sdcio_schema.SdcioModel_Interface_Subinterface{
+					0: {
+						Description: ygot.String("Subinterface 0"),
+						Type:        sdcio_schema.SdcioModelCommon_SiType_routed,
+						Index:       ygot.Uint32(0),
+					},
 				},
 			},
 		},
-	},
-	Choices: &sdcio_schema.SdcioModel_Choices{
-		Case1: &sdcio_schema.SdcioModel_Choices_Case1{
-			CaseElem: &sdcio_schema.SdcioModel_Choices_Case1_CaseElem{
-				Elem: ygot.String("foocaseval"),
-			},
-		},
-	},
-	Leaflist: &sdcio_schema.SdcioModel_Leaflist{
-		Entry: []string{
-			"foo",
-			"bar",
-		},
-	},
-	Patterntest: ygot.String("foo"),
-	NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
-		"default": {
-			AdminState:  sdcio_schema.SdcioModelNi_AdminState_disable,
-			Description: ygot.String("Default NI"),
-			Type:        sdcio_schema.SdcioModelNi_NiType_default,
-			Name:        ygot.String("default"),
-		},
-	},
-}
-
-var config2 = &sdcio_schema.Device{
-	Interface: map[string]*sdcio_schema.SdcioModel_Interface{
-		"ethernet-1/2": {
-			AdminState:  sdcio_schema.SdcioModelIf_AdminState_enable,
-			Description: ygot.String("Foo"),
-			Name:        ygot.String("ethernet-1/2"),
-			Subinterface: map[uint32]*sdcio_schema.SdcioModel_Interface_Subinterface{
-				5: {
-					Description: ygot.String("Subinterface 5"),
-					Type:        sdcio_schema.SdcioModelCommon_SiType_routed,
-					Index:       ygot.Uint32(5),
+		Choices: &sdcio_schema.SdcioModel_Choices{
+			Case1: &sdcio_schema.SdcioModel_Choices_Case1{
+				CaseElem: &sdcio_schema.SdcioModel_Choices_Case1_CaseElem{
+					Elem: ygot.String("foocaseval"),
 				},
 			},
 		},
-	},
-	Patterntest: ygot.String("bar"),
-	NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
-		"other": {
-			AdminState:  sdcio_schema.SdcioModelNi_AdminState_enable,
-			Description: ygot.String("Other NI"),
-			Type:        sdcio_schema.SdcioModelNi_NiType_ip_vrf,
-			Name:        ygot.String("other"),
+		Leaflist: &sdcio_schema.SdcioModel_Leaflist{
+			Entry: []string{
+				"foo",
+				"bar",
+			},
 		},
-	},
+		Patterntest: ygot.String("foo"),
+		NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
+			"default": {
+				AdminState:  sdcio_schema.SdcioModelNi_AdminState_disable,
+				Description: ygot.String("Default NI"),
+				Type:        sdcio_schema.SdcioModelNi_NiType_default,
+				Name:        ygot.String("default"),
+			},
+		},
+	}
 }
 
-func addToRoot(ctx context.Context, root *RootEntry, conf *sdcio_schema.Device, isNew bool) error {
+func config2() *sdcio_schema.Device {
+	return &sdcio_schema.Device{
+		Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+			"ethernet-1/2": {
+				AdminState:  sdcio_schema.SdcioModelIf_AdminState_enable,
+				Description: ygot.String("Foo"),
+				Name:        ygot.String("ethernet-1/2"),
+				Subinterface: map[uint32]*sdcio_schema.SdcioModel_Interface_Subinterface{
+					5: {
+						Description: ygot.String("Subinterface 5"),
+						Type:        sdcio_schema.SdcioModelCommon_SiType_routed,
+						Index:       ygot.Uint32(5),
+					},
+				},
+			},
+		},
+		Patterntest: ygot.String("bar"),
+		NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
+			"other": {
+				AdminState:  sdcio_schema.SdcioModelNi_AdminState_enable,
+				Description: ygot.String("Other NI"),
+				Type:        sdcio_schema.SdcioModelNi_NiType_ip_vrf,
+				Name:        ygot.String("other"),
+			},
+		},
+	}
+
+}
+
+func expandUpdateFromConfig(ctx context.Context, conf *sdcio_schema.Device, converter *utils.Converter) ([]*sdcpb.Update, error) {
 	if conf == nil {
-		return nil
+		return nil, nil
 	}
 
-	notis, err := ygot.TogNMINotifications(conf, 0, ygot.GNMINotificationsConfig{})
+	strJson, err := ygot.EmitJSON(conf, &ygot.EmitJSONConfig{
+		Format:         ygot.RFC7951,
+		SkipValidation: true,
+	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	for _, noti := range notis {
-		for _, upd := range noti.GetUpdate() {
+	return converter.ExpandUpdate(ctx,
+		&sdcpb.Update{
+			Path: &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{},
+			},
+			Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: []byte(strJson)}},
+		},
+		true)
+}
 
-			strPath, err := ygot.PathToStrings(upd.Path)
-			if err != nil {
-				return err
-			}
+func addToRoot(ctx context.Context, root *RootEntry, updates []*sdcpb.Update, isNew bool, owner string) error {
+	for _, upd := range updates {
+		b, err := proto.Marshal(upd.Value)
+		if err != nil {
+			return err
+		}
+		cacheUpd, err := cache.NewUpdate(utils.ToStrings(upd.GetPath(), false, false), b, 5, owner, 0), nil
+		if err != nil {
+			return err
+		}
 
-			val, err := proto.Marshal(utils.FromGNMITypedValue(upd.GetVal()))
-			if err != nil {
-				return err
-			}
-
-			cacheUpd := cache.NewUpdate(strPath, val, 5, "owner1", 0)
-
-			_, err = root.AddCacheUpdateRecursive(ctx, cacheUpd, isNew)
-			if err != nil {
-				return err
-			}
+		_, err = root.AddCacheUpdateRecursive(ctx, cacheUpd, isNew)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func TestToXMLTable(t *testing.T) {
+	var tests = []struct {
+		name                   string
+		onlyNewOrUpdated       bool
+		honorNamespace         bool
+		operationWithNamespace bool
+		useOperationRemove     bool
+		existingConfig         func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error)
+		runningConfig          func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error)
+		newConfig              func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error)
+		expected               string
+	}{
+		{
+			name:             "XML All",
+			onlyNewOrUpdated: false,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			expected: `<choices>
+  <case1>
+    <case-elem>
+      <elem>foocaseval</elem>
+    </case-elem>
+  </case1>
+</choices>
+<interface>
+  <admin-state>enable</admin-state>
+  <description>Foo</description>
+  <name>ethernet-1/1</name>
+  <subinterface>
+    <description>Subinterface 0</description>
+    <index>0</index>
+    <type>routed</type>
+  </subinterface>
+</interface>
+<leaflist operation="delete">
+  <entry>foo</entry>
+  <entry>bar</entry>
+</leaflist>
+<network-instance>
+  <admin-state>disable</admin-state>
+  <description>Default NI</description>
+  <name>default</name>
+  <type>default</type>
+</network-instance>
+<patterntest>foo</patterntest>
+`,
+		},
+		{
+			name:             "XML - no new",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			expected: ``,
+		},
+		{
+			name:             "XML NewOrUpdated - some elements deleted, some updated",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config2()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			expected: `<choices operation="delete"/>
+<interface operation="delete">
+  <name>ethernet-1/1</name>
+</interface>
+<interface>
+  <admin-state>enable</admin-state>
+  <description>Foo</description>
+  <name>ethernet-1/2</name>
+  <subinterface>
+    <description>Subinterface 5</description>
+    <index>5</index>
+    <type>routed</type>
+  </subinterface>
+</interface>
+<leaflist operation="delete"/>
+<network-instance operation="delete">
+  <name>default</name>
+</network-instance>
+<network-instance>
+  <admin-state>enable</admin-state>
+  <description>Other NI</description>
+  <name>other</name>
+  <type>ip-vrf</type>
+</network-instance>
+<patterntest>bar</patterntest>
+`,
+		},
+		{
+			name:             "XML - delete ethernet-1/1, honor namespace, operatin With namespace, remove",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			expected: `<interface xmlns="urn:sdcio/model" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
+`,
+			honorNamespace:         true,
+			operationWithNamespace: true,
+			useOperationRemove:     true,
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				delete(c.Interface, "ethernet-1/1")
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+		},
+		{
+			name:             "XML - honor namespace, operatin With namespace",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			expected: `<interface xmlns="urn:sdcio/model" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="delete"/>
+`,
+			honorNamespace:         true,
+			operationWithNamespace: true,
+			useOperationRemove:     false,
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				delete(c.Interface, "ethernet-1/1")
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+		},
+		{
+			name:             "XML - delete certain ethernet-1/1 attributes update another",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			expected: `<interface xmlns="urn:sdcio/model">
+  <description xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
+  <name>ethernet-1/1</name>
+  <subinterface>
+    <description xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
+    <index>0</index>
+    <type>bridged</type>
+  </subinterface>
+</interface>
+`,
+			honorNamespace:         true,
+			operationWithNamespace: true,
+			useOperationRemove:     true,
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				c.Interface["ethernet-1/1"].Description = nil
+				c.Interface["ethernet-1/1"].Subinterface[0].Description = nil
+				c.Interface["ethernet-1/1"].Subinterface[0].Type = sdcio_schema.SdcioModelCommon_SiType_bridged
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+		},
+		{
+			name:             "XML - delete ethernet-1/1 add ethernet-1/2",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			expected: `<choices operation="delete"/>
+<interface operation="delete">
+  <name>ethernet-1/1</name>
+</interface>
+<interface>
+  <admin-state>enable</admin-state>
+  <description>Test</description>
+  <name>ethernet-1/2</name>
+</interface>
+<patterntest operation="delete"/>
+`,
+			honorNamespace:         false,
+			operationWithNamespace: false,
+			useOperationRemove:     false,
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				delete(c.Interface, "ethernet-1/1")
+				c.Interface["ethernet-1/2"] = &sdcio_schema.SdcioModel_Interface{
+					AdminState:  sdcio_schema.SdcioModelIf_AdminState_enable,
+					Name:        ygot.String("ethernet-1/2"),
+					Description: ygot.String("Test"),
+				}
+				c.Patterntest = nil
+				c.Choices.Case1.CaseElem.Elem = nil
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+		},
+		{
+			name:             "XML - replace direct leaf and choice",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			expected: `<choices xmlns="urn:sdcio/model">
+  <case1 xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
+  <case2>
+    <log>true</log>
+  </case2>
+</choices>
+<patterntest xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
+`,
+			honorNamespace:         true,
+			operationWithNamespace: true,
+			useOperationRemove:     true,
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				c.Patterntest = nil
+				c.Choices.Case1.CaseElem.Elem = nil
+				c.Choices.Case2 = &sdcio_schema.SdcioModel_Choices_Case2{
+					Log: ygot.Bool(true),
+				}
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+		},
+		{
+			name:             "XML - empty",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+
+				upds, err := expandUpdateFromConfig(ctx, c, converter)
+				if err != nil {
+					return nil, err
+				}
+				upds = append(upds, &sdcpb.Update{Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "emptyconf"}}}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{}}})
+				return upds, nil
+			},
+			expected: `<emptyconf/>
+`,
+			honorNamespace:         true,
+			operationWithNamespace: true,
+			useOperationRemove:     true,
+		},
+		{
+			name:             "XML - presence",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			expected: `<network-instance xmlns="urn:sdcio/model">
+  <name>default</name>
+  <protocol>
+    <bgp/>
+  </protocol>
+</network-instance>
+`,
+			honorNamespace:         true,
+			operationWithNamespace: true,
+			useOperationRemove:     true,
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				upds, err := expandUpdateFromConfig(ctx, c, converter)
+				if err != nil {
+					return nil, err
+				}
+				upds = append(upds, &sdcpb.Update{
+					Path: &sdcpb.Path{
+						Elem: []*sdcpb.PathElem{
+							{Name: "network-instance", Key: map[string]string{"name": "default"}},
+							{Name: "protocol"},
+							{Name: "bgp"},
+						},
+					},
+					Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{}},
+				})
+				return upds, nil
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			scb, err := getSchemaClientBound(t)
+			if err != nil {
+				t.Fatal(err)
+			}
+			owner := "owner1"
+
+			ctx := context.Background()
+
+			converter := utils.NewConverter(scb)
+
+			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), owner)
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.existingConfig != nil {
+				existingUpds, err := tt.existingConfig(ctx, converter)
+				if err != nil {
+					t.Error(err)
+				}
+				err = addToRoot(ctx, root, existingUpds, false, owner)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			if tt.newConfig != nil {
+				root.markOwnerDelete(owner)
+
+				newUpds, err := tt.newConfig(ctx, converter)
+				if err != nil {
+					t.Error(err)
+				}
+				err = addToRoot(ctx, root, newUpds, true, owner)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tt.runningConfig != nil {
+				runningUpds, err := tt.runningConfig(ctx, converter)
+				if err != nil {
+					t.Error(err)
+				}
+				err = addToRoot(ctx, root, runningUpds, false, "running")
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			root.FinishInsertionPhase()
+			// fmt.Println(root.String())
+
+			xmlDoc, err := root.ToXML(tt.onlyNewOrUpdated, tt.honorNamespace, tt.operationWithNamespace, tt.useOperationRemove)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Make sure the attributes are sorted, otherwise the comparison is an issue
+			recursiveSortXMLElementsByTagName(&xmlDoc.Element)
+
+			xmlDoc.Indent(2)
+			xmlDocStr, err := xmlDoc.WriteToString()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			fmt.Println(string(xmlDocStr))
+
+			if diff := cmp.Diff(tt.expected, string(xmlDocStr)); diff != "" {
+				t.Fatalf("ToXML() failed.\nDiff:\n%s", diff)
+			}
+		})
+	}
+}
+
+// Function to recursively sort XML elements by their tag name
+func recursiveSortXMLElementsByTagName(element *etree.Element) {
+
+	// Sort the child elements by their tag name
+	slices.SortStableFunc(element.Child, func(i, j etree.Token) int {
+		ci, oki := i.(*etree.Element)
+		cj, okj := j.(*etree.Element)
+
+		if oki && okj {
+			comp := strings.Compare(ci.Tag, cj.Tag)
+			if comp != 0 {
+				return comp
+			}
+			attributes := []string{"name", "index"}
+			for _, a := range attributes {
+				if cic := ci.SelectElement(a); cic != nil {
+					cjc := cj.SelectElement(a)
+					return strings.Compare(cic.Text(), cjc.Text())
+				}
+			}
+		}
+		return 0
+	})
+
+	// Recurse into each child element to sort their children
+	for _, child := range element.Child {
+		if celem, ok := child.(*etree.Element); ok {
+			recursiveSortXMLElementsByTagName(celem)
+		}
+	}
 }
