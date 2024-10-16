@@ -209,13 +209,17 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				if includeKeysAsLeaf {
 					np := proto.Clone(p).(*sdcpb.Path)
 					np.Elem = append(np.Elem, &sdcpb.PathElem{Name: k.Name})
+					schemaRsp, err := c.schemaClientBound.GetSchema(ctx, np)
+					if err != nil {
+						return nil, err
+					}
+					updVal, err := TypedValueToYANGType(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: fmt.Sprintf("%v", v)}}, schemaRsp.GetSchema())
+					if err != nil {
+						return nil, err
+					}
 					upd := &sdcpb.Update{
-						Path: np,
-						Value: &sdcpb.TypedValue{
-							Value: &sdcpb.TypedValue_StringVal{
-								StringVal: fmt.Sprintf("%v", v),
-							},
-						},
+						Path:  np,
+						Value: updVal,
 					}
 					upds = append(upds, upd)
 				}
@@ -246,11 +250,15 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 						Value: &sdcpb.TypedValue_EmptyVal{},
 					}
 				default:
-					upd.Value = &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_StringVal{
-							StringVal: fmt.Sprintf("%v", v),
-						},
+					schemaRsp, err := c.schemaClientBound.GetSchema(ctx, np)
+					if err != nil {
+						return nil, err
 					}
+					upd.Value, err = TypedValueToYANGType(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: fmt.Sprintf("%v", v)}}, schemaRsp.GetSchema())
+					if err != nil {
+						return nil, err
+					}
+
 				}
 				upds = append(upds, upd)
 			case *sdcpb.LeafListSchema: // leaflist
@@ -353,7 +361,7 @@ func isKey(s string, cs *sdcpb.SchemaElem_Container) bool {
 func TypedValueToYANGType(tv *sdcpb.TypedValue, schemaObject *sdcpb.SchemaElem) (*sdcpb.TypedValue, error) {
 	switch tv.Value.(type) {
 	case *sdcpb.TypedValue_AsciiVal:
-		return convertToTypedValue(schemaObject, tv.GetAsciiVal(), tv.GetTimestamp())
+		return ConvertToTypedValue(schemaObject, tv.GetAsciiVal(), tv.GetTimestamp())
 	case *sdcpb.TypedValue_BoolVal:
 		return tv, nil
 	case *sdcpb.TypedValue_BytesVal:
@@ -367,7 +375,7 @@ func TypedValueToYANGType(tv *sdcpb.TypedValue, schemaObject *sdcpb.SchemaElem) 
 	case *sdcpb.TypedValue_IntVal:
 		return tv, nil
 	case *sdcpb.TypedValue_StringVal:
-		return convertToTypedValue(schemaObject, tv.GetStringVal(), tv.GetTimestamp())
+		return ConvertToTypedValue(schemaObject, tv.GetStringVal(), tv.GetTimestamp())
 	case *sdcpb.TypedValue_UintVal:
 		return tv, nil
 	case *sdcpb.TypedValue_JsonIetfVal: // TODO:
@@ -382,7 +390,7 @@ func TypedValueToYANGType(tv *sdcpb.TypedValue, schemaObject *sdcpb.SchemaElem) 
 	return tv, nil
 }
 
-func convertToTypedValue(schemaObject *sdcpb.SchemaElem, v string, ts uint64) (*sdcpb.TypedValue, error) {
+func ConvertToTypedValue(schemaObject *sdcpb.SchemaElem, v string, ts uint64) (*sdcpb.TypedValue, error) {
 	var schemaType *sdcpb.SchemaLeafType
 	switch {
 	case schemaObject.GetField() != nil:

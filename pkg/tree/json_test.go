@@ -218,7 +218,29 @@ func TestToJsonTable(t *testing.T) {
 }`,
 		},
 		{
-			name:             "XML - presence",
+			name:             "JSON_IETF - int16",
+			ietf:             true,
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				c.Interface["ethernet-1/1"].Mtu = ygot.Uint16(1500)
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			expected: `{
+  "sdcio_model_if:interface": [
+    {
+      "mtu": 1500,
+      "name": "ethernet-1/1"
+    }
+  ]
+}`,
+		},
+		{
+			name:             "JSON - presence",
 			onlyNewOrUpdated: true,
 			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
