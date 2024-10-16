@@ -49,4 +49,7 @@ module sdcio_model {
       // }
     }
   }
+  leaf emptyconf {
+    type empty;
+  }
 }

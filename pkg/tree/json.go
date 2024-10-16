@@ -8,7 +8,7 @@ import (
 )
 
 func (s *sharedEntryAttributes) ToJson(onlyNewOrUpdated bool) (any, error) {
-	result, err := s.toJsonInternal(onlyNewOrUpdated, false, "")
+	result, err := s.toJsonInternal(onlyNewOrUpdated, false)
 	if result == nil {
 		return map[string]any{}, err
 	}
@@ -16,7 +16,7 @@ func (s *sharedEntryAttributes) ToJson(onlyNewOrUpdated bool) (any, error) {
 }
 
 func (s *sharedEntryAttributes) ToJsonIETF(onlyNewOrUpdated bool) (any, error) {
-	result, err := s.toJsonInternal(onlyNewOrUpdated, true, "")
+	result, err := s.toJsonInternal(onlyNewOrUpdated, true)
 	if result == nil {
 		return map[string]any{}, err
 	}
@@ -27,41 +27,33 @@ func (s *sharedEntryAttributes) ToJsonIETF(onlyNewOrUpdated bool) (any, error) {
 // If the ietf parameter is set to true, JSON_IETF encoding is used.
 // The actualPrefix is used only for the JSON_IETF encoding and can be ignored for JSON
 // In the initial / users call with ietf == true, actualPrefix should be set to ""
-func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool, actualPrefix string) (any, error) {
+func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool) (any, error) {
 	switch s.schema.GetSchema().(type) {
 	case nil:
 		// we're operating on a key level, no schema attached, but the
 		// ancestor is a list with keys.
 		result := map[string]any{}
 
-		for k, c := range s.filterActiveChoiceCaseChilds() {
-			var prefix string
-			key := k
-			// if JSON_IETF is requested, acquire prefix
-			if ietf {
-				// get the prefix
-				prefix = utils.GetSchemaElemModuleName(c.GetSchema())
-				// only add prefix if it is not empty and is different from the
-				// given actualPrefix
-				if prefix != "" && prefix != actualPrefix {
-					key = fmt.Sprintf("%s:%s", prefix, key)
-				}
-			}
+		for key, c := range s.filterActiveChoiceCaseChilds() {
+			ancest, _ := s.GetFirstAncestorWithSchema()
+			prefixedKey := jsonGetIetfPrefixConditional(key, c, ancest, ietf)
 			// recurse the call
-			js, err := c.toJsonInternal(onlyNewOrUpdated, ietf, prefix)
+			js, err := c.toJsonInternal(onlyNewOrUpdated, ietf)
 			if err != nil {
 				return nil, err
 			}
 			if js != nil {
-				result[key] = js
+				result[prefixedKey] = js
 			}
 		}
 		if len(result) == 0 {
 			return nil, nil
 		}
+		jsonAddKeyElements(s, result)
 		return result, nil
 	case *sdcpb.SchemaElem_Container:
-		if len(s.GetSchemaKeys()) > 0 {
+		switch {
+		case len(s.GetSchemaKeys()) > 0:
 			// if the container contains keys, then it is a list
 			// hence must be rendered as an array
 			childs, err := s.FilterChilds(nil)
@@ -70,7 +62,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool,
 			}
 			result := make([]any, 0, len(childs))
 			for _, c := range childs {
-				j, err := c.toJsonInternal(onlyNewOrUpdated, ietf, actualPrefix)
+				j, err := c.toJsonInternal(onlyNewOrUpdated, ietf)
 				if err != nil {
 					return nil, err
 				}
@@ -82,34 +74,28 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool,
 				return nil, nil
 			}
 			return result, nil
-		}
-
-		// otherwise this is a map
-		result := map[string]any{}
-		for k, c := range s.filterActiveChoiceCaseChilds() {
-			var prefix string
-			key := k
-			if ietf {
-				// get the prefix
-				prefix = utils.GetSchemaElemModuleName(c.GetSchema())
-				// only add prefix if it is not empty and is different from the
-				// given actualPrefix
-				if prefix != "" && prefix != actualPrefix {
-					key = fmt.Sprintf("%s:%s", prefix, key)
+		case len(s.childs) == 0 && s.schema.GetContainer().IsPresence:
+			// Presence container without any childs
+			return map[string]any{}, nil
+		default:
+			// otherwise this is a map
+			result := map[string]any{}
+			for key, c := range s.filterActiveChoiceCaseChilds() {
+				prefixedKey := jsonGetIetfPrefixConditional(key, c, s, ietf)
+				js, err := c.toJsonInternal(onlyNewOrUpdated, ietf)
+				if err != nil {
+					return nil, err
+				}
+				if js != nil {
+					result[prefixedKey] = js
 				}
 			}
-			js, err := c.toJsonInternal(onlyNewOrUpdated, ietf, prefix)
-			if err != nil {
-				return nil, err
+			if len(result) == 0 {
+				return nil, nil
 			}
-			if js != nil {
-				result[key] = js
-			}
+			return result, nil
 		}
-		if len(result) == 0 {
-			return nil, nil
-		}
-		return result, nil
+
 	case *sdcpb.SchemaElem_Leaflist, *sdcpb.SchemaElem_Field:
 		le := s.leafVariants.GetHighestPrecedence(false)
 		if onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
@@ -119,7 +105,41 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool,
 		if err != nil {
 			return nil, err
 		}
-		return utils.GetJsonValue(v), nil
+		return utils.GetJsonValue(v)
 	}
 	return nil, fmt.Errorf("unable to convert to json (%s)", s.Path())
+}
+
+// jsonAddIetfPrefixConditional adds the module name
+func jsonGetIetfPrefixConditional(key string, a Entry, b Entry, ietf bool) string {
+	// if not ietf, then we do not need module prefixes
+	if !ietf {
+		return key
+	}
+	aModule := utils.GetSchemaElemModuleName(a.GetSchema())
+	if aModule == utils.GetSchemaElemModuleName(b.GetSchema()) {
+		return key
+	}
+	return fmt.Sprintf("%s:%s", aModule, key)
+}
+
+// xmlAddKeyElements determines the keys of a certain Entry in the tree and adds those to the
+// element if they do not already exist.
+func jsonAddKeyElements(s Entry, dict map[string]any) {
+	// retrieve the parent schema, we need to extract the key names
+	// values are the tree level names
+	parentSchema, levelsUp := s.GetFirstAncestorWithSchema()
+	// from the parent we get the keys as slice
+	schemaKeys := parentSchema.GetSchemaKeys()
+	var treeElem Entry = s
+	// the keys do match the levels up in the tree in reverse order
+	// hence we init i with levelUp and count down
+	for i := levelsUp - 1; i >= 0; i-- {
+		// skip if the element already exists
+		if _, exists := dict[schemaKeys[i]]; !exists {
+			// and finally we create the patheleme key attributes
+			dict[schemaKeys[i]] = treeElem.PathName()
+			treeElem = treeElem.GetParent()
+		}
+	}
 }

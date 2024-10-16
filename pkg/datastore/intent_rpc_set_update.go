@@ -70,9 +70,11 @@ func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentReques
 	}
 	tc.SetStoreIndex(storeIndex)
 
+	converter := utils.NewConverter(d.getValidationClient())
+
 	// list of updates to be added to the cache
 	// Expands the value, in case of json to single typed value updates
-	expandedReqUpdates, err := d.expandUpdates(ctx, req.GetUpdate(), true)
+	expandedReqUpdates, err := converter.ExpandUpdates(ctx, req.GetUpdate(), true)
 	if err != nil {
 		return nil, err
 	}

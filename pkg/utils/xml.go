@@ -20,7 +20,7 @@ func TypedValueToXML(parent *etree.Element, tv *sdcpb.TypedValue, name string, n
 		for _, tvle := range tv.GetLeaflistVal().GetElement() {
 			TypedValueToXML(parent, tvle, name, namespace, operationWithNamespace, useOperationRemove)
 		}
-		AddXMLOperation(parent, operationWithNamespace, useOperationRemove)
+		AddXMLOperationRemoveDelete(parent, operationWithNamespace, useOperationRemove)
 
 	case *sdcpb.TypedValue_EmptyVal:
 		parent.CreateElement(name)
@@ -33,8 +33,8 @@ func TypedValueToXML(parent *etree.Element, tv *sdcpb.TypedValue, name string, n
 	}
 }
 
-// AddXMLOperation adds the operation Attribute to the given etree.Element
-func AddXMLOperation(elem *etree.Element, operationWithNamespace bool, useOperationRemove bool) {
+// AddXMLOperationRemoveDelete adds the operation Attribute to the given etree.Element
+func AddXMLOperationRemoveDelete(elem *etree.Element, operationWithNamespace bool, useOperationRemove bool) {
 	operName := OperationDelete
 	operKey := "operation"
 	if useOperationRemove {

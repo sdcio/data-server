@@ -1382,15 +1382,18 @@ func TestToJsonTable(t *testing.T) {
 		name             string
 		ietf             bool
 		onlyNewOrUpdated bool
-		existingConfig   *sdcio_schema.Device
-		newConfig        *sdcio_schema.Device
+		existingConfig   func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error)
+		newConfig        func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error)
 		expected         string
 	}{
 		{
 			name:             "JSON All",
 			ietf:             false,
 			onlyNewOrUpdated: false,
-			existingConfig:   config1(),
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `{
   "choices": {
     "case1": {
@@ -1434,7 +1437,10 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JsonIETF All",
 			ietf:             true,
 			onlyNewOrUpdated: false,
-			existingConfig:   config1(),
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `{
   "sdcio_model:patterntest": "foo",
   "sdcio_model_choice:choices": {
@@ -1478,7 +1484,10 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JSON NewOrUpdated - no new",
 			ietf:             false,
 			onlyNewOrUpdated: true,
-			existingConfig:   config1(),
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 
 			expected: `{}`,
 		},
@@ -1486,7 +1495,10 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JSON_IETF NewOrUpdated - no new",
 			ietf:             true,
 			onlyNewOrUpdated: true,
-			existingConfig:   config1(),
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 
 			expected: `{}`,
 		},
@@ -1494,8 +1506,14 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JSON NewOrUpdated - with new",
 			ietf:             false,
 			onlyNewOrUpdated: true,
-			existingConfig:   config1(),
-			newConfig:        config2(),
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config2()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `{
   "interface": [
     {
@@ -1526,8 +1544,14 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JSON_IETF NewOrUpdated - with new",
 			ietf:             true,
 			onlyNewOrUpdated: true,
-			existingConfig:   config1(),
-			newConfig:        config2(),
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config2()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `{
   "sdcio_model:patterntest": "bar",
   "sdcio_model_if:interface": [
@@ -1554,6 +1578,63 @@ func TestToJsonTable(t *testing.T) {
   ]
 }`,
 		},
+		{
+			name:             "XML - presence",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			expected: `{
+  "network-instance": [
+    {
+      "name": "default",
+      "protocol": {
+        "bgp": {}
+      }
+    }
+  ]
+}`,
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				upds, err := expandUpdateFromConfig(ctx, c, converter)
+				if err != nil {
+					return nil, err
+				}
+				upds = append(upds, &sdcpb.Update{
+					Path: &sdcpb.Path{
+						Elem: []*sdcpb.PathElem{
+							{Name: "network-instance", Key: map[string]string{"name": "default"}},
+							{Name: "protocol"},
+							{Name: "bgp"},
+						},
+					},
+					Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{}},
+				})
+				return upds, nil
+			},
+		},
+		{
+			name:             "JSON - empty",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+
+				upds, err := expandUpdateFromConfig(ctx, c, converter)
+				if err != nil {
+					return nil, err
+				}
+				upds = append(upds, &sdcpb.Update{Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "emptyconf"}}}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{}}})
+				return upds, nil
+			},
+			expected: `{
+  "emptyconf": {}
+}`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1572,13 +1653,27 @@ func TestToJsonTable(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = addToRoot(ctx, root, tt.existingConfig, false, owner)
+			converter := utils.NewConverter(scb)
+
+			updsExisting, err := tt.existingConfig(ctx, converter)
+			if err != nil {
+				t.Error(err)
+			}
+
+			err = addToRoot(ctx, root, updsExisting, false, owner)
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = addToRoot(ctx, root, tt.newConfig, true, owner)
-			if err != nil {
-				t.Fatal(err)
+
+			if tt.newConfig != nil {
+				updsNew, err := tt.newConfig(ctx, converter)
+				if err != nil {
+					t.Error(err)
+				}
+				err = addToRoot(ctx, root, updsNew, true, owner)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 			root.FinishInsertionPhase()
 
@@ -1684,35 +1779,43 @@ func config2() *sdcio_schema.Device {
 
 }
 
-func addToRoot(ctx context.Context, root *RootEntry, conf *sdcio_schema.Device, isNew bool, owner string) error {
+func expandUpdateFromConfig(ctx context.Context, conf *sdcio_schema.Device, converter *utils.Converter) ([]*sdcpb.Update, error) {
 	if conf == nil {
-		return nil
+		return nil, nil
 	}
 
-	notis, err := ygot.TogNMINotifications(conf, 0, ygot.GNMINotificationsConfig{})
+	strJson, err := ygot.EmitJSON(conf, &ygot.EmitJSONConfig{
+		Format:         ygot.RFC7951,
+		SkipValidation: true,
+	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	for _, noti := range notis {
-		for _, upd := range noti.GetUpdate() {
+	return converter.ExpandUpdate(ctx,
+		&sdcpb.Update{
+			Path: &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{},
+			},
+			Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: []byte(strJson)}},
+		},
+		true)
+}
 
-			strPath, err := ygot.PathToStrings(upd.Path)
-			if err != nil {
-				return err
-			}
+func addToRoot(ctx context.Context, root *RootEntry, updates []*sdcpb.Update, isNew bool, owner string) error {
+	for _, upd := range updates {
+		b, err := proto.Marshal(upd.Value)
+		if err != nil {
+			return err
+		}
+		cacheUpd, err := cache.NewUpdate(utils.ToStrings(upd.GetPath(), false, false), b, 5, owner, 0), nil
+		if err != nil {
+			return err
+		}
 
-			val, err := proto.Marshal(utils.FromGNMITypedValue(upd.GetVal()))
-			if err != nil {
-				return err
-			}
-
-			cacheUpd := cache.NewUpdate(strPath, val, 5, owner, 0)
-
-			_, err = root.AddCacheUpdateRecursive(ctx, cacheUpd, isNew)
-			if err != nil {
-				return err
-			}
+		_, err = root.AddCacheUpdateRecursive(ctx, cacheUpd, isNew)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -1725,15 +1828,18 @@ func TestToXMLTable(t *testing.T) {
 		honorNamespace         bool
 		operationWithNamespace bool
 		useOperationRemove     bool
-		existingConfig         *sdcio_schema.Device
-		runningConfig          *sdcio_schema.Device
-		newConfig              func() *sdcio_schema.Device
+		existingConfig         func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error)
+		runningConfig          func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error)
+		newConfig              func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error)
 		expected               string
 	}{
 		{
 			name:             "XML All",
 			onlyNewOrUpdated: false,
-			existingConfig:   config1(),
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `<choices>
   <case1>
     <case-elem>
@@ -1767,14 +1873,23 @@ func TestToXMLTable(t *testing.T) {
 		{
 			name:             "XML - no new",
 			onlyNewOrUpdated: true,
-			existingConfig:   config1(),
-			expected:         ``,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			expected: ``,
 		},
 		{
 			name:             "XML NewOrUpdated - some elements deleted, some updated",
 			onlyNewOrUpdated: true,
-			existingConfig:   config1(),
-			newConfig:        config2,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config2()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `<choices operation="delete"/>
 <interface operation="delete">
   <name>ethernet-1/1</name>
@@ -1805,37 +1920,46 @@ func TestToXMLTable(t *testing.T) {
 		{
 			name:             "XML - delete ethernet-1/1, honor namespace, operatin With namespace, remove",
 			onlyNewOrUpdated: true,
-			existingConfig:   config1(),
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `<interface xmlns="urn:sdcio/model" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
 `,
 			honorNamespace:         true,
 			operationWithNamespace: true,
 			useOperationRemove:     true,
-			newConfig: func() *sdcio_schema.Device {
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
 				delete(c.Interface, "ethernet-1/1")
-				return c
+				return expandUpdateFromConfig(ctx, c, converter)
 			},
 		},
 		{
 			name:             "XML - honor namespace, operatin With namespace",
 			onlyNewOrUpdated: true,
-			existingConfig:   config1(),
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `<interface xmlns="urn:sdcio/model" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="delete"/>
 `,
 			honorNamespace:         true,
 			operationWithNamespace: true,
 			useOperationRemove:     false,
-			newConfig: func() *sdcio_schema.Device {
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
 				delete(c.Interface, "ethernet-1/1")
-				return c
+				return expandUpdateFromConfig(ctx, c, converter)
 			},
 		},
 		{
 			name:             "XML - delete certain ethernet-1/1 attributes update another",
 			onlyNewOrUpdated: true,
-			existingConfig:   config1(),
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `<interface xmlns="urn:sdcio/model">
   <description xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
   <name>ethernet-1/1</name>
@@ -1849,18 +1973,21 @@ func TestToXMLTable(t *testing.T) {
 			honorNamespace:         true,
 			operationWithNamespace: true,
 			useOperationRemove:     true,
-			newConfig: func() *sdcio_schema.Device {
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
 				c.Interface["ethernet-1/1"].Description = nil
 				c.Interface["ethernet-1/1"].Subinterface[0].Description = nil
 				c.Interface["ethernet-1/1"].Subinterface[0].Type = sdcio_schema.SdcioModelCommon_SiType_bridged
-				return c
+				return expandUpdateFromConfig(ctx, c, converter)
 			},
 		},
 		{
 			name:             "XML - delete ethernet-1/1 add ethernet-1/2",
 			onlyNewOrUpdated: true,
-			existingConfig:   config1(),
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `<choices operation="delete"/>
 <interface operation="delete">
   <name>ethernet-1/1</name>
@@ -1875,7 +2002,7 @@ func TestToXMLTable(t *testing.T) {
 			honorNamespace:         false,
 			operationWithNamespace: false,
 			useOperationRemove:     false,
-			newConfig: func() *sdcio_schema.Device {
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
 				delete(c.Interface, "ethernet-1/1")
 				c.Interface["ethernet-1/2"] = &sdcio_schema.SdcioModel_Interface{
@@ -1885,13 +2012,16 @@ func TestToXMLTable(t *testing.T) {
 				}
 				c.Patterntest = nil
 				c.Choices.Case1.CaseElem.Elem = nil
-				return c
+				return expandUpdateFromConfig(ctx, c, converter)
 			},
 		},
 		{
 			name:             "XML - replace direct leaf and choice",
 			onlyNewOrUpdated: true,
-			existingConfig:   config1(),
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `<choices xmlns="urn:sdcio/model">
   <case1 xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
   <case2>
@@ -1903,20 +2033,84 @@ func TestToXMLTable(t *testing.T) {
 			honorNamespace:         true,
 			operationWithNamespace: true,
 			useOperationRemove:     true,
-			newConfig: func() *sdcio_schema.Device {
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
 				c.Patterntest = nil
 				c.Choices.Case1.CaseElem.Elem = nil
 				c.Choices.Case2 = &sdcio_schema.SdcioModel_Choices_Case2{
 					Log: ygot.Bool(true),
 				}
-				return c
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+		},
+		{
+			name:             "XML - empty",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+
+				upds, err := expandUpdateFromConfig(ctx, c, converter)
+				if err != nil {
+					return nil, err
+				}
+				upds = append(upds, &sdcpb.Update{Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "emptyconf"}}}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{}}})
+				return upds, nil
+			},
+			expected: `<emptyconf/>
+`,
+			honorNamespace:         true,
+			operationWithNamespace: true,
+			useOperationRemove:     true,
+		},
+		{
+			name:             "XML - presence",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			expected: `<network-instance xmlns="urn:sdcio/model">
+  <name>default</name>
+  <protocol>
+    <bgp/>
+  </protocol>
+</network-instance>
+`,
+			honorNamespace:         true,
+			operationWithNamespace: true,
+			useOperationRemove:     true,
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				upds, err := expandUpdateFromConfig(ctx, c, converter)
+				if err != nil {
+					return nil, err
+				}
+				upds = append(upds, &sdcpb.Update{
+					Path: &sdcpb.Path{
+						Elem: []*sdcpb.PathElem{
+							{Name: "network-instance", Key: map[string]string{"name": "default"}},
+							{Name: "protocol"},
+							{Name: "bgp"},
+						},
+					},
+					Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{}},
+				})
+				return upds, nil
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
 			scb, err := getSchemaClientBound(t)
 			if err != nil {
 				t.Fatal(err)
@@ -1925,30 +2119,48 @@ func TestToXMLTable(t *testing.T) {
 
 			ctx := context.Background()
 
+			converter := utils.NewConverter(scb)
+
 			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", nil, scb), owner)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = addToRoot(ctx, root, tt.existingConfig, false, owner)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if tt.newConfig != nil {
-				root.markOwnerDelete(owner)
-
-				err = addToRoot(ctx, root, tt.newConfig(), true, owner)
+			if tt.existingConfig != nil {
+				existingUpds, err := tt.existingConfig(ctx, converter)
+				if err != nil {
+					t.Error(err)
+				}
+				err = addToRoot(ctx, root, existingUpds, false, owner)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
 
-			err = addToRoot(ctx, root, tt.runningConfig, false, "running")
-			if err != nil {
-				t.Fatal(err)
+			if tt.newConfig != nil {
+				root.markOwnerDelete(owner)
+
+				newUpds, err := tt.newConfig(ctx, converter)
+				if err != nil {
+					t.Error(err)
+				}
+				err = addToRoot(ctx, root, newUpds, true, owner)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tt.runningConfig != nil {
+				runningUpds, err := tt.runningConfig(ctx, converter)
+				if err != nil {
+					t.Error(err)
+				}
+				err = addToRoot(ctx, root, runningUpds, false, "running")
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 			root.FinishInsertionPhase()
+			// fmt.Println(root.String())
 
 			xmlDoc, err := root.ToXML(tt.onlyNewOrUpdated, tt.honorNamespace, tt.operationWithNamespace, tt.useOperationRemove)
 			if err != nil {
@@ -1993,9 +2205,7 @@ func recursiveSortXMLElementsByTagName(element *etree.Element) {
 					return strings.Compare(cic.Text(), cjc.Text())
 				}
 			}
-
 		}
-
 		return 0
 	})
 

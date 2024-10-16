@@ -118,7 +118,7 @@ type Entry interface {
 	ToJsonIETF(onlyNewOrUpdated bool) (any, error)
 	// toJsonInternal the internal function that produces JSON and JSON_IETF
 	// Not for external usage
-	toJsonInternal(onlyNewOrUpdated bool, ietf bool, actualPrefix string) (j any, err error)
+	toJsonInternal(onlyNewOrUpdated bool, ietf bool) (j any, err error)
 	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
 	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error)
 }

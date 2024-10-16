@@ -32,22 +32,12 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 			utils.AddXMLOperationRemoveDelete(parent, operationWithNamespace, useOperationRemove)
 			// retrieve the parent schema, we need to extract the key names
 			// values are the tree level names
-			parentSchema, levelsUp := s.GetFirstAncestorWithSchema()
-			// from the parent we get the keys as slice
-			schemaKeys := parentSchema.GetSchemaKeys()
-			var treeElem Entry = s
-			// the keys do match the levels up in the tree in reverse order
-			// hence we init i with levelUp and count down
-			for i := levelsUp - 1; i >= 0; i-- {
-				// and finally we create the patheleme key attributes
-				parent.CreateElement(schemaKeys[i]).SetText(treeElem.PathName())
-				treeElem = treeElem.GetParent()
-			}
+			xmlAddKeyElements(s, parent)
 			return true, nil
 		}
 
 		// if the entry remains so exist, we need to add it to the xml doc
-		overAllDoAdd := false
+		overallDoAdd := false
 		for _, c := range s.filterActiveChoiceCaseChilds() {
 			// recurse the call
 			// no additional element is created, since we're on a key level, so add to parent element
@@ -57,28 +47,23 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 			}
 			// only if there was something added in the childs, the element itself is meant to be added.
 			// we keep track of that via overAllDoAdd.
-			overAllDoAdd = doAdd || overAllDoAdd
+			overallDoAdd = doAdd || overallDoAdd
 		}
-		return overAllDoAdd, nil
+		return overallDoAdd, nil
 	case *sdcpb.SchemaElem_Container:
-		// check if the element is meant to be deleted
-		if !s.remainsToExist() {
+		overallDoAdd := false
+		switch {
+		case !s.remainsToExist():
+			// s is meant to be removed
 			// if delete, create the element as child of parent
-			e := parent.CreateElement(s.pathElemName)
+			newElem := parent.CreateElement(s.pathElemName)
 			// add namespace if we create doc with namespace and the actual namespace differs from the parent namespace
-			if honorNamespace && !namespaceIsEqual(s, s.parent) {
-				// create namespace attribute
-				e.CreateAttr("xmlns", utils.GetNamespaceFromGetSchema(s.GetSchema()))
-			}
+			xmlAddNamespaceConditional(s, s.parent, newElem, honorNamespace)
 			// add the delete / remove operation
-			utils.AddXMLOperationRemoveDelete(e, operationWithNamespace, useOperationRemove)
+			utils.AddXMLOperationRemoveDelete(newElem, operationWithNamespace, useOperationRemove)
 			return true, nil
-		}
-		overAllDoAdd := false
-
-		// A container can represent a list or a map.
-		// Figure out if it has keys, then it is a map
-		if len(s.GetSchemaKeys()) > 0 {
+		case len(s.GetSchemaKeys()) > 0:
+			// the container represents a list
 			// if the container contains keys, then it is a list
 			// hence must be rendered as an array
 			childs, err := s.FilterChilds(nil)
@@ -86,59 +71,67 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 				return false, err
 			}
 			// go through the childs creating the xml elements
-			for _, c := range childs {
+			for _, child := range childs {
 				// create the element for the child, that in the recursed call will appear as parent
-				p := etree.NewElement(s.PathName())
+				newElem := etree.NewElement(s.PathName())
 				// process the honorNamespace instruction
-				if honorNamespace && !namespaceIsEqual(s, s.parent) {
-					p.CreateAttr("xmlns", utils.GetNamespaceFromGetSchema(s.GetSchema()))
-				}
+				xmlAddNamespaceConditional(s, s.parent, newElem, honorNamespace)
 				// recurse the call
-				doAdd, err := c.toXmlInternal(p, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+				doAdd, err := child.toXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
 				if err != nil {
 					return false, err
 				}
-				overAllDoAdd = doAdd || overAllDoAdd
+				overallDoAdd = doAdd || overallDoAdd
 				// add the child only if doAdd is true
 				if doAdd {
-					parent.AddChild(p)
+					xmlAddKeyElements(child, newElem)
+					// add all the key elements if they do not already exist
+					parent.AddChild(newElem)
 				}
 			}
-			return overAllDoAdd, nil
-		}
-		// If we reach here, the Tree Entry represents a list
-		// So create the element that the tree entry represents
-		p := etree.NewElement(s.PathName())
-		// iterate through all the childs
-		for _, c := range s.childs {
-			// for namespace attr creation we need to handle the root node (s.parent == nil) specially
-			if s.parent != nil {
-				// only if not the root level, we can check if parent namespace != actual elements namespace
-				// so if we need to add namespaces, check if they are equal, if not add the namespace attribute
-				if honorNamespace && !namespaceIsEqual(s, s.parent) {
-					p.CreateAttr("xmlns", utils.GetNamespaceFromGetSchema(s.GetSchema()))
+			return overallDoAdd, nil
+		case len(s.childs) == 0 && s.GetSchema().GetContainer().IsPresence:
+			// process presence cotnainers with no childs
+			if len(s.childs) == 0 {
+				newElem := parent.CreateElement(s.PathName())
+				// process the honorNamespace instruction
+				xmlAddNamespaceConditional(s, s.parent, newElem, honorNamespace)
+				return true, nil
+			}
+		default:
+			// the container represents a map
+			// So create the element that the tree entry represents
+			newElem := etree.NewElement(s.PathName())
+			// iterate through all the childs
+			for _, c := range s.childs {
+				// for namespace attr creation we need to handle the root node (s.parent == nil) specially
+				if s.parent != nil {
+					// only if not the root level, we can check if parent namespace != actual elements namespace
+					// so if we need to add namespaces, check if they are equal, if not add the namespace attribute
+					xmlAddNamespaceConditional(s, s.parent, newElem, honorNamespace)
+				} else {
+					// if this is the root node, we take the given element from the parent parameter as p
+					// avoiding wrongly adding an additional level in the xml doc.
+					newElem = parent
 				}
-			} else {
-				// if this is the root node, we take the given element from the parent parameter as p
-				// avoiding wrongly adding an additional level in the xml doc.
-				p = parent
+				// recurse the call to all the children
+				doAdd, err := c.toXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+				if err != nil {
+					return false, err
+				}
+				// if a branch, represented by the childs is not meant to be added the doAdd is false.
+				// if all the childs are meant to no be added, the whole container element should not be added
+				// so we keep track via overAllDoAdd
+				overallDoAdd = doAdd || overallDoAdd
 			}
-			// recurse the call to all the children
-			doAdd, err := c.toXmlInternal(p, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
-			if err != nil {
-				return false, err
+			// so if there is at least a child and the s.parent is not nil (root node)
+			// then add p to the parent as a child
+			if overallDoAdd && s.parent != nil {
+				parent.AddChild(newElem)
 			}
-			// if a branch, represented by the childs is not meant to be added the doAdd is false.
-			// if all the childs are meant to no be added, the whole container element should not be added
-			// so we keep track via overAllDoAdd
-			overAllDoAdd = doAdd || overAllDoAdd
+			return overallDoAdd, nil
 		}
-		// so if there is at least a child and the s.parent is not nil (root node)
-		// then add p to the parent as a child
-		if overAllDoAdd && s.parent != nil {
-			parent.AddChild(p)
-		}
-		return overAllDoAdd, nil
+
 	case *sdcpb.SchemaElem_Leaflist, *sdcpb.SchemaElem_Field:
 		// check if the element remains to exist
 		if !s.remainsToExist() {
@@ -146,14 +139,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 			utils.AddXMLOperationRemoveDelete(parent.CreateElement(s.pathElemName), operationWithNamespace, useOperationRemove)
 			// see case nil for an explanation of this, it is basically the same
 			if s.parent.GetSchema() == nil {
-				// we need to add the keys
-				parentSchema, levelsUp := s.parent.GetFirstAncestorWithSchema()
-				schemaKeys := parentSchema.GetSchemaKeys()
-				var treeElem Entry = s.parent
-				for i := levelsUp - 1; i >= 0; i-- {
-					parent.CreateElement(schemaKeys[i]).SetText(treeElem.PathName())
-					treeElem = treeElem.GetParent()
-				}
+				xmlAddKeyElements(s.parent, parent)
 			}
 			return true, nil
 		}
@@ -201,4 +187,33 @@ func namespaceIsEqual(a Entry, b Entry) bool {
 
 	// compare the two namespaces
 	return namespaces[0] == namespaces[1]
+}
+
+// xmlAddNamespaceConditional adds the namespace of a to elem if namespaces of a and b are different
+func xmlAddNamespaceConditional(a Entry, b Entry, elem *etree.Element, honorNamespace bool) {
+	if honorNamespace && !namespaceIsEqual(a, b) {
+		elem.CreateAttr("xmlns", utils.GetNamespaceFromGetSchema(a.GetSchema()))
+	}
+}
+
+// xmlAddKeyElements determines the keys of a certain Entry in the tree and adds those to the
+// element if they do not already exist.
+func xmlAddKeyElements(s Entry, parent *etree.Element) {
+	// retrieve the parent schema, we need to extract the key names
+	// values are the tree level names
+	parentSchema, levelsUp := s.GetFirstAncestorWithSchema()
+	// from the parent we get the keys as slice
+	schemaKeys := parentSchema.GetSchemaKeys()
+	var treeElem Entry = s
+	// the keys do match the levels up in the tree in reverse order
+	// hence we init i with levelUp and count down
+	for i := levelsUp - 1; i >= 0; i-- {
+		// skip if the element already exists
+		existingElem := parent.SelectElement(schemaKeys[i])
+		if existingElem == nil {
+			// and finally we create the patheleme key attributes
+			parent.CreateElement(schemaKeys[i]).SetText(treeElem.PathName())
+			treeElem = treeElem.GetParent()
+		}
+	}
 }

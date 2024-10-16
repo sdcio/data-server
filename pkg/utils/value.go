@@ -72,44 +72,23 @@ func GetValue(updValue *gnmi.TypedValue) (interface{}, error) {
 	return value, nil
 }
 
-func GetJsonValue(tv *sdcpb.TypedValue) any {
+func GetJsonValue(tv *sdcpb.TypedValue) (any, error) {
 	switch tv.Value.(type) {
-	case *sdcpb.TypedValue_AsciiVal:
-		return tv.GetAsciiVal()
-	case *sdcpb.TypedValue_BoolVal:
-		return tv.GetBoolVal()
-	case *sdcpb.TypedValue_BytesVal:
-		return tv.GetBytesVal()
-	case *sdcpb.TypedValue_DecimalVal:
-		return tv.GetDecimalVal()
 	case *sdcpb.TypedValue_EmptyVal:
-		return map[string]any{}
-	case *sdcpb.TypedValue_FloatVal:
-		return tv.GetFloatVal()
-	case *sdcpb.TypedValue_DoubleVal:
-		return tv.GetDoubleVal()
-	case *sdcpb.TypedValue_IntVal:
-		return tv.GetIntVal()
-	case *sdcpb.TypedValue_StringVal:
-		return tv.GetStringVal()
-	case *sdcpb.TypedValue_UintVal:
-		return tv.GetUintVal()
-	case *sdcpb.TypedValue_JsonIetfVal:
-		return tv.GetJsonIetfVal()
-	case *sdcpb.TypedValue_JsonVal:
-		return tv.GetJsonVal()
+		return map[string]any{}, nil
 	case *sdcpb.TypedValue_LeaflistVal:
 		rs := make([]any, 0, len(tv.GetLeaflistVal().GetElement()))
 		for _, e := range tv.GetLeaflistVal().GetElement() {
-			rs = append(rs, GetJsonValue(e))
+			val, err := GetJsonValue(e)
+			if err != nil {
+				return nil, err
+			}
+			rs = append(rs, val)
 		}
-		return rs
-	case *sdcpb.TypedValue_ProtoBytes:
-		return tv.GetProtoBytes()
-	case *sdcpb.TypedValue_AnyVal:
-		return tv.GetAnyVal()
+		return rs, nil
+	default:
+		return GetSchemaValue(tv)
 	}
-	return nil
 }
 
 func GetSchemaValue(updValue *sdcpb.TypedValue) (interface{}, error) {
