@@ -97,7 +97,7 @@ func TestDatastore_validateTree(t *testing.T) {
 
 			// create a cache client mock
 			cacheClient := mockcacheclient.NewMockClient(controller)
-			testhelper.ConfigureCacheClientMock(t, cacheClient, tt.intendedStoreUpdates, nil, nil)
+			testhelper.ConfigureCacheClientMock(t, cacheClient, tt.intendedStoreUpdates, nil, nil, nil)
 
 			schemaClient, schema, err := testhelper.InitSDCIOSchema()
 			if err != nil {

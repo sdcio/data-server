@@ -469,10 +469,7 @@ func addToRoot(ctx context.Context, root *RootEntry, updates []*sdcpb.Update, is
 		if err != nil {
 			return err
 		}
-		cacheUpd, err := cache.NewUpdate(utils.ToStrings(upd.GetPath(), false, false), b, 5, owner, 0), nil
-		if err != nil {
-			return err
-		}
+		cacheUpd := cache.NewUpdate(utils.ToStrings(upd.GetPath(), false, false), b, 5, owner, 0)
 
 		_, err = root.AddCacheUpdateRecursive(ctx, cacheUpd, isNew)
 		if err != nil {

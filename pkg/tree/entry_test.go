@@ -619,12 +619,15 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	root.FinishInsertionPhase()
 
 	// retrieve the Deletes
-	deletesSlices := root.GetDeletes(true)
+	deletesSlices, err := root.GetDeletes(true)
+	if err != nil {
+		t.Error(err)
+	}
 
 	// process the result for comparison
 	deletes := make([]string, 0, len(deletesSlices))
 	for _, x := range deletesSlices {
-		deletes = append(deletes, strings.Join(x, "/"))
+		deletes = append(deletes, strings.Join(x.Path(), "/"))
 	}
 
 	// define the expected result

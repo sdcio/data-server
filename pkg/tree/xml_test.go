@@ -51,7 +51,7 @@ func TestToXMLTable(t *testing.T) {
     <type>routed</type>
   </subinterface>
 </interface>
-<leaflist operation="delete">
+<leaflist operation="replace">
   <entry>foo</entry>
   <entry>bar</entry>
 </leaflist>

@@ -221,7 +221,8 @@ func (s *sharedEntryAttributes) GetSchemaKeys() []string {
 // getAggregatedDeletes is called on levels that have no schema attached, meaning key schemas.
 // here we might delete the whole branch of the tree, if all key elements are being deleted
 // if not, we continue with regular deltes
-func (s *sharedEntryAttributes) getAggregatedDeletes(deletes PathSlices, aggregatePaths bool) PathSlices {
+func (s *sharedEntryAttributes) getAggregatedDeletes(deletes []DeleteEntry, aggregatePaths bool) ([]DeleteEntry, error) {
+	var err error
 	// we take a look into the level(s) up
 	// trying to get the schema
 	ancestor, level := s.GetFirstAncestorWithSchema()
@@ -247,14 +248,17 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes PathSlices, aggrega
 		// if aggregate delet is possible do it
 		if doAggregateDelete {
 			// by adding the key path to the deletes
-			deletes = append(deletes, s.Path())
+			deletes = append(deletes, s)
 		} else {
 			// otherwise continue with deletion on the childs.
 			for _, c := range s.childs {
-				deletes = c.GetDeletes(deletes, aggregatePaths)
+				deletes, err = c.GetDeletes(deletes, aggregatePaths)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
-		return deletes
+		return deletes, nil
 	}
 	return s.getRegularDeletes(deletes, aggregatePaths)
 }
@@ -291,7 +295,8 @@ func (s *sharedEntryAttributes) remainsToExist() bool {
 }
 
 // getRegularDeletes performs deletion calculation on elements that have a schema attached.
-func (s *sharedEntryAttributes) getRegularDeletes(deletes PathSlices, aggregate bool) PathSlices {
+func (s *sharedEntryAttributes) getRegularDeletes(deletes []DeleteEntry, aggregate bool) ([]DeleteEntry, error) {
+	var err error
 	// if entry is a container type, check the keys, to be able to
 	// issue a delte for the whole branch at once via keys
 	switch s.schema.GetSchema().(type) {
@@ -299,28 +304,43 @@ func (s *sharedEntryAttributes) getRegularDeletes(deletes PathSlices, aggregate 
 
 		// deletes for child elements (choice cases) that newly became inactive.
 		for _, v := range s.choicesResolvers {
-			oldBestCase := v.getOldBestCaseName()
-			newBestCase := v.getBestCaseName()
+			oldBestCaseName := v.getOldBestCaseName()
+			newBestCaseName := v.getBestCaseName()
 			// so if we have an old and a new best cases (not "") and the names are different,
 			// all the old to the deletion list
-			if oldBestCase != "" && newBestCase != "" && oldBestCase != newBestCase {
-				deletes = append(deletes, append(s.Path(), oldBestCase))
+			if oldBestCaseName != "" && newBestCaseName != "" && oldBestCaseName != newBestCaseName {
+				// try fetching the case from the childs
+				oldBestCaseEntry, exists := s.childs[oldBestCaseName]
+				if exists {
+					deletes = append(deletes, oldBestCaseEntry)
+				} else {
+					// it might be that the child is not loaded into the tree, but just considered from the treecontext cache for the choice/case resolution
+					// if so, we create and return the DeleteEntryImpl struct
+					path, err := s.SdcpbPath()
+					if err != nil {
+						return nil, err
+					}
+					deletes = append(deletes, NewDeleteEntryImpl(path, append(s.Path(), oldBestCaseName)))
+				}
 			}
 		}
 	}
 
 	if !s.remainsToExist() && !s.IsRoot() && len(s.GetSchemaKeys()) == 0 {
-		return append(deletes, s.Path())
+		return append(deletes, s), nil
 	}
 
 	for _, e := range s.childs {
-		deletes = e.GetDeletes(deletes, aggregate)
+		deletes, err = e.GetDeletes(deletes, aggregate)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return deletes
+	return deletes, nil
 }
 
 // GetDeletes calculate the deletes that need to be send to the device.
-func (s *sharedEntryAttributes) GetDeletes(deletes PathSlices, aggregatePaths bool) PathSlices {
+func (s *sharedEntryAttributes) GetDeletes(deletes []DeleteEntry, aggregatePaths bool) ([]DeleteEntry, error) {
 
 	// if the actual level has no schema assigned we're on a key level
 	// element. Hence we try deletion via aggregation
@@ -437,6 +457,9 @@ func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, pathElems
 			if err != nil {
 				return nil, err
 			}
+			if e != nil {
+				exists = true
+			}
 		}
 
 		if !exists {
@@ -535,6 +558,12 @@ func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isR
 		return s.parent.Navigate(ctx, path[1:], false)
 	default:
 		e, exists := s.filterActiveChoiceCaseChilds()[path[0]]
+		if !exists {
+			e, _ = s.tryLoading(ctx, append(s.Path(), path...))
+			if e != nil {
+				exists = true
+			}
+		}
 		if !exists {
 			e, err = s.tryLoadingDefault(ctx, append(s.Path(), path...))
 			if err != nil {
@@ -854,17 +883,23 @@ func (s *sharedEntryAttributes) populateChoiceCaseResolvers() {
 	// if choice/cases exist, process it
 	for _, choiceResolver := range s.choicesResolvers {
 		for _, elem := range choiceResolver.GetElementNames() {
-			child, childExists := s.childs[elem]
+			isNew := false
+			var val2 *int32
 			// Query the Index, stored in the treeContext for the per branch highes precedence
-			if val := s.treeContext.GetBranchesHighesPrecedence(s.Path(), CacheUpdateFilterExcludeOwner(s.treeContext.GetActualOwner())); val < math.MaxInt32 {
-				choiceResolver.SetValue(elem, val, false)
-			}
+			v := s.treeContext.GetBranchesHighesPrecedence(append(s.Path(), elem), CacheUpdateFilterExcludeOwner(s.treeContext.GetActualOwner()))
 
+			child, childExists := s.childs[elem]
 			// set the value from the tree as well
 			if childExists {
-				v := child.getHighestPrecedenceValueOfBranch()
-				choiceResolver.SetValue(elem, v, true)
+				x := child.getHighestPrecedenceValueOfBranch()
+				val2 = &x
 			}
+
+			if val2 != nil && v >= *val2 {
+				v = *val2
+				isNew = true
+			}
+			choiceResolver.SetValue(elem, v, isNew)
 		}
 	}
 }

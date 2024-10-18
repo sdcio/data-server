@@ -29,7 +29,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 		if !s.remainsToExist() {
 			// If the element is to be deleted
 			// add the delete operation to the parent element
-			utils.AddXMLOperationRemoveDelete(parent, operationWithNamespace, useOperationRemove)
+			utils.AddXMLOperation(parent, utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
 			// retrieve the parent schema, we need to extract the key names
 			// values are the tree level names
 			xmlAddKeyElements(s, parent)
@@ -60,7 +60,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 			// add namespace if we create doc with namespace and the actual namespace differs from the parent namespace
 			xmlAddNamespaceConditional(s, s.parent, newElem, honorNamespace)
 			// add the delete / remove operation
-			utils.AddXMLOperationRemoveDelete(newElem, operationWithNamespace, useOperationRemove)
+			utils.AddXMLOperation(newElem, utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
 			return true, nil
 		case len(s.GetSchemaKeys()) > 0:
 			// the container represents a list
@@ -136,7 +136,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 		// check if the element remains to exist
 		if !s.remainsToExist() {
 			// if not, add the remove / delete op
-			utils.AddXMLOperationRemoveDelete(parent.CreateElement(s.pathElemName), operationWithNamespace, useOperationRemove)
+			utils.AddXMLOperation(parent.CreateElement(s.pathElemName), utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
 			// see case nil for an explanation of this, it is basically the same
 			if s.parent.GetSchema() == nil {
 				xmlAddKeyElements(s.parent, parent)

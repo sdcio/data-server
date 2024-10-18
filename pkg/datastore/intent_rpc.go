@@ -28,10 +28,10 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/datastore/target"
 )
 
 var rawIntentPrefix = "__raw_intent__"
@@ -105,29 +105,20 @@ func (d *Datastore) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest
 	}, nil
 }
 
-func (d *Datastore) applyIntent(ctx context.Context, candidateName string, sdreq *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
+func (d *Datastore) applyIntent(ctx context.Context, candidateName string, source target.TargetSource) (*sdcpb.SetDataResponse, error) {
 	if candidateName == "" {
 		return nil, fmt.Errorf("missing candidate name")
 	}
-	log.Debugf("%s: applying intent from candidate %s", d.Name(), sdreq.GetDatastore())
-
 	var err error
-
-	// push updates to sbi
-	log.Debugf("datastore %s/%s applyIntent:\n%s", d.config.Name, candidateName, prototext.Format(sdreq))
-
-	log.Infof("datastore %s/%s applyIntent: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d",
-		d.config.Name, candidateName, len(sdreq.GetUpdate()), len(sdreq.GetReplace()), len(sdreq.GetDelete()))
 
 	var rsp *sdcpb.SetDataResponse
 	// send set request only if there are updates and/or deletes
-	if len(sdreq.GetUpdate())+len(sdreq.GetReplace())+len(sdreq.GetDelete()) > 0 {
-		rsp, err = d.sbi.Set(ctx, sdreq)
-		if err != nil {
-			return nil, err
-		}
-		log.Debugf("datastore %s/%s SetResponse from SBI: %v", d.config.Name, candidateName, rsp)
+
+	rsp, err = d.sbi.Set(ctx, source)
+	if err != nil {
+		return nil, err
 	}
+	log.Debugf("datastore %s/%s SetResponse from SBI: %v", d.config.Name, candidateName, rsp)
 
 	return rsp, nil
 }

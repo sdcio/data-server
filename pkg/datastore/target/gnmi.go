@@ -163,19 +163,19 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 	return schemaRsp, nil
 }
 
-func (t *gnmiTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
+func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDataResponse, error) {
+
+	req, err := source.ToProto(ctx, true)
+	if err != nil {
+		return nil, err
+	}
 	setReq := &gnmi.SetRequest{
-		Delete:  make([]*gnmi.Path, 0, len(req.GetDelete())),
-		Replace: make([]*gnmi.Update, 0, len(req.GetReplace())),
-		Update:  make([]*gnmi.Update, 0, len(req.GetUpdate())),
+		Delete: make([]*gnmi.Path, 0, len(req.GetDelete())),
+		Update: make([]*gnmi.Update, 0, len(req.GetUpdate())),
 	}
 	for _, del := range req.GetDelete() {
 		gdel := utils.ToGNMIPath(del)
 		setReq.Delete = append(setReq.Delete, gdel)
-	}
-	for _, repl := range req.GetReplace() {
-		grepl := t.convertKeyUpdates(repl)
-		setReq.Replace = append(setReq.Replace, grepl)
 	}
 	for _, upd := range req.GetUpdate() {
 		gupd := t.convertKeyUpdates(upd)

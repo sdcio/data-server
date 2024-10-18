@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	status "google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/prototext"
 
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/config"
@@ -200,55 +199,55 @@ func (d *Datastore) Candidates(ctx context.Context) ([]*sdcpb.DataStore, error) 
 	return rsp, nil
 }
 
-func (d *Datastore) Commit(ctx context.Context, req *sdcpb.CommitRequest) error {
-	name := req.GetDatastore().GetName()
-	if name == "" {
-		return fmt.Errorf("missing candidate name")
-	}
-	changes, err := d.cacheClient.GetChanges(ctx, d.Config().Name, req.GetDatastore().GetName())
-	if err != nil {
-		return err
-	}
+// func (d *Datastore) Commit(ctx context.Context, req *sdcpb.CommitRequest) error {
+// 	name := req.GetDatastore().GetName()
+// 	if name == "" {
+// 		return fmt.Errorf("missing candidate name")
+// 	}
+// 	changes, err := d.cacheClient.GetChanges(ctx, d.Config().Name, req.GetDatastore().GetName())
+// 	if err != nil {
+// 		return err
+// 	}
 
-	notification, err := d.changesToUpdates(ctx, changes)
-	if err != nil {
-		return err
-	}
-	log.Debugf("%s:%s notification:\n%s", d.Name(), name, prototext.Format(notification))
-	// TODO: consider if leafref validation
-	// needs to run before must statements validation
+// 	notification, err := d.changesToUpdates(ctx, changes)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	log.Debugf("%s:%s notification:\n%s", d.Name(), name, prototext.Format(notification))
+// 	// TODO: consider if leafref validation
+// 	// needs to run before must statements validation
 
-	// push updates to sbi
-	sbiSet := &sdcpb.SetDataRequest{
-		Update: notification.GetUpdate(),
-		// Replace
-		Delete: notification.GetDelete(),
-	}
-	log.Debugf("datastore %s/%s commit:\n%s", d.config.Name, name, prototext.Format(sbiSet))
+// 	// push updates to sbi
+// 	sbiSet := &sdcpb.SetDataRequest{
+// 		Update: notification.GetUpdate(),
+// 		// Replace
+// 		Delete: notification.GetDelete(),
+// 	}
+// 	log.Debugf("datastore %s/%s commit:\n%s", d.config.Name, name, prototext.Format(sbiSet))
 
-	log.Infof("datastore %s/%s commit: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d",
-		d.config.Name, name, len(sbiSet.GetUpdate()), len(sbiSet.GetReplace()), len(sbiSet.GetDelete()))
-	// send set request only if there are updates and/or deletes
-	if len(sbiSet.GetUpdate())+len(sbiSet.GetReplace())+len(sbiSet.GetDelete()) > 0 {
-		rsp, err := d.sbi.Set(ctx, sbiSet)
-		if err != nil {
-			return err
-		}
-		log.Debugf("datastore %s/%s SetResponse from SBI: %v", d.config.Name, name, rsp)
-	}
-	// commit candidate changes into the intended store
-	err = d.cacheClient.Commit(ctx, d.config.Name, name)
-	if err != nil {
-		return err
-	}
+// 	log.Infof("datastore %s/%s commit: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d",
+// 		d.config.Name, name, len(sbiSet.GetUpdate()), len(sbiSet.GetReplace()), len(sbiSet.GetDelete()))
+// 	// send set request only if there are updates and/or deletes
 
-	if req.GetStay() {
-		// reset candidate changes and (TODO) rebase
-		return d.cacheClient.Discard(ctx, d.config.Name, name)
-	}
-	// delete candidate
-	return d.cacheClient.DeleteCandidate(ctx, d.Name(), name)
-}
+// 		rsp, err := d.sbi.Set(ctx, sbiSet)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		log.Debugf("datastore %s/%s SetResponse from SBI: %v", d.config.Name, name, rsp)
+
+// 	// commit candidate changes into the intended store
+// 	err = d.cacheClient.Commit(ctx, d.config.Name, name)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	if req.GetStay() {
+// 		// reset candidate changes and (TODO) rebase
+// 		return d.cacheClient.Discard(ctx, d.config.Name, name)
+// 	}
+// 	// delete candidate
+// 	return d.cacheClient.DeleteCandidate(ctx, d.Name(), name)
+// }
 
 func (d *Datastore) Rebase(ctx context.Context, req *sdcpb.RebaseRequest) error {
 	// name := req.GetDatastore().GetName()
@@ -523,41 +522,6 @@ func (d *Datastore) toPath(ctx context.Context, p []string) (*sdcpb.Path, error)
 		return nil, err
 	}
 	return path, nil
-}
-
-func (d *Datastore) changesToUpdates(ctx context.Context, changes []*cache.Change) (*sdcpb.Notification, error) {
-	notif := &sdcpb.Notification{
-		Update: make([]*sdcpb.Update, 0, len(changes)),
-		Delete: make([]*sdcpb.Path, 0, len(changes)),
-	}
-	for _, change := range changes {
-		if change == nil {
-			continue
-		}
-		switch {
-		case len(change.Delete) != 0:
-			p, err := d.toPath(ctx, change.Delete)
-			if err != nil {
-				return nil, err
-			}
-			notif.Delete = append(notif.Delete, p)
-		case change.Update != nil:
-			tv, err := change.Update.Value()
-			if err != nil {
-				return nil, err
-			}
-			p, err := d.toPath(ctx, change.Update.GetPath())
-			if err != nil {
-				return nil, err
-			}
-			upd := &sdcpb.Update{
-				Path:  p,
-				Value: tv,
-			}
-			notif.Update = append(notif.Update, upd)
-		}
-	}
-	return notif, nil
 }
 
 // getValidationClient will create a ValidationClient instance if not already existing
