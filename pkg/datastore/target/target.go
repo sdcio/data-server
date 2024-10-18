@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/beevik/etree"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc"
 
@@ -33,7 +34,7 @@ const (
 
 type Target interface {
 	Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error)
-	Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error)
+	Set(ctx context.Context, source TargetSource) (*sdcpb.SetDataResponse, error)
 	Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate)
 	Status() string
 	Close() error
@@ -64,4 +65,15 @@ type SyncUpdate struct {
 	// if true indicates the end of a sync iteration.
 	// triggers the pruning on the cache side.
 	End bool
+}
+
+type TargetSource interface {
+	// ToJson returns the Tree contained structure as JSON
+	// use e.g. json.MarshalIndent() on the returned struct
+	ToJson(onlyNewOrUpdated bool) (any, error)
+	// ToJsonIETF returns the Tree contained structure as JSON_IETF
+	// use e.g. json.MarshalIndent() on the returned struct
+	ToJsonIETF(onlyNewOrUpdated bool) (any, error)
+	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
+	ToProto(context.Context, bool) (*sdcpb.Notification, error)
 }

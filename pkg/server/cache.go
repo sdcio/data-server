@@ -52,7 +52,7 @@ START:
 	}
 }
 
-func (s *Server) createLocalCacheClient(ctx context.Context) error {
+func (s *Server) createLocalCacheClient(_ context.Context) error {
 	var err error
 	log.Infof("initializing local cache client")
 	s.cacheClient, err = cache.NewLocalCache(&cconfig.CacheConfig{

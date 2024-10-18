@@ -31,7 +31,7 @@ import (
 )
 
 func (d *Datastore) populateTreeWithRunning(ctx context.Context, tc *tree.TreeContext, r *tree.RootEntry) error {
-	// read all the keys from the cache intended store but just the keys, no values are populated
+	// read all the keys from the cache running store but just the keys, no values are populated
 	configIndex, err := d.readStoreKeysMeta(ctx, cachepb.Store_CONFIG)
 	if err != nil {
 		return err
@@ -70,9 +70,11 @@ func (d *Datastore) populateTree(ctx context.Context, req *sdcpb.SetIntentReques
 	}
 	tc.SetStoreIndex(storeIndex)
 
+	converter := utils.NewConverter(d.getValidationClient())
+
 	// list of updates to be added to the cache
 	// Expands the value, in case of json to single typed value updates
-	expandedReqUpdates, err := d.expandUpdates(ctx, req.GetUpdate(), true)
+	expandedReqUpdates, err := converter.ExpandUpdates(ctx, req.GetUpdate(), true)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +208,10 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 
 	// retrieve the data that is meant to be send southbound (towards the device)
 	updates := root.GetHighestPrecedence(true)
-	deletes := root.GetDeletes(true)
+	deletes, err := root.GetDeletes(true)
+	if err != nil {
+		return nil, err
+	}
 
 	// set request to be applied into the candidate
 	setDataReq := &sdcpb.SetDataRequest{
@@ -232,7 +237,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 
 	// add all the deletes to the setDataReq
 	for _, u := range deletes {
-		p, err := d.toPath(ctx, u)
+		p, err := u.SdcpbPath()
 		if err != nil {
 			return nil, err
 		}
@@ -263,7 +268,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	if !req.Delete || req.Delete && !req.OnlyIntended {
 		log.Info("intent set into candidate")
 		// apply the resulting config to the device
-		dataResp, err := d.applyIntent(ctx, candidateName, setDataReq)
+		dataResp, err := d.applyIntent(ctx, candidateName, root)
 		if err != nil {
 			return nil, err
 		}
@@ -284,7 +289,10 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	strSl := tree.Map(updates.ToCacheUpdateSlice(), func(u *cache.Update) string { return u.String() })
 	log.Debugf("Updates\n%s", strings.Join(strSl, "\n"))
 
-	strSl = deletes.StringSlice()
+	delSl := make(tree.PathSlices, 0, len(deletes))
+	for _, del := range deletes {
+		delSl = append(delSl, del.Path())
+	}
 	log.Debugf("Deletes:\n%s", strings.Join(strSl, "\n"))
 
 	strSl = tree.Map(updatesOwner, func(u *cache.Update) string { return u.String() })
@@ -305,7 +313,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	// fast and optimistic writeback to the config store
 	err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
 		Store: cachepb.Store_CONFIG,
-	}, deletes.ToStringSlice(), updates.ToCacheUpdateSlice())
+	}, delSl.ToStringSlice(), updates.ToCacheUpdateSlice())
 	if err != nil {
 		return nil, fmt.Errorf("failed updating the running config store for %s: %w", d.Name(), err)
 	}

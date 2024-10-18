@@ -90,8 +90,8 @@ func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) LeafVariantSlice
 }
 
 // GetDeletes returns the paths that due to the Tree content are to be deleted from the southbound device.
-func (r *RootEntry) GetDeletes(aggregatePaths bool) PathSlices {
-	deletes := PathSlices{}
+func (r *RootEntry) GetDeletes(aggregatePaths bool) ([]DeleteEntry, error) {
+	deletes := []DeleteEntry{}
 	return r.sharedEntryAttributes.GetDeletes(deletes, aggregatePaths)
 }
 
@@ -123,4 +123,29 @@ NEXTELEMENT:
 		result = append(result, e)
 	}
 	return result
+}
+
+type DeleteEntry interface {
+	SdcpbPath() (*sdcpb.Path, error)
+	Path() PathSlice
+}
+
+// DeleteEntryImpl is a crutch to flag oldbestcases if on a choice, the active case changed
+type DeleteEntryImpl struct {
+	sdcpbPath *sdcpb.Path
+	pathslice PathSlice
+}
+
+func NewDeleteEntryImpl(sdcpbPath *sdcpb.Path, pathslice PathSlice) *DeleteEntryImpl {
+	return &DeleteEntryImpl{
+		sdcpbPath: sdcpbPath,
+		pathslice: pathslice,
+	}
+}
+
+func (d *DeleteEntryImpl) SdcpbPath() (*sdcpb.Path, error) {
+	return d.sdcpbPath, nil
+}
+func (d *DeleteEntryImpl) Path() PathSlice {
+	return d.pathslice
 }
