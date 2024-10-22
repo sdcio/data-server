@@ -53,15 +53,6 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 	case *sdcpb.SchemaElem_Container:
 		overallDoAdd := false
 		switch {
-		case !s.remainsToExist():
-			// s is meant to be removed
-			// if delete, create the element as child of parent
-			newElem := parent.CreateElement(s.pathElemName)
-			// add namespace if we create doc with namespace and the actual namespace differs from the parent namespace
-			xmlAddNamespaceConditional(s, s.parent, newElem, honorNamespace)
-			// add the delete / remove operation
-			utils.AddXMLOperation(newElem, utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
-			return true, nil
 		case len(s.GetSchemaKeys()) > 0:
 			// the container represents a list
 			// if the container contains keys, then it is a list
@@ -90,6 +81,15 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 				}
 			}
 			return overallDoAdd, nil
+		case !s.remainsToExist():
+			// s is meant to be removed
+			// if delete, create the element as child of parent
+			newElem := parent.CreateElement(s.pathElemName)
+			// add namespace if we create doc with namespace and the actual namespace differs from the parent namespace
+			xmlAddNamespaceConditional(s, s.parent, newElem, honorNamespace)
+			// add the delete / remove operation
+			utils.AddXMLOperation(newElem, utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
+			return true, nil
 		case len(s.childs) == 0 && s.GetSchema().GetContainer().IsPresence:
 			// process presence cotnainers with no childs
 			if len(s.childs) == 0 {
@@ -156,7 +156,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 		}
 		ns := ""
 		// process the namespace attribute
-		if honorNamespace && !namespaceIsEqual(s, s.parent) {
+		if s.parent == nil || (honorNamespace && !namespaceIsEqual(s, s.parent)) {
 			ns = utils.GetNamespaceFromGetSchema(s.GetSchema())
 		}
 		// convert value to XML and add to parent
@@ -169,6 +169,9 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 // namespaceIsEqual takes the two given Entries, gets the namespace
 // and reports if both belong to the same namespace
 func namespaceIsEqual(a Entry, b Entry) bool {
+	fmt.Printf("A: %s, Path: %s\n", a, a.Path())
+	fmt.Printf("B: %s, Path: %s\n", b, b.Path())
+
 	// store for the calculated namespaces
 	namespaces := make([]string, 0, 2)
 	for _, e := range []Entry{a, b} {

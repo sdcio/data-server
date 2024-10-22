@@ -118,7 +118,9 @@ func TestToXMLTable(t *testing.T) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
-			expected: `<interface xmlns="urn:sdcio/model" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
+			expected: `<interface xmlns="urn:sdcio/model" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove">
+  <name>ethernet-1/1</name>
+</interface>
 `,
 			honorNamespace:         true,
 			operationWithNamespace: true,
@@ -136,7 +138,9 @@ func TestToXMLTable(t *testing.T) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
-			expected: `<interface xmlns="urn:sdcio/model" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="delete"/>
+			expected: `<interface xmlns="urn:sdcio/model" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="delete">
+  <name>ethernet-1/1</name>
+</interface>
 `,
 			honorNamespace:         true,
 			operationWithNamespace: true,
