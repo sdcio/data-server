@@ -117,8 +117,7 @@ func sdcpbEncodingToGNMIENcoding(x sdcpb.Encoding) (gnmi.Encoding, error) {
 func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
 	var err error
 	gnmiReq := &gnmi.GetRequest{
-		Path:     make([]*gnmi.Path, 0, len(req.GetPath())),
-		Encoding: gnmi.Encoding_ASCII,
+		Path: make([]*gnmi.Path, 0, len(req.GetPath())),
 	}
 	for _, p := range req.GetPath() {
 		gnmiReq.Path = append(gnmiReq.Path, utils.ToGNMIPath(p))
@@ -144,20 +143,7 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 		Notification: make([]*sdcpb.Notification, 0, len(gnmiRsp.GetNotification())),
 	}
 	for _, n := range gnmiRsp.GetNotification() {
-		sn := &sdcpb.Notification{
-			Timestamp: n.GetTimestamp(),
-			Update:    make([]*sdcpb.Update, 0, len(n.GetUpdate())),
-			Delete:    make([]*sdcpb.Path, 0, len(n.GetDelete())),
-		}
-		for _, upd := range n.GetUpdate() {
-			sn.Update = append(sn.Update, &sdcpb.Update{
-				Path:  utils.FromGNMIPath(n.GetPrefix(), upd.GetPath()),
-				Value: utils.FromGNMITypedValue(upd.GetVal()),
-			})
-		}
-		for _, del := range n.GetDelete() {
-			sn.Delete = append(sn.Delete, utils.FromGNMIPath(n.GetPrefix(), del))
-		}
+		sn := utils.ToSchemaNotification(n)
 		schemaRsp.Notification = append(schemaRsp.Notification, sn)
 	}
 	return schemaRsp, nil
@@ -278,6 +264,18 @@ func (t *gnmiTarget) Close() error {
 	return t.target.Close()
 }
 
+func sdcpbEncoding(e string) int {
+	enc, ok := sdcpb.Encoding_value[strings.ToUpper(e)]
+	if ok {
+		return int(enc)
+	}
+	en, err := strconv.Atoi(e)
+	if err != nil {
+		return 0
+	}
+	return en
+}
+
 func encoding(e string) int {
 	enc, ok := gnmi.Encoding_value[strings.ToUpper(e)]
 	if ok {
@@ -310,6 +308,7 @@ func (t *gnmiTarget) getSync(ctx context.Context, gnmiSync *config.SyncProtocol,
 		Datastore: &sdcpb.DataStore{
 			Type: sdcpb.Type_MAIN,
 		},
+		Encoding: sdcpb.Encoding(sdcpbEncoding(gnmiSync.Encoding)),
 	}
 
 	go t.internalGetSync(ctx, req, syncCh)
