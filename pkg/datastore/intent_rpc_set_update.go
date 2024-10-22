@@ -31,23 +31,14 @@ import (
 )
 
 func (d *Datastore) populateTreeWithRunning(ctx context.Context, tc *tree.TreeContext, r *tree.RootEntry) error {
-	// read all the keys from the cache running store but just the keys, no values are populated
-	configIndex, err := d.readStoreKeysMeta(ctx, cachepb.Store_CONFIG)
+	upds, err := tc.ReadRunningFull(ctx)
 	if err != nil {
 		return err
 	}
-	ps := make([][]string, 0, len(configIndex))
 
-	for _, v := range configIndex {
-		ps = append(ps, v[0].GetPath())
-	}
-	upds, err := tc.ReadRunningMultiple(ctx, ps)
-	if err != nil {
-		return err
-	}
 	for _, upd := range upds {
 		newUpd := cache.NewUpdate(upd.GetPath(), upd.Bytes(), tree.RunningValuesPrio, tree.RunningIntentName, 0)
-		_, err = r.AddCacheUpdateRecursive(ctx, newUpd, false)
+		_, err := r.AddCacheUpdateRecursive(ctx, newUpd, false)
 		if err != nil {
 			return err
 		}
