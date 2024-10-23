@@ -75,5 +75,6 @@ type TargetSource interface {
 	// use e.g. json.MarshalIndent() on the returned struct
 	ToJsonIETF(onlyNewOrUpdated bool) (any, error)
 	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
-	ToProto(context.Context, bool) (*sdcpb.Notification, error)
+	ToProtoUpdates(ctx context.Context, onlyNewOrUpdated bool) ([]*sdcpb.Update, error)
+	ToProtoDeletes(ctx context.Context) ([]*sdcpb.Path, error)
 }

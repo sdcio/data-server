@@ -9,17 +9,11 @@ import (
 
 func (s *sharedEntryAttributes) ToJson(onlyNewOrUpdated bool) (any, error) {
 	result, err := s.toJsonInternal(onlyNewOrUpdated, false)
-	if result == nil {
-		return map[string]any{}, err
-	}
 	return result, err
 }
 
 func (s *sharedEntryAttributes) ToJsonIETF(onlyNewOrUpdated bool) (any, error) {
 	result, err := s.toJsonInternal(onlyNewOrUpdated, true)
-	if result == nil {
-		return map[string]any{}, err
-	}
 	return result, err
 }
 
@@ -97,6 +91,9 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 		}
 
 	case *sdcpb.SchemaElem_Leaflist, *sdcpb.SchemaElem_Field:
+		if s.leafVariants.shouldDelete() {
+			return nil, nil
+		}
 		le := s.leafVariants.GetHighestPrecedence(false)
 		if onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
 			return nil, nil

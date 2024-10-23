@@ -276,7 +276,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 					for _, e := range x {
 						tv := &sdcpb.TypedValue{
 							Value: &sdcpb.TypedValue_StringVal{
-								StringVal: fmt.Sprintf("%v", e.(string)),
+								StringVal: fmt.Sprintf("%v", e),
 							},
 						}
 						list = append(list, tv)
@@ -510,34 +510,42 @@ func getLeafList(s string, cs *sdcpb.SchemaElem_Container) (*sdcpb.LeafListSchem
 	return nil, false
 }
 
-func getChild(ctx context.Context, s string, cs *sdcpb.SchemaElem_Container, scb SchemaClientBound) (any, bool) {
-	if cs.Container.Name == "__root__" {
-		for _, c := range cs.Container.GetChildren() {
-			rsp, err := scb.GetSchema(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: c}}})
-			if err != nil {
-				log.Errorf("Failed to get schema object %s: %v", c, err)
-				return "", false
-			}
-			switch rsp := rsp.GetSchema().Schema.(type) {
-			case *sdcpb.SchemaElem_Container:
-				for _, child := range rsp.Container.GetChildren() {
-					if child == s {
-						return child, true
-					}
+func getChild(ctx context.Context, name string, cs *sdcpb.SchemaElem_Container, scb SchemaClientBound) (any, bool) {
+
+	searchNames := []string{name}
+	if i := strings.Index(name, ":"); i >= 0 {
+		searchNames = append(searchNames, name[i+1:])
+	}
+
+	for _, s := range searchNames {
+		if cs.Container.Name == "__root__" {
+			for _, c := range cs.Container.GetChildren() {
+				rsp, err := scb.GetSchema(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: c}}})
+				if err != nil {
+					log.Errorf("Failed to get schema object %s: %v", c, err)
+					return "", false
 				}
-				for _, field := range rsp.Container.GetFields() {
-					if field.Name == s {
-						return field, true
+				switch rsp := rsp.GetSchema().Schema.(type) {
+				case *sdcpb.SchemaElem_Container:
+					for _, child := range rsp.Container.GetChildren() {
+						if child == s {
+							return child, true
+						}
 					}
+					for _, field := range rsp.Container.GetFields() {
+						if field.Name == s {
+							return field, true
+						}
+					}
+				default:
+					continue
 				}
-			default:
-				continue
 			}
 		}
-	}
-	for _, c := range cs.Container.GetChildren() {
-		if c == s {
-			return c, true
+		for _, c := range cs.Container.GetChildren() {
+			if c == s {
+				return c, true
+			}
 		}
 	}
 	return "", false
@@ -720,7 +728,7 @@ func (c *Converter) ConvertNotificationTypedValues(ctx context.Context, n *sdcpb
 		}
 		log.Debugf("converted update from: %v, to: %v", upd, nup)
 		// gNMI get() could return a Notification with a single path element containing a JSON/JSON_IETF blob, we need to expand this into several typed values.
-		if nup == nil && upd.GetValue().GetJsonVal() != nil {
+		if nup == nil && (upd.GetValue().GetJsonVal() != nil || upd.GetValue().GetJsonIetfVal() != nil) {
 			expUpds, err := c.ExpandUpdate(ctx, upd, true)
 			if err != nil {
 				return nil, err

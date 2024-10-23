@@ -6,13 +6,11 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-func (r *RootEntry) ToProto(ctx context.Context, onlyNewOrUpdated bool) (*sdcpb.Notification, error) {
+func (r *RootEntry) ToProtoUpdates(ctx context.Context, onlyNewOrUpdated bool) ([]*sdcpb.Update, error) {
 
 	cacheUpdates := r.GetHighestPrecedence(onlyNewOrUpdated)
 
-	result := &sdcpb.Notification{
-		Update: make([]*sdcpb.Update, 0, len(cacheUpdates)),
-	}
+	upds := make([]*sdcpb.Update, 0, len(cacheUpdates))
 
 	// updates
 	for _, cachUpdate := range cacheUpdates {
@@ -25,15 +23,20 @@ func (r *RootEntry) ToProto(ctx context.Context, onlyNewOrUpdated bool) (*sdcpb.
 			return nil, err
 		}
 
-		result.Update = append(result.Update, &sdcpb.Update{Path: path, Value: val})
+		upds = append(upds, &sdcpb.Update{Path: path, Value: val})
 	}
+
+	return upds, nil
+}
+
+func (r *RootEntry) ToProtoDeletes(ctx context.Context) ([]*sdcpb.Path, error) {
 
 	cacheDeletes, err := r.GetDeletes(true)
 	if err != nil {
 		return nil, err
 	}
 
-	result.Delete = make([]*sdcpb.Path, 0, len(cacheDeletes))
+	deletes := make([]*sdcpb.Path, 0, len(cacheDeletes))
 	// deletes
 	for _, cacheDelete := range cacheDeletes {
 		path, err := cacheDelete.SdcpbPath()
@@ -41,7 +44,8 @@ func (r *RootEntry) ToProto(ctx context.Context, onlyNewOrUpdated bool) (*sdcpb.
 			return nil, err
 		}
 
-		result.Delete = append(result.Delete, path)
+		deletes = append(deletes, path)
 	}
-	return result, nil
+
+	return deletes, nil
 }

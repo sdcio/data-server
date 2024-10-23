@@ -172,40 +172,46 @@ func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDa
 		if err != nil {
 			return nil, err
 		}
-		jsonBytes, err := json.Marshal(jsonData)
-		if err != nil {
-			return nil, err
+		if jsonData != nil {
+			jsonBytes, err := json.Marshal(jsonData)
+			if err != nil {
+				return nil, err
+			}
+			upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: jsonBytes}}}}
 		}
-		upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: jsonBytes}}}}
 		// deletes from protos
-		req, err := source.ToProto(ctx, true)
+		deletes, err = source.ToProtoDeletes(ctx)
 		if err != nil {
 			return nil, err
 		}
-		deletes = req.GetDelete()
+
 	case "json_ietf":
 		jsonData, err := source.ToJsonIETF(true)
 		if err != nil {
 			return nil, err
 		}
-		jsonBytes, err := json.Marshal(jsonData)
-		if err != nil {
-			return nil, err
+		if jsonData != nil {
+			jsonBytes, err := json.Marshal(jsonData)
+			if err != nil {
+				return nil, err
+			}
+			upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonIetfVal{JsonIetfVal: jsonBytes}}}}
 		}
-		upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonIetfVal{JsonIetfVal: jsonBytes}}}}
 		// deletes from protos
-		req, err := source.ToProto(ctx, true)
+		deletes, err = source.ToProtoDeletes(ctx)
 		if err != nil {
 			return nil, err
 		}
-		deletes = req.GetDelete()
+
 	case "proto":
-		req, err := source.ToProto(ctx, true)
+		upds, err = source.ToProtoUpdates(ctx, true)
 		if err != nil {
 			return nil, err
 		}
-		upds = req.GetUpdate()
-		deletes = req.GetDelete()
+		deletes, err = source.ToProtoDeletes(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	setReq := &gnmi.SetRequest{
