@@ -41,7 +41,8 @@ type SBI struct {
 	// Southbound interface type, one of: gnmi, netconf
 	Type string `yaml:"type,omitempty" json:"type,omitempty"`
 	// gNMI or netconf address
-	Address string `yaml:"address,omitempty" json:"address,omitempty"`
+	Address string           `yaml:"address,omitempty" json:"address,omitempty"`
+	Ports   map[string]int32 `yaml:"ports,omitempty" json:"ports,omitempty"`
 	// TLS config
 	TLS *TLS `yaml:"tls,omitempty" json:"tls,omitempty"`
 	// Target SBI credentials
@@ -59,7 +60,8 @@ type SBI struct {
 	// ConnectRetry
 	ConnectRetry time.Duration `yaml:"connect-retry,omitempty" json:"connect-retry,omitempty"`
 	// Timeout
-	Timeout time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Timeout  time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Encoding string        `yaml:"encoding,omitempty" json:"encoding,omitempty"`
 }
 
 type Creds struct {
@@ -112,21 +114,6 @@ func (s *SBI) validateSetDefaults() error {
 	case sbiNOOP:
 		return nil
 	case sbiNETCONF:
-	case sbiGNMI:
-	default:
-		return fmt.Errorf("unknown sbi type: %q", s.Type)
-	}
-
-	if s.Address == "" {
-		return errors.New("missing SBI address")
-	}
-
-	_, _, err := net.SplitHostPort(s.Address)
-	if err != nil {
-		return err
-	}
-
-	if s.Type == sbiNETCONF {
 		switch s.CommitDatastore {
 		case "":
 			s.CommitDatastore = ncCommitDatastoreCandidate
@@ -136,7 +123,22 @@ func (s *SBI) validateSetDefaults() error {
 			return fmt.Errorf("unknown commit-datastore: %s. Must be one of %s, %s",
 				s.CommitDatastore, ncCommitDatastoreCandidate, ncCommitDatastoreRunning)
 		}
+	case sbiGNMI:
+		if s.Encoding == "" {
+			return errors.New("no encoding defined")
+		}
+	default:
+		return fmt.Errorf("unknown sbi type: %q", s.Type)
 	}
+
+	if s.Address == "" {
+		return errors.New("missing SBI address")
+	}
+
+	if len(s.Ports) == 0 {
+		return errors.New("no ports defined")
+	}
+
 	if s.ConnectRetry < time.Second {
 		s.ConnectRetry = time.Second
 	}

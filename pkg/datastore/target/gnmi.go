@@ -45,12 +45,19 @@ const (
 type gnmiTarget struct {
 	target    *gtarget.Target
 	encodings map[gnmi.Encoding]struct{}
+	cfg       *config.SBI
 }
 
 func newGNMITarget(ctx context.Context, name string, cfg *config.SBI, opts ...grpc.DialOption) (*gnmiTarget, error) {
+
+	port, exists := cfg.Ports[cfg.Type]
+	if !exists {
+		return nil, fmt.Errorf("port not defined for protocol %s", cfg.Type)
+	}
+
 	tc := &types.TargetConfig{
 		Name:       name,
-		Address:    cfg.Address,
+		Address:    fmt.Sprintf("%s:%d", cfg.Address, port),
 		Timeout:    10 * time.Second,
 		RetryTimer: 2 * time.Second,
 		BufferSize: 100,
@@ -70,6 +77,7 @@ func newGNMITarget(ctx context.Context, name string, cfg *config.SBI, opts ...gr
 	gt := &gnmiTarget{
 		target:    gtarget.NewTarget(tc),
 		encodings: make(map[gnmi.Encoding]struct{}),
+		cfg:       cfg,
 	}
 	err := gt.target.CreateGNMIClient(ctx, opts...)
 	if err != nil {
@@ -83,6 +91,11 @@ func newGNMITarget(ctx context.Context, name string, cfg *config.SBI, opts ...gr
 	for _, enc := range capResp.GetSupportedEncodings() {
 		gt.encodings[enc] = struct{}{}
 	}
+
+	if _, exists := gt.encodings[gnmi.Encoding(encoding(cfg.Encoding))]; !exists {
+		return nil, fmt.Errorf("encoding %q not supported", cfg.Encoding)
+	}
+
 	return gt, nil
 }
 
@@ -150,20 +163,60 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 }
 
 func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDataResponse, error) {
+	var upds []*sdcpb.Update
+	var deletes []*sdcpb.Path
+	var err error
+	switch strings.ToLower(t.cfg.Encoding) {
+	case "json":
+		jsonData, err := source.ToJson(true)
+		if err != nil {
+			return nil, err
+		}
+		jsonBytes, err := json.Marshal(jsonData)
+		if err != nil {
+			return nil, err
+		}
+		upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: jsonBytes}}}}
+		// deletes from protos
+		req, err := source.ToProto(ctx, true)
+		if err != nil {
+			return nil, err
+		}
+		deletes = req.GetDelete()
+	case "json_ietf":
+		jsonData, err := source.ToJsonIETF(true)
+		if err != nil {
+			return nil, err
+		}
+		jsonBytes, err := json.Marshal(jsonData)
+		if err != nil {
+			return nil, err
+		}
+		upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonIetfVal{JsonIetfVal: jsonBytes}}}}
+		// deletes from protos
+		req, err := source.ToProto(ctx, true)
+		if err != nil {
+			return nil, err
+		}
+		deletes = req.GetDelete()
+	case "proto":
+		req, err := source.ToProto(ctx, true)
+		if err != nil {
+			return nil, err
+		}
+		upds = req.GetUpdate()
+		deletes = req.GetDelete()
+	}
 
-	req, err := source.ToProto(ctx, true)
-	if err != nil {
-		return nil, err
-	}
 	setReq := &gnmi.SetRequest{
-		Delete: make([]*gnmi.Path, 0, len(req.GetDelete())),
-		Update: make([]*gnmi.Update, 0, len(req.GetUpdate())),
+		Delete: make([]*gnmi.Path, 0, len(deletes)),
+		Update: make([]*gnmi.Update, 0, len(upds)),
 	}
-	for _, del := range req.GetDelete() {
+	for _, del := range deletes {
 		gdel := utils.ToGNMIPath(del)
 		setReq.Delete = append(setReq.Delete, gdel)
 	}
-	for _, upd := range req.GetUpdate() {
+	for _, upd := range upds {
 		gupd := t.convertKeyUpdates(upd)
 		setReq.Update = append(setReq.Update, gupd)
 	}

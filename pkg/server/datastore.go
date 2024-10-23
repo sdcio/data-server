@@ -123,10 +123,12 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		}
 		sbi := &config.SBI{
 			Type:                   req.GetTarget().GetType(),
+			Ports:                  req.GetTarget().GetPorts(),
 			Address:                req.GetTarget().GetAddress(),
 			IncludeNS:              req.GetTarget().GetIncludeNs(),
 			OperationWithNamespace: req.GetTarget().GetOperationWithNs(),
 			UseOperationRemove:     req.GetTarget().GetUseOperationRemove(),
+			Encoding:               req.GetTarget().GetEncoding(),
 			CommitDatastore:        commitDatastore,
 		}
 		if req.GetTarget().GetTls() != nil {
