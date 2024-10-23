@@ -169,9 +169,6 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 // namespaceIsEqual takes the two given Entries, gets the namespace
 // and reports if both belong to the same namespace
 func namespaceIsEqual(a Entry, b Entry) bool {
-	fmt.Printf("A: %s, Path: %s\n", a, a.Path())
-	fmt.Printf("B: %s, Path: %s\n", b, b.Path())
-
 	// store for the calculated namespaces
 	namespaces := make([]string, 0, 2)
 	for _, e := range []Entry{a, b} {
