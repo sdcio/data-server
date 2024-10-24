@@ -83,3 +83,8 @@ ygot:
 .PHONY: format_yang
 format_yang:
 	cd $(CURDIR)/tests/schema; find ./ -name "*.yang" | xargs -I{} bash -c "cp {} {}.bak ; pyang -f yang {}.bak > {} ; rm {}.bak -f"
+
+.PHONY: goreleaser-nightly
+goreleaser-nightly:
+	go install github.com/goreleaser/goreleaser/v2@latest
+	goreleaser release --clean -f .goreleaser.nightlies.yml --skip=validate

@@ -15,15 +15,23 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func ConfigureCacheClientMock(t *testing.T, cacheClient *mockcacheclient.MockClient, updatesIntended []*cache.Update, expectedModify []*cache.Update, expectedDeletes [][]string) {
+func ConfigureCacheClientMock(t *testing.T, cacheClient *mockcacheclient.MockClient, updatesIntended []*cache.Update, updatesRunning []*cache.Update, expectedModify []*cache.Update, expectedDeletes [][]string) {
 
 	// mock the .GetIntendedKeysMeta() call
 	cacheClient.EXPECT().GetKeys(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
 
 		func(_ context.Context, datastoreName string, store cachepb.Store) (chan *cache.Update, error) {
 			rsCh := make(chan *cache.Update)
+
+			// GetKeys might be called with different stores...
+			// init with intended store, but if store is Config then use updatesRunning
+			source := updatesIntended
+			if store == cachepb.Store_CONFIG {
+				source = updatesRunning
+			}
+
 			go func() {
-				for _, u := range updatesIntended {
+				for _, u := range source {
 					rsCh <- u
 				}
 				close(rsCh)

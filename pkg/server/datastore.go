@@ -123,10 +123,12 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		}
 		sbi := &config.SBI{
 			Type:                   req.GetTarget().GetType(),
+			Ports:                  req.GetTarget().GetPorts(),
 			Address:                req.GetTarget().GetAddress(),
 			IncludeNS:              req.GetTarget().GetIncludeNs(),
 			OperationWithNamespace: req.GetTarget().GetOperationWithNs(),
 			UseOperationRemove:     req.GetTarget().GetUseOperationRemove(),
+			Encoding:               req.GetTarget().GetEncoding(),
 			CommitDatastore:        commitDatastore,
 		}
 		if req.GetTarget().GetTls() != nil {
@@ -246,24 +248,24 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 	}
 }
 
-func (s *Server) Commit(ctx context.Context, req *sdcpb.CommitRequest) (*sdcpb.CommitResponse, error) {
-	log.Debugf("Received CommitDataStoreRequest: %v", req)
-	name := req.GetName()
-	if name == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
-	}
-	s.md.RLock()
-	defer s.md.RUnlock()
-	ds, ok := s.datastores[name]
-	if !ok {
-		return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %s", name)
-	}
-	err := ds.Commit(ctx, req)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "%v", err)
-	}
-	return &sdcpb.CommitResponse{}, nil
-}
+// func (s *Server) Commit(ctx context.Context, req *sdcpb.CommitRequest) (*sdcpb.CommitResponse, error) {
+// 	log.Debugf("Received CommitDataStoreRequest: %v", req)
+// 	name := req.GetName()
+// 	if name == "" {
+// 		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
+// 	}
+// 	s.md.RLock()
+// 	defer s.md.RUnlock()
+// 	ds, ok := s.datastores[name]
+// 	if !ok {
+// 		return nil, status.Errorf(codes.InvalidArgument, "unknown datastore %s", name)
+// 	}
+// 	err := ds.Commit(ctx, req)
+// 	if err != nil {
+// 		return nil, status.Errorf(codes.Internal, "%v", err)
+// 	}
+// 	return &sdcpb.CommitResponse{}, nil
+// }
 
 func (s *Server) Rebase(ctx context.Context, req *sdcpb.RebaseRequest) (*sdcpb.RebaseResponse, error) {
 	log.Debugf("Received RebaseDataStoreRequest: %v", req)
@@ -324,8 +326,6 @@ func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.
 	ds.StopDeviationsWatch(peerInfo.Addr.String())
 	return nil
 }
-
-//
 
 func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*sdcpb.GetDataStoreResponse, error) {
 	cands, err := ds.Candidates(ctx)

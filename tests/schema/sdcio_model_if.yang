@@ -38,6 +38,9 @@ module sdcio_model_if {
         description
           "A user-entered description of this network instance.";
       }
+      leaf mtu {
+        type uint16;
+      }
       uses subinterface-top;
     }
   }
