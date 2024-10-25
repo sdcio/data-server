@@ -10,6 +10,7 @@ import (
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/utils"
+	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/proto"
@@ -300,7 +301,7 @@ func TestToJsonTable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			scb, err := getSchemaClientBound(t)
+			scb, err := testhelper.GetSchemaClientBound(t)
 			if err != nil {
 				t.Fatal(err)
 			}

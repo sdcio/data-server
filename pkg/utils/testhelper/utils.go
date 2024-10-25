@@ -1,14 +1,17 @@
 package testhelper
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
 	"github.com/sdcio/data-server/pkg/cache"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -103,4 +106,49 @@ func DiffDoubleStringPathSlice(s1, s2 [][]string) string {
 		}
 	}
 	return DiffStringSlice(y[0].Single, y[1].Single, false)
+}
+
+// GetSchemaClientBound creates a SchemaClientBound mock that responds to certain GetSchema requests
+func GetSchemaClientBound(t *testing.T) (*mockschemaclientbound.MockSchemaClientBound, error) {
+
+	x, schema, err := InitSDCIOSchema()
+	if err != nil {
+		return nil, err
+	}
+
+	sdcpbSchema := &sdcpb.Schema{
+		Name:    schema.Name,
+		Vendor:  schema.Vendor,
+		Version: schema.Version,
+	}
+
+	mockCtrl := gomock.NewController(t)
+	mockscb := mockschemaclientbound.NewMockSchemaClientBound(mockCtrl)
+
+	// make the mock respond to GetSchema requests
+	mockscb.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+		func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+			return x.GetSchema(ctx, &sdcpb.GetSchemaRequest{
+				Path:   path,
+				Schema: sdcpbSchema,
+			})
+		},
+	)
+
+	// setup the ToPath() responses
+	mockscb.EXPECT().ToPath(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+		func(ctx context.Context, path []string) (*sdcpb.Path, error) {
+			pr, err := x.ToPath(ctx, &sdcpb.ToPathRequest{
+				PathElement: path,
+				Schema:      sdcpbSchema,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return pr.GetPath(), nil
+		},
+	)
+
+	// return the mock
+	return mockscb, nil
 }

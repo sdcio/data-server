@@ -1,6 +1,9 @@
 package utils
 
 import (
+	"slices"
+	"strings"
+
 	"github.com/beevik/etree"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -17,14 +20,16 @@ const (
 	XMLOperationReplace XMLOperation = "replace"
 )
 
-func TypedValueToXML(parent *etree.Element, tv *sdcpb.TypedValue, name string, namespace string, operationWithNamespace bool, useOperationRemove bool) {
+func TypedValueToXML(parent *etree.Element, tv *sdcpb.TypedValue, name string, namespace string, onlyNewOrUpdated bool, operationWithNamespace bool, useOperationRemove bool) {
 	switch tv.Value.(type) {
 	case *sdcpb.TypedValue_LeaflistVal:
 		// we add all the leaflist entries as their own values
 		for _, tvle := range tv.GetLeaflistVal().GetElement() {
-			TypedValueToXML(parent, tvle, name, namespace, operationWithNamespace, useOperationRemove)
+			TypedValueToXML(parent, tvle, name, namespace, onlyNewOrUpdated, operationWithNamespace, useOperationRemove)
 		}
-		AddXMLOperation(parent, XMLOperationReplace, operationWithNamespace, useOperationRemove)
+		if onlyNewOrUpdated {
+			AddXMLOperation(parent, XMLOperationReplace, operationWithNamespace, useOperationRemove)
+		}
 
 	case *sdcpb.TypedValue_EmptyVal:
 		parent.CreateElement(name)
@@ -60,4 +65,35 @@ func AddXMLOperation(elem *etree.Element, operation XMLOperation, operationWithN
 	}
 	// add the delete operation attribute
 	elem.CreateAttr(operKey, string(operName))
+}
+
+// XmlRecursiveSortElementsByTagName - is a function used in testing to recursively sort XML elements by their tag name
+func XmlRecursiveSortElementsByTagName(element *etree.Element) {
+	// Sort the child elements by their tag name
+	slices.SortStableFunc(element.Child, func(i, j etree.Token) int {
+		ci, oki := i.(*etree.Element)
+		cj, okj := j.(*etree.Element)
+
+		if oki && okj {
+			comp := strings.Compare(ci.Tag, cj.Tag)
+			if comp != 0 {
+				return comp
+			}
+			attributes := []string{"name", "index"}
+			for _, a := range attributes {
+				if cic := ci.SelectElement(a); cic != nil {
+					cjc := cj.SelectElement(a)
+					return strings.Compare(cic.Text(), cjc.Text())
+				}
+			}
+		}
+		return 0
+	})
+
+	// Recurse into each child element to sort their children
+	for _, child := range element.Child {
+		if celem, ok := child.(*etree.Element); ok {
+			XmlRecursiveSortElementsByTagName(celem)
+		}
+	}
 }

@@ -9,11 +9,23 @@ import (
 
 func (s *sharedEntryAttributes) ToJson(onlyNewOrUpdated bool) (any, error) {
 	result, err := s.toJsonInternal(onlyNewOrUpdated, false)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return map[string]any{}, nil
+	}
 	return result, err
 }
 
 func (s *sharedEntryAttributes) ToJsonIETF(onlyNewOrUpdated bool) (any, error) {
 	result, err := s.toJsonInternal(onlyNewOrUpdated, true)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return map[string]any{}, nil
+	}
 	return result, err
 }
 

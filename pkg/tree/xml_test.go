@@ -3,14 +3,12 @@ package tree
 import (
 	"context"
 	"fmt"
-	"slices"
-	"strings"
 	"testing"
 
-	"github.com/beevik/etree"
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/pkg/utils"
+	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -51,7 +49,7 @@ func TestToXMLTable(t *testing.T) {
     <type>routed</type>
   </subinterface>
 </interface>
-<leaflist operation="replace">
+<leaflist>
   <entry>foo</entry>
   <entry>bar</entry>
 </leaflist>
@@ -309,7 +307,7 @@ func TestToXMLTable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			scb, err := getSchemaClientBound(t)
+			scb, err := testhelper.GetSchemaClientBound(t)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -366,7 +364,7 @@ func TestToXMLTable(t *testing.T) {
 			}
 
 			// Make sure the attributes are sorted, otherwise the comparison is an issue
-			recursiveSortXMLElementsByTagName(&xmlDoc.Element)
+			utils.XmlRecursiveSortElementsByTagName(&xmlDoc.Element)
 
 			xmlDoc.Indent(2)
 			xmlDocStr, err := xmlDoc.WriteToString()
@@ -380,36 +378,5 @@ func TestToXMLTable(t *testing.T) {
 				t.Fatalf("ToXML() failed.\nDiff:\n%s", diff)
 			}
 		})
-	}
-}
-
-// Function to recursively sort XML elements by their tag name
-func recursiveSortXMLElementsByTagName(element *etree.Element) {
-	// Sort the child elements by their tag name
-	slices.SortStableFunc(element.Child, func(i, j etree.Token) int {
-		ci, oki := i.(*etree.Element)
-		cj, okj := j.(*etree.Element)
-
-		if oki && okj {
-			comp := strings.Compare(ci.Tag, cj.Tag)
-			if comp != 0 {
-				return comp
-			}
-			attributes := []string{"name", "index"}
-			for _, a := range attributes {
-				if cic := ci.SelectElement(a); cic != nil {
-					cjc := cj.SelectElement(a)
-					return strings.Compare(cic.Text(), cjc.Text())
-				}
-			}
-		}
-		return 0
-	})
-
-	// Recurse into each child element to sort their children
-	for _, child := range element.Child {
-		if celem, ok := child.(*etree.Element); ok {
-			recursiveSortXMLElementsByTagName(celem)
-		}
 	}
 }

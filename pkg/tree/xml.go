@@ -160,7 +160,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 			ns = utils.GetNamespaceFromGetSchema(s.GetSchema())
 		}
 		// convert value to XML and add to parent
-		utils.TypedValueToXML(parent, v, s.PathName(), ns, operationWithNamespace, useOperationRemove)
+		utils.TypedValueToXML(parent, v, s.PathName(), ns, onlyNewOrUpdated, operationWithNamespace, useOperationRemove)
 		return true, nil
 	}
 	return false, fmt.Errorf("unable to convert to xml (%s)", s.Path())

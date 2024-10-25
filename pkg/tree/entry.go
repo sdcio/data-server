@@ -6,6 +6,7 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/tree/importer"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -121,6 +122,8 @@ type Entry interface {
 	toJsonInternal(onlyNewOrUpdated bool, ietf bool) (j any, err error)
 	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
 	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error)
+	// ImportConfig allows importing config data received from e.g. the device in different formats (json, xml) to be imported into the tree.
+	ImportConfig(ctx context.Context, t importer.ImportConfigAdapter) error
 }
 
 type EntryVisitor func(s *sharedEntryAttributes) error

@@ -12,9 +12,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // sharedEntryAttributes contains the attributes shared by Entry and RootEntry
@@ -102,6 +104,7 @@ func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 		}
 		s.schema = schemaResp.GetSchema()
 	}
+
 	return nil
 }
 
@@ -781,6 +784,130 @@ func (s *sharedEntryAttributes) validatePattern(errchan chan<- error) {
 			}
 		}
 	}
+}
+
+func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.ImportConfigAdapter) error {
+	var err error
+
+	switch x := s.schema.GetSchema().(type) {
+	case *sdcpb.SchemaElem_Container, nil:
+		switch {
+		case len(s.schema.GetContainer().GetKeys()) > 0:
+
+			var child Entry
+			var exists bool
+			child = s
+			for _, keySchema := range s.schema.GetContainer().GetKeys() {
+
+				keyElemName := keySchema.Name
+
+				keyTransf := t.GetElement(keyElemName)
+				if keyTransf == nil {
+					return fmt.Errorf("unable to find key attribute %s under %s", keyElemName, s.Path())
+				}
+				keyElemValue := keyTransf.GetValue()
+				// if the child does not exist, create it
+				if child, exists = child.getChildren()[keyElemValue]; !exists {
+					child, err = newEntry(ctx, s, keyElemValue, s.treeContext)
+					if err != nil {
+						return err
+					}
+					err = s.addChild(ctx, child)
+					if err != nil {
+						return err
+					}
+				}
+
+			}
+			err = child.ImportConfig(ctx, t)
+			if err != nil {
+				return err
+			}
+		default:
+
+			if len(t.GetElements()) == 0 {
+				// it might be a presence container
+				schem := s.schema.GetContainer()
+				if schem == nil {
+					return nil
+				}
+				if schem.IsPresence {
+					tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}
+					tvVal, err := proto.Marshal(tv)
+					if err != nil {
+						return err
+					}
+					upd := cache.NewUpdate(s.Path(), tvVal, RunningValuesPrio, RunningIntentName, 0)
+					s.leafVariants = append(s.leafVariants, NewLeafEntry(upd, false, s))
+				}
+			}
+
+			for _, elem := range t.GetElements() {
+				var child Entry
+				var exists bool
+
+				// if the child does not exist, create it
+				if child, exists = s.getChildren()[elem.GetName()]; !exists {
+					child, err = newEntry(ctx, s, elem.GetName(), s.treeContext)
+					if err != nil {
+						return fmt.Errorf("error trying to insert %s at path %v: %w", elem.GetName(), s.Path(), err)
+					}
+					err = s.addChild(ctx, child)
+					if err != nil {
+						return err
+					}
+				}
+				err = child.ImportConfig(ctx, elem)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	case *sdcpb.SchemaElem_Field:
+		tv, err := t.GetTVValue(x.Field.GetType())
+		if err != nil {
+			return err
+		}
+		tvVal, err := proto.Marshal(tv)
+		if err != nil {
+			return err
+		}
+		upd := cache.NewUpdate(s.Path(), tvVal, RunningValuesPrio, RunningIntentName, 0)
+
+		s.leafVariants = append(s.leafVariants, NewLeafEntry(upd, false, s))
+
+	case *sdcpb.SchemaElem_Leaflist:
+		var scalarArr *sdcpb.ScalarArray
+
+		lv := s.leafVariants.GetByOwner(RunningIntentName)
+		if lv != nil {
+			llvTv, err := lv.Update.Value()
+			if err != nil {
+				return err
+			}
+
+			scalarArr = llvTv.GetLeaflistVal()
+		} else {
+			lv = NewLeafEntry(nil, false, s)
+			s.leafVariants = append(s.leafVariants, lv)
+
+			scalarArr = &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{}}
+		}
+
+		tv, err := t.GetTVValue(x.Leaflist.GetType())
+		if err != nil {
+			return err
+		}
+		scalarArr.Element = append(scalarArr.Element, tv)
+
+		tvVal, err := proto.Marshal(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: scalarArr}})
+		if err != nil {
+			return err
+		}
+
+		lv.Update = cache.NewUpdate(s.Path(), tvVal, RunningValuesPrio, RunningIntentName, 0)
+	}
+	return nil
 }
 
 // validateMandatory validates that all the mandatory attributes,

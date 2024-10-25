@@ -8,11 +8,9 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -27,7 +25,7 @@ func Test_Entry(t *testing.T) {
 	u2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc, int32(99), "me", int64(444))
 	u3 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc, int32(98), "me", int64(88))
 
-	scb, err := getSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +70,7 @@ func Test_Entry_One(t *testing.T) {
 	u2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc2, prio100, owner1, ts1)
 	u3 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner2, ts1)
 
-	scb, err := getSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +136,7 @@ func Test_Entry_Two(t *testing.T) {
 	ts1 := int64(9999999)
 	u1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
 
-	scb, err := getSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +194,7 @@ func Test_Entry_Three(t *testing.T) {
 	u3 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "12", "description"}, desc3, prio50, owner1, ts1)
 	u4 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
 
-	scb, err := getSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,7 +311,7 @@ func Test_Entry_Four(t *testing.T) {
 
 	ctx := context.TODO()
 
-	scb, err := getSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +406,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 	ctx := context.TODO()
 
-	scb, err := getSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -582,7 +580,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 
 	ctx := context.TODO()
 
-	scb, err := getSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -642,51 +640,6 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	if diff := cmp.Diff(expects, deletes); diff != "" {
 		t.Errorf("root.GetDeletes() mismatch (-want +got):\n%s", diff)
 	}
-}
-
-// getSchemaClientBound creates a SchemaClientBound mock that responds to certain GetSchema requests
-func getSchemaClientBound(t *testing.T) (*mockschemaclientbound.MockSchemaClientBound, error) {
-
-	x, schema, err := testhelper.InitSDCIOSchema()
-	if err != nil {
-		return nil, err
-	}
-
-	sdcpbSchema := &sdcpb.Schema{
-		Name:    schema.Name,
-		Vendor:  schema.Vendor,
-		Version: schema.Version,
-	}
-
-	mockCtrl := gomock.NewController(t)
-	mockscb := mockschemaclientbound.NewMockSchemaClientBound(mockCtrl)
-
-	// make the mock respond to GetSchema requests
-	mockscb.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-		func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
-			return x.GetSchema(ctx, &sdcpb.GetSchemaRequest{
-				Path:   path,
-				Schema: sdcpbSchema,
-			})
-		},
-	)
-
-	// setup the ToPath() responses
-	mockscb.EXPECT().ToPath(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-		func(ctx context.Context, path []string) (*sdcpb.Path, error) {
-			pr, err := x.ToPath(ctx, &sdcpb.ToPathRequest{
-				PathElement: path,
-				Schema:      sdcpbSchema,
-			})
-			if err != nil {
-				return nil, err
-			}
-			return pr.GetPath(), nil
-		},
-	)
-
-	// return the mock
-	return mockscb, nil
 }
 
 // TestLeafVariants_GetHighesPrio
@@ -921,7 +874,7 @@ func Test_Schema_Population(t *testing.T) {
 
 	ctx := context.TODO()
 
-	scb, err := getSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -973,7 +926,7 @@ func Test_Schema_Population(t *testing.T) {
 func Test_sharedEntryAttributes_SdcpbPath(t *testing.T) {
 	ctx := context.TODO()
 
-	scb, err := getSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1097,7 +1050,7 @@ func Test_sharedEntryAttributes_SdcpbPath(t *testing.T) {
 func Test_sharedEntryAttributes_getKeyName(t *testing.T) {
 	ctx := context.TODO()
 
-	scb, err := getSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1189,7 +1142,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 
 	ctx := context.TODO()
 
-	scb, err := getSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1326,7 +1279,7 @@ func Test_Validation_Deref(t *testing.T) {
 
 	ctx := context.TODO()
 
-	scb, err := getSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t)
 	if err != nil {
 		t.Fatal(err)
 	}
