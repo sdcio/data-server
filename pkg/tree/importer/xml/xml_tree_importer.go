@@ -40,7 +40,7 @@ func (x *XmlTreeImporter) GetElements() []importer.ImportConfigAdapter {
 	return result
 }
 
-func (x *XmlTreeImporter) GetValue() string {
+func (x *XmlTreeImporter) GetKeyValue() string {
 	return x.elem.Text()
 }
 

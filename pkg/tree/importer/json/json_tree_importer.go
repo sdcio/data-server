@@ -6,6 +6,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	log "github.com/sirupsen/logrus"
 )
 
 type JsonTreeImporter struct {
@@ -51,12 +52,12 @@ func (j *JsonTreeImporter) GetElements() []importer.ImportConfigAdapter {
 			}
 		}
 	default:
-		fmt.Println("SHOULD NOT HAPPEN!")
+		log.Error("error we hit a code path that was not meant to be hit.")
 	}
 	return result
 }
 
-func (j *JsonTreeImporter) GetValue() string {
+func (j *JsonTreeImporter) GetKeyValue() string {
 	return fmt.Sprintf("%v", j.data)
 }
 
