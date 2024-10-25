@@ -17,9 +17,10 @@ func TestJsonTreeImporter(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
+		ietf  bool
 	}{
 		{
-			name: "one",
+			name: "JSON",
 			input: `
 				{
 			  "choices": {
@@ -64,6 +65,48 @@ func TestJsonTreeImporter(t *testing.T) {
 			"emptyconf": {}
 			}`,
 		},
+		{
+			name: "JSON_IETF",
+			ietf: true,
+			input: `{
+				"sdcio_model:patterntest": "foo",
+				"sdcio_model_choice:choices": {
+				  "case1": {
+					"case-elem": {
+					  "elem": "foocaseval"
+					}
+				  }
+				},
+				"sdcio_model_if:interface": [
+				  {
+					"admin-state": "enable",
+					"description": "Foo",
+					"name": "ethernet-1/1",
+					"subinterface": [
+					  {
+						"description": "Subinterface 0",
+						"index": 0,
+						"type": "routed"
+					  }
+					]
+				  }
+				],
+				"sdcio_model_leaflist:leaflist": {
+				  "entry": [
+					"foo",
+					"bar"
+				  ]
+				},
+				"sdcio_model_ni:network-instance": [
+				  {
+					"admin-state": "disable",
+					"description": "Default NI",
+					"name": "default",
+					"type": "default"
+				  }
+				]
+			  }`,
+		},
 	}
 
 	// create a gomock controller
@@ -79,10 +122,10 @@ func TestJsonTreeImporter(t *testing.T) {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	tc := tree.NewTreeContext(tree.NewTreeSchemaCacheClient(dsName, cacheClient, scb), "test")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			tc := tree.NewTreeContext(tree.NewTreeSchemaCacheClient(dsName, cacheClient, scb), "test")
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Error(err)
@@ -103,9 +146,17 @@ func TestJsonTreeImporter(t *testing.T) {
 			root.FinishInsertionPhase()
 			t.Log(root.String())
 
-			result, err := root.ToJson(false)
-			if err != nil {
-				t.Fatal(err)
+			var result any
+			if tt.ietf {
+				result, err = root.ToJsonIETF(false)
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				result, err = root.ToJson(false)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			// we need to marshal and then unmarshall again,

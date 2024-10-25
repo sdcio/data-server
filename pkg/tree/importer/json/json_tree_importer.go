@@ -2,6 +2,7 @@ package json
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -31,7 +32,16 @@ func NewJsonTreeImporter(d any) *JsonTreeImporter {
 func (j *JsonTreeImporter) GetElement(key string) importer.ImportConfigAdapter {
 	switch d := j.data.(type) {
 	case map[string]any:
-		return newJsonTreeImporterInternal(key, d[key])
+
+		for k, v := range d {
+			beforeColon, elemName, found := strings.Cut(k, ":")
+			if !found {
+				elemName = beforeColon
+			}
+			if key == elemName {
+				return newJsonTreeImporterInternal(key, v)
+			}
+		}
 	}
 	return nil
 }
@@ -42,13 +52,17 @@ func (j *JsonTreeImporter) GetElements() []importer.ImportConfigAdapter {
 	case map[string]any:
 		result = make([]importer.ImportConfigAdapter, 0, len(d))
 		for k, v := range d {
+			beforeColon, key, found := strings.Cut(k, ":")
+			if !found {
+				key = beforeColon
+			}
 			switch subElem := v.(type) {
 			case []any:
 				for _, listElem := range subElem {
-					result = append(result, newJsonTreeImporterInternal(k, listElem))
+					result = append(result, newJsonTreeImporterInternal(key, listElem))
 				}
 			default:
-				result = append(result, newJsonTreeImporterInternal(k, v))
+				result = append(result, newJsonTreeImporterInternal(key, v))
 			}
 		}
 	default:
