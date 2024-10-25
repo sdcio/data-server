@@ -732,7 +732,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			for e := range validationErrChan {
 				validationErrors = append(validationErrors, e)
 			}
-			fmt.Printf("Vlaidation Errors:\n%v\n", validationErrors)
+			fmt.Printf("Validation Errors:\n%v\n", validationErrors)
 			fmt.Printf("Tree:%s\n", root.String())
 
 			// get the updates that are meant to be send down towards the device
