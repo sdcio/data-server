@@ -49,15 +49,9 @@ type gnmiTarget struct {
 }
 
 func newGNMITarget(ctx context.Context, name string, cfg *config.SBI, opts ...grpc.DialOption) (*gnmiTarget, error) {
-
-	port, exists := cfg.Ports[cfg.Type]
-	if !exists {
-		return nil, fmt.Errorf("port not defined for protocol %s", cfg.Type)
-	}
-
 	tc := &types.TargetConfig{
 		Name:       name,
-		Address:    fmt.Sprintf("%s:%d", cfg.Address, port),
+		Address:    fmt.Sprintf("%s:%d", cfg.Address, cfg.Port),
 		Timeout:    10 * time.Second,
 		RetryTimer: 2 * time.Second,
 		BufferSize: 100,
@@ -92,8 +86,8 @@ func newGNMITarget(ctx context.Context, name string, cfg *config.SBI, opts ...gr
 		gt.encodings[enc] = struct{}{}
 	}
 
-	if _, exists := gt.encodings[gnmi.Encoding(encoding(cfg.Encoding))]; !exists {
-		return nil, fmt.Errorf("encoding %q not supported", cfg.Encoding)
+	if _, exists := gt.encodings[gnmi.Encoding(encoding(cfg.GnmiOptions.Encoding))]; !exists {
+		return nil, fmt.Errorf("encoding %q not supported", cfg.GnmiOptions.Encoding)
 	}
 
 	return gt, nil
@@ -166,7 +160,7 @@ func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDa
 	var upds []*sdcpb.Update
 	var deletes []*sdcpb.Path
 	var err error
-	switch strings.ToLower(t.cfg.Encoding) {
+	switch strings.ToLower(t.cfg.GnmiOptions.Encoding) {
 	case "json":
 		jsonData, err := source.ToJson(true)
 		if err != nil {

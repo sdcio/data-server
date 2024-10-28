@@ -113,24 +113,38 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		if _, ok := s.datastores[name]; ok {
 			return nil, status.Errorf(codes.InvalidArgument, "datastore %s already exists", name)
 		}
-		commitDatastore := "candidate"
-		switch req.GetTarget().GetCommitCandidate() {
-		case sdcpb.CommitCandidate_COMMIT_CANDIDATE:
-		case sdcpb.CommitCandidate_COMMIT_RUNNING:
-			commitDatastore = "running"
-		default:
-			return nil, fmt.Errorf("unknown commitDatastore: %v", req.GetTarget().GetCommitCandidate())
-		}
+
 		sbi := &config.SBI{
-			Type:                   req.GetTarget().GetType(),
-			Ports:                  req.GetTarget().GetPorts(),
-			Address:                req.GetTarget().GetAddress(),
-			IncludeNS:              req.GetTarget().GetIncludeNs(),
-			OperationWithNamespace: req.GetTarget().GetOperationWithNs(),
-			UseOperationRemove:     req.GetTarget().GetUseOperationRemove(),
-			Encoding:               req.GetTarget().GetEncoding(),
-			CommitDatastore:        commitDatastore,
+			Type:    req.GetTarget().GetType(),
+			Port:    req.GetTarget().GetPort(),
+			Address: req.GetTarget().GetAddress(),
 		}
+
+		switch strings.ToLower(req.GetTarget().GetType()) {
+		case "netconf":
+			commitDatastore := "candidate"
+			switch req.GetTarget().GetNetconfOpts().GetCommitCandidate() {
+			case sdcpb.CommitCandidate_COMMIT_CANDIDATE:
+			case sdcpb.CommitCandidate_COMMIT_RUNNING:
+				commitDatastore = "running"
+			default:
+				return nil, fmt.Errorf("unknown commitDatastore: %v", req.GetTarget().GetNetconfOpts().GetCommitCandidate())
+			}
+			sbi.NetconfOptions = &config.SBINetconfOptions{
+				IncludeNS:              req.GetTarget().GetNetconfOpts().GetIncludeNs(),
+				OperationWithNamespace: req.GetTarget().GetNetconfOpts().GetOperationWithNs(),
+				UseOperationRemove:     req.GetTarget().GetNetconfOpts().GetUseOperationRemove(),
+				CommitDatastore:        commitDatastore,
+			}
+
+		case "gnmi":
+			sbi.GnmiOptions = &config.SBIGnmiOptions{
+				Encoding: req.GetTarget().GetGnmiOpts().GetEncoding(),
+			}
+		default:
+			return nil, fmt.Errorf("unknowm protocol type %s", req.GetTarget().GetType())
+		}
+
 		if req.GetTarget().GetTls() != nil {
 			sbi.TLS = &config.TLS{
 				CA:         req.GetTarget().GetTls().GetCa(),
@@ -146,6 +160,7 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 				Token:    req.GetTarget().GetCredentials().GetToken(),
 			}
 		}
+
 		dsConfig := &config.DatastoreConfig{
 			Name: name,
 			Schema: &config.SchemaConfig{
@@ -164,12 +179,12 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 			}
 			for _, pSync := range req.GetSync().GetConfig() {
 				gnSyncConfig := &config.SyncProtocol{
-					Protocol: pSync.GetProtocol(),
+					Protocol: pSync.GetTarget().GetType(),
 					Name:     pSync.GetName(),
 					Paths:    pSync.GetPath(),
 					Interval: time.Duration(pSync.GetInterval()),
 				}
-				switch pSync.Protocol {
+				switch pSync.GetTarget().GetType() {
 				case "gnmi":
 					gnSyncConfig.Mode = "on-change"
 					switch pSync.GetMode() {
@@ -181,10 +196,10 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 					case sdcpb.SyncMode_SM_GET:
 						gnSyncConfig.Mode = "get"
 					}
-					gnSyncConfig.Encoding = pSync.GetEncoding()
+					gnSyncConfig.Encoding = pSync.GetTarget().GetGnmiOpts().GetEncoding()
 				case "netconf":
 				default:
-					return nil, status.Errorf(codes.InvalidArgument, "unknown sync protocol: %q", pSync.Protocol)
+					return nil, status.Errorf(codes.InvalidArgument, "unknown sync protocol: %q", pSync.GetTarget().GetType())
 				}
 				dsConfig.Sync.Config = append(dsConfig.Sync.Config, gnSyncConfig)
 			}

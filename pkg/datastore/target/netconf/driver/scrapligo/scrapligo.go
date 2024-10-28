@@ -56,9 +56,9 @@ func NewScrapligoNetconfTarget(cfg *config.SBI) (*ScrapligoNetconfTarget, error)
 			options.WithAuthPassword(cfg.Credentials.Password),
 		)
 	}
-	if cfg.PreferredNCVersion != "" {
+	if cfg.NetconfOptions.PreferredNCVersion != "" {
 		opts = append(opts,
-			options.WithNetconfPreferredVersion(cfg.PreferredNCVersion),
+			options.WithNetconfPreferredVersion(cfg.NetconfOptions.PreferredNCVersion),
 		)
 	}
 	// init the netconf driver

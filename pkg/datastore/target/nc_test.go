@@ -72,9 +72,11 @@ func Test_ncTarget_Get(t *testing.T) {
 				name:      "TestDev",
 				connected: true,
 				sbiConfig: &config.SBI{
-					IncludeNS:              false,
-					OperationWithNamespace: false,
-					UseOperationRemove:     false,
+					NetconfOptions: &config.SBINetconfOptions{
+						IncludeNS:              false,
+						OperationWithNamespace: false,
+						UseOperationRemove:     false,
+					},
 				},
 				getSchemaClient: func(c *gomock.Controller, t *testing.T) SchemaClient.SchemaClientBound {
 					s := mockschemaclientbound.NewMockSchemaClientBound(c)

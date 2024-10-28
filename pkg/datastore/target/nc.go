@@ -80,9 +80,9 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	// init a new XMLConfigBuilder for the pathfilter
 	pathfilterXmlBuilder := netconf.NewXMLConfigBuilder(t.schemaClient,
 		&netconf.XMLConfigBuilderOpts{
-			HonorNamespace:         t.sbiConfig.IncludeNS,
-			OperationWithNamespace: t.sbiConfig.OperationWithNamespace,
-			UseOperationRemove:     t.sbiConfig.UseOperationRemove,
+			HonorNamespace:         t.sbiConfig.NetconfOptions.IncludeNS,
+			OperationWithNamespace: t.sbiConfig.NetconfOptions.OperationWithNamespace,
+			UseOperationRemove:     t.sbiConfig.NetconfOptions.UseOperationRemove,
 		})
 
 	// add all the requested paths to the document
@@ -130,14 +130,14 @@ func (t *ncTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetData
 	if !t.connected {
 		return nil, fmt.Errorf("not connected")
 	}
-	switch t.sbiConfig.CommitDatastore {
+	switch t.sbiConfig.NetconfOptions.CommitDatastore {
 	case "running":
 		return t.setRunning(source)
 	case "candidate":
 		return t.setCandidate(source)
 	}
 	// should not get here if the config validation happened.
-	return nil, fmt.Errorf("unknown commit-datastore: %s", t.sbiConfig.CommitDatastore)
+	return nil, fmt.Errorf("unknown commit-datastore: %s", t.sbiConfig.NetconfOptions.CommitDatastore)
 }
 
 func (t *ncTarget) Status() string {
@@ -268,7 +268,7 @@ func (t *ncTarget) reconnect() {
 
 func (t *ncTarget) setRunning(source TargetSource) (*sdcpb.SetDataResponse, error) {
 
-	xtree, err := source.ToXML(true, t.sbiConfig.IncludeNS, t.sbiConfig.OperationWithNamespace, t.sbiConfig.UseOperationRemove)
+	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +328,7 @@ func filterRPCErrors(xml *etree.Document, severity string) ([]string, error) {
 }
 
 func (t *ncTarget) setCandidate(source TargetSource) (*sdcpb.SetDataResponse, error) {
-	xtree, err := source.ToXML(true, t.sbiConfig.IncludeNS, t.sbiConfig.OperationWithNamespace, t.sbiConfig.UseOperationRemove)
+	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
 	if err != nil {
 		return nil, err
 	}
