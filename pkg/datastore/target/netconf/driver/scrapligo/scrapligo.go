@@ -16,8 +16,6 @@ package scrapligo
 
 import (
 	"fmt"
-	"net"
-	"strconv"
 
 	"github.com/beevik/etree"
 	scraplinetconf "github.com/scrapli/scrapligo/driver/netconf"
@@ -34,19 +32,11 @@ type ScrapligoNetconfTarget struct {
 
 // NewScrapligoNetconfTarget inits a new ScrapligoNetconfTarget which is already connected to the target node
 func NewScrapligoNetconfTarget(cfg *config.SBI) (*ScrapligoNetconfTarget, error) {
-	addr, p, err := net.SplitHostPort(cfg.Address)
-	if err != nil {
-		return nil, err
-	}
-	pi, err := strconv.Atoi(p)
-	if err != nil {
-		return nil, err
-	}
 	opts := []util.Option{
 		options.WithAuthNoStrictKey(),
 		options.WithNetconfForceSelfClosingTags(),
 		options.WithTransportType("standard"),
-		options.WithPort(pi),
+		options.WithPort(int(cfg.Port)),
 		options.WithTimeoutOps(cfg.Timeout),
 	}
 
@@ -62,7 +52,7 @@ func NewScrapligoNetconfTarget(cfg *config.SBI) (*ScrapligoNetconfTarget, error)
 		)
 	}
 	// init the netconf driver
-	d, err := scraplinetconf.NewDriver(addr, opts...)
+	d, err := scraplinetconf.NewDriver(cfg.Address, opts...)
 	if err != nil {
 		return nil, err
 	}
