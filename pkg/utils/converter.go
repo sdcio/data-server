@@ -448,14 +448,22 @@ func convertStringToTv(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*
 			return nil, err
 		}
 		precision64, err := strconv.ParseUint(arr[1], 10, 32)
+		if err != nil {
+			return nil, err
+		}
 		precision := uint32(precision64)
 		return &sdcpb.TypedValue{
 			Value: &sdcpb.TypedValue_DecimalVal{DecimalVal: &sdcpb.Decimal64{Digits: digits, Precision: precision}},
 		}, nil
 	case "identityref":
+		// dirty hack, but we do not have the json_ietf based name of the type available
+		before, val, found := strings.Cut(v, ":")
+		if !found {
+			val = before
+		}
 		return &sdcpb.TypedValue{
 			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_StringVal{StringVal: v},
+			Value:     &sdcpb.TypedValue_StringVal{StringVal: val},
 		}, nil
 	case "leafref": // TODO: query leafref type
 		return &sdcpb.TypedValue{
@@ -724,6 +732,7 @@ func (c *Converter) ConvertNotificationTypedValues(ctx context.Context, n *sdcpb
 	}
 	// convert typed values to their YANG type
 	for _, upd := range n.GetUpdate() {
+		StripPathElemPrefixPath(upd.GetPath())
 		scRsp, err := c.schemaClientBound.GetSchema(ctx, upd.GetPath())
 		if err != nil {
 			return nil, err
