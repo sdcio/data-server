@@ -1,0 +1,31 @@
+module sdcio_model_identity_base {
+  yang-version 1.1;
+  namespace "urn:sdcio/model_identity_base";
+  prefix sdcio_identity_base;
+
+  description
+    "This is part of the test schema for sdcio";
+
+  revision 2024-10-29 {
+    description
+      "Test schema first attempt";
+  }
+
+  identity crypto-alg {
+    description
+      "Base identity from which all crypto algorithms
+       are derived.";
+  }
+
+  identity symmetric-key {
+    description
+      "Base identity used to identify symmetric-key crypto
+       algorithms.";
+  }
+
+  identity public-key {
+    description
+      "Base identity used to identify public-key crypto
+       algorithms.";
+  }
+}

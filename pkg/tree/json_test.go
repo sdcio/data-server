@@ -99,7 +99,7 @@ func TestToJsonTable(t *testing.T) {
         {
           "description": "Subinterface 0",
           "index": 0,
-          "type": "routed"
+          "type": "sdcio_model_common:routed"
         }
       ]
     }
@@ -115,7 +115,7 @@ func TestToJsonTable(t *testing.T) {
       "admin-state": "disable",
       "description": "Default NI",
       "name": "default",
-      "type": "default"
+      "type": "sdcio_model_ni:default"
     }
   ]
 }`,
@@ -203,7 +203,7 @@ func TestToJsonTable(t *testing.T) {
         {
           "description": "Subinterface 5",
           "index": 5,
-          "type": "routed"
+          "type": "sdcio_model_common:routed"
         }
       ]
     }
@@ -213,7 +213,7 @@ func TestToJsonTable(t *testing.T) {
       "admin-state": "enable",
       "description": "Other NI",
       "name": "other",
-      "type": "ip-vrf"
+      "type": "sdcio_model_ni:ip-vrf"
     }
   ]
 }`,
@@ -295,6 +295,29 @@ func TestToJsonTable(t *testing.T) {
 			},
 			expected: `{
   "emptyconf": {}
+}`,
+		},
+		{
+			name:             "JSON_IETF - identityref",
+			ietf:             true,
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				c.Identityref = &sdcio_schema.SdcioModel_Identityref{
+					CryptoA: sdcio_schema.SdcioModelIdentityBase_CryptoAlg_des3,
+					CryptoB: sdcio_schema.SdcioModelIdentityBase_CryptoAlg_otherAlgo,
+				}
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			expected: `{
+  "sdcio_model_identity:identityref": {
+    "cryptoA": "sdcio_model_identity_types:des3",
+    "cryptoB": "sdcio_model_identity:otherAlgo"
+  }
 }`,
 		},
 	}

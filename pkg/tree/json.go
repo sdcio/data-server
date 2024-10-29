@@ -114,7 +114,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 		if err != nil {
 			return nil, err
 		}
-		return utils.GetJsonValue(v)
+		return utils.GetJsonValue(v, ietf)
 	}
 	return nil, fmt.Errorf("unable to convert to json (%s)", s.Path())
 }

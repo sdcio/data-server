@@ -82,8 +82,7 @@ func ConvertInstanceIdentifier(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.
 }
 
 func ConvertIdentityRef(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	// delegate to string, validation is left for a different party at a later stage in processing
-	return ConvertString(value, slt)
+	return convertStringToTv(slt, value, 0)
 }
 
 func ConvertBinary(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
@@ -333,7 +332,7 @@ func ConvertUnion(value string, slts []*sdcpb.SchemaLeafType) (*sdcpb.TypedValue
 func ConvertJsonValueToTv(d any, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	var err error
 	switch slt.Type {
-	case "string", "identityref", "leafref":
+	case "string", "leafref":
 		v, ok := d.(string)
 		if !ok {
 			return nil, fmt.Errorf("error converting %v to string", v)
@@ -341,6 +340,12 @@ func ConvertJsonValueToTv(d any, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, 
 		return &sdcpb.TypedValue{
 			Value: &sdcpb.TypedValue_StringVal{StringVal: v},
 		}, nil
+	case "identityref":
+		v, ok := d.(string)
+		if !ok {
+			return nil, fmt.Errorf("error converting %v to string", v)
+		}
+		return convertStringToTv(slt, v, 0)
 	case "uint64", "uint32", "uint16", "uint8":
 		var i uint64
 		switch v := d.(type) {

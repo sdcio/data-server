@@ -92,7 +92,7 @@ func TestXmlTreeImporter(t *testing.T) {
 
 			inputDoc := etree.NewDocument()
 			if err := inputDoc.ReadFromString(tt.input); err != nil {
-				panic(err)
+				t.Fatal(err)
 			}
 
 			err = root.ImportConfig(ctx, NewXmlTreeImporter(&inputDoc.Element))

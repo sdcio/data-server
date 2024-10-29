@@ -86,7 +86,7 @@ func TestJsonTreeImporter(t *testing.T) {
 					  {
 						"description": "Subinterface 0",
 						"index": 0,
-						"type": "routed"
+						"type": "sdcio_model_common:routed"
 					  }
 					]
 				  }
@@ -102,7 +102,7 @@ func TestJsonTreeImporter(t *testing.T) {
 					"admin-state": "disable",
 					"description": "Default NI",
 					"name": "default",
-					"type": "default"
+					"type": "sdcio_model_ni:default"
 				  }
 				]
 			  }`,

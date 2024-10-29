@@ -456,14 +456,29 @@ func convertStringToTv(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*
 			Value: &sdcpb.TypedValue_DecimalVal{DecimalVal: &sdcpb.Decimal64{Digits: digits, Precision: precision}},
 		}, nil
 	case "identityref":
-		// dirty hack, but we do not have the json_ietf based name of the type available
-		before, val, found := strings.Cut(v, ":")
+		before, name, found := strings.Cut(v, ":")
 		if !found {
-			val = before
+			name = before
+		}
+		prefix, ok := schemaType.IdentityPrefixesMap[name]
+		if !ok {
+			identities := make([]string, 0, len(schemaType.IdentityPrefixesMap))
+			for k := range schemaType.IdentityPrefixesMap {
+				identities = append(identities, k)
+			}
+			return nil, fmt.Errorf("identity %s not found, possible values are %s", v, strings.Join(identities, ", "))
+		}
+		module, ok := schemaType.ModulePrefixMap[name]
+		if !ok {
+			identities := make([]string, 0, len(schemaType.IdentityPrefixesMap))
+			for k := range schemaType.IdentityPrefixesMap {
+				identities = append(identities, k)
+			}
+			return nil, fmt.Errorf("identity %s not found, possible values are %s", v, strings.Join(identities, ", "))
 		}
 		return &sdcpb.TypedValue{
 			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_StringVal{StringVal: val},
+			Value:     &sdcpb.TypedValue_IdentityrefVal{IdentityrefVal: &sdcpb.IdentityRef{Value: name, Prefix: prefix, Module: module}},
 		}, nil
 	case "leafref": // TODO: query leafref type
 		return &sdcpb.TypedValue{
