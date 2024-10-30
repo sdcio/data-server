@@ -33,6 +33,7 @@ func (l *LeafEntry) MarkUpdate(u *cache.Update) {
 // MarkDelete indicate that the entry is to be deleted
 func (l *LeafEntry) MarkDelete() {
 	l.Delete = true
+	l.IsUpdated = false
 }
 
 func (l *LeafEntry) GetRootBasedEntryChain() []Entry {

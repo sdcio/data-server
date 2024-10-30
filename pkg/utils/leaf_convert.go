@@ -23,6 +23,7 @@ import (
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func Convert(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
@@ -81,8 +82,7 @@ func ConvertInstanceIdentifier(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.
 }
 
 func ConvertIdentityRef(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	// delegate to string, validation is left for a different party at a later stage in processing
-	return ConvertString(value, slt)
+	return convertStringToTv(slt, value, 0)
 }
 
 func ConvertBinary(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
@@ -327,4 +327,103 @@ func ConvertUnion(value string, slts []*sdcpb.SchemaLeafType) (*sdcpb.TypedValue
 		return tv, nil
 	}
 	return nil, fmt.Errorf("no union type fit the provided value %q", value)
+}
+
+func ConvertJsonValueToTv(d any, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+	var err error
+	switch slt.Type {
+	case "string", "leafref":
+		v, ok := d.(string)
+		if !ok {
+			return nil, fmt.Errorf("error converting %v to string", v)
+		}
+		return &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_StringVal{StringVal: v},
+		}, nil
+	case "identityref":
+		v, ok := d.(string)
+		if !ok {
+			return nil, fmt.Errorf("error converting %v to string", v)
+		}
+		return convertStringToTv(slt, v, 0)
+	case "uint64", "uint32", "uint16", "uint8":
+		var i uint64
+		switch v := d.(type) {
+		case string: // the 64 bit types are transported as strings in json
+			i, err = strconv.ParseUint(d.(string), 10, 64)
+			if err != nil {
+				return nil, err
+			}
+		case uint8:
+			i = uint64(v)
+		case uint16:
+			i = uint64(v)
+		case uint32:
+			i = uint64(v)
+		case uint64:
+			i = v
+		case float64:
+			i = uint64(v)
+		}
+		return &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_UintVal{UintVal: i},
+		}, nil
+
+	case "int64", "int32", "int16", "int8":
+		var i int64
+		switch v := d.(type) {
+		case string: // the 64 bit types are transported as strings in json
+			i, err = strconv.ParseInt(d.(string), 10, 64)
+			if err != nil {
+				return nil, err
+			}
+		case int8:
+			i = int64(v)
+		case int16:
+			i = int64(v)
+		case int32:
+			i = int64(v)
+		case int64:
+			i = v
+		case float64:
+			i = int64(v)
+		}
+		return &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_IntVal{IntVal: i},
+		}, nil
+	case "boolean":
+		return &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_BoolVal{BoolVal: d.(bool)},
+		}, nil
+	case "decimal64":
+		arr := strings.SplitN(d.(string), ".", 2)
+		digits, err := strconv.ParseInt(arr[0], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		precision64, err := strconv.ParseUint(arr[1], 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		precision := uint32(precision64)
+		return &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_DecimalVal{DecimalVal: &sdcpb.Decimal64{Digits: digits, Precision: precision}},
+		}, nil
+	case "union":
+		for _, ut := range slt.GetUnionTypes() {
+			tv, err := ConvertJsonValueToTv(d, ut)
+			if err == nil {
+				return tv, nil
+			}
+		}
+		return nil, fmt.Errorf("invalid value %s for union type: %v", d, slt.GetUnionTypes())
+	case "enumeration":
+		// TODO: get correct type, assuming string
+		return &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_StringVal{StringVal: fmt.Sprintf("%v", d)},
+		}, nil
+	case "empty":
+		return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}, nil
+	}
+	return nil, fmt.Errorf("error no case matched when converting from json to TV: %v, %v", d, slt)
 }

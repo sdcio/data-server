@@ -72,6 +72,7 @@ func TestDatastore_populateTree(t *testing.T) {
 		expectedOwnerDeletes [][]string
 		expectedOwnerUpdates []*cache.Update
 		intendedStoreUpdates []*cache.Update
+		runningStoreUpdates  []*cache.Update
 		NotOnlyNewOrUpdated  bool // it negated when used in the call, usually we want it to be true
 	}{
 		{
@@ -652,7 +653,7 @@ func TestDatastore_populateTree(t *testing.T) {
 
 			// create a cache client mock
 			cacheClient := mockcacheclient.NewMockClient(controller)
-			testhelper.ConfigureCacheClientMock(t, cacheClient, tt.intendedStoreUpdates, tt.expectedModify, tt.expectedDeletes)
+			testhelper.ConfigureCacheClientMock(t, cacheClient, tt.intendedStoreUpdates, tt.runningStoreUpdates, tt.expectedModify, tt.expectedDeletes)
 
 			schemaClient, schema, err := testhelper.InitSDCIOSchema()
 			if err != nil {
@@ -704,8 +705,16 @@ func TestDatastore_populateTree(t *testing.T) {
 				Delete: tt.intentDelete,
 			}
 
+			tc := tree.NewTreeContext(tree.NewTreeSchemaCacheClient(dsName, d.cacheClient, d.getValidationClient()), tt.intentName)
+
 			// Populate the root tree
-			root, err := d.populateTree(ctx, reqOne, tree.NewTreeContext(tree.NewTreeSchemaCacheClient(dsName, d.cacheClient, d.getValidationClient()), tt.intentName))
+			root, err := d.populateTree(ctx, reqOne, tc)
+			if err != nil {
+				t.Error(err)
+			}
+
+			// populate Tree with running
+			err = d.populateTreeWithRunning(ctx, tc, root)
 			if err != nil {
 				t.Error(err)
 			}
@@ -723,7 +732,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			for e := range validationErrChan {
 				validationErrors = append(validationErrors, e)
 			}
-			fmt.Println(validationErrors)
+			fmt.Printf("Validation Errors:\n%v\n", validationErrors)
 			fmt.Printf("Tree:%s\n", root.String())
 
 			// get the updates that are meant to be send down towards the device
@@ -733,8 +742,17 @@ func TestDatastore_populateTree(t *testing.T) {
 			}
 
 			// get the deletes that are meant to be send down towards the device
-			deletes := root.GetDeletes(true)
-			if diff := testhelper.DiffDoubleStringPathSlice(tt.expectedDeletes, deletes.ToStringSlice()); diff != "" {
+			deletes, err := root.GetDeletes(true)
+			if err != nil {
+				t.Error(err)
+			}
+
+			deletePathSlice := make(tree.PathSlices, 0, len(deletes))
+			for _, del := range deletes {
+				deletePathSlice = append(deletePathSlice, del.Path())
+			}
+
+			if diff := testhelper.DiffDoubleStringPathSlice(tt.expectedDeletes, deletePathSlice.ToStringSlice()); diff != "" {
 				t.Errorf("root.GetDeletes() mismatch (-want +got):\n%s", diff)
 			}
 

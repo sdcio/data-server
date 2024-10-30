@@ -310,6 +310,16 @@ func ToXPath(p *sdcpb.Path, noKeys bool) string {
 	return sb.String()
 }
 
+func StripPathElemPrefixPath(p *sdcpb.Path) {
+	for _, pe := range p.Elem {
+		before, name, found := strings.Cut(pe.Name, ":")
+		if !found {
+			name = before
+		}
+		pe.Name = name
+	}
+}
+
 func StripPathElemPrefix(p string) (string, error) {
 	sp, err := ParsePath(p)
 	if err != nil {

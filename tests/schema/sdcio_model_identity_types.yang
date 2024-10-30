@@ -1,0 +1,40 @@
+module sdcio_model_identity_types {
+  yang-version 1.1;
+  namespace "urn:sdcio/model_identity_types";
+  prefix sdcio_identity_types;
+
+  import sdcio_model_identity_base {
+    prefix identity_base;
+  }
+
+  
+
+  description
+    "This is part of the test schema for sdcio";
+
+  revision 2024-10-29 {
+    description
+      "Test schema first attempt";
+  }
+
+  identity des {
+    base identity_base:crypto-alg;
+    base identity_base:symmetric-key;
+    description
+      "DES crypto algorithm.";
+  }
+
+  identity des3 {
+    base identity_base:crypto-alg;
+    base identity_base:symmetric-key;
+    description
+      "Triple DES crypto algorithm.";
+  }
+
+  identity rsa {
+    base identity_base:crypto-alg;
+    base identity_base:public-key;
+    description
+      "Triple DES crypto algorithm.";
+  }
+}

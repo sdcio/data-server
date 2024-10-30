@@ -42,10 +42,24 @@ type SBI struct {
 	Type string `yaml:"type,omitempty" json:"type,omitempty"`
 	// gNMI or netconf address
 	Address string `yaml:"address,omitempty" json:"address,omitempty"`
+	Port    uint32 `yaml:"port,omitempty" json:"port,omitempty"`
 	// TLS config
 	TLS *TLS `yaml:"tls,omitempty" json:"tls,omitempty"`
 	// Target SBI credentials
-	Credentials *Creds `yaml:"credentials,omitempty" json:"credentials,omitempty"`
+	Credentials    *Creds             `yaml:"credentials,omitempty" json:"credentials,omitempty"`
+	NetconfOptions *SBINetconfOptions `yaml:"netconf-options,omitempty" json:"netconf-options,omitempty"`
+	GnmiOptions    *SBIGnmiOptions    `yaml:"gnmi-options,omitempty" json:"gnmi-options,omitempty"`
+	// ConnectRetry
+	ConnectRetry time.Duration `yaml:"connect-retry,omitempty" json:"connect-retry,omitempty"`
+	// Timeout
+	Timeout time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+}
+
+type SBIGnmiOptions struct {
+	Encoding string `yaml:"encoding,omitempty" json:"encoding,omitempty"`
+}
+
+type SBINetconfOptions struct {
 	// if true, the namespace is included as an `xmlns` attribute in the netconf payloads
 	IncludeNS bool `yaml:"include-ns,omitempty" json:"include-ns,omitempty"`
 	// sets the preferred NC version: 1.0 or 1.1
@@ -56,10 +70,6 @@ type SBI struct {
 	UseOperationRemove bool `yaml:"use-operation-remove,omitempty" json:"use-operation-remove,omitempty"`
 	// for netconf targets: defines whether to commit to running or use a candidate.
 	CommitDatastore string `yaml:"commit-datastore,omitempty" json:"commit-datastore,omitempty"`
-	// ConnectRetry
-	ConnectRetry time.Duration `yaml:"connect-retry,omitempty" json:"connect-retry,omitempty"`
-	// Timeout
-	Timeout time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 }
 
 type Creds struct {
@@ -112,7 +122,19 @@ func (s *SBI) validateSetDefaults() error {
 	case sbiNOOP:
 		return nil
 	case sbiNETCONF:
+		switch s.NetconfOptions.CommitDatastore {
+		case "":
+			s.NetconfOptions.CommitDatastore = ncCommitDatastoreCandidate
+		case ncCommitDatastoreRunning:
+		case ncCommitDatastoreCandidate:
+		default:
+			return fmt.Errorf("unknown commit-datastore: %s. Must be one of %s, %s",
+				s.NetconfOptions.CommitDatastore, ncCommitDatastoreCandidate, ncCommitDatastoreRunning)
+		}
 	case sbiGNMI:
+		if s.GnmiOptions.Encoding == "" {
+			return errors.New("no encoding defined")
+		}
 	default:
 		return fmt.Errorf("unknown sbi type: %q", s.Type)
 	}
@@ -121,22 +143,10 @@ func (s *SBI) validateSetDefaults() error {
 		return errors.New("missing SBI address")
 	}
 
-	_, _, err := net.SplitHostPort(s.Address)
-	if err != nil {
-		return err
+	if s.Port == 0 {
+		return errors.New("missing sbi port")
 	}
 
-	if s.Type == sbiNETCONF {
-		switch s.CommitDatastore {
-		case "":
-			s.CommitDatastore = ncCommitDatastoreCandidate
-		case ncCommitDatastoreRunning:
-		case ncCommitDatastoreCandidate:
-		default:
-			return fmt.Errorf("unknown commit-datastore: %s. Must be one of %s, %s",
-				s.CommitDatastore, ncCommitDatastoreCandidate, ncCommitDatastoreRunning)
-		}
-	}
 	if s.ConnectRetry < time.Second {
 		s.ConnectRetry = time.Second
 	}

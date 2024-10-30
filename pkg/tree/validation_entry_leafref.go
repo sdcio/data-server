@@ -48,9 +48,7 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 
 	switch ttv := tv.Value.(type) {
 	case *sdcpb.TypedValue_LeaflistVal:
-		for _, v := range ttv.LeaflistVal.GetElement() {
-			values = append(values, v)
-		}
+		values = append(values, ttv.LeaflistVal.GetElement()...)
 	default:
 		values = append(values, tv)
 	}

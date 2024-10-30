@@ -45,12 +45,13 @@ const (
 type gnmiTarget struct {
 	target    *gtarget.Target
 	encodings map[gnmi.Encoding]struct{}
+	cfg       *config.SBI
 }
 
 func newGNMITarget(ctx context.Context, name string, cfg *config.SBI, opts ...grpc.DialOption) (*gnmiTarget, error) {
 	tc := &types.TargetConfig{
 		Name:       name,
-		Address:    cfg.Address,
+		Address:    fmt.Sprintf("%s:%d", cfg.Address, cfg.Port),
 		Timeout:    10 * time.Second,
 		RetryTimer: 2 * time.Second,
 		BufferSize: 100,
@@ -70,6 +71,7 @@ func newGNMITarget(ctx context.Context, name string, cfg *config.SBI, opts ...gr
 	gt := &gnmiTarget{
 		target:    gtarget.NewTarget(tc),
 		encodings: make(map[gnmi.Encoding]struct{}),
+		cfg:       cfg,
 	}
 	err := gt.target.CreateGNMIClient(ctx, opts...)
 	if err != nil {
@@ -83,6 +85,11 @@ func newGNMITarget(ctx context.Context, name string, cfg *config.SBI, opts ...gr
 	for _, enc := range capResp.GetSupportedEncodings() {
 		gt.encodings[enc] = struct{}{}
 	}
+
+	if _, exists := gt.encodings[gnmi.Encoding(encoding(cfg.GnmiOptions.Encoding))]; !exists {
+		return nil, fmt.Errorf("encoding %q not supported", cfg.GnmiOptions.Encoding)
+	}
+
 	return gt, nil
 }
 
@@ -117,8 +124,7 @@ func sdcpbEncodingToGNMIENcoding(x sdcpb.Encoding) (gnmi.Encoding, error) {
 func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
 	var err error
 	gnmiReq := &gnmi.GetRequest{
-		Path:     make([]*gnmi.Path, 0, len(req.GetPath())),
-		Encoding: gnmi.Encoding_ASCII,
+		Path: make([]*gnmi.Path, 0, len(req.GetPath())),
 	}
 	for _, p := range req.GetPath() {
 		gnmiReq.Path = append(gnmiReq.Path, utils.ToGNMIPath(p))
@@ -144,40 +150,73 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 		Notification: make([]*sdcpb.Notification, 0, len(gnmiRsp.GetNotification())),
 	}
 	for _, n := range gnmiRsp.GetNotification() {
-		sn := &sdcpb.Notification{
-			Timestamp: n.GetTimestamp(),
-			Update:    make([]*sdcpb.Update, 0, len(n.GetUpdate())),
-			Delete:    make([]*sdcpb.Path, 0, len(n.GetDelete())),
-		}
-		for _, upd := range n.GetUpdate() {
-			sn.Update = append(sn.Update, &sdcpb.Update{
-				Path:  utils.FromGNMIPath(n.GetPrefix(), upd.GetPath()),
-				Value: utils.FromGNMITypedValue(upd.GetVal()),
-			})
-		}
-		for _, del := range n.GetDelete() {
-			sn.Delete = append(sn.Delete, utils.FromGNMIPath(n.GetPrefix(), del))
-		}
+		sn := utils.ToSchemaNotification(n)
 		schemaRsp.Notification = append(schemaRsp.Notification, sn)
 	}
 	return schemaRsp, nil
 }
 
-func (t *gnmiTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
-	setReq := &gnmi.SetRequest{
-		Delete:  make([]*gnmi.Path, 0, len(req.GetDelete())),
-		Replace: make([]*gnmi.Update, 0, len(req.GetReplace())),
-		Update:  make([]*gnmi.Update, 0, len(req.GetUpdate())),
+func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDataResponse, error) {
+	var upds []*sdcpb.Update
+	var deletes []*sdcpb.Path
+	var err error
+	switch strings.ToLower(t.cfg.GnmiOptions.Encoding) {
+	case "json":
+		jsonData, err := source.ToJson(true)
+		if err != nil {
+			return nil, err
+		}
+		if jsonData != nil {
+			jsonBytes, err := json.Marshal(jsonData)
+			if err != nil {
+				return nil, err
+			}
+			upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: jsonBytes}}}}
+		}
+		// deletes from protos
+		deletes, err = source.ToProtoDeletes(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+	case "json_ietf":
+		jsonData, err := source.ToJsonIETF(true)
+		if err != nil {
+			return nil, err
+		}
+		if jsonData != nil {
+			jsonBytes, err := json.Marshal(jsonData)
+			if err != nil {
+				return nil, err
+			}
+			upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonIetfVal{JsonIetfVal: jsonBytes}}}}
+		}
+		// deletes from protos
+		deletes, err = source.ToProtoDeletes(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+	case "proto":
+		upds, err = source.ToProtoUpdates(ctx, true)
+		if err != nil {
+			return nil, err
+		}
+		deletes, err = source.ToProtoDeletes(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
-	for _, del := range req.GetDelete() {
+
+	setReq := &gnmi.SetRequest{
+		Delete: make([]*gnmi.Path, 0, len(deletes)),
+		Update: make([]*gnmi.Update, 0, len(upds)),
+	}
+	for _, del := range deletes {
 		gdel := utils.ToGNMIPath(del)
 		setReq.Delete = append(setReq.Delete, gdel)
 	}
-	for _, repl := range req.GetReplace() {
-		grepl := t.convertKeyUpdates(repl)
-		setReq.Replace = append(setReq.Replace, grepl)
-	}
-	for _, upd := range req.GetUpdate() {
+	for _, upd := range upds {
 		gupd := t.convertKeyUpdates(upd)
 		setReq.Update = append(setReq.Update, gupd)
 	}
@@ -278,6 +317,18 @@ func (t *gnmiTarget) Close() error {
 	return t.target.Close()
 }
 
+func sdcpbEncoding(e string) int {
+	enc, ok := sdcpb.Encoding_value[strings.ToUpper(e)]
+	if ok {
+		return int(enc)
+	}
+	en, err := strconv.Atoi(e)
+	if err != nil {
+		return 0
+	}
+	return en
+}
+
 func encoding(e string) int {
 	enc, ok := gnmi.Encoding_value[strings.ToUpper(e)]
 	if ok {
@@ -310,6 +361,7 @@ func (t *gnmiTarget) getSync(ctx context.Context, gnmiSync *config.SyncProtocol,
 		Datastore: &sdcpb.DataStore{
 			Type: sdcpb.Type_MAIN,
 		},
+		Encoding: sdcpb.Encoding(sdcpbEncoding(gnmiSync.Encoding)),
 	}
 
 	go t.internalGetSync(ctx, req, syncCh)

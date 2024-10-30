@@ -24,6 +24,9 @@ module sdcio_model {
   import sdcio_model_deref {
     prefix sdcio_model_deref;
   }
+  import sdcio_model_identity {
+    prefix sdcio_identity;
+  }
 
   description
     "This is the test schema for sdcio";
@@ -40,6 +43,8 @@ module sdcio_model {
   uses sdcio_model_leaflist:leaflist-top;
   uses sdcio_model_list_unique:list-unique-top;
   uses sdcio_model_deref:deref-top;
+  uses sdcio_identity:identityref-top;
+  
   leaf patterntest {
     type string {
       length "7..10";
@@ -48,5 +53,8 @@ module sdcio_model {
       //  // modifier invert-match;
       // }
     }
+  }
+  leaf emptyconf {
+    type empty;
   }
 }

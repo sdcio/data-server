@@ -22,7 +22,6 @@ import (
 
 	"github.com/openconfig/gnmi/proto/gnmi"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 )
 
 func GetValue(updValue *gnmi.TypedValue) (interface{}, error) {
@@ -72,44 +71,28 @@ func GetValue(updValue *gnmi.TypedValue) (interface{}, error) {
 	return value, nil
 }
 
-func GetJsonValue(tv *sdcpb.TypedValue) any {
+func GetJsonValue(tv *sdcpb.TypedValue, ietf bool) (any, error) {
 	switch tv.Value.(type) {
-	case *sdcpb.TypedValue_AsciiVal:
-		return tv.GetAsciiVal()
-	case *sdcpb.TypedValue_BoolVal:
-		return tv.GetBoolVal()
-	case *sdcpb.TypedValue_BytesVal:
-		return tv.GetBytesVal()
-	case *sdcpb.TypedValue_DecimalVal:
-		return tv.GetDecimalVal()
 	case *sdcpb.TypedValue_EmptyVal:
-		return map[string]any{}
-	case *sdcpb.TypedValue_FloatVal:
-		return tv.GetFloatVal()
-	case *sdcpb.TypedValue_DoubleVal:
-		return tv.GetDoubleVal()
-	case *sdcpb.TypedValue_IntVal:
-		return tv.GetIntVal()
-	case *sdcpb.TypedValue_StringVal:
-		return tv.GetStringVal()
-	case *sdcpb.TypedValue_UintVal:
-		return tv.GetUintVal()
-	case *sdcpb.TypedValue_JsonIetfVal:
-		return tv.GetJsonIetfVal()
-	case *sdcpb.TypedValue_JsonVal:
-		return tv.GetJsonVal()
+		return map[string]any{}, nil
 	case *sdcpb.TypedValue_LeaflistVal:
 		rs := make([]any, 0, len(tv.GetLeaflistVal().GetElement()))
 		for _, e := range tv.GetLeaflistVal().GetElement() {
-			rs = append(rs, GetJsonValue(e))
+			val, err := GetJsonValue(e, ietf)
+			if err != nil {
+				return nil, err
+			}
+			rs = append(rs, val)
 		}
-		return rs
-	case *sdcpb.TypedValue_ProtoBytes:
-		return tv.GetProtoBytes()
-	case *sdcpb.TypedValue_AnyVal:
-		return tv.GetAnyVal()
+		return rs, nil
+	case *sdcpb.TypedValue_IdentityrefVal:
+		if ietf {
+			return tv.GetIdentityrefVal().JsonIetfString(), nil
+		}
+		return GetSchemaValue(tv)
+	default:
+		return GetSchemaValue(tv)
 	}
-	return nil
 }
 
 func GetSchemaValue(updValue *sdcpb.TypedValue) (interface{}, error) {
@@ -149,6 +132,8 @@ func GetSchemaValue(updValue *sdcpb.TypedValue) (interface{}, error) {
 		value = updValue.GetProtoBytes()
 	case *sdcpb.TypedValue_AnyVal:
 		value = updValue.GetAnyVal()
+	case *sdcpb.TypedValue_IdentityrefVal:
+		value = updValue.GetIdentityrefVal().Value
 	}
 	if value == nil && len(jsondata) != 0 {
 		err := json.Unmarshal(jsondata, &value)
@@ -158,100 +143,6 @@ func GetSchemaValue(updValue *sdcpb.TypedValue) (interface{}, error) {
 	}
 	return value, nil
 }
-
-func ToSchemaTypedValue(v any) *sdcpb.TypedValue {
-	log.Debugf("to schema value %T, %#v", v, v) //TODO2: Writing in sdcpb typedValue, need to change to gNMI ?
-	switch v := v.(type) {
-	case *sdcpb.TypedValue:
-		return v
-	case *gnmi.TypedValue:
-		return ToSchemaTypedValue(v.GetValue())
-	case *gnmi.TypedValue_AnyVal:
-		return &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_AnyVal{
-				AnyVal: v.AnyVal,
-			},
-		}
-	case *gnmi.TypedValue_AsciiVal:
-		return &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_AsciiVal{
-				AsciiVal: v.AsciiVal,
-			},
-		}
-	case *gnmi.TypedValue_StringVal:
-		return &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_StringVal{
-				StringVal: v.StringVal,
-			},
-		}
-	case *gnmi.TypedValue_BoolVal:
-		return &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_BoolVal{
-				BoolVal: v.BoolVal,
-			},
-		}
-	case *gnmi.TypedValue_BytesVal:
-		return &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_BytesVal{
-				BytesVal: v.BytesVal,
-			},
-		}
-	case *gnmi.TypedValue_IntVal:
-		return &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_IntVal{
-				IntVal: v.IntVal,
-			},
-		}
-	case *gnmi.TypedValue_UintVal:
-		return &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_UintVal{
-				UintVal: v.UintVal,
-			},
-		}
-	case *gnmi.TypedValue_ProtoBytes:
-		return &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_ProtoBytes{
-				ProtoBytes: v.ProtoBytes,
-			},
-		}
-	case *gnmi.TypedValue_LeaflistVal:
-		schemalf := &sdcpb.ScalarArray{
-			Element: make([]*sdcpb.TypedValue, 0, len(v.LeaflistVal.GetElement())),
-		}
-		for _, e := range v.LeaflistVal.GetElement() {
-			schemalf.Element = append(schemalf.Element, ToSchemaTypedValue(e))
-		}
-		return &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: schemalf},
-		}
-	}
-	return nil
-}
-
-// func ToGNMITypedValue(v any) *gnmi.TypedValue {
-// 	log.Infof("to gNMI value %T, %v", v, v)
-// 	switch v := v.(type) {
-// 	case *sdcpb.TypedValue_AsciiVal:
-// 		return &gnmi.TypedValue{
-// 			Value: &gnmi.TypedValue_AsciiVal{
-// 				AsciiVal: v.AsciiVal,
-// 			},
-// 		}
-// 	case *sdcpb.TypedValue_StringVal:
-// 		return &gnmi.TypedValue{
-// 			Value: &gnmi.TypedValue_StringVal{
-// 				StringVal: v.StringVal,
-// 			},
-// 		}
-// 	case string:
-// 		return &gnmi.TypedValue{
-// 			Value: &gnmi.TypedValue_AsciiVal{
-// 				AsciiVal: v,
-// 			},
-// 		}
-// 	}
-// 	return nil
-// }
 
 func ToGNMITypedValue(v *sdcpb.TypedValue) *gnmi.TypedValue {
 	if v == nil {
@@ -316,6 +207,10 @@ func ToGNMITypedValue(v *sdcpb.TypedValue) *gnmi.TypedValue {
 		return &gnmi.TypedValue{
 			Value: &gnmi.TypedValue_UintVal{UintVal: v.GetUintVal()},
 		}
+	case *sdcpb.TypedValue_IdentityrefVal:
+		return &gnmi.TypedValue{
+			Value: &gnmi.TypedValue_StringVal{StringVal: v.GetIdentityrefVal().Value},
+		}
 	}
 	return nil
 }
@@ -361,6 +256,21 @@ func EqualTypedValues(v1, v2 *sdcpb.TypedValue) bool {
 				return false
 			}
 			return v1.AsciiVal == v2.AsciiVal
+		default:
+			return false
+		}
+	case *sdcpb.TypedValue_IdentityrefVal:
+		switch v2 := v2.GetValue().(type) {
+		case *sdcpb.TypedValue_IdentityrefVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
+				return false
+			}
+			return v1.IdentityrefVal.GetValue() == v2.IdentityrefVal.GetValue() &&
+				v1.IdentityrefVal.GetModule() == v2.IdentityrefVal.GetModule() &&
+				v1.IdentityrefVal.GetPrefix() == v2.IdentityrefVal.GetPrefix()
 		default:
 			return false
 		}
@@ -585,6 +495,8 @@ func TypedValueToString(tv *sdcpb.TypedValue) string {
 		return tv.GetStringVal()
 	case *sdcpb.TypedValue_UintVal:
 		return strconv.Itoa(int(tv.GetUintVal()))
+	case *sdcpb.TypedValue_IdentityrefVal:
+		return tv.GetIdentityrefVal().Value
 	}
 	return ""
 }

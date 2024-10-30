@@ -29,14 +29,6 @@ func (y *yangParserEntryAdapter) valueToDatum(tv *sdcpb.TypedValue) xpath.Datum 
 	switch ttv := tv.Value.(type) {
 	case *sdcpb.TypedValue_BoolVal:
 		return xpath.NewBoolDatum(tv.GetBoolVal())
-	case *sdcpb.TypedValue_StringVal:
-		if y.e.GetSchema().GetField().GetType().GetType() == "identityref" {
-			idPrefixMap := y.e.GetSchema().GetField().GetType().GetIdentityPrefixesMap()
-			if prefix, ok := idPrefixMap[tv.GetStringVal()]; ok {
-				return xpath.NewLiteralDatum(fmt.Sprintf("%s:%s", prefix, tv.GetStringVal()))
-			}
-		}
-		return xpath.NewLiteralDatum(tv.GetStringVal())
 	case *sdcpb.TypedValue_UintVal:
 		return xpath.NewNumDatum(float64(tv.GetUintVal()))
 	case *sdcpb.TypedValue_LeaflistVal:
@@ -48,6 +40,8 @@ func (y *yangParserEntryAdapter) valueToDatum(tv *sdcpb.TypedValue) xpath.Datum 
 		return xpath.NewDatumSliceDatum(datums)
 	case *sdcpb.TypedValue_EmptyVal:
 		return xpath.NewBoolDatum(true)
+	case *sdcpb.TypedValue_IdentityrefVal:
+		return xpath.NewLiteralDatum(tv.GetIdentityrefVal().YangString())
 	default:
 		return xpath.NewLiteralDatum(tv.GetStringVal())
 	}

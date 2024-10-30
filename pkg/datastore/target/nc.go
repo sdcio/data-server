@@ -41,7 +41,6 @@ type ncTarget struct {
 	connected bool
 
 	schemaClient     schemaClient.SchemaClientBound
-	schema           *sdcpb.Schema
 	sbiConfig        *config.SBI
 	xml2sdcpbAdapter *netconf.XML2sdcpbConfigAdapter
 }
@@ -81,9 +80,9 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	// init a new XMLConfigBuilder for the pathfilter
 	pathfilterXmlBuilder := netconf.NewXMLConfigBuilder(t.schemaClient,
 		&netconf.XMLConfigBuilderOpts{
-			HonorNamespace:         t.sbiConfig.IncludeNS,
-			OperationWithNamespace: t.sbiConfig.OperationWithNamespace,
-			UseOperationRemove:     t.sbiConfig.UseOperationRemove,
+			HonorNamespace:         t.sbiConfig.NetconfOptions.IncludeNS,
+			OperationWithNamespace: t.sbiConfig.NetconfOptions.OperationWithNamespace,
+			UseOperationRemove:     t.sbiConfig.NetconfOptions.UseOperationRemove,
 		})
 
 	// add all the requested paths to the document
@@ -127,18 +126,18 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	return result, nil
 }
 
-func (t *ncTarget) Set(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
+func (t *ncTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDataResponse, error) {
 	if !t.connected {
 		return nil, fmt.Errorf("not connected")
 	}
-	switch t.sbiConfig.CommitDatastore {
+	switch t.sbiConfig.NetconfOptions.CommitDatastore {
 	case "running":
-		return t.setRunning(ctx, req)
+		return t.setRunning(source)
 	case "candidate":
-		return t.setCandidate(ctx, req)
+		return t.setCandidate(source)
 	}
 	// should not get here if the config validation happened.
-	return nil, fmt.Errorf("unknown commit-datastore: %s", t.sbiConfig.CommitDatastore)
+	return nil, fmt.Errorf("unknown commit-datastore: %s", t.sbiConfig.NetconfOptions.CommitDatastore)
 }
 
 func (t *ncTarget) Status() string {
@@ -267,25 +266,14 @@ func (t *ncTarget) reconnect() {
 	}
 }
 
-func (t *ncTarget) setRunning(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
-	xcbCfg := &netconf.XMLConfigBuilderOpts{
-		HonorNamespace:         t.sbiConfig.IncludeNS,
-		OperationWithNamespace: t.sbiConfig.OperationWithNamespace,
-		UseOperationRemove:     t.sbiConfig.UseOperationRemove,
+func (t *ncTarget) setRunning(source TargetSource) (*sdcpb.SetDataResponse, error) {
+
+	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
+	if err != nil {
+		return nil, err
 	}
 
-	xmlBuilder := netconf.NewXMLConfigBuilder(t.schemaClient, xcbCfg)
-
-	// iterate over the update array
-	for _, u := range req.GetUpdate() {
-		xmlBuilder.AddValue(ctx, u.Path, u.Value)
-	}
-	// iterate over the delete array
-	for _, p := range req.GetDelete() {
-		xmlBuilder.Delete(ctx, p)
-	}
-
-	xdoc, err := xmlBuilder.GetDoc()
+	xdoc, err := xtree.WriteToString()
 	if err != nil {
 		return nil, err
 	}
@@ -339,70 +327,51 @@ func filterRPCErrors(xml *etree.Document, severity string) ([]string, error) {
 	return result, nil
 }
 
-func (t *ncTarget) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
-	xcbCfg := &netconf.XMLConfigBuilderOpts{
-		HonorNamespace:         t.sbiConfig.IncludeNS,
-		OperationWithNamespace: t.sbiConfig.OperationWithNamespace,
-		UseOperationRemove:     t.sbiConfig.UseOperationRemove,
-	}
-	xmlCBDelete := netconf.NewXMLConfigBuilder(t.schemaClient, xcbCfg)
-
-	// iterate over the delete array
-	for _, p := range req.GetDelete() {
-		xmlCBDelete.Delete(ctx, p)
+func (t *ncTarget) setCandidate(source TargetSource) (*sdcpb.SetDataResponse, error) {
+	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
+	if err != nil {
+		return nil, err
 	}
 
-	xmlCBAdd := netconf.NewXMLConfigBuilder(t.schemaClient, xcbCfg)
-
-	// iterate over the update array
-	for _, u := range req.Update {
-		xmlCBAdd.AddValue(ctx, u.Path, u.Value)
+	xdoc, err := xtree.WriteToString()
+	if err != nil {
+		return nil, err
 	}
 
-	var warnings []string
+	// if there was no data in the xml document, continue
+	if len(xdoc) == 0 {
+		return &sdcpb.SetDataResponse{
+			Timestamp: time.Now().UnixNano(),
+		}, nil
+	}
 
-	// first apply the deletes before the adds
-	for _, xml := range []*netconf.XMLConfigBuilder{xmlCBDelete, xmlCBAdd} {
-		// finally retrieve the xml config as string
-		xdoc, err := xml.GetDoc()
-		if err != nil {
+	log.Debugf("datastore %s XML:\n%s\n", t.name, xdoc)
+
+	// edit the config
+	resp, err := t.driver.EditConfig("candidate", xdoc)
+	if err != nil {
+		log.Errorf("datastore %s failed edit-config: %v", t.name, err)
+		if strings.Contains(err.Error(), "EOF") {
+			t.Close()
+			t.connected = false
+			go t.reconnect()
 			return nil, err
 		}
-
-		// if there was no data in the xml document, continue
-		if len(xdoc) == 0 {
-			continue
+		err2 := t.driver.Discard()
+		if err2 != nil {
+			// log failed discard
+			log.Errorf("failed with %v while discarding pending changes after error %v", err2, err)
 		}
-
-		log.Debugf("datastore %s XML:\n%s\n", t.name, xdoc)
-
-		// edit the config
-		resp, err := t.driver.EditConfig("candidate", xdoc)
-		if err != nil {
-			log.Errorf("datastore %s failed edit-config: %v", t.name, err)
-			if strings.Contains(err.Error(), "EOF") {
-				t.Close()
-				t.connected = false
-				go t.reconnect()
-				return nil, err
-			}
-			err2 := t.driver.Discard()
-			if err2 != nil {
-				// log failed discard
-				log.Errorf("failed with %v while discarding pending changes after error %v", err2, err)
-			}
-			return nil, err
-		}
-		rpcWarnings, err := filterRPCErrors(resp.Doc, "warning")
-		if err != nil {
-			return nil, fmt.Errorf("filtering netconf rpc-errors with severity warnings: %w", err)
-		}
-		warnings = append(warnings, rpcWarnings...)
-
+		return nil, err
 	}
+	rpcWarnings, err := filterRPCErrors(resp.Doc, "warning")
+	if err != nil {
+		return nil, fmt.Errorf("filtering netconf rpc-errors with severity warnings: %w", err)
+	}
+
 	log.Infof("datastore %s: committing changes on target", t.name)
 	// commit the config
-	err := t.driver.Commit()
+	err = t.driver.Commit()
 	if err != nil {
 		if strings.Contains(err.Error(), "EOF") {
 			t.Close()
@@ -412,7 +381,7 @@ func (t *ncTarget) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest) 
 		return nil, err
 	}
 	return &sdcpb.SetDataResponse{
-		Warnings:  warnings,
+		Warnings:  rpcWarnings,
 		Timestamp: time.Now().UnixNano(),
 	}, nil
 }

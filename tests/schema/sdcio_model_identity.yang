@@ -1,0 +1,31 @@
+module sdcio_model_identity {
+  yang-version 1.1;
+  namespace "urn:sdcio/model_identity";
+  prefix sdcio_identity;
+
+  import sdcio_model_identity_base {
+    prefix identity_base;
+  }
+
+  identity otherAlgo {
+    base identity_base:crypto-alg;
+    base identity_base:public-key;
+    description
+      "other Algo";
+  }
+
+  grouping identityref-top {
+    container identityref {
+      leaf cryptoA {
+        type identityref {
+          base identity_base:crypto-alg;
+        }
+      }
+      leaf cryptoB {
+        type identityref {
+          base identity_base:crypto-alg;
+        }
+      }
+    }
+  }
+}

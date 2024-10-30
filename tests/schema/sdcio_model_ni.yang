@@ -56,6 +56,9 @@ module sdcio_model_ni {
         description
           "A unique name identifying the network instance";
       }
+      container protocol {
+        uses bgp-top;
+      }
       leaf type {
         type identityref {
           base ni-type;

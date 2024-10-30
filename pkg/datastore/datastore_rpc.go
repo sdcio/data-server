@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -32,8 +31,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	status "google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/prototext"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/config"
@@ -202,55 +199,55 @@ func (d *Datastore) Candidates(ctx context.Context) ([]*sdcpb.DataStore, error) 
 	return rsp, nil
 }
 
-func (d *Datastore) Commit(ctx context.Context, req *sdcpb.CommitRequest) error {
-	name := req.GetDatastore().GetName()
-	if name == "" {
-		return fmt.Errorf("missing candidate name")
-	}
-	changes, err := d.cacheClient.GetChanges(ctx, d.Config().Name, req.GetDatastore().GetName())
-	if err != nil {
-		return err
-	}
+// func (d *Datastore) Commit(ctx context.Context, req *sdcpb.CommitRequest) error {
+// 	name := req.GetDatastore().GetName()
+// 	if name == "" {
+// 		return fmt.Errorf("missing candidate name")
+// 	}
+// 	changes, err := d.cacheClient.GetChanges(ctx, d.Config().Name, req.GetDatastore().GetName())
+// 	if err != nil {
+// 		return err
+// 	}
 
-	notification, err := d.changesToUpdates(ctx, changes)
-	if err != nil {
-		return err
-	}
-	log.Debugf("%s:%s notification:\n%s", d.Name(), name, prototext.Format(notification))
-	// TODO: consider if leafref validation
-	// needs to run before must statements validation
+// 	notification, err := d.changesToUpdates(ctx, changes)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	log.Debugf("%s:%s notification:\n%s", d.Name(), name, prototext.Format(notification))
+// 	// TODO: consider if leafref validation
+// 	// needs to run before must statements validation
 
-	// push updates to sbi
-	sbiSet := &sdcpb.SetDataRequest{
-		Update: notification.GetUpdate(),
-		// Replace
-		Delete: notification.GetDelete(),
-	}
-	log.Debugf("datastore %s/%s commit:\n%s", d.config.Name, name, prototext.Format(sbiSet))
+// 	// push updates to sbi
+// 	sbiSet := &sdcpb.SetDataRequest{
+// 		Update: notification.GetUpdate(),
+// 		// Replace
+// 		Delete: notification.GetDelete(),
+// 	}
+// 	log.Debugf("datastore %s/%s commit:\n%s", d.config.Name, name, prototext.Format(sbiSet))
 
-	log.Infof("datastore %s/%s commit: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d",
-		d.config.Name, name, len(sbiSet.GetUpdate()), len(sbiSet.GetReplace()), len(sbiSet.GetDelete()))
-	// send set request only if there are updates and/or deletes
-	if len(sbiSet.GetUpdate())+len(sbiSet.GetReplace())+len(sbiSet.GetDelete()) > 0 {
-		rsp, err := d.sbi.Set(ctx, sbiSet)
-		if err != nil {
-			return err
-		}
-		log.Debugf("datastore %s/%s SetResponse from SBI: %v", d.config.Name, name, rsp)
-	}
-	// commit candidate changes into the intended store
-	err = d.cacheClient.Commit(ctx, d.config.Name, name)
-	if err != nil {
-		return err
-	}
+// 	log.Infof("datastore %s/%s commit: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d",
+// 		d.config.Name, name, len(sbiSet.GetUpdate()), len(sbiSet.GetReplace()), len(sbiSet.GetDelete()))
+// 	// send set request only if there are updates and/or deletes
 
-	if req.GetStay() {
-		// reset candidate changes and (TODO) rebase
-		return d.cacheClient.Discard(ctx, d.config.Name, name)
-	}
-	// delete candidate
-	return d.cacheClient.DeleteCandidate(ctx, d.Name(), name)
-}
+// 		rsp, err := d.sbi.Set(ctx, sbiSet)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		log.Debugf("datastore %s/%s SetResponse from SBI: %v", d.config.Name, name, rsp)
+
+// 	// commit candidate changes into the intended store
+// 	err = d.cacheClient.Commit(ctx, d.config.Name, name)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	if req.GetStay() {
+// 		// reset candidate changes and (TODO) rebase
+// 		return d.cacheClient.Discard(ctx, d.config.Name, name)
+// 	}
+// 	// delete candidate
+// 	return d.cacheClient.DeleteCandidate(ctx, d.Name(), name)
+// }
 
 func (d *Datastore) Rebase(ctx context.Context, req *sdcpb.RebaseRequest) error {
 	// name := req.GetDatastore().GetName()
@@ -397,7 +394,9 @@ func isState(r *sdcpb.GetSchemaResponse) bool {
 func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate, sem *semaphore.Weighted) {
 	defer sem.Release(1)
 
-	cNotification, err := d.convertNotificationTypedValues(ctx, syncup.Update)
+	converter := utils.NewConverter(d.getValidationClient())
+
+	cNotification, err := converter.ConvertNotificationTypedValues(ctx, syncup.Update)
 	if err != nil {
 		log.Errorf("failed to convert notification typedValue: %v", err)
 		return
@@ -405,7 +404,7 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 
 	upds := NewSdcpbUpdateDedup()
 	for _, x := range cNotification.GetUpdate() {
-		addUpds, err := d.expandUpdateKeysAsLeaf(ctx, x)
+		addUpds, err := converter.ExpandUpdateKeysAsLeaf(ctx, x)
 		if err != nil {
 			continue
 		}
@@ -525,41 +524,6 @@ func (d *Datastore) toPath(ctx context.Context, p []string) (*sdcpb.Path, error)
 	return path, nil
 }
 
-func (d *Datastore) changesToUpdates(ctx context.Context, changes []*cache.Change) (*sdcpb.Notification, error) {
-	notif := &sdcpb.Notification{
-		Update: make([]*sdcpb.Update, 0, len(changes)),
-		Delete: make([]*sdcpb.Path, 0, len(changes)),
-	}
-	for _, change := range changes {
-		if change == nil {
-			continue
-		}
-		switch {
-		case len(change.Delete) != 0:
-			p, err := d.toPath(ctx, change.Delete)
-			if err != nil {
-				return nil, err
-			}
-			notif.Delete = append(notif.Delete, p)
-		case change.Update != nil:
-			tv, err := change.Update.Value()
-			if err != nil {
-				return nil, err
-			}
-			p, err := d.toPath(ctx, change.Update.GetPath())
-			if err != nil {
-				return nil, err
-			}
-			upd := &sdcpb.Update{
-				Path:  p,
-				Value: tv,
-			}
-			notif.Update = append(notif.Update, upd)
-		}
-	}
-	return notif, nil
-}
-
 // getValidationClient will create a ValidationClient instance if not already existing
 // save it as part of the datastore and return a valid *clients.ValidationClient
 func (d *Datastore) getValidationClient() clients.ValidationClient {
@@ -569,229 +533,6 @@ func (d *Datastore) getValidationClient() clients.ValidationClient {
 	}
 	// return the bound validation client
 	return d._validationClientBound
-}
-
-// conversion
-type leafListNotification struct {
-	path      *sdcpb.Path
-	leaflists []*sdcpb.TypedValue
-}
-
-func (d *Datastore) convertNotificationTypedValues(ctx context.Context, n *sdcpb.Notification) (*sdcpb.Notification, error) {
-	// this map serves as a context to group leaf-lists
-	// sent as keys in separate updates.
-	leaflists := map[string]*leafListNotification{}
-	nn := &sdcpb.Notification{
-		Timestamp: n.GetTimestamp(),
-		Update:    make([]*sdcpb.Update, 0, len(n.GetUpdate())),
-		Delete:    n.GetDelete(),
-	}
-	// convert typed values to their YANG type
-	for _, upd := range n.GetUpdate() {
-		scRsp, err := d.getSchema(ctx, upd.GetPath())
-		if err != nil {
-			return nil, err
-		}
-		nup, err := d.convertUpdateTypedValue(ctx, upd, scRsp, leaflists)
-		if err != nil {
-			return nil, err
-		}
-		log.Debugf("%s: converted update from: %v, to: %v", d.Name(), upd, nup)
-		if nup == nil { // filters out notification ending in non-presence containers
-			continue
-		}
-		nn.Update = append(nn.Update, nup)
-	}
-	// add accumulated leaf-lists
-	for _, lfnotif := range leaflists {
-		nn.Update = append(nn.Update, &sdcpb.Update{
-			Path: lfnotif.path,
-			Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{
-				LeaflistVal: &sdcpb.ScalarArray{Element: lfnotif.leaflists},
-			},
-			},
-		})
-	}
-
-	return nn, nil
-}
-
-func (d *Datastore) convertUpdateTypedValue(_ context.Context, upd *sdcpb.Update, scRsp *sdcpb.GetSchemaResponse, leaflists map[string]*leafListNotification) (*sdcpb.Update, error) {
-	switch {
-	case scRsp.GetSchema().GetContainer() != nil:
-		if !scRsp.GetSchema().GetContainer().GetIsPresence() {
-			return nil, nil
-		}
-		return upd, nil
-	case scRsp.GetSchema().GetLeaflist() != nil:
-		// leaf-list received as a key
-		if upd.GetValue() == nil {
-			// clone path
-			p := proto.Clone(upd.GetPath()).(*sdcpb.Path)
-			// grab the key from the last elem, that's the leaf-list value
-			var lftv *sdcpb.TypedValue
-			for _, v := range p.GetElem()[len(p.GetElem())-1].GetKey() {
-				lftv = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
-				break
-			}
-			if lftv == nil {
-				return nil, fmt.Errorf("malformed leaf-list update: %v", upd)
-			}
-			// delete the key from the last elem (that's the leaf-list value)
-			p.GetElem()[len(p.GetElem())-1].Key = nil
-			// build unique path
-			sp := utils.ToXPath(p, false)
-			if _, ok := leaflists[sp]; !ok {
-				leaflists[sp] = &leafListNotification{
-					path:      p,                               // modified path
-					leaflists: make([]*sdcpb.TypedValue, 0, 1), // at least one elem
-				}
-			}
-			// convert leaf-list to its YANG type
-			clftv, err := d.typedValueToYANGType(lftv, scRsp.GetSchema())
-			if err != nil {
-				return nil, err
-			}
-			// append leaf-list
-			leaflists[sp].leaflists = append(leaflists[sp].leaflists, clftv)
-			return nil, nil
-		}
-		// regular leaf list
-		switch upd.GetValue().Value.(type) {
-		case *sdcpb.TypedValue_LeaflistVal:
-			return upd, nil
-		default:
-			return nil, fmt.Errorf("unexpected leaf-list typedValue: %v", upd.GetValue())
-		}
-	case scRsp.GetSchema().GetField() != nil:
-		ctv, err := d.typedValueToYANGType(upd.GetValue(), scRsp.GetSchema())
-		if err != nil {
-			return nil, err
-		}
-		return &sdcpb.Update{
-			Path:  upd.GetPath(),
-			Value: ctv,
-		}, nil
-	}
-	return nil, nil
-}
-
-func (d *Datastore) typedValueToYANGType(tv *sdcpb.TypedValue, schemaObject *sdcpb.SchemaElem) (*sdcpb.TypedValue, error) {
-	switch tv.Value.(type) {
-	case *sdcpb.TypedValue_AsciiVal:
-		return convertToTypedValue(schemaObject, tv.GetAsciiVal(), tv.GetTimestamp())
-	case *sdcpb.TypedValue_BoolVal:
-		return tv, nil
-	case *sdcpb.TypedValue_BytesVal:
-		return tv, nil
-	case *sdcpb.TypedValue_DecimalVal:
-		return tv, nil
-	case *sdcpb.TypedValue_FloatVal:
-		return tv, nil
-	case *sdcpb.TypedValue_DoubleVal:
-		return tv, nil
-	case *sdcpb.TypedValue_IntVal:
-		return tv, nil
-	case *sdcpb.TypedValue_StringVal:
-		return convertToTypedValue(schemaObject, tv.GetStringVal(), tv.GetTimestamp())
-	case *sdcpb.TypedValue_UintVal:
-		return tv, nil
-	case *sdcpb.TypedValue_JsonIetfVal: // TODO:
-	case *sdcpb.TypedValue_JsonVal: // TODO:
-	case *sdcpb.TypedValue_LeaflistVal:
-		return tv, nil
-	case *sdcpb.TypedValue_ProtoBytes:
-		return tv, nil
-	case *sdcpb.TypedValue_AnyVal:
-		return tv, nil
-	}
-	return tv, nil
-}
-
-func convertToTypedValue(schemaObject *sdcpb.SchemaElem, v string, ts uint64) (*sdcpb.TypedValue, error) {
-	var schemaType *sdcpb.SchemaLeafType
-	switch {
-	case schemaObject.GetField() != nil:
-		schemaType = schemaObject.GetField().GetType()
-	case schemaObject.GetLeaflist() != nil:
-		schemaType = schemaObject.GetLeaflist().GetType()
-	case schemaObject.GetContainer() != nil:
-		if !schemaObject.GetContainer().IsPresence {
-			return nil, errors.New("non presence container update")
-		}
-		return nil, nil
-	}
-	return convertStringToTv(schemaType, v, ts)
-}
-
-func convertStringToTv(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*sdcpb.TypedValue, error) {
-	// convert field or leaf-list schema elem
-	switch schemaType.GetType() {
-	case "string":
-		return &sdcpb.TypedValue{
-
-			Value: &sdcpb.TypedValue_StringVal{StringVal: v},
-		}, nil
-	case "uint64", "uint32", "uint16", "uint8":
-		i, err := strconv.ParseUint(v, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		return &sdcpb.TypedValue{
-			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_UintVal{UintVal: i},
-		}, nil
-	case "int64", "int32", "int16", "int8":
-		i, err := strconv.ParseInt(v, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		return &sdcpb.TypedValue{
-			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_IntVal{IntVal: i},
-		}, nil
-	case "boolean":
-		b, err := strconv.ParseBool(v)
-		if err != nil {
-			return nil, err
-		}
-		return &sdcpb.TypedValue{
-			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_BoolVal{BoolVal: b},
-		}, nil
-	case "decimal64":
-		// TODO: convert string to decimal
-		return &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_DecimalVal{DecimalVal: &sdcpb.Decimal64{}},
-		}, nil
-	case "identityref":
-		return &sdcpb.TypedValue{
-			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_StringVal{StringVal: v},
-		}, nil
-	case "leafref": // TODO: query leafref type
-		return &sdcpb.TypedValue{
-			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_StringVal{StringVal: v},
-		}, nil
-	case "union":
-		for _, ut := range schemaType.GetUnionTypes() {
-			tv, err := convertStringToTv(ut, v, ts)
-			if err == nil {
-				return tv, nil
-			}
-		}
-		return nil, fmt.Errorf("invalid value %s for union type: %v", v, schemaType)
-	case "enumeration":
-		// TODO: get correct type, assuming string
-		return &sdcpb.TypedValue{
-			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_StringVal{StringVal: v},
-		}, nil
-	case "": // presence ?
-		return &sdcpb.TypedValue{}, nil
-	}
-	return nil, nil
 }
 
 func (d *Datastore) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.DataServer_WatchDeviationsServer) error {
@@ -928,7 +669,7 @@ func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.
 			log.Errorf("%s: failed to get path schema: %v ", d.Name(), err)
 			continue
 		}
-		nfiv, err := d.typedValueToYANGType(fiv, scRsp.GetSchema())
+		nfiv, err := utils.TypedValueToYANGType(fiv, scRsp.GetSchema())
 		if err != nil {
 			log.Errorf("%s: failed to convert value to its YANG type: %v ", d.Name(), err)
 			continue
@@ -975,7 +716,7 @@ func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.
 				log.Errorf("%s: failed to get path schema: %v ", d.Name(), err)
 				continue
 			}
-			niv, err := d.typedValueToYANGType(iv, scRsp.GetSchema())
+			niv, err := utils.TypedValueToYANGType(iv, scRsp.GetSchema())
 			if err != nil {
 				log.Errorf("%s: failed to convert value to its YANG type: %v ", d.Name(), err)
 				continue

@@ -53,26 +53,31 @@ func (t *noopTarget) Get(_ context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	return result, nil
 }
 
-func (t *noopTarget) Set(_ context.Context, req *sdcpb.SetDataRequest) (*sdcpb.SetDataResponse, error) {
+func (t *noopTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDataResponse, error) {
+
+	upds, err := source.ToProtoUpdates(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+
+	deletes, err := source.ToProtoDeletes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	result := &sdcpb.SetDataResponse{
 		Response: make([]*sdcpb.UpdateResult, 0,
-			len(req.GetUpdate())+len(req.GetReplace())+len(req.GetDelete())),
+			len(upds)+len(deletes)),
 		Timestamp: time.Now().UnixNano(),
 	}
 
-	for _, upd := range req.GetUpdate() {
+	for _, upd := range upds {
 		result.Response = append(result.Response, &sdcpb.UpdateResult{
 			Path: upd.GetPath(),
 			Op:   sdcpb.UpdateResult_UPDATE,
 		})
 	}
-	for _, upd := range req.GetReplace() {
-		result.Response = append(result.Response, &sdcpb.UpdateResult{
-			Path: upd.GetPath(),
-			Op:   sdcpb.UpdateResult_REPLACE,
-		})
-	}
-	for _, p := range req.GetDelete() {
+	for _, p := range deletes {
 		result.Response = append(result.Response, &sdcpb.UpdateResult{
 			Path: p,
 			Op:   sdcpb.UpdateResult_DELETE,
