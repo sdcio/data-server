@@ -171,8 +171,6 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	log.Debugf("finish insertion phase")
 	root.FinishInsertionPhase()
 
-	fmt.Printf("Tree before Validate:%s\n", root.String())
-
 	// perform validation
 	// we use a channel and cumulate all the errors
 	validationErrors := []error{}

@@ -88,6 +88,40 @@ func TestDatastore_validateTree(t *testing.T) {
 			intentName: owner1,
 			intentPrio: prio10,
 		},
+		{
+			name:          "identityref",
+			intentReqPath: "/",
+			intentReqValue: func() (string, error) {
+				d := &sdcio_schema.Device{
+					Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+						"ethernet-1/1": {
+							Name:          ygot.String("ethernet-1/1"),
+							InterfaceType: ygot.String("traffic"),
+							AdminState:    sdcio_schema.SdcioModelIf_AdminState_enable,
+						},
+						"mgmt0": {
+							Name:          ygot.String("mgmt0"),
+							InterfaceType: ygot.String("mgmt"),
+							AdminState:    sdcio_schema.SdcioModelIf_AdminState_enable,
+						},
+					},
+					MgmtInterface: &sdcio_schema.SdcioModel_MgmtInterface{
+						Name: ygot.String("mgmt0"),
+						Type: ygot.String("mgmt"),
+					},
+					Identityref: &sdcio_schema.SdcioModel_Identityref{
+						CryptoA: sdcio_schema.SdcioModelIdentityBase_CryptoAlg_des3,
+						CryptoB: sdcio_schema.SdcioModelIdentityBase_CryptoAlg_otherAlgo,
+					},
+				}
+				return ygot.EmitJSON(d, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false,
+				})
+			},
+			intentName: owner1,
+			intentPrio: prio10,
+		},
 	}
 
 	for _, tt := range tests {

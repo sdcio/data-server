@@ -17,7 +17,6 @@ package utils
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -88,7 +87,7 @@ func GetJsonValue(tv *sdcpb.TypedValue, ietf bool) (any, error) {
 		return rs, nil
 	case *sdcpb.TypedValue_IdentityrefVal:
 		if ietf {
-			return fmt.Sprintf("%s:%s", tv.GetIdentityrefVal().Module, tv.GetIdentityrefVal().Value), nil
+			return tv.GetIdentityrefVal().JsonIetfString(), nil
 		}
 		return GetSchemaValue(tv)
 	default:
