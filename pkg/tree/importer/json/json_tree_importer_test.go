@@ -139,10 +139,11 @@ func TestJsonTreeImporter(t *testing.T) {
 				t.Fatalf("error parsing json document: %v", err)
 			}
 			jti := NewJsonTreeImporter(j)
-			err = root.ImportConfig(ctx, jti)
+			err = root.ImportConfig(ctx, jti, tree.RunningIntentName, tree.RunningValuesPrio)
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			root.FinishInsertionPhase()
 			t.Log(root.String())
 

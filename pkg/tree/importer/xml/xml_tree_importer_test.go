@@ -95,7 +95,7 @@ func TestXmlTreeImporter(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = root.ImportConfig(ctx, NewXmlTreeImporter(&inputDoc.Element))
+			err = root.ImportConfig(ctx, NewXmlTreeImporter(&inputDoc.Element), tree.RunningIntentName, tree.RunningValuesPrio)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -786,7 +786,7 @@ func (s *sharedEntryAttributes) validatePattern(errchan chan<- error) {
 	}
 }
 
-func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.ImportConfigAdapter) error {
+func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32) error {
 	var err error
 
 	switch x := s.schema.GetSchema().(type) {
@@ -819,7 +819,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 				}
 
 			}
-			err = child.ImportConfig(ctx, t)
+			err = child.ImportConfig(ctx, t, intentName, intentPrio)
 			if err != nil {
 				return err
 			}
@@ -857,7 +857,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 						return err
 					}
 				}
-				err = child.ImportConfig(ctx, elem)
+				err = child.ImportConfig(ctx, elem, intentName, intentPrio)
 				if err != nil {
 					return err
 				}
@@ -872,9 +872,14 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 		if err != nil {
 			return err
 		}
-		upd := cache.NewUpdate(s.Path(), tvVal, RunningValuesPrio, RunningIntentName, 0)
+		upd := cache.NewUpdate(s.Path(), tvVal, intentPrio, intentName, 0)
 
-		s.leafVariants = append(s.leafVariants, NewLeafEntry(upd, false, s))
+		isNew := true
+		// If the intent name is the RunningIntentName, then set isNew to false
+		if intentName == RunningIntentName {
+			isNew = false
+		}
+		s.leafVariants = append(s.leafVariants, NewLeafEntry(upd, isNew, s))
 
 	case *sdcpb.SchemaElem_Leaflist:
 		var scalarArr *sdcpb.ScalarArray

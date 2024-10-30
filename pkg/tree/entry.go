@@ -123,7 +123,7 @@ type Entry interface {
 	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
 	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error)
 	// ImportConfig allows importing config data received from e.g. the device in different formats (json, xml) to be imported into the tree.
-	ImportConfig(ctx context.Context, t importer.ImportConfigAdapter) error
+	ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32) error
 }
 
 type EntryVisitor func(s *sharedEntryAttributes) error
