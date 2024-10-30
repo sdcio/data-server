@@ -658,7 +658,7 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, errchan chan<- err
 	defer wg.Wait()
 	for _, c := range s.filterActiveChoiceCaseChilds() {
 		wg.Add(1)
-		func(x Entry) { // HINT: for Must-Statement debugging, remove "go " such that the debugger is triggered one after the other
+		go func(x Entry) { // HINT: for Must-Statement debugging, remove "go " such that the debugger is triggered one after the other
 			x.Validate(ctx, errchan)
 			wg.Done()
 		}(c)
