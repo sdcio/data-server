@@ -153,9 +153,9 @@ func (s *sharedEntryAttributes) FilterChilds(keys map[string]string) ([]Entry, e
 			}
 		} else {
 			// this is basically the wildcard case, so go through all childs and add them
+			result = make([]Entry, 0, len(processEntries))
 			for _, entry := range processEntries {
 				childs := entry.getChildren()
-				result = make([]Entry, 0, len(childs))
 				for _, v := range childs {
 					// hence we add all the existing childs to the result list
 					result = append(result, v)
