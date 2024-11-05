@@ -18,7 +18,6 @@ output.xml
 report.html
 intra/
 nbn/
-mocks/*
 .vscode
 schema-dir
 dist/
