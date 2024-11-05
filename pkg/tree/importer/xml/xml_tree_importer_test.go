@@ -36,7 +36,7 @@ func TestXmlTreeImporter(t *testing.T) {
   <subinterface>
     <description>Subinterface 0</description>
     <index>0</index>
-    <type>routed</type>
+    <type>sdcio_model_common:routed</type>
   </subinterface>
 </interface>
 <interface>
@@ -46,7 +46,7 @@ func TestXmlTreeImporter(t *testing.T) {
   <subinterface>
     <description>Subinterface 0</description>
     <index>0</index>
-    <type>routed</type>
+    <type>sdcio_model_common:routed</type>
   </subinterface>
 </interface>
 <leaflist>
@@ -60,7 +60,7 @@ func TestXmlTreeImporter(t *testing.T) {
   <protocol>
     <bgp/>
   </protocol>
-  <type>default</type>
+  <type>sdcio_model_ni:default</type>
 </network-instance>
 <patterntest>hallo DU</patterntest>
 	`,
