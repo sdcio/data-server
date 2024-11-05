@@ -22,8 +22,8 @@ require (
 	github.com/prometheus/client_golang v1.20.5
 	github.com/scrapli/scrapligo v1.3.2
 	github.com/sdcio/cache v0.0.34
-	github.com/sdcio/schema-server v0.0.24
-	github.com/sdcio/sdc-protos v0.0.33
+	github.com/sdcio/schema-server v0.0.25
+	github.com/sdcio/sdc-protos v0.0.35
 	github.com/sdcio/yang-parser v0.0.9
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.1
@@ -43,8 +43,8 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/creack/pty v1.1.23 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/dgraph-io/badger/v4 v4.3.0 // indirect
-	github.com/dgraph-io/ristretto v0.1.2-0.20240116140435-c67e07994f91 // indirect
+	github.com/dgraph-io/badger/v4 v4.3.1 // indirect
+	github.com/dgraph-io/ristretto v1.0.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
@@ -65,7 +65,7 @@ require (
 	github.com/jhump/protoreflect v1.16.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.17.9 // indirect
+	github.com/klauspost/compress v1.17.10 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
