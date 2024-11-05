@@ -176,7 +176,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 	validationErrors := []error{}
 	validationErrChan := make(chan error)
 	go func() {
-		root.Validate(ctx, validationErrChan)
+		root.Validate(ctx, validationErrChan, true)
 		close(validationErrChan)
 	}()
 

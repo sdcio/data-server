@@ -92,12 +92,21 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 			return true, nil
 		case len(s.childs) == 0 && s.GetSchema().GetContainer().IsPresence:
 			// process presence cotnainers with no childs
-			if len(s.childs) == 0 {
-				newElem := parent.CreateElement(s.PathName())
-				// process the honorNamespace instruction
-				xmlAddNamespaceConditional(s, s.parent, newElem, honorNamespace)
-				return true, nil
+			if onlyNewOrUpdated {
+				// presence containers have leafvariantes with typedValue_Empty, so check that
+				if s.leafVariants.shouldDelete() {
+					return false, nil
+				}
+				le := s.leafVariants.GetHighestPrecedence(false)
+				if onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
+					return false, nil
+				}
 			}
+			newElem := parent.CreateElement(s.PathName())
+			// process the honorNamespace instruction
+			xmlAddNamespaceConditional(s, s.parent, newElem, honorNamespace)
+			return true, nil
+
 		default:
 			// the container represents a map
 			// So create the element that the tree entry represents

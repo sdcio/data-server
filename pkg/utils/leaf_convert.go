@@ -332,7 +332,7 @@ func ConvertUnion(value string, slts []*sdcpb.SchemaLeafType) (*sdcpb.TypedValue
 func ConvertJsonValueToTv(d any, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	var err error
 	switch slt.Type {
-	case "string", "leafref":
+	case "string":
 		v, ok := d.(string)
 		if !ok {
 			return nil, fmt.Errorf("error converting %v to string", v)
@@ -340,6 +340,8 @@ func ConvertJsonValueToTv(d any, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, 
 		return &sdcpb.TypedValue{
 			Value: &sdcpb.TypedValue_StringVal{StringVal: v},
 		}, nil
+	case "leafref":
+		return ConvertJsonValueToTv(d, slt.LeafrefTargetType)
 	case "identityref":
 		v, ok := d.(string)
 		if !ok {

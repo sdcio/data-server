@@ -153,9 +153,9 @@ func (s *sharedEntryAttributes) FilterChilds(keys map[string]string) ([]Entry, e
 			}
 		} else {
 			// this is basically the wildcard case, so go through all childs and add them
+			result = []Entry{}
 			for _, entry := range processEntries {
 				childs := entry.getChildren()
-				result = make([]Entry, 0, len(childs))
 				for _, v := range childs {
 					// hence we add all the existing childs to the result list
 					result = append(result, v)
@@ -651,17 +651,22 @@ func (s *sharedEntryAttributes) getHighestPrecedenceValueOfBranch() int32 {
 
 // Validate is the highlevel function to perform validation.
 // it will multiplex all the different Validations that need to happen
-func (s *sharedEntryAttributes) Validate(ctx context.Context, errchan chan<- error) {
+func (s *sharedEntryAttributes) Validate(ctx context.Context, errchan chan<- error, concurrent bool) {
 
 	// recurse the call to the child elements
 	wg := sync.WaitGroup{}
 	defer wg.Wait()
 	for _, c := range s.filterActiveChoiceCaseChilds() {
 		wg.Add(1)
-		go func(x Entry) { // HINT: for Must-Statement debugging, remove "go " such that the debugger is triggered one after the other
-			x.Validate(ctx, errchan)
+		valFunc := func(x Entry) { // HINT: for Must-Statement debugging, remove "go " such that the debugger is triggered one after the other
+			x.Validate(ctx, errchan, concurrent)
 			wg.Done()
-		}(c)
+		}
+		if concurrent {
+			go valFunc(c)
+		} else {
+			valFunc(c)
+		}
 	}
 
 	// validate the mandatory statement on this entry
@@ -794,9 +799,9 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 		switch {
 		case len(s.schema.GetContainer().GetKeys()) > 0:
 
-			var child Entry
 			var exists bool
-			child = s
+			var actualEntry Entry = s
+			var keyChild Entry
 			for _, keySchema := range s.schema.GetContainer().GetKeys() {
 
 				keyElemName := keySchema.Name
@@ -807,19 +812,15 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 				}
 				keyElemValue := keyTransf.GetKeyValue()
 				// if the child does not exist, create it
-				if child, exists = child.getChildren()[keyElemValue]; !exists {
-					child, err = newEntry(ctx, s, keyElemValue, s.treeContext)
-					if err != nil {
-						return err
-					}
-					err = s.addChild(ctx, child)
+				if keyChild, exists = actualEntry.getChildren()[keyElemValue]; !exists {
+					keyChild, err = newEntry(ctx, actualEntry, keyElemValue, s.treeContext)
 					if err != nil {
 						return err
 					}
 				}
-
+				actualEntry = keyChild
 			}
-			err = child.ImportConfig(ctx, t, intentName, intentPrio)
+			err = actualEntry.ImportConfig(ctx, t, intentName, intentPrio)
 			if err != nil {
 				return err
 			}
@@ -864,7 +865,13 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 			}
 		}
 	case *sdcpb.SchemaElem_Field:
-		tv, err := t.GetTVValue(x.Field.GetType())
+		// // if it is as leafref we need to figure out the type of the references field.
+		fieldType := x.Field.GetType()
+		// if x.Field.GetType().Type == "leafref" {
+		// 	s.treeContext.treeSchemaCacheClient.GetSchema(ctx,)
+		// }
+
+		tv, err := t.GetTVValue(fieldType)
 		if err != nil {
 			return err
 		}
