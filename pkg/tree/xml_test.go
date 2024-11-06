@@ -46,7 +46,7 @@ func TestToXMLTable(t *testing.T) {
   <subinterface>
     <description>Subinterface 0</description>
     <index>0</index>
-    <type>routed</type>
+    <type>sdcio_model_common:routed</type>
   </subinterface>
 </interface>
 <leaflist>
@@ -57,7 +57,7 @@ func TestToXMLTable(t *testing.T) {
   <admin-state>disable</admin-state>
   <description>Default NI</description>
   <name>default</name>
-  <type>default</type>
+  <type>sdcio_model_ni:default</type>
 </network-instance>
 <patterntest>foo</patterntest>
 `,
@@ -93,7 +93,7 @@ func TestToXMLTable(t *testing.T) {
   <subinterface>
     <description>Subinterface 5</description>
     <index>5</index>
-    <type>routed</type>
+    <type>sdcio_model_common:routed</type>
   </subinterface>
 </interface>
 <leaflist operation="delete"/>
@@ -104,7 +104,7 @@ func TestToXMLTable(t *testing.T) {
   <admin-state>enable</admin-state>
   <description>Other NI</description>
   <name>other</name>
-  <type>ip-vrf</type>
+  <type>sdcio_model_ni:ip-vrf</type>
 </network-instance>
 <patterntest>bar</patterntest>
 `,
@@ -162,7 +162,7 @@ func TestToXMLTable(t *testing.T) {
   <subinterface>
     <description xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
     <index>0</index>
-    <type>bridged</type>
+    <type>sdcio_model_common:bridged</type>
   </subinterface>
 </interface>
 `,

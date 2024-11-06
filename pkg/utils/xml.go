@@ -33,6 +33,13 @@ func TypedValueToXML(parent *etree.Element, tv *sdcpb.TypedValue, name string, n
 
 	case *sdcpb.TypedValue_EmptyVal:
 		parent.CreateElement(name)
+
+	case *sdcpb.TypedValue_IdentityrefVal:
+		subelem := parent.CreateElement(name)
+		if namespace != "" {
+			subelem.CreateAttr("xmlns", namespace)
+		}
+		subelem.SetText(tv.GetIdentityrefVal().YangString())
 	default:
 		subelem := parent.CreateElement(name)
 		if namespace != "" {
