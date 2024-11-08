@@ -22,7 +22,7 @@ require (
 	github.com/prometheus/client_golang v1.20.5
 	github.com/scrapli/scrapligo v1.3.2
 	github.com/sdcio/cache v0.0.34
-	github.com/sdcio/schema-server v0.0.25
+	github.com/sdcio/schema-server v0.0.26
 	github.com/sdcio/sdc-protos v0.0.35
 	github.com/sdcio/yang-parser v0.0.9
 	github.com/sirupsen/logrus v1.9.3
