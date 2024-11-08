@@ -55,9 +55,6 @@ func (c *TreeSchemaCacheClientImpl) Read(ctx context.Context, opts *cache.Opts, 
 // ToPath local implementation of the ToPath functinality. It takes a string slice that contains schema elements as well as key values.
 // Via the help of the schema, the key elemens are being identified and an sdcpb.Path is returned.
 func (c *TreeSchemaCacheClientImpl) ToPath(ctx context.Context, path []string) (*sdcpb.Path, error) {
-	var err error
-
-	keylessPathSlice := []string{}
 	p := &sdcpb.Path{}
 	// iterate through the path slice
 	for i := 0; i < len(path); i++ {
@@ -65,19 +62,10 @@ func (c *TreeSchemaCacheClientImpl) ToPath(ctx context.Context, path []string) (
 		newPathElem := &sdcpb.PathElem{Name: path[i]}
 		// append the path elem to the path
 		p.Elem = append(p.Elem, newPathElem)
-		// prepare key lookup in index
-		keylessPathSlice = append(keylessPathSlice, path[i])
-		c.schemaIndexMutex.RLock()
-		// lookup the key in the schema index
-		schema, exists := c.schemaIndex[strings.Join(keylessPathSlice, PATHSEP)]
-		c.schemaIndexMutex.RUnlock()
-		// if it does not exist
-		if !exists {
-			// retrieve the schema
-			schema, err = c.retrieveSchema(ctx, p)
-			if err != nil {
-				return nil, err
-			}
+		// retrieve the schema
+		schema, err := c.retrieveSchema(ctx, p)
+		if err != nil {
+			return nil, err
 		}
 
 		// break early if the container itself is defined in the path, not a sub-element
@@ -95,29 +83,45 @@ func (c *TreeSchemaCacheClientImpl) ToPath(ctx context.Context, path []string) (
 				newPathElem.Key[k.Name] = path[i]
 			}
 		}
-
 	}
-
 	return p, nil
 }
 
 // retrieveSchema internal function to retrieve a schema, which when retireved will also be
 // stored in the TreeSchemaCacheClientImpl's schema index
 func (c *TreeSchemaCacheClientImpl) retrieveSchema(ctx context.Context, p *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+
+	// convert the path into a keyless path, for schema index lookups.
+	keylessPathSlice := utils.ToStrings(p, false, true)
+	keylessPath := strings.Join(keylessPathSlice, PATHSEP)
+
+	c.schemaIndexMutex.RLock()
+	// first check if it was inserted meanwhile
+	v, exists := c.schemaIndex[keylessPath]
+	c.schemaIndexMutex.RUnlock()
+	// if so, return it.
+	if exists {
+		return v, nil
+	}
+
+	c.schemaIndexMutex.Lock()
+	defer c.schemaIndexMutex.Unlock()
+
+	// try to see again if it exists, some other goroutine might have inserted in the meantime
+	v, exists = c.schemaIndex[keylessPath]
+	// if so, return it.
+	if exists {
+		return v, nil
+	}
+
 	// if schema wasn't found in index, go and fetch it
 	schemaRsp, err := c.scb.GetSchema(ctx, p)
 	if err != nil {
 		return nil, err
 	}
 
-	// convert the path into a keyless path, for schema index lookups.
-	keylessPathSlice := utils.ToStrings(p, false, true)
-	keylessPath := strings.Join(keylessPathSlice, PATHSEP)
-
-	c.schemaIndexMutex.Lock()
 	// store the schema in the lookup index
 	c.schemaIndex[keylessPath] = schemaRsp
-	c.schemaIndexMutex.Unlock()
 	return schemaRsp, nil
 }
 
@@ -129,15 +133,5 @@ func (c *TreeSchemaCacheClientImpl) GetSchema(ctx context.Context, path []string
 	if err != nil {
 		return nil, err
 	}
-
-	// convert the path into a keyless path, for schema index lookups.
-	keylessPathSlice := utils.ToStrings(sdcpbPath, false, true)
-	keylessPath := strings.Join(keylessPathSlice, PATHSEP)
-
-	// lookup schema in schemaindex, preventing consecutive gets from the schema server
-	if v, exists := c.schemaIndex[keylessPath]; exists {
-		return v, nil
-	}
-
 	return c.retrieveSchema(ctx, sdcpbPath)
 }
