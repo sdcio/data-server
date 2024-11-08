@@ -526,6 +526,9 @@ func getField(s string, cs *sdcpb.SchemaElem_Container) (*sdcpb.LeafSchema, bool
 		if f.Name == s {
 			return f, true
 		}
+		if fmt.Sprintf("%s:%s", f.ModuleName, f.Name) == s {
+			return f, true
+		}
 	}
 	return nil, false
 }
@@ -533,6 +536,9 @@ func getField(s string, cs *sdcpb.SchemaElem_Container) (*sdcpb.LeafSchema, bool
 func getLeafList(s string, cs *sdcpb.SchemaElem_Container) (*sdcpb.LeafListSchema, bool) {
 	for _, lfl := range cs.Container.GetLeaflists() {
 		if lfl.Name == s {
+			return lfl, true
+		}
+		if fmt.Sprintf("%s:%s", lfl.ModuleName, lfl.Name) == s {
 			return lfl, true
 		}
 	}
