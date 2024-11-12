@@ -81,7 +81,7 @@ func Test_pathElem2Xpath(t *testing.T) {
 				return
 			}
 			if d := cmp.Diff(got, tt.want); d != "" {
-				t.Errorf(d)
+				t.Errorf("pathElem2XPath() diff:\n%s", d)
 			}
 
 		})

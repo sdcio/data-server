@@ -1,6 +1,10 @@
 package tree
 
-import "math"
+import (
+	"math"
+
+	"github.com/sdcio/data-server/pkg/utils"
+)
 
 type LeafVariants []*LeafEntry
 
@@ -46,7 +50,7 @@ func (lv LeafVariants) GetHighestPrecedenceValue() int32 {
 
 // GetHighesNewUpdated returns the LeafEntry with the highes priority
 // nil if no leaf entry exists.
-func (lv LeafVariants) GetHighestPrecedence(onlyIfPrioChanged bool) *LeafEntry {
+func (lv LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool) *LeafEntry {
 	if len(lv) == 0 {
 		return nil
 	}
@@ -79,7 +83,7 @@ func (lv LeafVariants) GetHighestPrecedence(onlyIfPrioChanged bool) *LeafEntry {
 
 	// if it does not matter if the highes update is also
 	// New or Updated return it
-	if !onlyIfPrioChanged {
+	if !onlyNewOrUpdated {
 		if !highest.Delete {
 			return highest
 		}
@@ -88,7 +92,7 @@ func (lv LeafVariants) GetHighestPrecedence(onlyIfPrioChanged bool) *LeafEntry {
 
 	// if the highes is not marked for deletion and new or updated (=PrioChanged) return it
 	if !highest.Delete {
-		if highest.IsNew || highest.IsUpdated {
+		if highest.IsNew || highest.IsUpdated || lv.runningUnequalHighest(highest) {
 			return highest
 		}
 		return nil
@@ -100,6 +104,18 @@ func (lv LeafVariants) GetHighestPrecedence(onlyIfPrioChanged bool) *LeafEntry {
 
 	// otherwise return nil
 	return nil
+}
+
+func (lv LeafVariants) runningUnequalHighest(highest *LeafEntry) bool {
+	runVal := lv.GetByOwner(RunningIntentName)
+	if runVal == nil {
+		return true
+	}
+	// ignore errors, they should not happen :-P I know... should...
+	rval, _ := runVal.Value()
+	hval, _ := highest.Value()
+
+	return !utils.EqualTypedValues(rval, hval)
 }
 
 // GetByOwner returns the entry that is owned by the given owner,
