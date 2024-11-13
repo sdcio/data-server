@@ -160,6 +160,11 @@ func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDa
 	var upds []*sdcpb.Update
 	var deletes []*sdcpb.Path
 	var err error
+
+	if t == nil {
+		return nil, fmt.Errorf("%s", "not connected")
+	}
+
 	switch strings.ToLower(t.cfg.GnmiOptions.Encoding) {
 	case "json":
 		jsonData, err := source.ToJson(true)
