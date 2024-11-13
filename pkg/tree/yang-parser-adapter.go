@@ -48,7 +48,7 @@ func (y *yangParserEntryAdapter) valueToDatum(tv *sdcpb.TypedValue) xpath.Datum 
 }
 
 func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
-	if y.e.GetSchema().GetContainer() != nil {
+	if y.e.GetSchema() == nil || y.e.GetSchema().GetContainer() != nil {
 		return xpath.NewBoolDatum(true), nil
 	}
 
