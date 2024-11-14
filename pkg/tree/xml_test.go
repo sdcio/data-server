@@ -327,7 +327,7 @@ func TestToXMLTable(t *testing.T) {
 				if err != nil {
 					t.Error(err)
 				}
-				err = addToRoot(ctx, root, existingUpds, false, "someIntended")
+				err = addToRoot(ctx, root, existingUpds, false, owner)
 				if err != nil {
 					t.Fatal(err)
 				}

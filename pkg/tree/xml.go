@@ -52,7 +52,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 			for _, k := range keys {
 				// recurse the call
 				// no additional element is created, since we're on a key level, so add to parent element
-				childs[k].toXmlInternal(parent, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordered)
+				doAdd, err := childs[k].toXmlInternal(parent, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordered)
 				if err != nil {
 					return false, err
 				}
@@ -196,9 +196,9 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 		// if the Field or Leaflist remains to exist
 		// get highes Precedence value
 		le := s.leafVariants.GetHighestPrecedence(false, false)
-		// if le == nil {
-		// 	return false, nil
-		// }
+		if le == nil {
+			return false, nil
+		}
 		// check the only new or updated flag
 		if onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
 			return false, nil
