@@ -2,13 +2,14 @@ package tree
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-func (s *sharedEntryAttributes) ToJson(onlyNewOrUpdated bool) (any, error) {
-	result, err := s.toJsonInternal(onlyNewOrUpdated, false)
+func (s *sharedEntryAttributes) ToJson(onlyNewOrUpdated bool, ordered bool) (any, error) {
+	result, err := s.toJsonInternal(onlyNewOrUpdated, false, ordered)
 	if err != nil {
 		return nil, err
 	}
@@ -18,8 +19,8 @@ func (s *sharedEntryAttributes) ToJson(onlyNewOrUpdated bool) (any, error) {
 	return result, err
 }
 
-func (s *sharedEntryAttributes) ToJsonIETF(onlyNewOrUpdated bool) (any, error) {
-	result, err := s.toJsonInternal(onlyNewOrUpdated, true)
+func (s *sharedEntryAttributes) ToJsonIETF(onlyNewOrUpdated bool, ordered bool) (any, error) {
+	result, err := s.toJsonInternal(onlyNewOrUpdated, true, ordered)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +34,7 @@ func (s *sharedEntryAttributes) ToJsonIETF(onlyNewOrUpdated bool) (any, error) {
 // If the ietf parameter is set to true, JSON_IETF encoding is used.
 // The actualPrefix is used only for the JSON_IETF encoding and can be ignored for JSON
 // In the initial / users call with ietf == true, actualPrefix should be set to ""
-func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool) (any, error) {
+func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool, ordered bool) (any, error) {
 	switch s.schema.GetSchema().(type) {
 	case nil:
 		// we're operating on a key level, no schema attached, but the
@@ -44,7 +45,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 			ancest, _ := s.GetFirstAncestorWithSchema()
 			prefixedKey := jsonGetIetfPrefixConditional(key, c, ancest, ietf)
 			// recurse the call
-			js, err := c.toJsonInternal(onlyNewOrUpdated, ietf)
+			js, err := c.toJsonInternal(onlyNewOrUpdated, ietf, ordered)
 			if err != nil {
 				return nil, err
 			}
@@ -66,9 +67,14 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 			if err != nil {
 				return nil, err
 			}
+
+			if ordered {
+				slices.SortFunc(childs, getListEntrySortFunc(s))
+			}
+
 			result := make([]any, 0, len(childs))
 			for _, c := range childs {
-				j, err := c.toJsonInternal(onlyNewOrUpdated, ietf)
+				j, err := c.toJsonInternal(onlyNewOrUpdated, ietf, ordered)
 				if err != nil {
 					return nil, err
 				}
@@ -87,7 +93,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 				if s.leafVariants.shouldDelete() {
 					return nil, nil
 				}
-				le := s.leafVariants.GetHighestPrecedence(false)
+				le := s.leafVariants.GetHighestPrecedence(false, false)
 				if onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
 					return nil, nil
 				}
@@ -98,7 +104,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 			result := map[string]any{}
 			for key, c := range s.filterActiveChoiceCaseChilds() {
 				prefixedKey := jsonGetIetfPrefixConditional(key, c, s, ietf)
-				js, err := c.toJsonInternal(onlyNewOrUpdated, ietf)
+				js, err := c.toJsonInternal(onlyNewOrUpdated, ietf, ordered)
 				if err != nil {
 					return nil, err
 				}
@@ -116,7 +122,10 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 		if s.leafVariants.shouldDelete() {
 			return nil, nil
 		}
-		le := s.leafVariants.GetHighestPrecedence(false)
+		le := s.leafVariants.GetHighestPrecedence(false, false)
+		if le == nil {
+			return nil, nil
+		}
 		if onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
 			return nil, nil
 		}

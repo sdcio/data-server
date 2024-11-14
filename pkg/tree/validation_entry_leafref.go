@@ -22,7 +22,7 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 		return nil, fmt.Errorf("error not a leafref %s", s.Path().String())
 	}
 
-	lv := s.leafVariants.GetHighestPrecedence(false)
+	lv := s.leafVariants.GetHighestPrecedence(false, true)
 
 	lref, err := utils.StripPathElemPrefix(lref)
 	if err != nil {
@@ -203,7 +203,7 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, errchan ch
 
 	// Only if the value remains, even after the SetIntent made it through, the LeafRef can be considered resolved.
 	if !entry[0].remainsToExist() {
-		lv := s.leafVariants.GetHighestPrecedence(false)
+		lv := s.leafVariants.GetHighestPrecedence(false, false)
 		EntryPath, _ := s.SdcpbPath()
 		errchan <- fmt.Errorf("missing leaf reference: failed resolving leafref %s for %s to path %s LeafVariant %v", lref, utils.ToXPath(EntryPath, false), s.Path().String(), lv)
 		return

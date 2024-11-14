@@ -327,7 +327,7 @@ func TestToXMLTable(t *testing.T) {
 				if err != nil {
 					t.Error(err)
 				}
-				err = addToRoot(ctx, root, existingUpds, false, owner)
+				err = addToRoot(ctx, root, existingUpds, false, "someIntended")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -350,7 +350,7 @@ func TestToXMLTable(t *testing.T) {
 				if err != nil {
 					t.Error(err)
 				}
-				err = addToRoot(ctx, root, runningUpds, false, "running")
+				err = addToRoot(ctx, root, runningUpds, false, RunningIntentName)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -358,7 +358,7 @@ func TestToXMLTable(t *testing.T) {
 			root.FinishInsertionPhase()
 			// fmt.Println(root.String())
 
-			xmlDoc, err := root.ToXML(tt.onlyNewOrUpdated, tt.honorNamespace, tt.operationWithNamespace, tt.useOperationRemove)
+			xmlDoc, err := root.ToXML(tt.onlyNewOrUpdated, tt.honorNamespace, tt.operationWithNamespace, tt.useOperationRemove, true)
 			if err != nil {
 				t.Fatal(err)
 			}

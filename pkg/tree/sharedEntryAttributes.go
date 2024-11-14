@@ -29,7 +29,7 @@ type sharedEntryAttributes struct {
 	childs map[string]Entry
 	// leafVariants mutual exclusive with Childs
 	// If Entry is a leaf it can hold multiple leafVariants
-	leafVariants LeafVariants
+	leafVariants *LeafVariants
 	// schema the schema element for this entry
 	schema *sdcpb.SchemaElem
 
@@ -38,7 +38,8 @@ type sharedEntryAttributes struct {
 	treeContext *TreeContext
 
 	// state cache
-	remains *bool
+	remains      *bool
+	remainsMutex sync.Mutex
 }
 
 func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName string, tc *TreeContext) (*sharedEntryAttributes, error) {
@@ -46,7 +47,7 @@ func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName st
 		parent:       parent,
 		pathElemName: pathElemName,
 		childs:       map[string]Entry{},
-		leafVariants: newLeafVariants(),
+		leafVariants: newLeafVariants(tc),
 		treeContext:  tc,
 	}
 
@@ -268,11 +269,13 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes []DeleteEntry, aggr
 
 func (s *sharedEntryAttributes) remainsToExist() bool {
 	// see if we have the value cached
+	s.remainsMutex.Lock()
+	defer s.remainsMutex.Unlock()
 	if s.remains != nil {
 		return *s.remains
 	}
 
-	leafVariantResult := len(s.leafVariants) > 0 && !s.leafVariants.shouldDelete()
+	leafVariantResult := len(s.leafVariants.les) > 0 && !s.leafVariants.shouldDelete()
 
 	// handle containers
 	childsRemain := false
@@ -412,7 +415,7 @@ func (s *sharedEntryAttributes) String() string {
 // addChild add an entry to the list of child entries for the entry.
 func (s *sharedEntryAttributes) addChild(ctx context.Context, e Entry) error {
 	// make sure Entry should not only hold LeafEntries
-	if len(s.leafVariants) > 0 {
+	if s.leafVariants.Length() > 0 {
 		// An exception are presence containers
 		_, is_container := s.schema.Schema.(*sdcpb.SchemaElem_Container)
 		if !is_container && !s.schema.GetContainer().IsPresence {
@@ -598,7 +601,7 @@ func (s *sharedEntryAttributes) tryLoading(ctx context.Context, path []string) (
 // These are the updated that will be send to the device.
 func (s *sharedEntryAttributes) GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool) LeafVariantSlice {
 	// get the highes precedence LeafeVariant and add it to the list
-	lv := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated)
+	lv := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, false)
 	if lv != nil {
 		result = append(result, lv)
 	}
@@ -612,7 +615,7 @@ func (s *sharedEntryAttributes) GetHighestPrecedence(result LeafVariantSlice, on
 
 func (s *sharedEntryAttributes) getHighestPrecedenceLeafValue(ctx context.Context) (*LeafEntry, error) {
 	for _, x := range []string{"existing", "default"} {
-		lv := s.leafVariants.GetHighestPrecedence(false)
+		lv := s.leafVariants.GetHighestPrecedence(false, true)
 		if lv != nil {
 			return lv, nil
 		}
@@ -711,7 +714,7 @@ func (s *sharedEntryAttributes) validateRange(errchan chan<- error) {
 func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(errchan chan<- error) {
 	if schema := s.schema.GetLeaflist(); schema != nil {
 		if schema.MinElements > 0 {
-			if lv := s.leafVariants.GetHighestPrecedence(false); lv != nil {
+			if lv := s.leafVariants.GetHighestPrecedence(false, true); lv != nil {
 				tv, err := lv.Update.Value()
 				if err != nil {
 					errchan <- fmt.Errorf("validating LeafList Min Attribute: %v", err)
@@ -738,7 +741,7 @@ func (s *sharedEntryAttributes) validateLength(errchan chan<- error) {
 			return
 		}
 
-		lv := s.leafVariants.GetHighestPrecedence(false)
+		lv := s.leafVariants.GetHighestPrecedence(false, true)
 		if lv == nil {
 			return
 		}
@@ -769,7 +772,7 @@ func (s *sharedEntryAttributes) validatePattern(errchan chan<- error) {
 		if len(schema.Type.Patterns) == 0 {
 			return
 		}
-		lv := s.leafVariants.GetHighestPrecedence(false)
+		lv := s.leafVariants.GetHighestPrecedence(false, true)
 		tv, err := lv.Update.Value()
 		if err != nil {
 			errchan <- fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err)
@@ -839,7 +842,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 						return err
 					}
 					upd := cache.NewUpdate(s.Path(), tvVal, RunningValuesPrio, RunningIntentName, 0)
-					s.leafVariants = append(s.leafVariants, NewLeafEntry(upd, false, s))
+					s.leafVariants.Append(NewLeafEntry(upd, false, s))
 				}
 			}
 
@@ -886,7 +889,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 		if intentName == RunningIntentName {
 			isNew = false
 		}
-		s.leafVariants = append(s.leafVariants, NewLeafEntry(upd, isNew, s))
+		s.leafVariants.Append(NewLeafEntry(upd, isNew, s))
 
 	case *sdcpb.SchemaElem_Leaflist:
 		var scalarArr *sdcpb.ScalarArray
@@ -901,7 +904,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 			scalarArr = llvTv.GetLeaflistVal()
 		} else {
 			lv = NewLeafEntry(nil, false, s)
-			s.leafVariants = append(s.leafVariants, lv)
+			s.leafVariants.Append(lv)
 
 			scalarArr = &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{}}
 		}
@@ -1076,7 +1079,7 @@ func (s *sharedEntryAttributes) StringIndent(result []string) []string {
 		result = c.StringIndent(result)
 	}
 	// range over LeafVariants
-	for _, l := range s.leafVariants {
+	for l := range s.leafVariants.Items() {
 		result = append(result, fmt.Sprintf("%s -> %s", strings.Repeat("  ", s.GetLevel()), l.String()))
 	}
 	return result
@@ -1185,7 +1188,7 @@ func (s *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *
 			}
 		} else {
 			// if LeafVaraint with same owner does not exist, add the new entry
-			s.leafVariants = append(s.leafVariants, NewLeafEntry(c, new, s))
+			s.leafVariants.Append(NewLeafEntry(c, new, s))
 		}
 
 		return s, nil

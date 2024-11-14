@@ -2,6 +2,7 @@ package tree
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -12,16 +13,16 @@ import (
 // If honorNamespace is set, the xml elements will carry their respective namespace attributes.
 // If operationWithNamespace is set, the operation attributes added to the to be deleted alements will also carry the Netconf Base namespace.
 // If useOperationRemove is set, the remove operation will be used for deletes, instead of the delete operation.
-func (s *sharedEntryAttributes) ToXML(onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove bool) (*etree.Document, error) {
+func (s *sharedEntryAttributes) ToXML(onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove bool, ordered bool) (*etree.Document, error) {
 	doc := etree.NewDocument()
-	_, err := s.toXmlInternal(&doc.Element, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+	_, err := s.toXmlInternal(&doc.Element, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordered)
 	if err != nil {
 		return nil, err
 	}
 	return doc, nil
 }
 
-func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error) {
+func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool, ordered bool) (doAdd bool, err error) {
 
 	switch s.schema.GetSchema().(type) {
 	case nil:
@@ -38,10 +39,34 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 
 		// if the entry remains so exist, we need to add it to the xml doc
 		overallDoAdd := false
-		for _, c := range s.filterActiveChoiceCaseChilds() {
+
+		childs := s.filterActiveChoiceCaseChilds()
+
+		if ordered {
+			keys := make([]string, 0, len(childs))
+			for k := range childs {
+				keys = append(keys, k)
+			}
+			slices.Sort(keys)
+
+			for _, k := range keys {
+				// recurse the call
+				// no additional element is created, since we're on a key level, so add to parent element
+				childs[k].toXmlInternal(parent, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordered)
+				if err != nil {
+					return false, err
+				}
+				// only if there was something added in the childs, the element itself is meant to be added.
+				// we keep track of that via overAllDoAdd.
+				overallDoAdd = doAdd || overallDoAdd
+			}
+			return overallDoAdd, nil
+		}
+
+		for _, c := range childs {
 			// recurse the call
 			// no additional element is created, since we're on a key level, so add to parent element
-			doAdd, err := c.toXmlInternal(parent, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+			doAdd, err := c.toXmlInternal(parent, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordered)
 			if err != nil {
 				return false, err
 			}
@@ -61,6 +86,11 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 			if err != nil {
 				return false, err
 			}
+
+			if ordered {
+				slices.SortFunc(childs, getListEntrySortFunc(s))
+			}
+
 			// go through the childs creating the xml elements
 			for _, child := range childs {
 				// create the element for the child, that in the recursed call will appear as parent
@@ -68,7 +98,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 				// process the honorNamespace instruction
 				xmlAddNamespaceConditional(s, s.parent, newElem, honorNamespace)
 				// recurse the call
-				doAdd, err := child.toXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+				doAdd, err := child.toXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordered)
 				if err != nil {
 					return false, err
 				}
@@ -97,7 +127,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 				if s.leafVariants.shouldDelete() {
 					return false, nil
 				}
-				le := s.leafVariants.GetHighestPrecedence(false)
+				le := s.leafVariants.GetHighestPrecedence(false, false)
 				if onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
 					return false, nil
 				}
@@ -111,8 +141,19 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 			// the container represents a map
 			// So create the element that the tree entry represents
 			newElem := etree.NewElement(s.PathName())
+
+			keys := make([]string, 0, len(s.childs))
+			for k := range s.childs {
+				keys = append(keys, k)
+			}
+
+			if ordered {
+				slices.Sort(keys)
+			}
+
 			// iterate through all the childs
-			for _, c := range s.childs {
+			for _, k := range keys {
+
 				// for namespace attr creation we need to handle the root node (s.parent == nil) specially
 				if s.parent != nil {
 					// only if not the root level, we can check if parent namespace != actual elements namespace
@@ -124,7 +165,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 					newElem = parent
 				}
 				// recurse the call to all the children
-				doAdd, err := c.toXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+				doAdd, err := s.childs[k].toXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordered)
 				if err != nil {
 					return false, err
 				}
@@ -154,7 +195,10 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 		}
 		// if the Field or Leaflist remains to exist
 		// get highes Precedence value
-		le := s.leafVariants.GetHighestPrecedence(false)
+		le := s.leafVariants.GetHighestPrecedence(false, false)
+		// if le == nil {
+		// 	return false, nil
+		// }
 		// check the only new or updated flag
 		if onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
 			return false, nil

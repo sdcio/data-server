@@ -268,7 +268,7 @@ func (t *ncTarget) reconnect() {
 
 func (t *ncTarget) setRunning(source TargetSource) (*sdcpb.SetDataResponse, error) {
 
-	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
+	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove, false)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +328,7 @@ func filterRPCErrors(xml *etree.Document, severity string) ([]string, error) {
 }
 
 func (t *ncTarget) setCandidate(source TargetSource) (*sdcpb.SetDataResponse, error) {
-	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
+	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove, false)
 	if err != nil {
 		return nil, err
 	}

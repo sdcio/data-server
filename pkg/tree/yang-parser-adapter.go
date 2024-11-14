@@ -52,10 +52,7 @@ func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
 		return xpath.NewBoolDatum(true), nil
 	}
 
-	lv, err := y.e.getHighestPrecedenceLeafValue(y.ctx)
-	if err != nil {
-		return nil, err
-	}
+	lv, _ := y.e.getHighestPrecedenceLeafValue(y.ctx)
 	if lv == nil {
 		return xpath.NewNodesetDatum([]xutils.XpathNode{}), nil
 	}

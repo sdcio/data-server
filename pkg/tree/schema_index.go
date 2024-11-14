@@ -85,8 +85,10 @@ func (si *schemaIndex) Retrieve(ctx context.Context, path *sdcpb.Path) (*sdcpb.G
 		return nil, err
 	}
 
+	si.indexMutex.Lock()
 	// store the schema in the lookup index
 	si.index[keylessPath] = schemaRsp
+	si.indexMutex.Unlock()
 	cond.Broadcast()
 	return schemaRsp, nil
 }
