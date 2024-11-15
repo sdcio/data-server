@@ -160,9 +160,14 @@ func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDa
 	var upds []*sdcpb.Update
 	var deletes []*sdcpb.Path
 	var err error
+
+	if t == nil {
+		return nil, fmt.Errorf("%s", "not connected")
+	}
+
 	switch strings.ToLower(t.cfg.GnmiOptions.Encoding) {
 	case "json":
-		jsonData, err := source.ToJson(true)
+		jsonData, err := source.ToJson(true, false)
 		if err != nil {
 			return nil, err
 		}
@@ -180,7 +185,7 @@ func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDa
 		}
 
 	case "json_ietf":
-		jsonData, err := source.ToJsonIETF(true)
+		jsonData, err := source.ToJsonIETF(true, false)
 		if err != nil {
 			return nil, err
 		}

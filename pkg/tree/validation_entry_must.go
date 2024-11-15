@@ -53,7 +53,7 @@ func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, errc
 		result, err := res1.GetBoolResult()
 		if !result || err != nil {
 			if err == nil {
-				err = fmt.Errorf("error must-statement [%q] path: %s: %s", must.Statement, s.Path(), must.Error)
+				err = fmt.Errorf("error path: %s, must-statement [%s] %s", must.Statement, s.Path(), must.Error)
 			}
 			if strings.Contains(err.Error(), "Stack underflow") {
 				slog.Debug("stack underflow error: path=%v, mustExpr=%s", s.Path().String(), exprStr)

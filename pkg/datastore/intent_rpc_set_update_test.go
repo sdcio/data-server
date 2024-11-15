@@ -114,6 +114,25 @@ func TestDatastore_populateTree(t *testing.T) {
 					SkipValidation: false,
 				})
 			},
+			runningStoreUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key1"}, testhelper.GetStringTvProto(t, "k1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key2"}, testhelper.GetStringTvProto(t, "k1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key1"}, testhelper.GetStringTvProto(t, "k1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key2"}, testhelper.GetStringTvProto(t, "k1.3"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key1"}, testhelper.GetStringTvProto(t, "k2.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key2"}, testhelper.GetStringTvProto(t, "k2.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval2.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval2.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+			},
 			expectedDeletes: [][]string{
 				{"doublekey", "k1.1", "k1.3"},
 			},
@@ -412,6 +431,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			},
 			expectedModify: []*cache.Update{
 				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyNonappliedDescription"), prio10, owner2, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
 			},
 			intendedStoreUpdates: []*cache.Update{
 				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
@@ -440,6 +460,7 @@ func TestDatastore_populateTree(t *testing.T) {
 					SkipValidation: false,
 				})
 			},
+
 			expectedOwnerUpdates: []*cache.Update{
 				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
 				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyNonappliedDescription"), prio10, owner2, 0),

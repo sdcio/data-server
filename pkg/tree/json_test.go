@@ -365,12 +365,12 @@ func TestToJsonTable(t *testing.T) {
 			var jsonStruct any
 
 			if tt.ietf {
-				jsonStruct, err = root.ToJsonIETF(tt.onlyNewOrUpdated)
+				jsonStruct, err = root.ToJsonIETF(tt.onlyNewOrUpdated, true)
 				if err != nil {
 					t.Fatal(err)
 				}
 			} else {
-				jsonStruct, err = root.ToJson(tt.onlyNewOrUpdated)
+				jsonStruct, err = root.ToJson(tt.onlyNewOrUpdated, true)
 				if err != nil {
 					t.Fatal(err)
 				}

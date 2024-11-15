@@ -114,6 +114,10 @@ func (d *Datastore) applyIntent(ctx context.Context, candidateName string, sourc
 	var rsp *sdcpb.SetDataResponse
 	// send set request only if there are updates and/or deletes
 
+	if d.sbi == nil {
+		return nil, fmt.Errorf("%s is not connected", d.config.Name)
+	}
+
 	rsp, err = d.sbi.Set(ctx, source)
 	if err != nil {
 		return nil, err

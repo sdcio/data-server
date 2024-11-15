@@ -42,17 +42,27 @@ func ConfigureCacheClientMock(t *testing.T, cacheClient *mockcacheclient.MockCli
 
 	// mock the .Read() call
 	// prepare a map of the updates indexed by the path for quick lookup
-	updatesMap := map[string][]*cache.Update{}
+	updatesMap := map[cachepb.Store]map[string][]*cache.Update{}
+
+	updatesMap[cachepb.Store_CONFIG] = map[string][]*cache.Update{}
+	updatesMap[cachepb.Store_INTENDED] = map[string][]*cache.Update{}
 	// fill the map
 	for _, u := range updatesIntended {
 		key := strings.Join(u.GetPath(), pathSep)
-		updatesMap[key] = append(updatesMap[key], u)
+		updatesMap[cachepb.Store_INTENDED][key] = append(updatesMap[cachepb.Store_INTENDED][key], u)
+	}
+	for _, u := range updatesRunning {
+		key := strings.Join(u.GetPath(), pathSep)
+		updatesMap[cachepb.Store_CONFIG][key] = append(updatesMap[cachepb.Store_CONFIG][key], u)
 	}
 	cacheClient.EXPECT().Read(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
 		func(_ context.Context, datastoreName string, opts *cache.Opts, paths [][]string, period time.Duration) []*cache.Update {
+			if len(paths) == 1 && len(paths[0]) == 0 {
+				return updatesRunning
+			}
 			result := make([]*cache.Update, 0, len(paths))
 			for _, p := range paths {
-				if val, exists := updatesMap[strings.Join(p, pathSep)]; exists {
+				if val, exists := updatesMap[opts.Store][strings.Join(p, pathSep)]; exists {
 					result = append(result, val...)
 				}
 			}

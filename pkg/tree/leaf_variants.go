@@ -1,29 +1,59 @@
 package tree
 
-import "math"
+import (
+	"iter"
+	"math"
 
-type LeafVariants []*LeafEntry
+	"github.com/sdcio/data-server/pkg/utils"
+)
 
-func newLeafVariants() LeafVariants {
-	return make([]*LeafEntry, 0)
+type LeafVariants struct {
+	les []*LeafEntry
+	tc  *TreeContext
+}
+
+func newLeafVariants(tc *TreeContext) *LeafVariants {
+	return &LeafVariants{
+		les: make([]*LeafEntry, 0, 2),
+		tc:  tc,
+	}
+}
+
+func (lv *LeafVariants) Append(le *LeafEntry) {
+	lv.les = append(lv.les, le)
+}
+
+// Items iterator for the LeafVariants
+func (lv *LeafVariants) Items() iter.Seq[*LeafEntry] {
+	return func(yield func(*LeafEntry) bool) {
+		for _, v := range lv.les {
+			if !yield(v) {
+				return
+			}
+		}
+	}
+}
+
+func (lv *LeafVariants) Length() int {
+	return len(lv.les)
 }
 
 // ShouldDelete indicates if the entry should be deleted,
 // since it is an entry that represents LeafsVariants but non
 // of these are still valid.
-func (lv LeafVariants) shouldDelete() bool {
+func (lv *LeafVariants) shouldDelete() bool {
 	// only procede if we have leave variants
-	if len(lv) == 0 {
+	if len(lv.les) == 0 {
 		return false
 	}
 
 	// if only running exists return false
-	if lv[0].Update.Owner() == RunningIntentName && len(lv) == 1 {
+	if lv.les[0].Update.Owner() == RunningIntentName && len(lv.les) == 1 {
 		return false
 	}
 
 	// go through all variants
-	for _, l := range lv {
+	for _, l := range lv.les {
 		// if not running is set and not the owner is running then
 		// it should not be deleted
 		if !(l.Delete || l.Update.Owner() == RunningIntentName) {
@@ -34,10 +64,10 @@ func (lv LeafVariants) shouldDelete() bool {
 	return true
 }
 
-func (lv LeafVariants) GetHighestPrecedenceValue() int32 {
+func (lv *LeafVariants) GetHighestPrecedenceValue() int32 {
 	result := int32(math.MaxInt32)
-	for _, e := range lv {
-		if !e.Delete && e.Update.Priority() < result {
+	for _, e := range lv.les {
+		if !e.Delete && e.Owner() != DefaultsIntentName && e.Update.Priority() < result {
 			result = e.Update.Priority()
 		}
 	}
@@ -46,8 +76,8 @@ func (lv LeafVariants) GetHighestPrecedenceValue() int32 {
 
 // GetHighesNewUpdated returns the LeafEntry with the highes priority
 // nil if no leaf entry exists.
-func (lv LeafVariants) GetHighestPrecedence(onlyIfPrioChanged bool) *LeafEntry {
-	if len(lv) == 0 {
+func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool) *LeafEntry {
+	if len(lv.les) == 0 {
 		return nil
 	}
 	if lv.shouldDelete() {
@@ -56,7 +86,7 @@ func (lv LeafVariants) GetHighestPrecedence(onlyIfPrioChanged bool) *LeafEntry {
 
 	var highest *LeafEntry
 	var secondHighest *LeafEntry
-	for _, e := range lv {
+	for _, e := range lv.les {
 		// first entry set result to it
 		// if it is not marked for deletion
 		if highest == nil {
@@ -77,9 +107,14 @@ func (lv LeafVariants) GetHighestPrecedence(onlyIfPrioChanged bool) *LeafEntry {
 		}
 	}
 
+	// do not include defaults loaded at validation time
+	if !includeDefaults && highest.Update.Owner() == DefaultsIntentName {
+		return nil
+	}
+
 	// if it does not matter if the highes update is also
 	// New or Updated return it
-	if !onlyIfPrioChanged {
+	if !onlyNewOrUpdated {
 		if !highest.Delete {
 			return highest
 		}
@@ -88,13 +123,13 @@ func (lv LeafVariants) GetHighestPrecedence(onlyIfPrioChanged bool) *LeafEntry {
 
 	// if the highes is not marked for deletion and new or updated (=PrioChanged) return it
 	if !highest.Delete {
-		if highest.IsNew || highest.IsUpdated {
+		if highest.IsNew || highest.IsUpdated || (lv.tc.actualOwner != "" && highest.Update.Owner() == lv.tc.actualOwner && lv.highestNotRunning(highest)) {
 			return highest
 		}
 		return nil
 	}
 	// otherwise if the secondhighest is not marked for deletion return it
-	if secondHighest != nil && !secondHighest.Delete {
+	if secondHighest != nil && !secondHighest.Delete && secondHighest.Update.Owner() != RunningIntentName {
 		return secondHighest
 	}
 
@@ -102,10 +137,28 @@ func (lv LeafVariants) GetHighestPrecedence(onlyIfPrioChanged bool) *LeafEntry {
 	return nil
 }
 
+func (lv *LeafVariants) highestNotRunning(highest *LeafEntry) bool {
+	// if highes is already running or even default, return false
+	if highest.Update.Owner() == RunningIntentName {
+		return false
+	}
+
+	runVal := lv.GetByOwner(RunningIntentName)
+	if runVal == nil {
+		return true
+	}
+
+	// ignore errors, they should not happen :-P I know... should...
+	rval, _ := runVal.Value()
+	hval, _ := highest.Value()
+
+	return !utils.EqualTypedValues(rval, hval)
+}
+
 // GetByOwner returns the entry that is owned by the given owner,
 // returns nil if no entry exists.
-func (lv LeafVariants) GetByOwner(owner string) *LeafEntry {
-	for _, e := range lv {
+func (lv *LeafVariants) GetByOwner(owner string) *LeafEntry {
+	for _, e := range lv.les {
 		if e.Owner() == owner {
 			return e
 		}

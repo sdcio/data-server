@@ -48,14 +48,11 @@ func (y *yangParserEntryAdapter) valueToDatum(tv *sdcpb.TypedValue) xpath.Datum 
 }
 
 func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
-	if y.e.GetSchema().GetContainer() != nil {
+	if y.e.GetSchema() == nil || y.e.GetSchema().GetContainer() != nil {
 		return xpath.NewBoolDatum(true), nil
 	}
 
-	lv, err := y.e.getHighestPrecedenceLeafValue(y.ctx)
-	if err != nil {
-		return nil, err
-	}
+	lv, _ := y.e.getHighestPrecedenceLeafValue(y.ctx)
 	if lv == nil {
 		return xpath.NewNodesetDatum([]xutils.XpathNode{}), nil
 	}
