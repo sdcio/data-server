@@ -1,8 +1,6 @@
 module github.com/sdcio/data-server
 
-go 1.22.0
-
-toolchain go1.22.2
+go 1.23.3
 
 require (
 	github.com/AlekSi/pointer v1.2.0
