@@ -23,6 +23,7 @@ func TestToJsonTable(t *testing.T) {
 		ietf             bool
 		onlyNewOrUpdated bool
 		existingConfig   func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error)
+		runningConfig    func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error)
 		newConfig        func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error)
 		expected         string
 	}{
@@ -30,6 +31,10 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JSON All",
 			ietf:             false,
 			onlyNewOrUpdated: false,
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
@@ -124,6 +129,10 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JSON NewOrUpdated - no new",
 			ietf:             false,
 			onlyNewOrUpdated: true,
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
@@ -139,6 +148,10 @@ func TestToJsonTable(t *testing.T) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 
 			expected: `{}`,
 		},
@@ -147,6 +160,10 @@ func TestToJsonTable(t *testing.T) {
 			ietf:             false,
 			onlyNewOrUpdated: true,
 			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
@@ -188,6 +205,10 @@ func TestToJsonTable(t *testing.T) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config2()
 				return expandUpdateFromConfig(ctx, c, converter)
@@ -226,6 +247,10 @@ func TestToJsonTable(t *testing.T) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
 				c.Interface["ethernet-1/1"].Mtu = ygot.Uint16(1500)
@@ -244,6 +269,10 @@ func TestToJsonTable(t *testing.T) {
 			name:             "JSON - presence",
 			onlyNewOrUpdated: true,
 			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
@@ -283,6 +312,10 @@ func TestToJsonTable(t *testing.T) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
 
@@ -302,6 +335,10 @@ func TestToJsonTable(t *testing.T) {
 			ietf:             true,
 			onlyNewOrUpdated: true,
 			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
@@ -340,12 +377,24 @@ func TestToJsonTable(t *testing.T) {
 			}
 			converter := utils.NewConverter(scb)
 
+			if tt.runningConfig != nil {
+				updsRunning, err := tt.runningConfig(ctx, converter)
+				if err != nil {
+					t.Error(err)
+				}
+
+				err = addToRoot(ctx, root, updsRunning, false, RunningIntentName, RunningValuesPrio)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
 			updsExisting, err := tt.existingConfig(ctx, converter)
 			if err != nil {
 				t.Error(err)
 			}
 
-			err = addToRoot(ctx, root, updsExisting, false, owner)
+			err = addToRoot(ctx, root, updsExisting, false, owner, 5)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -355,12 +404,14 @@ func TestToJsonTable(t *testing.T) {
 				if err != nil {
 					t.Error(err)
 				}
-				err = addToRoot(ctx, root, updsNew, true, owner)
+				err = addToRoot(ctx, root, updsNew, true, owner, 5)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
 			root.FinishInsertionPhase()
+
+			fmt.Println(root.String())
 
 			var jsonStruct any
 
@@ -487,13 +538,13 @@ func expandUpdateFromConfig(ctx context.Context, conf *sdcio_schema.Device, conv
 		true)
 }
 
-func addToRoot(ctx context.Context, root *RootEntry, updates []*sdcpb.Update, isNew bool, owner string) error {
+func addToRoot(ctx context.Context, root *RootEntry, updates []*sdcpb.Update, isNew bool, owner string, prio int32) error {
 	for _, upd := range updates {
 		b, err := proto.Marshal(upd.Value)
 		if err != nil {
 			return err
 		}
-		cacheUpd := cache.NewUpdate(utils.ToStrings(upd.GetPath(), false, false), b, 5, owner, 0)
+		cacheUpd := cache.NewUpdate(utils.ToStrings(upd.GetPath(), false, false), b, prio, owner, 0)
 
 		_, err = root.AddCacheUpdateRecursive(ctx, cacheUpd, isNew)
 		if err != nil {

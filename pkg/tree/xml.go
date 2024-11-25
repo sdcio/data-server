@@ -195,12 +195,8 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 		}
 		// if the Field or Leaflist remains to exist
 		// get highes Precedence value
-		le := s.leafVariants.GetHighestPrecedence(false, false)
+		le := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, false)
 		if le == nil {
-			return false, nil
-		}
-		// check the only new or updated flag
-		if onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
 			return false, nil
 		}
 		v, err := le.Update.Value()
