@@ -394,8 +394,18 @@ func ConvertJsonValueToTv(d any, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, 
 			Value: &sdcpb.TypedValue_IntVal{IntVal: i},
 		}, nil
 	case "boolean":
+		var b bool
+		switch d.(type) {
+		case bool:
+			b = d.(bool)
+		case string:
+			b, err = strconv.ParseBool(d.(string))
+			if err != nil {
+				return nil, err
+			}
+		}
 		return &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_BoolVal{BoolVal: d.(bool)},
+			Value: &sdcpb.TypedValue_BoolVal{BoolVal: b},
 		}, nil
 	case "decimal64":
 		arr := strings.SplitN(d.(string), ".", 2)
@@ -426,6 +436,11 @@ func ConvertJsonValueToTv(d any, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, 
 		}, nil
 	case "empty":
 		return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}, nil
+	case "bits":
+		return &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_StringVal{StringVal: fmt.Sprintf("%v", d)},
+		}, nil
 	}
+
 	return nil, fmt.Errorf("error no case matched when converting from json to TV: %v, %v", d, slt)
 }

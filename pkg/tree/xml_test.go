@@ -65,6 +65,10 @@ func TestToXMLTable(t *testing.T) {
 		{
 			name:             "XML - no new",
 			onlyNewOrUpdated: true,
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
@@ -116,6 +120,10 @@ func TestToXMLTable(t *testing.T) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `<interface xmlns="urn:sdcio/model" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove">
   <name>ethernet-1/1</name>
 </interface>
@@ -136,6 +144,10 @@ func TestToXMLTable(t *testing.T) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `<interface xmlns="urn:sdcio/model" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="delete">
   <name>ethernet-1/1</name>
 </interface>
@@ -153,6 +165,10 @@ func TestToXMLTable(t *testing.T) {
 			name:             "XML - delete certain ethernet-1/1 attributes update another",
 			onlyNewOrUpdated: true,
 			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
@@ -184,7 +200,13 @@ func TestToXMLTable(t *testing.T) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
-			expected: `<choices operation="delete"/>
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			expected: `<choices>
+  <case1 operation="delete"/>
+</choices>
 <interface operation="delete">
   <name>ethernet-1/1</name>
 </interface>
@@ -218,6 +240,10 @@ func TestToXMLTable(t *testing.T) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			expected: `<choices xmlns="urn:sdcio/model">
   <case1 xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
   <case2>
@@ -243,6 +269,10 @@ func TestToXMLTable(t *testing.T) {
 			name:             "XML - empty",
 			onlyNewOrUpdated: true,
 			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
@@ -327,7 +357,7 @@ func TestToXMLTable(t *testing.T) {
 				if err != nil {
 					t.Error(err)
 				}
-				err = addToRoot(ctx, root, existingUpds, false, owner)
+				err = addToRoot(ctx, root, existingUpds, false, owner, 5)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -340,7 +370,7 @@ func TestToXMLTable(t *testing.T) {
 				if err != nil {
 					t.Error(err)
 				}
-				err = addToRoot(ctx, root, newUpds, true, owner)
+				err = addToRoot(ctx, root, newUpds, true, owner, 5)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -350,7 +380,7 @@ func TestToXMLTable(t *testing.T) {
 				if err != nil {
 					t.Error(err)
 				}
-				err = addToRoot(ctx, root, runningUpds, false, RunningIntentName)
+				err = addToRoot(ctx, root, runningUpds, false, RunningIntentName, RunningValuesPrio)
 				if err != nil {
 					t.Fatal(err)
 				}

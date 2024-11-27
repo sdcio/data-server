@@ -3,6 +3,7 @@ package tree
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -120,7 +121,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 			// add the delete / remove operation
 			utils.AddXMLOperation(newElem, utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
 			return true, nil
-		case len(s.childs) == 0 && s.GetSchema().GetContainer().IsPresence:
+		case s.childs.Length() == 0 && s.GetSchema().GetContainer().IsPresence:
 			// process presence cotnainers with no childs
 			if onlyNewOrUpdated {
 				// presence containers have leafvariantes with typedValue_Empty, so check that
@@ -142,11 +143,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 			// So create the element that the tree entry represents
 			newElem := etree.NewElement(s.PathName())
 
-			keys := make([]string, 0, len(s.childs))
-			for k := range s.childs {
-				keys = append(keys, k)
-			}
-
+			keys := s.childs.GetKeys()
 			if ordered {
 				slices.Sort(keys)
 			}
@@ -165,7 +162,11 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 					newElem = parent
 				}
 				// recurse the call to all the children
-				doAdd, err := s.childs[k].toXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordered)
+				child, exists := s.childs.GetEntry(k)
+				if !exists {
+					return false, fmt.Errorf("child %s does not exist for %s", k, strings.Join(s.Path(), "/"))
+				}
+				doAdd, err := child.toXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordered)
 				if err != nil {
 					return false, err
 				}
@@ -195,12 +196,8 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 		}
 		// if the Field or Leaflist remains to exist
 		// get highes Precedence value
-		le := s.leafVariants.GetHighestPrecedence(false, false)
+		le := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, false)
 		if le == nil {
-			return false, nil
-		}
-		// check the only new or updated flag
-		if onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
 			return false, nil
 		}
 		v, err := le.Update.Value()

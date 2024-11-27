@@ -86,7 +86,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool,
 				return nil, nil
 			}
 			return result, nil
-		case len(s.childs) == 0 && s.schema.GetContainer().IsPresence:
+		case s.childs.Length() == 0 && s.schema.GetContainer().IsPresence:
 			// Presence container without any childs
 			if onlyNewOrUpdated {
 				// presence containers have leafvariantes with typedValue_Empty, so check that
@@ -122,11 +122,8 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool,
 		if s.leafVariants.shouldDelete() {
 			return nil, nil
 		}
-		le := s.leafVariants.GetHighestPrecedence(false, false)
+		le := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, false)
 		if le == nil {
-			return nil, nil
-		}
-		if onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
 			return nil, nil
 		}
 		v, err := le.Update.Value()
