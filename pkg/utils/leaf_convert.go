@@ -437,8 +437,9 @@ func ConvertJsonValueToTv(d any, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, 
 	case "empty":
 		return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}, nil
 	case "bits":
-		//TODO: need a proper representation for this
-		log.Error("Bits data type not implemented yet.")
+		return &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_StringVal{StringVal: fmt.Sprintf("%v", d)},
+		}, nil
 	}
 
 	return nil, fmt.Errorf("error no case matched when converting from json to TV: %v, %v", d, slt)

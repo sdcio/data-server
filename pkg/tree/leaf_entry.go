@@ -2,6 +2,7 @@ package tree
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/sdcio/data-server/pkg/cache"
 )
@@ -14,6 +15,7 @@ type LeafEntry struct {
 	IsNew       bool
 	Delete      bool
 	IsUpdated   bool
+	mu          sync.RWMutex
 }
 
 func (l *LeafEntry) GetEntry() Entry {
@@ -22,6 +24,8 @@ func (l *LeafEntry) GetEntry() Entry {
 
 // MarkUpdate indicate that the entry is an Updated value
 func (l *LeafEntry) MarkUpdate(u *cache.Update) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	// set the new value
 	l.Update = u
 	// set the update flag
@@ -30,8 +34,32 @@ func (l *LeafEntry) MarkUpdate(u *cache.Update) {
 	l.Delete = false
 }
 
+func (l *LeafEntry) GetDeleteFlag() bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.Delete
+}
+func (l *LeafEntry) GetUpdateFlag() bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.IsUpdated
+}
+func (l *LeafEntry) GetNewFlag() bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.IsNew
+}
+
+func (l *LeafEntry) DropDeleteFlag() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.Delete = false
+}
+
 // MarkDelete indicate that the entry is to be deleted
 func (l *LeafEntry) MarkDelete() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.Delete = true
 	l.IsUpdated = false
 }

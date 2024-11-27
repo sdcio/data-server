@@ -645,6 +645,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 // TestLeafVariants_GetHighesPrio
 func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	owner1 := "owner1"
+	owner2 := "owner2"
 	ts := int64(0)
 	path := []string{"firstPathElem"}
 
@@ -653,16 +654,10 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	t.Run("Delete Non New",
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{})
-			lv.Append(&LeafEntry{
-				Update:    cache.NewUpdate(path, nil, 2, owner1, ts),
-				IsUpdated: false,
-				IsNew:     false,
-				Delete:    false,
-			})
-			lv.Append(&LeafEntry{
-				Update: cache.NewUpdate(path, nil, 1, owner1, ts),
-				Delete: true,
-			})
+
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 2, owner1, ts), false, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 1, owner2, ts), false, nil))
+			lv.les[1].MarkDelete()
 
 			le := lv.GetHighestPrecedence(true, false)
 
@@ -678,10 +673,8 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	t.Run("Single entry thats also marked for deletion",
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{})
-			lv.Append(&LeafEntry{
-				Update: cache.NewUpdate(path, nil, 1, owner1, ts),
-				Delete: true,
-			})
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 1, owner1, ts), false, nil))
+			lv.les[0].MarkDelete()
 
 			le := lv.GetHighestPrecedence(true, false)
 
@@ -696,18 +689,8 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	t.Run("New Low Prio IsUpdate OnlyChanged True",
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{})
-			lv.Append(&LeafEntry{
-				Update:    cache.NewUpdate(path, nil, 5, owner1, ts),
-				Delete:    false,
-				IsNew:     false,
-				IsUpdated: false,
-			})
-			lv.Append(&LeafEntry{
-				Update:    cache.NewUpdate(path, nil, 6, owner1, ts),
-				Delete:    false,
-				IsNew:     false,
-				IsUpdated: true,
-			})
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), false, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner2, ts), true, nil))
 
 			le := lv.GetHighestPrecedence(true, false)
 
@@ -722,18 +705,8 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	t.Run("New Low Prio IsUpdate OnlyChanged False",
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{})
-			lv.Append(&LeafEntry{
-				Update:    cache.NewUpdate(path, nil, 5, owner1, ts),
-				Delete:    false,
-				IsNew:     false,
-				IsUpdated: false,
-			})
-			lv.Append(&LeafEntry{
-				Update:    cache.NewUpdate(path, nil, 6, owner1, ts),
-				Delete:    false,
-				IsNew:     false,
-				IsUpdated: true,
-			})
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), false, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner1, ts), true, nil))
 
 			le := lv.GetHighestPrecedence(false, false)
 
@@ -744,22 +717,13 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	)
 
 	// A preferred entry does exist the lower prio entry is new.
-	// on onlyIfPrioChanged == true we do not expect output.
+	// // on onlyIfPrioChanged == true we do not expect output.
 	t.Run("New Low Prio IsNew OnlyChanged == True",
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{})
-			lv.Append(&LeafEntry{
-				Update:    cache.NewUpdate(path, nil, 5, owner1, ts),
-				Delete:    false,
-				IsNew:     false,
-				IsUpdated: false,
-			})
-			lv.Append(&LeafEntry{
-				Update:    cache.NewUpdate(path, nil, 6, owner1, ts),
-				Delete:    false,
-				IsNew:     true,
-				IsUpdated: false,
-			})
+
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), false, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner2, ts), true, nil))
 
 			le := lv.GetHighestPrecedence(true, false)
 
@@ -772,18 +736,8 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	t.Run("New Low Prio IsNew OnlyChanged == False",
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{})
-			lv.Append(&LeafEntry{
-				Update:    cache.NewUpdate(path, nil, 5, owner1, ts),
-				Delete:    false,
-				IsNew:     false,
-				IsUpdated: false,
-			})
-			lv.Append(&LeafEntry{
-				Update:    cache.NewUpdate(path, nil, 6, owner1, ts),
-				Delete:    false,
-				IsNew:     true,
-				IsUpdated: false,
-			})
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), false, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner2, ts), true, nil))
 
 			le := lv.GetHighestPrecedence(false, false)
 
@@ -810,16 +764,9 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	t.Run("secondhighes populated if highes was first",
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{})
-			lv.Append(&LeafEntry{
-				Update: cache.NewUpdate(path, nil, 1, owner1, ts),
-				Delete: true,
-			})
-			lv.Append(&LeafEntry{
-				Update:    cache.NewUpdate(path, nil, 2, owner1, ts),
-				IsUpdated: false,
-				IsNew:     false,
-				Delete:    false,
-			})
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 1, owner1, ts), false, nil))
+			lv.les[0].MarkDelete()
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 2, owner2, ts), false, nil))
 
 			le := lv.GetHighestPrecedence(true, false)
 
