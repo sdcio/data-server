@@ -77,7 +77,7 @@ func (l *LeafEntry) String() string {
 	} else {
 		v = tv.String()
 	}
-	return fmt.Sprintf("Owner: %s, Priority: %d, Value: %s, New: %t, Delete: %t, Update: %t", l.Owner(), l.Priority(), v, l.IsNew, l.Delete, l.IsUpdated)
+	return fmt.Sprintf("Owner: %s, Priority: %d, Value: %s, New: %t, Delete: %t, Update: %t", l.Owner(), l.Priority(), v, l.GetNewFlag(), l.GetDeleteFlag(), l.GetUpdateFlag())
 }
 
 // NewLeafEntry constructor for a new LeafEntry
