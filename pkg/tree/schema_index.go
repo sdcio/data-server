@@ -63,11 +63,13 @@ func (si *schemaIndex) Retrieve(ctx context.Context, path *sdcpb.Path) (*sdcpb.G
 
 	// lets lock the ongoing map
 	cond, existed := si.retrieveOrCreateOngoingCond(keylessPath)
+	defer cond.Broadcast()
 
 	// if it existed, some other goroutine is already fetching the schema
 	if existed {
 		cond.L.Lock()
 		defer cond.L.Unlock()
+
 		loop := true
 		// there is already a request ongoing, lets wait for it and then grab it from the cache
 		for loop {
@@ -89,6 +91,10 @@ func (si *schemaIndex) Retrieve(ctx context.Context, path *sdcpb.Path) (*sdcpb.G
 	// store the schema in the lookup index
 	si.index[keylessPath] = schemaRsp
 	si.indexMutex.Unlock()
-	cond.Broadcast()
+
+	si.ongoingMutex.Lock()
+	delete(si.ongoing, keylessPath)
+	si.ongoingMutex.Unlock()
+
 	return schemaRsp, nil
 }
