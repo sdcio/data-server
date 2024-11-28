@@ -899,7 +899,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 					if err != nil {
 						return err
 					}
-					upd := cache.NewUpdate(s.Path(), tvVal, RunningValuesPrio, RunningIntentName, 0)
+					upd := cache.NewUpdate(s.Path(), tvVal, intentPrio, intentName, 0)
 					s.leafVariants.Add(NewLeafEntry(upd, false, s))
 				}
 			}
@@ -950,7 +950,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 	case *sdcpb.SchemaElem_Leaflist:
 		var scalarArr *sdcpb.ScalarArray
 		mustAdd := false
-		le := s.leafVariants.GetByOwner(RunningIntentName)
+		le := s.leafVariants.GetByOwner(intentName)
 		if le != nil {
 			llvTv, err := le.Update.Value()
 			if err != nil {
