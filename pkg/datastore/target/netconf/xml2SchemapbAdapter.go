@@ -16,6 +16,7 @@ package netconf
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/beevik/etree"
@@ -23,6 +24,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/utils"
 )
 
 // XML2sdcpbConfigAdapter is used to transform the provided XML configuration data into the gnmi-like sdcpb.Notifications.
@@ -141,7 +143,27 @@ func (x *XML2sdcpbConfigAdapter) transformContainer(ctx context.Context, e *etre
 }
 
 // transformField transforms an etree.element of a configuration as an update into the provided *sdcpb.Notification.
-func (x *XML2sdcpbConfigAdapter) transformField(_ context.Context, e *etree.Element, pelems []*sdcpb.PathElem, ls *sdcpb.LeafSchema, result *sdcpb.Notification) error {
+func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, ls *sdcpb.LeafSchema, result *sdcpb.Notification) error {
+	path := pelems
+	for ls.GetType().GetLeafref() != "" {
+		path, err := utils.NormalizedAbsPath(ls.Type.Leafref, path)
+		if err != nil {
+			return err
+		}
+
+		schema, err := x.schemaClient.GetSchema(ctx, path)
+		if err != nil {
+			return err
+		}
+
+		var schemaElem *sdcpb.SchemaElem_Field
+		var ok bool
+		if schemaElem, ok = schema.GetSchema().GetSchema().(*sdcpb.SchemaElem_Field); !ok {
+			return fmt.Errorf("leafref resolved to non-field schema type")
+		}
+		ls = schemaElem.Field
+	}
+
 	// process terminal values
 	tv, err := StringElementToTypedValue(e.Text(), ls)
 	if err != nil {
