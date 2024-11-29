@@ -992,8 +992,8 @@ func (s *sharedEntryAttributes) validateMandatory(errchan chan<- error) {
 	if s.schema != nil {
 		switch s.schema.GetSchema().(type) {
 		case *sdcpb.SchemaElem_Container:
-			for _, c := range s.schema.GetContainer().MandatoryChildren {
-				s.validateMandatoryWithKeys(len(s.GetSchema().GetContainer().GetKeys()), c, errchan)
+			for _, c := range s.schema.GetContainer().GetMandatoryChildrenConfig() {
+				s.validateMandatoryWithKeys(len(s.GetSchema().GetContainer().GetKeys()), c.Name, errchan)
 			}
 		}
 	}
@@ -1007,9 +1007,7 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(level int, attribute s
 		// if not the path exists in the tree and is not to be deleted, then lookup in the paths index of the store
 		// and see if such path exists, if not raise the error
 		if !(existsInTree && v.remainsToExist()) {
-			if !s.treeContext.PathExists(append(s.Path(), attribute)) {
-				errchan <- fmt.Errorf("error mandatory child %s does not exist, path: %s", attribute, s.Path())
-			}
+			errchan <- fmt.Errorf("error mandatory child %s does not exist, path: %s", attribute, s.Path())
 		}
 		return
 	}
