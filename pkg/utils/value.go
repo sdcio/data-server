@@ -505,6 +505,10 @@ func ParseDecimal64(v string) (*sdcpb.Decimal64, error) {
 	// Remove any leading or trailing spaces.
 	trimmed := strings.TrimSpace(v)
 
+	if len(trimmed) == 0 {
+		return nil, nil
+	}
+
 	// Split the string into integer and fractional parts.
 	parts := strings.SplitN(trimmed, ".", 2)
 	intPart := parts[0]

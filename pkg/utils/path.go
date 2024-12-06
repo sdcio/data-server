@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sdcio/schema-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -27,6 +28,52 @@ var errMalformedXPath = errors.New("malformed xpath")
 var errMalformedXPathKey = errors.New("malformed xpath key")
 
 var escapedBracketsReplacer = strings.NewReplacer(`\]`, `]`, `\[`, `[`)
+
+func relativeToAbsPath(p *sdcpb.Path, currentPath []*sdcpb.PathElem) *sdcpb.Path {
+	np := &sdcpb.Path{
+		Elem: make([]*sdcpb.PathElem, 0, len(p.GetElem())+len(currentPath)),
+	}
+
+	// copy current path to new path
+	np.Elem = append(np.Elem, currentPath...)
+
+	for _, pe := range p.GetElem() {
+		switch {
+		case pe.Name == ".." && len(np.Elem) != 0:
+			// modify new path to follow '..' operations, watching bounds
+			np.Elem = np.Elem[:len(np.Elem)-1]
+		default:
+			// add path element to new path
+			np.Elem = append(np.Elem, pe)
+		}
+	}
+
+	return np
+}
+
+func hasRelativePathElem(p *sdcpb.Path) bool {
+	for _, pe := range p.GetElem() {
+		if pe.GetName() == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+func NormalizedAbsPath(p string, currentPath []*sdcpb.PathElem) (*sdcpb.Path, error) {
+	scp, _ := utils.ParsePath(p)
+	if hasRelativePathElem(scp) {
+		scp = relativeToAbsPath(scp, currentPath)
+	}
+
+	for _, pe := range scp.GetElem() {
+		if spe := strings.SplitN(pe.Name, ":", 2); len(spe) == 2 {
+			pe.Name = spe[1]
+		}
+	}
+
+	return scp, nil
+}
 
 // ParsePath creates a sdcpb.Path out of a p string, check if the first element is prefixed by an origin,
 // removes it from the xpath and adds it to the returned sdcpb.Path
@@ -311,12 +358,29 @@ func ToXPath(p *sdcpb.Path, noKeys bool) string {
 }
 
 func StripPathElemPrefixPath(p *sdcpb.Path) {
-	for _, pe := range p.Elem {
-		before, name, found := strings.Cut(pe.Name, ":")
-		if !found {
-			name = before
+	for _, pe := range p.GetElem() {
+		if i := strings.Index(pe.Name, ":"); i > 0 {
+			pe.Name = pe.Name[i+1:]
 		}
-		pe.Name = name
+		// process keys
+		for k, v := range pe.Key {
+			// delete prefix from key name
+			if i := strings.Index(k, ":"); i > 0 {
+				delete(pe.Key, k)
+				k = k[i+1:]
+			}
+			// delete prefix from key value
+			if strings.Contains(v, ":") {
+				kelems := strings.Split(v, "/")
+				for idx, kelem := range kelems {
+					if i := strings.Index(kelem, ":"); i > 0 {
+						kelems[idx] = kelem[i+1:]
+					}
+				}
+				v = strings.Join(kelems, "/")
+			}
+			pe.Key[k] = v
+		}
 	}
 }
 

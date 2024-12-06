@@ -153,6 +153,15 @@ func (x *XMLConfigBuilder) AddValue(ctx context.Context, p *sdcpb.Path, v *sdcpb
 		for _, tv := range val.LeaflistVal.GetElement() {
 			subelem := parent.CreateElement(p.Elem[len(p.Elem)-1].Name)
 
+			//perform namespace operations
+			namespaceUri, err := x.resolveNamespace(ctx, p, len(p.GetElem())-1)
+			if err != nil {
+				return err
+			}
+			if x.cfg.HonorNamespace && namespaceUri != parent.NamespaceURI() {
+				subelem.CreateAttr("xmlns", namespaceUri)
+			}
+
 			value, err := valueAsString(tv)
 			if err != nil {
 				return err
@@ -176,6 +185,16 @@ func (x *XMLConfigBuilder) AddValue(ctx context.Context, p *sdcpb.Path, v *sdcpb
 		parent.RemoveChild(elem)
 
 	default:
+		//perform namespace operations
+		namespaceUri, err := x.resolveNamespace(ctx, p, len(p.GetElem())-1)
+		if err != nil {
+			return err
+		}
+		parent := elem.Parent()
+		if x.cfg.HonorNamespace && (parent == nil || namespaceUri != parent.NamespaceURI()) {
+			elem.CreateAttr("xmlns", namespaceUri)
+		}
+
 		value, err := valueAsString(v)
 		if err != nil {
 			return err

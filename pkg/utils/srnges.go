@@ -48,6 +48,9 @@ func (r *SRng) String() string {
 }
 
 func (r *SRnges) isWithinAnyRange(value string) (*sdcpb.TypedValue, error) {
+	if len(value) == 0 {
+		return nil, nil
+	}
 	intValue, err := strconv.ParseInt(value, 10, 64)
 	if err != nil {
 		return nil, err

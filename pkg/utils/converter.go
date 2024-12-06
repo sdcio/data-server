@@ -480,11 +480,8 @@ func convertStringToTv(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*
 			Timestamp: ts,
 			Value:     &sdcpb.TypedValue_IdentityrefVal{IdentityrefVal: &sdcpb.IdentityRef{Value: name, Prefix: prefix, Module: module}},
 		}, nil
-	case "leafref": // TODO: query leafref type
-		return &sdcpb.TypedValue{
-			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_StringVal{StringVal: v},
-		}, nil
+	case "leafref":
+		return convertStringToTv(schemaType.LeafrefTargetType, v, ts)
 	case "union":
 		for _, ut := range schemaType.GetUnionTypes() {
 			tv, err := convertStringToTv(ut, v, ts)
