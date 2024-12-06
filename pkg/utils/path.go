@@ -358,12 +358,29 @@ func ToXPath(p *sdcpb.Path, noKeys bool) string {
 }
 
 func StripPathElemPrefixPath(p *sdcpb.Path) {
-	for _, pe := range p.Elem {
-		before, name, found := strings.Cut(pe.Name, ":")
-		if !found {
-			name = before
+	for _, pe := range p.GetElem() {
+		if i := strings.Index(pe.Name, ":"); i > 0 {
+			pe.Name = pe.Name[i+1:]
 		}
-		pe.Name = name
+		// process keys
+		for k, v := range pe.Key {
+			// delete prefix from key name
+			if i := strings.Index(k, ":"); i > 0 {
+				delete(pe.Key, k)
+				k = k[i+1:]
+			}
+			// delete prefix from key value
+			if strings.Contains(v, ":") {
+				kelems := strings.Split(v, "/")
+				for idx, kelem := range kelems {
+					if i := strings.Index(kelem, ":"); i > 0 {
+						kelems[idx] = kelem[i+1:]
+					}
+				}
+				v = strings.Join(kelems, "/")
+			}
+			pe.Key[k] = v
+		}
 	}
 }
 
