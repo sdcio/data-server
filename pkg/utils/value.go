@@ -90,6 +90,9 @@ func GetJsonValue(tv *sdcpb.TypedValue, ietf bool) (any, error) {
 			return tv.GetIdentityrefVal().JsonIetfString(), nil
 		}
 		return GetSchemaValue(tv)
+	case *sdcpb.TypedValue_DecimalVal:
+		// TODO have a String() function on the *sdcpb.TypedValue_DecimalVal type?
+		return TypedValueToString(tv), nil
 	default:
 		return GetSchemaValue(tv)
 	}
@@ -504,6 +507,10 @@ func TypedValueToString(tv *sdcpb.TypedValue) string {
 func ParseDecimal64(v string) (*sdcpb.Decimal64, error) {
 	// Remove any leading or trailing spaces.
 	trimmed := strings.TrimSpace(v)
+
+	if len(trimmed) == 0 {
+		return nil, nil
+	}
 
 	// Split the string into integer and fractional parts.
 	parts := strings.SplitN(trimmed, ".", 2)

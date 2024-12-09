@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -66,14 +67,19 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update, include
 		log.Debugf("expanding update %v on container %q", upd, rsp.Container.Name)
 		var v interface{}
 		var err error
+		var jsonDecoder *json.Decoder
 		switch upd.GetValue().Value.(type) {
 		case *sdcpb.TypedValue_JsonIetfVal:
-			err = json.Unmarshal(upd.GetValue().GetJsonIetfVal(), &v)
+			jsonDecoder = json.NewDecoder(bytes.NewReader(upd.GetValue().GetJsonIetfVal()))
 		case *sdcpb.TypedValue_JsonVal:
-			err = json.Unmarshal(upd.GetValue().GetJsonVal(), &v)
+			jsonDecoder = json.NewDecoder(bytes.NewReader(upd.GetValue().GetJsonVal()))
 		default:
 			return []*sdcpb.Update{upd}, nil
 		}
+		// don't decode into float64 but keep as a string
+		// this solves issues created by reading long integers
+		jsonDecoder.UseNumber()
+		err = jsonDecoder.Decode(&v)
 		if err != nil {
 			return nil, err
 		}
@@ -480,11 +486,8 @@ func convertStringToTv(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*
 			Timestamp: ts,
 			Value:     &sdcpb.TypedValue_IdentityrefVal{IdentityrefVal: &sdcpb.IdentityRef{Value: name, Prefix: prefix, Module: module}},
 		}, nil
-	case "leafref": // TODO: query leafref type
-		return &sdcpb.TypedValue{
-			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_StringVal{StringVal: v},
-		}, nil
+	case "leafref":
+		return convertStringToTv(schemaType.LeafrefTargetType, v, ts)
 	case "union":
 		for _, ut := range schemaType.GetUnionTypes() {
 			tv, err := convertStringToTv(ut, v, ts)

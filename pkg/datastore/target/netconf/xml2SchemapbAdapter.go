@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/beevik/etree"
+	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 

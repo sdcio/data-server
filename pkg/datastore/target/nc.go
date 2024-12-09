@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/beevik/etree"
+	"github.com/sdcio/data-server/pkg/tree"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 
@@ -268,7 +269,7 @@ func (t *ncTarget) reconnect() {
 
 func (t *ncTarget) setRunning(source TargetSource) (*sdcpb.SetDataResponse, error) {
 
-	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove, false)
+	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove, tree.SchemaBound)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +329,7 @@ func filterRPCErrors(xml *etree.Document, severity string) ([]string, error) {
 }
 
 func (t *ncTarget) setCandidate(source TargetSource) (*sdcpb.SetDataResponse, error) {
-	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove, false)
+	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove, tree.SchemaBound)
 	if err != nil {
 		return nil, err
 	}
