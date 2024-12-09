@@ -1,6 +1,7 @@
 package tree
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strings"
@@ -14,16 +15,16 @@ import (
 // If honorNamespace is set, the xml elements will carry their respective namespace attributes.
 // If operationWithNamespace is set, the operation attributes added to the to be deleted alements will also carry the Netconf Base namespace.
 // If useOperationRemove is set, the remove operation will be used for deletes, instead of the delete operation.
-func (s *sharedEntryAttributes) ToXML(onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove bool, ordered bool) (*etree.Document, error) {
+func (s *sharedEntryAttributes) ToXML(onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove bool, ordering OrderingMethod) (*etree.Document, error) {
 	doc := etree.NewDocument()
-	_, err := s.toXmlInternal(&doc.Element, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordered)
+	_, err := s.toXmlInternal(&doc.Element, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordering)
 	if err != nil {
 		return nil, err
 	}
 	return doc, nil
 }
 
-func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool, ordered bool) (doAdd bool, err error) {
+func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool, ordering OrderingMethod) (doAdd bool, err error) {
 
 	switch s.schema.GetSchema().(type) {
 	case nil:
@@ -43,31 +44,45 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 
 		childs := s.filterActiveChoiceCaseChilds()
 
-		if ordered {
-			keys := make([]string, 0, len(childs))
-			for k := range childs {
-				keys = append(keys, k)
-			}
-			slices.Sort(keys)
-
-			for _, k := range keys {
-				// recurse the call
-				// no additional element is created, since we're on a key level, so add to parent element
-				doAdd, err := childs[k].toXmlInternal(parent, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordered)
-				if err != nil {
-					return false, err
-				}
-				// only if there was something added in the childs, the element itself is meant to be added.
-				// we keep track of that via overAllDoAdd.
-				overallDoAdd = doAdd || overallDoAdd
-			}
-			return overallDoAdd, nil
+		keys := make([]string, 0, len(childs))
+		for k := range childs {
+			keys = append(keys, k)
 		}
 
-		for _, c := range childs {
+		switch ordering {
+		case Alphabetical:
+			slices.Sort(keys)
+		case None:
+		case SchemaBound:
+			schemaParent, _ := s.GetFirstAncestorWithSchema()
+			if schemaParent == nil {
+				return false, fmt.Errorf("no ancestor has schema for %v", s)
+			}
+			schemaKeys := schemaParent.GetSchemaKeys()
+			slices.SortFunc(keys, func(a, b string) int {
+				aIdx := slices.Index(schemaKeys, a)
+				bIdx := slices.Index(schemaKeys, b)
+				switch {
+				case aIdx == -1 && bIdx == -1:
+					// if neither are keys, sort them against each other
+					return cmp.Compare(a, b)
+				case aIdx == -1:
+					return 1
+				case bIdx == -1:
+					return -1
+				default:
+					return cmp.Compare(aIdx, bIdx)
+				}
+			})
+
+		default:
+			return false, fmt.Errorf("unknown ordering method: %v", ordering)
+		}
+
+		for _, k := range keys {
 			// recurse the call
 			// no additional element is created, since we're on a key level, so add to parent element
-			doAdd, err := c.toXmlInternal(parent, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordered)
+			doAdd, err := childs[k].toXmlInternal(parent, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordering)
 			if err != nil {
 				return false, err
 			}
@@ -88,8 +103,16 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 				return false, err
 			}
 
-			if ordered {
+			switch ordering {
+			case Alphabetical:
+				slices.SortFunc(childs, func(a, b Entry) int {
+					return cmp.Compare(a.PathName(), b.PathName())
+				})
+			case SchemaBound:
 				slices.SortFunc(childs, getListEntrySortFunc(s))
+			case None:
+			default:
+				return false, fmt.Errorf("unknown ordering method: %v", ordering)
 			}
 
 			// go through the childs creating the xml elements
@@ -99,7 +122,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 				// process the honorNamespace instruction
 				xmlAddNamespaceConditional(s, s.parent, newElem, honorNamespace)
 				// recurse the call
-				doAdd, err := child.toXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordered)
+				doAdd, err := child.toXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordering)
 				if err != nil {
 					return false, err
 				}
@@ -144,8 +167,21 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 			newElem := etree.NewElement(s.PathName())
 
 			keys := s.childs.GetKeys()
-			if ordered {
+			switch ordering {
+			case Alphabetical:
 				slices.Sort(keys)
+			case SchemaBound:
+				if s.parent == nil {
+					slices.Sort(keys)
+				} else {
+					cldrn := s.schema.GetContainer().GetChildren()
+					slices.SortFunc(keys, func(a, b string) int {
+						return cmp.Compare(slices.Index(cldrn, a), slices.Index(cldrn, b))
+					})
+				}
+			case None:
+			default:
+				return false, fmt.Errorf("unknown ordering method: %v", ordering)
 			}
 
 			// iterate through all the childs
@@ -166,7 +202,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 				if !exists {
 					return false, fmt.Errorf("child %s does not exist for %s", k, strings.Join(s.Path(), "/"))
 				}
-				doAdd, err := child.toXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordered)
+				doAdd, err := child.toXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove, ordering)
 				if err != nil {
 					return false, err
 				}

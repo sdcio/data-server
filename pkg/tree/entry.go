@@ -19,6 +19,14 @@ const (
 	RunningIntentName  = "running"
 )
 
+type OrderingMethod uint
+
+const (
+	None OrderingMethod = iota
+	Alphabetical
+	SchemaBound
+)
+
 type EntryImpl struct {
 	*sharedEntryAttributes
 }
@@ -120,8 +128,8 @@ type Entry interface {
 	// toJsonInternal the internal function that produces JSON and JSON_IETF
 	// Not for external usage
 	toJsonInternal(onlyNewOrUpdated bool, ietf bool, ordered bool) (j any, err error)
-	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool, ordered bool) (*etree.Document, error)
-	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool, ordered bool) (doAdd bool, err error)
+	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool, ordering OrderingMethod) (*etree.Document, error)
+	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool, ordering OrderingMethod) (doAdd bool, err error)
 	// ImportConfig allows importing config data received from e.g. the device in different formats (json, xml) to be imported into the tree.
 	ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32) error
 }

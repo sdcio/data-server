@@ -51,8 +51,8 @@ func valueAsString(v *sdcpb.TypedValue) (string, error) {
 		return string(v.GetBytesVal()), nil
 	case *sdcpb.TypedValue_FloatVal:
 		return string(strconv.FormatFloat(float64(v.GetFloatVal()), 'b', -1, 32)), nil
-	// case *sdcpb.TypedValue_DecimalVal:
-	// 	return fmt.Sprintf("%d", v.GetDecimalVal().Digits), nil
+	case *sdcpb.TypedValue_DecimalVal:
+		return utils.TypedValueToString(v), nil // could we use this in general?
 	case *sdcpb.TypedValue_AsciiVal:
 		return v.GetAsciiVal(), nil
 	case *sdcpb.TypedValue_LeaflistVal:
