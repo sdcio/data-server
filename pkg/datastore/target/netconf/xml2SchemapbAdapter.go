@@ -25,6 +25,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/utils"
 )
 
 // XML2sdcpbConfigAdapter is used to transform the provided XML configuration data into the gnmi-like sdcpb.Notifications.
@@ -144,9 +145,9 @@ func (x *XML2sdcpbConfigAdapter) transformContainer(ctx context.Context, e *etre
 
 // transformField transforms an etree.element of a configuration as an update into the provided *sdcpb.Notification.
 func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, ls *sdcpb.LeafSchema, result *sdcpb.Notification) error {
-
-	if ls.GetType().GetLeafref() != "" {
-		path, err := utils.NormalizedAbsPath(ls.Type.Leafref, pelems)
+	path := pelems
+	for ls.GetType().GetLeafref() != "" {
+		path, err := utils.NormalizedAbsPath(ls.Type.Leafref, path)
 		if err != nil {
 			return err
 		}
