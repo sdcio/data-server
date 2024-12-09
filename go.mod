@@ -20,7 +20,7 @@ require (
 	github.com/prometheus/client_golang v1.20.5
 	github.com/scrapli/scrapligo v1.3.3
 	github.com/sdcio/cache v0.0.35
-	github.com/sdcio/schema-server v0.0.27
+	github.com/sdcio/schema-server v0.0.28
 	github.com/sdcio/sdc-protos v0.0.36
 	github.com/sdcio/yang-parser v0.0.10
 	github.com/sirupsen/logrus v1.9.3
@@ -41,7 +41,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/creack/pty v1.1.24 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/dgraph-io/badger/v4 v4.4.0 // indirect
+	github.com/dgraph-io/badger/v4 v4.5.0 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.0.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
