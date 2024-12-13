@@ -24,23 +24,11 @@ builds:
       - linux
     goarch:
       - amd64
-  - id: datactl
-    binary: datactl
-    main: ./client/main.go
-    env:
-      - CGO_ENABLED=0
-    ldflags:
-      - -s -w
-    goos:
-      - linux
-    goarch:
-      - amd64
 dockers:
   - goos: linux
     goarch: amd64
     ids:
       - data-server
-      - datactl
     image_templates:
       - "registry.k8s.sdcio.dev/sdcio/data-server:v0.0.0-{{ if index .Env \"PR\"  }}PR{{ .Env.PR }}-{{ .ShortCommit }}{{ else }}{{ .ShortCommit }}{{ end }}"
     dockerfile: goreleaser.dockerfile
