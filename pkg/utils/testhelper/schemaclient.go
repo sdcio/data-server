@@ -3,8 +3,10 @@ package testhelper
 import (
 	"context"
 	"fmt"
+	"os"
 	"path"
 	"runtime"
+	"strings"
 
 	dConfig "github.com/sdcio/data-server/pkg/config"
 	dataschema "github.com/sdcio/data-server/pkg/schema"
@@ -77,13 +79,20 @@ func InitSDCIOSchema() (dataschema.Client, *dConfig.SchemaConfig, error) {
 	// create an in memory schema store
 	schemaMemStore := memstore.New()
 
+	// HT: workaround to fixed paths here. Considering all unit tests are executed in pkg, split the paths on pkg.
+	dir, err := os.Getwd()
+	if err != nil {
+		return nil, nil, err
+	}
+	project := strings.Split(dir, "pkg")[0]
+
 	// define the schema config
 	sc := &sConfig.SchemaConfig{
 		Name:    "testschema",
 		Vendor:  "sdcio",
 		Version: "v0.0.0",
 		Files: []string{
-			path.Join("/home/mava/projects/data-server", SDCIO_SCHEMA_LOCATION),
+			path.Join(project, SDCIO_SCHEMA_LOCATION),
 		},
 	}
 
