@@ -103,7 +103,7 @@ func TestXmlTreeImporter(t *testing.T) {
 
 			root.FinishInsertionPhase()
 
-			result, err := root.ToXML(false, false, false, false, true)
+			result, err := root.ToXML(false, false, false, false, tree.SchemaBound)
 			if err != nil {
 				t.Fatal(err)
 			}
