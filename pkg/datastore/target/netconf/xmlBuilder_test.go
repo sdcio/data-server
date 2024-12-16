@@ -306,7 +306,7 @@ func TestXMLConfigBuilder_fastForward(t *testing.T) {
       <name>eth0</name>
       <subinterface xmlns="NS-4">
         <name>1</name>
-        <vlan-id xmlns="NS-6"/>
+        <vlan-id xmlns="NS-5"/>
       </subinterface>
     </interface>
   </interfaces>
@@ -672,7 +672,7 @@ func TestXMLConfigBuilder_AddValue(t *testing.T) {
       <name>eth0</name>
       <subinterface xmlns="NS-4">
         <name>1</name>
-        <vlan-id xmlns="NS-5">5</vlan-id>
+        <vlan-id xmlns="NS-6">5</vlan-id>
       </subinterface>
     </interface>
   </interfaces>
