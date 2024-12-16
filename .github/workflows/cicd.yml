@@ -1,4 +1,4 @@
-name: CI/CD Test per PR.
+name: CI/CD Test per PR
 on:
   workflow_dispatch:
   pull_request:
