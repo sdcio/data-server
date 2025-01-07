@@ -19,14 +19,6 @@ const (
 	RunningIntentName  = "running"
 )
 
-type OrderingMethod uint
-
-const (
-	None OrderingMethod = iota
-	Alphabetical
-	SchemaBound
-)
-
 type EntryImpl struct {
 	*sharedEntryAttributes
 }
@@ -121,15 +113,15 @@ type Entry interface {
 	FilterChilds(keys map[string]string) ([]Entry, error)
 	// ToJson returns the Tree contained structure as JSON
 	// use e.g. json.MarshalIndent() on the returned struct
-	ToJson(onlyNewOrUpdated bool, ordered bool) (any, error)
+	ToJson(onlyNewOrUpdated bool) (any, error)
 	// ToJsonIETF returns the Tree contained structure as JSON_IETF
 	// use e.g. json.MarshalIndent() on the returned struct
-	ToJsonIETF(onlyNewOrUpdated bool, ordered bool) (any, error)
+	ToJsonIETF(onlyNewOrUpdated bool) (any, error)
 	// toJsonInternal the internal function that produces JSON and JSON_IETF
 	// Not for external usage
-	toJsonInternal(onlyNewOrUpdated bool, ietf bool, ordered bool) (j any, err error)
-	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool, ordering OrderingMethod) (*etree.Document, error)
-	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool, ordering OrderingMethod) (doAdd bool, err error)
+	toJsonInternal(onlyNewOrUpdated bool, ietf bool) (j any, err error)
+	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
+	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error)
 	// ImportConfig allows importing config data received from e.g. the device in different formats (json, xml) to be imported into the tree.
 	ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32) error
 }

@@ -167,7 +167,7 @@ func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDa
 
 	switch strings.ToLower(t.cfg.GnmiOptions.Encoding) {
 	case "json":
-		jsonData, err := source.ToJson(true, false)
+		jsonData, err := source.ToJson(true)
 		if err != nil {
 			return nil, err
 		}
@@ -185,7 +185,7 @@ func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDa
 		}
 
 	case "json_ietf":
-		jsonData, err := source.ToJsonIETF(true, false)
+		jsonData, err := source.ToJsonIETF(true)
 		if err != nil {
 			return nil, err
 		}
