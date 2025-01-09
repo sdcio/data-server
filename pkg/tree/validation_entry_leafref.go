@@ -190,6 +190,13 @@ func (s *sharedEntryAttributes) resolve_leafref_key_path(ctx context.Context, ke
 }
 
 func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, errchan chan<- error) {
+
+	// check if the OptionalInstance (!require-instances [https://datatracker.ietf.org/doc/html/rfc7950#section-9.9.3])
+	// is set to true, if it is, the leafref validation can be skipped.
+	if s.schema.GetField().GetType().GetOptionalInstance() {
+		return
+	}
+
 	lref := s.schema.GetField().GetType().GetLeafref()
 	if s.schema == nil || lref == "" {
 		return

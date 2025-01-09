@@ -220,10 +220,10 @@ github.com/scrapli/scrapligo v1.3.3 h1:D9zj1QrOYNYAQ30YT7wfQBINvPGxvs5L5Lz+2LnL7
 github.com/scrapli/scrapligo v1.3.3/go.mod h1:pOWxVyPsQRrWTrkoSSDg05tjOqtWfLffAZtAsCc0w3M=
 github.com/sdcio/cache v0.0.35 h1:E0PZl+37qr/MwdQecvZPaiAhgVlUvN/KNiLE9r/XYgA=
 github.com/sdcio/cache v0.0.35/go.mod h1:ZQCmt2KtpsuwXZtBCoIksKGBxdjPVHoCDnjo6s49oC0=
-github.com/sdcio/schema-server v0.0.28 h1:Tj3AI0WA5zrT2Tm8SGW0g9i+dQOWUsIWFQC/IWN/8Ps=
-github.com/sdcio/schema-server v0.0.28/go.mod h1:uwX0+giyy7Y/cgX7mVf6GojCvE/XSEZomzhLaBzPYQg=
-github.com/sdcio/sdc-protos v0.0.37 h1:VsLXKbqnMnpfvaQ1VNzKVfHhMhNluOVowmtLbDUVjKI=
-github.com/sdcio/sdc-protos v0.0.37/go.mod h1:0QVPD4xH344200nCEjuHxbx+uoV9A+/ltF5st+IYPks=
+github.com/sdcio/schema-server v0.0.29 h1:Dcz+FNtElaDV7XIKqMyy32btkUrMxRquQR3d22ebOSc=
+github.com/sdcio/schema-server v0.0.29/go.mod h1:8x9yRqb7yMAaC8yxRmSG+0SM2ID0u3Af4jNYxBhiisM=
+github.com/sdcio/sdc-protos v0.0.38 h1:iToiSsMQRcuWx8mghCaLyzidSaj/olCJjm/bTShzWRE=
+github.com/sdcio/sdc-protos v0.0.38/go.mod h1:uG2jk1oV3iQ6WRypxJA+vssPqtfZchQzGwAXueV9z6A=
 github.com/sdcio/yang-parser v0.0.10 h1:N+DTuOM40kkx7y2eXhxL2BAokFntwkfsp6xQxP3VQ+I=
 github.com/sdcio/yang-parser v0.0.10/go.mod h1:y/d8lg/mqSnZwaO2bkxyVuFBtuDQm9ys9hpsBs/WizU=
 github.com/sirikothe/gotextfsm v1.0.1-0.20200816110946-6aa2cfd355e4 h1:FHUL2HofYJuslFOQdy/JjjP36zxqIpd/dcoiwLMIs7k=
@@ -407,8 +407,8 @@ google.golang.org/protobuf v1.26.0-rc.1/go.mod h1:jlhhOSvTdKEhbULTjvd4ARK9grFBp0
 google.golang.org/protobuf v1.26.0/go.mod h1:9q0QmTI4eRPtz6boOQmLYwt+qCgq0jsYwAQnmE0givc=
 google.golang.org/protobuf v1.27.1/go.mod h1:9q0QmTI4eRPtz6boOQmLYwt+qCgq0jsYwAQnmE0givc=
 google.golang.org/protobuf v1.28.0/go.mod h1:HV8QOd/L58Z+nl8r43ehVNZIU/HEI6OcFqwMG9pJV4I=
-google.golang.org/protobuf v1.35.2 h1:8Ar7bF+apOIoThw1EdZl0p1oWvMqTHmpA2fRTyZO8io=
-google.golang.org/protobuf v1.35.2/go.mod h1:9fA7Ob0pmnwhb644+1+CVWFRbNajQ6iRojtC/QF5bRE=
+google.golang.org/protobuf v1.36.2 h1:R8FeyR1/eLmkutZOM5CWghmo5itiG9z0ktFlTVLuTmU=
+google.golang.org/protobuf v1.36.2/go.mod h1:9fA7Ob0pmnwhb644+1+CVWFRbNajQ6iRojtC/QF5bRE=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c h1:Hei/4ADfdWqJk1ZMxUNpqntNwaWcugrBjAiHlqqRiVk=
