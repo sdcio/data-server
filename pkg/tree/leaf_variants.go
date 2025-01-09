@@ -105,7 +105,7 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 	if len(lv.les) == 0 {
 		return nil
 	}
-	if lv.shouldDelete() {
+	if onlyNewOrUpdated && lv.shouldDelete() {
 		return nil
 	}
 
@@ -140,10 +140,7 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 	// if it does not matter if the highes update is also
 	// New or Updated return it
 	if !onlyNewOrUpdated {
-		if !highest.GetDeleteFlag() {
-			return highest
-		}
-		return secondHighest
+		return highest
 	}
 
 	// if the highes is not marked for deletion and new or updated (=PrioChanged) return it

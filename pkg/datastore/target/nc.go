@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/beevik/etree"
-	"github.com/sdcio/data-server/pkg/tree"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 
@@ -113,6 +112,13 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	}
 
 	log.Debugf("netconf response:\n%s", ncResponse.DocAsString())
+
+	// cmlImport := xml.NewXmlTreeImporter(ncResponse.Doc.Root())
+
+	// treeCacheSchemaClient := tree.NewTreeSchemaCacheClient(t.name, nil, d.getValidationClient())
+	// tc := tree.NewTreeContext(treeCacheSchemaClient, tree.RunningIntentName)
+
+	// NewTreeRoot
 
 	// start transformation, which yields the sdcpb_Notification
 	noti, err := t.xml2sdcpbAdapter.Transform(ctx, ncResponse.Doc)
@@ -269,7 +275,7 @@ func (t *ncTarget) reconnect() {
 
 func (t *ncTarget) setRunning(source TargetSource) (*sdcpb.SetDataResponse, error) {
 
-	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove, tree.SchemaBound)
+	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +335,7 @@ func filterRPCErrors(xml *etree.Document, severity string) ([]string, error) {
 }
 
 func (t *ncTarget) setCandidate(source TargetSource) (*sdcpb.SetDataResponse, error) {
-	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove, tree.SchemaBound)
+	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
 	if err != nil {
 		return nil, err
 	}

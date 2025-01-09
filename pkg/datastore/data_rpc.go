@@ -213,12 +213,12 @@ func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, r
 	var j any
 	// marshal map into JSON bytes
 	if ietf {
-		j, err = root.ToJsonIETF(false, false)
+		j, err = root.ToJsonIETF(false)
 		if err != nil {
 			return err
 		}
 	} else {
-		j, err = root.ToJson(false, false)
+		j, err = root.ToJson(false)
 		if err != nil {
 			return err
 		}

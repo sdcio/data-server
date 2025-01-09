@@ -388,7 +388,7 @@ func TestToXMLTable(t *testing.T) {
 			root.FinishInsertionPhase()
 			// fmt.Println(root.String())
 
-			xmlDoc, err := root.ToXML(tt.onlyNewOrUpdated, tt.honorNamespace, tt.operationWithNamespace, tt.useOperationRemove, Alphabetical)
+			xmlDoc, err := root.ToXML(tt.onlyNewOrUpdated, tt.honorNamespace, tt.operationWithNamespace, tt.useOperationRemove)
 			if err != nil {
 				t.Fatal(err)
 			}

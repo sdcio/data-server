@@ -149,12 +149,12 @@ func TestJsonTreeImporter(t *testing.T) {
 
 			var result any
 			if tt.ietf {
-				result, err = root.ToJsonIETF(false, true)
+				result, err = root.ToJsonIETF(false)
 				if err != nil {
 					t.Fatal(err)
 				}
 			} else {
-				result, err = root.ToJson(false, true)
+				result, err = root.ToJson(false)
 				if err != nil {
 					t.Fatal(err)
 				}
