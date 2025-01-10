@@ -193,8 +193,9 @@ func TestDatastore_validateTree(t *testing.T) {
 
 			validationErrors := []error{}
 			validationErrChan := make(chan error)
+			validationWarnChan := make(chan error)
 			go func() {
-				root.Validate(ctx, validationErrChan, false)
+				root.Validate(ctx, validationErrChan, validationWarnChan, false)
 				close(validationErrChan)
 			}()
 
