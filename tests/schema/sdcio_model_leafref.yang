@@ -1,0 +1,22 @@
+module sdcio_model_leafref {
+  yang-version 1.1;
+  namespace "urn:sdcio/model_leafref";
+  prefix sdcio_model_leafref;
+
+  description
+    "This is part of the test schema for sdcio";
+
+  revision 2024-09-09 {
+    description
+      "Test schema first attempt";
+  }
+
+  grouping leafref-top {
+    leaf leafref-optional {
+      type leafref {
+        path "/interface/name";
+        require-instance false;
+      }
+    }
+  }
+}

@@ -7,8 +7,6 @@ module sdcio_model_identity_types {
     prefix identity_base;
   }
 
-  
-
   description
     "This is part of the test schema for sdcio";
 

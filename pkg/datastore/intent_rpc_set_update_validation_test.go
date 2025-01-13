@@ -17,6 +17,7 @@ package datastore
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
@@ -56,6 +57,7 @@ func TestDatastore_validateTree(t *testing.T) {
 		intentDelete         bool
 		intendedStoreUpdates []*cache.Update
 		NotOnlyNewOrUpdated  bool // it negated when used in the call, usually we want it to be true
+		expectedWarnings     []string
 	}{
 
 		{
@@ -112,6 +114,37 @@ func TestDatastore_validateTree(t *testing.T) {
 					Identityref: &sdcio_schema.SdcioModel_Identityref{
 						CryptoA: sdcio_schema.SdcioModelIdentityBase_CryptoAlg_des3,
 						CryptoB: sdcio_schema.SdcioModelIdentityBase_CryptoAlg_otherAlgo,
+					},
+				}
+				return ygot.EmitJSON(d, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false,
+				})
+			},
+			intentName: owner1,
+			intentPrio: prio10,
+		},
+		{
+			name:          "leafref-optional (require-instance == false) not exists",
+			intentReqPath: "/",
+			intentReqValue: func() (string, error) {
+				return "{\"leafref-optional\":\"mgmt0\"}", nil
+			},
+			intentName:       owner1,
+			intentPrio:       prio10,
+			expectedWarnings: []string{"leafref leafref-optional value mgmt0 unable to resolve non-mandatory reference /interface/name"},
+		},
+		{
+			name:          "leafref-optional (require-instance == false) exists",
+			intentReqPath: "/",
+			intentReqValue: func() (string, error) {
+				d := &sdcio_schema.Device{
+					LeafrefOptional: ygot.String("mgmt0"),
+					Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+						"mgmt0": {
+							Name:        ygot.String("mgmt0"),
+							Description: ygot.String("foo"),
+						},
 					},
 				}
 				return ygot.EmitJSON(d, &ygot.EmitJSONConfig{
@@ -192,18 +225,34 @@ func TestDatastore_validateTree(t *testing.T) {
 			root.FinishInsertionPhase()
 
 			validationErrors := []error{}
-			validationErrChan := make(chan error)
-			validationWarnChan := make(chan error)
+			validationErrChan := make(chan error, 20)
+			validationWarnings := []string{}
+			validationWarnChan := make(chan error, 20)
 			go func() {
 				root.Validate(ctx, validationErrChan, validationWarnChan, false)
 				close(validationErrChan)
+				close(validationWarnChan)
 			}()
 
 			// read from the Error channel
 			for e := range validationErrChan {
 				validationErrors = append(validationErrors, e)
 			}
+
+			// read from the Error channel
+			for e := range validationWarnChan {
+				validationWarnings = append(validationWarnings, e.Error())
+			}
+
+			for _, x := range tt.expectedWarnings {
+				if !slices.Contains(validationWarnings, x) {
+					t.Errorf("Warning %q not emitted.", x)
+				}
+			}
+
 			fmt.Println(validationErrors)
+			fmt.Println(validationWarnings)
+
 			fmt.Printf("Tree:%s\n", root.String())
 		})
 	}

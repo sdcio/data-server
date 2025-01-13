@@ -82,7 +82,7 @@ ygot:
 
 .PHONY: format_yang
 format_yang:
-	cd $(CURDIR)/tests/schema; find ./ -name "*.yang" | xargs -I{} bash -c "cp {} {}.bak ; pyang -f yang {}.bak > {} ; rm {}.bak -f"
+	cd $(CURDIR)/tests/schema; find ./ -name "*.yang" | xargs -I{} bash -c "cp {} {}.bak && if pyang -f yang {}.bak > {}; then rm {}.bak ; else echo 'Error processing {}' ; mv {}.bak {} ; fi"
 
 .PHONY: goreleaser-nightly
 goreleaser-nightly:

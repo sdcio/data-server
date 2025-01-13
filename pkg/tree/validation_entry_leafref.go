@@ -200,7 +200,7 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, errchan ch
 	if err != nil || len(entry) == 0 {
 		// check if the OptionalInstance (!require-instances [https://datatracker.ietf.org/doc/html/rfc7950#section-9.9.3])
 		if s.schema.GetField().GetType().GetOptionalInstance() {
-			warnChan <- fmt.Errorf("leafref %s unable to resolve non-mandatory reference %s", lref, s.Path().String())
+			generateOptionalWarning(ctx, s, lref, errchan, warnChan)
 			return
 		}
 		// if required, issue error
@@ -215,13 +215,28 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, errchan ch
 
 		// check if the OptionalInstance (!require-instances [https://datatracker.ietf.org/doc/html/rfc7950#section-9.9.3])
 		if s.schema.GetField().GetType().GetOptionalInstance() {
-			warnChan <- fmt.Errorf("leafref %s unable to resolve non-mandatory reference %s", lref, s.Path().String())
+			generateOptionalWarning(ctx, s, lref, errchan, warnChan)
 			return
 		}
 		// if required, issue error
 		errchan <- fmt.Errorf("missing leaf reference: failed resolving leafref %s for %s to path %s LeafVariant %v", lref, utils.ToXPath(EntryPath, false), s.Path().String(), lv)
 		return
 	}
+}
+
+func generateOptionalWarning(ctx context.Context, s Entry, lref string, errchan chan<- error, warnChan chan<- error) {
+	lrefval, err := s.getHighestPrecedenceLeafValue(ctx)
+	if err != nil {
+		errchan <- err
+		return
+	}
+	tvVal, err := lrefval.Update.Value()
+	if err != nil {
+		errchan <- err
+		return
+	}
+
+	warnChan <- fmt.Errorf("leafref %s value %s unable to resolve non-mandatory reference %s", s.Path().String(), utils.TypedValueToString(tvVal), lref)
 }
 
 // lrefPath for the leafref resolution we need to distinguish between already resolved values and not yet resolved xpath statements
