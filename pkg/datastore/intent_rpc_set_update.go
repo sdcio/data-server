@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/sdcio/cache/proto/cachepb"
 	"github.com/sdcio/data-server/pkg/cache"
@@ -168,24 +169,45 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		return nil, err
 	}
 
-	log.Debugf("finish insertion phase")
+	logger.Debugf("finish insertion phase")
 	root.FinishInsertionPhase()
 
 	// perform validation
 	// we use a channel and cumulate all the errors
 	validationErrors := []error{}
 	validationErrChan := make(chan error)
+
+	validationWarnings := []error{}
+	validationWarningsChan := make(chan error)
+
+	wg := sync.WaitGroup{}
+
 	go func() {
-		root.Validate(ctx, validationErrChan, true)
+		root.Validate(ctx, validationErrChan, validationWarningsChan, true)
 		close(validationErrChan)
+		close(validationWarningsChan)
 	}()
 
-	// read from the Error channel
-	for e := range validationErrChan {
-		validationErrors = append(validationErrors, e)
-	}
+	wg.Add(1)
+	go func() {
+		// read from the Error channel
+		for e := range validationErrChan {
+			validationErrors = append(validationErrors, e)
+		}
+		wg.Done()
+	}()
 
-	fmt.Printf("Tree after Validate:%s\n", root.String())
+	wg.Add(1)
+	go func() {
+		// read from the Warnings channel
+		for e := range validationWarningsChan {
+			validationWarnings = append(validationWarnings, e)
+		}
+		wg.Done()
+	}()
+
+	wg.Wait()
+	logger.Tracef("Tree after Validate:%s\n", root.String())
 
 	// check if errors are received
 	// If so, join them and return the cumulated errors
@@ -193,7 +215,12 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		return nil, fmt.Errorf("cumulated validation errors:\n%v", errors.Join(validationErrors...))
 	}
 
-	logger.Debug("intent is validated")
+	if len(validationWarnings) > 0 {
+		logger.Warnf("cumulated validation warnings:\n%v", errors.Join(validationWarnings...))
+		// adding to response later on, when response struct is created
+	}
+
+	logger.Info("intent is valid")
 
 	// retrieve the data that is meant to be send southbound (towards the device)
 	updates := root.GetHighestPrecedence(true)
@@ -233,7 +260,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		setDataReq.Delete = append(setDataReq.Delete, p)
 	}
 
-	log.Debug(prototext.Format(setDataReq))
+	logger.Debug(prototext.Format(setDataReq))
 
 	// set the response data indicationg the changes to the device
 	setIntentResponse := &sdcpb.SetIntentResponse{
@@ -241,12 +268,17 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		Delete: setDataReq.GetDelete(),
 	}
 
+	// populate response with validation warnings
+	for _, e := range validationWarnings {
+		setIntentResponse.Warnings = append(setIntentResponse.Warnings, e.Error())
+	}
+
 	// if it is a dry run, return now, skipping updating the device or the cache
 	if req.DryRun {
 		return setIntentResponse, nil
 	}
 
-	log.Info("intent setting into candidate")
+	logger.Info("intent setting into candidate")
 	// set the candidate
 	_, err = d.setCandidate(ctx, setDataReq, false)
 	if err != nil {
@@ -255,13 +287,13 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 
 	// only if not the OnlyIntended flag is set, we transact to the device
 	if !req.Delete || req.Delete && !req.OnlyIntended {
-		log.Info("intent set into candidate")
+		logger.Info("intent set into candidate")
 		// apply the resulting config to the device
 		dataResp, err := d.applyIntent(ctx, candidateName, root)
 		if err != nil {
 			return nil, err
 		}
-		setIntentResponse.Warnings = dataResp.GetWarnings()
+		setIntentResponse.Warnings = append(setIntentResponse.Warnings, dataResp.GetWarnings()...)
 
 		log.Infof("ds=%s intent=%s: intent applied", req.GetName(), req.GetIntent())
 	}
@@ -276,19 +308,19 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 
 	// logging
 	strSl := tree.Map(updates.ToCacheUpdateSlice(), func(u *cache.Update) string { return u.String() })
-	log.Debugf("Updates\n%s", strings.Join(strSl, "\n"))
+	logger.Debugf("Updates\n%s", strings.Join(strSl, "\n"))
 
 	delSl := make(tree.PathSlices, 0, len(deletes))
 	for _, del := range deletes {
 		delSl = append(delSl, del.Path())
 	}
-	log.Debugf("Deletes:\n%s", strings.Join(strSl, "\n"))
+	logger.Debugf("Deletes:\n%s", strings.Join(strSl, "\n"))
 
 	strSl = tree.Map(updatesOwner, func(u *cache.Update) string { return u.String() })
-	log.Debugf("Updates Owner:\n%s", strings.Join(strSl, "\n"))
+	logger.Debugf("Updates Owner:\n%s", strings.Join(strSl, "\n"))
 
 	strSl = deletesOwner.StringSlice()
-	log.Debugf("Deletes Owner:\n%s", strings.Join(strSl, "\n"))
+	logger.Debugf("Deletes Owner:\n%s", strings.Join(strSl, "\n"))
 
 	err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
 		Store:    cachepb.Store_INTENDED,
@@ -322,7 +354,7 @@ func (d *Datastore) SetIntentUpdate(ctx context.Context, req *sdcpb.SetIntentReq
 		}
 	}
 
-	log.Infof("ds=%s intent=%s: intent saved", req.GetName(), req.GetIntent())
+	logger.Infof("ds=%s intent=%s: intent saved", req.GetName(), req.GetIntent())
 	return setIntentResponse, nil
 }
 

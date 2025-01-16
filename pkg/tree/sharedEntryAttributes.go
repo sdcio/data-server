@@ -713,7 +713,7 @@ func (s *sharedEntryAttributes) getHighestPrecedenceValueOfBranch() int32 {
 
 // Validate is the highlevel function to perform validation.
 // it will multiplex all the different Validations that need to happen
-func (s *sharedEntryAttributes) Validate(ctx context.Context, errchan chan<- error, concurrent bool) {
+func (s *sharedEntryAttributes) Validate(ctx context.Context, errChan chan<- error, warnChan chan<- error, concurrent bool) {
 
 	// recurse the call to the child elements
 	wg := sync.WaitGroup{}
@@ -721,7 +721,7 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, errchan chan<- err
 	for _, c := range s.filterActiveChoiceCaseChilds() {
 		wg.Add(1)
 		valFunc := func(x Entry) { // HINT: for Must-Statement debugging, remove "go " such that the debugger is triggered one after the other
-			x.Validate(ctx, errchan, concurrent)
+			x.Validate(ctx, errChan, warnChan, concurrent)
 			wg.Done()
 		}
 		if concurrent {
@@ -733,13 +733,13 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, errchan chan<- err
 
 	// validate the mandatory statement on this entry
 	if s.remainsToExist() {
-		s.validateMandatory(errchan)
-		s.validateLeafRefs(ctx, errchan)
-		s.validateLeafListMinMaxAttributes(errchan)
-		s.validatePattern(errchan)
-		s.validateMustStatements(ctx, errchan)
-		s.validateLength(errchan)
-		s.validateRange(errchan)
+		s.validateMandatory(errChan)
+		s.validateLeafRefs(ctx, errChan, warnChan)
+		s.validateLeafListMinMaxAttributes(errChan)
+		s.validatePattern(errChan)
+		s.validateMustStatements(ctx, errChan)
+		s.validateLength(errChan)
+		s.validateRange(errChan)
 	}
 }
 
