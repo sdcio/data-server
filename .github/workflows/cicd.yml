@@ -1,11 +1,16 @@
 name: CI/CD Test per PR
 on:
   workflow_dispatch:
+  pull_request_target:
+    types: [labeled]
   pull_request:
   push:
     branches:
       - "main"
       - "!releases/**"
+
+permissions: read-all
+
 env:
   GOVER: 1.23.3
 
@@ -23,6 +28,7 @@ jobs:
           CGO_ENABLED: 0
 
   pr-release:
+    if: contains(github.event.pull_request.labels.*.name, 'safe to test')
     runs-on: sdcio-action-runners
     needs: unittest
     outputs:
