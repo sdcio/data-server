@@ -20,6 +20,15 @@ func (u UpdateSlice) GetLowestPriorityValue(filters []CacheUpdateFilter) int32 {
 	return result
 }
 
+func (u UpdateSlice) ToPathSet() *PathSet {
+	pathKeySet := NewPathSet()
+
+	for _, upd := range u {
+		pathKeySet.AddPath(upd.GetPath())
+	}
+	return pathKeySet
+}
+
 func Map[T any](u UpdateSlice, f func(*cache.Update) T) []T {
 	vsm := make([]T, len(u))
 	for i, v := range u {

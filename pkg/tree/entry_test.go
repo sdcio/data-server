@@ -246,7 +246,7 @@ func Test_Entry_Three(t *testing.T) {
 
 	// indicate that the intent is receiving an update
 	// therefor invalidate all the present entries of the owner / intent
-	root.markOwnerDelete(owner1)
+	root.markOwnerDelete(owner1, false)
 
 	// add incomming set intent reques data
 	overwriteDesc := testhelper.GetStringTvProto(t, "Owerwrite Description")
@@ -348,7 +348,7 @@ func Test_Entry_Four(t *testing.T) {
 
 	// indicate that the intent is receiving an update
 	// therefor invalidate all the present entries of the owner / intent
-	root.markOwnerDelete(owner1)
+	root.markOwnerDelete(owner1, false)
 
 	// add incomming set intent reques data
 	overwriteDesc := testhelper.GetStringTvProto(t, "Owerwrite Description")
@@ -440,23 +440,13 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			root.FinishInsertionPhase()
 
-			validationErrors := []error{}
-			validationErrChan := make(chan error)
-			validationWarnChan := make(chan error)
-			go func() {
-				root.Validate(context.TODO(), validationErrChan, validationWarnChan, false)
-				close(validationErrChan)
-			}()
-
-			// read from the Error channel
-			for e := range validationErrChan {
-				validationErrors = append(validationErrors, e)
-			}
+			validationResult := root.Validate(context.TODO(), false)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
-			if len(validationErrors) != 1 {
-				t.Errorf("expected 1 error but got %d, %v", len(validationErrors), validationErrors)
+			errs := validationResult.ErrorsStr()
+			if len(errs) != 1 {
+				t.Errorf("expected 1 error but got %d, %v", len(errs), errs)
 			}
 		},
 	)
@@ -490,23 +480,13 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				}
 			}
 
-			validationErrors := []error{}
-			validationErrChan := make(chan error)
-			validationWarnChan := make(chan error)
-			go func() {
-				root.Validate(context.TODO(), validationErrChan, validationWarnChan, false)
-				close(validationErrChan)
-			}()
-
-			// read from the Error channel
-			for e := range validationErrChan {
-				validationErrors = append(validationErrors, e)
-			}
+			validationResult := root.Validate(context.TODO(), false)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
-			if len(validationErrors) > 0 {
-				t.Errorf("expected no error but got %v", validationErrors)
+			errs := validationResult.ErrorsStr()
+			if len(errs) != 0 {
+				t.Errorf("expected 0 errors but got %d, %v", len(errs), errs)
 			}
 		},
 	)
@@ -546,24 +526,13 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				}
 			}
 
-			validationErrors := []error{}
-			validationErrChan := make(chan error)
-			validationWarnChan := make(chan error)
-
-			go func() {
-				root.Validate(context.TODO(), validationErrChan, validationWarnChan, false)
-				close(validationErrChan)
-			}()
-
-			// read from the Error channel
-			for e := range validationErrChan {
-				validationErrors = append(validationErrors, e)
-			}
+			validationResult := root.Validate(context.TODO(), false)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
-			if len(validationErrors) != 1 {
-				t.Errorf("expected 1 error but got %d, %v", len(validationErrors), validationErrors)
+			errs := validationResult.ErrorsStr()
+			if len(errs) != 1 {
+				t.Errorf("expected 1 error but got %d, %v", len(errs), errs)
 			}
 		},
 	)
@@ -605,7 +574,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	}
 
 	// get ready to add the new intent data
-	root.markOwnerDelete(owner1)
+	root.markOwnerDelete(owner1, false)
 
 	u1n := cache.NewUpdate([]string{"interface", "ethernet-0/1", "description"}, desc3, prio50, owner1, ts1)
 	u2n := cache.NewUpdate([]string{"interface", "ethernet-0/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/1"), prio50, owner1, ts1)
@@ -661,7 +630,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 
 			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 2, owner1, ts), false, nil))
 			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 1, owner2, ts), false, nil))
-			lv.les[1].MarkDelete()
+			lv.les[1].MarkDelete(false)
 
 			le := lv.GetHighestPrecedence(true, false)
 
@@ -678,7 +647,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{})
 			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 1, owner1, ts), false, nil))
-			lv.les[0].MarkDelete()
+			lv.les[0].MarkDelete(false)
 
 			le := lv.GetHighestPrecedence(true, false)
 
@@ -769,7 +738,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{})
 			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 1, owner1, ts), false, nil))
-			lv.les[0].MarkDelete()
+			lv.les[0].MarkDelete(false)
 			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 2, owner2, ts), false, nil))
 
 			le := lv.GetHighestPrecedence(true, false)
@@ -1111,23 +1080,13 @@ func Test_Validation_String_Pattern(t *testing.T) {
 
 			root.FinishInsertionPhase()
 
-			validationErrors := []error{}
-			validationErrChan := make(chan error)
-			validationWarnChan := make(chan error)
-			go func() {
-				root.Validate(context.TODO(), validationErrChan, validationWarnChan, false)
-				close(validationErrChan)
-			}()
-
-			// read from the Error channel
-			for e := range validationErrChan {
-				validationErrors = append(validationErrors, e)
-			}
+			validationResult := root.Validate(context.TODO(), false)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
-			if len(validationErrors) != 1 {
-				t.Errorf("expected 1 error but got %d, %v", len(validationErrors), validationErrors)
+			if !validationResult.HasErrors() {
+				errs := validationResult.ErrorsStr()
+				t.Errorf("expected 1 error but got %d, %v", len(errs), errs)
 			}
 		},
 	)
@@ -1153,23 +1112,13 @@ func Test_Validation_String_Pattern(t *testing.T) {
 
 			root.FinishInsertionPhase()
 
-			validationErrors := []error{}
-			validationErrChan := make(chan error)
-			validationWarnChan := make(chan error)
-			go func() {
-				root.Validate(context.TODO(), validationErrChan, validationWarnChan, false)
-				close(validationErrChan)
-			}()
-
-			// read from the Error channel
-			for e := range validationErrChan {
-				validationErrors = append(validationErrors, e)
-			}
+			validationResult := root.Validate(context.TODO(), false)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
-			if len(validationErrors) > 0 {
-				t.Errorf("expected 0 error but got %d, %v", len(validationErrors), validationErrors)
+			if validationResult.HasErrors() {
+				errs := validationResult.ErrorsStr()
+				t.Errorf("expected 0 errors but got %d, %v", len(errs), errs)
 			}
 		},
 	)
@@ -1250,23 +1199,13 @@ func Test_Validation_Deref(t *testing.T) {
 
 			root.FinishInsertionPhase()
 
-			validationErrors := []error{}
-			validationErrChan := make(chan error)
-			validationWarnChan := make(chan error)
-			go func() {
-				root.Validate(context.TODO(), validationErrChan, validationWarnChan, false)
-				close(validationErrChan)
-			}()
-
-			// read from the Error channel
-			for e := range validationErrChan {
-				validationErrors = append(validationErrors, e)
-			}
+			validationResult := root.Validate(context.TODO(), false)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
-			if len(validationErrors) != 1 {
-				t.Errorf("expected 1 error but got %d, %v", len(validationErrors), validationErrors)
+			errs := validationResult.ErrorsStr()
+			if len(errs) != 1 {
+				t.Errorf("expected 1 error but got %d, %v", len(errs), errs)
 			}
 		},
 	)

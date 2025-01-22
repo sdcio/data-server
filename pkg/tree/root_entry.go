@@ -2,8 +2,10 @@ package tree
 
 import (
 	"context"
+	"slices"
 	"strings"
 
+	"github.com/sdcio/data-server/pkg/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -31,24 +33,67 @@ func NewTreeRoot(ctx context.Context, tc *TreeContext) (*RootEntry, error) {
 	return root, nil
 }
 
-func (r *RootEntry) LoadIntendedStoreOwnerData(ctx context.Context, owner string, pathKeySet *PathSet) {
+func (r *RootEntry) LoadIntendedStoreHighestPrio(ctx context.Context, pathKeySet *PathSet, skipIntents []string) error {
+	tc := r.getTreeContext()
+
+	// Get all entries of the already existing intent
+	cacheEntries := tc.ReadCurrentUpdatesHighestPriorities(ctx, pathKeySet.GetPaths(), 2)
+
+	// add all the existing entries
+	for _, entry := range cacheEntries {
+		// we need to skip the actual owner entries
+		if slices.Contains(skipIntents, entry.Owner()) {
+			continue
+		}
+		_, err := r.AddCacheUpdateRecursive(ctx, entry, false)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *RootEntry) LoadIntendedStoreOwnerData(ctx context.Context, owner string, deleteOnlyIntended bool) (UpdateSlice, error) {
 	tc := r.getTreeContext()
 	ownerPaths := tc.GetPathsOfOwner(owner)
 
-	// add the given paths as well
-	ownerPaths.Join(pathKeySet)
-
 	// Get all entries of the already existing intent
-	highesCurrentCacheEntries := tc.ReadCurrentUpdatesHighestPriorities(ctx, ownerPaths.GetPaths(), 2)
+	ownerCacheEntries := tc.ReadUpdatesOwner(ctx, ownerPaths.GetPaths(), owner)
 
 	// add all the existing entries
-	for _, entry := range highesCurrentCacheEntries {
-		r.AddCacheUpdateRecursive(ctx, entry, false)
+	for _, entry := range ownerCacheEntries {
+		_, err := r.AddCacheUpdateRecursive(ctx, entry, false)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Mark all the entries that belong to the owner / intent as deleted.
 	// This is to allow for intent updates. We mark all existing entries for deletion up front.
-	r.markOwnerDelete(owner)
+	r.markOwnerDelete(owner, deleteOnlyIntended)
+	return ownerCacheEntries, nil
+}
+
+func (r *RootEntry) Validate(ctx context.Context, concurrent bool) types.ValidationResult {
+	// perform validation
+	// we use a channel and cumulate all the errors
+	validationResultEntryChan := make(chan *types.ValidationResultEntry, 10)
+
+	// start validation in a seperate goroutine
+	go func() {
+		r.sharedEntryAttributes.Validate(ctx, validationResultEntryChan, concurrent)
+		close(validationResultEntryChan)
+	}()
+
+	// create a ValidationResult struct
+	validationResult := types.ValidationResult{}
+
+	// read from the Warnings channel
+	for e := range validationResultEntryChan {
+		validationResult.AddEntry(e)
+	}
+
+	return validationResult
 }
 
 // String returns the string representation of the Tree.
@@ -90,7 +135,7 @@ func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) LeafVariantSlice
 }
 
 // GetDeletes returns the paths that due to the Tree content are to be deleted from the southbound device.
-func (r *RootEntry) GetDeletes(aggregatePaths bool) ([]DeleteEntry, error) {
+func (r *RootEntry) GetDeletes(aggregatePaths bool) (DeleteEntriesList, error) {
 	deletes := []DeleteEntry{}
 	return r.sharedEntryAttributes.GetDeletes(deletes, aggregatePaths)
 }
@@ -148,4 +193,14 @@ func (d *DeleteEntryImpl) SdcpbPath() (*sdcpb.Path, error) {
 }
 func (d *DeleteEntryImpl) Path() PathSlice {
 	return d.pathslice
+}
+
+type DeleteEntriesList []DeleteEntry
+
+func (d DeleteEntriesList) PathSlices() PathSlices {
+	result := make(PathSlices, 0, len(d))
+	for _, del := range d {
+		result = append(result, del.Path())
+	}
+	return result
 }

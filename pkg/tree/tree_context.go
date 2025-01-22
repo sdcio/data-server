@@ -65,6 +65,13 @@ func (tc *TreeContext) ReadCurrentUpdatesHighestPriorities(ctx context.Context, 
 	}, ccp.ToStringSlice())
 }
 
+func (tc *TreeContext) ReadUpdatesOwner(ctx context.Context, ccp PathSlices, owner string) UpdateSlice {
+	return tc.treeSchemaCacheClient.Read(ctx, &cache.Opts{
+		Store: cachepb.Store_INTENDED,
+		Owner: owner,
+	}, ccp.ToStringSlice())
+}
+
 func (t *TreeContext) GetPathsOfOwner(owner string) *PathSet {
 	p := NewPathSet()
 	for _, keyMeta := range t.IntendedStoreIndex {

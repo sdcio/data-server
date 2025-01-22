@@ -7,6 +7,7 @@ import (
 	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/tree/importer"
+	"github.com/sdcio/data-server/pkg/types"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -61,18 +62,18 @@ type Entry interface {
 	// GetByOwner returns the branches Updates by owner
 	GetByOwner(owner string, result []*LeafEntry) []*LeafEntry
 	// markOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
-	markOwnerDelete(o string)
+	markOwnerDelete(o string, onlyIntended bool)
 	// GetDeletes returns the cache-updates that are not updated, have no lower priority value left and hence should be deleted completely
 	GetDeletes(entries []DeleteEntry, aggregatePaths bool) ([]DeleteEntry, error)
 	// Walk takes the EntryVisitor and applies it to every Entry in the tree
 	Walk(f EntryVisitor) error
 	// Validate kicks off validation
-	Validate(ctx context.Context, errchan chan<- error, warnChan chan<- error, concurrent bool)
+	Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, concurrent bool)
 	// validateMandatory the Mandatory schema field
-	validateMandatory(errchan chan<- error)
+	validateMandatory(resultChan chan<- *types.ValidationResultEntry)
 	// validateMandatoryWithKeys is an internally used function that us called by validateMandatory in case
 	// the container has keys defined that need to be skipped before the mandatory attributes can be checked
-	validateMandatoryWithKeys(level int, attribute string, errchan chan<- error)
+	validateMandatoryWithKeys(level int, attribute string, resultChan chan<- *types.ValidationResultEntry)
 	// getHighestPrecedenceValueOfBranch returns the highes Precedence Value (lowest Priority value) of the brach that starts at this Entry
 	getHighestPrecedenceValueOfBranch() int32
 	// GetSchema returns the *sdcpb.SchemaElem of the Entry
