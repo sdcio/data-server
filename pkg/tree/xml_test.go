@@ -364,7 +364,7 @@ func TestToXMLTable(t *testing.T) {
 			}
 
 			if tt.newConfig != nil {
-				root.markOwnerDelete(owner)
+				root.markOwnerDelete(owner, false)
 
 				newUpds, err := tt.newConfig(ctx, converter)
 				if err != nil {

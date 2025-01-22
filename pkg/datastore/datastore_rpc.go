@@ -63,19 +63,16 @@ type Datastore struct {
 	// stop cancel func
 	cfn context.CancelFunc
 
-	// intent semaphore.
-	// Used by SetIntent to guarantee that
-	// only one SetIntent
-	// is applied at a time.
-	intentMutex *sync.Mutex
-
 	// keeps track of clients watching deviation updates
-	m                *sync.RWMutex
+	m                sync.RWMutex
 	deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer
 
 	// per path intent deviations (no unhandled)
 	md                       *sync.RWMutex
 	currentIntentsDeviations map[string][]*sdcpb.WatchDeviationResponse
+
+	// TransactionManager
+	transactionManager *TransactionManager
 }
 
 // New creates a new datastore, its schema server client and initializes the SBI target
@@ -85,11 +82,9 @@ func New(ctx context.Context, c *config.DatastoreConfig, scc schema.Client, cc c
 		config:                   c,
 		schemaClient:             scc,
 		cacheClient:              cc,
-		intentMutex:              new(sync.Mutex),
-		m:                        new(sync.RWMutex),
 		deviationClients:         make(map[string]sdcpb.DataServer_WatchDeviationsServer),
-		md:                       new(sync.RWMutex),
 		currentIntentsDeviations: make(map[string][]*sdcpb.WatchDeviationResponse),
+		transactionManager:       NewTransactionManager(),
 	}
 	if c.Sync != nil {
 		ds.synCh = make(chan *target.SyncUpdate, c.Sync.Buffer)
@@ -199,76 +194,6 @@ func (d *Datastore) Candidates(ctx context.Context) ([]*sdcpb.DataStore, error) 
 	return rsp, nil
 }
 
-// func (d *Datastore) Commit(ctx context.Context, req *sdcpb.CommitRequest) error {
-// 	name := req.GetDatastore().GetName()
-// 	if name == "" {
-// 		return fmt.Errorf("missing candidate name")
-// 	}
-// 	changes, err := d.cacheClient.GetChanges(ctx, d.Config().Name, req.GetDatastore().GetName())
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	notification, err := d.changesToUpdates(ctx, changes)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	log.Debugf("%s:%s notification:\n%s", d.Name(), name, prototext.Format(notification))
-// 	// TODO: consider if leafref validation
-// 	// needs to run before must statements validation
-
-// 	// push updates to sbi
-// 	sbiSet := &sdcpb.SetDataRequest{
-// 		Update: notification.GetUpdate(),
-// 		// Replace
-// 		Delete: notification.GetDelete(),
-// 	}
-// 	log.Debugf("datastore %s/%s commit:\n%s", d.config.Name, name, prototext.Format(sbiSet))
-
-// 	log.Infof("datastore %s/%s commit: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d",
-// 		d.config.Name, name, len(sbiSet.GetUpdate()), len(sbiSet.GetReplace()), len(sbiSet.GetDelete()))
-// 	// send set request only if there are updates and/or deletes
-
-// 		rsp, err := d.sbi.Set(ctx, sbiSet)
-// 		if err != nil {
-// 			return err
-// 		}
-// 		log.Debugf("datastore %s/%s SetResponse from SBI: %v", d.config.Name, name, rsp)
-
-// 	// commit candidate changes into the intended store
-// 	err = d.cacheClient.Commit(ctx, d.config.Name, name)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	if req.GetStay() {
-// 		// reset candidate changes and (TODO) rebase
-// 		return d.cacheClient.Discard(ctx, d.config.Name, name)
-// 	}
-// 	// delete candidate
-// 	return d.cacheClient.DeleteCandidate(ctx, d.Name(), name)
-// }
-
-func (d *Datastore) Rebase(ctx context.Context, req *sdcpb.RebaseRequest) error {
-	// name := req.GetDatastore().GetName()
-	// if name == "" {
-	// 	return fmt.Errorf("missing candidate name")
-	// }
-	// d.m.Lock()
-	// defer d.m.Unlock()
-	// cand, ok := d.candidates[name]
-	// if !ok {
-	// 	return fmt.Errorf("unknown candidate name %q", name)
-	// }
-
-	// newBase, err := d.main.config.Clone()
-	// if err != nil {
-	// 	return fmt.Errorf("failed to rebase: %v", err)
-	// }
-	// cand.base = newBase
-	return nil
-}
-
 func (d *Datastore) Discard(ctx context.Context, req *sdcpb.DiscardRequest) error {
 	return d.cacheClient.Discard(ctx, req.GetName(), req.Datastore.GetName())
 }
@@ -290,9 +215,9 @@ func (d *Datastore) DeleteCandidate(ctx context.Context, name string) error {
 	return d.cacheClient.DeleteCandidate(ctx, d.Name(), name)
 }
 
-func (d *Datastore) ConnectionState() string {
+func (d *Datastore) ConnectionState() *target.TargetStatus {
 	if d.sbi == nil {
-		return ""
+		return target.NewTargetStatus(target.TargetStatusNotConnected)
 	}
 	return d.sbi.Status()
 }
@@ -410,7 +335,6 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 		}
 		upds.AddUpdate(x)
 		upds.AddUpdates(addUpds)
-
 	}
 	cNotification.Update = upds.Updates()
 
