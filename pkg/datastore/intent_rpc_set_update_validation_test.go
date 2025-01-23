@@ -226,7 +226,7 @@ func TestDatastore_validateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			root.FinishInsertionPhase()
+			root.FinishInsertionPhase(ctx)
 
 			validationResult := root.Validate(ctx, false)
 

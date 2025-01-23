@@ -207,7 +207,7 @@ func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, r
 		}
 	}
 
-	root.FinishInsertionPhase()
+	root.FinishInsertionPhase(ctx)
 
 	var j any
 	// marshal map into JSON bytes

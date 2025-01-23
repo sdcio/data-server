@@ -33,11 +33,26 @@ func NewTreeRoot(ctx context.Context, tc *TreeContext) (*RootEntry, error) {
 	return root, nil
 }
 
+func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
+	tc := r.treeContext.deepCopy()
+	se, err := r.sharedEntryAttributes.deepCopy(tc, nil)
+
+	result := &RootEntry{
+		sharedEntryAttributes: se,
+	}
+
+	err = tc.SetRoot(result.sharedEntryAttributes)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (r *RootEntry) LoadIntendedStoreHighestPrio(ctx context.Context, pathKeySet *PathSet, skipIntents []string) error {
 	tc := r.getTreeContext()
 
 	// Get all entries of the already existing intent
-	cacheEntries := tc.ReadCurrentUpdatesHighestPriorities(ctx, pathKeySet.GetPaths(), 2)
+	cacheEntries := tc.GetTreeSchemaCacheClient().ReadCurrentUpdatesHighestPriorities(ctx, pathKeySet.GetPaths(), 2)
 
 	// add all the existing entries
 	for _, entry := range cacheEntries {
@@ -55,10 +70,9 @@ func (r *RootEntry) LoadIntendedStoreHighestPrio(ctx context.Context, pathKeySet
 
 func (r *RootEntry) LoadIntendedStoreOwnerData(ctx context.Context, owner string, deleteOnlyIntended bool) (UpdateSlice, error) {
 	tc := r.getTreeContext()
-	ownerPaths := tc.GetPathsOfOwner(owner)
 
 	// Get all entries of the already existing intent
-	ownerCacheEntries := tc.ReadUpdatesOwner(ctx, ownerPaths.GetPaths(), owner)
+	ownerCacheEntries := tc.GetTreeSchemaCacheClient().ReadUpdatesOwner(ctx, owner)
 
 	// add all the existing entries
 	for _, entry := range ownerCacheEntries {

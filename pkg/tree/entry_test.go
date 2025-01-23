@@ -46,7 +46,7 @@ func Test_Entry(t *testing.T) {
 		}
 	}
 
-	root.FinishInsertionPhase()
+	root.FinishInsertionPhase(ctx)
 
 	r := []string{}
 	r = root.StringIndent(r)
@@ -92,7 +92,7 @@ func Test_Entry_One(t *testing.T) {
 		}
 	}
 
-	root.FinishInsertionPhase()
+	root.FinishInsertionPhase(ctx)
 
 	// log the tree
 	t.Log(root.String())
@@ -171,7 +171,7 @@ func Test_Entry_Two(t *testing.T) {
 		}
 	}
 
-	root.FinishInsertionPhase()
+	root.FinishInsertionPhase(ctx)
 
 	// log the tree
 	t.Log(root.String())
@@ -216,7 +216,7 @@ func Test_Entry_Three(t *testing.T) {
 		}
 	}
 
-	root.FinishInsertionPhase()
+	root.FinishInsertionPhase(ctx)
 
 	t.Run("Check the data is present", func(t *testing.T) {
 
@@ -262,7 +262,7 @@ func Test_Entry_Three(t *testing.T) {
 		}
 	}
 
-	root.FinishInsertionPhase()
+	root.FinishInsertionPhase(ctx)
 
 	// log the tree
 	t.Log(root.String())
@@ -331,7 +331,7 @@ func Test_Entry_Four(t *testing.T) {
 		}
 	}
 
-	root.FinishInsertionPhase()
+	root.FinishInsertionPhase(ctx)
 
 	t.Run("Check the data is present", func(t *testing.T) {
 
@@ -363,7 +363,7 @@ func Test_Entry_Four(t *testing.T) {
 			t.Error(err)
 		}
 	}
-	root.FinishInsertionPhase()
+	root.FinishInsertionPhase(ctx)
 
 	// log the tree
 	t.Log(root.String())
@@ -438,7 +438,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				}
 			}
 
-			root.FinishInsertionPhase()
+			root.FinishInsertionPhase(ctx)
 
 			validationResult := root.Validate(context.TODO(), false)
 
@@ -587,7 +587,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 		}
 	}
 
-	root.FinishInsertionPhase()
+	root.FinishInsertionPhase(ctx)
 
 	// retrieve the Deletes
 	deletesSlices, err := root.GetDeletes(true)
@@ -1078,7 +1078,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 				}
 			}
 
-			root.FinishInsertionPhase()
+			root.FinishInsertionPhase(ctx)
 
 			validationResult := root.Validate(context.TODO(), false)
 
@@ -1110,7 +1110,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 				}
 			}
 
-			root.FinishInsertionPhase()
+			root.FinishInsertionPhase(ctx)
 
 			validationResult := root.Validate(context.TODO(), false)
 
@@ -1197,7 +1197,7 @@ func Test_Validation_Deref(t *testing.T) {
 				}
 			}
 
-			root.FinishInsertionPhase()
+			root.FinishInsertionPhase(ctx)
 
 			validationResult := root.Validate(context.TODO(), false)
 

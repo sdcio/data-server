@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
-	"github.com/sdcio/cache/proto/cachepb"
 	"github.com/sdcio/data-server/mocks/mockcacheclient"
 	"github.com/sdcio/data-server/mocks/mocktarget"
 	"github.com/sdcio/data-server/pkg/cache"
@@ -740,13 +739,6 @@ func TestDatastore_populateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			// read all the keys from the cache intended store but just the keys, no values are populated
-			storeIndex, err := d.readStoreKeysMeta(ctx, cachepb.Store_INTENDED)
-			if err != nil {
-				t.Error(err)
-			}
-			tc.SetStoreIndex(storeIndex)
-
 			oldIntentContent, err := root.LoadIntendedStoreOwnerData(ctx, reqOne.GetIntent(), false)
 			if err != nil {
 				t.Error(err)
@@ -772,7 +764,7 @@ func TestDatastore_populateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			root.FinishInsertionPhase()
+			root.FinishInsertionPhase(ctx)
 
 			validationResult := root.Validate(ctx, false)
 

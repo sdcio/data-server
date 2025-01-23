@@ -144,7 +144,7 @@ func TestJsonTreeImporter(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			root.FinishInsertionPhase()
+			root.FinishInsertionPhase(ctx)
 			t.Log(root.String())
 
 			var result any

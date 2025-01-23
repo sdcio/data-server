@@ -70,10 +70,10 @@ type Entry interface {
 	// Validate kicks off validation
 	Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, concurrent bool)
 	// validateMandatory the Mandatory schema field
-	validateMandatory(resultChan chan<- *types.ValidationResultEntry)
+	validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry)
 	// validateMandatoryWithKeys is an internally used function that us called by validateMandatory in case
 	// the container has keys defined that need to be skipped before the mandatory attributes can be checked
-	validateMandatoryWithKeys(level int, attribute string, resultChan chan<- *types.ValidationResultEntry)
+	validateMandatoryWithKeys(ctx context.Context, level int, attribute string, resultChan chan<- *types.ValidationResultEntry)
 	// getHighestPrecedenceValueOfBranch returns the highes Precedence Value (lowest Priority value) of the brach that starts at this Entry
 	getHighestPrecedenceValueOfBranch() int32
 	// GetSchema returns the *sdcpb.SchemaElem of the Entry
@@ -82,7 +82,7 @@ type Entry interface {
 	IsRoot() bool
 	// FinishInsertionPhase indicates, that the insertion of Entries into the tree is over
 	// Hence calculations for e.g. choice/case can be performed.
-	FinishInsertionPhase()
+	FinishInsertionPhase(ctx context.Context)
 	// GetParent returns the parent entry
 	GetParent() Entry
 	// Navigate navigates the tree according to the given path and returns the referenced entry or nil if it does not exist.

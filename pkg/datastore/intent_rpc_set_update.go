@@ -25,7 +25,7 @@ import (
 )
 
 func (d *Datastore) populateTreeWithRunning(ctx context.Context, tc *tree.TreeContext, r *tree.RootEntry) error {
-	upds, err := tc.ReadRunningFull(ctx)
+	upds, err := tc.GetTreeSchemaCacheClient().ReadRunningFull(ctx)
 	if err != nil {
 		return err
 	}

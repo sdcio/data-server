@@ -45,6 +45,19 @@ type sharedEntryAttributes struct {
 	remainsMutex sync.Mutex
 }
 
+func (s *sharedEntryAttributes) deepCopy(tc *TreeContext, parent Entry) (*sharedEntryAttributes, error) {
+	result := &sharedEntryAttributes{
+		parent:           parent,
+		pathElemName:     s.pathElemName,
+		childs:           newChildMap(),
+		leafVariants:     newLeafVariants(tc),
+		schema:           s.schema,
+		treeContext:      tc,
+		choicesResolvers: s.choicesResolvers.deepCopy(),
+	}
+	return result, nil
+}
+
 type childMap struct {
 	c  map[string]Entry
 	mu sync.RWMutex
@@ -640,7 +653,7 @@ func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isR
 }
 
 func (s *sharedEntryAttributes) tryLoading(ctx context.Context, path []string) (Entry, error) {
-	upd, err := s.treeContext.ReadRunning(ctx, append(s.Path(), path...))
+	upd, err := s.treeContext.GetTreeSchemaCacheClient().ReadRunningPath(ctx, append(s.Path(), path...))
 	if err != nil {
 		return nil, err
 	}
@@ -733,7 +746,7 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 
 	// validate the mandatory statement on this entry
 	if s.remainsToExist() {
-		s.validateMandatory(resultChan)
+		s.validateMandatory(ctx, resultChan)
 		s.validateLeafRefs(ctx, resultChan)
 		s.validateLeafListMinMaxAttributes(resultChan)
 		s.validatePattern(resultChan)
@@ -988,18 +1001,18 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 
 // validateMandatory validates that all the mandatory attributes,
 // defined by the schema are present either in the tree or in the index.
-func (s *sharedEntryAttributes) validateMandatory(resultChan chan<- *types.ValidationResultEntry) {
+func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry) {
 	if s.schema != nil {
 		switch s.schema.GetSchema().(type) {
 		case *sdcpb.SchemaElem_Container:
 			for _, c := range s.schema.GetContainer().GetMandatoryChildrenConfig() {
-				s.validateMandatoryWithKeys(len(s.GetSchema().GetContainer().GetKeys()), c.Name, resultChan)
+				s.validateMandatoryWithKeys(ctx, len(s.GetSchema().GetContainer().GetKeys()), c.Name, resultChan)
 			}
 		}
 	}
 }
 
-func (s *sharedEntryAttributes) validateMandatoryWithKeys(level int, attribute string, resultChan chan<- *types.ValidationResultEntry) {
+func (s *sharedEntryAttributes) validateMandatoryWithKeys(ctx context.Context, level int, attribute string, resultChan chan<- *types.ValidationResultEntry) {
 	if level == 0 {
 		// first check if the mandatory value is set via the intent, e.g. part of the tree already
 		v, existsInTree := s.filterActiveChoiceCaseChilds()[attribute]
@@ -1007,7 +1020,11 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(level int, attribute s
 		// if not the path exists in the tree and is not to be deleted, then lookup in the paths index of the store
 		// and see if such path exists, if not raise the error
 		if !(existsInTree && v.remainsToExist()) {
-			if !s.treeContext.PathExists(append(s.Path(), attribute)) {
+			exists, err := s.treeContext.treeSchemaCacheClient.IntendedPathExists(ctx, append(s.Path(), attribute))
+			if err != nil {
+				resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, false).Owner(), fmt.Errorf("error validating mandatory childs %s: %v", s.Path(), err), types.ValidationResultEntryTypeError)
+			}
+			if !exists {
 				resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, false).Owner(), fmt.Errorf("error mandatory child %s does not exist, path: %s", attribute, s.Path()), types.ValidationResultEntryTypeError)
 			}
 		}
@@ -1015,7 +1032,7 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(level int, attribute s
 	}
 
 	for _, c := range s.filterActiveChoiceCaseChilds() {
-		c.validateMandatoryWithKeys(level-1, attribute, resultChan)
+		c.validateMandatoryWithKeys(ctx, level-1, attribute, resultChan)
 	}
 
 }
@@ -1058,15 +1075,15 @@ func (s *sharedEntryAttributes) initChoiceCasesResolvers() {
 // FinishInsertionPhase certain values that are costly to calculate but used multiple times
 // will be calculated and stored for later use. However therefore the insertion phase into the
 // tree needs to be over. Calling this function indicated the end of the phase and thereby triggers the calculation
-func (s *sharedEntryAttributes) FinishInsertionPhase() {
+func (s *sharedEntryAttributes) FinishInsertionPhase(ctx context.Context) {
 
 	// populate the ChoiceCaseResolvers to determine the active case
-	s.populateChoiceCaseResolvers()
+	s.populateChoiceCaseResolvers(ctx)
 
 	// recurse the call to all (active) entries within the tree.
 	// Thereby already using the choiceCaseResolver via filterActiveChoiceCaseChilds()
 	for _, child := range s.filterActiveChoiceCaseChilds() {
-		child.FinishInsertionPhase()
+		child.FinishInsertionPhase(ctx)
 	}
 
 	// reset state
@@ -1079,7 +1096,7 @@ func (s *sharedEntryAttributes) FinishInsertionPhase() {
 // caches index (old intent content) as well as from the tree (new intent content).
 // the choiceResolver is fed with the resulting values and thereby ready to be queried
 // in a later stage (filterActiveChoiceCaseChilds()).
-func (s *sharedEntryAttributes) populateChoiceCaseResolvers() {
+func (s *sharedEntryAttributes) populateChoiceCaseResolvers(ctx context.Context) {
 	if s.schema == nil {
 		return
 	}
@@ -1089,7 +1106,7 @@ func (s *sharedEntryAttributes) populateChoiceCaseResolvers() {
 			isNew := false
 			var val2 *int32
 			// Query the Index, stored in the treeContext for the per branch highes precedence
-			v := s.treeContext.GetBranchesHighesPrecedence(append(s.Path(), elem), CacheUpdateFilterExcludeOwner(s.treeContext.GetActualOwner()))
+			v := s.treeContext.GetTreeSchemaCacheClient().GetBranchesHighesPrecedence(ctx, append(s.Path(), elem), CacheUpdateFilterExcludeOwner(s.treeContext.GetActualOwner()))
 
 			child, childExists := s.childs.GetEntry(elem)
 			// set the value from the tree as well

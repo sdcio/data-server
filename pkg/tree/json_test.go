@@ -409,7 +409,7 @@ func TestToJsonTable(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			root.FinishInsertionPhase()
+			root.FinishInsertionPhase(ctx)
 
 			fmt.Println(root.String())
 
