@@ -78,12 +78,7 @@ func (d *Datastore) transactionSet(ctx context.Context, recordTransaction *Trans
 	treeCacheSchemaClient := tree.NewTreeSchemaCacheClient(d.Name(), d.cacheClient, d.getValidationClient())
 	tc := tree.NewTreeContext(treeCacheSchemaClient, d.Name())
 
-	// read all the keys from the cache intended store but just the keys, no values are populated
-	storeIndex, err := d.readStoreKeysMeta(ctx, cachepb.Store_INTENDED)
-	if err != nil {
-		return nil, err
-	}
-	tc.SetStoreIndex(storeIndex)
+	tc.GetTreeSchemaCacheClient().RefreshCaches(ctx)
 
 	root, err := tree.NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -93,6 +88,8 @@ func (d *Datastore) transactionSet(ctx context.Context, recordTransaction *Trans
 	involvedPaths := &tree.PathSet{}
 
 	for _, intent := range setTransaction.intents {
+		tc.SetActualOwner(intent.name)
+
 		log.Debugf("Transaction: %s - adding intent %s to tree", recordTransaction.GetTransactionId(), intent.name)
 		oldIntentContent, err := root.LoadIntendedStoreOwnerData(ctx, intent.name, intent.onlyIntended)
 		if err != nil {
@@ -124,7 +121,7 @@ func (d *Datastore) transactionSet(ctx context.Context, recordTransaction *Trans
 	}
 
 	log.Debugf("Transaction: %s - finish tree insertion phase", recordTransaction.GetTransactionId())
-	root.FinishInsertionPhase()
+	root.FinishInsertionPhase(ctx)
 
 	result := &sdcpb.TransactionSetResponse{}
 

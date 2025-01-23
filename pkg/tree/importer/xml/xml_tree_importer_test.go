@@ -101,7 +101,7 @@ func TestXmlTreeImporter(t *testing.T) {
 			}
 			t.Log(root.String())
 
-			root.FinishInsertionPhase()
+			root.FinishInsertionPhase(ctx)
 
 			result, err := root.ToXML(false, false, false, false)
 			if err != nil {
