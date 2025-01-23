@@ -11,8 +11,20 @@ import (
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
 )
+
+var (
+	flagsNew      *UpdateInsertFlags
+	flagsExisting *UpdateInsertFlags
+)
+
+func init() {
+	flagsNew = NewUpdateInsertFlags()
+	flagsNew.SetNewFlag()
+	flagsExisting = NewUpdateInsertFlags()
+}
 
 func Test_Entry(t *testing.T) {
 
@@ -25,7 +37,10 @@ func Test_Entry(t *testing.T) {
 	u2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc, int32(99), "me", int64(444))
 	u3 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc, int32(98), "me", int64(88))
 
-	scb, err := testhelper.GetSchemaClientBound(t)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +55,7 @@ func Test_Entry(t *testing.T) {
 	}
 
 	for _, u := range []*cache.Update{u1, u2, u3} {
-		_, err = root.AddCacheUpdateRecursive(ctx, u, true)
+		_, err = root.AddCacheUpdateRecursive(ctx, u, flagsNew)
 		if err != nil {
 			t.Error(err)
 		}
@@ -70,7 +85,10 @@ func Test_Entry_One(t *testing.T) {
 	u2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc2, prio100, owner1, ts1)
 	u3 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner2, ts1)
 
-	scb, err := testhelper.GetSchemaClientBound(t)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +104,7 @@ func Test_Entry_One(t *testing.T) {
 
 	// start test
 	for _, u := range []*cache.Update{u1, u2, u3} {
-		_, err := root.AddCacheUpdateRecursive(ctx, u, true)
+		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsNew)
 		if err != nil {
 			t.Error(err)
 		}
@@ -136,7 +154,10 @@ func Test_Entry_Two(t *testing.T) {
 	ts1 := int64(9999999)
 	u1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
 
-	scb, err := testhelper.GetSchemaClientBound(t)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +173,7 @@ func Test_Entry_Two(t *testing.T) {
 
 	// start test add "existing" data
 	for _, u := range []*cache.Update{u1} {
-		_, err := root.AddCacheUpdateRecursive(ctx, u, false)
+		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsExisting)
 		if err != nil {
 			t.Error(err)
 		}
@@ -165,7 +186,7 @@ func Test_Entry_Two(t *testing.T) {
 	n1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*cache.Update{n1} {
-		_, err = root.AddCacheUpdateRecursive(ctx, u, true)
+		_, err = root.AddCacheUpdateRecursive(ctx, u, flagsNew)
 		if err != nil {
 			t.Error(err)
 		}
@@ -194,7 +215,10 @@ func Test_Entry_Three(t *testing.T) {
 	u3 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "12", "description"}, desc3, prio50, owner1, ts1)
 	u4 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
 
-	scb, err := testhelper.GetSchemaClientBound(t)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +234,7 @@ func Test_Entry_Three(t *testing.T) {
 
 	// start test add "existing" data
 	for _, u := range []*cache.Update{u1, u2, u3, u4} {
-		_, err := root.AddCacheUpdateRecursive(ctx, u, false)
+		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsExisting)
 		if err != nil {
 			t.Error(err)
 		}
@@ -256,7 +280,7 @@ func Test_Entry_Three(t *testing.T) {
 	n2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "11", "description"}, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*cache.Update{n1, n2} {
-		_, err := root.AddCacheUpdateRecursive(ctx, u, true)
+		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsNew)
 		if err != nil {
 			t.Error(err)
 		}
@@ -311,7 +335,10 @@ func Test_Entry_Four(t *testing.T) {
 
 	ctx := context.TODO()
 
-	scb, err := testhelper.GetSchemaClientBound(t)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +352,7 @@ func Test_Entry_Four(t *testing.T) {
 
 	// start test add "existing" data
 	for _, u := range []*cache.Update{u1o1, u2o1, u3, u4, u1o2, u2o2} {
-		_, err := root.AddCacheUpdateRecursive(ctx, u, false)
+		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsExisting)
 		if err != nil {
 			t.Error(err)
 		}
@@ -358,7 +385,7 @@ func Test_Entry_Four(t *testing.T) {
 	n2 := cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "11", "description"}, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*cache.Update{n1, n2} {
-		_, err := root.AddCacheUpdateRecursive(ctx, u, true)
+		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsNew)
 		if err != nil {
 			t.Error(err)
 		}
@@ -406,7 +433,10 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 	ctx := context.TODO()
 
-	scb, err := testhelper.GetSchemaClientBound(t)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -432,7 +462,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			// start test add "existing" data
 			for _, u := range []*cache.Update{u1} {
-				_, err := root.AddCacheUpdateRecursive(ctx, u, false)
+				_, err := root.AddCacheUpdateRecursive(ctx, u, flagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -474,7 +504,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			// start test add "existing" data
 			for _, u := range []*cache.Update{u1} {
-				_, err := root.AddCacheUpdateRecursive(ctx, u, false)
+				_, err := root.AddCacheUpdateRecursive(ctx, u, flagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -520,7 +550,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			// start test add "existing" data
 			for _, u := range []*cache.Update{u1} {
-				_, err := root.AddCacheUpdateRecursive(ctx, u, false)
+				_, err := root.AddCacheUpdateRecursive(ctx, u, flagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -552,8 +582,10 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	u6 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "description"}, desc3, prio50, owner1, ts1)
 
 	ctx := context.TODO()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
 
-	scb, err := testhelper.GetSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -567,7 +599,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 
 	// start test add "existing" data
 	for _, u := range []*cache.Update{u1, u2, u3, u4, u5, u6} {
-		_, err := root.AddCacheUpdateRecursive(ctx, u, false)
+		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsExisting)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -581,7 +613,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 
 	// start test add "new" / request data
 	for _, u := range []*cache.Update{u1n, u2n} {
-		_, err := root.AddCacheUpdateRecursive(ctx, u, true)
+		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsNew)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -628,8 +660,8 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{})
 
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 2, owner1, ts), false, nil))
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 1, owner2, ts), false, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 2, owner1, ts), flagsExisting, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 1, owner2, ts), flagsExisting, nil))
 			lv.les[1].MarkDelete(false)
 
 			le := lv.GetHighestPrecedence(true, false)
@@ -646,7 +678,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	t.Run("Single entry thats also marked for deletion",
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{})
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 1, owner1, ts), false, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 1, owner1, ts), flagsExisting, nil))
 			lv.les[0].MarkDelete(false)
 
 			le := lv.GetHighestPrecedence(true, false)
@@ -662,8 +694,8 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	t.Run("New Low Prio IsUpdate OnlyChanged True",
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{})
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), false, nil))
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner2, ts), true, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
 
 			le := lv.GetHighestPrecedence(true, false)
 
@@ -678,8 +710,8 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	t.Run("New Low Prio IsUpdate OnlyChanged False",
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{})
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), false, nil))
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner1, ts), true, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner1, ts), flagsNew, nil))
 
 			le := lv.GetHighestPrecedence(false, false)
 
@@ -695,8 +727,8 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{})
 
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), false, nil))
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner2, ts), true, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
 
 			le := lv.GetHighestPrecedence(true, false)
 
@@ -709,8 +741,8 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	t.Run("New Low Prio IsNew OnlyChanged == False",
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{})
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), false, nil))
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner2, ts), true, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
 
 			le := lv.GetHighestPrecedence(false, false)
 
@@ -737,9 +769,9 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	t.Run("secondhighes populated if highes was first",
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{})
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 1, owner1, ts), false, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 1, owner1, ts), flagsExisting, nil))
 			lv.les[0].MarkDelete(false)
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 2, owner2, ts), false, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 2, owner2, ts), flagsExisting, nil))
 
 			le := lv.GetHighestPrecedence(true, false)
 
@@ -786,7 +818,10 @@ func Test_Schema_Population(t *testing.T) {
 
 	ctx := context.TODO()
 
-	scb, err := testhelper.GetSchemaClientBound(t)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -838,7 +873,10 @@ func Test_Schema_Population(t *testing.T) {
 func Test_sharedEntryAttributes_SdcpbPath(t *testing.T) {
 	ctx := context.TODO()
 
-	scb, err := testhelper.GetSchemaClientBound(t)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -962,7 +1000,10 @@ func Test_sharedEntryAttributes_SdcpbPath(t *testing.T) {
 func Test_sharedEntryAttributes_getKeyName(t *testing.T) {
 	ctx := context.TODO()
 
-	scb, err := testhelper.GetSchemaClientBound(t)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1054,7 +1095,10 @@ func Test_Validation_String_Pattern(t *testing.T) {
 
 	ctx := context.TODO()
 
-	scb, err := testhelper.GetSchemaClientBound(t)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1072,7 +1116,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 			u1 := cache.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
 
 			for _, u := range []*cache.Update{u1} {
-				_, err := root.AddCacheUpdateRecursive(ctx, u, true)
+				_, err := root.AddCacheUpdateRecursive(ctx, u, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1090,6 +1134,8 @@ func Test_Validation_String_Pattern(t *testing.T) {
 			}
 		},
 	)
+	flagsNew := NewUpdateInsertFlags()
+	flagsNew.SetNewFlag()
 
 	t.Run("Test_Validation_String_Pattern - Two",
 		func(t *testing.T) {
@@ -1104,7 +1150,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 			u1 := cache.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
 
 			for _, u := range []*cache.Update{u1} {
-				_, err := root.AddCacheUpdateRecursive(ctx, u, true)
+				_, err := root.AddCacheUpdateRecursive(ctx, u, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1173,10 +1219,16 @@ func Test_Validation_Deref(t *testing.T) {
 
 	ctx := context.TODO()
 
-	scb, err := testhelper.GetSchemaClientBound(t)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	flagsNew := NewUpdateInsertFlags()
+	flagsNew.SetNewFlag()
 
 	t.Run("Test_Validation_String_Pattern - One",
 		func(t *testing.T) {
@@ -1191,7 +1243,7 @@ func Test_Validation_Deref(t *testing.T) {
 			u1 := cache.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
 
 			for _, u := range []*cache.Update{u1} {
-				_, err := root.AddCacheUpdateRecursive(ctx, u, true)
+				_, err := root.AddCacheUpdateRecursive(ctx, u, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}

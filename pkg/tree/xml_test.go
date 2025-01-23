@@ -11,6 +11,7 @@ import (
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"go.uber.org/mock/gomock"
 )
 
 func TestToXMLTable(t *testing.T) {
@@ -337,7 +338,10 @@ func TestToXMLTable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			scb, err := testhelper.GetSchemaClientBound(t)
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+
+			scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -357,7 +361,7 @@ func TestToXMLTable(t *testing.T) {
 				if err != nil {
 					t.Error(err)
 				}
-				err = addToRoot(ctx, root, existingUpds, false, owner, 5)
+				err = addToRoot(ctx, root, existingUpds, flagsExisting, owner, 5)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -370,7 +374,7 @@ func TestToXMLTable(t *testing.T) {
 				if err != nil {
 					t.Error(err)
 				}
-				err = addToRoot(ctx, root, newUpds, true, owner, 5)
+				err = addToRoot(ctx, root, newUpds, flagsNew, owner, 5)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -380,7 +384,7 @@ func TestToXMLTable(t *testing.T) {
 				if err != nil {
 					t.Error(err)
 				}
-				err = addToRoot(ctx, root, runningUpds, false, RunningIntentName, RunningValuesPrio)
+				err = addToRoot(ctx, root, runningUpds, flagsExisting, RunningIntentName, RunningValuesPrio)
 				if err != nil {
 					t.Fatal(err)
 				}

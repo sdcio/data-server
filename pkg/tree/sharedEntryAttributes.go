@@ -610,7 +610,9 @@ func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path []st
 
 	upd := cache.NewUpdate(path, val, DefaultValuesPrio, DefaultsIntentName, 0)
 
-	result, err := s.AddCacheUpdateRecursive(ctx, upd, false)
+	flags := NewUpdateInsertFlags()
+
+	result, err := s.AddCacheUpdateRecursive(ctx, upd, flags)
 	if err != nil {
 		return nil, fmt.Errorf("failed adding default value for %s to tree; %v", strings.Join(path, "/"), err)
 	}
@@ -660,7 +662,9 @@ func (s *sharedEntryAttributes) tryLoading(ctx context.Context, path []string) (
 	if upd == nil {
 		return nil, fmt.Errorf("reached %v but child %s does not exist", s.Path(), path[0])
 	}
-	_, err = s.treeContext.root.AddCacheUpdateRecursive(ctx, upd, false)
+	flags := NewUpdateInsertFlags()
+
+	_, err = s.treeContext.root.AddCacheUpdateRecursive(ctx, upd, flags)
 	if err != nil {
 		return nil, err
 	}
@@ -869,6 +873,11 @@ func (s *sharedEntryAttributes) validatePattern(resultChan chan<- *types.Validat
 func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32) error {
 	var err error
 
+	updateInsertFlags := NewUpdateInsertFlags()
+	if intentName != RunningIntentName {
+		updateInsertFlags.SetNewFlag()
+	}
+
 	switch x := s.schema.GetSchema().(type) {
 	case *sdcpb.SchemaElem_Container, nil:
 		switch {
@@ -913,7 +922,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 						return err
 					}
 					upd := cache.NewUpdate(s.Path(), tvVal, intentPrio, intentName, 0)
-					s.leafVariants.Add(NewLeafEntry(upd, false, s))
+					s.leafVariants.Add(NewLeafEntry(upd, updateInsertFlags, s))
 				}
 			}
 
@@ -955,10 +964,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 		}
 		upd := cache.NewUpdate(s.Path(), tvVal, intentPrio, intentName, 0)
 
-		// If the intent name is the RunningIntentName, then set isNew to false
-		isNew := intentName != RunningIntentName
-
-		s.leafVariants.Add(NewLeafEntry(upd, isNew, s))
+		s.leafVariants.Add(NewLeafEntry(upd, updateInsertFlags, s))
 
 	case *sdcpb.SchemaElem_Leaflist:
 		var scalarArr *sdcpb.ScalarArray
@@ -972,10 +978,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 
 			scalarArr = llvTv.GetLeaflistVal()
 		} else {
-			// If the intent name is the RunningIntentName, then set isNew to false
-			isNew := intentName != RunningIntentName
-
-			le = NewLeafEntry(nil, isNew, s)
+			le = NewLeafEntry(nil, updateInsertFlags, s)
 			mustAdd = true
 			scalarArr = &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{}}
 		}
@@ -1246,7 +1249,7 @@ func (s *sharedEntryAttributes) getKeyName() (string, error) {
 
 // AddCacheUpdateRecursive recursively adds the given cache.Update to the tree. Thereby creating all the entries along the path.
 // if the entries along th path already exist, the existing entries are called to add the Update.
-func (s *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *cache.Update, new bool) (Entry, error) {
+func (s *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *cache.Update, flags *UpdateInsertFlags) (Entry, error) {
 	idx := 0
 	// if it is the root node, index remains == 0
 	if s.parent != nil {
@@ -1256,7 +1259,7 @@ func (s *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *
 	// continue with recursive add otherwise
 	if idx == len(c.GetPath()) {
 		// delegate update handling to leafVariants
-		s.leafVariants.Add(NewLeafEntry(c, new, s))
+		s.leafVariants.Add(NewLeafEntry(c, flags, s))
 		return s, nil
 	}
 
@@ -1270,5 +1273,57 @@ func (s *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *
 			return nil, err
 		}
 	}
-	return e.AddCacheUpdateRecursive(ctx, c, new)
+	return e.AddCacheUpdateRecursive(ctx, c, flags)
+}
+
+type UpdateInsertFlags struct {
+	new          bool
+	delete       bool
+	onlyIntended bool
+}
+
+// NewUpdateInsertFlags returns a new *UpdateInsertFlags instance
+// with all values set to false, so not new, and not marked for deletion
+func NewUpdateInsertFlags() *UpdateInsertFlags {
+	return &UpdateInsertFlags{}
+}
+
+func (f *UpdateInsertFlags) SetDeleteFlag() {
+	f.delete = true
+	f.new = false
+}
+
+func (f *UpdateInsertFlags) SetDeleteOnlyUpdatedFlag() {
+	f.delete = true
+	f.onlyIntended = true
+	f.new = false
+}
+
+func (f *UpdateInsertFlags) SetNewFlag() {
+	f.new = true
+	f.delete = false
+	f.onlyIntended = false
+}
+
+func (f *UpdateInsertFlags) GetDeleteFlag() bool {
+	return f.delete
+}
+
+func (f *UpdateInsertFlags) GetDeleteOnlyIntendedFlag() bool {
+	return f.onlyIntended
+}
+
+func (f *UpdateInsertFlags) GetNewFlag() bool {
+	return f.new
+}
+
+func (f *UpdateInsertFlags) Apply(le *LeafEntry) {
+	if f.delete {
+		le.MarkDelete(f.onlyIntended)
+		return
+	}
+	if f.new {
+		le.MarkNew()
+		return
+	}
 }

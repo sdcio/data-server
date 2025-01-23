@@ -30,22 +30,11 @@ func (d *Datastore) populateTreeWithRunning(ctx context.Context, tc *tree.TreeCo
 		return err
 	}
 
+	flags := tree.NewUpdateInsertFlags()
+
 	for _, upd := range upds {
 		newUpd := cache.NewUpdate(upd.GetPath(), upd.Bytes(), tree.RunningValuesPrio, tree.RunningIntentName, 0)
-		_, err := r.AddCacheUpdateRecursive(ctx, newUpd, false)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (d *Datastore) populateTree(ctx context.Context, root *tree.RootEntry, upds []*cache.Update) error {
-	// now add the cache.Updates from the actual request, after marking the old once for deletion.
-	for _, upd := range upds {
-		// add the cache.Update to the tree
-		_, err := root.AddCacheUpdateRecursive(ctx, upd, true)
+		_, err := r.AddCacheUpdateRecursive(ctx, newUpd, flags)
 		if err != nil {
 			return err
 		}

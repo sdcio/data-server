@@ -34,6 +34,18 @@ func (l *LeafEntry) MarkUpdate(u *cache.Update) {
 	l.IsUpdated = true
 	// reset the delete flag
 	l.Delete = false
+	l.IsNew = false
+}
+
+func (l *LeafEntry) MarkNew() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	// set the update flag
+	l.IsUpdated = false
+	// reset the delete flag
+	l.Delete = false
+	l.DeleteOnlyIntended = false
+	l.IsNew = true
 }
 
 func (l *LeafEntry) GetDeleteFlag() bool {
@@ -76,6 +88,7 @@ func (l *LeafEntry) MarkDelete(onlyIntended bool) {
 		l.DeleteOnlyIntended = true
 	}
 	l.IsUpdated = false
+	l.IsNew = false
 }
 
 func (l *LeafEntry) GetRootBasedEntryChain() []Entry {
@@ -95,10 +108,12 @@ func (l *LeafEntry) String() string {
 }
 
 // NewLeafEntry constructor for a new LeafEntry
-func NewLeafEntry(c *cache.Update, new bool, parent Entry) *LeafEntry {
-	return &LeafEntry{
+func NewLeafEntry(c *cache.Update, flags *UpdateInsertFlags, parent Entry) *LeafEntry {
+	le := &LeafEntry{
 		parentEntry: parent,
 		Update:      c,
-		IsNew:       new,
 	}
+	flags.Apply(le)
+	return le
+
 }

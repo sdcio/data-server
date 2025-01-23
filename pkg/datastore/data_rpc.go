@@ -170,6 +170,8 @@ func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, r
 		return err
 	}
 
+	flagsExisting := tree.NewUpdateInsertFlags()
+
 	for _, store := range getStores(req) {
 		in := d.cacheClient.ReadCh(ctx, name, &cache.Opts{
 			Store:    store,
@@ -202,7 +204,7 @@ func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, r
 						continue
 					}
 				}
-				root.AddCacheUpdateRecursive(ctx, upd, false)
+				root.AddCacheUpdateRecursive(ctx, upd, flagsExisting)
 			}
 		}
 	}
