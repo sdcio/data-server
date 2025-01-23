@@ -220,11 +220,9 @@ func TestDatastore_validateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			// Populate the root tree
-			err = d.populateTree(ctx, root, updSlice)
-			if err != nil {
-				t.Error(err)
-			}
+			flagsNew := tree.NewUpdateInsertFlags()
+			flagsNew.SetNewFlag()
+			root.AddCacheUpdatesRecursive(ctx, updSlice, flagsNew)
 
 			root.FinishInsertionPhase(ctx)
 

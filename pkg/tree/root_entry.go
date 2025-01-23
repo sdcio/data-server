@@ -54,13 +54,26 @@ func (r *RootEntry) LoadIntendedStoreHighestPrio(ctx context.Context, pathKeySet
 	// Get all entries of the already existing intent
 	cacheEntries := tc.GetTreeSchemaCacheClient().ReadCurrentUpdatesHighestPriorities(ctx, pathKeySet.GetPaths(), 2)
 
+	flags := NewUpdateInsertFlags()
+
 	// add all the existing entries
 	for _, entry := range cacheEntries {
 		// we need to skip the actual owner entries
 		if slices.Contains(skipIntents, entry.Owner()) {
 			continue
 		}
-		_, err := r.AddCacheUpdateRecursive(ctx, entry, false)
+		_, err := r.AddCacheUpdateRecursive(ctx, entry, flags)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *RootEntry) AddCacheUpdatesRecursive(ctx context.Context, us UpdateSlice, flags *UpdateInsertFlags) error {
+	var err error
+	for _, u := range us {
+		_, err = r.sharedEntryAttributes.AddCacheUpdateRecursive(ctx, u, flags)
 		if err != nil {
 			return err
 		}
@@ -74,9 +87,11 @@ func (r *RootEntry) LoadIntendedStoreOwnerData(ctx context.Context, owner string
 	// Get all entries of the already existing intent
 	ownerCacheEntries := tc.GetTreeSchemaCacheClient().ReadUpdatesOwner(ctx, owner)
 
+	flags := NewUpdateInsertFlags()
+
 	// add all the existing entries
 	for _, entry := range ownerCacheEntries {
-		_, err := r.AddCacheUpdateRecursive(ctx, entry, false)
+		_, err := r.AddCacheUpdateRecursive(ctx, entry, flags)
 		if err != nil {
 			return nil, err
 		}

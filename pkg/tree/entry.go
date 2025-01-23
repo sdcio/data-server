@@ -49,7 +49,7 @@ type Entry interface {
 	// addChild Add a child entry
 	addChild(context.Context, Entry) error
 	// AddCacheUpdateRecursive Add the given cache.Update to the tree
-	AddCacheUpdateRecursive(ctx context.Context, u *cache.Update, new bool) (Entry, error)
+	AddCacheUpdateRecursive(ctx context.Context, u *cache.Update, flags *UpdateInsertFlags) (Entry, error)
 	// StringIndent debug tree struct as indented string slice
 	StringIndent(result []string) []string
 	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.

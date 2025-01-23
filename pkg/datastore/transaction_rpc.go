@@ -101,7 +101,10 @@ func (d *Datastore) transactionSet(ctx context.Context, recordTransaction *Trans
 			return nil, err
 		}
 
-		err = d.populateTree(ctx, root, intent.updates)
+		flagsNew := tree.NewUpdateInsertFlags()
+		flagsNew.SetNewFlag()
+
+		err = root.AddCacheUpdatesRecursive(ctx, intent.updates, flagsNew)
 		if err != nil {
 			return nil, err
 		}

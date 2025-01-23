@@ -752,11 +752,9 @@ func TestDatastore_populateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			// Populate the root tree
-			err = d.populateTree(ctx, root, updSlice)
-			if err != nil {
-				t.Error(err)
-			}
+			flags := tree.NewUpdateInsertFlags()
+			flags.SetNewFlag()
+			root.AddCacheUpdatesRecursive(ctx, updSlice, flags)
 
 			// populate Tree with running
 			err = d.populateTreeWithRunning(ctx, tc, root)

@@ -117,7 +117,7 @@ func TestJsonTreeImporter(t *testing.T) {
 	testhelper.ConfigureCacheClientMock(t, cacheClient, nil, nil, nil, nil)
 
 	dsName := "dev1"
-	scb, err := testhelper.GetSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t, controller)
 	if err != nil {
 		t.Error(err)
 	}
