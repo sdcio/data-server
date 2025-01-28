@@ -64,7 +64,7 @@ type Datastore struct {
 	cfn context.CancelFunc
 
 	// keeps track of clients watching deviation updates
-	m                sync.RWMutex
+	m                *sync.RWMutex
 	deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer
 
 	// per path intent deviations (no unhandled)
@@ -82,10 +82,13 @@ func New(ctx context.Context, c *config.DatastoreConfig, scc schema.Client, cc c
 		config:                   c,
 		schemaClient:             scc,
 		cacheClient:              cc,
+		m:                        &sync.RWMutex{},
+		md:                       &sync.RWMutex{},
 		deviationClients:         make(map[string]sdcpb.DataServer_WatchDeviationsServer),
 		currentIntentsDeviations: make(map[string][]*sdcpb.WatchDeviationResponse),
-		transactionManager:       NewTransactionManager(),
 	}
+	ds.transactionManager = NewTransactionManager(ds)
+
 	if c.Sync != nil {
 		ds.synCh = make(chan *target.SyncUpdate, c.Sync.Buffer)
 	}

@@ -1,38 +1,77 @@
 package datastore
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/tree"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	log "github.com/sirupsen/logrus"
+)
+
+var (
+	ErrTransactionOngoing error = errors.New("transaction ongoing")
 )
 
 type TransactionManager struct {
-	transactionMutex sync.Mutex
-	transaction      *Transaction
+	tmMutex     *sync.Mutex
+	transaction *Transaction
+	rollbacker  RollbackInterface
 }
 
-func NewTransactionManager() *TransactionManager {
-	return &TransactionManager{}
+func NewTransactionManager(r RollbackInterface) *TransactionManager {
+	return &TransactionManager{
+		tmMutex:    &sync.Mutex{},
+		rollbacker: r,
+	}
 }
 
-func (t *TransactionManager) CreateTransaction(id string) *Transaction {
-	t.transactionMutex.Lock()
+func (t *TransactionManager) RegisterTransaction(ctx context.Context, trans *Transaction) error {
+	t.tmMutex.Lock()
+	defer t.tmMutex.Unlock()
+	if t.transactionOngoing() {
+		return ErrTransactionOngoing
+	}
+
 	// no Unlock, the created transaction locks the Mutex, which must explicitly be unlocked via FinishTransaction
-	t.transaction = NewTransaction(id)
-	return t.transaction
+	t.transaction = trans
+	return nil
 }
 
-func (t *TransactionManager) FinishTransaction(id string) error {
+// transactionIsOngoing requires caller to acquire lock before calling
+func (t *TransactionManager) transactionOngoing() bool {
+	return t.transaction != nil
+}
+
+func (t *TransactionManager) cleanupTransaction(id string) error {
+	t.tmMutex.Lock()
+	defer t.tmMutex.Unlock()
 	// Perform checks by calling GetTransaction
 	_, err := t.GetTransaction(id)
 	if err != nil {
 		return err
 	}
 	t.transaction = nil
-	t.transactionMutex.Unlock()
 	return nil
+}
+
+func (t *TransactionManager) Confirm(id string) error {
+	t.transaction.Confirm()
+	return t.cleanupTransaction(id)
+}
+
+func (t *TransactionManager) Cancel(ctx context.Context, id string) error {
+	rollbacktransAction := t.transaction.GetRollbackTransaction()
+
+	_, err := t.rollbacker.transactionSet(ctx, rollbacktransAction, false)
+	if err != nil {
+		return err
+	}
+	return t.cleanupTransaction(id)
 }
 
 func (t *TransactionManager) GetTransaction(id string) (*Transaction, error) {
@@ -45,54 +84,114 @@ func (t *TransactionManager) GetTransaction(id string) (*Transaction, error) {
 	return t.transaction, nil
 }
 
+type TransactionIntentType int
+
+const (
+	TransactionIntentNew TransactionIntentType = iota // Starts at 0
+	TransactionIntentOld                              // Incremented to 1
+)
+
 type Transaction struct {
 	transactionId string
-	intents       map[string]*TransactionIntent
+	timer         *TransactionCancelTimer
+	newIntents    map[string]*TransactionIntent
+	oldIntents    map[string]*TransactionIntent
 }
 
 func NewTransaction(id string) *Transaction {
 	return &Transaction{
 		transactionId: id,
+		newIntents:    map[string]*TransactionIntent{},
+		oldIntents:    map[string]*TransactionIntent{},
 	}
+}
+
+func (t *Transaction) Confirm() {
+	t.timer.Stop()
+}
+
+func (t *Transaction) StartRollbackTimer() error {
+	if t.timer != nil {
+		return t.timer.Start()
+	}
+	return nil
+}
+
+func (t *Transaction) SetTimeout(d time.Duration) {
+	t.timer = NewTransactionCancelTimer(d)
 }
 
 func (t *Transaction) GetIntentNames() []string {
 	result := []string{}
-	for k := range t.intents {
+	for k := range t.newIntents {
 		result = append(result, k)
 	}
 	return result
+}
+
+func (t *Transaction) GetRollbackTransaction() *Transaction {
+	t.timer.Stop()
+	tr := NewTransaction(t.GetTransactionId() + " - Rollback")
+	for _, v := range t.oldIntents {
+		tr.AddTransactionIntent(v, TransactionIntentNew)
+	}
+
+	return tr
 }
 
 func (t *Transaction) GetTransactionId() string {
 	return t.transactionId
 }
 
-func (t *Transaction) AddTransactionIntent(ti *TransactionIntent) error {
-	_, exists := t.intents[ti.name]
+func (t *Transaction) getTransactionIntentTypeMap(tit TransactionIntentType) map[string]*TransactionIntent {
+	switch tit {
+	case TransactionIntentNew:
+		return t.newIntents
+	case TransactionIntentOld:
+		return t.oldIntents
+	default:
+		return nil
+	}
+}
+
+func (t *Transaction) AddTransactionIntents(ti []*TransactionIntent, tit TransactionIntentType) error {
+	for _, v := range ti {
+		err := t.AddTransactionIntent(v, tit)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *Transaction) AddTransactionIntent(ti *TransactionIntent, tit TransactionIntentType) error {
+	dstMap := t.getTransactionIntentTypeMap(tit)
+	_, exists := dstMap[ti.name]
 	if exists {
 		return fmt.Errorf("intent %s already exists in transaction", ti.name)
 	}
-	t.intents[ti.name] = ti
+	dstMap[ti.name] = ti
 	return nil
 }
 
 // AddIntentContent add the content of an intent. If the intent did not exist, add the name of the intent and content == nil.
-func (t *Transaction) AddIntentContent(name string, priority int32, content tree.UpdateSlice) error {
-	_, exists := t.intents[name]
+func (t *Transaction) AddIntentContent(name string, tit TransactionIntentType, priority int32, content tree.UpdateSlice) error {
+	dstMap := t.getTransactionIntentTypeMap(tit)
+	_, exists := dstMap[name]
 	if exists {
 		return fmt.Errorf("intent %s already exists in transaction", name)
 	}
 	ti := NewTransactionIntent(name, priority)
-	t.intents[name] = ti
+	dstMap[name] = ti
 
 	ti.AddUpdates(content)
 	return nil
 }
 
-func (t *Transaction) GetPathSet() *tree.PathSet {
+func (t *Transaction) GetPathSet(tit TransactionIntentType) *tree.PathSet {
+	srcMap := t.getTransactionIntentTypeMap(tit)
 	ps := tree.NewPathSet()
-	for _, intent := range t.intents {
+	for _, intent := range srcMap {
 		ps.Join(intent.GetPathSet())
 	}
 	return ps
@@ -131,4 +230,49 @@ func (ti *TransactionIntent) AddUpdate(u *cache.Update) {
 
 func (ti *TransactionIntent) AddUpdates(u tree.UpdateSlice) {
 	ti.updates = append(ti.updates, u...)
+}
+
+type RollbackInterface interface {
+	// TransactionRollback(ctx context.Context, transaction *Transaction) error
+	transactionSet(ctx context.Context, transaction *Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error)
+}
+
+type TransactionCancelTimer struct {
+	delay time.Duration
+	done  chan struct{}
+}
+
+func NewTransactionCancelTimer(delay time.Duration) *TransactionCancelTimer {
+	return &TransactionCancelTimer{
+		delay: delay,
+	}
+}
+
+func (t *TransactionCancelTimer) Start() error {
+	if t.done != nil {
+		return fmt.Errorf("TransactionCancelTimer already started")
+	}
+	t.done = make(chan struct{})
+
+	go func() {
+		timer := time.NewTimer(t.delay)
+		log.Debugf("TransactionCancelTimer started (%s)", t.delay.String())
+		defer timer.Stop() // Ensure the timer is cleaned up
+
+		select {
+		case <-timer.C:
+			// Timer fired, process TransactionCancel action
+			log.Infof("TransactionCancelTimer triggered")
+		case <-t.done:
+			// Stop the timer
+			log.Debugf("TransactionCancelTimer stopped")
+		}
+	}()
+
+	return nil
+}
+
+func (t *TransactionCancelTimer) Stop() {
+	close(t.done)
+	t.done = nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sdcio/cache/proto/cachepb"
 	"github.com/sdcio/data-server/pkg/cache"
@@ -60,7 +61,7 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 	if req.GetDelete() {
 		ti.SetDeleteFlag()
 	}
-	if req.GetOnlyIntended() {
+	if req.GetOrphan() {
 		ti.SetDeleteOnlyIntendedFlag()
 	}
 
@@ -74,7 +75,7 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 	return ti, nil
 }
 
-func (d *Datastore) transactionSet(ctx context.Context, recordTransaction *Transaction, dryRun bool, setTransaction *Transaction) (*sdcpb.TransactionSetResponse, error) {
+func (d *Datastore) transactionSet(ctx context.Context, transaction *Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
 	treeCacheSchemaClient := tree.NewTreeSchemaCacheClient(d.Name(), d.cacheClient, d.getValidationClient())
 	tc := tree.NewTreeContext(treeCacheSchemaClient, d.Name())
 
@@ -85,18 +86,18 @@ func (d *Datastore) transactionSet(ctx context.Context, recordTransaction *Trans
 		return nil, err
 	}
 
-	involvedPaths := &tree.PathSet{}
+	involvedPaths := tree.NewPathSet()
 
-	for _, intent := range setTransaction.intents {
+	for _, intent := range transaction.newIntents {
 		tc.SetActualOwner(intent.name)
 
-		log.Debugf("Transaction: %s - adding intent %s to tree", recordTransaction.GetTransactionId(), intent.name)
+		log.Debugf("Transaction: %s - adding intent %s to tree", transaction.GetTransactionId(), intent.name)
 		oldIntentContent, err := root.LoadIntendedStoreOwnerData(ctx, intent.name, intent.onlyIntended)
 		if err != nil {
 			return nil, err
 		}
 
-		err = recordTransaction.AddIntentContent(intent.name, oldIntentContent.GetLowestPriorityValue(nil), oldIntentContent)
+		err = transaction.AddIntentContent(intent.name, TransactionIntentOld, oldIntentContent.GetLowestPriorityValue(nil), oldIntentContent)
 		if err != nil {
 			return nil, err
 		}
@@ -113,7 +114,7 @@ func (d *Datastore) transactionSet(ctx context.Context, recordTransaction *Trans
 		involvedPaths.Join(intent.updates.ToPathSet())
 	}
 
-	err = root.LoadIntendedStoreHighestPrio(ctx, involvedPaths, setTransaction.GetIntentNames())
+	err = root.LoadIntendedStoreHighestPrio(ctx, involvedPaths, transaction.GetIntentNames())
 	if err != nil {
 		return nil, err
 	}
@@ -123,10 +124,15 @@ func (d *Datastore) transactionSet(ctx context.Context, recordTransaction *Trans
 		return nil, err
 	}
 
-	log.Debugf("Transaction: %s - finish tree insertion phase", recordTransaction.GetTransactionId())
+	log.Debugf("Transaction: %s - finish tree insertion phase", transaction.GetTransactionId())
 	root.FinishInsertionPhase(ctx)
 
-	result := &sdcpb.TransactionSetResponse{}
+	result := &sdcpb.TransactionSetResponse{
+		Intents:  map[string]*sdcpb.TransactionSetResponseIntent{},
+		Update:   []*sdcpb.Update{},
+		Delete:   []*sdcpb.Path{},
+		Warnings: []string{},
+	}
 
 	// perform validation
 	validationResult := root.Validate(ctx, true)
@@ -138,7 +144,7 @@ func (d *Datastore) transactionSet(ctx context.Context, recordTransaction *Trans
 		}
 	}
 
-	log.Infof("Transaction: %s - validation passed", recordTransaction.GetTransactionId())
+	log.Infof("Transaction: %s - validation passed", transaction.GetTransactionId())
 
 	// retrieve the data that is meant to be send southbound (towards the device)
 	updates := root.GetHighestPrecedence(true)
@@ -173,7 +179,7 @@ func (d *Datastore) transactionSet(ctx context.Context, recordTransaction *Trans
 	}
 	result.Warnings = append(result.Warnings, dataResp.GetWarnings()...)
 
-	log.Infof("ds=%s transaction=%s applied", d.Name(), recordTransaction.GetTransactionId())
+	log.Infof("ds=%s transaction=%s applied", d.Name(), transaction.GetTransactionId())
 
 	/////////////////////////////////////
 	// update intent in intended store //
@@ -187,7 +193,7 @@ func (d *Datastore) transactionSet(ctx context.Context, recordTransaction *Trans
 
 	log.Debugf("Deletes:\n%s", strings.Join(strSl, "\n"))
 
-	for _, intent := range setTransaction.intents {
+	for _, intent := range transaction.newIntents {
 		// retrieve the data that is meant to be send towards the cache
 		updatesOwner := root.GetUpdatesForOwner(intent.name)
 		deletesOwner := root.GetDeletesForOwner(intent.name)
@@ -219,31 +225,66 @@ func (d *Datastore) transactionSet(ctx context.Context, recordTransaction *Trans
 		return nil, fmt.Errorf("failed updating the running config store for %s: %w", d.Name(), err)
 	}
 
-	log.Infof("ds=%s transaction=%s: completet", d.Name(), recordTransaction.GetTransactionId())
+	log.Infof("ds=%s transaction=%s: completed", d.Name(), transaction.GetTransactionId())
+	err = transaction.StartRollbackTimer()
+	if err != nil {
+		return nil, err
+	}
 
 	return nil, nil
 }
 
-func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, dryRun bool, intents []*sdcpb.TransactionIntent) (*sdcpb.TransactionSetResponse, error) {
+func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, transactionTimeout time.Duration, dryRun bool, transactionIntents []*TransactionIntent) (*sdcpb.TransactionSetResponse, error) {
+	var err error
 
 	log.Infof("Transaction: %s - start", transactionId)
-	recordTransaction := d.transactionManager.CreateTransaction(transactionId)
 
-	setTransaction := NewTransaction(transactionId)
+	transaction := NewTransaction(transactionId)
+	transaction.SetTimeout(transactionTimeout)
 
-	for _, intent := range intents {
-		us, err := d.expandAndConvertIntent(ctx, intent.GetIntent(), intent.GetPriority(), intent.GetUpdate())
-		if err != nil {
-			return nil, err
+	registered := false
+	for {
+		select {
+		case <-ctx.Done():
+			// Context was canceled or timed out
+			log.Errorf("Transaction: %s - context canceled or timed out: %v", transactionId, ctx.Err())
+			return nil, ctx.Err()
+		default:
+			// Start a transaction and prepare to cancel it if any error occurs
+			err = d.transactionManager.RegisterTransaction(ctx, transaction)
+			if err == nil {
+				registered = true
+				break
+			}
+			log.Warnf("Transaction: %s - failed to create transaction, retrying: %v", transactionId, err)
+			time.Sleep(time.Millisecond * 200)
 		}
-		err = setTransaction.AddIntentContent(intent.GetIntent(), intent.GetPriority(), us)
-		if err != nil {
-			return nil, err
+		if registered {
+			break
 		}
-
 	}
 
-	return d.transactionSet(ctx, recordTransaction, dryRun, setTransaction)
+	defer func() {
+		// Cancel the transaction if it hasn't been committed (in case of an error)
+		if registered {
+			log.Infof("Transaction: %s - canceling due to error", transactionId)
+			d.transactionManager.cleanupTransaction(transactionId)
+		}
+	}()
+
+	err = transaction.AddTransactionIntents(transactionIntents, TransactionIntentNew)
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := d.transactionSet(ctx, transaction, dryRun)
+	if err != nil {
+		return nil, err
+	}
+
+	// Mark the transaction as successfully committed
+	registered = false // Prevent TransactionCancel() in defer
+	return response, err
 }
 
 func cacheUpdateToSdcpbUpdate(lvs tree.LeafVariantSlice) ([]*sdcpb.Update, error) {
@@ -269,23 +310,10 @@ func cacheUpdateToSdcpbUpdate(lvs tree.LeafVariantSlice) ([]*sdcpb.Update, error
 func (d *Datastore) TransactionConfirm(ctx context.Context, transactionId string) error {
 	log.Infof("Transaction %s - Confirm", transactionId)
 	// everything remains as is
-	return d.transactionManager.FinishTransaction(transactionId)
+	return d.transactionManager.Confirm(transactionId)
 }
 
 func (d *Datastore) TransactionCancel(ctx context.Context, transactionId string) error {
 	log.Infof("Transaction %s - Cancel", transactionId)
-
-	trans := NewTransaction(fmt.Sprintf("%s - Rollback", transactionId))
-
-	oldTrans, err := d.transactionManager.GetTransaction(transactionId)
-	if err != nil {
-		return err
-	}
-
-	_, err = d.transactionSet(ctx, trans, false, oldTrans)
-	if err != nil {
-		return err
-	}
-
-	return d.transactionManager.FinishTransaction(transactionId)
+	return d.transactionManager.Cancel(ctx, transactionId)
 }
