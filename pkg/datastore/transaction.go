@@ -117,8 +117,8 @@ func (t *Transaction) StartRollbackTimer() error {
 	return nil
 }
 
-func (t *Transaction) SetTimeout(d time.Duration) {
-	t.timer = NewTransactionCancelTimer(d)
+func (t *Transaction) SetTimeout(d time.Duration, f func()) {
+	t.timer = NewTransactionCancelTimer(d, f)
 }
 
 func (t *Transaction) GetIntentNames() []string {
@@ -240,11 +240,13 @@ type RollbackInterface interface {
 type TransactionCancelTimer struct {
 	delay time.Duration
 	done  chan struct{}
+	fnc   func()
 }
 
-func NewTransactionCancelTimer(delay time.Duration) *TransactionCancelTimer {
+func NewTransactionCancelTimer(delay time.Duration, f func()) *TransactionCancelTimer {
 	return &TransactionCancelTimer{
 		delay: delay,
+		fnc:   f,
 	}
 }
 
@@ -263,6 +265,9 @@ func (t *TransactionCancelTimer) Start() error {
 		case <-timer.C:
 			// Timer fired, process TransactionCancel action
 			log.Infof("TransactionCancelTimer triggered")
+			if t.fnc != nil {
+				t.fnc()
+			}
 		case <-t.done:
 			// Stop the timer
 			log.Debugf("TransactionCancelTimer stopped")

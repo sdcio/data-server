@@ -240,7 +240,9 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	log.Infof("Transaction: %s - start", transactionId)
 
 	transaction := NewTransaction(transactionId)
-	transaction.SetTimeout(transactionTimeout)
+	transaction.SetTimeout(transactionTimeout, func() {
+		d.TransactionCancel(context.Background(), transactionId)
+	})
 
 	registered := false
 	for {
