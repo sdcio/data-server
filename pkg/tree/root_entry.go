@@ -117,7 +117,7 @@ func (r *RootEntry) Validate(ctx context.Context, concurrent bool) types.Validat
 	// create a ValidationResult struct
 	validationResult := types.ValidationResult{}
 
-	// read from the Warnings channel
+	// read from the validationResult channel
 	for e := range validationResultEntryChan {
 		validationResult.AddEntry(e)
 	}

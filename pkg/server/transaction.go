@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/sdcio/data-server/pkg/datastore"
@@ -27,8 +26,6 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 	} else {
 		timeout = time.Duration(*req.Timeout) * time.Millisecond
 	}
-
-	fmt.Print(timeout.String())
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()

@@ -47,9 +47,8 @@ func (t *TransactionManager) transactionOngoing() bool {
 	return t.transaction != nil
 }
 
+// cleanupTransaction the expectation is, that the caller is holding the lock for the TransactionManager
 func (t *TransactionManager) cleanupTransaction(id string) error {
-	t.tmMutex.Lock()
-	defer t.tmMutex.Unlock()
 	// Perform checks by calling GetTransaction
 	_, err := t.GetTransaction(id)
 	if err != nil {
@@ -60,11 +59,15 @@ func (t *TransactionManager) cleanupTransaction(id string) error {
 }
 
 func (t *TransactionManager) Confirm(id string) error {
+	t.tmMutex.Lock()
+	defer t.tmMutex.Unlock()
 	t.transaction.Confirm()
 	return t.cleanupTransaction(id)
 }
 
 func (t *TransactionManager) Cancel(ctx context.Context, id string) error {
+	t.tmMutex.Lock()
+	defer t.tmMutex.Unlock()
 	rollbacktransAction := t.transaction.GetRollbackTransaction()
 
 	_, err := t.rollbacker.transactionSet(ctx, rollbacktransAction, false)
@@ -238,19 +241,23 @@ type RollbackInterface interface {
 }
 
 type TransactionCancelTimer struct {
-	delay time.Duration
-	done  chan struct{}
-	fnc   func()
+	delay     time.Duration
+	done      chan struct{}
+	doneMutex *sync.Mutex
+	fnc       func()
 }
 
 func NewTransactionCancelTimer(delay time.Duration, f func()) *TransactionCancelTimer {
 	return &TransactionCancelTimer{
-		delay: delay,
-		fnc:   f,
+		delay:     delay,
+		fnc:       f,
+		doneMutex: &sync.Mutex{},
 	}
 }
 
 func (t *TransactionCancelTimer) Start() error {
+	t.doneMutex.Lock()
+	defer t.doneMutex.Unlock()
 	if t.done != nil {
 		return fmt.Errorf("TransactionCancelTimer already started")
 	}
@@ -278,6 +285,12 @@ func (t *TransactionCancelTimer) Start() error {
 }
 
 func (t *TransactionCancelTimer) Stop() {
+	t.doneMutex.Lock()
+	defer t.doneMutex.Unlock()
+
+	if t.done == nil {
+		return
+	}
 	close(t.done)
 	t.done = nil
 }
