@@ -126,7 +126,7 @@ func (c *Config) validateSetDefaults() error {
 	}
 
 	if c.DefaultTransactionTimeout == 0 {
-		c.DefaultTransactionTimeout = 10 * time.Second
+		c.DefaultTransactionTimeout = 5 * time.Minute
 	}
 	return nil
 }
