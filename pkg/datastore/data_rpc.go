@@ -732,12 +732,21 @@ func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
 }
 
 func validateLeafListValue(ll *sdcpb.LeafListSchema, v any) error {
-	// TODO: validate Leaflist
-	// TODO: eval must statements
-	// for _, must := range ll.MustStatements {
-	// 	_ = must
-	// }
-	return validateLeafTypeValue(ll.GetType(), v)
+	switch vTyped := v.(type) {
+	case *sdcpb.ScalarArray:
+		for _, elem := range vTyped.Element {
+			val, err := utils.GetSchemaValue(elem)
+			if err != nil {
+				return err
+			}
+			err = validateLeafTypeValue(ll.GetType(), val)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func (d *Datastore) doSubscribeOnce(ctx context.Context, subscription *sdcpb.Subscription, stream sdcpb.DataServer_SubscribeServer) error {

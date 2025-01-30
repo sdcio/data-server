@@ -272,8 +272,13 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				np := proto.Clone(p).(*sdcpb.Path)
 				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item.Name})
 
-				list := []*sdcpb.TypedValue{}
+				se := &sdcpb.SchemaElem{
+					Schema: &sdcpb.SchemaElem_Leaflist{
+						Leaflist: item,
+					},
+				}
 
+				list := []*sdcpb.TypedValue{}
 				// iterate through the elements
 				// ATTENTION: assuming its all strings
 				// add them to the Leaflist value
@@ -285,7 +290,11 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 								StringVal: fmt.Sprintf("%v", e),
 							},
 						}
-						list = append(list, tv)
+						tvYangType, err := TypedValueToYANGType(tv, se)
+						if err != nil {
+							return nil, err
+						}
+						list = append(list, tvYangType)
 					}
 				default:
 					return nil, fmt.Errorf("leaflist %s expects array as input, but %v of type %v was given", np.String(), x, reflect.TypeOf(x).Name())
