@@ -1,6 +1,7 @@
 package types
 
 import (
+	"errors"
 	"slices"
 	"sync"
 )
@@ -56,6 +57,24 @@ func (v ValidationResult) ErrorsStr() []string {
 	result := []string{}
 	for _, intent := range v {
 		result = append(result, intent.ErrorsString()...)
+	}
+	return result
+}
+
+func (v ValidationResult) JoinErrors() error {
+	var result error
+
+	for _, intent := range v {
+		errors.Join(result, errors.Join(intent.errors...))
+	}
+	return result
+}
+
+func (v ValidationResult) JoinWarnings() error {
+	var result error
+
+	for _, intent := range v {
+		errors.Join(result, errors.Join(intent.warnings...))
 	}
 	return result
 }

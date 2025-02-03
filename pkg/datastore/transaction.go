@@ -99,6 +99,8 @@ type Transaction struct {
 	timer         *TransactionCancelTimer
 	newIntents    map[string]*TransactionIntent
 	oldIntents    map[string]*TransactionIntent
+	oldRunning    *TransactionIntent
+	replace       *TransactionIntent
 }
 
 func NewTransaction(id string) *Transaction {
@@ -106,6 +108,8 @@ func NewTransaction(id string) *Transaction {
 		transactionId: id,
 		newIntents:    map[string]*TransactionIntent{},
 		oldIntents:    map[string]*TransactionIntent{},
+		oldRunning:    NewTransactionIntent("oldrunning", 600),
+		replace:       NewTransactionIntent(tree.ReplaceIntentName, tree.ReplaceValuesPrio),
 	}
 }
 
