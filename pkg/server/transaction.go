@@ -22,32 +22,34 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
 	}
 
+	// load either default timer from global config or use the request provided value as seconds
 	var timeout time.Duration
 	if req.Timeout == nil {
 		timeout = s.config.DefaultTransactionTimeout
 	} else {
-		timeout = time.Duration(*req.Timeout) * time.Millisecond
+		timeout = time.Duration(*req.Timeout) * time.Second
 	}
 
-	// ctx, cancel := context.WithTimeout(ctx, timeout)
-	// defer cancel()
-
+	// retrieve the referenced datastore
 	ds, err := s.getDataStore(req.DatastoreName)
 	if err != nil {
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
 
-	transactions := make([]*datastore.TransactionIntent, 0, len(req.GetIntents()))
+	// create a list of intents that are contained in the req.
+	transactionIntents := make([]*datastore.TransactionIntent, 0, len(req.GetIntents()))
 
+	// populate the transactionIntents from the req.intents basically transforming from sdcpb to datastore intent format
 	for _, intent := range req.GetIntents() {
 		ti, err := ds.SdcpbTransactionIntentToInternalTI(ctx, intent)
 		if err != nil {
 			return nil, err
 		}
 
-		transactions = append(transactions, ti)
+		transactionIntents = append(transactionIntents, ti)
 	}
 
+	// perform the conversion also for the replace intent
 	var replaceIntent *datastore.TransactionIntent
 	if req.GetReplaceIntent() != nil {
 		// overwrite replace priority and name with specific value
@@ -60,7 +62,8 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 		}
 	}
 
-	rsp, err := ds.TransactionSet(ctx, req.GetTransactionId(), transactions, replaceIntent, timeout, req.GetDryRun())
+	// with the transformed intents call the TransactionSet() on the datastore.
+	rsp, err := ds.TransactionSet(ctx, req.GetTransactionId(), transactionIntents, replaceIntent, timeout, req.GetDryRun())
 	if errors.Is(err, datastore.ErrDatastoreLocked) {
 		return nil, status.Error(codes.ResourceExhausted, err.Error())
 	}

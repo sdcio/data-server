@@ -308,6 +308,7 @@ func (d *Datastore) transactionSet(ctx context.Context, transaction *Transaction
 func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, transactionIntents []*TransactionIntent, replaceIntent *TransactionIntent, transactionTimeout time.Duration, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
 	var err error
 
+	// try locking the datastore if it is locked return the specific ErrDatastoreLocked error.
 	if !d.dmutex.TryLock() {
 		return nil, ErrDatastoreLocked
 	}
@@ -315,19 +316,12 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 
 	log.Infof("Transaction: %s - start", transactionId)
 
+	// create a new Transaction with the given transaction id
 	transaction := NewTransaction(transactionId)
+	// set the timeout on the transaction
 	transaction.SetTimeout(transactionTimeout, func() {
 		d.TransactionCancel(context.Background(), transactionId)
 	})
-	transaction.replace = replaceIntent
-
-	if replaceIntent != nil {
-		replaceWarn, err := d.replaceIntent(ctx, transaction)
-		if err != nil {
-			return nil, err
-		}
-		_ = replaceWarn
-	}
 
 	registered := false
 	for {
@@ -358,6 +352,19 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 			d.transactionManager.cleanupTransaction(transactionId)
 		}
 	}()
+
+	// add the replaceIntent to the transaction
+	transaction.replace = replaceIntent
+
+	// if replace intent is provided, kickoff the replace intent processing first
+	if transaction.replace != nil {
+		replaceWarn, err := d.replaceIntent(ctx, transaction)
+		if err != nil {
+			return nil, err
+		}
+		// TODO: do something with these warnings
+		_ = replaceWarn
+	}
 
 	err = transaction.AddTransactionIntents(transactionIntents, TransactionIntentNew)
 	if err != nil {

@@ -61,13 +61,22 @@ func (t *TransactionManager) cleanupTransaction(id string) error {
 func (t *TransactionManager) Confirm(id string) error {
 	t.tmMutex.Lock()
 	defer t.tmMutex.Unlock()
-	t.transaction.Confirm()
+	if t.transaction == nil {
+		return fmt.Errorf("no ongoing transaction")
+	}
+	err := t.transaction.Confirm()
+	if err != nil {
+		return err
+	}
 	return t.cleanupTransaction(id)
 }
 
 func (t *TransactionManager) Cancel(ctx context.Context, id string) error {
 	t.tmMutex.Lock()
 	defer t.tmMutex.Unlock()
+	if t.transaction == nil {
+		return fmt.Errorf("no ongoing transaction")
+	}
 	rollbacktransAction := t.transaction.GetRollbackTransaction()
 
 	_, err := t.rollbacker.transactionSet(ctx, rollbacktransAction, false)
@@ -113,8 +122,12 @@ func NewTransaction(id string) *Transaction {
 	}
 }
 
-func (t *Transaction) Confirm() {
+func (t *Transaction) Confirm() error {
+	if t.timer == nil {
+		return fmt.Errorf("no ongoing transaction")
+	}
 	t.timer.Stop()
+	return nil
 }
 
 func (t *Transaction) StartRollbackTimer() error {
@@ -269,7 +282,7 @@ func (t *TransactionCancelTimer) Start() error {
 
 	go func() {
 		timer := time.NewTimer(t.delay)
-		log.Debugf("TransactionCancelTimer started (%s)", t.delay.String())
+		log.Infof("TransactionCancelTimer started (%s)", t.delay.String())
 		defer timer.Stop() // Ensure the timer is cleaned up
 
 		select {
@@ -281,7 +294,8 @@ func (t *TransactionCancelTimer) Start() error {
 			}
 		case <-t.done:
 			// Stop the timer
-			log.Debugf("TransactionCancelTimer stopped")
+			log.Infof("TransactionCancelTimer stopped")
+			t.done = nil
 		}
 	}()
 
@@ -296,5 +310,4 @@ func (t *TransactionCancelTimer) Stop() {
 		return
 	}
 	close(t.done)
-	t.done = nil
 }
