@@ -37,6 +37,7 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/clients"
 	"github.com/sdcio/data-server/pkg/datastore/target"
 	"github.com/sdcio/data-server/pkg/schema"
+	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/utils"
 )
 
@@ -71,8 +72,13 @@ type Datastore struct {
 	md                       *sync.RWMutex
 	currentIntentsDeviations map[string][]*sdcpb.WatchDeviationResponse
 
+	// datastore mutex locks the whole datasore for further set operations
+	dmutex *sync.Mutex
+
 	// TransactionManager
 	transactionManager *TransactionManager
+
+	treeCacheSchemaClient tree.TreeSchemaCacheClient
 }
 
 // New creates a new datastore, its schema server client and initializes the SBI target
@@ -84,10 +90,12 @@ func New(ctx context.Context, c *config.DatastoreConfig, scc schema.Client, cc c
 		cacheClient:              cc,
 		m:                        &sync.RWMutex{},
 		md:                       &sync.RWMutex{},
+		dmutex:                   &sync.Mutex{},
 		deviationClients:         make(map[string]sdcpb.DataServer_WatchDeviationsServer),
 		currentIntentsDeviations: make(map[string][]*sdcpb.WatchDeviationResponse),
 	}
 	ds.transactionManager = NewTransactionManager(ds)
+	ds.treeCacheSchemaClient = tree.NewTreeSchemaCacheClient(ds.Name(), ds.cacheClient, ds.getValidationClient())
 
 	if c.Sync != nil {
 		ds.synCh = make(chan *target.SyncUpdate, c.Sync.Buffer)

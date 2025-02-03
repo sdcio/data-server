@@ -18,6 +18,8 @@ const (
 	DefaultsIntentName = "default"
 	RunningValuesPrio  = int32(math.MaxInt32 - 100)
 	RunningIntentName  = "running"
+	ReplaceValuesPrio  = int32(math.MaxInt32 - 110)
+	ReplaceIntentName  = "replace"
 )
 
 type EntryImpl struct {

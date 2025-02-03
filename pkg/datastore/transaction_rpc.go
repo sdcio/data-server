@@ -2,17 +2,23 @@ package datastore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/sdcio/cache/proto/cachepb"
 	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
+)
+
+var (
+	ErrDatastoreLocked = errors.New("Datastore is locked, other action is ongoing.")
 )
 
 func (d *Datastore) expandAndConvertIntent(ctx context.Context, intentName string, priority int32, upds []*sdcpb.Update) (tree.UpdateSlice, error) {
@@ -75,10 +81,75 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 	return ti, nil
 }
 
-func (d *Datastore) transactionSet(ctx context.Context, transaction *Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
-	treeCacheSchemaClient := tree.NewTreeSchemaCacheClient(d.Name(), d.cacheClient, d.getValidationClient())
-	tc := tree.NewTreeContext(treeCacheSchemaClient, d.Name())
+func (d *Datastore) replaceIntent(ctx context.Context, transaction *Transaction) ([]string, error) {
 
+	tc := tree.NewTreeContext(d.treeCacheSchemaClient, d.Name())
+	tc.GetTreeSchemaCacheClient().RefreshCaches(ctx)
+
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		return nil, err
+	}
+	tc.SetActualOwner(tree.ReplaceIntentName)
+
+	// store the actual running in the transaction
+	runningUpds, err := tc.GetTreeSchemaCacheClient().ReadRunningFull(ctx)
+	transaction.oldRunning.AddUpdates(runningUpds)
+
+	flagNew := tree.NewUpdateInsertFlags()
+	flagNew.SetNewFlag()
+
+	err = root.AddCacheUpdatesRecursive(ctx, transaction.replace.updates, flagNew)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debugf("Transaction Replace: %s - finish tree insertion phase", transaction.GetTransactionId())
+	root.FinishInsertionPhase(ctx)
+
+	// perform validation
+	validationResult := root.Validate(ctx, true)
+	validationResult.ErrorsStr()
+	if validationResult.HasErrors() {
+		return nil, validationResult.JoinErrors()
+	}
+
+	warnings := validationResult.WarningsStr()
+
+	log.Infof("Transaction: %s - validation passed", transaction.GetTransactionId())
+
+	// we use the TargetSourceReplace, that adjustes the tree results in a way
+	// that the whole config tree is getting replaced.
+	replaceRoot := types.NewTargetSourceReplace(root)
+
+	// apply the resulting config to the device
+	dataResp, err := d.applyIntent(ctx, replaceRoot)
+	if err != nil {
+		return nil, err
+	}
+	warnings = append(warnings, dataResp.GetWarnings()...)
+
+	deletes, err := root.GetDeletes(true)
+	if err != nil {
+		return nil, err
+	}
+
+	// fast and optimistic writeback to the config store
+	err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
+		Store: cachepb.Store_CONFIG,
+	}, deletes.PathSlices().ToStringSlice(), root.GetHighestPrecedence(false).ToCacheUpdateSlice())
+	if err != nil {
+		return nil, fmt.Errorf("failed updating the running config store for %s: %w", d.Name(), err)
+	}
+
+	log.Infof("ds=%s transaction=%s applied", d.Name(), transaction.GetTransactionId()+" - replace")
+
+	return warnings, nil
+}
+
+func (d *Datastore) transactionSet(ctx context.Context, transaction *Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
+
+	tc := tree.NewTreeContext(d.treeCacheSchemaClient, d.Name())
 	tc.GetTreeSchemaCacheClient().RefreshCaches(ctx)
 
 	root, err := tree.NewTreeRoot(ctx, tc)
@@ -87,6 +158,9 @@ func (d *Datastore) transactionSet(ctx context.Context, transaction *Transaction
 	}
 
 	involvedPaths := tree.NewPathSet()
+
+	flagNew := tree.NewUpdateInsertFlags()
+	flagNew.SetNewFlag()
 
 	for _, intent := range transaction.newIntents {
 		tc.SetActualOwner(intent.name)
@@ -102,10 +176,7 @@ func (d *Datastore) transactionSet(ctx context.Context, transaction *Transaction
 			return nil, err
 		}
 
-		flagsNew := tree.NewUpdateInsertFlags()
-		flagsNew.SetNewFlag()
-
-		err = root.AddCacheUpdatesRecursive(ctx, intent.updates, flagsNew)
+		err = root.AddCacheUpdatesRecursive(ctx, intent.updates, flagNew)
 		if err != nil {
 			return nil, err
 		}
@@ -127,15 +198,15 @@ func (d *Datastore) transactionSet(ctx context.Context, transaction *Transaction
 	log.Debugf("Transaction: %s - finish tree insertion phase", transaction.GetTransactionId())
 	root.FinishInsertionPhase(ctx)
 
+	// perform validation
+	validationResult := root.Validate(ctx, false)
+
 	result := &sdcpb.TransactionSetResponse{
 		Intents:  map[string]*sdcpb.TransactionSetResponseIntent{},
 		Update:   []*sdcpb.Update{},
 		Delete:   []*sdcpb.Path{},
 		Warnings: []string{},
 	}
-
-	// perform validation
-	validationResult := root.Validate(ctx, true)
 
 	for intentName, intentValidationResult := range validationResult {
 		result.Intents[intentName] = &sdcpb.TransactionSetResponseIntent{
@@ -234,8 +305,13 @@ func (d *Datastore) transactionSet(ctx context.Context, transaction *Transaction
 	return nil, nil
 }
 
-func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, transactionTimeout time.Duration, dryRun bool, transactionIntents []*TransactionIntent) (*sdcpb.TransactionSetResponse, error) {
+func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, transactionIntents []*TransactionIntent, replaceIntent *TransactionIntent, transactionTimeout time.Duration, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
 	var err error
+
+	if !d.dmutex.TryLock() {
+		return nil, ErrDatastoreLocked
+	}
+	defer d.dmutex.Unlock()
 
 	log.Infof("Transaction: %s - start", transactionId)
 
@@ -243,6 +319,15 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	transaction.SetTimeout(transactionTimeout, func() {
 		d.TransactionCancel(context.Background(), transactionId)
 	})
+	transaction.replace = replaceIntent
+
+	if replaceIntent != nil {
+		replaceWarn, err := d.replaceIntent(ctx, transaction)
+		if err != nil {
+			return nil, err
+		}
+		_ = replaceWarn
+	}
 
 	registered := false
 	for {
@@ -311,11 +396,22 @@ func cacheUpdateToSdcpbUpdate(lvs tree.LeafVariantSlice) ([]*sdcpb.Update, error
 
 func (d *Datastore) TransactionConfirm(ctx context.Context, transactionId string) error {
 	log.Infof("Transaction %s - Confirm", transactionId)
+
+	if !d.dmutex.TryLock() {
+		return ErrDatastoreLocked
+	}
+	defer d.dmutex.Unlock()
 	// everything remains as is
 	return d.transactionManager.Confirm(transactionId)
 }
 
 func (d *Datastore) TransactionCancel(ctx context.Context, transactionId string) error {
 	log.Infof("Transaction %s - Cancel", transactionId)
+
+	if !d.dmutex.TryLock() {
+		return ErrDatastoreLocked
+	}
+	defer d.dmutex.Unlock()
+
 	return d.transactionManager.Cancel(ctx, transactionId)
 }

@@ -2,9 +2,11 @@ package server
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/sdcio/data-server/pkg/datastore"
+	"github.com/sdcio/data-server/pkg/tree"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
@@ -27,8 +29,8 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 		timeout = time.Duration(*req.Timeout) * time.Millisecond
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
+	// ctx, cancel := context.WithTimeout(ctx, timeout)
+	// defer cancel()
 
 	ds, err := s.getDataStore(req.DatastoreName)
 	if err != nil {
@@ -46,7 +48,24 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 		transactions = append(transactions, ti)
 	}
 
-	return ds.TransactionSet(ctx, req.GetTransactionId(), timeout, req.GetDryRun(), transactions)
+	var replaceIntent *datastore.TransactionIntent
+	if req.GetReplaceIntent() != nil {
+		// overwrite replace priority and name with specific value
+		req.ReplaceIntent.Priority = tree.ReplaceValuesPrio
+		req.ReplaceIntent.Intent = tree.ReplaceIntentName
+
+		replaceIntent, err = ds.SdcpbTransactionIntentToInternalTI(ctx, req.GetReplaceIntent())
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	rsp, err := ds.TransactionSet(ctx, req.GetTransactionId(), transactions, replaceIntent, timeout, req.GetDryRun())
+	if errors.Is(err, datastore.ErrDatastoreLocked) {
+		return nil, status.Error(codes.ResourceExhausted, err.Error())
+	}
+
+	return rsp, err
 }
 
 func (s *Server) TransactionConfirm(ctx context.Context, req *sdcpb.TransactionConfirmRequest) (*sdcpb.TransactionConfirmResponse, error) {
@@ -62,7 +81,11 @@ func (s *Server) TransactionConfirm(ctx context.Context, req *sdcpb.TransactionC
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
 
-	return nil, ds.TransactionConfirm(ctx, req.TransactionId)
+	err = ds.TransactionConfirm(ctx, req.TransactionId)
+	if errors.Is(err, datastore.ErrDatastoreLocked) {
+		return nil, status.Error(codes.ResourceExhausted, err.Error())
+	}
+	return nil, err
 }
 
 func (s *Server) TransactionCancel(ctx context.Context, req *sdcpb.TransactionCancelRequest) (*sdcpb.TransactionCancelResponse, error) {
@@ -77,6 +100,9 @@ func (s *Server) TransactionCancel(ctx context.Context, req *sdcpb.TransactionCa
 	if err != nil {
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
-
-	return nil, ds.TransactionCancel(ctx, req.TransactionId)
+	err = ds.TransactionCancel(ctx, req.TransactionId)
+	if errors.Is(err, datastore.ErrDatastoreLocked) {
+		return nil, status.Error(codes.ResourceExhausted, err.Error())
+	}
+	return nil, err
 }
