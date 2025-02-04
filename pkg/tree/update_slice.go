@@ -9,6 +9,14 @@ import (
 // UpdateSlice A slice of *cache.Update, that defines additional helper functions.
 type UpdateSlice []*cache.Update
 
+// GetFirstPriorityValue returns the priority of the first element or math.MaxInt32 if len() is zero
+func (u UpdateSlice) GetFirstPriorityValue() int32 {
+	if len(u) > 0 {
+		return u[0].Priority()
+	}
+	return int32(math.MaxInt32)
+}
+
 // GetHighesPriorityValue returns the highes priority value of all the containing Updates
 func (u UpdateSlice) GetLowestPriorityValue(filters []CacheUpdateFilter) int32 {
 	result := int32(math.MaxInt32)

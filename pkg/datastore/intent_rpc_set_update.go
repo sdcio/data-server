@@ -16,6 +16,7 @@ package datastore
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"github.com/sdcio/cache/proto/cachepb"
@@ -24,8 +25,29 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-func (d *Datastore) populateTreeWithRunning(ctx context.Context, tc *tree.TreeContext, r *tree.RootEntry) error {
-	upds, err := tc.GetTreeSchemaCacheClient().ReadRunningFull(ctx)
+func (d *Datastore) loadIntendedStoreHighestPrio(ctx context.Context, tscc tree.TreeSchemaCacheClient, r *tree.RootEntry, pathKeySet *tree.PathSet, skipIntents []string) error {
+
+	// Get all entries of the already existing intent
+	cacheEntries := tscc.ReadCurrentUpdatesHighestPriorities(ctx, pathKeySet.GetPaths(), 2)
+
+	flags := tree.NewUpdateInsertFlags()
+
+	// add all the existing entries
+	for _, entry := range cacheEntries {
+		// we need to skip the actual owner entries
+		if slices.Contains(skipIntents, entry.Owner()) {
+			continue
+		}
+		_, err := r.AddCacheUpdateRecursive(ctx, entry, flags)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (d *Datastore) populateTreeWithRunning(ctx context.Context, tscc tree.TreeSchemaCacheClient, r *tree.RootEntry) error {
+	upds, err := tscc.ReadRunningFull(ctx)
 	if err != nil {
 		return err
 	}

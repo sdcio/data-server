@@ -2,7 +2,6 @@ package tree
 
 import (
 	"context"
-	"slices"
 	"strings"
 
 	"github.com/sdcio/data-server/pkg/types"
@@ -46,28 +45,6 @@ func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 		return nil, err
 	}
 	return result, nil
-}
-
-func (r *RootEntry) LoadIntendedStoreHighestPrio(ctx context.Context, pathKeySet *PathSet, skipIntents []string) error {
-	tc := r.getTreeContext()
-
-	// Get all entries of the already existing intent
-	cacheEntries := tc.GetTreeSchemaCacheClient().ReadCurrentUpdatesHighestPriorities(ctx, pathKeySet.GetPaths(), 2)
-
-	flags := NewUpdateInsertFlags()
-
-	// add all the existing entries
-	for _, entry := range cacheEntries {
-		// we need to skip the actual owner entries
-		if slices.Contains(skipIntents, entry.Owner()) {
-			continue
-		}
-		_, err := r.AddCacheUpdateRecursive(ctx, entry, flags)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (r *RootEntry) AddCacheUpdatesRecursive(ctx context.Context, us UpdateSlice, flags *UpdateInsertFlags) error {

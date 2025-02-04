@@ -36,6 +36,7 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore/clients"
 	"github.com/sdcio/data-server/pkg/datastore/target"
+	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/schema"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -76,7 +77,7 @@ type Datastore struct {
 	dmutex *sync.Mutex
 
 	// TransactionManager
-	transactionManager *TransactionManager
+	transactionManager *types.TransactionManager
 
 	treeCacheSchemaClient tree.TreeSchemaCacheClient
 }
@@ -94,7 +95,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, scc schema.Client, cc c
 		deviationClients:         make(map[string]sdcpb.DataServer_WatchDeviationsServer),
 		currentIntentsDeviations: make(map[string][]*sdcpb.WatchDeviationResponse),
 	}
-	ds.transactionManager = NewTransactionManager(ds)
+	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
 	ds.treeCacheSchemaClient = tree.NewTreeSchemaCacheClient(ds.Name(), ds.cacheClient, ds.getValidationClient())
 
 	if c.Sync != nil {
@@ -754,3 +755,23 @@ func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.
 	d.currentIntentsDeviations = newDeviations
 	d.md.Unlock()
 }
+
+// DatastoreRollbackAdapter implements the types.RollbackInterface and encapsulates the Datastore.
+type DatastoreRollbackAdapter struct {
+	d *Datastore
+}
+
+// NewDatastoreRollbackAdapter constructor for the DatastoreRollbackAdapter.
+func NewDatastoreRollbackAdapter(d *Datastore) *DatastoreRollbackAdapter {
+	return &DatastoreRollbackAdapter{
+		d: d,
+	}
+}
+
+// TransactionRollback is adapted to the datastore.lowlevelTransactionSet() function
+func (dra *DatastoreRollbackAdapter) TransactionRollback(ctx context.Context, transaction *types.Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
+	return dra.d.lowlevelTransactionSet(ctx, transaction, dryRun)
+}
+
+// Assure the types.RollbackInterface is implemented by the DatastoreRollbackAdapter
+var _ types.RollbackInterface = &DatastoreRollbackAdapter{}

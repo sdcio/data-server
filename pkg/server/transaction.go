@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sdcio/data-server/pkg/datastore"
+	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/tree"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
@@ -37,7 +38,7 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 	}
 
 	// create a list of intents that are contained in the req.
-	transactionIntents := make([]*datastore.TransactionIntent, 0, len(req.GetIntents()))
+	transactionIntents := make([]*types.TransactionIntent, 0, len(req.GetIntents()))
 
 	// populate the transactionIntents from the req.intents basically transforming from sdcpb to datastore intent format
 	for _, intent := range req.GetIntents() {
@@ -50,7 +51,7 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 	}
 
 	// perform the conversion also for the replace intent
-	var replaceIntent *datastore.TransactionIntent
+	var replaceIntent *types.TransactionIntent
 	if req.GetReplaceIntent() != nil {
 		// overwrite replace priority and name with specific value
 		req.ReplaceIntent.Priority = tree.ReplaceValuesPrio
