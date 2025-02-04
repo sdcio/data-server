@@ -5,7 +5,7 @@ toolchain go1.23.5
 
 require (
 	github.com/AlekSi/pointer v1.2.0
-	github.com/beevik/etree v1.4.1
+	github.com/beevik/etree v1.5.0
 	github.com/google/go-cmp v0.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
