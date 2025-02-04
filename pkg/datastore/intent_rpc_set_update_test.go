@@ -747,7 +747,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			loadHighest := oldIntentContent.ToPathSet()
 			loadHighest.Join(updSlice.ToPathSet())
 
-			err = root.LoadIntendedStoreHighestPrio(ctx, loadHighest, []string{reqOne.GetIntent()})
+			err = d.loadIntendedStoreHighestPrio(ctx, d.treeCacheSchemaClient, root, loadHighest, []string{reqOne.GetIntent()})
 			if err != nil {
 				t.Error(err)
 			}
@@ -757,7 +757,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			root.AddCacheUpdatesRecursive(ctx, updSlice, flags)
 
 			// populate Tree with running
-			err = d.populateTreeWithRunning(ctx, tc, root)
+			err = d.populateTreeWithRunning(ctx, d.treeCacheSchemaClient, root)
 			if err != nil {
 				t.Error(err)
 			}
