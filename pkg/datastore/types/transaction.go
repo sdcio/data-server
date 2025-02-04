@@ -9,14 +9,15 @@ import (
 )
 
 type Transaction struct {
-	transactionId      string
-	timer              *TransactionCancelTimer
-	transactionManager *TransactionManager
-	newIntents         map[string]*TransactionIntent
-	oldIntents         map[string]*TransactionIntent
-	oldRunning         *TransactionIntent
-	replace            *TransactionIntent
-	isRollback         bool
+	transactionId      string                        // ID that identifies the Transaction
+	timer              *TransactionCancelTimer       // timer that triggers auto rollback
+	transactionManager *TransactionManager           // referernce to the TransactionManager this transaction is registered with
+	newIntents         map[string]*TransactionIntent // new Intents with their content
+	oldIntents         map[string]*TransactionIntent // old intents content
+	oldRunning         *TransactionIntent            // old running config
+	replace            *TransactionIntent            // possible replace config
+	isRollback         bool                          // indicates if the transaction is already a rollback transaction.
+	// Used to deactivate auto rollback triggering
 }
 
 func NewTransaction(id string, tm *TransactionManager) *Transaction {
