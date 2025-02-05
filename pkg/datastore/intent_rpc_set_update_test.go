@@ -695,6 +695,7 @@ func TestDatastore_populateTree(t *testing.T) {
 				cacheClient:  cacheClient,
 				schemaClient: schemaClient,
 			}
+			d.treeCacheSchemaClient = tree.NewTreeSchemaCacheClient(dsName, cacheClient, d.getValidationClient())
 
 			ctx := context.Background()
 
@@ -727,7 +728,7 @@ func TestDatastore_populateTree(t *testing.T) {
 				Delete: tt.intentDelete,
 			}
 
-			tc := tree.NewTreeContext(tree.NewTreeSchemaCacheClient(dsName, d.cacheClient, d.getValidationClient()), tt.intentName)
+			tc := tree.NewTreeContext(d.treeCacheSchemaClient, tt.intentName)
 
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
