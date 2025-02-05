@@ -24,7 +24,7 @@ var (
 
 // expandAndConvertIntent takes a slice of Updates ([]*sdcpb.Update) and converts it into a tree.UpdateSlice, that contains *cache.Updates.
 func (d *Datastore) expandAndConvertIntent(ctx context.Context, intentName string, priority int32, upds []*sdcpb.Update) (tree.UpdateSlice, error) {
-	converter := utils.NewConverter(d.getValidationClient())
+	converter := utils.NewConverter(d.schemaClient)
 
 	// list of updates to be added to the cache
 	// Expands the value, in case of json to single typed value updates
@@ -93,8 +93,9 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 // returns the warnings as a []string and potential errors that happend during validation / from SBI Set()
 func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transaction) ([]string, error) {
 
+	treeSCC := tree.NewTreeCacheClient(d.Name(), d.cacheClient)
 	// create a new TreeContext
-	tc := tree.NewTreeContext(d.treeCacheSchemaClient, d.Name())
+	tc := tree.NewTreeContext(treeSCC, d.schemaClient, d.Name())
 	// refresh the Cache content of the treeCacheSchemaClient
 	tc.GetTreeSchemaCacheClient().RefreshCaches(ctx)
 
@@ -169,8 +170,9 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 // lowlevelTransactionSet
 func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *types.Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
 
+	treeSCC := tree.NewTreeCacheClient(d.Name(), d.cacheClient)
 	// create a new TreeContext
-	tc := tree.NewTreeContext(d.treeCacheSchemaClient, d.Name())
+	tc := tree.NewTreeContext(treeSCC, d.schemaClient, d.Name())
 	// refresh the SchemaClientCache
 	tc.GetTreeSchemaCacheClient().RefreshCaches(ctx)
 
@@ -223,13 +225,13 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	}
 
 	// load the alternatives for the involved paths into the tree
-	err = d.loadIntendedStoreHighestPrio(ctx, d.treeCacheSchemaClient, root, involvedPaths, transaction.GetIntentNames())
+	err = loadIntendedStoreHighestPrio(ctx, treeSCC, root, involvedPaths, transaction.GetIntentNames())
 	if err != nil {
 		return nil, err
 	}
 
 	// add running to the tree
-	err = d.populateTreeWithRunning(ctx, d.treeCacheSchemaClient, root)
+	err = populateTreeWithRunning(ctx, treeSCC, root)
 	if err != nil {
 		return nil, err
 	}
@@ -463,7 +465,7 @@ func (d *Datastore) TransactionCancel(ctx context.Context, transactionId string)
 	return d.transactionManager.Cancel(ctx, transactionId)
 }
 
-func (d *Datastore) loadIntendedStoreHighestPrio(ctx context.Context, tscc tree.TreeSchemaCacheClient, r *tree.RootEntry, pathKeySet *tree.PathSet, skipIntents []string) error {
+func loadIntendedStoreHighestPrio(ctx context.Context, tscc tree.TreeCacheClient, r *tree.RootEntry, pathKeySet *tree.PathSet, skipIntents []string) error {
 
 	// Get all entries of the already existing intent
 	cacheEntries := tscc.ReadCurrentUpdatesHighestPriorities(ctx, pathKeySet.GetPaths(), 2)
@@ -484,7 +486,7 @@ func (d *Datastore) loadIntendedStoreHighestPrio(ctx context.Context, tscc tree.
 	return nil
 }
 
-func (d *Datastore) populateTreeWithRunning(ctx context.Context, tscc tree.TreeSchemaCacheClient, r *tree.RootEntry) error {
+func populateTreeWithRunning(ctx context.Context, tscc tree.TreeCacheClient, r *tree.RootEntry) error {
 	upds, err := tscc.ReadRunningFull(ctx)
 	if err != nil {
 		return err

@@ -170,7 +170,7 @@ func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 
 	if getSchema {
 		// trieve if the getSchema var is still true
-		schemaResp, err := s.treeContext.treeSchemaCacheClient.GetSchema(ctx, s.Path())
+		schemaResp, err := s.treeContext.schemaClient.GetSchemaSlicePath(ctx, s.Path())
 		if err != nil {
 			return err
 		}
@@ -564,7 +564,7 @@ func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, pathElems
 
 func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path []string) (Entry, error) {
 
-	schema, err := s.treeContext.treeSchemaCacheClient.GetSchema(ctx, path)
+	schema, err := s.treeContext.schemaClient.GetSchemaSlicePath(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("error trying to load defaults for %s: %v", strings.Join(path, "->"), err)
 	}
@@ -1023,7 +1023,7 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(ctx context.Context, l
 		// if not the path exists in the tree and is not to be deleted, then lookup in the paths index of the store
 		// and see if such path exists, if not raise the error
 		if !(existsInTree && v.remainsToExist()) {
-			exists, err := s.treeContext.treeSchemaCacheClient.IntendedPathExists(ctx, append(s.Path(), attribute))
+			exists, err := s.treeContext.cacheClient.IntendedPathExists(ctx, append(s.Path(), attribute))
 			if err != nil {
 				resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, false).Owner(), fmt.Errorf("error validating mandatory childs %s: %v", s.Path(), err), types.ValidationResultEntryTypeError)
 			}

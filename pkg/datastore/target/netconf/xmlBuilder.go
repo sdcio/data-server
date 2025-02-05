@@ -225,7 +225,7 @@ func (x *XMLConfigBuilder) resolveNamespace(ctx context.Context, p *sdcpb.Path, 
 	}
 
 	// Perform schema queries
-	sr, err := x.schemaClient.GetSchema(ctx,
+	sr, err := x.schemaClient.GetSchemaSdcpbPath(ctx,
 		&sdcpb.Path{
 			Elem:   p.Elem[:peIdx+1],
 			Origin: p.Origin,

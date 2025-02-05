@@ -384,7 +384,7 @@ func TestToJsonTable(t *testing.T) {
 			cacheClient := mockcacheclient.NewMockClient(mockCtrl)
 			testhelper.ConfigureCacheClientMock(t, cacheClient, []*cache.Update{}, []*cache.Update{}, []*cache.Update{}, [][]string{})
 
-			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", cacheClient, scb), owner)
+			tc := NewTreeContext(NewTreeCacheClient("dev1", cacheClient), scb, owner)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)

@@ -25,6 +25,7 @@ import (
 	"github.com/sdcio/data-server/mocks/mocktarget"
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/config"
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -166,7 +167,7 @@ func TestDatastore_validateTree(t *testing.T) {
 			cacheClient := mockcacheclient.NewMockClient(controller)
 			testhelper.ConfigureCacheClientMock(t, cacheClient, tt.intendedStoreUpdates, nil, nil, nil)
 
-			schemaClient, schema, err := testhelper.InitSDCIOSchema()
+			sc, schema, err := testhelper.InitSDCIOSchema()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -182,7 +183,7 @@ func TestDatastore_validateTree(t *testing.T) {
 
 				sbi:          mocktarget.NewMockTarget(controller),
 				cacheClient:  cacheClient,
-				schemaClient: schemaClient,
+				schemaClient: schemaClient.NewSchemaClientBound(schema.GetSchema(), sc),
 			}
 
 			ctx := context.Background()
@@ -199,7 +200,8 @@ func TestDatastore_validateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			tc := tree.NewTreeContext(tree.NewTreeSchemaCacheClient(dsName, d.cacheClient, d.getValidationClient()), tt.intentName)
+			tcc := tree.NewTreeCacheClient(dsName, d.cacheClient)
+			tc := tree.NewTreeContext(tcc, d.schemaClient, tt.intentName)
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Error(err)

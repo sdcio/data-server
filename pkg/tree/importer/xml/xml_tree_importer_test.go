@@ -80,7 +80,8 @@ func TestXmlTreeImporter(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	tc := tree.NewTreeContext(tree.NewTreeSchemaCacheClient(dsName, cacheClient, scb), "test")
+
+	tc := tree.NewTreeContext(tree.NewTreeCacheClient(dsName, cacheClient), scb, "test")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

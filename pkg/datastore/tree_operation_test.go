@@ -25,6 +25,7 @@ import (
 	"github.com/sdcio/data-server/mocks/mocktarget"
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/config"
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -677,12 +678,13 @@ func TestDatastore_populateTree(t *testing.T) {
 			cacheClient := mockcacheclient.NewMockClient(controller)
 			testhelper.ConfigureCacheClientMock(t, cacheClient, tt.intendedStoreUpdates, tt.runningStoreUpdates, tt.expectedModify, tt.expectedDeletes)
 
-			schemaClient, schema, err := testhelper.InitSDCIOSchema()
+			sc, schema, err := testhelper.InitSDCIOSchema()
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			dsName := "dev1"
+			ctx := context.Background()
 
 			// create a datastore
 			d := &Datastore{
@@ -693,11 +695,8 @@ func TestDatastore_populateTree(t *testing.T) {
 
 				sbi:          mocktarget.NewMockTarget(controller),
 				cacheClient:  cacheClient,
-				schemaClient: schemaClient,
+				schemaClient: schemaClient.NewSchemaClientBound(schema.GetSchema(), sc),
 			}
-			d.treeCacheSchemaClient = tree.NewTreeSchemaCacheClient(dsName, cacheClient, d.getValidationClient())
-
-			ctx := context.Background()
 
 			// marshall the intentReqValue into a byte slice
 			jsonConf, err := tt.intentReqValue()
@@ -728,7 +727,8 @@ func TestDatastore_populateTree(t *testing.T) {
 				Delete: tt.intentDelete,
 			}
 
-			tc := tree.NewTreeContext(d.treeCacheSchemaClient, tt.intentName)
+			tcc := tree.NewTreeCacheClient(d.Name(), cacheClient)
+			tc := tree.NewTreeContext(tcc, d.schemaClient, tt.intentName)
 
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
@@ -748,7 +748,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			loadHighest := oldIntentContent.ToPathSet()
 			loadHighest.Join(updSlice.ToPathSet())
 
-			err = d.loadIntendedStoreHighestPrio(ctx, d.treeCacheSchemaClient, root, loadHighest, []string{reqOne.GetIntent()})
+			err = loadIntendedStoreHighestPrio(ctx, tcc, root, loadHighest, []string{reqOne.GetIntent()})
 			if err != nil {
 				t.Error(err)
 			}
@@ -758,7 +758,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			root.AddCacheUpdatesRecursive(ctx, updSlice, flags)
 
 			// populate Tree with running
-			err = d.populateTreeWithRunning(ctx, d.treeCacheSchemaClient, root)
+			err = populateTreeWithRunning(ctx, tcc, root)
 			if err != nil {
 				t.Error(err)
 			}

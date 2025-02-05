@@ -358,7 +358,7 @@ func TestToXMLTable(t *testing.T) {
 
 			converter := utils.NewConverter(scb)
 
-			tc := NewTreeContext(NewTreeSchemaCacheClient("dev1", ccMock, scb), owner)
+			tc := NewTreeContext(NewTreeCacheClient("dev1", ccMock), scb, owner)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)

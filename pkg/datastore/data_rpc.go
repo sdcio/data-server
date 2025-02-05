@@ -123,7 +123,7 @@ NEXT_STORE:
 				if len(upd.GetPath()) == 0 {
 					continue
 				}
-				scp, err := d.toPath(ctx, upd.GetPath())
+				scp, err := d.schemaClient.ToPath(ctx, upd.GetPath())
 				if err != nil {
 					return err
 				}
@@ -163,8 +163,8 @@ NEXT_STORE:
 func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, req *sdcpb.GetDataRequest, paths [][]string, out chan *sdcpb.GetDataResponse, ietf bool) error {
 	now := time.Now().UnixNano()
 
-	treeSCC := tree.NewTreeSchemaCacheClient(d.Name(), d.cacheClient, d.getValidationClient())
-	tc := tree.NewTreeContext(treeSCC, "")
+	treeSCC := tree.NewTreeCacheClient(d.Name(), d.cacheClient)
+	tc := tree.NewTreeContext(treeSCC, d.schemaClient, "")
 	root, err := tree.NewTreeRoot(ctx, tc)
 	if err != nil {
 		return err
@@ -192,7 +192,7 @@ func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, r
 					continue
 				}
 
-				scp, err := d.toPath(ctx, upd.GetPath())
+				scp, err := d.schemaClient.ToPath(ctx, upd.GetPath())
 				if err != nil {
 					return err
 				}
@@ -249,7 +249,7 @@ func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, r
 }
 
 func (d *Datastore) handleGetDataUpdatesPROTO(ctx context.Context, name string, req *sdcpb.GetDataRequest, paths [][]string, out chan *sdcpb.GetDataResponse) error {
-	converter := utils.NewConverter(d.getValidationClient())
+	converter := utils.NewConverter(d.schemaClient)
 NEXT_STORE:
 	for _, store := range getStores(req) {
 		in := d.cacheClient.ReadCh(ctx, name, &cache.Opts{
@@ -270,7 +270,7 @@ NEXT_STORE:
 				if len(upd.GetPath()) == 0 {
 					continue
 				}
-				scp, err := d.toPath(ctx, upd.GetPath())
+				scp, err := d.schemaClient.ToPath(ctx, upd.GetPath())
 				if err != nil {
 					return err
 				}
@@ -366,7 +366,7 @@ func (d *Datastore) validateUpdate(ctx context.Context, upd *sdcpb.Update) error
 	// 2.validate that the value is compliant with the schema
 
 	// 1. validate the path
-	rsp, err := d.getSchema(ctx, upd.GetPath())
+	rsp, err := d.schemaClient.GetSchemaSdcpbPath(ctx, upd.GetPath())
 	if err != nil {
 		return err
 	}
@@ -687,7 +687,7 @@ func getStores(req proto.Message) []cachepb.Store {
 }
 
 func (d *Datastore) subscribeResponseFromCacheUpdate(ctx context.Context, upd *cache.Update) (*sdcpb.SubscribeResponse, error) {
-	scp, err := d.toPath(ctx, upd.GetPath())
+	scp, err := d.schemaClient.ToPath(ctx, upd.GetPath())
 	if err != nil {
 		return nil, err
 	}
@@ -708,139 +708,3 @@ func (d *Datastore) subscribeResponseFromCacheUpdate(ctx context.Context, upd *c
 		},
 	}, nil
 }
-
-// func (d *Datastore) setCandidate(ctx context.Context, req *sdcpb.SetDataRequest, expandDeletes bool) (*sdcpb.SetDataResponse, error) {
-// 	ok, err := d.cacheClient.HasCandidate(ctx, req.GetName(), req.GetDatastore().GetName())
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	if !ok {
-// 		return nil, status.Errorf(codes.InvalidArgument, "unknown candidate %s", req.GetDatastore().GetName())
-// 	}
-
-// 	replaces := make([]*sdcpb.Update, 0, len(req.GetReplace()))
-// 	updates := make([]*sdcpb.Update, 0, len(req.GetUpdate()))
-
-// 	converter := utils.NewConverter(d.getValidationClient())
-
-// 	// expand json/json_ietf values
-// 	for _, upd := range req.GetReplace() {
-// 		rs, err := converter.ExpandUpdate(ctx, upd, false)
-// 		if err != nil {
-// 			return nil, status.Errorf(codes.InvalidArgument, "failed expand replace: %v", err)
-// 		}
-// 		replaces = append(replaces, rs...)
-// 	}
-
-// 	for _, upd := range req.GetUpdate() {
-// 		rs, err := converter.ExpandUpdate(ctx, upd, false)
-// 		if err != nil {
-// 			return nil, status.Errorf(codes.InvalidArgument, "failed expand update: %v", err)
-// 		}
-// 		updates = append(updates, rs...)
-// 	}
-
-// 	// debugging
-// 	if log.GetLevel() >= log.DebugLevel {
-// 		for _, upd := range replaces {
-// 			log.Debugf("expanded replace:\n%s", prototext.Format(upd))
-// 		}
-// 		for _, upd := range updates {
-// 			log.Debugf("expanded update:\n%s", prototext.Format(upd))
-// 		}
-// 	}
-
-// 	// validate individual deletes
-// 	dels := make([]*sdcpb.Path, 0, len(req.GetDelete()))
-// 	for _, del := range req.GetDelete() {
-// 		if expandDeletes {
-// 			rsp, err := d.schemaClient.ExpandPath(ctx, &sdcpb.ExpandPathRequest{
-// 				Path:     del,
-// 				Schema:   d.Schema().GetSchema(),
-// 				DataType: sdcpb.DataType_CONFIG,
-// 			})
-// 			if err != nil {
-// 				return nil, status.Errorf(codes.InvalidArgument, "delete path: %q validation failed: %v", del, err)
-// 			}
-// 			dels = append(dels, rsp.GetPath()...)
-// 			continue
-// 		}
-// 		err = d.validatePath(ctx, del)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 		dels = append(dels, del)
-// 	}
-
-// 	for _, upd := range replaces {
-// 		err = d.validateUpdate(ctx, upd)
-// 		if err != nil {
-// 			log.Debugf("replace %v validation failed: %v", upd, err)
-// 			return nil, status.Errorf(codes.InvalidArgument, "replace: validation failed: %v", err)
-// 		}
-// 	}
-
-// 	for _, upd := range updates {
-// 		err = d.validateUpdate(ctx, upd)
-// 		if err != nil {
-// 			log.Debugf("update %v validation failed: %v", upd, err)
-// 			return nil, status.Errorf(codes.InvalidArgument, "update: validation failed: %v", err)
-// 		}
-// 	}
-
-// 	// insert/delete
-// 	// the order of operations is delete, replace, update
-// 	rsp := &sdcpb.SetDataResponse{
-// 		Response: make([]*sdcpb.UpdateResult, 0,
-// 			len(dels)+len(replaces)+len(updates)),
-// 	}
-
-// 	name := fmt.Sprintf("%s/%s", req.GetName(), req.GetDatastore().GetName())
-// 	cdels := make([][]string, 0, len(dels))
-// 	upds := make([]*cache.Update, 0, len(replaces)+len(updates))
-// 	// deletes start
-// 	for _, del := range dels {
-// 		cdels = append(cdels, utils.ToStrings(del, false, false))
-// 	}
-// 	for _, changes := range [][]*sdcpb.Update{replaces, updates} {
-// 		for _, upd := range changes {
-// 			cUpd, err := d.cacheClient.NewUpdate(upd)
-// 			if err != nil {
-// 				return nil, err
-// 			}
-// 			upds = append(upds, cUpd)
-// 		}
-// 	}
-// 	err = d.cacheClient.Modify(ctx, name, &cache.Opts{
-// 		Store: cachepb.Store_CONFIG,
-// 	}, cdels, upds)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	// deletes start
-// 	for _, del := range req.GetDelete() {
-// 		rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
-// 			Path: del,
-// 			Op:   sdcpb.UpdateResult_DELETE,
-// 		})
-// 	}
-// 	// deletes end
-// 	// replaces start
-// 	for _, rep := range req.GetReplace() {
-// 		rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
-// 			Path: rep.GetPath(),
-// 			Op:   sdcpb.UpdateResult_REPLACE,
-// 		})
-// 	}
-// 	// replaces end
-// 	// updates start
-// 	for _, upd := range req.GetUpdate() {
-// 		rsp.Response = append(rsp.Response, &sdcpb.UpdateResult{
-// 			Path: upd.GetPath(),
-// 			Op:   sdcpb.UpdateResult_UPDATE,
-// 		})
-// 	}
-// 	// updates end
-// 	return rsp, nil
-// }

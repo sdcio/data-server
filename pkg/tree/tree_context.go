@@ -2,30 +2,34 @@ package tree
 
 import (
 	"fmt"
+
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 )
 
 type TreeContext struct {
-	root                  Entry // the trees root element
-	treeSchemaCacheClient TreeSchemaCacheClient
-	actualOwner           string
+	root         Entry // the trees root element
+	cacheClient  TreeCacheClient
+	schemaClient schemaClient.SchemaClientBound
+	actualOwner  string
 }
 
-func NewTreeContext(tscc TreeSchemaCacheClient, actualOwner string) *TreeContext {
+func NewTreeContext(cc TreeCacheClient, sc schemaClient.SchemaClientBound, actualOwner string) *TreeContext {
 	return &TreeContext{
-		treeSchemaCacheClient: tscc,
-		actualOwner:           actualOwner,
+		cacheClient:  cc,
+		schemaClient: sc,
+		actualOwner:  actualOwner,
 	}
 }
 
 // deepCopy root is required to be set manually
 func (t *TreeContext) deepCopy() *TreeContext {
 	return &TreeContext{
-		treeSchemaCacheClient: t.treeSchemaCacheClient,
+		cacheClient: t.cacheClient,
 	}
 }
 
-func (t *TreeContext) GetTreeSchemaCacheClient() TreeSchemaCacheClient {
-	return t.treeSchemaCacheClient
+func (t *TreeContext) GetTreeSchemaCacheClient() TreeCacheClient {
+	return t.cacheClient
 }
 
 func (t *TreeContext) SetRoot(e Entry) error {

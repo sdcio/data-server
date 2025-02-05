@@ -43,8 +43,6 @@ type Client interface {
 	ToPath(ctx context.Context, in *sdcpb.ToPathRequest, opts ...grpc.CallOption) (*sdcpb.ToPathResponse, error)
 	// ExpandPath returns a list of sub paths given a single path
 	ExpandPath(ctx context.Context, in *sdcpb.ExpandPathRequest, opts ...grpc.CallOption) (*sdcpb.ExpandPathResponse, error)
-
 	// overwrites
-	// TOOD: uploadSchema
 	GetSchemaElements(ctx context.Context, req *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (chan *sdcpb.SchemaElem, error)
 }
