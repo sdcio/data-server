@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -460,4 +461,79 @@ func (d *Datastore) TransactionCancel(ctx context.Context, transactionId string)
 	defer d.dmutex.Unlock()
 
 	return d.transactionManager.Cancel(ctx, transactionId)
+}
+
+func (d *Datastore) loadIntendedStoreHighestPrio(ctx context.Context, tscc tree.TreeSchemaCacheClient, r *tree.RootEntry, pathKeySet *tree.PathSet, skipIntents []string) error {
+
+	// Get all entries of the already existing intent
+	cacheEntries := tscc.ReadCurrentUpdatesHighestPriorities(ctx, pathKeySet.GetPaths(), 2)
+
+	flags := tree.NewUpdateInsertFlags()
+
+	// add all the existing entries
+	for _, entry := range cacheEntries {
+		// we need to skip the actual owner entries
+		if slices.Contains(skipIntents, entry.Owner()) {
+			continue
+		}
+		_, err := r.AddCacheUpdateRecursive(ctx, entry, flags)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (d *Datastore) populateTreeWithRunning(ctx context.Context, tscc tree.TreeSchemaCacheClient, r *tree.RootEntry) error {
+	upds, err := tscc.ReadRunningFull(ctx)
+	if err != nil {
+		return err
+	}
+
+	flags := tree.NewUpdateInsertFlags()
+
+	for _, upd := range upds {
+		newUpd := cache.NewUpdate(upd.GetPath(), upd.Bytes(), tree.RunningValuesPrio, tree.RunningIntentName, 0)
+		_, err := r.AddCacheUpdateRecursive(ctx, newUpd, flags)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func pathIsKeyAsLeaf(p *sdcpb.Path) bool {
+	numPElem := len(p.GetElem())
+	if numPElem < 2 {
+		return false
+	}
+
+	_, ok := p.GetElem()[numPElem-2].GetKey()[p.GetElem()[numPElem-1].GetName()]
+	return ok
+}
+
+func (d *Datastore) readStoreKeysMeta(ctx context.Context, store cachepb.Store) (map[string]tree.UpdateSlice, error) {
+	entryCh, err := d.cacheClient.GetKeys(ctx, d.config.Name, store)
+	if err != nil {
+		return nil, err
+	}
+
+	result := map[string]tree.UpdateSlice{}
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case e, ok := <-entryCh:
+			if !ok {
+				return result, nil
+			}
+			key := strings.Join(e.GetPath(), tree.KeysIndexSep)
+			_, exists := result[key]
+			if !exists {
+				result[key] = tree.UpdateSlice{}
+			}
+			result[key] = append(result[key], e)
+		}
+	}
 }
