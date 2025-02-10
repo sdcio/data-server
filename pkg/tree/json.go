@@ -6,6 +6,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"golang.org/x/net/context"
 )
 
 func (s *sharedEntryAttributes) ToJson(onlyNewOrUpdated bool) (any, error) {
@@ -85,7 +86,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 				return nil, nil
 			}
 			return result, nil
-		case s.childs.Length() == 0 && s.schema.GetContainer().IsPresence:
+		case s.schema.GetContainer().IsPresence && s.containsOnlyDefaults():
 			// Presence container without any childs
 			if onlyNewOrUpdated {
 				// presence containers have leafvariantes with typedValue_Empty, so check that
@@ -132,6 +133,42 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 		return utils.GetJsonValue(v, ietf)
 	}
 	return nil, fmt.Errorf("unable to convert to json (%s)", s.Path())
+}
+
+// containsOnlyDefaults checks for presence containers, if only default values are present,
+// such that the Entry should also be treated as a presence container
+func (s *sharedEntryAttributes) containsOnlyDefaults() bool {
+	// if no schema is present, we must be in a key level
+	if s.schema == nil {
+		return false
+	}
+	contSchema := s.schema.GetContainer()
+	if contSchema == nil {
+		return false
+	}
+
+	// only if length of childs is (more) compared to the number of
+	// attributes carrying defaults, the presence condition can be met
+	if s.childs.Length() > len(contSchema.ChildsWithDefaults) {
+		return false
+	}
+	for k, v := range s.childs.GetAll() {
+		// check if child name is part of ChildsWithDefaults
+		if !slices.Contains(contSchema.ChildsWithDefaults, k) {
+			return false
+		}
+		// check if the value is the default value
+		le, err := v.getHighestPrecedenceLeafValue(context.TODO())
+		if err != nil {
+			return false
+		}
+		// if the owner is not Default return false
+		if le.Owner() != DefaultsIntentName {
+			return false
+		}
+	}
+
+	return true
 }
 
 // jsonAddIetfPrefixConditional adds the module name

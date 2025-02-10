@@ -57,6 +57,24 @@ func (lv *LeafVariants) Length() int {
 	return len(lv.les)
 }
 
+// containsOtherOwnerThenDefaultOrRunning returns true if there is any other leafentry then default or running
+func (lv *LeafVariants) containsOtherOwnerThenDefaultOrRunning() bool {
+	// quick check, if more then 2 elements, there must be
+	// anything other then default and running
+	if len(lv.les) > 2 {
+		return true
+	}
+	foundOther := false
+	for _, le := range lv.les {
+		foundOther = le.Owner() != RunningIntentName && le.Owner() != DefaultsIntentName
+		if foundOther {
+			break
+		}
+	}
+
+	return foundOther
+}
+
 // ShouldDelete indicates if the entry should be deleted,
 // since it is an entry that represents LeafsVariants but non
 // of these are still valid.
@@ -97,6 +115,23 @@ func (lv *LeafVariants) GetHighestPrecedenceValue() int32 {
 	return result
 }
 
+// checkReturnDefault checks if defaults are allowed and if the given LeafEntry is owned by default
+func checkNotDefaultAllowedButIsDefaultOwner(le *LeafEntry, includeDefaults bool) bool {
+	return !includeDefaults && le.Update.Owner() == DefaultsIntentName
+}
+
+func checkExistsAndDeleteFlagSet(le *LeafEntry) bool {
+	return le != nil && le.GetDeleteFlag()
+}
+
+func checkNewOrUpdateFlagSet(le *LeafEntry) bool {
+	return le.GetNewFlag() || le.GetUpdateFlag()
+}
+
+func checkNotOwner(le *LeafEntry, owner string) bool {
+	return le.Owner() != owner
+}
+
 // GetHighesNewUpdated returns the LeafEntry with the highes priority
 // nil if no leaf entry exists.
 func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool) *LeafEntry {
@@ -133,7 +168,7 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 	}
 
 	// do not include defaults loaded at validation time
-	if !includeDefaults && highest.Update.Owner() == DefaultsIntentName {
+	if checkNotDefaultAllowedButIsDefaultOwner(highest, includeDefaults) {
 		return nil
 	}
 
@@ -144,14 +179,14 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 	}
 
 	// if the highes is not marked for deletion and new or updated (=PrioChanged) return it
-	if !highest.GetDeleteFlag() {
-		if highest.GetNewFlag() || highest.GetUpdateFlag() || (lv.tc.actualOwner != "" && highest.Update.Owner() == lv.tc.actualOwner && lv.highestNotRunning(highest)) {
+	if !checkExistsAndDeleteFlagSet(highest) {
+		if checkNewOrUpdateFlagSet(highest) || lv.highestIsUnequalRunning(highest) {
 			return highest
 		}
 		return nil
 	}
 	// otherwise if the secondhighest is not marked for deletion return it
-	if secondHighest != nil && !secondHighest.GetDeleteFlag() && secondHighest.Update.Owner() != RunningIntentName {
+	if !checkExistsAndDeleteFlagSet(secondHighest) && checkNotOwner(secondHighest, RunningIntentName) {
 		return secondHighest
 	}
 
@@ -159,7 +194,7 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 	return nil
 }
 
-func (lv *LeafVariants) highestNotRunning(highest *LeafEntry) bool {
+func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
 	// if highes is already running or even default, return false
 	if highest.Update.Owner() == RunningIntentName {
 		return false

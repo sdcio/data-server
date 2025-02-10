@@ -215,6 +215,11 @@ func Test_Entry_Three(t *testing.T) {
 	u3 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "12", "description"}, desc3, prio50, owner1, ts1)
 	u4 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
 
+	u1r := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc3, RunningValuesPrio, RunningIntentName, ts1)
+	u2r := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "11", "description"}, desc3, RunningValuesPrio, RunningIntentName, ts1)
+	u3r := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "12", "description"}, desc3, RunningValuesPrio, RunningIntentName, ts1)
+	u4r := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "13", "description"}, desc3, RunningValuesPrio, RunningIntentName, ts1)
+
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -234,6 +239,14 @@ func Test_Entry_Three(t *testing.T) {
 
 	// start test add "existing" data
 	for _, u := range []*cache.Update{u1, u2, u3, u4} {
+		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsExisting)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+
+	// start test add "existing" data as running
+	for _, u := range []*cache.Update{u1r, u2r, u3r, u4r} {
 		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsExisting)
 		if err != nil {
 			t.Error(err)
@@ -636,6 +649,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	// define the expected result
 	expects := []string{
 		"interface/ethernet-0/0",
+		"interface/ethernet-0/1/admin-state",
 	}
 	// sort both slices for equality check
 	slices.Sort(deletes)
@@ -696,6 +710,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{})
 			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
 			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, RunningValuesPrio, RunningIntentName, ts), flagsExisting, nil))
 
 			le := lv.GetHighestPrecedence(true, false)
 
@@ -729,11 +744,29 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 
 			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
 			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, RunningValuesPrio, RunningIntentName, ts), flagsExisting, nil))
 
 			le := lv.GetHighestPrecedence(true, false)
 
 			if le != nil {
 				t.Errorf("expected to get entry %v, got %v", nil, le)
+			}
+		},
+	)
+
+	// A preferred entry does exist the lower prio entry is new.
+	// // on onlyIfPrioChanged == true we do not expect output.
+	t.Run("New Low Prio IsNew OnlyChanged == True, with running not existing",
+		func(t *testing.T) {
+			lv := newLeafVariants(&TreeContext{})
+
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
+			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
+
+			le := lv.GetHighestPrecedence(true, false)
+
+			if le != lv.les[0] {
+				t.Errorf("expected to get entry %v, got %v", lv.les[0], le)
 			}
 		},
 	)

@@ -373,7 +373,7 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes []DeleteEntry, aggr
 		for _, n := range keys {
 			c, exists := s.childs.GetEntry(n)
 			// these keys should aways exist, so for now we do not catch the non existing key case
-			if exists && c.remainsToExist(true) {
+			if exists && c.remainsToExist() {
 				// if not all the keys are marked for deletion, we need to revert to regular deletion
 				doAggregateDelete = false
 				break
@@ -397,23 +397,20 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes []DeleteEntry, aggr
 	return s.getRegularDeletes(deletes, aggregatePaths)
 }
 
-func (s *sharedEntryAttributes) remainsToExist(shouldDelete bool) bool {
+func (s *sharedEntryAttributes) remainsToExist() bool {
 	// see if we have the value cached
-	// s.remainsMutex.Lock()
-	// defer s.remainsMutex.Unlock()
-	// if s.remains != nil {
-	// 	return *s.remains
-	// }
-
-	leafVariantResult := s.leafVariants.Length() > 0 && !s.leafVariants.shouldDelete(shouldDelete)
-	if shouldDelete && s.leafVariants.Length() > 0 {
-		leafVariantResult = leafVariantResult && s.leafVariants.containsOtherOwnerThenDefaultOrRunning()
+	s.remainsMutex.Lock()
+	defer s.remainsMutex.Unlock()
+	if s.remains != nil {
+		return *s.remains
 	}
+
+	leafVariantResult := s.leafVariants.Length() > 0 && !s.leafVariants.shouldDelete()
 
 	// handle containers
 	childsRemain := false
 	for _, c := range s.filterActiveChoiceCaseChilds() {
-		childsRemain = c.remainsToExist(shouldDelete)
+		childsRemain = c.remainsToExist()
 		if childsRemain {
 			break
 		}
@@ -465,7 +462,7 @@ func (s *sharedEntryAttributes) getRegularDeletes(deletes []DeleteEntry, aggrega
 		}
 	}
 
-	if !s.remainsToExist(true) && s.containsOtherOwnerThenDefaultOrRunning() && !s.IsRoot() && len(s.GetSchemaKeys()) == 0 {
+	if !s.remainsToExist() && !s.IsRoot() && len(s.GetSchemaKeys()) == 0 {
 		return append(deletes, s), nil
 	}
 
@@ -773,7 +770,7 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 	}
 
 	// validate the mandatory statement on this entry
-	if s.remainsToExist(false) {
+	if s.remainsToExist() {
 		s.validateMandatory(ctx, resultChan)
 		s.validateLeafRefs(ctx, resultChan)
 		s.validateLeafListMinMaxAttributes(resultChan)
@@ -1046,7 +1043,7 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(ctx context.Context, l
 
 		// if not the path exists in the tree and is not to be deleted, then lookup in the paths index of the store
 		// and see if such path exists, if not raise the error
-		if !(existsInTree && v.remainsToExist(false)) {
+		if !(existsInTree && v.remainsToExist()) {
 			exists, err := s.treeContext.cacheClient.IntendedPathExists(ctx, append(s.Path(), attribute))
 			if err != nil {
 				resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, false).Owner(), fmt.Errorf("error validating mandatory childs %s: %v", s.Path(), err), types.ValidationResultEntryTypeError)
