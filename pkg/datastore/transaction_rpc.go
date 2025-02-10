@@ -125,6 +125,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	log.Debugf("Transaction Replace: %s - finish tree insertion phase", transaction.GetTransactionId())
 	root.FinishInsertionPhase(ctx)
 
+	log.Debug(root.String())
 	// perform validation
 	validationResult := root.Validate(ctx, true)
 	validationResult.ErrorsStr()
@@ -240,8 +241,10 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	// FinishInsertion Phase
 	root.FinishInsertionPhase(ctx)
 
+	log.Debug(root.String())
+
 	// perform validation
-	validationResult := root.Validate(ctx, false)
+	validationResult := root.Validate(ctx, true)
 
 	// prepare the response struct
 	result := &sdcpb.TransactionSetResponse{
