@@ -3,13 +3,13 @@ package tree
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/sdcio/data-server/pkg/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/yang-parser/xpath"
 	"github.com/sdcio/yang-parser/xpath/grammars/expr"
+	log "github.com/sirupsen/logrus"
 )
 
 func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, resultChan chan<- *types.ValidationResultEntry) {
@@ -57,10 +57,10 @@ func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, resu
 				err = fmt.Errorf("error path: %s, must-statement [%s] %s", must.Statement, s.Path(), must.Error)
 			}
 			if strings.Contains(err.Error(), "Stack underflow") {
-				slog.Debug("stack underflow error: path=%v, mustExpr=%s", s.Path().String(), exprStr)
+				log.Debugf("stack underflow error: path=%v, mustExpr=%s", s.Path().String(), exprStr)
 				continue
 			}
-			resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, false).Owner(), err, types.ValidationResultEntryTypeError)
+			resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, true).Owner(), err, types.ValidationResultEntryTypeError)
 			return
 		}
 	}

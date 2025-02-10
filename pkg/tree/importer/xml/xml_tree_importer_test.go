@@ -127,7 +127,7 @@ func TestXmlTreeImporter(t *testing.T) {
 			t.Log(string(xmlResultStr))
 
 			if diff := cmp.Diff(inputDocStr, string(xmlResultStr)); diff != "" {
-				t.Fatalf("Integrating xml failed.\nDiff:\n%s", diff)
+				t.Fatalf("Integrating xml failed. mismatch (-want +got).\nDiff:\n%s", diff)
 			}
 		})
 	}

@@ -397,7 +397,8 @@ func TestToXMLTable(t *testing.T) {
 				}
 			}
 			root.FinishInsertionPhase(ctx)
-			// fmt.Println(root.String())
+
+			t.Log(root.String())
 
 			xmlDoc, err := root.ToXML(tt.onlyNewOrUpdated, tt.honorNamespace, tt.operationWithNamespace, tt.useOperationRemove)
 			if err != nil {
@@ -416,7 +417,7 @@ func TestToXMLTable(t *testing.T) {
 			fmt.Println(string(xmlDocStr))
 
 			if diff := cmp.Diff(tt.expected, string(xmlDocStr)); diff != "" {
-				t.Fatalf("ToXML() failed.\nDiff:\n%s", diff)
+				t.Fatalf("ToXML() mismatch (-want +got)\n%s", diff)
 			}
 		})
 	}

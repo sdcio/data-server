@@ -125,6 +125,12 @@ func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName st
 		return nil, err
 	}
 
+	// try loading potential defaults
+	err = s.loadDefaults(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// initialize the choice case resolvers with the schema information
 	s.initChoiceCasesResolvers()
 
@@ -136,6 +142,57 @@ func (s *sharedEntryAttributes) GetRoot() Entry {
 		return s
 	}
 	return s.parent.GetRoot()
+}
+
+// loadDefaults helper to populate defaults on the initializiation of the sharedEntryAttribute
+func (s *sharedEntryAttributes) loadDefaults(ctx context.Context) error {
+
+	// if it is a container wihtout keys (not a list) then load the defaults
+	if s.schema.GetContainer() != nil && len(s.schema.GetContainer().GetKeys()) == 0 {
+		for _, childname := range s.schema.GetContainer().ChildsWithDefaults {
+			// tryLoadingDefaults is using the pathslice, that contains keys as well,
+			// so we need to make up for these extra entries in the slice
+			path := append(s.Path(), childname)
+			_, err := s.tryLoadingDefault(ctx, path)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// on the root element we cannot query the parent schema.
+	// hence skip this part if IsRoot
+	if !s.IsRoot() {
+
+		// the regular container was covered further up, now we're after lists.
+		// but only entries without a schema make sense to test. Since defaults
+		// need to be added to the last level with no schema
+		if s.schema != nil {
+			return nil
+		}
+
+		// get the first ancestor with a schema and how many levels up that is
+		ancestor, levelsUp := s.GetFirstAncestorWithSchema()
+
+		// retrieve the container schema
+		ancestorContainerSchema := ancestor.GetSchema().GetContainer()
+		// if it is not a container, return
+		if ancestorContainerSchema == nil {
+			return nil
+		}
+
+		// if we're in the last level of keys, then we need to add the defaults
+		if len(ancestorContainerSchema.Keys) == levelsUp {
+			for _, childname := range ancestorContainerSchema.ChildsWithDefaults {
+				path := append(s.Path(), childname)
+				_, err := s.tryLoadingDefault(ctx, path)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
@@ -316,7 +373,7 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes []DeleteEntry, aggr
 		for _, n := range keys {
 			c, exists := s.childs.GetEntry(n)
 			// these keys should aways exist, so for now we do not catch the non existing key case
-			if exists && c.remainsToExist() {
+			if exists && c.remainsToExist(true) {
 				// if not all the keys are marked for deletion, we need to revert to regular deletion
 				doAggregateDelete = false
 				break
@@ -340,20 +397,23 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes []DeleteEntry, aggr
 	return s.getRegularDeletes(deletes, aggregatePaths)
 }
 
-func (s *sharedEntryAttributes) remainsToExist() bool {
+func (s *sharedEntryAttributes) remainsToExist(shouldDelete bool) bool {
 	// see if we have the value cached
-	s.remainsMutex.Lock()
-	defer s.remainsMutex.Unlock()
-	if s.remains != nil {
-		return *s.remains
-	}
+	// s.remainsMutex.Lock()
+	// defer s.remainsMutex.Unlock()
+	// if s.remains != nil {
+	// 	return *s.remains
+	// }
 
-	leafVariantResult := s.leafVariants.Length() > 0 && !s.leafVariants.shouldDelete()
+	leafVariantResult := s.leafVariants.Length() > 0 && !s.leafVariants.shouldDelete(shouldDelete)
+	if shouldDelete && s.leafVariants.Length() > 0 {
+		leafVariantResult = leafVariantResult && s.leafVariants.containsOtherOwnerThenDefaultOrRunning()
+	}
 
 	// handle containers
 	childsRemain := false
 	for _, c := range s.filterActiveChoiceCaseChilds() {
-		childsRemain = c.remainsToExist()
+		childsRemain = c.remainsToExist(shouldDelete)
 		if childsRemain {
 			break
 		}
@@ -405,7 +465,7 @@ func (s *sharedEntryAttributes) getRegularDeletes(deletes []DeleteEntry, aggrega
 		}
 	}
 
-	if !s.remainsToExist() && !s.IsRoot() && len(s.GetSchemaKeys()) == 0 {
+	if !s.remainsToExist(true) && s.containsOtherOwnerThenDefaultOrRunning() && !s.IsRoot() && len(s.GetSchemaKeys()) == 0 {
 		return append(deletes, s), nil
 	}
 
@@ -569,46 +629,10 @@ func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path []st
 		return nil, fmt.Errorf("error trying to load defaults for %s: %v", strings.Join(path, "->"), err)
 	}
 
-	var tv *sdcpb.TypedValue
-
-	switch schem := schema.GetSchema().GetSchema().(type) {
-	case *sdcpb.SchemaElem_Field:
-		defaultVal := schem.Field.GetDefault()
-		if defaultVal == "" {
-			return nil, fmt.Errorf("error no default defined for %s", strings.Join(path, " -> "))
-		}
-		tv, err = utils.Convert(defaultVal, schem.Field.GetType())
-		if err != nil {
-			return nil, err
-		}
-	case *sdcpb.SchemaElem_Leaflist:
-		listDefaults := schem.Leaflist.GetDefaults()
-		tvlist := make([]*sdcpb.TypedValue, 0, len(listDefaults))
-		for _, dv := range schem.Leaflist.GetDefaults() {
-			tvelem, err := utils.Convert(dv, schem.Leaflist.GetType())
-			if err != nil {
-				return nil, fmt.Errorf("error converting default to typed value for %s, type: %s ; value: %s; err: %v", strings.Join(path, " -> "), schem.Leaflist.GetType().GetTypeName(), dv, err)
-			}
-			tvlist = append(tvlist, tvelem)
-		}
-		tv = &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_LeaflistVal{
-				LeaflistVal: &sdcpb.ScalarArray{
-					Element: tvlist,
-				},
-			},
-		}
-	default:
-		return nil, fmt.Errorf("error no defaults defined for schema path: %s", strings.Join(path, "->"))
-	}
-
-	// convert value to []byte for cache insertion
-	val, err := proto.Marshal(tv)
+	upd, err := utils.DefaultValueRetrieve(schema.GetSchema(), path, DefaultValuesPrio, DefaultsIntentName)
 	if err != nil {
 		return nil, err
 	}
-
-	upd := cache.NewUpdate(path, val, DefaultValuesPrio, DefaultsIntentName, 0)
 
 	flags := NewUpdateInsertFlags()
 
@@ -749,7 +773,7 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 	}
 
 	// validate the mandatory statement on this entry
-	if s.remainsToExist() {
+	if s.remainsToExist(false) {
 		s.validateMandatory(ctx, resultChan)
 		s.validateLeafRefs(ctx, resultChan)
 		s.validateLeafListMinMaxAttributes(resultChan)
@@ -1022,7 +1046,7 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(ctx context.Context, l
 
 		// if not the path exists in the tree and is not to be deleted, then lookup in the paths index of the store
 		// and see if such path exists, if not raise the error
-		if !(existsInTree && v.remainsToExist()) {
+		if !(existsInTree && v.remainsToExist(false)) {
 			exists, err := s.treeContext.cacheClient.IntendedPathExists(ctx, append(s.Path(), attribute))
 			if err != nil {
 				resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, false).Owner(), fmt.Errorf("error validating mandatory childs %s: %v", s.Path(), err), types.ValidationResultEntryTypeError)
