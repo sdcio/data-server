@@ -538,3 +538,8 @@ func ParseDecimal64(v string) (*sdcpb.Decimal64, error) {
 		Precision: precision,
 	}, nil
 }
+
+// BoolPtr retrieve a pointer to a bool value
+func BoolPtr(b bool) *bool {
+	return &b
+}

@@ -59,11 +59,6 @@ func (lv *LeafVariants) Length() int {
 
 // containsOtherOwnerThenDefaultOrRunning returns true if there is any other leafentry then default or running
 func (lv *LeafVariants) containsOtherOwnerThenDefaultOrRunning() bool {
-	// quick check, if more then 2 elements, there must be
-	// anything other then default and running
-	if len(lv.les) > 2 {
-		return true
-	}
 	foundOther := false
 	for _, le := range lv.les {
 		foundOther = le.Owner() != RunningIntentName && le.Owner() != DefaultsIntentName
@@ -75,9 +70,32 @@ func (lv *LeafVariants) containsOtherOwnerThenDefaultOrRunning() bool {
 	return foundOther
 }
 
-// ShouldDelete indicates if the entry should be deleted,
-// since it is an entry that represents LeafsVariants but non
-// of these are still valid.
+// canDelete returns true if leafValues exist that are not owned by default or running that do not have the DeleteFlag set [or if delete is set, also the DeleteOnlyIntendedFlag set]
+func (lv *LeafVariants) canDelete() bool {
+	lv.lesMutex.RLock()
+	defer lv.lesMutex.RUnlock()
+	// only procede if we have leave variants
+	if len(lv.les) == 0 {
+		return true
+	}
+
+	// go through all variants
+	for _, l := range lv.les {
+		// if the LeafVariant is not owned by running or default
+		if l.Update.Owner() != RunningIntentName && l.Update.Owner() != DefaultsIntentName {
+			// then we need to check that it remains, so not Delete Flag set or DeleteOnylIntended Flags set [which results in not doing a delete towards the device]
+			if l.GetDeleteOnlyIntendedFlag() || !l.GetDeleteFlag() {
+				// then this entry should not be deleted
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// shouldDelete evaluates the LeafVariants and indicates if the overall result is, that the Entry referencing these
+// LeafVariants is explicitly to be deleted. Meaning there are no other LeafVariants remaining after the pending action, that
+// any LeafVariant other then Running or Defaults exist.
 func (lv *LeafVariants) shouldDelete() bool {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
@@ -86,21 +104,40 @@ func (lv *LeafVariants) shouldDelete() bool {
 		return false
 	}
 
-	// if only running exists return false
-	if lv.les[0].Update.Owner() == RunningIntentName && len(lv.les) == 1 {
+	// go through all variants
+	for _, l := range lv.les {
+		// if an entry exists that is not owned by running or default,
+		if l.Update.Owner() == RunningIntentName || l.Update.Owner() == DefaultsIntentName {
+			continue
+		}
+
+		// if an entry exists that has
+		// the only intended flag set or not the Delete Flag and is not owned by default and not owned by running
+		if l.GetDeleteOnlyIntendedFlag() || !l.GetDeleteFlag() {
+			// then this entry should not be deleted
+			return false
+		}
+	}
+	return true
+}
+
+func (lv *LeafVariants) remainsToExist() bool {
+	lv.lesMutex.RLock()
+	defer lv.lesMutex.RUnlock()
+	// only procede if we have leave variants
+	if len(lv.les) == 0 {
 		return false
 	}
 
 	// go through all variants
 	for _, l := range lv.les {
-		// if not running is set and not the owner is running then
-		// it should not be deleted
-		if !((l.GetDeleteFlag() && !l.GetDeleteOnlyIntendedFlag()) || l.Update.Owner() == RunningIntentName) {
-			return false
+		// if an entry exists that does not have the delete flag set,
+		// then a remaining LeafVariant exists.
+		if !l.GetDeleteFlag() {
+			return true
 		}
 	}
-
-	return true
+	return false
 }
 
 func (lv *LeafVariants) GetHighestPrecedenceValue() int32 {

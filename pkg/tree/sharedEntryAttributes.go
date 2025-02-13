@@ -41,8 +41,10 @@ type sharedEntryAttributes struct {
 	treeContext *TreeContext
 
 	// state cache
-	remains      *bool
-	remainsMutex sync.Mutex
+	cacheShouldDelete *bool
+	cacheCanDelete    *bool
+	cacheRemains      *bool
+	cacheMutex        sync.Mutex
 }
 
 func (s *sharedEntryAttributes) deepCopy(tc *TreeContext, parent Entry) (*sharedEntryAttributes, error) {
@@ -373,7 +375,7 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes []DeleteEntry, aggr
 		for _, n := range keys {
 			c, exists := s.childs.GetEntry(n)
 			// these keys should aways exist, so for now we do not catch the non existing key case
-			if exists && c.remainsToExist() {
+			if exists && !c.shouldDelete() {
 				// if not all the keys are marked for deletion, we need to revert to regular deletion
 				doAggregateDelete = false
 				break
@@ -397,15 +399,89 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes []DeleteEntry, aggr
 	return s.getRegularDeletes(deletes, aggregatePaths)
 }
 
-func (s *sharedEntryAttributes) remainsToExist() bool {
-	// see if we have the value cached
-	s.remainsMutex.Lock()
-	defer s.remainsMutex.Unlock()
-	if s.remains != nil {
-		return *s.remains
+// canDelete checks if the entry can be Deleted.
+// This is e.g. to cover e.g. defaults and running. They can be deleted, but should not, they are basically implicitly existing.
+// In caomparison to
+//   - remainsToExists() returns true, because they remain to exist even though implicitly.
+//   - shouldDelete() returns false, because no explicit delete should be issued for them.
+func (s *sharedEntryAttributes) canDelete() bool {
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+	if s.cacheCanDelete != nil {
+		return *s.cacheCanDelete
 	}
 
-	leafVariantResult := s.leafVariants.Length() > 0 && !s.leafVariants.shouldDelete()
+	leafVariantCanDelete := s.leafVariants.canDelete()
+	if !leafVariantCanDelete {
+		s.cacheCanDelete = utils.BoolPtr(false)
+		return *s.cacheCanDelete
+	}
+
+	// handle containers
+	for _, c := range s.filterActiveChoiceCaseChilds() {
+		canDelete := c.canDelete()
+		if !canDelete {
+			s.cacheCanDelete = utils.BoolPtr(false)
+			return *s.cacheCanDelete
+		}
+	}
+	s.cacheCanDelete = utils.BoolPtr(true)
+	return *s.cacheCanDelete
+}
+
+// shouldDelete checks if a container or Leaf(List) is to be explicitly deleted.
+func (s *sharedEntryAttributes) shouldDelete() bool {
+	// see if we have the value cached
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+	if s.cacheShouldDelete != nil {
+		return *s.cacheShouldDelete
+	}
+	// check if the leafVariants result in a should delete
+	leafVariantshouldDelete := s.leafVariants.shouldDelete()
+
+	// for containers, it is basically a canDelete() check.
+	canDelete := false
+	// but a real delete should only be added if there is at least one shouldDelete() == true
+	shouldDelete := false
+
+	// iterate through the active childs
+	for _, c := range s.filterActiveChoiceCaseChilds() {
+		// check if the child can be deleted
+		canDelete = c.canDelete()
+		// if it can explicitly not be deleted, then the result is clear, we should not delete
+		if !canDelete {
+			break
+		}
+		// if it can be deleted we need to check if there is a contibuting entry that
+		// requires deletion only if there is a contributing shouldDelete() == true then we must issue
+		// a real delete
+		shouldDelete = shouldDelete || c.shouldDelete()
+	}
+
+	// the overall result is
+	// if we have a leaf
+	//     the result of the leafVariant.shouldDelete() calculation
+	// or if it is a conmtainer
+	//     canDelete() [if no canDelete() == true then it must remain]
+	// 	 and
+	//     shouldDelete() [only if an entry is explicitly to be deleted, issue a delete]
+	//   and
+	//     s.leafVariants.canDelete()
+	result := leafVariantshouldDelete || (canDelete && shouldDelete && s.leafVariants.canDelete())
+
+	s.cacheShouldDelete = &result
+	return result
+}
+
+func (s *sharedEntryAttributes) remainsToExist() bool {
+	// see if we have the value cached
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+	if s.cacheRemains != nil {
+		return *s.cacheRemains
+	}
+	leafVariantResult := s.leafVariants.remainsToExist()
 
 	// handle containers
 	childsRemain := false
@@ -424,9 +500,8 @@ func (s *sharedEntryAttributes) remainsToExist() bool {
 
 	// assumption is, that if the entry exists, there is at least a running value available.
 	remains := leafVariantResult || childsRemain || activeChoiceCase
-	// populate the state cache
-	s.remains = &remains
 
+	s.cacheRemains = &remains
 	return remains
 }
 
@@ -462,7 +537,7 @@ func (s *sharedEntryAttributes) getRegularDeletes(deletes []DeleteEntry, aggrega
 		}
 	}
 
-	if !s.remainsToExist() && !s.IsRoot() && len(s.GetSchemaKeys()) == 0 {
+	if s.shouldDelete() && !s.IsRoot() && len(s.GetSchemaKeys()) == 0 {
 		return append(deletes, s), nil
 	}
 
@@ -733,7 +808,7 @@ func (s *sharedEntryAttributes) GetRootBasedEntryChain() []Entry {
 	return append(s.parent.GetRootBasedEntryChain(), s)
 }
 
-// getHighestPrecedenceValueOfBranch goes through all the child branches to find the highes
+// getHighestPrecedenceValueOfBranch goes through all the child branches to find the highest
 // precedence value (lowest priority value) for the entire branch and returns it.
 func (s *sharedEntryAttributes) getHighestPrecedenceValueOfBranch() int32 {
 	result := int32(math.MaxInt32)
@@ -758,7 +833,7 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 	defer wg.Wait()
 	for _, c := range s.filterActiveChoiceCaseChilds() {
 		wg.Add(1)
-		valFunc := func(x Entry) { // HINT: for Must-Statement debugging, remove "go " such that the debugger is triggered one after the other
+		valFunc := func(x Entry) {
 			x.Validate(ctx, resultChan, concurrent)
 			wg.Done()
 		}
@@ -1046,10 +1121,10 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(ctx context.Context, l
 		if !(existsInTree && v.remainsToExist()) {
 			exists, err := s.treeContext.cacheClient.IntendedPathExists(ctx, append(s.Path(), attribute))
 			if err != nil {
-				resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, false).Owner(), fmt.Errorf("error validating mandatory childs %s: %v", s.Path(), err), types.ValidationResultEntryTypeError)
+				resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, true).Owner(), fmt.Errorf("error validating mandatory childs %s: %v", s.Path(), err), types.ValidationResultEntryTypeError)
 			}
 			if !exists {
-				resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, false).Owner(), fmt.Errorf("error mandatory child %s does not exist, path: %s", attribute, s.Path()), types.ValidationResultEntryTypeError)
+				resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, true).Owner(), fmt.Errorf("error mandatory child %s does not exist, path: %s", attribute, s.Path()), types.ValidationResultEntryTypeError)
 			}
 		}
 		return
@@ -1111,7 +1186,11 @@ func (s *sharedEntryAttributes) FinishInsertionPhase(ctx context.Context) {
 	}
 
 	// reset state
-	s.remains = nil
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+	s.cacheRemains = nil
+	s.cacheShouldDelete = nil
+	s.cacheCanDelete = nil
 }
 
 // populateChoiceCaseResolvers iterates through the ChoiceCaseResolvers,
@@ -1157,6 +1236,11 @@ func (s *sharedEntryAttributes) filterActiveChoiceCaseChilds() map[string]Entry 
 	}
 
 	skipAttributesList := s.choicesResolvers.GetSkipElements()
+	// if there are no items that should be skipped, take a shortcut
+	// and simply return all childs straight away
+	if len(skipAttributesList) == 0 {
+		return s.childs.GetAll()
+	}
 	result := map[string]Entry{}
 	// optimization option: sort the slices and forward in parallel, lifts extra burden that the contains call holds.
 	for childName, child := range s.childs.GetAll() {
@@ -1295,6 +1379,42 @@ func (s *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *
 		}
 	}
 	return e.AddCacheUpdateRecursive(ctx, c, flags)
+}
+
+// containsOnlyDefaults checks for presence containers, if only default values are present,
+// such that the Entry should also be treated as a presence container
+func (s *sharedEntryAttributes) containsOnlyDefaults() bool {
+	// if no schema is present, we must be in a key level
+	if s.schema == nil {
+		return false
+	}
+	contSchema := s.schema.GetContainer()
+	if contSchema == nil {
+		return false
+	}
+
+	// only if length of childs is (more) compared to the number of
+	// attributes carrying defaults, the presence condition can be met
+	if s.childs.Length() > len(contSchema.ChildsWithDefaults) {
+		return false
+	}
+	for k, v := range s.childs.GetAll() {
+		// check if child name is part of ChildsWithDefaults
+		if !slices.Contains(contSchema.ChildsWithDefaults, k) {
+			return false
+		}
+		// check if the value is the default value
+		le, err := v.getHighestPrecedenceLeafValue(context.TODO())
+		if err != nil {
+			return false
+		}
+		// if the owner is not Default return false
+		if le.Owner() != DefaultsIntentName {
+			return false
+		}
+	}
+
+	return true
 }
 
 type UpdateInsertFlags struct {

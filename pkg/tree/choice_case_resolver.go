@@ -35,6 +35,13 @@ func (c choiceCasesResolvers) GetSkipElements() []string {
 	return result
 }
 
+func (c choiceCasesResolvers) shouldDelete() bool {
+	if len(c) == 0 {
+		return false
+	}
+	return !c.remainsToExist()
+}
+
 func (c choiceCasesResolvers) remainsToExist() bool {
 	for _, x := range c {
 		if x.getBestCaseName() != "" {
@@ -191,7 +198,7 @@ func (c *choiceCasesResolver) getBestCaseName() string {
 	var bestCaseName string
 	bestCasePrio := int32(math.MaxInt32)
 	for caseName, cas := range c.cases {
-		if cas.GetLowestPriorityValue() < bestCasePrio {
+		if cas.GetLowestPriorityValue() <= bestCasePrio {
 			bestCaseName = caseName
 			bestCasePrio = cas.GetLowestPriorityValue()
 		}

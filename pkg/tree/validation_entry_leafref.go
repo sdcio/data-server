@@ -101,7 +101,7 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 				return nil, err
 			}
 
-			// if the entry is marked for deletion, skip it
+			// if the entry is will be deleted by the actual operation, skip it.
 			if !entry.remainsToExist() {
 				continue
 			}
@@ -211,7 +211,7 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan
 
 	// Only if the value remains, even after the SetIntent made it through, the LeafRef can be considered resolved.
 	if !entry[0].remainsToExist() {
-		lv := s.leafVariants.GetHighestPrecedence(false, false)
+		lv := s.leafVariants.GetHighestPrecedence(false, true)
 		EntryPath, _ := s.SdcpbPath()
 
 		// check if the OptionalInstance (!require-instances [https://datatracker.ietf.org/doc/html/rfc7950#section-9.9.3])

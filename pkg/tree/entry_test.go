@@ -483,6 +483,8 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			root.FinishInsertionPhase(ctx)
 
+			t.Log(root.String())
+
 			validationResult := root.Validate(context.TODO(), false)
 
 			// check if errors are received
@@ -649,7 +651,6 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	// define the expected result
 	expects := []string{
 		"interface/ethernet-0/0",
-		"interface/ethernet-0/1/admin-state",
 	}
 	// sort both slices for equality check
 	slices.Sort(deletes)

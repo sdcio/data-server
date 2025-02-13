@@ -488,6 +488,42 @@ func TestDatastore_populateTree(t *testing.T) {
 			},
 		},
 		{
+			name:          "choices delete",
+			intentReqPath: "interface",
+			intentReqValue: func() (string, error) {
+				i := &sdcio_schema.SdcioModel_Interface{
+					Name:        ygot.String("ethernet-1/1"),
+					Description: ygot.String("MyDescription"),
+				}
+				return ygot.EmitJSON(i, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false,
+				})
+			},
+			intentPrio: 10,
+			intentName: owner1,
+			runningStoreUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"choices", "case1", "case-elem"}, testhelper.GetStringTvProto(t, "Foobar"), prio10, owner1, 0),
+			},
+			expectedOwnerUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+			},
+			intendedStoreUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"choices", "case1", "case-elem"}, testhelper.GetStringTvProto(t, "Foobar"), prio10, owner1, 0),
+			},
+			expectedModify: []*cache.Update{
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+			},
+			expectedDeletes: [][]string{
+				{"choices"},
+			},
+			expectedOwnerDeletes: [][]string{
+				{"choices", "case1", "case-elem"},
+			},
+		},
+		{
 			name:          "Mixed, new entry, higher and lower precedence",
 			intentName:    owner2,
 			intentPrio:    prio10,

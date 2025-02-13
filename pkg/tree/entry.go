@@ -110,8 +110,18 @@ type Entry interface {
 	// Since we add running to the tree, there will always be Entries, that will disappear in the
 	// as part of the SetIntent process. We need to consider this, when evaluating e.g. LeafRefs.
 	// The returned boolean will in indicate if the value remains existing (true) after the setintent.
-	// Or will disappear from device (running) as part of the SetIntent action.
+	// Or will disappear from device (running) as part of the update action.
 	remainsToExist() bool
+	// shouldDelete returns true if an explicit delete should be issued for the given branch
+	shouldDelete() bool
+	// canDelete checks if the entry can be Deleted.
+	// This is e.g. to cover e.g. defaults and running. They can be deleted, but should not, they are basically implicitly existing.
+	// In caomparison to
+	//    - remainsToExists() returns true, because they remain to exist even though implicitly.
+	//    - shouldDelete() returns false, because no explicit delete should be issued for them.
+	canDelete() bool
+	// getChildren returns all the child Entries of the Entry in a map indexed by there name.
+	// FYI: leaf values are not considered children
 	getChildren() map[string]Entry
 	FilterChilds(keys map[string]string) ([]Entry, error)
 	// ToJson returns the Tree contained structure as JSON
@@ -123,6 +133,7 @@ type Entry interface {
 	// toJsonInternal the internal function that produces JSON and JSON_IETF
 	// Not for external usage
 	toJsonInternal(onlyNewOrUpdated bool, ietf bool) (j any, err error)
+	// ToXML returns the tree and its current state in the XML representation used by netconf
 	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
 	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error)
 	// ImportConfig allows importing config data received from e.g. the device in different formats (json, xml) to be imported into the tree.
