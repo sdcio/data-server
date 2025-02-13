@@ -117,7 +117,7 @@ func TestJsonTreeImporter(t *testing.T) {
 	testhelper.ConfigureCacheClientMock(t, cacheClient, nil, nil, nil, nil)
 
 	dsName := "dev1"
-	scb, err := testhelper.GetSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t, controller)
 	if err != nil {
 		t.Error(err)
 	}
@@ -125,7 +125,7 @@ func TestJsonTreeImporter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tc := tree.NewTreeContext(tree.NewTreeSchemaCacheClient(dsName, cacheClient, scb), "test")
+			tc := tree.NewTreeContext(tree.NewTreeCacheClient(dsName, cacheClient), scb, "test")
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Error(err)
@@ -144,7 +144,7 @@ func TestJsonTreeImporter(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			root.FinishInsertionPhase()
+			root.FinishInsertionPhase(ctx)
 			t.Log(root.String())
 
 			var result any

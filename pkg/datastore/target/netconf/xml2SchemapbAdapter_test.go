@@ -72,7 +72,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 
 				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
 				counter := 0
-				schemaClientMock.EXPECT().GetSchema(context.TODO(), gomock.Any()).AnyTimes().DoAndReturn(
+				schemaClientMock.EXPECT().GetSchemaSdcpbPath(context.TODO(), gomock.Any()).AnyTimes().DoAndReturn(
 					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 						selem := &sdcpb.SchemaElem{}
 						switch counter {

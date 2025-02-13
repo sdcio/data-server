@@ -75,12 +75,13 @@ func TestXmlTreeImporter(t *testing.T) {
 	testhelper.ConfigureCacheClientMock(t, cacheClient, nil, nil, nil, nil)
 
 	dsName := "dev1"
-	scb, err := testhelper.GetSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t, controller)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	tc := tree.NewTreeContext(tree.NewTreeSchemaCacheClient(dsName, cacheClient, scb), "test")
+
+	tc := tree.NewTreeContext(tree.NewTreeCacheClient(dsName, cacheClient), scb, "test")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -101,7 +102,7 @@ func TestXmlTreeImporter(t *testing.T) {
 			}
 			t.Log(root.String())
 
-			root.FinishInsertionPhase()
+			root.FinishInsertionPhase(ctx)
 
 			result, err := root.ToXML(false, false, false, false)
 			if err != nil {
@@ -126,7 +127,7 @@ func TestXmlTreeImporter(t *testing.T) {
 			t.Log(string(xmlResultStr))
 
 			if diff := cmp.Diff(inputDocStr, string(xmlResultStr)); diff != "" {
-				t.Fatalf("Integrating xml failed.\nDiff:\n%s", diff)
+				t.Fatalf("Integrating xml failed. mismatch (-want +got).\nDiff:\n%s", diff)
 			}
 		})
 	}

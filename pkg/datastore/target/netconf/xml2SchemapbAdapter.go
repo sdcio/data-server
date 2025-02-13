@@ -64,7 +64,7 @@ func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etre
 	pelems = append(pelems, &sdcpb.PathElem{Name: e.Tag})
 
 	// retrieve schema
-	sr, err := x.schemaClient.GetSchema(ctx,
+	sr, err := x.schemaClient.GetSchemaSdcpbPath(ctx,
 		&sdcpb.Path{
 			Elem: pelems,
 		},
@@ -151,7 +151,7 @@ func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.El
 			return err
 		}
 
-		schema, err := x.schemaClient.GetSchema(ctx, path)
+		schema, err := x.schemaClient.GetSchemaSdcpbPath(ctx, path)
 		if err != nil {
 			return err
 		}

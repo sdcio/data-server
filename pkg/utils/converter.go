@@ -18,7 +18,7 @@ import (
 // SchemaClientBound provides access to a certain vendor + model + version based schema
 type SchemaClientBound interface {
 	// GetSchema retrieves the schema for the given path
-	GetSchema(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error)
+	GetSchemaSdcpbPath(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error)
 	// GetSchemaElements retrieves the Schema Elements for all levels of the given path
 	GetSchemaElements(ctx context.Context, p *sdcpb.Path, done chan struct{}) (chan *sdcpb.GetSchemaResponse, error)
 	ToPath(ctx context.Context, path []string) (*sdcpb.Path, error)
@@ -57,7 +57,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update, include
 		}
 		upds = append(upds, intUpd...)
 	}
-	rsp, err := c.schemaClientBound.GetSchema(ctx, upd.GetPath())
+	rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, upd.GetPath())
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func (c *Converter) ExpandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Updat
 			}
 			intUpd.Path.Elem = append(intUpd.Path.Elem, &sdcpb.PathElem{Name: k})
 
-			schemaRsp, err := c.schemaClientBound.GetSchema(ctx, intUpd.Path)
+			schemaRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, intUpd.Path)
 			if err != nil {
 				return nil, err
 			}
@@ -215,7 +215,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				if includeKeysAsLeaf {
 					np := proto.Clone(p).(*sdcpb.Path)
 					np.Elem = append(np.Elem, &sdcpb.PathElem{Name: k.Name})
-					schemaRsp, err := c.schemaClientBound.GetSchema(ctx, np)
+					schemaRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, np)
 					if err != nil {
 						return nil, err
 					}
@@ -256,7 +256,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 						Value: &sdcpb.TypedValue_EmptyVal{},
 					}
 				default:
-					schemaRsp, err := c.schemaClientBound.GetSchema(ctx, np)
+					schemaRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, np)
 					if err != nil {
 						return nil, err
 					}
@@ -313,7 +313,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				log.Debugf("handling child container %s", item)
 				np := proto.Clone(p).(*sdcpb.Path)
 				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item})
-				rsp, err := c.schemaClientBound.GetSchema(ctx, np)
+				rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, np)
 				if err != nil {
 					return nil, err
 				}
@@ -567,7 +567,7 @@ func getChild(ctx context.Context, name string, cs *sdcpb.SchemaElem_Container, 
 	for _, s := range searchNames {
 		if cs.Container.Name == "__root__" {
 			for _, c := range cs.Container.GetChildren() {
-				rsp, err := scb.GetSchema(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: c}}})
+				rsp, err := scb.GetSchemaSdcpbPath(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: c}}})
 				if err != nil {
 					log.Errorf("Failed to get schema object %s: %v", c, err)
 					return "", false
@@ -599,7 +599,7 @@ func getChild(ctx context.Context, name string, cs *sdcpb.SchemaElem_Container, 
 }
 
 func (c *Converter) ConvertTypedValueToProto(ctx context.Context, p *sdcpb.Path, tv *sdcpb.TypedValue) (*sdcpb.TypedValue, error) {
-	rsp, err := c.schemaClientBound.GetSchema(ctx, p)
+	rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, p)
 	if err != nil {
 		return nil, err
 	}
@@ -766,7 +766,7 @@ func (c *Converter) ConvertNotificationTypedValues(ctx context.Context, n *sdcpb
 	// convert typed values to their YANG type
 	for _, upd := range n.GetUpdate() {
 		StripPathElemPrefixPath(upd.GetPath())
-		scRsp, err := c.schemaClientBound.GetSchema(ctx, upd.GetPath())
+		scRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, upd.GetPath())
 		if err != nil {
 			return nil, err
 		}

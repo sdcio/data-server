@@ -109,7 +109,7 @@ func DiffDoubleStringPathSlice(s1, s2 [][]string) string {
 }
 
 // GetSchemaClientBound creates a SchemaClientBound mock that responds to certain GetSchema requests
-func GetSchemaClientBound(t *testing.T) (*mockschemaclientbound.MockSchemaClientBound, error) {
+func GetSchemaClientBound(t *testing.T, mockCtrl *gomock.Controller) (*mockschemaclientbound.MockSchemaClientBound, error) {
 
 	x, schema, err := InitSDCIOSchema()
 	if err != nil {
@@ -122,14 +122,27 @@ func GetSchemaClientBound(t *testing.T) (*mockschemaclientbound.MockSchemaClient
 		Version: schema.Version,
 	}
 
-	mockCtrl := gomock.NewController(t)
 	mockscb := mockschemaclientbound.NewMockSchemaClientBound(mockCtrl)
 
 	// make the mock respond to GetSchema requests
-	mockscb.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+	mockscb.EXPECT().GetSchemaSdcpbPath(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
 		func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 			return x.GetSchema(ctx, &sdcpb.GetSchemaRequest{
 				Path:   path,
+				Schema: sdcpbSchema,
+			})
+		},
+	)
+
+	// make the mock respond to GetSchema requests
+	mockscb.EXPECT().GetSchemaSlicePath(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+		func(ctx context.Context, path []string) (*sdcpb.GetSchemaResponse, error) {
+			p, err := mockscb.ToPath(ctx, path)
+			if err != nil {
+				return nil, err
+			}
+			return x.GetSchema(ctx, &sdcpb.GetSchemaRequest{
+				Path:   p,
 				Schema: sdcpbSchema,
 			})
 		},

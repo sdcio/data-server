@@ -17,6 +17,7 @@ package datastore
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
@@ -24,6 +25,7 @@ import (
 	"github.com/sdcio/data-server/mocks/mocktarget"
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/config"
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -348,7 +350,7 @@ func TestDatastore_populateTree(t *testing.T) {
 		{
 			name:          "Delete the highes priority values, making shadowed values become active",
 			intentName:    owner1,
-			intentPrio:    prio10,
+			intentPrio:    prio5,
 			intentReqPath: "/",
 			intentReqValue: func() (string, error) {
 				return "{}", nil
@@ -411,7 +413,18 @@ func TestDatastore_populateTree(t *testing.T) {
 					SkipValidation: false,
 				})
 			},
-			intentDelete: true,
+			intentDelete:        true,
+			runningStoreUpdates: []*cache.Update{
+				// cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
+				// cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
+				// cache.NewUpdate([]string{"interface", "ethernet-1/1", "admin-state"}, testhelper.GetStringTvProto(t, "enable"), prio10, owner2, 0),
+				// cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio10, owner2, 0),
+				// cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
+				// cache.NewUpdate([]string{"interface", "ethernet-1/2", "admin-state"}, testhelper.GetStringTvProto(t, "enable"), prio10, owner2, 0),
+				// cache.NewUpdate([]string{"interface", "ethernet-1/3", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/3"), prio10, owner2, 0),
+				// cache.NewUpdate([]string{"interface", "ethernet-1/3", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
+				// cache.NewUpdate([]string{"interface", "ethernet-1/3", "admin-state"}, testhelper.GetStringTvProto(t, "enable"), prio10, owner2, 0),
+			},
 			expectedDeletes: [][]string{
 				{"interface", "ethernet-1/1", "admin-state"},
 				{"interface", "ethernet-1/2"},
@@ -460,6 +473,10 @@ func TestDatastore_populateTree(t *testing.T) {
 					SkipValidation: false,
 				})
 			},
+			runningStoreUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+			},
 
 			expectedOwnerUpdates: []*cache.Update{
 				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
@@ -468,6 +485,42 @@ func TestDatastore_populateTree(t *testing.T) {
 			intendedStoreUpdates: []*cache.Update{
 				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio5, owner1, 0),
 				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
+			},
+		},
+		{
+			name:          "choices delete",
+			intentReqPath: "interface",
+			intentReqValue: func() (string, error) {
+				i := &sdcio_schema.SdcioModel_Interface{
+					Name:        ygot.String("ethernet-1/1"),
+					Description: ygot.String("MyDescription"),
+				}
+				return ygot.EmitJSON(i, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false,
+				})
+			},
+			intentPrio: 10,
+			intentName: owner1,
+			runningStoreUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"choices", "case1", "case-elem"}, testhelper.GetStringTvProto(t, "Foobar"), prio10, owner1, 0),
+			},
+			expectedOwnerUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+			},
+			intendedStoreUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"choices", "case1", "case-elem"}, testhelper.GetStringTvProto(t, "Foobar"), prio10, owner1, 0),
+			},
+			expectedModify: []*cache.Update{
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+			},
+			expectedDeletes: [][]string{
+				{"choices"},
+			},
+			expectedOwnerDeletes: [][]string{
+				{"choices", "case1", "case-elem"},
 			},
 		},
 		{
@@ -506,7 +559,14 @@ func TestDatastore_populateTree(t *testing.T) {
 					SkipValidation: false,
 				})
 			},
-
+			runningStoreUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio15, owner3, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "Owner3 Description"), prio15, owner3, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(t, 1), prio15, owner3, 0),
+				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio15, owner3, 0),
+			},
 			expectedModify: []*cache.Update{
 				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
 				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
@@ -676,12 +736,13 @@ func TestDatastore_populateTree(t *testing.T) {
 			cacheClient := mockcacheclient.NewMockClient(controller)
 			testhelper.ConfigureCacheClientMock(t, cacheClient, tt.intendedStoreUpdates, tt.runningStoreUpdates, tt.expectedModify, tt.expectedDeletes)
 
-			schemaClient, schema, err := testhelper.InitSDCIOSchema()
+			sc, schema, err := testhelper.InitSDCIOSchema()
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			dsName := "dev1"
+			ctx := context.Background()
 
 			// create a datastore
 			d := &Datastore{
@@ -692,10 +753,8 @@ func TestDatastore_populateTree(t *testing.T) {
 
 				sbi:          mocktarget.NewMockTarget(controller),
 				cacheClient:  cacheClient,
-				schemaClient: schemaClient,
+				schemaClient: schemaClient.NewSchemaClientBound(schema.GetSchema(), sc),
 			}
-
-			ctx := context.Background()
 
 			// marshall the intentReqValue into a byte slice
 			jsonConf, err := tt.intentReqValue()
@@ -726,35 +785,47 @@ func TestDatastore_populateTree(t *testing.T) {
 				Delete: tt.intentDelete,
 			}
 
-			tc := tree.NewTreeContext(tree.NewTreeSchemaCacheClient(dsName, d.cacheClient, d.getValidationClient()), tt.intentName)
+			tcc := tree.NewTreeCacheClient(d.Name(), cacheClient)
+			tc := tree.NewTreeContext(tcc, d.schemaClient, tt.intentName)
 
-			// Populate the root tree
-			root, err := d.populateTree(ctx, reqOne, tc)
+			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Error(err)
 			}
+
+			updSlice, err := d.expandAndConvertIntent(ctx, reqOne.GetIntent(), reqOne.GetPriority(), reqOne.GetUpdate())
+			if err != nil {
+				t.Error(err)
+			}
+
+			oldIntentContent, err := root.LoadIntendedStoreOwnerData(ctx, reqOne.GetIntent(), false)
+			if err != nil {
+				t.Error(err)
+			}
+
+			loadHighest := oldIntentContent.ToPathSet()
+			loadHighest.Join(updSlice.ToPathSet())
+
+			err = loadIntendedStoreHighestPrio(ctx, tcc, root, loadHighest, []string{reqOne.GetIntent()})
+			if err != nil {
+				t.Error(err)
+			}
+
+			flags := tree.NewUpdateInsertFlags()
+			flags.SetNewFlag()
+			root.AddCacheUpdatesRecursive(ctx, updSlice, flags)
 
 			// populate Tree with running
-			err = d.populateTreeWithRunning(ctx, tc, root)
+			err = populateTreeWithRunning(ctx, tcc, root)
 			if err != nil {
 				t.Error(err)
 			}
 
-			root.FinishInsertionPhase()
+			root.FinishInsertionPhase(ctx)
 
-			validationErrors := []error{}
-			validationErrChan := make(chan error)
-			validationWarnChan := make(chan error)
-			go func() {
-				root.Validate(ctx, validationErrChan, validationWarnChan, false)
-				close(validationErrChan)
-			}()
+			validationResult := root.Validate(ctx, false)
 
-			// read from the Error channel
-			for e := range validationErrChan {
-				validationErrors = append(validationErrors, e)
-			}
-			fmt.Printf("Validation Errors:\n%v\n", validationErrors)
+			fmt.Printf("Validation Errors:\n%v\n", strings.Join(validationResult.ErrorsStr(), "\n"))
 			fmt.Printf("Tree:%s\n", root.String())
 
 			// get the updates that are meant to be send down towards the device
@@ -789,7 +860,6 @@ func TestDatastore_populateTree(t *testing.T) {
 			if diff := testhelper.DiffDoubleStringPathSlice(tt.expectedOwnerDeletes, deletesOwner.ToStringSlice()); diff != "" {
 				t.Errorf("root.GetDeletesForOwner mismatch (-want +got):\n%s", diff)
 			}
-
 		})
 	}
 }

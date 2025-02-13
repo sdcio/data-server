@@ -41,7 +41,6 @@ func Test_ncTarget_Get(t *testing.T) {
 	type fields struct {
 		name            string
 		getDriver       func(*gomock.Controller, *testing.T) netconf.Driver
-		connected       bool
 		getSchemaClient func(*gomock.Controller, *testing.T) SchemaClient.SchemaClientBound
 		sbiConfig       *config.SBI
 	}
@@ -67,10 +66,10 @@ func Test_ncTarget_Get(t *testing.T) {
 						t.Errorf("error creating response")
 					}
 					d.EXPECT().GetConfig("running", gomock.Any()).Return(&types.NetconfResponse{Doc: responseDoc}, nil)
+					d.EXPECT().IsAlive().AnyTimes().Return(true)
 					return d
 				},
-				name:      "TestDev",
-				connected: true,
+				name: "TestDev",
 				sbiConfig: &config.SBI{
 					NetconfOptions: &config.SBINetconfOptions{
 						IncludeNS:              false,
@@ -81,7 +80,7 @@ func Test_ncTarget_Get(t *testing.T) {
 				getSchemaClient: func(c *gomock.Controller, t *testing.T) SchemaClient.SchemaClientBound {
 					s := mockschemaclientbound.NewMockSchemaClientBound(c)
 					gomock.InOrder(
-						s.EXPECT().GetSchema(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
+						s.EXPECT().GetSchemaSdcpbPath(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
 							func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 								fmt.Println(path.String())
 								return &sdcpb.GetSchemaResponse{
@@ -100,7 +99,7 @@ func Test_ncTarget_Get(t *testing.T) {
 								}, nil
 							},
 						),
-						s.EXPECT().GetSchema(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
+						s.EXPECT().GetSchemaSdcpbPath(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
 							func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 								fmt.Println(path.String())
 								return &sdcpb.GetSchemaResponse{
@@ -119,7 +118,7 @@ func Test_ncTarget_Get(t *testing.T) {
 								}, nil
 							},
 						),
-						s.EXPECT().GetSchema(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
+						s.EXPECT().GetSchemaSdcpbPath(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
 							func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 								fmt.Println(path.String())
 								return &sdcpb.GetSchemaResponse{
@@ -136,7 +135,7 @@ func Test_ncTarget_Get(t *testing.T) {
 								}, nil
 							},
 						),
-						s.EXPECT().GetSchema(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
+						s.EXPECT().GetSchemaSdcpbPath(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
 							func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 								fmt.Println(path.String())
 								return &sdcpb.GetSchemaResponse{
@@ -238,7 +237,6 @@ func Test_ncTarget_Get(t *testing.T) {
 			tr := &ncTarget{
 				name:             tt.fields.name,
 				driver:           tt.fields.getDriver(mockCtrl, t),
-				connected:        tt.fields.connected,
 				schemaClient:     sc,
 				sbiConfig:        tt.fields.sbiConfig,
 				xml2sdcpbAdapter: netconf.NewXML2sdcpbConfigAdapter(sc),
@@ -338,7 +336,7 @@ func getSchemaClientBound(t *testing.T) (SchemaClient.SchemaClientBound, error) 
 	mockscb := mockschemaclientbound.NewMockSchemaClientBound(mockCtrl)
 
 	// make the mock respond to GetSchema requests
-	mockscb.EXPECT().GetSchema(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+	mockscb.EXPECT().GetSchemaSdcpbPath(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
 		func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 			return x.GetSchema(ctx, &sdcpb.GetSchemaRequest{
 				Path:   path,
