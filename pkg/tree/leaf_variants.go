@@ -104,12 +104,14 @@ func (lv *LeafVariants) shouldDelete() bool {
 		return false
 	}
 
+	foundOtherThenRunningAndDefault := false
 	// go through all variants
 	for _, l := range lv.les {
 		// if an entry exists that is not owned by running or default,
 		if l.Update.Owner() == RunningIntentName || l.Update.Owner() == DefaultsIntentName {
 			continue
 		}
+		foundOtherThenRunningAndDefault = true
 
 		// if an entry exists that has
 		// the only intended flag set or not the Delete Flag and is not owned by default and not owned by running
@@ -117,6 +119,9 @@ func (lv *LeafVariants) shouldDelete() bool {
 			// then this entry should not be deleted
 			return false
 		}
+	}
+	if !foundOtherThenRunningAndDefault {
+		return false
 	}
 	return true
 }
