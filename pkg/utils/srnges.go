@@ -95,10 +95,13 @@ func (r *SRnges) AddRange(min, max int64) {
 
 func (r *SRnges) String() string {
 	sb := &strings.Builder{}
-	sb.WriteString("Ranges: ")
+	sep := ""
+	sb.WriteString("[ ")
 	for _, ur := range r.rnges {
+		sb.WriteString(sep)
 		sb.WriteString(ur.String())
-		sb.WriteString(" ")
+		sep = " | "
 	}
+	sb.WriteString(" ]")
 	return sb.String()
 }

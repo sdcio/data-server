@@ -857,6 +857,8 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 	}
 }
 
+// validateRange int and uint types (Leaf and Leaflist) define ranges which configured values must lay in.
+// validateRange does check this condition.
 func (s *sharedEntryAttributes) validateRange(resultCHan chan<- *types.ValidationResultEntry) {
 
 	// TODO: Implement LEAFLIST
@@ -869,43 +871,72 @@ func (s *sharedEntryAttributes) validateRange(resultCHan chan<- *types.Validatio
 		return
 	}
 
-	if schema := s.schema.GetField(); schema != nil {
-		switch schema.GetType().TypeName {
+	var tvs []*sdcpb.TypedValue
+	var typeSchema *sdcpb.SchemaLeafType
+	// ranges are defined on Leafs or LeafLists.
+	switch {
+	case len(s.GetSchema().GetField().GetType().GetRange()) != 0:
+		// if it is a leaf, extract the value add it as a single value to the tvs slice and check it further down
+		val, err := lv.Update.Value()
+		if err != nil {
+			errchan <- err
+			return
+		}
+		tvs = []*sdcpb.TypedValue{val}
+		// we also need the Field/Leaf Type schema
+		typeSchema = s.GetSchema().GetField().GetType()
+	case len(s.GetSchema().GetLeaflist().GetType().GetRange()) != 0:
+		// if it is a leaflist, extract the values them to the tvs slice and check them further down
+		tv, err := lv.Update.Value()
+		if err != nil {
+			errchan <- err
+			return
+		}
+		tvs = tv.GetLeaflistVal().GetElement()
+		// we also need the Field/Leaf Type schema
+		typeSchema = s.GetSchema().GetLeaflist().GetType()
+	default:
+		// if no ranges exist return
+		return
+	}
+
+	// range through the tvs and check that they are in range
+	for _, tv := range tvs {
+		// we need to distinguish between unsigned and singned ints
+		switch typeSchema.TypeName {
 		case "uint8", "uint16", "uint32", "uint64":
+			// procede with the unsigned ints
 			urnges := utils.NewUrnges()
-			for _, r := range schema.GetType().GetRange() {
+			// add the defined ranges to the ranges struct
+			for _, r := range typeSchema.GetRange() {
 				urnges.AddRange(r.Min.Value, r.Max.Value)
 			}
-			v, err := lv.Update.Value()
-			if err != nil {
-				errchan <- err
-				return
-			}
-			if !urnges.IsWithinAnyRange(v.GetUintVal()) {
-				errchan <- fmt.Errorf("Value %d not within any of the allowed ranges %s", v.GetUintVal(), urnges.String())
+
+			// check the value laays within any of the ranges
+			if !urnges.IsWithinAnyRange(tv.GetUintVal()) {
+				errchan <- fmt.Errorf("path %s, value %d not within any of the expected ranges %s", s.Path(), tv.GetUintVal(), urnges.String())
 			}
 
 		case "int8", "int16", "int32", "int64":
+			// procede with the signed ints
 			srnges := utils.NewSrnges()
-			for _, r := range schema.GetType().GetRange() {
+			for _, r := range typeSchema.GetRange() {
+				// get the value
 				min := int64(r.GetMin().GetValue())
 				max := int64(r.GetMax().GetValue())
+				// take care of the minus sign
 				if r.Min.Negative {
 					min = min * -1
 				}
 				if r.Max.Negative {
 					max = max * -1
 				}
-
+				// add the defined ranges to the ranges struct
 				srnges.AddRange(min, max)
 			}
-			v, err := lv.Update.Value()
-			if err != nil {
-				errchan <- err
-				return
-			}
-			if !srnges.IsWithinAnyRange(v.GetIntVal()) {
-				errchan <- fmt.Errorf("Value %d not within any of the allowed ranges %s", v.GetIntVal(), srnges.String())
+			// check the value laays within any of the ranges
+			if !srnges.IsWithinAnyRange(tv.GetIntVal()) {
+				errchan <- fmt.Errorf("path %s, value %d not within any of the expected ranges %s", s.Path(), tv.GetIntVal(), srnges.String())
 			}
 		}
 	}
