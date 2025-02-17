@@ -45,7 +45,8 @@ TransactionSet
     [Arguments]
     ...    ${datastore}
     ...    ${transactionId}
-    ...    @{intents}
+    ...    ${intents}
+    ...    @{optargs}
     
     ${intentargs} =    Create List
 
@@ -64,6 +65,7 @@ TransactionSet
     ...    --transaction-id
     ...    ${transactionId}
     ...    @{intentargs}
+    ...    @{optargs}
 
     Log    ${result.rc}
     Log    ${result.stdout}
