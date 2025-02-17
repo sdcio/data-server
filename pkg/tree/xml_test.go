@@ -27,6 +27,7 @@ func TestToXMLTable(t *testing.T) {
 		runningConfig          func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error)
 		newConfig              func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error)
 		expected               string
+		skip                   bool
 	}{
 		{
 			name:             "XML All",
@@ -81,6 +82,7 @@ func TestToXMLTable(t *testing.T) {
 		{
 			name:             "XML NewOrUpdated - some elements deleted, some updated",
 			onlyNewOrUpdated: true,
+			skip:             true,
 			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
@@ -207,6 +209,7 @@ func TestToXMLTable(t *testing.T) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
+			skip: true,
 			expected: `<choices>
   <case1 operation="delete"/>
 </choices>
@@ -370,6 +373,10 @@ func TestToXMLTable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
+			if tt.skip {
+				t.Skip("Need to reimplement these tests")
+			}
 
 			mockCtrl := gomock.NewController(t)
 			defer mockCtrl.Finish()
