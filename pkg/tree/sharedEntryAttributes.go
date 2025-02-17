@@ -853,33 +853,62 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 		s.validateMustStatements(ctx, resultChan)
 		s.validateLength(resultChan)
 		s.validateRange(resultChan)
+		// s.validateMaxElements(errChan)   // TODO
 	}
 }
 
 func (s *sharedEntryAttributes) validateRange(resultCHan chan<- *types.ValidationResultEntry) {
 
-	// lv := s.leafVariants.GetHighestPrecedence(false)
-	// if lv == nil {
-	// 	return
-	// }
+	// TODO: Implement LEAFLIST
+	if s.GetSchema() == nil || len(s.GetSchema().GetField().GetType().GetRange()) == 0 {
+		return
+	}
 
-	// tv, err := lv.Value()
-	// if err != nil {
-	// 	errchan <- fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err)
-	// 	return
-	// }
+	lv := s.leafVariants.GetHighestPrecedence(false, true)
+	if lv == nil {
+		return
+	}
 
-	// if schema := s.schema.GetField(); schema != nil {
-	// 	switch schema.GetType().TypeName {
-	// 	case "uint8", "uint16", "uint32", "uint64":
-	// 		urange := &utils.NewUrnges()
-	// 	}
+	if schema := s.schema.GetField(); schema != nil {
+		switch schema.GetType().TypeName {
+		case "uint8", "uint16", "uint32", "uint64":
+			urnges := utils.NewUrnges()
+			for _, r := range schema.GetType().GetRange() {
+				urnges.AddRange(r.Min.Value, r.Max.Value)
+			}
+			v, err := lv.Update.Value()
+			if err != nil {
+				errchan <- err
+				return
+			}
+			if !urnges.IsWithinAnyRange(v.GetUintVal()) {
+				errchan <- fmt.Errorf("Value %d not within any of the allowed ranges %s", v.GetUintVal(), urnges.String())
+			}
 
-	// 	for _, rng := range schema.GetType().Range {
+		case "int8", "int16", "int32", "int64":
+			srnges := utils.NewSrnges()
+			for _, r := range schema.GetType().GetRange() {
+				min := int64(r.GetMin().GetValue())
+				max := int64(r.GetMax().GetValue())
+				if r.Min.Negative {
+					min = min * -1
+				}
+				if r.Max.Negative {
+					max = max * -1
+				}
 
-	// 	}
-	// }
-
+				srnges.AddRange(min, max)
+			}
+			v, err := lv.Update.Value()
+			if err != nil {
+				errchan <- err
+				return
+			}
+			if !srnges.IsWithinAnyRange(v.GetIntVal()) {
+				errchan <- fmt.Errorf("Value %d not within any of the allowed ranges %s", v.GetIntVal(), srnges.String())
+			}
+		}
+	}
 }
 
 // validateLeafListMinMaxAttributes validates the Min-, and Max-Elements attribute of the Entry if it is a Leaflists.

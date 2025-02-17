@@ -165,11 +165,11 @@ func convertUint(value string, minMaxs []*sdcpb.SchemaMinMaxType, ranges *URnges
 		if err != nil {
 			return nil, err
 		}
-		ranges.addRange(min, max)
+		ranges.AddRange(min, max)
 	}
 
 	// validate the value against the ranges
-	val, err := ranges.isWithinAnyRange(value)
+	val, err := ranges.IsWithinAnyRangeString(value)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +180,7 @@ func convertUint(value string, minMaxs []*sdcpb.SchemaMinMaxType, ranges *URnges
 func ConvertUint8(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// create the ranges
 	ranges := NewUrnges()
-	ranges.addRange(0, math.MaxUint8)
+	ranges.AddRange(0, math.MaxUint8)
 
 	return convertUint(value, lst.Range, ranges)
 }
@@ -188,7 +188,7 @@ func ConvertUint8(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, e
 func ConvertUint16(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// create the ranges
 	ranges := NewUrnges()
-	ranges.addRange(0, math.MaxUint16)
+	ranges.AddRange(0, math.MaxUint16)
 
 	return convertUint(value, lst.Range, ranges)
 }
@@ -196,7 +196,7 @@ func ConvertUint16(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, 
 func ConvertUint32(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// create the ranges
 	ranges := NewUrnges()
-	ranges.addRange(0, math.MaxUint32)
+	ranges.AddRange(0, math.MaxUint32)
 
 	return convertUint(value, lst.Range, ranges)
 }
@@ -218,11 +218,11 @@ func convertInt(value string, minMaxs []*sdcpb.SchemaMinMaxType, ranges *SRnges)
 		if err != nil {
 			return nil, err
 		}
-		ranges.addRange(min, max)
+		ranges.AddRange(min, max)
 	}
 
 	// validate the value against the ranges
-	val, err := ranges.isWithinAnyRange(value)
+	val, err := ranges.IsWithinAnyRangeString(value)
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +233,7 @@ func convertInt(value string, minMaxs []*sdcpb.SchemaMinMaxType, ranges *SRnges)
 func ConvertInt8(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// create the ranges
 	ranges := NewSrnges()
-	ranges.addRange(math.MinInt8, math.MaxInt8)
+	ranges.AddRange(math.MinInt8, math.MaxInt8)
 
 	return convertInt(value, lst.Range, ranges)
 }
@@ -241,7 +241,7 @@ func ConvertInt8(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, er
 func ConvertInt16(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// create the ranges
 	ranges := NewSrnges()
-	ranges.addRange(math.MinInt16, math.MaxInt16)
+	ranges.AddRange(math.MinInt16, math.MaxInt16)
 
 	return convertInt(value, lst.Range, ranges)
 }
@@ -249,7 +249,7 @@ func ConvertInt16(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, e
 func ConvertInt32(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// create the ranges
 	ranges := NewSrnges()
-	ranges.addRange(math.MinInt32, math.MaxInt32)
+	ranges.AddRange(math.MinInt32, math.MaxInt32)
 
 	return convertInt(value, lst.Range, ranges)
 }
