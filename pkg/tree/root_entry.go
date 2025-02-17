@@ -80,7 +80,7 @@ func (r *RootEntry) LoadIntendedStoreOwnerData(ctx context.Context, owner string
 	return ownerCacheEntries, nil
 }
 
-func (r *RootEntry) Validate(ctx context.Context, concurrent bool) types.ValidationResult {
+func (r *RootEntry) Validate(ctx context.Context, concurrent bool) types.ValidationResults {
 	// perform validation
 	// we use a channel and cumulate all the errors
 	validationResultEntryChan := make(chan *types.ValidationResultEntry, 10)
@@ -92,7 +92,7 @@ func (r *RootEntry) Validate(ctx context.Context, concurrent bool) types.Validat
 	}()
 
 	// create a ValidationResult struct
-	validationResult := types.ValidationResult{}
+	validationResult := types.ValidationResults{}
 
 	// read from the validationResult channel
 	for e := range validationResultEntryChan {

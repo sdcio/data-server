@@ -2,6 +2,7 @@ package xml
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/beevik/etree"
@@ -101,6 +102,7 @@ func TestXmlTreeImporter(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Log(root.String())
+			fmt.Println(root.String())
 
 			root.FinishInsertionPhase(ctx)
 

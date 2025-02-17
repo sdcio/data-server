@@ -1120,11 +1120,15 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(ctx context.Context, l
 		// and see if such path exists, if not raise the error
 		if !(existsInTree && v.remainsToExist()) {
 			exists, err := s.treeContext.cacheClient.IntendedPathExists(ctx, append(s.Path(), attribute))
+			owner := "unknown"
+			if s.leafVariants.Length() > 0 {
+				s.leafVariants.GetHighestPrecedence(false, true).Owner()
+			}
 			if err != nil {
-				resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, true).Owner(), fmt.Errorf("error validating mandatory childs %s: %v", s.Path(), err), types.ValidationResultEntryTypeError)
+				resultChan <- types.NewValidationResultEntry(owner, fmt.Errorf("error validating mandatory childs %s: %v", s.Path(), err), types.ValidationResultEntryTypeError)
 			}
 			if !exists {
-				resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, true).Owner(), fmt.Errorf("error mandatory child %s does not exist, path: %s", attribute, s.Path()), types.ValidationResultEntryTypeError)
+				resultChan <- types.NewValidationResultEntry(owner, fmt.Errorf("error mandatory child %s does not exist, path: %s", attribute, s.Path()), types.ValidationResultEntryTypeError)
 			}
 		}
 		return

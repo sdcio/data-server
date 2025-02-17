@@ -299,7 +299,17 @@ func TestToXMLTable(t *testing.T) {
 			name:             "XML - presence",
 			onlyNewOrUpdated: true,
 			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
-				c := config1()
+				//c := config1()
+				c := &sdcio_schema.Device{
+					NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
+						"default": {
+							AdminState:  sdcio_schema.SdcioModelNi_AdminState_disable,
+							Description: ygot.String("Default NI"),
+							Type:        sdcio_schema.SdcioModelNi_NiType_default,
+							Name:        ygot.String("default"),
+						},
+					},
+				}
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
 			expected: `<network-instance xmlns="urn:sdcio/model">
@@ -313,15 +323,36 @@ func TestToXMLTable(t *testing.T) {
 			operationWithNamespace: true,
 			useOperationRemove:     true,
 			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
-				c := config1()
+				// c := config1()
+				c := &sdcio_schema.Device{
+					NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
+						"default": {
+							AdminState:  sdcio_schema.SdcioModelNi_AdminState_disable,
+							Description: ygot.String("Default NI"),
+							Type:        sdcio_schema.SdcioModelNi_NiType_default,
+							Name:        ygot.String("default"),
+						},
+					},
+				}
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
 			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
-				c := config1()
+				// c := config1()
+				c := &sdcio_schema.Device{
+					NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
+						"default": {
+							AdminState:  sdcio_schema.SdcioModelNi_AdminState_disable,
+							Description: ygot.String("Default NI"),
+							Type:        sdcio_schema.SdcioModelNi_NiType_default,
+							Name:        ygot.String("default"),
+						},
+					},
+				}
 				upds, err := expandUpdateFromConfig(ctx, c, converter)
 				if err != nil {
 					return nil, err
 				}
+
 				upds = append(upds, &sdcpb.Update{
 					Path: &sdcpb.Path{
 						Elem: []*sdcpb.PathElem{
@@ -399,6 +430,7 @@ func TestToXMLTable(t *testing.T) {
 			root.FinishInsertionPhase(ctx)
 
 			t.Log(root.String())
+			fmt.Println(root.String())
 
 			xmlDoc, err := root.ToXML(tt.onlyNewOrUpdated, tt.honorNamespace, tt.operationWithNamespace, tt.useOperationRemove)
 			if err != nil {

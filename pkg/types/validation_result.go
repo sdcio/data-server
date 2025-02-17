@@ -2,14 +2,16 @@ package types
 
 import (
 	"errors"
+	"fmt"
 	"slices"
+	"strings"
 	"sync"
 )
 
-// ValidationResult is map[string]*ValidationResultIntent so consider iterating via range
-type ValidationResult map[string]*ValidationResultIntent
+// ValidationResults is map[string]*ValidationResultIntent so consider iterating via range
+type ValidationResults map[string]*ValidationResultIntent
 
-func (v ValidationResult) AddIntent(intentName string) {
+func (v ValidationResults) AddIntent(intentName string) {
 	_, exists := v[intentName]
 	if exists {
 		return
@@ -17,7 +19,7 @@ func (v ValidationResult) AddIntent(intentName string) {
 	v[intentName] = NewValidationResultIntent(intentName)
 }
 
-func (v ValidationResult) AddEntry(e *ValidationResultEntry) error {
+func (v ValidationResults) AddEntry(e *ValidationResultEntry) error {
 	r, exists := v[e.intentName]
 	if !exists {
 		r = NewValidationResultIntent(e.intentName)
@@ -27,7 +29,7 @@ func (v ValidationResult) AddEntry(e *ValidationResultEntry) error {
 	return nil
 }
 
-func (v ValidationResult) HasErrors() bool {
+func (v ValidationResults) HasErrors() bool {
 	for _, intent := range v {
 		if len(intent.errors) > 0 {
 			return true
@@ -36,7 +38,7 @@ func (v ValidationResult) HasErrors() bool {
 	return false
 }
 
-func (v ValidationResult) HasWarnings() bool {
+func (v ValidationResults) HasWarnings() bool {
 	for _, intent := range v {
 		if len(intent.warnings) > 0 {
 			return true
@@ -45,7 +47,7 @@ func (v ValidationResult) HasWarnings() bool {
 	return false
 }
 
-func (v ValidationResult) WarningsStr() []string {
+func (v ValidationResults) WarningsStr() []string {
 	result := []string{}
 	for _, intent := range v {
 		result = append(result, intent.WarningsString()...)
@@ -53,7 +55,7 @@ func (v ValidationResult) WarningsStr() []string {
 	return result
 }
 
-func (v ValidationResult) ErrorsStr() []string {
+func (v ValidationResults) ErrorsStr() []string {
 	result := []string{}
 	for _, intent := range v {
 		result = append(result, intent.ErrorsString()...)
@@ -61,7 +63,7 @@ func (v ValidationResult) ErrorsStr() []string {
 	return result
 }
 
-func (v ValidationResult) JoinErrors() error {
+func (v ValidationResults) JoinErrors() error {
 	var result error
 
 	for _, intent := range v {
@@ -70,13 +72,22 @@ func (v ValidationResult) JoinErrors() error {
 	return result
 }
 
-func (v ValidationResult) JoinWarnings() error {
+func (v ValidationResults) JoinWarnings() error {
 	var result error
 
 	for _, intent := range v {
 		errors.Join(result, errors.Join(intent.warnings...))
 	}
 	return result
+}
+
+func (v ValidationResults) String() string {
+	sb := &strings.Builder{}
+	for _, e := range v {
+		sb.WriteString(e.String())
+		sb.WriteByte('\n')
+	}
+	return sb.String()
 }
 
 type ValidationResultIntent struct {
@@ -93,6 +104,20 @@ func NewValidationResultIntent(intentName string) *ValidationResultIntent {
 		errors:     []error{},
 		warnings:   []error{},
 	}
+}
+
+func (v *ValidationResultIntent) String() string {
+	sb := &strings.Builder{}
+	newLine := ""
+	for _, e := range v.errors {
+		sb.WriteString(fmt.Sprintf("%s%s: %s - %s", newLine, v.intentName, "error", e.Error()))
+		newLine = "\n"
+	}
+	for _, e := range v.warnings {
+		sb.WriteString(fmt.Sprintf("%s%s: %s - %s", newLine, v.intentName, "warning", e.Error()))
+		newLine = "\n"
+	}
+	return sb.String()
 }
 
 func (v *ValidationResultIntent) AddEntry(x *ValidationResultEntry) {

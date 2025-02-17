@@ -446,6 +446,20 @@ func (mr *MockEntryMockRecorder) addChild(arg0, arg1 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "addChild", reflect.TypeOf((*MockEntry)(nil).addChild), arg0, arg1)
 }
 
+// canDelete mocks base method.
+func (m *MockEntry) canDelete() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "canDelete")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// canDelete indicates an expected call of canDelete.
+func (mr *MockEntryMockRecorder) canDelete() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "canDelete", reflect.TypeOf((*MockEntry)(nil).canDelete))
+}
+
 // getChildren mocks base method.
 func (m *MockEntry) getChildren() map[string]tree.Entry {
 	m.ctrl.T.Helper()
@@ -513,6 +527,20 @@ func (m *MockEntry) remainsToExist() bool {
 func (mr *MockEntryMockRecorder) remainsToExist() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "remainsToExist", reflect.TypeOf((*MockEntry)(nil).remainsToExist))
+}
+
+// shouldDelete mocks base method.
+func (m *MockEntry) shouldDelete() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "shouldDelete")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// shouldDelete indicates an expected call of shouldDelete.
+func (mr *MockEntryMockRecorder) shouldDelete() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "shouldDelete", reflect.TypeOf((*MockEntry)(nil).shouldDelete))
 }
 
 // toJsonInternal mocks base method.

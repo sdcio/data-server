@@ -262,8 +262,6 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 	}
 
-	log.Infof("Transaction: %s - validation passed", transaction.GetTransactionId())
-
 	// retrieve the data that is meant to be send southbound (towards the device)
 	updates := root.GetHighestPrecedence(true)
 	deletes, err := root.GetDeletes(true)
@@ -286,6 +284,13 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 		result.Delete = append(result.Delete, p)
 	}
+
+	// Error out if validation failed.
+	if validationResult.HasErrors() {
+		return result, nil
+	}
+
+	log.Infof("Transaction: %s - validation passed", transaction.GetTransactionId())
 
 	// if it is a dry run, return now, skipping updating the device or the cache
 	if dryRun {
@@ -355,7 +360,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 	}
 
-	return nil, nil
+	return result, nil
 }
 
 func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, transactionIntents []*types.TransactionIntent, replaceIntent *types.TransactionIntent, transactionTimeout time.Duration, dryRun bool) (*sdcpb.TransactionSetResponse, error) {

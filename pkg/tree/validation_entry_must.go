@@ -54,13 +54,18 @@ func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, resu
 		result, err := res1.GetBoolResult()
 		if !result || err != nil {
 			if err == nil {
-				err = fmt.Errorf("error path: %s, must-statement [%s] %s", must.Statement, s.Path(), must.Error)
+				err = fmt.Errorf("error path: %s, must-statement [%s] %s", s.Path(), must.Statement, must.Error)
 			}
 			if strings.Contains(err.Error(), "Stack underflow") {
 				log.Debugf("stack underflow error: path=%v, mustExpr=%s", s.Path().String(), exprStr)
 				continue
 			}
-			resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, true).Owner(), err, types.ValidationResultEntryTypeError)
+			owner := "unknown"
+			// must statement might be assigned on a container, hence we might not have any LeafVariants
+			if s.leafVariants.Length() > 0 {
+				owner = s.leafVariants.GetHighestPrecedence(false, true).Owner()
+			}
+			resultChan <- types.NewValidationResultEntry(owner, err, types.ValidationResultEntryTypeError)
 			return
 		}
 	}
