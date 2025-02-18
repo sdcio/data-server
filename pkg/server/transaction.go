@@ -65,11 +65,7 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 
 	// with the transformed intents call the TransactionSet() on the datastore.
 	rsp, err := ds.TransactionSet(ctx, req.GetTransactionId(), transactionIntents, replaceIntent, timeout, req.GetDryRun())
-	if errors.Is(err, datastore.ErrDatastoreLocked) {
-		return nil, status.Error(codes.ResourceExhausted, err.Error())
-	}
-
-	return rsp, err
+	return rsp, translateInternalToGrpcError(err)
 }
 
 func (s *Server) TransactionConfirm(ctx context.Context, req *sdcpb.TransactionConfirmRequest) (*sdcpb.TransactionConfirmResponse, error) {
@@ -86,10 +82,7 @@ func (s *Server) TransactionConfirm(ctx context.Context, req *sdcpb.TransactionC
 	}
 
 	err = ds.TransactionConfirm(ctx, req.TransactionId)
-	if errors.Is(err, datastore.ErrDatastoreLocked) {
-		return nil, status.Error(codes.ResourceExhausted, err.Error())
-	}
-	return nil, err
+	return nil, translateInternalToGrpcError(err)
 }
 
 func (s *Server) TransactionCancel(ctx context.Context, req *sdcpb.TransactionCancelRequest) (*sdcpb.TransactionCancelResponse, error) {
@@ -105,8 +98,13 @@ func (s *Server) TransactionCancel(ctx context.Context, req *sdcpb.TransactionCa
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
 	err = ds.TransactionCancel(ctx, req.TransactionId)
+	return nil, translateInternalToGrpcError(err)
+}
+
+// translateInternalToGrpcError central function to map internal errors to grpc error codes
+func translateInternalToGrpcError(err error) error {
 	if errors.Is(err, datastore.ErrDatastoreLocked) {
-		return nil, status.Error(codes.ResourceExhausted, err.Error())
+		return status.Error(codes.Aborted, err.Error())
 	}
-	return nil, err
+	return err
 }

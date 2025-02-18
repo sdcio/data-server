@@ -388,7 +388,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 		case <-ctx.Done():
 			// Context was canceled or timed out
 			log.Errorf("Transaction: %s - context canceled or timed out: %v", transactionId, ctx.Err())
-			return nil, ctx.Err()
+			return nil, ErrDatastoreLocked
 		default:
 			// Start a transaction and prepare to cancel it if any error occurs
 			transactionGuard, err = d.transactionManager.RegisterTransaction(ctx, transaction)
