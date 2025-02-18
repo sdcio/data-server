@@ -294,6 +294,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 	// if it is a dry run, return now, skipping updating the device or the cache
 	if dryRun {
+		log.Infof("Transaction: %s - dryrun finished successfull", transaction.GetTransactionId())
 		return result, nil
 	}
 

@@ -63,7 +63,7 @@ func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient s
 
 func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
 	if !t.Status().IsConnected() {
-		return nil, fmt.Errorf("not connected")
+		return nil, fmt.Errorf("%s", TargetStatusNotConnected)
 	}
 	var source string
 
@@ -130,8 +130,8 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 }
 
 func (t *ncTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDataResponse, error) {
-	if t.Status().IsConnected() {
-		return nil, fmt.Errorf("not connected")
+	if !t.Status().IsConnected() {
+		return nil, fmt.Errorf("%s", TargetStatusNotConnected)
 	}
 
 	switch t.sbiConfig.NetconfOptions.CommitDatastore {
@@ -184,7 +184,7 @@ func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh cha
 }
 
 func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, force bool, syncCh chan *SyncUpdate) {
-	if t.Status().IsConnected() {
+	if !t.Status().IsConnected() {
 		return
 	}
 	// iterate syncConfig
