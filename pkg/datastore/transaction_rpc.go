@@ -410,6 +410,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	if transaction.GetReplace() != nil {
 		replaceWarn, err := d.replaceIntent(ctx, transaction)
 		if err != nil {
+			log.Errorf("error setting replace intent: %v", err)
 			return nil, err
 		}
 		// TODO: do something with these warnings
@@ -418,16 +419,20 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 
 	err = transaction.AddTransactionIntents(transactionIntents, types.TransactionIntentNew)
 	if err != nil {
+		log.Errorf("error adding intents to transaction: %v", err)
 		return nil, err
 	}
 
 	response, err := d.lowlevelTransactionSet(ctx, transaction, dryRun)
 	if err != nil {
+		log.Errorf("error executing transaction: %v", err)
 		return nil, err
 	}
 
 	// Mark the transaction as successfully committed
 	transactionGuard.Success()
+
+	log.Infof("Transaction: %s - transacted", transactionId)
 	return response, err
 }
 

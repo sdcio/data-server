@@ -33,7 +33,6 @@ func (t *TransactionManager) RegisterTransaction(ctx context.Context, trans *Tra
 		return nil, ErrTransactionOngoing
 	}
 
-	// no Unlock, the created transaction locks the Mutex, which must explicitly be unlocked via FinishTransaction
 	t.transaction = trans
 
 	return NewTransactionGuard(func() {
