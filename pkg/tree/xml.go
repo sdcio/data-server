@@ -254,7 +254,7 @@ func namespaceIsEqual(a Entry, b Entry) bool {
 
 // xmlAddNamespaceConditional adds the namespace of a to elem if namespaces of a and b are different
 func xmlAddNamespaceConditional(a Entry, b Entry, elem *etree.Element, honorNamespace bool) {
-	if honorNamespace && !namespaceIsEqual(a, b) {
+	if honorNamespace && (b == nil || !namespaceIsEqual(a, b)) {
 		elem.CreateAttr("xmlns", utils.GetNamespaceFromGetSchema(a.GetSchema()))
 	}
 }
