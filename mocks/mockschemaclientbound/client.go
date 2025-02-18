@@ -41,21 +41,6 @@ func (m *MockSchemaClientBound) EXPECT() *MockSchemaClientBoundMockRecorder {
 	return m.recorder
 }
 
-// GetSchema mocks base method.
-func (m *MockSchemaClientBound) GetSchema(ctx context.Context, path *schema_server.Path) (*schema_server.GetSchemaResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetSchema", ctx, path)
-	ret0, _ := ret[0].(*schema_server.GetSchemaResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetSchema indicates an expected call of GetSchema.
-func (mr *MockSchemaClientBoundMockRecorder) GetSchema(ctx, path any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSchema", reflect.TypeOf((*MockSchemaClientBound)(nil).GetSchema), ctx, path)
-}
-
 // GetSchemaElements mocks base method.
 func (m *MockSchemaClientBound) GetSchemaElements(ctx context.Context, p *schema_server.Path, done chan struct{}) (chan *schema_server.GetSchemaResponse, error) {
 	m.ctrl.T.Helper()
@@ -69,6 +54,36 @@ func (m *MockSchemaClientBound) GetSchemaElements(ctx context.Context, p *schema
 func (mr *MockSchemaClientBoundMockRecorder) GetSchemaElements(ctx, p, done any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSchemaElements", reflect.TypeOf((*MockSchemaClientBound)(nil).GetSchemaElements), ctx, p, done)
+}
+
+// GetSchemaSdcpbPath mocks base method.
+func (m *MockSchemaClientBound) GetSchemaSdcpbPath(ctx context.Context, path *schema_server.Path) (*schema_server.GetSchemaResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSchemaSdcpbPath", ctx, path)
+	ret0, _ := ret[0].(*schema_server.GetSchemaResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSchemaSdcpbPath indicates an expected call of GetSchemaSdcpbPath.
+func (mr *MockSchemaClientBoundMockRecorder) GetSchemaSdcpbPath(ctx, path any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSchemaSdcpbPath", reflect.TypeOf((*MockSchemaClientBound)(nil).GetSchemaSdcpbPath), ctx, path)
+}
+
+// GetSchemaSlicePath mocks base method.
+func (m *MockSchemaClientBound) GetSchemaSlicePath(ctx context.Context, path []string) (*schema_server.GetSchemaResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSchemaSlicePath", ctx, path)
+	ret0, _ := ret[0].(*schema_server.GetSchemaResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSchemaSlicePath indicates an expected call of GetSchemaSlicePath.
+func (mr *MockSchemaClientBoundMockRecorder) GetSchemaSlicePath(ctx, path any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSchemaSlicePath", reflect.TypeOf((*MockSchemaClientBound)(nil).GetSchemaSlicePath), ctx, path)
 }
 
 // ToPath mocks base method.

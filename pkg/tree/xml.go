@@ -29,7 +29,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 	switch s.schema.GetSchema().(type) {
 	case nil:
 		// This case represents a key level element. So no schema present. all child attributes need to be adedd directly to the parent element, since the key levels are not visible in the resulting xml.
-		if !s.remainsToExist() {
+		if s.shouldDelete() {
 			// If the element is to be deleted
 			// add the delete operation to the parent element
 			utils.AddXMLOperation(parent, utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
@@ -119,7 +119,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 				}
 			}
 			return overallDoAdd, nil
-		case !s.remainsToExist():
+		case s.shouldDelete():
 			// s is meant to be removed
 			// if delete, create the element as child of parent
 			newElem := parent.CreateElement(s.pathElemName)
@@ -128,7 +128,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 			// add the delete / remove operation
 			utils.AddXMLOperation(newElem, utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
 			return true, nil
-		case s.childs.Length() == 0 && s.GetSchema().GetContainer().IsPresence:
+		case s.GetSchema().GetContainer().IsPresence && s.containsOnlyDefaults():
 			// process presence cotnainers with no childs
 			if onlyNewOrUpdated {
 				// presence containers have leafvariantes with typedValue_Empty, so check that
@@ -198,7 +198,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 
 	case *sdcpb.SchemaElem_Leaflist, *sdcpb.SchemaElem_Field:
 		// check if the element remains to exist
-		if !s.remainsToExist() {
+		if s.shouldDelete() {
 			// if not, add the remove / delete op
 			utils.AddXMLOperation(parent.CreateElement(s.pathElemName), utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
 			// see case nil for an explanation of this, it is basically the same
@@ -254,7 +254,7 @@ func namespaceIsEqual(a Entry, b Entry) bool {
 
 // xmlAddNamespaceConditional adds the namespace of a to elem if namespaces of a and b are different
 func xmlAddNamespaceConditional(a Entry, b Entry, elem *etree.Element, honorNamespace bool) {
-	if honorNamespace && !namespaceIsEqual(a, b) {
+	if honorNamespace && (b == nil || !namespaceIsEqual(a, b)) {
 		elem.CreateAttr("xmlns", utils.GetNamespaceFromGetSchema(a.GetSchema()))
 	}
 }

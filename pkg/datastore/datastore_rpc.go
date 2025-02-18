@@ -34,8 +34,9 @@ import (
 
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/config"
-	"github.com/sdcio/data-server/pkg/datastore/clients"
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/datastore/target"
+	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/schema"
 	"github.com/sdcio/data-server/pkg/utils"
 )
@@ -51,23 +52,13 @@ type Datastore struct {
 
 	// schema server client
 	// schemaClient sdcpb.SchemaServerClient
-	schemaClient schema.Client
-
-	// client, bound to schema and version on the schema side and to datastore name on the cache side
-	// do not use directly use getValidationClient()
-	_validationClientBound clients.ValidationClient
+	schemaClient schemaClient.SchemaClientBound
 
 	// sync channel, to be passed to the SBI Sync method
 	synCh chan *target.SyncUpdate
 
 	// stop cancel func
 	cfn context.CancelFunc
-
-	// intent semaphore.
-	// Used by SetIntent to guarantee that
-	// only one SetIntent
-	// is applied at a time.
-	intentMutex *sync.Mutex
 
 	// keeps track of clients watching deviation updates
 	m                *sync.RWMutex
@@ -76,21 +67,29 @@ type Datastore struct {
 	// per path intent deviations (no unhandled)
 	md                       *sync.RWMutex
 	currentIntentsDeviations map[string][]*sdcpb.WatchDeviationResponse
+
+	// datastore mutex locks the whole datasore for further set operations
+	dmutex *sync.Mutex
+
+	// TransactionManager
+	transactionManager *types.TransactionManager
 }
 
 // New creates a new datastore, its schema server client and initializes the SBI target
 // func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Datastore {
-func New(ctx context.Context, c *config.DatastoreConfig, scc schema.Client, cc cache.Client, opts ...grpc.DialOption) *Datastore {
+func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc cache.Client, opts ...grpc.DialOption) *Datastore {
 	ds := &Datastore{
 		config:                   c,
-		schemaClient:             scc,
+		schemaClient:             schemaClient.NewSchemaClientBound(c.Schema.GetSchema(), sc),
 		cacheClient:              cc,
-		intentMutex:              new(sync.Mutex),
-		m:                        new(sync.RWMutex),
+		m:                        &sync.RWMutex{},
+		md:                       &sync.RWMutex{},
+		dmutex:                   &sync.Mutex{},
 		deviationClients:         make(map[string]sdcpb.DataServer_WatchDeviationsServer),
-		md:                       new(sync.RWMutex),
 		currentIntentsDeviations: make(map[string][]*sdcpb.WatchDeviationResponse),
 	}
+	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
+
 	if c.Sync != nil {
 		ds.synCh = make(chan *target.SyncUpdate, c.Sync.Buffer)
 	}
@@ -146,7 +145,7 @@ CREATE:
 
 func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) error {
 	var err error
-	d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.getValidationClient(), opts...)
+	d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, opts...)
 	if err == nil {
 		return nil
 	}
@@ -160,7 +159,7 @@ func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) err
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.getValidationClient(), opts...)
+			d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, opts...)
 			if err != nil {
 				log.Errorf("failed to create DS %s target: %v", d.config.Name, err)
 				continue
@@ -199,76 +198,6 @@ func (d *Datastore) Candidates(ctx context.Context) ([]*sdcpb.DataStore, error) 
 	return rsp, nil
 }
 
-// func (d *Datastore) Commit(ctx context.Context, req *sdcpb.CommitRequest) error {
-// 	name := req.GetDatastore().GetName()
-// 	if name == "" {
-// 		return fmt.Errorf("missing candidate name")
-// 	}
-// 	changes, err := d.cacheClient.GetChanges(ctx, d.Config().Name, req.GetDatastore().GetName())
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	notification, err := d.changesToUpdates(ctx, changes)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	log.Debugf("%s:%s notification:\n%s", d.Name(), name, prototext.Format(notification))
-// 	// TODO: consider if leafref validation
-// 	// needs to run before must statements validation
-
-// 	// push updates to sbi
-// 	sbiSet := &sdcpb.SetDataRequest{
-// 		Update: notification.GetUpdate(),
-// 		// Replace
-// 		Delete: notification.GetDelete(),
-// 	}
-// 	log.Debugf("datastore %s/%s commit:\n%s", d.config.Name, name, prototext.Format(sbiSet))
-
-// 	log.Infof("datastore %s/%s commit: sending a setDataRequest with num_updates=%d, num_replaces=%d, num_deletes=%d",
-// 		d.config.Name, name, len(sbiSet.GetUpdate()), len(sbiSet.GetReplace()), len(sbiSet.GetDelete()))
-// 	// send set request only if there are updates and/or deletes
-
-// 		rsp, err := d.sbi.Set(ctx, sbiSet)
-// 		if err != nil {
-// 			return err
-// 		}
-// 		log.Debugf("datastore %s/%s SetResponse from SBI: %v", d.config.Name, name, rsp)
-
-// 	// commit candidate changes into the intended store
-// 	err = d.cacheClient.Commit(ctx, d.config.Name, name)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	if req.GetStay() {
-// 		// reset candidate changes and (TODO) rebase
-// 		return d.cacheClient.Discard(ctx, d.config.Name, name)
-// 	}
-// 	// delete candidate
-// 	return d.cacheClient.DeleteCandidate(ctx, d.Name(), name)
-// }
-
-func (d *Datastore) Rebase(ctx context.Context, req *sdcpb.RebaseRequest) error {
-	// name := req.GetDatastore().GetName()
-	// if name == "" {
-	// 	return fmt.Errorf("missing candidate name")
-	// }
-	// d.m.Lock()
-	// defer d.m.Unlock()
-	// cand, ok := d.candidates[name]
-	// if !ok {
-	// 	return fmt.Errorf("unknown candidate name %q", name)
-	// }
-
-	// newBase, err := d.main.config.Clone()
-	// if err != nil {
-	// 	return fmt.Errorf("failed to rebase: %v", err)
-	// }
-	// cand.base = newBase
-	return nil
-}
-
 func (d *Datastore) Discard(ctx context.Context, req *sdcpb.DiscardRequest) error {
 	return d.cacheClient.Discard(ctx, req.GetName(), req.Datastore.GetName())
 }
@@ -290,9 +219,9 @@ func (d *Datastore) DeleteCandidate(ctx context.Context, name string) error {
 	return d.cacheClient.DeleteCandidate(ctx, d.Name(), name)
 }
 
-func (d *Datastore) ConnectionState() string {
+func (d *Datastore) ConnectionState() *target.TargetStatus {
 	if d.sbi == nil {
-		return ""
+		return target.NewTargetStatus(target.TargetStatusNotConnected)
 	}
 	return d.sbi.Status()
 }
@@ -394,7 +323,7 @@ func isState(r *sdcpb.GetSchemaResponse) bool {
 func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate, sem *semaphore.Weighted) {
 	defer sem.Release(1)
 
-	converter := utils.NewConverter(d.getValidationClient())
+	converter := utils.NewConverter(d.schemaClient)
 
 	cNotification, err := converter.ConvertNotificationTypedValues(ctx, syncup.Update)
 	if err != nil {
@@ -410,7 +339,6 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 		}
 		upds.AddUpdate(x)
 		upds.AddUpdates(addUpds)
-
 	}
 	cNotification.Update = upds.Updates()
 
@@ -421,7 +349,7 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 	for _, del := range cNotification.GetDelete() {
 		store := cachepb.Store_CONFIG
 		if d.config.Sync != nil && d.config.Sync.Validate {
-			scRsp, err := d.getSchema(ctx, del)
+			scRsp, err := d.schemaClient.GetSchemaSdcpbPath(ctx, del)
 			if err != nil {
 				log.Errorf("datastore %s failed to get schema for delete path %v: %v", d.config.Name, del, err)
 				continue
@@ -446,7 +374,7 @@ func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate,
 	for _, upd := range cNotification.GetUpdate() {
 		store := cachepb.Store_CONFIG
 		if d.config.Sync != nil && d.config.Sync.Validate {
-			scRsp, err := d.getSchema(ctx, upd.GetPath())
+			scRsp, err := d.schemaClient.GetSchemaSdcpbPath(ctx, upd.GetPath())
 			if err != nil {
 				log.Errorf("datastore %s failed to get schema for update path %v: %v", d.config.Name, upd.GetPath(), err)
 				continue
@@ -506,33 +434,9 @@ func (s *SdcpbUpdateDedup) Updates() []*sdcpb.Update {
 	return result
 }
 
-// helper for GetSchema
-func (d *Datastore) getSchema(ctx context.Context, p *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
-	return d.getValidationClient().GetSchema(ctx, p)
-}
-
 func (d *Datastore) validatePath(ctx context.Context, p *sdcpb.Path) error {
-	_, err := d.getSchema(ctx, p)
+	_, err := d.schemaClient.GetSchemaSdcpbPath(ctx, p)
 	return err
-}
-
-func (d *Datastore) toPath(ctx context.Context, p []string) (*sdcpb.Path, error) {
-	path, err := d.getValidationClient().ToPath(ctx, p)
-	if err != nil {
-		return nil, err
-	}
-	return path, nil
-}
-
-// getValidationClient will create a ValidationClient instance if not already existing
-// save it as part of the datastore and return a valid *clients.ValidationClient
-func (d *Datastore) getValidationClient() clients.ValidationClient {
-	// if not initialized, init it, cache it
-	if d._validationClientBound == nil {
-		d._validationClientBound = clients.NewValidationClient(d.Name(), d.cacheClient, d.Schema().GetSchema(), d.schemaClient)
-	}
-	// return the bound validation client
-	return d._validationClientBound
 }
 
 func (d *Datastore) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.DataServer_WatchDeviationsServer) error {
@@ -622,7 +526,7 @@ func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.
 		if len(intentsUpdates) == 0 {
 			log.Debugf("%s: has unhandled config %v: %v", d.Name(), upd.GetPath(), v)
 			// TODO: generate an unhandled config deviation
-			sp, err := d.toPath(ctx, upd.GetPath())
+			sp, err := d.schemaClient.ToPath(ctx, upd.GetPath())
 			if err != nil {
 				log.Errorf("%s: failed to convert cached path to xpath: %v", d.Name(), err)
 			}
@@ -659,12 +563,12 @@ func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.
 			log.Errorf("%s: failed to convert intent value: %v", d.Name(), err)
 			continue
 		}
-		sp, err := d.toPath(ctx, intentsUpdates[0].GetPath())
+		sp, err := d.schemaClient.ToPath(ctx, intentsUpdates[0].GetPath())
 		if err != nil {
 			log.Errorf("%s: failed to convert path %v: %v", d.Name(), intentsUpdates[0].GetPath(), err)
 			continue
 		}
-		scRsp, err := d.getSchema(ctx, sp)
+		scRsp, err := d.schemaClient.GetSchemaSdcpbPath(ctx, sp)
 		if err != nil {
 			log.Errorf("%s: failed to get path schema: %v ", d.Name(), err)
 			continue
@@ -706,12 +610,12 @@ func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.
 				log.Errorf("%s: failed to convert intent value: %v", d.Name(), err)
 				continue
 			}
-			sp, err := d.toPath(ctx, intUpd.GetPath())
+			sp, err := d.schemaClient.ToPath(ctx, intUpd.GetPath())
 			if err != nil {
 				log.Errorf("%s: failed to convert path %v: %v", d.Name(), intUpd.GetPath(), err)
 				continue
 			}
-			scRsp, err := d.getSchema(ctx, sp)
+			scRsp, err := d.schemaClient.GetSchemaSdcpbPath(ctx, sp)
 			if err != nil {
 				log.Errorf("%s: failed to get path schema: %v ", d.Name(), err)
 				continue
@@ -768,7 +672,7 @@ func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.
 				// 	continue
 				// }
 
-				path, err := d.toPath(ctx, upd.GetPath())
+				path, err := d.schemaClient.ToPath(ctx, upd.GetPath())
 				if err != nil {
 					log.Error(err)
 					continue
@@ -819,3 +723,23 @@ func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.
 	d.currentIntentsDeviations = newDeviations
 	d.md.Unlock()
 }
+
+// DatastoreRollbackAdapter implements the types.RollbackInterface and encapsulates the Datastore.
+type DatastoreRollbackAdapter struct {
+	d *Datastore
+}
+
+// NewDatastoreRollbackAdapter constructor for the DatastoreRollbackAdapter.
+func NewDatastoreRollbackAdapter(d *Datastore) *DatastoreRollbackAdapter {
+	return &DatastoreRollbackAdapter{
+		d: d,
+	}
+}
+
+// TransactionRollback is adapted to the datastore.lowlevelTransactionSet() function
+func (dra *DatastoreRollbackAdapter) TransactionRollback(ctx context.Context, transaction *types.Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
+	return dra.d.lowlevelTransactionSet(ctx, transaction, dryRun)
+}
+
+// Assure the types.RollbackInterface is implemented by the DatastoreRollbackAdapter
+var _ types.RollbackInterface = &DatastoreRollbackAdapter{}

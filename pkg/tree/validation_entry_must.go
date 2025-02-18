@@ -3,15 +3,16 @@ package tree
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 
+	"github.com/sdcio/data-server/pkg/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/yang-parser/xpath"
 	"github.com/sdcio/yang-parser/xpath/grammars/expr"
+	log "github.com/sirupsen/logrus"
 )
 
-func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, errchan chan<- error) {
+func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, resultChan chan<- *types.ValidationResultEntry) {
 
 	// if no schema, then there is nothing to be done, return
 	if s.schema == nil {
@@ -39,7 +40,7 @@ func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, errc
 		lexer.Parse()
 		prog, err := lexer.CreateProgram(exprStr)
 		if err != nil {
-			errchan <- err
+			resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, false).Owner(), err, types.ValidationResultEntryTypeError)
 			return
 		}
 		machine := xpath.NewMachine(exprStr, prog, exprStr)
@@ -53,13 +54,18 @@ func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, errc
 		result, err := res1.GetBoolResult()
 		if !result || err != nil {
 			if err == nil {
-				err = fmt.Errorf("error path: %s, must-statement [%s] %s", must.Statement, s.Path(), must.Error)
+				err = fmt.Errorf("error path: %s, must-statement [%s] %s", s.Path(), must.Statement, must.Error)
 			}
 			if strings.Contains(err.Error(), "Stack underflow") {
-				slog.Debug("stack underflow error: path=%v, mustExpr=%s", s.Path().String(), exprStr)
+				log.Debugf("stack underflow error: path=%v, mustExpr=%s", s.Path().String(), exprStr)
 				continue
 			}
-			errchan <- err
+			owner := "unknown"
+			// must statement might be assigned on a container, hence we might not have any LeafVariants
+			if s.leafVariants.Length() > 0 {
+				owner = s.leafVariants.GetHighestPrecedence(false, true).Owner()
+			}
+			resultChan <- types.NewValidationResultEntry(owner, err, types.ValidationResultEntryTypeError)
 			return
 		}
 	}

@@ -13,6 +13,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/tree/importer"
+	"github.com/sdcio/data-server/pkg/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/proto"
@@ -40,8 +41,23 @@ type sharedEntryAttributes struct {
 	treeContext *TreeContext
 
 	// state cache
-	remains      *bool
-	remainsMutex sync.Mutex
+	cacheShouldDelete *bool
+	cacheCanDelete    *bool
+	cacheRemains      *bool
+	cacheMutex        sync.Mutex
+}
+
+func (s *sharedEntryAttributes) deepCopy(tc *TreeContext, parent Entry) (*sharedEntryAttributes, error) {
+	result := &sharedEntryAttributes{
+		parent:           parent,
+		pathElemName:     s.pathElemName,
+		childs:           newChildMap(),
+		leafVariants:     newLeafVariants(tc),
+		schema:           s.schema,
+		treeContext:      tc,
+		choicesResolvers: s.choicesResolvers.deepCopy(),
+	}
+	return result, nil
 }
 
 type childMap struct {
@@ -111,6 +127,12 @@ func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName st
 		return nil, err
 	}
 
+	// try loading potential defaults
+	err = s.loadDefaults(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// initialize the choice case resolvers with the schema information
 	s.initChoiceCasesResolvers()
 
@@ -122,6 +144,57 @@ func (s *sharedEntryAttributes) GetRoot() Entry {
 		return s
 	}
 	return s.parent.GetRoot()
+}
+
+// loadDefaults helper to populate defaults on the initializiation of the sharedEntryAttribute
+func (s *sharedEntryAttributes) loadDefaults(ctx context.Context) error {
+
+	// if it is a container wihtout keys (not a list) then load the defaults
+	if s.schema.GetContainer() != nil && len(s.schema.GetContainer().GetKeys()) == 0 {
+		for _, childname := range s.schema.GetContainer().ChildsWithDefaults {
+			// tryLoadingDefaults is using the pathslice, that contains keys as well,
+			// so we need to make up for these extra entries in the slice
+			path := append(s.Path(), childname)
+			_, err := s.tryLoadingDefault(ctx, path)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// on the root element we cannot query the parent schema.
+	// hence skip this part if IsRoot
+	if !s.IsRoot() {
+
+		// the regular container was covered further up, now we're after lists.
+		// but only entries without a schema make sense to test. Since defaults
+		// need to be added to the last level with no schema
+		if s.schema != nil {
+			return nil
+		}
+
+		// get the first ancestor with a schema and how many levels up that is
+		ancestor, levelsUp := s.GetFirstAncestorWithSchema()
+
+		// retrieve the container schema
+		ancestorContainerSchema := ancestor.GetSchema().GetContainer()
+		// if it is not a container, return
+		if ancestorContainerSchema == nil {
+			return nil
+		}
+
+		// if we're in the last level of keys, then we need to add the defaults
+		if len(ancestorContainerSchema.Keys) == levelsUp {
+			for _, childname := range ancestorContainerSchema.ChildsWithDefaults {
+				path := append(s.Path(), childname)
+				_, err := s.tryLoadingDefault(ctx, path)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
@@ -156,7 +229,7 @@ func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 
 	if getSchema {
 		// trieve if the getSchema var is still true
-		schemaResp, err := s.treeContext.treeSchemaCacheClient.GetSchema(ctx, s.Path())
+		schemaResp, err := s.treeContext.schemaClient.GetSchemaSlicePath(ctx, s.Path())
 		if err != nil {
 			return err
 		}
@@ -302,7 +375,7 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes []DeleteEntry, aggr
 		for _, n := range keys {
 			c, exists := s.childs.GetEntry(n)
 			// these keys should aways exist, so for now we do not catch the non existing key case
-			if exists && c.remainsToExist() {
+			if exists && !c.shouldDelete() {
 				// if not all the keys are marked for deletion, we need to revert to regular deletion
 				doAggregateDelete = false
 				break
@@ -326,15 +399,89 @@ func (s *sharedEntryAttributes) getAggregatedDeletes(deletes []DeleteEntry, aggr
 	return s.getRegularDeletes(deletes, aggregatePaths)
 }
 
-func (s *sharedEntryAttributes) remainsToExist() bool {
-	// see if we have the value cached
-	s.remainsMutex.Lock()
-	defer s.remainsMutex.Unlock()
-	if s.remains != nil {
-		return *s.remains
+// canDelete checks if the entry can be Deleted.
+// This is e.g. to cover e.g. defaults and running. They can be deleted, but should not, they are basically implicitly existing.
+// In caomparison to
+//   - remainsToExists() returns true, because they remain to exist even though implicitly.
+//   - shouldDelete() returns false, because no explicit delete should be issued for them.
+func (s *sharedEntryAttributes) canDelete() bool {
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+	if s.cacheCanDelete != nil {
+		return *s.cacheCanDelete
 	}
 
-	leafVariantResult := s.leafVariants.Length() > 0 && !s.leafVariants.shouldDelete()
+	leafVariantCanDelete := s.leafVariants.canDelete()
+	if !leafVariantCanDelete {
+		s.cacheCanDelete = utils.BoolPtr(false)
+		return *s.cacheCanDelete
+	}
+
+	// handle containers
+	for _, c := range s.filterActiveChoiceCaseChilds() {
+		canDelete := c.canDelete()
+		if !canDelete {
+			s.cacheCanDelete = utils.BoolPtr(false)
+			return *s.cacheCanDelete
+		}
+	}
+	s.cacheCanDelete = utils.BoolPtr(true)
+	return *s.cacheCanDelete
+}
+
+// shouldDelete checks if a container or Leaf(List) is to be explicitly deleted.
+func (s *sharedEntryAttributes) shouldDelete() bool {
+	// see if we have the value cached
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+	if s.cacheShouldDelete != nil {
+		return *s.cacheShouldDelete
+	}
+	// check if the leafVariants result in a should delete
+	leafVariantshouldDelete := s.leafVariants.shouldDelete()
+
+	// for containers, it is basically a canDelete() check.
+	canDelete := false
+	// but a real delete should only be added if there is at least one shouldDelete() == true
+	shouldDelete := false
+
+	// iterate through the active childs
+	for _, c := range s.filterActiveChoiceCaseChilds() {
+		// check if the child can be deleted
+		canDelete = c.canDelete()
+		// if it can explicitly not be deleted, then the result is clear, we should not delete
+		if !canDelete {
+			break
+		}
+		// if it can be deleted we need to check if there is a contibuting entry that
+		// requires deletion only if there is a contributing shouldDelete() == true then we must issue
+		// a real delete
+		shouldDelete = shouldDelete || c.shouldDelete()
+	}
+
+	// the overall result is
+	// if we have a leaf
+	//     the result of the leafVariant.shouldDelete() calculation
+	// or if it is a conmtainer
+	//     canDelete() [if no canDelete() == true then it must remain]
+	// 	 and
+	//     shouldDelete() [only if an entry is explicitly to be deleted, issue a delete]
+	//   and
+	//     s.leafVariants.canDelete()
+	result := leafVariantshouldDelete || (canDelete && shouldDelete && s.leafVariants.canDelete())
+
+	s.cacheShouldDelete = &result
+	return result
+}
+
+func (s *sharedEntryAttributes) remainsToExist() bool {
+	// see if we have the value cached
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+	if s.cacheRemains != nil {
+		return *s.cacheRemains
+	}
+	leafVariantResult := s.leafVariants.remainsToExist()
 
 	// handle containers
 	childsRemain := false
@@ -353,9 +500,8 @@ func (s *sharedEntryAttributes) remainsToExist() bool {
 
 	// assumption is, that if the entry exists, there is at least a running value available.
 	remains := leafVariantResult || childsRemain || activeChoiceCase
-	// populate the state cache
-	s.remains = &remains
 
+	s.cacheRemains = &remains
 	return remains
 }
 
@@ -391,7 +537,7 @@ func (s *sharedEntryAttributes) getRegularDeletes(deletes []DeleteEntry, aggrega
 		}
 	}
 
-	if !s.remainsToExist() && !s.IsRoot() && len(s.GetSchemaKeys()) == 0 {
+	if s.shouldDelete() && !s.IsRoot() && len(s.GetSchemaKeys()) == 0 {
 		return append(deletes, s), nil
 	}
 
@@ -415,7 +561,6 @@ func (s *sharedEntryAttributes) GetDeletes(deletes []DeleteEntry, aggregatePaths
 
 	// else perform regular deletion
 	return s.getRegularDeletes(deletes, aggregatePaths)
-
 }
 
 // GetAncestorSchema returns the schema of the parent node if the schema is set.
@@ -551,53 +696,19 @@ func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, pathElems
 
 func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path []string) (Entry, error) {
 
-	schema, err := s.treeContext.treeSchemaCacheClient.GetSchema(ctx, path)
+	schema, err := s.treeContext.schemaClient.GetSchemaSlicePath(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("error trying to load defaults for %s: %v", strings.Join(path, "->"), err)
 	}
 
-	var tv *sdcpb.TypedValue
-
-	switch schem := schema.GetSchema().GetSchema().(type) {
-	case *sdcpb.SchemaElem_Field:
-		defaultVal := schem.Field.GetDefault()
-		if defaultVal == "" {
-			return nil, fmt.Errorf("error no default defined for %s", strings.Join(path, " -> "))
-		}
-		tv, err = utils.Convert(defaultVal, schem.Field.GetType())
-		if err != nil {
-			return nil, err
-		}
-	case *sdcpb.SchemaElem_Leaflist:
-		listDefaults := schem.Leaflist.GetDefaults()
-		tvlist := make([]*sdcpb.TypedValue, 0, len(listDefaults))
-		for _, dv := range schem.Leaflist.GetDefaults() {
-			tvelem, err := utils.Convert(dv, schem.Leaflist.GetType())
-			if err != nil {
-				return nil, fmt.Errorf("error converting default to typed value for %s, type: %s ; value: %s; err: %v", strings.Join(path, " -> "), schem.Leaflist.GetType().GetTypeName(), dv, err)
-			}
-			tvlist = append(tvlist, tvelem)
-		}
-		tv = &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_LeaflistVal{
-				LeaflistVal: &sdcpb.ScalarArray{
-					Element: tvlist,
-				},
-			},
-		}
-	default:
-		return nil, fmt.Errorf("error no defaults defined for schema path: %s", strings.Join(path, "->"))
-	}
-
-	// convert value to []byte for cache insertion
-	val, err := proto.Marshal(tv)
+	upd, err := utils.DefaultValueRetrieve(schema.GetSchema(), path, DefaultValuesPrio, DefaultsIntentName)
 	if err != nil {
 		return nil, err
 	}
 
-	upd := cache.NewUpdate(path, val, DefaultValuesPrio, DefaultsIntentName, 0)
+	flags := NewUpdateInsertFlags()
 
-	result, err := s.AddCacheUpdateRecursive(ctx, upd, false)
+	result, err := s.AddCacheUpdateRecursive(ctx, upd, flags)
 	if err != nil {
 		return nil, fmt.Errorf("failed adding default value for %s to tree; %v", strings.Join(path, "/"), err)
 	}
@@ -640,14 +751,16 @@ func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isR
 }
 
 func (s *sharedEntryAttributes) tryLoading(ctx context.Context, path []string) (Entry, error) {
-	upd, err := s.treeContext.ReadRunning(ctx, append(s.Path(), path...))
+	upd, err := s.treeContext.GetTreeSchemaCacheClient().ReadRunningPath(ctx, append(s.Path(), path...))
 	if err != nil {
 		return nil, err
 	}
 	if upd == nil {
 		return nil, fmt.Errorf("reached %v but child %s does not exist", s.Path(), path[0])
 	}
-	_, err = s.treeContext.root.AddCacheUpdateRecursive(ctx, upd, false)
+	flags := NewUpdateInsertFlags()
+
+	_, err = s.treeContext.root.AddCacheUpdateRecursive(ctx, upd, flags)
 	if err != nil {
 		return nil, err
 	}
@@ -695,7 +808,7 @@ func (s *sharedEntryAttributes) GetRootBasedEntryChain() []Entry {
 	return append(s.parent.GetRootBasedEntryChain(), s)
 }
 
-// getHighestPrecedenceValueOfBranch goes through all the child branches to find the highes
+// getHighestPrecedenceValueOfBranch goes through all the child branches to find the highest
 // precedence value (lowest priority value) for the entire branch and returns it.
 func (s *sharedEntryAttributes) getHighestPrecedenceValueOfBranch() int32 {
 	result := int32(math.MaxInt32)
@@ -713,15 +826,15 @@ func (s *sharedEntryAttributes) getHighestPrecedenceValueOfBranch() int32 {
 
 // Validate is the highlevel function to perform validation.
 // it will multiplex all the different Validations that need to happen
-func (s *sharedEntryAttributes) Validate(ctx context.Context, errChan chan<- error, warnChan chan<- error, concurrent bool) {
+func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, concurrent bool) {
 
 	// recurse the call to the child elements
 	wg := sync.WaitGroup{}
 	defer wg.Wait()
 	for _, c := range s.filterActiveChoiceCaseChilds() {
 		wg.Add(1)
-		valFunc := func(x Entry) { // HINT: for Must-Statement debugging, remove "go " such that the debugger is triggered one after the other
-			x.Validate(ctx, errChan, warnChan, concurrent)
+		valFunc := func(x Entry) {
+			x.Validate(ctx, resultChan, concurrent)
 			wg.Done()
 		}
 		if concurrent {
@@ -733,17 +846,17 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, errChan chan<- err
 
 	// validate the mandatory statement on this entry
 	if s.remainsToExist() {
-		s.validateMandatory(errChan)
-		s.validateLeafRefs(ctx, errChan, warnChan)
-		s.validateLeafListMinMaxAttributes(errChan)
-		s.validatePattern(errChan)
-		s.validateMustStatements(ctx, errChan)
-		s.validateLength(errChan)
-		s.validateRange(errChan)
+		s.validateMandatory(ctx, resultChan)
+		s.validateLeafRefs(ctx, resultChan)
+		s.validateLeafListMinMaxAttributes(resultChan)
+		s.validatePattern(resultChan)
+		s.validateMustStatements(ctx, resultChan)
+		s.validateLength(resultChan)
+		s.validateRange(resultChan)
 	}
 }
 
-func (s *sharedEntryAttributes) validateRange(errchan chan<- error) {
+func (s *sharedEntryAttributes) validateRange(resultCHan chan<- *types.ValidationResultEntry) {
 
 	// lv := s.leafVariants.GetHighestPrecedence(false)
 	// if lv == nil {
@@ -770,22 +883,22 @@ func (s *sharedEntryAttributes) validateRange(errchan chan<- error) {
 }
 
 // validateLeafListMinMaxAttributes validates the Min-, and Max-Elements attribute of the Entry if it is a Leaflists.
-func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(errchan chan<- error) {
+func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(resultChan chan<- *types.ValidationResultEntry) {
 	if schema := s.schema.GetLeaflist(); schema != nil {
 		if schema.MinElements > 0 {
 			if lv := s.leafVariants.GetHighestPrecedence(false, true); lv != nil {
 				tv, err := lv.Update.Value()
 				if err != nil {
-					errchan <- fmt.Errorf("validating LeafList Min Attribute: %v", err)
+					resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("validating LeafList Min Attribute: %v", err), types.ValidationResultEntryTypeError)
 				}
 				if val := tv.GetLeaflistVal(); val != nil {
 					// check minelements if set
 					if schema.MinElements > 0 && len(val.GetElement()) < int(schema.GetMinElements()) {
-						errchan <- fmt.Errorf("leaflist %s defines %d min-elements but only %d elements are present", s.Path().String(), schema.MinElements, len(val.GetElement()))
+						resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("leaflist %s defines %d min-elements but only %d elements are present", s.Path().String(), schema.MinElements, len(val.GetElement())), types.ValidationResultEntryTypeError)
 					}
 					// check maxelements if set
 					if len(val.GetElement()) > int(schema.GetMaxElements()) {
-						errchan <- fmt.Errorf("leaflist %s defines %d max-elements but %d elements are present", s.Path().String(), schema.GetMaxElements(), len(val.GetElement()))
+						resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("leaflist %s defines %d max-elements but %d elements are present", s.Path().String(), schema.GetMaxElements(), len(val.GetElement())), types.ValidationResultEntryTypeError)
 					}
 				}
 			}
@@ -793,7 +906,7 @@ func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(errchan chan<- 
 	}
 }
 
-func (s *sharedEntryAttributes) validateLength(errchan chan<- error) {
+func (s *sharedEntryAttributes) validateLength(resultChan chan<- *types.ValidationResultEntry) {
 	if schema := s.schema.GetField(); schema != nil {
 
 		if len(schema.GetType().Length) == 0 {
@@ -807,7 +920,7 @@ func (s *sharedEntryAttributes) validateLength(errchan chan<- error) {
 
 		tv, err := lv.Value()
 		if err != nil {
-			errchan <- fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err)
+			resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err), types.ValidationResultEntryTypeError)
 			return
 		}
 		value := tv.GetStringVal()
@@ -822,11 +935,11 @@ func (s *sharedEntryAttributes) validateLength(errchan chan<- error) {
 		for _, lengthDef := range schema.GetType().Length {
 			lenghts = append(lenghts, fmt.Sprintf("%d..%d", lengthDef.Min.Value, lengthDef.Max.Value))
 		}
-		errchan <- fmt.Errorf("error length of Path: %s, Value: %s not within allowed length %s", s.Path(), value, strings.Join(lenghts, ", "))
+		resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("error length of Path: %s, Value: %s not within allowed length %s", s.Path(), value, strings.Join(lenghts, ", ")), types.ValidationResultEntryTypeError)
 	}
 }
 
-func (s *sharedEntryAttributes) validatePattern(errchan chan<- error) {
+func (s *sharedEntryAttributes) validatePattern(resultChan chan<- *types.ValidationResultEntry) {
 	if schema := s.schema.GetField(); schema != nil {
 		if len(schema.Type.Patterns) == 0 {
 			return
@@ -834,7 +947,7 @@ func (s *sharedEntryAttributes) validatePattern(errchan chan<- error) {
 		lv := s.leafVariants.GetHighestPrecedence(false, true)
 		tv, err := lv.Update.Value()
 		if err != nil {
-			errchan <- fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err)
+			resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err), types.ValidationResultEntryTypeError)
 			return
 		}
 		value := tv.GetStringVal()
@@ -842,11 +955,11 @@ func (s *sharedEntryAttributes) validatePattern(errchan chan<- error) {
 			if p := pattern.GetPattern(); p != "" {
 				matched, err := regexp.MatchString(p, value)
 				if err != nil {
-					errchan <- fmt.Errorf("failed compiling regex %s defined for %s", p, s.Path())
+					resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("failed compiling regex %s defined for %s", p, s.Path()), types.ValidationResultEntryTypeError)
 					continue
 				}
 				if (!matched && !pattern.Inverted) || (pattern.GetInverted() && matched) {
-					errchan <- fmt.Errorf("value %s of %s does not match regex %s (inverted: %t)", value, s.Path(), p, pattern.GetInverted())
+					resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("value %s of %s does not match regex %s (inverted: %t)", value, s.Path(), p, pattern.GetInverted()), types.ValidationResultEntryTypeError)
 				}
 			}
 		}
@@ -855,6 +968,11 @@ func (s *sharedEntryAttributes) validatePattern(errchan chan<- error) {
 
 func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32) error {
 	var err error
+
+	updateInsertFlags := NewUpdateInsertFlags()
+	if intentName != RunningIntentName {
+		updateInsertFlags.SetNewFlag()
+	}
 
 	switch x := s.schema.GetSchema().(type) {
 	case *sdcpb.SchemaElem_Container, nil:
@@ -900,7 +1018,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 						return err
 					}
 					upd := cache.NewUpdate(s.Path(), tvVal, intentPrio, intentName, 0)
-					s.leafVariants.Add(NewLeafEntry(upd, false, s))
+					s.leafVariants.Add(NewLeafEntry(upd, updateInsertFlags, s))
 				}
 			}
 
@@ -942,10 +1060,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 		}
 		upd := cache.NewUpdate(s.Path(), tvVal, intentPrio, intentName, 0)
 
-		// If the intent name is the RunningIntentName, then set isNew to false
-		isNew := intentName != RunningIntentName
-
-		s.leafVariants.Add(NewLeafEntry(upd, isNew, s))
+		s.leafVariants.Add(NewLeafEntry(upd, updateInsertFlags, s))
 
 	case *sdcpb.SchemaElem_Leaflist:
 		var scalarArr *sdcpb.ScalarArray
@@ -959,10 +1074,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 
 			scalarArr = llvTv.GetLeaflistVal()
 		} else {
-			// If the intent name is the RunningIntentName, then set isNew to false
-			isNew := intentName != RunningIntentName
-
-			le = NewLeafEntry(nil, isNew, s)
+			le = NewLeafEntry(nil, updateInsertFlags, s)
 			mustAdd = true
 			scalarArr = &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{}}
 		}
@@ -988,18 +1100,18 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 
 // validateMandatory validates that all the mandatory attributes,
 // defined by the schema are present either in the tree or in the index.
-func (s *sharedEntryAttributes) validateMandatory(errchan chan<- error) {
+func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry) {
 	if s.schema != nil {
 		switch s.schema.GetSchema().(type) {
 		case *sdcpb.SchemaElem_Container:
 			for _, c := range s.schema.GetContainer().GetMandatoryChildrenConfig() {
-				s.validateMandatoryWithKeys(len(s.GetSchema().GetContainer().GetKeys()), c.Name, errchan)
+				s.validateMandatoryWithKeys(ctx, len(s.GetSchema().GetContainer().GetKeys()), c.Name, resultChan)
 			}
 		}
 	}
 }
 
-func (s *sharedEntryAttributes) validateMandatoryWithKeys(level int, attribute string, errchan chan<- error) {
+func (s *sharedEntryAttributes) validateMandatoryWithKeys(ctx context.Context, level int, attribute string, resultChan chan<- *types.ValidationResultEntry) {
 	if level == 0 {
 		// first check if the mandatory value is set via the intent, e.g. part of the tree already
 		v, existsInTree := s.filterActiveChoiceCaseChilds()[attribute]
@@ -1007,15 +1119,23 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(level int, attribute s
 		// if not the path exists in the tree and is not to be deleted, then lookup in the paths index of the store
 		// and see if such path exists, if not raise the error
 		if !(existsInTree && v.remainsToExist()) {
-			if !s.treeContext.PathExists(append(s.Path(), attribute)) {
-				errchan <- fmt.Errorf("error mandatory child %s does not exist, path: %s", attribute, s.Path())
+			exists, err := s.treeContext.cacheClient.IntendedPathExists(ctx, append(s.Path(), attribute))
+			owner := "unknown"
+			if s.leafVariants.Length() > 0 {
+				s.leafVariants.GetHighestPrecedence(false, true).Owner()
+			}
+			if err != nil {
+				resultChan <- types.NewValidationResultEntry(owner, fmt.Errorf("error validating mandatory childs %s: %v", s.Path(), err), types.ValidationResultEntryTypeError)
+			}
+			if !exists {
+				resultChan <- types.NewValidationResultEntry(owner, fmt.Errorf("error mandatory child %s does not exist, path: %s", attribute, s.Path()), types.ValidationResultEntryTypeError)
 			}
 		}
 		return
 	}
 
 	for _, c := range s.filterActiveChoiceCaseChilds() {
-		c.validateMandatoryWithKeys(level-1, attribute, errchan)
+		c.validateMandatoryWithKeys(ctx, level-1, attribute, resultChan)
 	}
 
 }
@@ -1058,19 +1178,23 @@ func (s *sharedEntryAttributes) initChoiceCasesResolvers() {
 // FinishInsertionPhase certain values that are costly to calculate but used multiple times
 // will be calculated and stored for later use. However therefore the insertion phase into the
 // tree needs to be over. Calling this function indicated the end of the phase and thereby triggers the calculation
-func (s *sharedEntryAttributes) FinishInsertionPhase() {
+func (s *sharedEntryAttributes) FinishInsertionPhase(ctx context.Context) {
 
 	// populate the ChoiceCaseResolvers to determine the active case
-	s.populateChoiceCaseResolvers()
+	s.populateChoiceCaseResolvers(ctx)
 
 	// recurse the call to all (active) entries within the tree.
 	// Thereby already using the choiceCaseResolver via filterActiveChoiceCaseChilds()
 	for _, child := range s.filterActiveChoiceCaseChilds() {
-		child.FinishInsertionPhase()
+		child.FinishInsertionPhase(ctx)
 	}
 
 	// reset state
-	s.remains = nil
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+	s.cacheRemains = nil
+	s.cacheShouldDelete = nil
+	s.cacheCanDelete = nil
 }
 
 // populateChoiceCaseResolvers iterates through the ChoiceCaseResolvers,
@@ -1079,7 +1203,7 @@ func (s *sharedEntryAttributes) FinishInsertionPhase() {
 // caches index (old intent content) as well as from the tree (new intent content).
 // the choiceResolver is fed with the resulting values and thereby ready to be queried
 // in a later stage (filterActiveChoiceCaseChilds()).
-func (s *sharedEntryAttributes) populateChoiceCaseResolvers() {
+func (s *sharedEntryAttributes) populateChoiceCaseResolvers(ctx context.Context) {
 	if s.schema == nil {
 		return
 	}
@@ -1089,7 +1213,7 @@ func (s *sharedEntryAttributes) populateChoiceCaseResolvers() {
 			isNew := false
 			var val2 *int32
 			// Query the Index, stored in the treeContext for the per branch highes precedence
-			v := s.treeContext.GetBranchesHighesPrecedence(append(s.Path(), elem), CacheUpdateFilterExcludeOwner(s.treeContext.GetActualOwner()))
+			v := s.treeContext.GetTreeSchemaCacheClient().GetBranchesHighesPrecedence(ctx, append(s.Path(), elem), CacheUpdateFilterExcludeOwner(s.treeContext.GetActualOwner()))
 
 			child, childExists := s.childs.GetEntry(elem)
 			// set the value from the tree as well
@@ -1116,6 +1240,11 @@ func (s *sharedEntryAttributes) filterActiveChoiceCaseChilds() map[string]Entry 
 	}
 
 	skipAttributesList := s.choicesResolvers.GetSkipElements()
+	// if there are no items that should be skipped, take a shortcut
+	// and simply return all childs straight away
+	if len(skipAttributesList) == 0 {
+		return s.childs.GetAll()
+	}
 	result := map[string]Entry{}
 	// optimization option: sort the slices and forward in parallel, lifts extra burden that the contains call holds.
 	for childName, child := range s.childs.GetAll() {
@@ -1147,15 +1276,15 @@ func (s *sharedEntryAttributes) StringIndent(result []string) []string {
 }
 
 // markOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
-func (s *sharedEntryAttributes) markOwnerDelete(o string) {
+func (s *sharedEntryAttributes) markOwnerDelete(o string, onlyIntended bool) {
 	lvEntry := s.leafVariants.GetByOwner(o)
 	// if an entry for the given user exists, mark it for deletion
 	if lvEntry != nil {
-		lvEntry.MarkDelete()
+		lvEntry.MarkDelete(onlyIntended)
 	}
 	// recurse into childs
 	for _, child := range s.childs.GetAll() {
-		child.markOwnerDelete(o)
+		child.markOwnerDelete(o, onlyIntended)
 	}
 }
 
@@ -1229,7 +1358,7 @@ func (s *sharedEntryAttributes) getKeyName() (string, error) {
 
 // AddCacheUpdateRecursive recursively adds the given cache.Update to the tree. Thereby creating all the entries along the path.
 // if the entries along th path already exist, the existing entries are called to add the Update.
-func (s *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *cache.Update, new bool) (Entry, error) {
+func (s *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *cache.Update, flags *UpdateInsertFlags) (Entry, error) {
 	idx := 0
 	// if it is the root node, index remains == 0
 	if s.parent != nil {
@@ -1239,7 +1368,7 @@ func (s *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *
 	// continue with recursive add otherwise
 	if idx == len(c.GetPath()) {
 		// delegate update handling to leafVariants
-		s.leafVariants.Add(NewLeafEntry(c, new, s))
+		s.leafVariants.Add(NewLeafEntry(c, flags, s))
 		return s, nil
 	}
 
@@ -1253,5 +1382,93 @@ func (s *sharedEntryAttributes) AddCacheUpdateRecursive(ctx context.Context, c *
 			return nil, err
 		}
 	}
-	return e.AddCacheUpdateRecursive(ctx, c, new)
+	return e.AddCacheUpdateRecursive(ctx, c, flags)
+}
+
+// containsOnlyDefaults checks for presence containers, if only default values are present,
+// such that the Entry should also be treated as a presence container
+func (s *sharedEntryAttributes) containsOnlyDefaults() bool {
+	// if no schema is present, we must be in a key level
+	if s.schema == nil {
+		return false
+	}
+	contSchema := s.schema.GetContainer()
+	if contSchema == nil {
+		return false
+	}
+
+	// only if length of childs is (more) compared to the number of
+	// attributes carrying defaults, the presence condition can be met
+	if s.childs.Length() > len(contSchema.ChildsWithDefaults) {
+		return false
+	}
+	for k, v := range s.childs.GetAll() {
+		// check if child name is part of ChildsWithDefaults
+		if !slices.Contains(contSchema.ChildsWithDefaults, k) {
+			return false
+		}
+		// check if the value is the default value
+		le, err := v.getHighestPrecedenceLeafValue(context.TODO())
+		if err != nil {
+			return false
+		}
+		// if the owner is not Default return false
+		if le.Owner() != DefaultsIntentName {
+			return false
+		}
+	}
+
+	return true
+}
+
+type UpdateInsertFlags struct {
+	new          bool
+	delete       bool
+	onlyIntended bool
+}
+
+// NewUpdateInsertFlags returns a new *UpdateInsertFlags instance
+// with all values set to false, so not new, and not marked for deletion
+func NewUpdateInsertFlags() *UpdateInsertFlags {
+	return &UpdateInsertFlags{}
+}
+
+func (f *UpdateInsertFlags) SetDeleteFlag() {
+	f.delete = true
+	f.new = false
+}
+
+func (f *UpdateInsertFlags) SetDeleteOnlyUpdatedFlag() {
+	f.delete = true
+	f.onlyIntended = true
+	f.new = false
+}
+
+func (f *UpdateInsertFlags) SetNewFlag() {
+	f.new = true
+	f.delete = false
+	f.onlyIntended = false
+}
+
+func (f *UpdateInsertFlags) GetDeleteFlag() bool {
+	return f.delete
+}
+
+func (f *UpdateInsertFlags) GetDeleteOnlyIntendedFlag() bool {
+	return f.onlyIntended
+}
+
+func (f *UpdateInsertFlags) GetNewFlag() bool {
+	return f.new
+}
+
+func (f *UpdateInsertFlags) Apply(le *LeafEntry) {
+	if f.delete {
+		le.MarkDelete(f.onlyIntended)
+		return
+	}
+	if f.new {
+		le.MarkNew()
+		return
+	}
 }

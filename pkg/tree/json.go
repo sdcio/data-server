@@ -85,7 +85,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 				return nil, nil
 			}
 			return result, nil
-		case s.childs.Length() == 0 && s.schema.GetContainer().IsPresence:
+		case s.schema.GetContainer().IsPresence && s.containsOnlyDefaults():
 			// Presence container without any childs
 			if onlyNewOrUpdated {
 				// presence containers have leafvariantes with typedValue_Empty, so check that
