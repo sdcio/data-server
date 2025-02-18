@@ -79,6 +79,11 @@ func (lv *LeafVariants) canDelete() bool {
 		return true
 	}
 
+	// if we have runnig and only running we should not delete
+	if len(lv.les) == 1 && lv.les[0].Owner() == RunningIntentName {
+		return false
+	}
+
 	// go through all variants
 	for _, l := range lv.les {
 		// if the LeafVariant is not owned by running or default
