@@ -45,11 +45,11 @@ func (d *Datastore) expandAndConvertIntent(ctx context.Context, intentName strin
 		// since we already have the pathslice, we construct the cache.Update, but keep it for later
 		// addition to the tree. First we need to mark the existing once for deletion
 
-		// make sure typedValue is carrying the correct type
-		err = d.validateUpdate(ctx, u)
-		if err != nil {
-			return nil, err
-		}
+		// // make sure typedValue is carrying the correct type
+		// err = d.validateUpdate(ctx, u)
+		// if err != nil {
+		// 	return nil, err
+		// }
 
 		// convert value to []byte for cache insertion
 		val, err := proto.Marshal(u.GetValue())
@@ -517,16 +517,6 @@ func populateTreeWithRunning(ctx context.Context, tscc tree.TreeCacheClient, r *
 	}
 
 	return nil
-}
-
-func pathIsKeyAsLeaf(p *sdcpb.Path) bool {
-	numPElem := len(p.GetElem())
-	if numPElem < 2 {
-		return false
-	}
-
-	_, ok := p.GetElem()[numPElem-2].GetKey()[p.GetElem()[numPElem-1].GetName()]
-	return ok
 }
 
 func (d *Datastore) readStoreKeysMeta(ctx context.Context, store cachepb.Store) (map[string]tree.UpdateSlice, error) {

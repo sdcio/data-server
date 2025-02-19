@@ -14,35 +14,25 @@
 
 package server
 
-import (
-	"context"
+// func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*sdcpb.GetIntentResponse, error) {
+// 	pr, _ := peer.FromContext(ctx)
+// 	log.Debugf("received GetIntent request %v from peer %s", req, pr.Addr.String())
 
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/status"
-)
-
-func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*sdcpb.GetIntentResponse, error) {
-	pr, _ := peer.FromContext(ctx)
-	log.Debugf("received GetIntent request %v from peer %s", req, pr.Addr.String())
-
-	if req.GetName() == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
-	}
-	if req.GetIntent() == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing intent name")
-	}
-	if req.GetPriority() == 0 {
-		return nil, status.Error(codes.InvalidArgument, "missing intent priority")
-	}
-	ds, err := s.getDataStore(req.Name)
-	if err != nil {
-		return nil, status.Error(codes.NotFound, err.Error())
-	}
-	return ds.GetIntent(ctx, req)
-}
+// 	if req.GetName() == "" {
+// 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
+// 	}
+// 	if req.GetIntent() == "" {
+// 		return nil, status.Error(codes.InvalidArgument, "missing intent name")
+// 	}
+// 	if req.GetPriority() == 0 {
+// 		return nil, status.Error(codes.InvalidArgument, "missing intent priority")
+// 	}
+// 	ds, err := s.getDataStore(req.Name)
+// 	if err != nil {
+// 		return nil, status.Error(codes.NotFound, err.Error())
+// 	}
+// 	return ds.GetIntent(ctx, req)
+// }
 
 // func (s *Server) SetIntent(ctx context.Context, req *sdcpb.SetIntentRequest) (*sdcpb.SetIntentResponse, error) {
 // 	pr, _ := peer.FromContext(ctx)
@@ -67,16 +57,16 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 // 	return ds.SetIntent(ctx, req)
 // }
 
-func (s *Server) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (*sdcpb.ListIntentResponse, error) {
-	pr, _ := peer.FromContext(ctx)
-	log.Debugf("received ListIntent request %v from peer %s", req, pr.Addr.String())
+// func (s *Server) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (*sdcpb.ListIntentResponse, error) {
+// 	pr, _ := peer.FromContext(ctx)
+// 	log.Debugf("received ListIntent request %v from peer %s", req, pr.Addr.String())
 
-	if req.GetName() == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
-	}
-	ds, err := s.getDataStore(req.Name)
-	if err != nil {
-		return nil, status.Error(codes.NotFound, err.Error())
-	}
-	return ds.ListIntent(ctx, req)
-}
+// 	if req.GetName() == "" {
+// 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
+// 	}
+// 	ds, err := s.getDataStore(req.Name)
+// 	if err != nil {
+// 		return nil, status.Error(codes.NotFound, err.Error())
+// 	}
+// 	return ds.ListIntent(ctx, req)
+// }

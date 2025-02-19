@@ -12,16 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datastore
+package testhelper
 
 import (
 	"context"
 	"reflect"
 	"testing"
 
-	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/utils"
-	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -224,12 +223,12 @@ func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			schemaClient, schema, err := testhelper.InitSDCIOSchema()
+			sdcioSchemaClient, schema, err := InitSDCIOSchema()
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			converter := utils.NewConverter(SchemaClient.NewSchemaClientBound(schema.GetSchema(), schemaClient))
+			converter := utils.NewConverter(schemaClient.NewSchemaClientBound(schema.GetSchema(), sdcioSchemaClient))
 
 			got, err := converter.ExpandUpdateKeysAsLeaf(tt.args.ctx, tt.args.upd)
 			if (err != nil) != tt.wantErr {
