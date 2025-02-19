@@ -10,18 +10,20 @@ import (
 	json_importer "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
+	"go.uber.org/mock/gomock"
 )
 
-func TestValidate_Ranges(t *testing.T) {
+func TestValidate_Range_SDC_Schema(t *testing.T) {
 
 	ctx := context.TODO()
+	mockCtrl := gomock.NewController(t)
 
-	scb, err := testhelper.GetSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
 	if err != nil {
 		t.Error(err)
 	}
 
-	tc := NewTreeContext(NewTreeSchemaCacheClient("DS1", nil, scb), "owner1")
+	tc := NewTreeContext(nil, scb, "owner1")
 
 	root, err := NewTreeRoot(ctx, tc)
 
@@ -35,9 +37,13 @@ func TestValidate_Ranges(t *testing.T) {
 				Name:        ygot.String("ethernet-1/15"),
 				Description: ygot.String("testinterface"),
 				Subinterface: map[uint32]*sdcio_schema.SdcioModel_Interface_Subinterface{
+					9999: {
+						Index:       ygot.Uint32(9999),
+						Description: ygot.String("subif 9999"),
+					},
 					10000: {
 						Index:       ygot.Uint32(10000),
-						Description: ygot.String("foobar"),
+						Description: ygot.String("subif 10000"),
 					},
 				},
 			},
@@ -62,23 +68,16 @@ func TestValidate_Ranges(t *testing.T) {
 		t.Error(err)
 	}
 
-	root.FinishInsertionPhase()
+	root.FinishInsertionPhase(ctx)
 
-	validationErrors := []string{}
-	validationErrChan := make(chan error)
-	validationWarnChan := make(chan error)
-	go func() {
-		root.Validate(ctx, validationErrChan, validationWarnChan, false)
-		close(validationErrChan)
-	}()
+	validationResult := root.Validate(ctx, false)
 
-	// read from the Error channel
-	for e := range validationErrChan {
-		validationErrors = append(validationErrors, e.Error())
-	}
-
-	t.Logf("Validation Errors:\n%s", strings.Join(validationErrors, "\n"))
+	t.Logf("Validation Errors:\n%s", strings.Join(validationResult.ErrorsStr(), "\n"))
 	t.Log(root.String())
+
+	if len(validationResult.ErrorsStr()) != 1 {
+		t.Errorf("expected %d error, got %d", 1, len(validationResult.ErrorsStr()))
+	}
 
 }
 
@@ -135,9 +134,10 @@ func TestValidate_RangesSigned(t *testing.T) {
 
 	// the test context
 	ctx := context.TODO()
+	mockCtrl := gomock.NewController(t)
 
 	// the sdcio schema client bound
-	scb, err := testhelper.GetSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
 	if err != nil {
 		t.Error(err)
 	}
@@ -147,7 +147,7 @@ func TestValidate_RangesSigned(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			// the tree context
-			tc := NewTreeContext(NewTreeSchemaCacheClient("DS1", nil, scb), "owner1")
+			tc := NewTreeContext(nil, scb, "owner1")
 
 			// the tree root
 			root, err := NewTreeRoot(ctx, tc)
@@ -177,27 +177,15 @@ func TestValidate_RangesSigned(t *testing.T) {
 				t.Error(err)
 			}
 
-			root.FinishInsertionPhase()
+			root.FinishInsertionPhase(ctx)
 
-			// run validation
-			validationErrors := []string{}
-			validationErrChan := make(chan error)
-			validationWarnChan := make(chan error)
-			go func() {
-				root.Validate(ctx, validationErrChan, validationWarnChan, false)
-				close(validationErrChan)
-			}()
+			validationResult := root.Validate(ctx, false)
 
-			// read from the Error channel
-			for e := range validationErrChan {
-				validationErrors = append(validationErrors, e.Error())
-			}
-
-			t.Logf("Validation Errors:\n%s", strings.Join(validationErrors, "\n"))
+			t.Logf("Validation Errors:\n%s", strings.Join(validationResult.ErrorsStr(), "\n"))
 			t.Log(root.String())
 
-			if len(validationErrors) != tt.wantErrors {
-				t.Errorf("expected %d error, got %d", tt.wantErrors, len(validationErrors))
+			if len(validationResult.ErrorsStr()) != tt.wantErrors {
+				t.Errorf("expected %d error, got %d", tt.wantErrors, len(validationResult.ErrorsStr()))
 			}
 
 		})
@@ -276,8 +264,10 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 	// the test context
 	ctx := context.TODO()
 
+	mockCtrl := gomock.NewController(t)
+
 	// the sdcio schema client bound
-	scb, err := testhelper.GetSchemaClientBound(t)
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
 	if err != nil {
 		t.Error(err)
 	}
@@ -287,7 +277,7 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			// the tree context
-			tc := NewTreeContext(NewTreeSchemaCacheClient("DS1", nil, scb), "owner1")
+			tc := NewTreeContext(nil, scb, "owner1")
 
 			// the tree root
 			root, err := NewTreeRoot(ctx, tc)
@@ -317,27 +307,16 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 				t.Error(err)
 			}
 
-			root.FinishInsertionPhase()
+			root.FinishInsertionPhase(ctx)
 
 			// run validation
-			validationErrors := []string{}
-			validationErrChan := make(chan error)
-			validationWarnChan := make(chan error)
-			go func() {
-				root.Validate(ctx, validationErrChan, validationWarnChan, false)
-				close(validationErrChan)
-			}()
+			validationResults := root.Validate(ctx, false)
 
-			// read from the Error channel
-			for e := range validationErrChan {
-				validationErrors = append(validationErrors, e.Error())
-			}
-
-			t.Logf("Validation Errors:\n%s", strings.Join(validationErrors, "\n"))
+			t.Logf("Validation Errors:\n%s", strings.Join(validationResults.ErrorsStr(), "\n"))
 			t.Log(root.String())
 
-			if len(validationErrors) != tt.wantErrors {
-				t.Errorf("expected %d error, got %d", tt.wantErrors, len(validationErrors))
+			if len(validationResults.ErrorsStr()) != tt.wantErrors {
+				t.Errorf("expected %d error, got %d", tt.wantErrors, len(validationResults.ErrorsStr()))
 			}
 
 		})

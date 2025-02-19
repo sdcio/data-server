@@ -859,15 +859,21 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 
 // validateRange int and uint types (Leaf and Leaflist) define ranges which configured values must lay in.
 // validateRange does check this condition.
-func (s *sharedEntryAttributes) validateRange(resultCHan chan<- *types.ValidationResultEntry) {
+func (s *sharedEntryAttributes) validateRange(resultChan chan<- *types.ValidationResultEntry) {
 
-	// TODO: Implement LEAFLIST
-	if s.GetSchema() == nil || len(s.GetSchema().GetField().GetType().GetRange()) == 0 {
+	// if no schema present or Field and LeafList Types do not contain any ranges, return there is nothing to check
+	if s.GetSchema() == nil || (len(s.GetSchema().GetField().GetType().GetRange()) == 0 && len(s.GetSchema().GetLeaflist().GetType().GetRange()) == 0) {
 		return
 	}
 
 	lv := s.leafVariants.GetHighestPrecedence(false, true)
 	if lv == nil {
+		return
+	}
+
+	tv, err := lv.Update.Value()
+	if err != nil {
+		resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("path %s, error validating ranges: %w", s.Path(), err), types.ValidationResultEntryTypeError)
 		return
 	}
 
@@ -877,21 +883,11 @@ func (s *sharedEntryAttributes) validateRange(resultCHan chan<- *types.Validatio
 	switch {
 	case len(s.GetSchema().GetField().GetType().GetRange()) != 0:
 		// if it is a leaf, extract the value add it as a single value to the tvs slice and check it further down
-		val, err := lv.Update.Value()
-		if err != nil {
-			errchan <- err
-			return
-		}
-		tvs = []*sdcpb.TypedValue{val}
+		tvs = []*sdcpb.TypedValue{tv}
 		// we also need the Field/Leaf Type schema
 		typeSchema = s.GetSchema().GetField().GetType()
 	case len(s.GetSchema().GetLeaflist().GetType().GetRange()) != 0:
 		// if it is a leaflist, extract the values them to the tvs slice and check them further down
-		tv, err := lv.Update.Value()
-		if err != nil {
-			errchan <- err
-			return
-		}
 		tvs = tv.GetLeaflistVal().GetElement()
 		// we also need the Field/Leaf Type schema
 		typeSchema = s.GetSchema().GetLeaflist().GetType()
@@ -914,7 +910,7 @@ func (s *sharedEntryAttributes) validateRange(resultCHan chan<- *types.Validatio
 
 			// check the value laays within any of the ranges
 			if !urnges.IsWithinAnyRange(tv.GetUintVal()) {
-				errchan <- fmt.Errorf("path %s, value %d not within any of the expected ranges %s", s.Path(), tv.GetUintVal(), urnges.String())
+				resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("path %s, value %d not within any of the expected ranges %s", s.Path(), tv.GetUintVal(), urnges.String()), types.ValidationResultEntryTypeError)
 			}
 
 		case "int8", "int16", "int32", "int64":
@@ -936,7 +932,7 @@ func (s *sharedEntryAttributes) validateRange(resultCHan chan<- *types.Validatio
 			}
 			// check the value laays within any of the ranges
 			if !srnges.IsWithinAnyRange(tv.GetIntVal()) {
-				errchan <- fmt.Errorf("path %s, value %d not within any of the expected ranges %s", s.Path(), tv.GetIntVal(), srnges.String())
+				resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("path %s, value %d not within any of the expected ranges %s", s.Path(), tv.GetIntVal(), srnges.String()), types.ValidationResultEntryTypeError)
 			}
 		}
 	}
