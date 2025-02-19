@@ -18,9 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -30,7 +27,6 @@ import (
 	"google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/tree"
@@ -54,7 +50,6 @@ func (d *Datastore) Get(ctx context.Context, req *sdcpb.GetDataRequest, nCh chan
 	}
 
 	switch req.GetEncoding() {
-	case sdcpb.Encoding_STRING:
 	case sdcpb.Encoding_JSON:
 	case sdcpb.Encoding_JSON_IETF:
 	case sdcpb.Encoding_PROTO:
@@ -85,83 +80,6 @@ func (d *Datastore) Get(ctx context.Context, req *sdcpb.GetDataRequest, nCh chan
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-
-	switch req.GetEncoding() {
-	case sdcpb.Encoding_STRING:
-		err = d.handleGetDataUpdatesSTRING(ctx, name, req, paths, nCh)
-	case sdcpb.Encoding_JSON:
-		err = d.handleGetDataUpdatesJSON(ctx, name, req, paths, nCh, false)
-	case sdcpb.Encoding_JSON_IETF:
-		err = d.handleGetDataUpdatesJSON(ctx, name, req, paths, nCh, true)
-	case sdcpb.Encoding_PROTO:
-		err = d.handleGetDataUpdatesPROTO(ctx, name, req, paths, nCh)
-	}
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (d *Datastore) handleGetDataUpdatesSTRING(ctx context.Context, name string, req *sdcpb.GetDataRequest, paths [][]string, out chan *sdcpb.GetDataResponse) error {
-NEXT_STORE:
-	for _, store := range getStores(req) {
-		in := d.cacheClient.ReadCh(ctx, name, &cache.Opts{
-			Store:    store,
-			Owner:    req.GetDatastore().GetOwner(),
-			Priority: req.GetDatastore().GetPriority(),
-		}, paths, 0)
-
-		for {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case upd, ok := <-in:
-				//log.Debugf("ds=%s read path=%v from store=%v: %v", name, paths, store, upd)
-				if !ok {
-					continue NEXT_STORE
-				}
-				if len(upd.GetPath()) == 0 {
-					continue
-				}
-				scp, err := d.schemaClient.ToPath(ctx, upd.GetPath())
-				if err != nil {
-					return err
-				}
-				switch len(scp.GetElem()) {
-				case 0:
-					continue
-				case 1:
-					if scp.GetElem()[0].GetName() == "" {
-						continue
-					}
-				}
-				tv, err := upd.Value()
-				if err != nil {
-					return err
-				}
-				notification := &sdcpb.Notification{
-					Timestamp: time.Now().UnixNano(),
-					Update: []*sdcpb.Update{{
-						Path:  scp,
-						Value: tv,
-					}},
-				}
-				rsp := &sdcpb.GetDataResponse{
-					Notification: []*sdcpb.Notification{notification},
-				}
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case out <- rsp:
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, req *sdcpb.GetDataRequest, paths [][]string, out chan *sdcpb.GetDataResponse, ietf bool) error {
-	now := time.Now().UnixNano()
 
 	treeSCC := tree.NewTreeCacheClient(d.Name(), d.cacheClient)
 	tc := tree.NewTreeContext(treeSCC, d.schemaClient, "")
@@ -211,6 +129,45 @@ func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, r
 
 	root.FinishInsertionPhase(ctx)
 
+	ietf := false
+	switch req.Encoding {
+	case sdcpb.Encoding_JSON_IETF:
+		ietf = true
+		fallthrough
+	case sdcpb.Encoding_JSON:
+		return d.getJson(ctx, root, nCh, ietf)
+	case sdcpb.Encoding_PROTO:
+		return d.getProto(ctx, root, nCh)
+	default:
+		return fmt.Errorf("unknown encoding: %v", req.GetEncoding())
+	}
+}
+
+func (d *Datastore) getProto(ctx context.Context, root *tree.RootEntry, out chan *sdcpb.GetDataResponse) error {
+	upds, err := root.ToProtoUpdates(ctx, false)
+	if err != nil {
+		return err
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		now := time.Now().UnixNano()
+		out <- &sdcpb.GetDataResponse{
+			Notification: []*sdcpb.Notification{
+				{
+					Timestamp: now,
+					Update:    upds,
+				},
+			},
+		}
+		return nil
+	}
+}
+func (d *Datastore) getJson(ctx context.Context, root *tree.RootEntry, out chan *sdcpb.GetDataResponse, ietf bool) error {
+
+	var err error
 	var j any
 	// marshal map into JSON bytes
 	if ietf {
@@ -230,7 +187,7 @@ func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, r
 		log.Error(err)
 		return err
 	}
-
+	now := time.Now().UnixNano()
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -244,69 +201,6 @@ func (d *Datastore) handleGetDataUpdatesJSON(ctx context.Context, name string, r
 			},
 		},
 	}:
-	}
-	return nil
-}
-
-func (d *Datastore) handleGetDataUpdatesPROTO(ctx context.Context, name string, req *sdcpb.GetDataRequest, paths [][]string, out chan *sdcpb.GetDataResponse) error {
-	converter := utils.NewConverter(d.schemaClient)
-NEXT_STORE:
-	for _, store := range getStores(req) {
-		in := d.cacheClient.ReadCh(ctx, name, &cache.Opts{
-			Store:    store,
-			Owner:    req.GetDatastore().GetOwner(),
-			Priority: req.GetDatastore().GetPriority(),
-		}, paths, 0)
-		for {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case upd, ok := <-in:
-				//log.Debugf("ds=%s read path=%v from store=%v: %v", name, paths, store, upd)
-				if !ok {
-					continue NEXT_STORE
-				}
-
-				if len(upd.GetPath()) == 0 {
-					continue
-				}
-				scp, err := d.schemaClient.ToPath(ctx, upd.GetPath())
-				if err != nil {
-					return err
-				}
-				switch len(scp.GetElem()) {
-				case 0:
-					continue
-				case 1:
-					if scp.GetElem()[0].GetName() == "" {
-						continue
-					}
-				}
-				tv, err := upd.Value()
-				if err != nil {
-					return err
-				}
-				ctv, err := converter.ConvertTypedValueToProto(ctx, scp, tv)
-				if err != nil {
-					return err
-				}
-				notification := &sdcpb.Notification{
-					Timestamp: time.Now().UnixNano(),
-					Update: []*sdcpb.Update{{
-						Path:  scp,
-						Value: ctv,
-					}},
-				}
-				rsp := &sdcpb.GetDataResponse{
-					Notification: []*sdcpb.Notification{notification},
-				}
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case out <- rsp:
-				}
-			}
-		}
 	}
 	return nil
 }
@@ -358,270 +252,6 @@ func (d *Datastore) Subscribe(req *sdcpb.SubscribeRequest, stream sdcpb.DataServ
 		}(subsc)
 	}
 	wg.Wait()
-	return nil
-}
-
-func (d *Datastore) validateUpdate(ctx context.Context, upd *sdcpb.Update) error {
-	// 1.validate the path i.e check that the path exists
-	// 2.validate that the value is compliant with the schema
-
-	// 1. validate the path
-	rsp, err := d.schemaClient.GetSchemaSdcpbPath(ctx, upd.GetPath())
-	if err != nil {
-		return err
-	}
-	// 2. convert value to its YANG type
-	upd.Value, err = utils.ConvertTypedValueToYANGType(rsp.GetSchema(), upd.GetValue())
-	if err != nil {
-		return err
-	}
-	// 2. validate value
-	val, err := utils.GetSchemaValue(upd.GetValue())
-	if err != nil {
-		return err
-	}
-	switch obj := rsp.GetSchema().Schema.(type) {
-	case *sdcpb.SchemaElem_Container:
-		if !pathIsKeyAsLeaf(upd.GetPath()) && !obj.Container.IsPresence {
-			return fmt.Errorf("cannot set value on container %q object", obj.Container.Name)
-		}
-		// TODO: validate key as leaf
-	case *sdcpb.SchemaElem_Field:
-		if obj.Field.IsState {
-			return fmt.Errorf("cannot set state field: %v", obj.Field.Name)
-		}
-		err = validateFieldValue(obj.Field, val)
-		if err != nil {
-			return err
-		}
-	case *sdcpb.SchemaElem_Leaflist:
-		err = validateLeafListValue(obj.Leaflist, val)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func validateFieldValue(f *sdcpb.LeafSchema, v any) error {
-	return validateLeafTypeValue(f.GetType(), v)
-}
-
-func validateLeafTypeValue(lt *sdcpb.SchemaLeafType, v any) error {
-	switch lt.GetType() {
-	case "string":
-		// TODO: validate length and range
-		return nil
-	case "int8":
-		switch v := v.(type) {
-		case string:
-			_, err := strconv.ParseInt(v, 10, 8)
-			if err != nil {
-				return err
-			}
-		case int64:
-			if v > math.MaxInt8 || v < math.MinInt8 {
-				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
-			}
-		default:
-			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
-		}
-		return nil
-	case "int16":
-		switch v := v.(type) {
-		case string:
-			_, err := strconv.ParseInt(v, 10, 16)
-			if err != nil {
-				return err
-			}
-		case int64:
-			if v > math.MaxInt16 || v < math.MinInt16 {
-				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
-			}
-		default:
-			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
-		}
-		return nil
-	case "int32":
-		switch v := v.(type) {
-		case string:
-			_, err := strconv.ParseInt(v, 10, 32)
-			if err != nil {
-				return err
-			}
-		case int64:
-			if v > math.MaxInt32 || v < math.MinInt32 {
-				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
-			}
-		default:
-			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
-		}
-		return nil
-	case "int64":
-		switch v := v.(type) {
-		case string:
-			_, err := strconv.ParseInt(v, 10, 64)
-			if err != nil {
-				return err
-			}
-		case int64:
-			// No need to do anything, same type
-		default:
-			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
-		}
-		return nil
-	case "uint8":
-		switch v := v.(type) {
-		case string:
-			_, err := strconv.ParseUint(v, 10, 8)
-			if err != nil {
-				return err
-			}
-		case uint64:
-			if v > math.MaxUint8 {
-				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
-			}
-		default:
-			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
-		}
-		return nil
-	case "uint16":
-		switch v := v.(type) {
-		case string:
-			_, err := strconv.ParseUint(v, 10, 16)
-			if err != nil {
-				return err
-			}
-		case uint64:
-			if v > math.MaxUint16 {
-				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
-			}
-		default:
-			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
-		}
-		return nil
-	case "uint32":
-		switch v := v.(type) {
-		case string:
-			_, err := strconv.ParseUint(v, 10, 32)
-			if err != nil {
-				return err
-			}
-		case uint64:
-			if v > math.MaxUint32 {
-				return fmt.Errorf("value %v out of bound for type %s", v, lt.GetType())
-			}
-		default:
-			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
-		}
-		return nil
-	case "uint64":
-		switch v := v.(type) {
-		case string:
-			_, err := strconv.ParseUint(v, 10, 64)
-			if err != nil {
-				return err
-			}
-		case uint64:
-			// No need to do anything, same type
-		default:
-			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
-		}
-		return nil
-	case "boolean":
-		switch v := v.(type) {
-		case string:
-			_, err := strconv.ParseBool(v)
-			if err != nil {
-				return fmt.Errorf("value %v must be a boolean: %v", v, err)
-			}
-		case bool:
-			return nil
-		default:
-			return fmt.Errorf("unexpected casted type %T in %v", v, lt.GetType())
-		}
-		return nil
-	case "enumeration":
-		valid := false
-		for _, vv := range lt.EnumNames {
-			if fmt.Sprintf("%s", v) == vv {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			return fmt.Errorf("value %q does not match enum type %q, must be one of [%s]", v, lt.TypeName, strings.Join(lt.EnumNames, ", "))
-		}
-		return nil
-	case "union":
-		valid := false
-		for _, ut := range lt.GetUnionTypes() {
-			err := validateLeafTypeValue(ut, v)
-			if err == nil {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			return fmt.Errorf("value %v does not match union type %v", v, lt.TypeName)
-		}
-		return nil
-	case "identityref":
-		valid := false
-		identities := make([]string, 0, len(lt.IdentityPrefixesMap))
-		for vv := range lt.IdentityPrefixesMap {
-			identities = append(identities, vv)
-			if fmt.Sprintf("%s", v) == vv {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			return fmt.Errorf("value %q does not match identityRef type %q, must be one of [%s]", v, lt.TypeName, strings.Join(identities, ", "))
-		}
-		return nil
-	case "decimal64":
-		switch v := v.(type) {
-		case float64: // if it's a float64 then it's a valid decimal64
-		case string:
-			if c := strings.Count(v, "."); c == 0 || c > 1 {
-				return fmt.Errorf("value %q is not a valid Decimal64", v)
-			}
-		case sdcpb.Decimal64, *sdcpb.Decimal64:
-			// No need to do anything, same type
-		default:
-			return fmt.Errorf("unexpected type for a Decimal64 value %q: %T", v, v)
-		}
-		return nil
-	case "leafref":
-		// TODO: does this need extra validation?
-		return nil
-	case "empty":
-		switch v.(type) {
-		case *emptypb.Empty:
-			return nil
-		}
-		return fmt.Errorf("value %v is not an empty JSON object '{}' so does not match empty type", v)
-	default:
-		return fmt.Errorf("unhandled type %v for value %q", lt.GetType(), v)
-	}
-}
-
-func validateLeafListValue(ll *sdcpb.LeafListSchema, v any) error {
-	switch vTyped := v.(type) {
-	case *sdcpb.ScalarArray:
-		for _, elem := range vTyped.Element {
-			val, err := utils.GetSchemaValue(elem)
-			if err != nil {
-				return err
-			}
-			err = validateLeafTypeValue(ll.GetType(), val)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
 	return nil
 }
 

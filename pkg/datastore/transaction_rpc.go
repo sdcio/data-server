@@ -45,11 +45,11 @@ func (d *Datastore) expandAndConvertIntent(ctx context.Context, intentName strin
 		// since we already have the pathslice, we construct the cache.Update, but keep it for later
 		// addition to the tree. First we need to mark the existing once for deletion
 
-		// make sure typedValue is carrying the correct type
-		err = d.validateUpdate(ctx, u)
-		if err != nil {
-			return nil, err
-		}
+		// // make sure typedValue is carrying the correct type
+		// err = d.validateUpdate(ctx, u)
+		// if err != nil {
+		// 	return nil, err
+		// }
 
 		// convert value to []byte for cache insertion
 		val, err := proto.Marshal(u.GetValue())

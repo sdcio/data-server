@@ -57,19 +57,6 @@ func (lv *LeafVariants) Length() int {
 	return len(lv.les)
 }
 
-// containsOtherOwnerThenDefaultOrRunning returns true if there is any other leafentry then default or running
-func (lv *LeafVariants) containsOtherOwnerThenDefaultOrRunning() bool {
-	foundOther := false
-	for _, le := range lv.les {
-		foundOther = le.Owner() != RunningIntentName && le.Owner() != DefaultsIntentName
-		if foundOther {
-			break
-		}
-	}
-
-	return foundOther
-}
-
 // canDelete returns true if leafValues exist that are not owned by default or running that do not have the DeleteFlag set [or if delete is set, also the DeleteOnlyIntendedFlag set]
 func (lv *LeafVariants) canDelete() bool {
 	lv.lesMutex.RLock()

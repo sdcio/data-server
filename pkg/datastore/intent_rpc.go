@@ -18,16 +18,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
-	"strconv"
-	"strings"
 
-	"github.com/sdcio/cache/proto/cachepb"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 
-	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/datastore/target"
 )
 
@@ -39,22 +33,22 @@ const (
 
 var ErrIntentNotFound = errors.New("intent not found")
 
-func (d *Datastore) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*sdcpb.GetIntentResponse, error) {
-	r, err := d.getRawIntent(ctx, req.GetIntent(), req.GetPriority())
-	if err != nil {
-		return nil, err
-	}
+// func (d *Datastore) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*sdcpb.GetIntentResponse, error) {
+// 	r, err := d.getRawIntent(ctx, req.GetIntent(), req.GetPriority())
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	rsp := &sdcpb.GetIntentResponse{
-		Name: d.Name(),
-		Intent: &sdcpb.Intent{
-			Intent:   r.GetIntent(),
-			Priority: r.GetPriority(),
-			Update:   r.GetUpdate(),
-		},
-	}
-	return rsp, nil
-}
+// 	rsp := &sdcpb.GetIntentResponse{
+// 		Name: d.Name(),
+// 		Intent: &sdcpb.Intent{
+// 			Intent:   r.GetIntent(),
+// 			Priority: r.GetPriority(),
+// 			Update:   r.GetUpdate(),
+// 		},
+// 	}
+// 	return rsp, nil
+// }
 
 // func (d *Datastore) SetIntent(ctx context.Context, req *sdcpb.SetIntentRequest) (*sdcpb.SetIntentResponse, error) {
 // 	if !d.intentMutex.TryLock() {
@@ -91,16 +85,16 @@ func (d *Datastore) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) 
 // 	return setIntentResponse, nil
 // }
 
-func (d *Datastore) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (*sdcpb.ListIntentResponse, error) {
-	intents, err := d.listRawIntent(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return &sdcpb.ListIntentResponse{
-		Name:   req.GetName(),
-		Intent: intents,
-	}, nil
-}
+// func (d *Datastore) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (*sdcpb.ListIntentResponse, error) {
+// 	intents, err := d.listRawIntent(ctx)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return &sdcpb.ListIntentResponse{
+// 		Name:   req.GetName(),
+// 		Intent: intents,
+// 	}, nil
+// }
 
 func (d *Datastore) applyIntent(ctx context.Context, source target.TargetSource) (*sdcpb.SetDataResponse, error) {
 	var err error
@@ -121,107 +115,107 @@ func (d *Datastore) applyIntent(ctx context.Context, source target.TargetSource)
 	return rsp, nil
 }
 
-func (d *Datastore) saveRawIntent(ctx context.Context, intentName string, req *sdcpb.SetIntentRequest) error {
-	b, err := proto.Marshal(req)
-	if err != nil {
-		return err
-	}
-	//
-	rin := rawIntentName(intentName, req.GetPriority())
-	upd, err := d.cacheClient.NewUpdate(
-		&sdcpb.Update{
-			Path: &sdcpb.Path{
-				Elem: []*sdcpb.PathElem{{Name: rin}},
-			},
-			Value: &sdcpb.TypedValue{
-				Value: &sdcpb.TypedValue_BytesVal{BytesVal: b},
-			},
-		},
-	)
-	if err != nil {
-		return err
-	}
-	err = d.cacheClient.Modify(ctx, d.config.Name,
-		&cache.Opts{
-			Store: cachepb.Store_INTENTS,
-		},
-		nil,
-		[]*cache.Update{upd})
-	if err != nil {
-		return err
-	}
-	return nil
-}
+// func (d *Datastore) saveRawIntent(ctx context.Context, intentName string, req *sdcpb.SetIntentRequest) error {
+// 	b, err := proto.Marshal(req)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	//
+// 	rin := rawIntentName(intentName, req.GetPriority())
+// 	upd, err := d.cacheClient.NewUpdate(
+// 		&sdcpb.Update{
+// 			Path: &sdcpb.Path{
+// 				Elem: []*sdcpb.PathElem{{Name: rin}},
+// 			},
+// 			Value: &sdcpb.TypedValue{
+// 				Value: &sdcpb.TypedValue_BytesVal{BytesVal: b},
+// 			},
+// 		},
+// 	)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	err = d.cacheClient.Modify(ctx, d.config.Name,
+// 		&cache.Opts{
+// 			Store: cachepb.Store_INTENTS,
+// 		},
+// 		nil,
+// 		[]*cache.Update{upd})
+// 	if err != nil {
+// 		return err
+// 	}
+// 	return nil
+// }
 
-func (d *Datastore) getRawIntent(ctx context.Context, intentName string, priority int32) (*sdcpb.SetIntentRequest, error) {
-	rin := rawIntentName(intentName, priority)
-	upds := d.cacheClient.Read(ctx, d.config.Name, &cache.Opts{
-		Store: cachepb.Store_INTENTS,
-	}, [][]string{{rin}}, 0)
-	if len(upds) == 0 {
-		return nil, ErrIntentNotFound
-	}
+// func (d *Datastore) getRawIntent(ctx context.Context, intentName string, priority int32) (*sdcpb.SetIntentRequest, error) {
+// 	rin := rawIntentName(intentName, priority)
+// 	upds := d.cacheClient.Read(ctx, d.config.Name, &cache.Opts{
+// 		Store: cachepb.Store_INTENTS,
+// 	}, [][]string{{rin}}, 0)
+// 	if len(upds) == 0 {
+// 		return nil, ErrIntentNotFound
+// 	}
 
-	val, err := upds[0].Value()
-	if err != nil {
-		return nil, err
-	}
-	req := &sdcpb.SetIntentRequest{}
-	err = proto.Unmarshal(val.GetBytesVal(), req)
-	if err != nil {
-		return nil, err
-	}
-	return req, nil
-}
+// 	val, err := upds[0].Value()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	req := &sdcpb.SetIntentRequest{}
+// 	err = proto.Unmarshal(val.GetBytesVal(), req)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return req, nil
+// }
 
-func (d *Datastore) listRawIntent(ctx context.Context) ([]*sdcpb.Intent, error) {
-	upds := d.cacheClient.Read(ctx, d.config.Name, &cache.Opts{
-		Store:    cachepb.Store_INTENTS,
-		KeysOnly: true,
-	}, [][]string{{"*"}}, 0)
-	numUpds := len(upds)
-	if numUpds == 0 {
-		return nil, nil
-	}
-	intents := make([]*sdcpb.Intent, 0, numUpds)
-	for _, upd := range upds {
-		if len(upd.GetPath()) == 0 {
-			return nil, fmt.Errorf("malformed raw intent name: %q", upd.GetPath()[0])
-		}
-		intentRawName := strings.TrimPrefix(upd.GetPath()[0], rawIntentPrefix)
-		intentNameComp := strings.Split(intentRawName, intentRawNameSep)
-		inc := len(intentNameComp)
-		if inc < 2 {
-			return nil, fmt.Errorf("malformed raw intent name: %q", upd.GetPath()[0])
-		}
-		pr, err := strconv.Atoi(intentNameComp[inc-1])
-		if err != nil {
-			return nil, fmt.Errorf("malformed raw intent name: %q: %v", upd.GetPath()[0], err)
-		}
-		in := &sdcpb.Intent{
-			Intent:   strings.Join(intentNameComp[:inc-1], intentRawNameSep),
-			Priority: int32(pr),
-		}
-		intents = append(intents, in)
-	}
-	sort.Slice(intents, func(i, j int) bool {
-		if intents[i].GetPriority() == intents[j].GetPriority() {
-			return intents[i].GetIntent() < intents[j].GetIntent()
-		}
-		return intents[i].GetPriority() < intents[j].GetPriority()
-	})
-	return intents, nil
-}
+// func (d *Datastore) listRawIntent(ctx context.Context) ([]*sdcpb.Intent, error) {
+// 	upds := d.cacheClient.Read(ctx, d.config.Name, &cache.Opts{
+// 		Store:    cachepb.Store_INTENTS,
+// 		KeysOnly: true,
+// 	}, [][]string{{"*"}}, 0)
+// 	numUpds := len(upds)
+// 	if numUpds == 0 {
+// 		return nil, nil
+// 	}
+// 	intents := make([]*sdcpb.Intent, 0, numUpds)
+// 	for _, upd := range upds {
+// 		if len(upd.GetPath()) == 0 {
+// 			return nil, fmt.Errorf("malformed raw intent name: %q", upd.GetPath()[0])
+// 		}
+// 		intentRawName := strings.TrimPrefix(upd.GetPath()[0], rawIntentPrefix)
+// 		intentNameComp := strings.Split(intentRawName, intentRawNameSep)
+// 		inc := len(intentNameComp)
+// 		if inc < 2 {
+// 			return nil, fmt.Errorf("malformed raw intent name: %q", upd.GetPath()[0])
+// 		}
+// 		pr, err := strconv.Atoi(intentNameComp[inc-1])
+// 		if err != nil {
+// 			return nil, fmt.Errorf("malformed raw intent name: %q: %v", upd.GetPath()[0], err)
+// 		}
+// 		in := &sdcpb.Intent{
+// 			Intent:   strings.Join(intentNameComp[:inc-1], intentRawNameSep),
+// 			Priority: int32(pr),
+// 		}
+// 		intents = append(intents, in)
+// 	}
+// 	sort.Slice(intents, func(i, j int) bool {
+// 		if intents[i].GetPriority() == intents[j].GetPriority() {
+// 			return intents[i].GetIntent() < intents[j].GetIntent()
+// 		}
+// 		return intents[i].GetPriority() < intents[j].GetPriority()
+// 	})
+// 	return intents, nil
+// }
 
-func (d *Datastore) deleteRawIntent(ctx context.Context, intentName string, priority int32) error {
-	return d.cacheClient.Modify(ctx, d.config.Name,
-		&cache.Opts{
-			Store: cachepb.Store_INTENTS,
-		},
-		[][]string{{rawIntentName(intentName, priority)}},
-		nil)
-}
+// func (d *Datastore) deleteRawIntent(ctx context.Context, intentName string, priority int32) error {
+// 	return d.cacheClient.Modify(ctx, d.config.Name,
+// 		&cache.Opts{
+// 			Store: cachepb.Store_INTENTS,
+// 		},
+// 		[][]string{{rawIntentName(intentName, priority)}},
+// 		nil)
+// }
 
-func rawIntentName(name string, pr int32) string {
-	return fmt.Sprintf("%s%s%s%d", rawIntentPrefix, name, intentRawNameSep, pr)
-}
+// func rawIntentName(name string, pr int32) string {
+// 	return fmt.Sprintf("%s%s%s%d", rawIntentPrefix, name, intentRawNameSep, pr)
+// }
