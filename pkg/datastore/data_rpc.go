@@ -82,7 +82,9 @@ func (d *Datastore) Get(ctx context.Context, req *sdcpb.GetDataRequest, nCh chan
 	defer cancel()
 
 	treeSCC := tree.NewTreeCacheClient(d.Name(), d.cacheClient)
+	treeSCC.RefreshCaches(ctx)
 	tc := tree.NewTreeContext(treeSCC, d.schemaClient, "")
+
 	root, err := tree.NewTreeRoot(ctx, tc)
 	if err != nil {
 		return err
