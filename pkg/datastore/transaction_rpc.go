@@ -519,16 +519,6 @@ func populateTreeWithRunning(ctx context.Context, tscc tree.TreeCacheClient, r *
 	return nil
 }
 
-func pathIsKeyAsLeaf(p *sdcpb.Path) bool {
-	numPElem := len(p.GetElem())
-	if numPElem < 2 {
-		return false
-	}
-
-	_, ok := p.GetElem()[numPElem-2].GetKey()[p.GetElem()[numPElem-1].GetName()]
-	return ok
-}
-
 func (d *Datastore) readStoreKeysMeta(ctx context.Context, store cachepb.Store) (map[string]tree.UpdateSlice, error) {
 	entryCh, err := d.cacheClient.GetKeys(ctx, d.config.Name, store)
 	if err != nil {
