@@ -17,6 +17,7 @@ package utils
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -37,7 +38,7 @@ func NewSrnges() *SRnges {
 	return r
 }
 
-func (r *SRng) isInRange(value int64) bool {
+func (r *SRng) IsInRange(value int64) bool {
 	// return the result
 	return r.min <= value && value <= r.max
 }
@@ -47,7 +48,22 @@ func (r *SRng) String() string {
 	return fmt.Sprintf("%d..%d", r.min, r.max)
 }
 
-func (r *SRnges) isWithinAnyRange(value string) (*sdcpb.TypedValue, error) {
+func (r *SRnges) IsWithinAnyRange(val int64) bool {
+	// if no ranges defined, return the tv
+	if len(r.rnges) == 0 {
+		return true
+	}
+	// check the ranges
+	for _, rng := range r.rnges {
+		if rng.IsInRange(val) {
+			return true
+		}
+	}
+	return false
+
+}
+
+func (r *SRnges) IsWithinAnyRangeString(value string) (*sdcpb.TypedValue, error) {
 	if len(value) == 0 {
 		return nil, nil
 	}
@@ -62,24 +78,30 @@ func (r *SRnges) isWithinAnyRange(value string) (*sdcpb.TypedValue, error) {
 			IntVal: intValue,
 		},
 	}
-	// if no ranges defined, return the tv
-	if len(r.rnges) == 0 {
+	if r.IsWithinAnyRange(intValue) {
 		return tv, nil
-	}
-	// check the ranges
-	for _, rng := range r.rnges {
-		if rng.isInRange(intValue) {
-			return tv, nil
-		}
 	}
 	return nil, fmt.Errorf("%q not within ranges", value)
 }
 
-func (r *SRnges) addRange(min, max int64) {
+func (r *SRnges) AddRange(min, max int64) {
 	// to make sure the value is in the general limits of the datatype uint8|16|32|64
 	// we add the min max as a seperate additional range
 	r.rnges = append(r.rnges, &SRng{
 		min: min,
 		max: max,
 	})
+}
+
+func (r *SRnges) String() string {
+	sb := &strings.Builder{}
+	sep := ""
+	sb.WriteString("[ ")
+	for _, ur := range r.rnges {
+		sb.WriteString(sep)
+		sb.WriteString(ur.String())
+		sep = " | "
+	}
+	sb.WriteString(" ]")
+	return sb.String()
 }
