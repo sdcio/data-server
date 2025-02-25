@@ -36,7 +36,7 @@ type sharedEntryAttributes struct {
 	schema      *sdcpb.SchemaElem
 	schemaMutex sync.RWMutex
 
-	choicesResolvers choiceCasesResolvers
+	choicesResolvers choiceResolvers
 
 	treeContext *TreeContext
 
@@ -445,8 +445,15 @@ func (s *sharedEntryAttributes) shouldDelete() bool {
 	// but a real delete should only be added if there is at least one shouldDelete() == true
 	shouldDelete := false
 
+	activeChilds := s.filterActiveChoiceCaseChilds()
+	// if we have no active childs, we can and should delete.
+	if len(s.choicesResolvers) > 0 && len(activeChilds) == 0 {
+		canDelete = true
+		shouldDelete = true
+	}
+
 	// iterate through the active childs
-	for _, c := range s.filterActiveChoiceCaseChilds() {
+	for _, c := range activeChilds {
 		// check if the child can be deleted
 		canDelete = c.canDelete()
 		// if it can explicitly not be deleted, then the result is clear, we should not delete
@@ -491,15 +498,9 @@ func (s *sharedEntryAttributes) remainsToExist() bool {
 			break
 		}
 	}
-	activeChoiceCase := false
-	// only needs to be checked if it still looks like there
-	// it is to be deleted
-	if !childsRemain {
-		activeChoiceCase = s.choicesResolvers.remainsToExist()
-	}
 
 	// assumption is, that if the entry exists, there is at least a running value available.
-	remains := leafVariantResult || childsRemain || activeChoiceCase
+	remains := leafVariantResult || childsRemain
 
 	s.cacheRemains = &remains
 	return remains
@@ -512,33 +513,40 @@ func (s *sharedEntryAttributes) getRegularDeletes(deletes []DeleteEntry, aggrega
 	// issue a delte for the whole branch at once via keys
 	switch s.schema.GetSchema().(type) {
 	case *sdcpb.SchemaElem_Container:
-
-		// deletes for child elements (choice cases) that newly became inactive.
-		for _, v := range s.choicesResolvers {
-			oldBestCaseName := v.getOldBestCaseName()
-			newBestCaseName := v.getBestCaseName()
-			// so if we have an old and a new best cases (not "") and the names are different,
-			// all the old to the deletion list
-			if oldBestCaseName != "" && newBestCaseName != "" && oldBestCaseName != newBestCaseName {
-				// try fetching the case from the childs
-				oldBestCaseEntry, exists := s.childs.GetEntry(oldBestCaseName)
-				if exists {
-					deletes = append(deletes, oldBestCaseEntry)
-				} else {
-					// it might be that the child is not loaded into the tree, but just considered from the treecontext cache for the choice/case resolution
-					// if so, we create and return the DeleteEntryImpl struct
-					path, err := s.SdcpbPath()
-					if err != nil {
-						return nil, err
-					}
-					deletes = append(deletes, NewDeleteEntryImpl(path, append(s.Path(), oldBestCaseName)))
-				}
-			}
-		}
+		// // deletes for child elements (choice cases) that newly became inactive.
+		// for _, v := range s.choicesResolvers {
+		// 	oldBestCaseName := v.getOldBestCaseName()
+		// 	newBestCaseName := v.getBestCaseName()
+		// 	// so if we have an old and a new best cases (not "") and the names are different,
+		// 	// all the old to the deletion list
+		// 	if oldBestCaseName != "" && newBestCaseName != "" && oldBestCaseName != newBestCaseName {
+		// 		// try fetching the case from the childs
+		// 		oldBestCaseEntry, exists := s.childs.GetEntry(oldBestCaseName)
+		// 		if exists {
+		// 			deletes = append(deletes, oldBestCaseEntry)
+		// 		} else {
+		// 			// it might be that the child is not loaded into the tree, but just considered from the treecontext cache for the choice/case resolution
+		// 			// if so, we create and return the DeleteEntryImpl struct
+		// 			path, err := s.SdcpbPath()
+		// 			if err != nil {
+		// 				return nil, err
+		// 			}
+		// 			deletes = append(deletes, NewDeleteEntryImpl(path, append(s.Path(), oldBestCaseName)))
+		// 		}
+		// 	}
+		// }
 	}
 
 	if s.shouldDelete() && !s.IsRoot() && len(s.GetSchemaKeys()) == 0 {
 		return append(deletes, s), nil
+	}
+
+	for _, elem := range s.choicesResolvers.GetDeletes() {
+		path, err := s.SdcpbPath()
+		if err != nil {
+			return nil, err
+		}
+		deletes = append(deletes, NewDeleteEntryImpl(path, append(s.Path(), elem)))
 	}
 
 	for _, e := range s.childs.GetAll() {
@@ -751,7 +759,7 @@ func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isR
 }
 
 func (s *sharedEntryAttributes) tryLoading(ctx context.Context, path []string) (Entry, error) {
-	upd, err := s.treeContext.GetTreeSchemaCacheClient().ReadRunningPath(ctx, append(s.Path(), path...))
+	upd, err := s.treeContext.GetTreeCacheClient().ReadRunningPath(ctx, append(s.Path(), path...))
 	if err != nil {
 		return nil, err
 	}
@@ -810,14 +818,14 @@ func (s *sharedEntryAttributes) GetRootBasedEntryChain() []Entry {
 
 // getHighestPrecedenceValueOfBranch goes through all the child branches to find the highest
 // precedence value (lowest priority value) for the entire branch and returns it.
-func (s *sharedEntryAttributes) getHighestPrecedenceValueOfBranch() int32 {
+func (s *sharedEntryAttributes) getHighestPrecedenceValueOfBranch(includeDeleted bool) int32 {
 	result := int32(math.MaxInt32)
 	for _, e := range s.childs.GetAll() {
-		if val := e.getHighestPrecedenceValueOfBranch(); val < result {
+		if val := e.getHighestPrecedenceValueOfBranch(includeDeleted); val < result {
 			result = val
 		}
 	}
-	if val := s.leafVariants.GetHighestPrecedenceValue(); val < result {
+	if val := s.leafVariants.GetHighestPrecedenceValue(includeDeleted); val < result {
 		result = val
 	}
 
@@ -1215,7 +1223,7 @@ func (s *sharedEntryAttributes) initChoiceCasesResolvers() {
 	}
 
 	// create a new choiceCasesResolvers struct
-	choicesResolvers := choiceCasesResolvers{}
+	choicesResolvers := choiceResolvers{}
 
 	// iterate through choices defined in schema
 	for choiceName, choice := range ci.GetChoice() {
@@ -1234,10 +1242,13 @@ func (s *sharedEntryAttributes) initChoiceCasesResolvers() {
 // FinishInsertionPhase certain values that are costly to calculate but used multiple times
 // will be calculated and stored for later use. However therefore the insertion phase into the
 // tree needs to be over. Calling this function indicated the end of the phase and thereby triggers the calculation
-func (s *sharedEntryAttributes) FinishInsertionPhase(ctx context.Context) {
+func (s *sharedEntryAttributes) FinishInsertionPhase(ctx context.Context) error {
 
 	// populate the ChoiceCaseResolvers to determine the active case
-	s.populateChoiceCaseResolvers(ctx)
+	err := s.populateChoiceCaseResolvers(ctx)
+	if err != nil {
+		return err
+	}
 
 	// recurse the call to all (active) entries within the tree.
 	// Thereby already using the choiceCaseResolver via filterActiveChoiceCaseChilds()
@@ -1251,6 +1262,8 @@ func (s *sharedEntryAttributes) FinishInsertionPhase(ctx context.Context) {
 	s.cacheRemains = nil
 	s.cacheShouldDelete = nil
 	s.cacheCanDelete = nil
+
+	return nil
 }
 
 // populateChoiceCaseResolvers iterates through the ChoiceCaseResolvers,
@@ -1259,32 +1272,46 @@ func (s *sharedEntryAttributes) FinishInsertionPhase(ctx context.Context) {
 // caches index (old intent content) as well as from the tree (new intent content).
 // the choiceResolver is fed with the resulting values and thereby ready to be queried
 // in a later stage (filterActiveChoiceCaseChilds()).
-func (s *sharedEntryAttributes) populateChoiceCaseResolvers(ctx context.Context) {
+func (s *sharedEntryAttributes) populateChoiceCaseResolvers(ctx context.Context) error {
 	if s.schema == nil {
-		return
+		return nil
 	}
 	// if choice/cases exist, process it
 	for _, choiceResolver := range s.choicesResolvers {
 		for _, elem := range choiceResolver.GetElementNames() {
 			isNew := false
-			var val2 *int32
-			// Query the Index, stored in the treeContext for the per branch highes precedence
-			v := s.treeContext.GetTreeSchemaCacheClient().GetBranchesHighesPrecedence(ctx, append(s.Path(), elem), CacheUpdateFilterExcludeOwner(s.treeContext.GetActualOwner()))
+			isDeleted := false
+
+			// Query the Index, stored in the treeContext for the per branch highest precedence
+			v := s.treeContext.GetTreeCacheClient().GetBranchesHighestPrecedence(ctx, append(s.Path(), elem), CacheUpdateFilterExcludeOwner(s.treeContext.GetActualOwner()))
+
+			highestWDelete := v
+			highestWODelete := v
 
 			child, childExists := s.childs.GetEntry(elem)
 			// set the value from the tree as well
 			if childExists {
-				x := child.getHighestPrecedenceValueOfBranch()
-				val2 = &x
-			}
+				valWDel := child.getHighestPrecedenceValueOfBranch(true)
 
-			if val2 != nil && v >= *val2 {
-				v = *val2
-				isNew = true
+				if valWDel <= highestWDelete {
+					highestWDelete = valWDel
+					if child.canDelete() {
+						isDeleted = true
+					} else {
+						isNew = true
+					}
+				}
+
+				valNonDel := child.getHighestPrecedenceValueOfBranch(false)
+
+				if valNonDel <= highestWODelete {
+					highestWODelete = valNonDel
+				}
 			}
-			choiceResolver.SetValue(elem, v, isNew)
+			choiceResolver.SetValue(elem, highestWODelete, highestWDelete, isNew, isDeleted)
 		}
 	}
+	return nil
 }
 
 // filterActiveChoiceCaseChilds returns the list of child elements. In case the Entry is
@@ -1333,11 +1360,7 @@ func (s *sharedEntryAttributes) StringIndent(result []string) []string {
 
 // markOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
 func (s *sharedEntryAttributes) markOwnerDelete(o string, onlyIntended bool) {
-	lvEntry := s.leafVariants.GetByOwner(o)
-	// if an entry for the given user exists, mark it for deletion
-	if lvEntry != nil {
-		lvEntry.MarkDelete(onlyIntended)
-	}
+	s.leafVariants.MarkOwnerForDeletion(o, onlyIntended)
 	// recurse into childs
 	for _, child := range s.childs.GetAll() {
 		child.markOwnerDelete(o, onlyIntended)

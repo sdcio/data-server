@@ -695,6 +695,10 @@ func TestDatastore_populateTree(t *testing.T) {
 				cache.NewUpdate([]string{"choices", "case1", "case-elem", "elem"}, testhelper.GetStringTvProto(t, "case1-content"), prio15, owner1, 0),
 				cache.NewUpdate([]string{"choices", "case1", "log"}, TypedValueFalse, prio15, owner1, 0),
 			},
+			runningStoreUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"choices", "case1", "case-elem", "elem"}, testhelper.GetStringTvProto(t, "case1-content"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				cache.NewUpdate([]string{"choices", "case1", "log"}, TypedValueFalse, tree.RunningValuesPrio, tree.RunningIntentName, 0),
+			},
 		},
 		{
 			name:          "ChoiceCase - old highes case",
@@ -724,6 +728,10 @@ func TestDatastore_populateTree(t *testing.T) {
 				cache.NewUpdate([]string{"choices", "case1", "case-elem", "elem"}, testhelper.GetStringTvProto(t, "case1-content"), prio5, owner1, 0),
 				cache.NewUpdate([]string{"choices", "case1", "log"}, TypedValueFalse, prio5, owner1, 0),
 			},
+			runningStoreUpdates: []*cache.Update{
+				cache.NewUpdate([]string{"choices", "case1", "case-elem", "elem"}, testhelper.GetStringTvProto(t, "case1-content"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				cache.NewUpdate([]string{"choices", "case1", "log"}, TypedValueFalse, tree.RunningValuesPrio, tree.RunningIntentName, 0),
+			},
 		},
 	}
 
@@ -731,6 +739,7 @@ func TestDatastore_populateTree(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// create a gomock controller
 			controller := gomock.NewController(t)
+			defer controller.Finish()
 
 			// create a cache client mock
 			cacheClient := mockcacheclient.NewMockClient(controller)
@@ -820,8 +829,9 @@ func TestDatastore_populateTree(t *testing.T) {
 			if err != nil {
 				t.Error(err)
 			}
-
+			fmt.Println(root.String())
 			root.FinishInsertionPhase(ctx)
+			fmt.Println(root.String())
 
 			validationResult := root.Validate(ctx, false)
 

@@ -21,7 +21,7 @@ type TreeCacheClient interface {
 
 	ReadRunningPath(ctx context.Context, path PathSlice) (*cache.Update, error)
 	ReadRunningFull(ctx context.Context) ([]*cache.Update, error)
-	GetBranchesHighesPrecedence(ctx context.Context, path []string, filters ...CacheUpdateFilter) int32
+	GetBranchesHighestPrecedence(ctx context.Context, path []string, filters ...CacheUpdateFilter) int32
 	ReadCurrentUpdatesHighestPriorities(ctx context.Context, ccp PathSlices, count uint64) UpdateSlice
 	IntendedPathExists(ctx context.Context, path []string) (bool, error)
 	ReadUpdatesOwner(ctx context.Context, owner string) UpdateSlice
@@ -114,7 +114,7 @@ func (c *TreeCacheClientImpl) readStoreKeysMeta(ctx context.Context, store cache
 	}
 }
 
-func (c *TreeCacheClientImpl) GetBranchesHighesPrecedence(ctx context.Context, path []string, filters ...CacheUpdateFilter) int32 {
+func (c *TreeCacheClientImpl) GetBranchesHighestPrecedence(ctx context.Context, path []string, filters ...CacheUpdateFilter) int32 {
 	result := int32(math.MaxInt32)
 	pathKey := strings.Join(path, KeysIndexSep)
 	c.intendedStoreIndexMutex.RLock()

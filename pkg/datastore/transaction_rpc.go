@@ -97,7 +97,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	// create a new TreeContext
 	tc := tree.NewTreeContext(treeSCC, d.schemaClient, d.Name())
 	// refresh the Cache content of the treeCacheSchemaClient
-	tc.GetTreeSchemaCacheClient().RefreshCaches(ctx)
+	tc.GetTreeCacheClient().RefreshCaches(ctx)
 
 	// create a new TreeRoot to collect validate and hand to SBI.Set()
 	root, err := tree.NewTreeRoot(ctx, tc)
@@ -109,7 +109,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	tc.SetActualOwner(tree.ReplaceIntentName)
 
 	// store the actual / old running in the transaction
-	runningUpds, err := tc.GetTreeSchemaCacheClient().ReadRunningFull(ctx)
+	runningUpds, err := tc.GetTreeCacheClient().ReadRunningFull(ctx)
 	transaction.GetOldRunning().AddUpdates(runningUpds)
 
 	// creat a InsertFlags struct with the New flag set.
@@ -175,7 +175,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	// create a new TreeContext
 	tc := tree.NewTreeContext(treeSCC, d.schemaClient, d.Name())
 	// refresh the SchemaClientCache
-	tc.GetTreeSchemaCacheClient().RefreshCaches(ctx)
+	tc.GetTreeCacheClient().RefreshCaches(ctx)
 
 	// creat a new TreeRoot
 	root, err := tree.NewTreeRoot(ctx, tc)

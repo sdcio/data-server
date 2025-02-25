@@ -28,7 +28,7 @@ func (t *TreeContext) deepCopy() *TreeContext {
 	}
 }
 
-func (t *TreeContext) GetTreeSchemaCacheClient() TreeCacheClient {
+func (t *TreeContext) GetTreeCacheClient() TreeCacheClient {
 	return t.cacheClient
 }
 

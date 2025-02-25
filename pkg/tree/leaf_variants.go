@@ -57,19 +57,6 @@ func (lv *LeafVariants) Length() int {
 	return len(lv.les)
 }
 
-// containsOtherOwnerThenDefaultOrRunning returns true if there is any other leafentry then default or running
-func (lv *LeafVariants) containsOtherOwnerThenDefaultOrRunning() bool {
-	foundOther := false
-	for _, le := range lv.les {
-		foundOther = le.Owner() != RunningIntentName && le.Owner() != DefaultsIntentName
-		if foundOther {
-			break
-		}
-	}
-
-	return foundOther
-}
-
 // canDelete returns true if leafValues exist that are not owned by default or running that do not have the DeleteFlag set [or if delete is set, also the DeleteOnlyIntendedFlag set]
 func (lv *LeafVariants) canDelete() bool {
 	lv.lesMutex.RLock()
@@ -150,12 +137,12 @@ func (lv *LeafVariants) remainsToExist() bool {
 	return false
 }
 
-func (lv *LeafVariants) GetHighestPrecedenceValue() int32 {
+func (lv *LeafVariants) GetHighestPrecedenceValue(includeDelete bool) int32 {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 	result := int32(math.MaxInt32)
 	for _, e := range lv.les {
-		if !e.GetDeleteFlag() && e.Owner() != DefaultsIntentName && e.Update.Priority() < result {
+		if (!e.GetDeleteFlag() || includeDelete) && e.Owner() != DefaultsIntentName && e.Owner() != RunningIntentName && e.Update.Priority() < result {
 			result = e.Update.Priority()
 		}
 	}
@@ -270,4 +257,13 @@ func (lv *LeafVariants) GetByOwner(owner string) *LeafEntry {
 		}
 	}
 	return nil
+}
+
+// MarkOwnerForDeletion searches for a LefVariant of given owner, if it exists
+// the entry is marked for deletion
+func (lv *LeafVariants) MarkOwnerForDeletion(owner string, onlyIntended bool) {
+	le := lv.GetByOwner(owner)
+	if le != nil {
+		le.MarkDelete(onlyIntended)
+	}
 }

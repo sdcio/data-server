@@ -62,7 +62,7 @@ func (r *RootEntry) LoadIntendedStoreOwnerData(ctx context.Context, owner string
 	tc := r.getTreeContext()
 
 	// Get all entries of the already existing intent
-	ownerCacheEntries := tc.GetTreeSchemaCacheClient().ReadUpdatesOwner(ctx, owner)
+	ownerCacheEntries := tc.GetTreeCacheClient().ReadUpdatesOwner(ctx, owner)
 
 	flags := NewUpdateInsertFlags()
 
