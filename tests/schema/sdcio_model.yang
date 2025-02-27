@@ -60,4 +60,19 @@ module sdcio_model {
   leaf emptyconf {
     type empty;
   }
+  leaf rangetestsigned {
+    type int32 {
+      range "-3000..-60 | -50 | -32..-1 | 10..300";
+    }
+  }
+  leaf rangetestunsigned {
+    type uint32 {
+      range "10..300 | 5000..5020 | 9999";
+    }
+  }
+  leaf-list rangetestLeaflist {
+    type uint32 {
+        range "10..300 | 5000..5020 | 9999";
+    }
+}
 }

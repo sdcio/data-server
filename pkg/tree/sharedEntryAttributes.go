@@ -853,33 +853,89 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 		s.validateMustStatements(ctx, resultChan)
 		s.validateLength(resultChan)
 		s.validateRange(resultChan)
+		// s.validateMaxElements(errChan)   // TODO
 	}
 }
 
-func (s *sharedEntryAttributes) validateRange(resultCHan chan<- *types.ValidationResultEntry) {
+// validateRange int and uint types (Leaf and Leaflist) define ranges which configured values must lay in.
+// validateRange does check this condition.
+func (s *sharedEntryAttributes) validateRange(resultChan chan<- *types.ValidationResultEntry) {
 
-	// lv := s.leafVariants.GetHighestPrecedence(false)
-	// if lv == nil {
-	// 	return
-	// }
+	// if no schema present or Field and LeafList Types do not contain any ranges, return there is nothing to check
+	if s.GetSchema() == nil || (len(s.GetSchema().GetField().GetType().GetRange()) == 0 && len(s.GetSchema().GetLeaflist().GetType().GetRange()) == 0) {
+		return
+	}
 
-	// tv, err := lv.Value()
-	// if err != nil {
-	// 	errchan <- fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err)
-	// 	return
-	// }
+	lv := s.leafVariants.GetHighestPrecedence(false, true)
+	if lv == nil {
+		return
+	}
 
-	// if schema := s.schema.GetField(); schema != nil {
-	// 	switch schema.GetType().TypeName {
-	// 	case "uint8", "uint16", "uint32", "uint64":
-	// 		urange := &utils.NewUrnges()
-	// 	}
+	tv, err := lv.Update.Value()
+	if err != nil {
+		resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("path %s, error validating ranges: %w", s.Path(), err), types.ValidationResultEntryTypeError)
+		return
+	}
 
-	// 	for _, rng := range schema.GetType().Range {
+	var tvs []*sdcpb.TypedValue
+	var typeSchema *sdcpb.SchemaLeafType
+	// ranges are defined on Leafs or LeafLists.
+	switch {
+	case len(s.GetSchema().GetField().GetType().GetRange()) != 0:
+		// if it is a leaf, extract the value add it as a single value to the tvs slice and check it further down
+		tvs = []*sdcpb.TypedValue{tv}
+		// we also need the Field/Leaf Type schema
+		typeSchema = s.GetSchema().GetField().GetType()
+	case len(s.GetSchema().GetLeaflist().GetType().GetRange()) != 0:
+		// if it is a leaflist, extract the values them to the tvs slice and check them further down
+		tvs = tv.GetLeaflistVal().GetElement()
+		// we also need the Field/Leaf Type schema
+		typeSchema = s.GetSchema().GetLeaflist().GetType()
+	default:
+		// if no ranges exist return
+		return
+	}
 
-	// 	}
-	// }
+	// range through the tvs and check that they are in range
+	for _, tv := range tvs {
+		// we need to distinguish between unsigned and singned ints
+		switch typeSchema.TypeName {
+		case "uint8", "uint16", "uint32", "uint64":
+			// procede with the unsigned ints
+			urnges := utils.NewUrnges()
+			// add the defined ranges to the ranges struct
+			for _, r := range typeSchema.GetRange() {
+				urnges.AddRange(r.Min.Value, r.Max.Value)
+			}
 
+			// check the value laays within any of the ranges
+			if !urnges.IsWithinAnyRange(tv.GetUintVal()) {
+				resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("path %s, value %d not within any of the expected ranges %s", s.Path(), tv.GetUintVal(), urnges.String()), types.ValidationResultEntryTypeError)
+			}
+
+		case "int8", "int16", "int32", "int64":
+			// procede with the signed ints
+			srnges := utils.NewSrnges()
+			for _, r := range typeSchema.GetRange() {
+				// get the value
+				min := int64(r.GetMin().GetValue())
+				max := int64(r.GetMax().GetValue())
+				// take care of the minus sign
+				if r.Min.Negative {
+					min = min * -1
+				}
+				if r.Max.Negative {
+					max = max * -1
+				}
+				// add the defined ranges to the ranges struct
+				srnges.AddRange(min, max)
+			}
+			// check the value laays within any of the ranges
+			if !srnges.IsWithinAnyRange(tv.GetIntVal()) {
+				resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("path %s, value %d not within any of the expected ranges %s", s.Path(), tv.GetIntVal(), srnges.String()), types.ValidationResultEntryTypeError)
+			}
+		}
+	}
 }
 
 // validateLeafListMinMaxAttributes validates the Min-, and Max-Elements attribute of the Entry if it is a Leaflists.
