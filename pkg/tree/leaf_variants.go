@@ -23,7 +23,7 @@ func newLeafVariants(tc *TreeContext) *LeafVariants {
 
 func (lv *LeafVariants) Add(le *LeafEntry) {
 	if leafVariant := lv.GetByOwner(le.Owner()); leafVariant != nil {
-		if leafVariant.EqualSkipPath(le.Update) {
+		if leafVariant.Equal(le.Update) {
 			// it seems like the element was not deleted, so drop the delete flag
 			leafVariant.DropDeleteFlag()
 		} else {
@@ -240,8 +240,8 @@ func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
 	}
 
 	// ignore errors, they should not happen :-P I know... should...
-	rval, _ := runVal.Value()
-	hval, _ := highest.Value()
+	rval := runVal.Value()
+	hval := highest.Value()
 
 	return !utils.EqualTypedValues(rval, hval)
 }

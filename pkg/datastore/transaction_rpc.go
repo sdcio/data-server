@@ -4,26 +4,25 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
-	"github.com/sdcio/cache/proto/cachepb"
-	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/tree"
+	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
+	"github.com/sdcio/data-server/pkg/tree/tree_persist"
+	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
 var (
 	ErrDatastoreLocked = errors.New("Datastore is locked, other action is ongoing.")
 )
 
-// expandAndConvertIntent takes a slice of Updates ([]*sdcpb.Update) and converts it into a tree.UpdateSlice, that contains *cache.Updates.
-func (d *Datastore) expandAndConvertIntent(ctx context.Context, intentName string, priority int32, upds []*sdcpb.Update) (tree.UpdateSlice, error) {
+// expandAndConvertIntent takes a slice of Updates ([]*sdcpb.Update) and converts it into a tree.UpdateSlice, that contains *treetypes.Updates.
+func (d *Datastore) expandAndConvertIntent(ctx context.Context, intentName string, priority int32, upds []*sdcpb.Update) (treetypes.UpdateSlice, error) {
 	converter := utils.NewConverter(d.schemaClient)
 
 	// list of updates to be added to the cache
@@ -34,7 +33,7 @@ func (d *Datastore) expandAndConvertIntent(ctx context.Context, intentName strin
 	}
 
 	// temp storage for cache.Update of the req. They are to be added later.
-	newCacheUpdates := make([]*cache.Update, 0, len(expandedReqUpdates))
+	newCacheUpdates := make(treetypes.UpdateSlice, 0, len(expandedReqUpdates))
 
 	for _, u := range expandedReqUpdates {
 		pathslice, err := utils.CompletePath(nil, u.GetPath())
@@ -42,23 +41,8 @@ func (d *Datastore) expandAndConvertIntent(ctx context.Context, intentName strin
 			return nil, err
 		}
 
-		// since we already have the pathslice, we construct the cache.Update, but keep it for later
-		// addition to the tree. First we need to mark the existing once for deletion
-
-		// make sure typedValue is carrying the correct type
-		err = d.validateUpdate(ctx, u)
-		if err != nil {
-			return nil, err
-		}
-
-		// convert value to []byte for cache insertion
-		val, err := proto.Marshal(u.GetValue())
-		if err != nil {
-			return nil, err
-		}
-
 		// construct the cache.Update
-		newCacheUpdates = append(newCacheUpdates, cache.NewUpdate(pathslice, val, priority, intentName, 0))
+		newCacheUpdates = append(newCacheUpdates, treetypes.NewUpdate(pathslice, u.GetValue(), priority, intentName, 0))
 	}
 	return newCacheUpdates, nil
 }
@@ -93,11 +77,8 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 // returns the warnings as a []string and potential errors that happend during validation / from SBI Set()
 func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transaction) ([]string, error) {
 
-	treeSCC := tree.NewTreeCacheClient(d.Name(), d.cacheClient)
 	// create a new TreeContext
-	tc := tree.NewTreeContext(treeSCC, d.schemaClient, d.Name())
-	// refresh the Cache content of the treeCacheSchemaClient
-	tc.GetTreeCacheClient().RefreshCaches(ctx)
+	tc := tree.NewTreeContext(d.schemaClient, d.Name())
 
 	// create a new TreeRoot to collect validate and hand to SBI.Set()
 	root, err := tree.NewTreeRoot(ctx, tc)
@@ -109,8 +90,15 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	tc.SetActualOwner(tree.ReplaceIntentName)
 
 	// store the actual / old running in the transaction
-	runningUpds, err := tc.GetTreeCacheClient().ReadRunningFull(ctx)
-	transaction.GetOldRunning().AddUpdates(runningUpds)
+	runningProto, err := d.cacheClient.IntentGet(ctx, tree.RunningIntentName)
+	err = root.ImportConfig(ctx, treeproto.NewProtoTreeImporter(runningProto.GetRoot()), tree.RunningIntentName, tree.RunningValuesPrio, tree.NewUpdateInsertFlags())
+	if err != nil {
+		return nil, err
+	}
+	les := tree.LeafVariantSlice{}
+	les = root.GetByOwner(tree.RunningIntentName, les)
+
+	transaction.GetOldRunning().AddUpdates(les.ToUpdateSlice())
 
 	// creat a InsertFlags struct with the New flag set.
 	flagNew := tree.NewUpdateInsertFlags()
@@ -149,33 +137,59 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	// collect warnings
 	warnings = append(warnings, dataResp.GetWarnings()...)
 
-	// query tree for deletes
-	deletes, err := root.GetDeletes(true)
-	if err != nil {
-		return nil, err
-	}
+	// // query tree for deletes
+	// deletes, err := root.GetDeletes(true)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	// fast and optimistic writeback to the config store
-	err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
-		Store: cachepb.Store_CONFIG,
-	}, deletes.PathSlices().ToStringSlice(), root.GetHighestPrecedence(false).ToCacheUpdateSlice())
-	if err != nil {
-		return nil, fmt.Errorf("failed updating the running config store for %s: %w", d.Name(), err)
-	}
+	// // fast and optimistic writeback to the config store
+	// err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
+	// 	Store: cachepb.Store_CONFIG,
+	// }, deletes.PathSlices().ToStringSlice(), root.GetHighestPrecedence(false).ToCacheUpdateSlice())
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed updating the running config store for %s: %w", d.Name(), err)
+	// }
 
 	log.Infof("ds=%s transaction=%s applied", d.Name(), transaction.GetTransactionId()+" - replace")
 
 	return warnings, nil
 }
 
+func (d *Datastore) LoadAllIntents(ctx context.Context, root *tree.RootEntry) error {
+
+	IntentChan := make(chan *tree_persist.Intent, 0)
+	ErrChan := make(chan error, 1)
+
+	go d.cacheClient.IntentGetAll(ctx, IntentChan, ErrChan)
+
+	for {
+		select {
+		case err := <-ErrChan:
+			return err
+		case <-ctx.Done():
+			return fmt.Errorf("contexec closed while retrieving all intents")
+		case intent, ok := <-IntentChan:
+			if !ok {
+				// IntentChan closed due to finish
+				return nil
+			}
+			log.Debugf("adding intent %s to tree", intent.GetIntentName())
+			protoLoader := treeproto.NewProtoTreeImporter(intent.GetRoot())
+			log.Debugf(intent.String())
+			err := root.ImportConfig(ctx, protoLoader, intent.GetIntentName(), intent.GetPriority(), tree.NewUpdateInsertFlags())
+			if err != nil {
+				return err
+			}
+		}
+	}
+}
+
 // lowlevelTransactionSet
 func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *types.Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
 
-	treeSCC := tree.NewTreeCacheClient(d.Name(), d.cacheClient)
 	// create a new TreeContext
-	tc := tree.NewTreeContext(treeSCC, d.schemaClient, d.Name())
-	// refresh the SchemaClientCache
-	tc.GetTreeCacheClient().RefreshCaches(ctx)
+	tc := tree.NewTreeContext(d.schemaClient, d.Name())
 
 	// creat a new TreeRoot
 	root, err := tree.NewTreeRoot(ctx, tc)
@@ -187,7 +201,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	// this is then used to load the IntendedStore highes prio into the tree, to decide if an update
 	// is to be applied or if a higher precedence update exists and is therefore not applicable. Also if the value got
 	// deleted and a previousely shadowed entry becomes active.
-	involvedPaths := tree.NewPathSet()
+	involvedPaths := treetypes.NewPathSet()
 
 	// create a flags attribute
 	flagNew := tree.NewUpdateInsertFlags()
@@ -197,15 +211,12 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	// iterate through all the intents
 	for _, intent := range transaction.GetNewIntents() {
 		// update the TreeContext to reflect the actual owner (intent name)
-		tc.SetActualOwner(intent.GetName())
+		lvs := tree.LeafVariantSlice{}
+		lvs = root.GetByOwner(intent.GetName(), lvs)
 
-		log.Debugf("Transaction: %s - adding intent %s to tree", transaction.GetTransactionId(), intent.GetName())
+		oldIntentContent := lvs.ToUpdateSlice()
 
-		// load the old intent content into the tree and return it
-		oldIntentContent, err := root.LoadIntendedStoreOwnerData(ctx, intent.GetName(), intent.GetOnlyIntended())
-		if err != nil {
-			return nil, err
-		}
+		root.MarkOwnerDelete(intent.GetName(), intent.GetOnlyIntended())
 
 		// store the old intent content in the transaction as the old intent.
 		err = transaction.AddIntentContent(intent.GetName(), types.TransactionIntentOld, oldIntentContent.GetFirstPriorityValue(), oldIntentContent)
@@ -225,21 +236,17 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		involvedPaths.Join(intent.GetUpdates().ToPathSet())
 	}
 
-	// load the alternatives for the involved paths into the tree
-	err = loadIntendedStoreHighestPrio(ctx, treeSCC, root, involvedPaths, transaction.GetIntentNames())
-	if err != nil {
-		return nil, err
-	}
-
-	// add running to the tree
-	err = populateTreeWithRunning(ctx, treeSCC, root)
+	err = d.LoadAllIntents(ctx, root)
 	if err != nil {
 		return nil, err
 	}
 
 	log.Debugf("Transaction: %s - finish tree insertion phase", transaction.GetTransactionId())
 	// FinishInsertion Phase
-	root.FinishInsertionPhase(ctx)
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	log.Debug(root.String())
 
@@ -311,11 +318,24 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	// update intent in intended store //
 	/////////////////////////////////////
 
+	// persist the intents in the cache
+	for _, intent := range transaction.GetNewIntents() {
+		tpi, err := root.TreeExport(intent.GetName())
+		if err != nil {
+			return nil, err
+		}
+		tpi.Priority = intent.GetPriority()
+		err = d.cacheClient.IntentModify(ctx, tpi)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// logging
-	strSl := tree.Map(updates.ToCacheUpdateSlice(), func(u *cache.Update) string { return u.String() })
+	strSl := treetypes.Map(updates.ToUpdateSlice(), func(u *treetypes.Update) string { return u.String() })
 	log.Debugf("Updates\n%s", strings.Join(strSl, "\n"))
 
-	delSl := deletes.PathSlices()
+	// delSl := deletes.PathSlices()
 
 	log.Debugf("Deletes:\n%s", strings.Join(strSl, "\n"))
 
@@ -325,31 +345,27 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		deletesOwner := root.GetDeletesForOwner(intent.GetName())
 
 		// logging
-		strSl := tree.Map(updatesOwner, func(u *cache.Update) string { return u.String() })
+		strSl := treetypes.Map(updatesOwner, func(u *treetypes.Update) string { return u.String() })
 		log.Debugf("Updates Owner: %s\n%s", intent.GetName(), strings.Join(strSl, "\n"))
 
 		delSl := deletesOwner.StringSlice()
 		log.Debugf("Deletes Owner: %s \n%s", intent.GetName(), strings.Join(delSl, "\n"))
 
-		// modify intended store per intent
-		err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
-			Store:    cachepb.Store_INTENDED,
-			Owner:    intent.GetName(),
-			Priority: intent.GetPriority(),
-		}, deletesOwner.ToStringSlice(), updatesOwner)
-
+		protoIntent, err := root.TreeExport(intent.GetName())
+		err = d.cacheClient.IntentModify(ctx, protoIntent)
 		if err != nil {
 			return nil, fmt.Errorf("failed updating the intended store for %s: %w", d.Name(), err)
 		}
 	}
 
-	// fast and optimistic writeback to the config store
-	err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
-		Store: cachepb.Store_CONFIG,
-	}, delSl.ToStringSlice(), updates.ToCacheUpdateSlice())
-	if err != nil {
-		return nil, fmt.Errorf("failed updating the running config store for %s: %w", d.Name(), err)
-	}
+	// TODO: OPTIMISTIC WRITEBACK TO RUNNING
+	// // fast and optimistic writeback to the config store
+	// err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
+	// 	Store: cachepb.Store_CONFIG,
+	// }, delSl.ToStringSlice(), updates.ToCacheUpdateSlice())
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed updating the running config store for %s: %w", d.Name(), err)
+	// }
 
 	log.Infof("ds=%s transaction=%s: completed", d.Name(), transaction.GetTransactionId())
 	// start the rollback ticker only if it was not already a rollback transaction.
@@ -444,10 +460,7 @@ func cacheUpdateToSdcpbUpdate(lvs tree.LeafVariantSlice) ([]*sdcpb.Update, error
 		if err != nil {
 			return nil, err
 		}
-		value, err := lv.Update.Value()
-		if err != nil {
-			return nil, err
-		}
+		value := lv.Value()
 		upd := &sdcpb.Update{
 			Path:  path,
 			Value: value,
@@ -479,46 +492,6 @@ func (d *Datastore) TransactionCancel(ctx context.Context, transactionId string)
 	return d.transactionManager.Cancel(ctx, transactionId)
 }
 
-func loadIntendedStoreHighestPrio(ctx context.Context, tscc tree.TreeCacheClient, r *tree.RootEntry, pathKeySet *tree.PathSet, skipIntents []string) error {
-
-	// Get all entries of the already existing intent
-	cacheEntries := tscc.ReadCurrentUpdatesHighestPriorities(ctx, pathKeySet.GetPaths(), 2)
-
-	flags := tree.NewUpdateInsertFlags()
-
-	// add all the existing entries
-	for _, entry := range cacheEntries {
-		// we need to skip the actual owner entries
-		if slices.Contains(skipIntents, entry.Owner()) {
-			continue
-		}
-		_, err := r.AddCacheUpdateRecursive(ctx, entry, flags)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func populateTreeWithRunning(ctx context.Context, tscc tree.TreeCacheClient, r *tree.RootEntry) error {
-	upds, err := tscc.ReadRunningFull(ctx)
-	if err != nil {
-		return err
-	}
-
-	flags := tree.NewUpdateInsertFlags()
-
-	for _, upd := range upds {
-		newUpd := cache.NewUpdate(upd.GetPath(), upd.Bytes(), tree.RunningValuesPrio, tree.RunningIntentName, 0)
-		_, err := r.AddCacheUpdateRecursive(ctx, newUpd, flags)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func pathIsKeyAsLeaf(p *sdcpb.Path) bool {
 	numPElem := len(p.GetElem())
 	if numPElem < 2 {
@@ -527,29 +500,4 @@ func pathIsKeyAsLeaf(p *sdcpb.Path) bool {
 
 	_, ok := p.GetElem()[numPElem-2].GetKey()[p.GetElem()[numPElem-1].GetName()]
 	return ok
-}
-
-func (d *Datastore) readStoreKeysMeta(ctx context.Context, store cachepb.Store) (map[string]tree.UpdateSlice, error) {
-	entryCh, err := d.cacheClient.GetKeys(ctx, d.config.Name, store)
-	if err != nil {
-		return nil, err
-	}
-
-	result := map[string]tree.UpdateSlice{}
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case e, ok := <-entryCh:
-			if !ok {
-				return result, nil
-			}
-			key := strings.Join(e.GetPath(), tree.KeysIndexSep)
-			_, exists := result[key]
-			if !exists {
-				result[key] = tree.UpdateSlice{}
-			}
-			result[key] = append(result[key], e)
-		}
-	}
 }

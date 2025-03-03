@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sdcio/data-server/pkg/types"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -41,10 +41,7 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 		isRootBasedPath = true
 	}
 
-	tv, err := lv.Update.Value()
-	if err != nil {
-		return nil, fmt.Errorf("failed reading value from %s LeafVariant %v: %w", s.Path(), lv, err)
-	}
+	tv := lv.Value()
 	var values []*sdcpb.TypedValue
 
 	switch ttv := tv.Value.(type) {
@@ -138,10 +135,7 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 		if err != nil {
 			return nil, err
 		}
-		val, err := r.Update.Value()
-		if err != nil {
-			return nil, err
-		}
+		val := r.Value()
 		for _, value := range values {
 			if utils.EqualTypedValues(val, value) {
 				resultEntries = append(resultEntries, e)
@@ -180,10 +174,7 @@ func (s *sharedEntryAttributes) resolve_leafref_key_path(ctx context.Context, ke
 		}
 
 		lvs := keyValue.GetHighestPrecedence(LeafVariantSlice{}, false)
-		tv, err := lvs[0].Value()
-		if err != nil {
-			return err
-		}
+		tv := lvs[0].Value()
 		keys[k].value = tv.GetStringVal()
 		keys[k].doNotResolve = true
 	}
@@ -231,11 +222,7 @@ func generateOptionalWarning(ctx context.Context, s Entry, lref string, resultCh
 		resultChan <- types.NewValidationResultEntry(lrefval.Owner(), err, types.ValidationResultEntryTypeError)
 		return
 	}
-	tvVal, err := lrefval.Update.Value()
-	if err != nil {
-		resultChan <- types.NewValidationResultEntry(lrefval.Owner(), err, types.ValidationResultEntryTypeError)
-		return
-	}
+	tvVal := lrefval.Value()
 	resultChan <- types.NewValidationResultEntry(lrefval.Owner(), fmt.Errorf("leafref %s value %s unable to resolve non-mandatory reference %s", s.Path().String(), utils.TypedValueToString(tvVal), lref), types.ValidationResultEntryTypeWarning)
 }
 

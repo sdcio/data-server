@@ -32,12 +32,6 @@ var datastoreDeleteCmd = &cobra.Command{
 		req := &sdcpb.DeleteDataStoreRequest{
 			Name: datastoreName,
 		}
-		if candidate != "" {
-			req.Datastore = &sdcpb.DataStore{
-				Type: sdcpb.Type_CANDIDATE,
-				Name: candidate,
-			}
-		}
 		ctx, cancel := context.WithCancel(cmd.Context())
 		defer cancel()
 		dataClient, err := createDataClient(ctx, addr)

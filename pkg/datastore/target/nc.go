@@ -65,14 +65,7 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	if !t.Status().IsConnected() {
 		return nil, fmt.Errorf("%s", TargetStatusNotConnected)
 	}
-	var source string
-
-	switch req.Datastore.Type {
-	case sdcpb.Type_MAIN:
-		source = "running"
-	case sdcpb.Type_CANDIDATE:
-		source = "candidate"
-	}
+	source := "running"
 
 	// init a new XMLConfigBuilder for the pathfilter
 	pathfilterXmlBuilder := netconf.NewXMLConfigBuilder(t.schemaClient,
@@ -205,9 +198,6 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, fo
 		Name:     sc.Name,
 		Path:     paths,
 		DataType: sdcpb.DataType_CONFIG,
-		Datastore: &sdcpb.DataStore{
-			Type: sdcpb.Type_MAIN,
-		},
 	}
 
 	// execute netconf get

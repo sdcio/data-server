@@ -213,17 +213,13 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 		if le == nil {
 			return false, nil
 		}
-		v, err := le.Update.Value()
-		if err != nil {
-			return false, err
-		}
 		ns := ""
 		// process the namespace attribute
 		if s.parent == nil || (honorNamespace && !namespaceIsEqual(s, s.parent)) {
 			ns = utils.GetNamespaceFromGetSchema(s.GetSchema())
 		}
 		// convert value to XML and add to parent
-		utils.TypedValueToXML(parent, v, s.PathName(), ns, onlyNewOrUpdated, operationWithNamespace, useOperationRemove)
+		utils.TypedValueToXML(parent, le.Value(), s.PathName(), ns, onlyNewOrUpdated, operationWithNamespace, useOperationRemove)
 		return true, nil
 	}
 	return false, fmt.Errorf("unable to convert to xml (%s)", s.Path())

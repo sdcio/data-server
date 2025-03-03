@@ -56,12 +56,7 @@ func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
 	if lv == nil {
 		return xpath.NewNodesetDatum([]xutils.XpathNode{}), nil
 	}
-	tv, err := lv.Update.Value()
-	if err != nil {
-		return nil, err
-	}
-
-	return y.valueToDatum(tv), nil
+	return y.valueToDatum(lv.Value()), nil
 }
 
 func (y *yangParserEntryAdapter) FollowLeafRef() (xpath.Entry, error) {

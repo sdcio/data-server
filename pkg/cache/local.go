@@ -16,262 +16,85 @@ package cache
 
 import (
 	"context"
-	"fmt"
-	"sort"
-	"time"
 
 	"github.com/sdcio/cache/pkg/cache"
 	"github.com/sdcio/cache/pkg/config"
-	"github.com/sdcio/cache/proto/cachepb"
-	"github.com/sdcio/schema-server/pkg/utils"
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
+	"github.com/sdcio/cache/pkg/store/filesystem"
+	"github.com/sdcio/cache/pkg/types"
+	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	"google.golang.org/protobuf/proto"
 )
 
-type localCache struct {
-	c cache.Cache
-}
-
 func NewLocalCache(cfg *config.CacheConfig) (Client, error) {
-	lc := &localCache{
-		c: cache.New(cfg),
-	}
-	err := lc.c.Init(context.TODO())
+
+	fnc, err := filesystem.PreConfigureFilesystemInitFunc(cfg.Dir)
 	if err != nil {
 		return nil, err
 	}
-	return lc, nil
-}
 
-func (c *localCache) Create(ctx context.Context, name string, _ bool, _ bool) error {
-	return c.c.Create(ctx, &cache.CacheInstanceConfig{
-		Name: name,
-	})
-}
-
-func (c *localCache) List(ctx context.Context) ([]string, error) {
-	return c.c.List(ctx), nil
-}
-
-func (c *localCache) HasCandidate(ctx context.Context, name, candidate string) (bool, error) {
-	cands, err := c.GetCandidates(ctx, name)
+	cache, err := cache.NewCache(fnc)
 	if err != nil {
-		return false, err
-	}
-	for _, cand := range cands {
-		if cand.CandidateName == candidate {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func (c *localCache) GetCandidates(ctx context.Context, name string) ([]*cache.CandidateDetails, error) {
-	return c.c.Candidates(ctx, name)
-}
-
-func (c *localCache) Delete(ctx context.Context, name string) error {
-	return c.c.Delete(ctx, name)
-}
-
-func (c *localCache) DeleteCandidate(ctx context.Context, name, candidate string) error {
-	return c.c.Delete(ctx, fmt.Sprintf("%s/%s", name, candidate))
-}
-
-func (c *localCache) Exists(ctx context.Context, name string) (bool, error) {
-	return c.c.Exists(ctx, name), nil
-}
-
-func (c *localCache) CreateCandidate(ctx context.Context, name, candidate, owner string, priority int32) error {
-	_, err := c.c.CreateCandidate(ctx, name, candidate, owner, priority)
-	return err
-}
-
-func (c *localCache) Clone(ctx context.Context, name, clone string) error {
-	_, err := c.c.Clone(ctx, name, clone)
-	return err
-}
-
-func (c *localCache) Modify(ctx context.Context, name string, opts *Opts, dels [][]string, upds []*Update) error {
-	if opts == nil {
-		opts = &Opts{}
-	}
-	//
-	var err error
-	for _, del := range dels {
-		err = c.c.DeletePrefix(ctx, name, &cache.Opts{
-			Store:    getStore(opts.Store),
-			Path:     [][]string{del}, // TODO:
-			Owner:    opts.Owner,
-			Priority: opts.Priority,
-		})
-		if err != nil {
-			return err
-		}
+		return nil, err
 	}
 
-	for _, upd := range upds {
-		err = c.c.WriteValue(ctx, name, &cache.Opts{
-			Store:    getStore(opts.Store),
-			Path:     [][]string{upd.GetPath()},
-			Owner:    opts.Owner,
-			Priority: opts.Priority,
-		}, upd.Bytes())
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return &LocalCache{
+		Cache: cache,
+	}, nil
 }
 
-func (c *localCache) Read(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) []*Update {
-	ch := c.ReadCh(ctx, name, opts, paths, period)
-	var upds = make([]*Update, 0, len(paths))
-	for {
+type LocalCache struct {
+	*cache.Cache
+}
+
+func (l *LocalCache) InstanceIntentGet(ctx context.Context, cacheName string, intentName string) (*tree_persist.Intent, error) {
+
+	b, err := l.Cache.InstanceIntentGet(ctx, cacheName, intentName)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &tree_persist.Intent{}
+	err = proto.Unmarshal(b, result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (l *LocalCache) InstanceIntentGetAll(ctx context.Context, cacheName string, intentChanOrig chan<- *tree_persist.Intent, errChanOrig chan<- error) {
+	// create new channels
+	intentChan := make(chan *types.Intent, 5)
+	errChan := make(chan error, 1)
+
+	go func() {
+		defer close(intentChanOrig)
+		defer close(errChanOrig)
+
 		select {
-		case <-ctx.Done():
-			return nil
-		case u, ok := <-ch:
-			if !ok {
-				sort.Slice(upds, func(i, j int) bool {
-					return upds[i].ts < upds[j].ts
-				})
-				return upds
-			}
-			upds = append(upds, u)
-		}
-	}
-}
-
-func (c *localCache) GetKeys(ctx context.Context, name string, store cachepb.Store) (chan *Update, error) {
-
-	if store != cachepb.Store_CONFIG && store != cachepb.Store_INTENDED {
-		return nil, fmt.Errorf("getkeys only available with config or intended store")
-	}
-
-	cacheStore := getStore(store)
-	entryCh, err := c.c.ReadKeys(ctx, name, cacheStore)
-	outCh := make(chan *Update)
-	if err != nil {
-		close(outCh)
-		return nil, err
-	}
-	go func() {
-		defer close(outCh)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case e, ok := <-entryCh:
-				if !ok {
-					return
-				}
-				if e == nil {
-					continue //
-				}
-				outCh <- &Update{
-					path:     e.P,
-					value:    nil,
-					priority: e.Priority,
-					owner:    e.Owner,
-					ts:       int64(e.Timestamp),
-				}
-			}
-		}
-	}()
-	return outCh, nil
-}
-
-func (c *localCache) ReadCh(ctx context.Context, name string, opts *Opts, paths [][]string, period time.Duration) chan *Update {
-	if opts == nil {
-		opts = &Opts{}
-	}
-	outCh := make(chan *Update, len(paths))
-	go func() {
-		defer close(outCh)
-		ch, err := c.c.ReadValue(ctx, name, &cache.Opts{
-			Store:         getStore(opts.Store),
-			Path:          paths,
-			Owner:         opts.Owner,
-			Priority:      opts.Priority,
-			PriorityCount: opts.PriorityCount,
-			KeysOnly:      opts.KeysOnly,
-		})
-		if err != nil {
-			log.Errorf("failed to read path %v: %v", paths, err)
+		case err := <-errChan: // forward errors
+			errChanOrig <- err
 			return
-		}
-		for {
-			select {
-			case <-ctx.Done():
+		case <-ctx.Done(): // Or stop if context is canceled
+			return
+		case intent := <-intentChan: // retieve intent
+			// unmarshall it into a tree_persit.Intent
+			tpIntent := &tree_persist.Intent{}
+			err := proto.Unmarshal(intent.Data(), tpIntent)
+			if err != nil {
+				errChanOrig <- err
 				return
-			case e, ok := <-ch:
-				if !ok {
-					return
-				}
-				if e == nil {
-					continue //
-				}
-				outCh <- &Update{
-					path:     e.P,
-					value:    e.V,
-					priority: e.Priority,
-					owner:    e.Owner,
-					ts:       int64(e.Timestamp),
-				}
 			}
+			// forward to caller
+			intentChanOrig <- tpIntent
 		}
 	}()
-	return outCh
+	l.Cache.InstanceIntentGetAll(ctx, cacheName, intentChan, errChan)
 }
 
-func (c *localCache) GetChanges(ctx context.Context, name, candidate string) ([]*Change, error) {
-	dels, entries, err := c.c.Diff(ctx, name, candidate)
+func (l *LocalCache) InstanceIntentModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error {
+	b, err := proto.Marshal(intent)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	changes := make([]*Change, 0, len(dels)+len(entries))
-	for _, del := range dels {
-		changes = append(changes, &Change{Delete: del})
-	}
-	for _, entry := range entries {
-		changes = append(changes, &Change{Update: &Update{
-			path:  entry.P,
-			value: entry.V,
-		}})
-	}
-	return changes, nil
-}
-
-func (c *localCache) Discard(ctx context.Context, name, candidate string) error {
-	return c.c.Discard(ctx, name, candidate)
-}
-
-func (c *localCache) Commit(ctx context.Context, name, candidate string) error {
-	return c.c.Commit(ctx, name, candidate)
-}
-
-func (c *localCache) CreatePruneID(ctx context.Context, name string, force bool) (string, error) {
-	return c.c.CreatePruneID(ctx, name, force)
-}
-
-func (c *localCache) ApplyPrune(ctx context.Context, name, id string) error {
-	return c.c.ApplyPrune(ctx, name, id)
-}
-
-func (c *localCache) NewUpdate(upd *sdcpb.Update) (*Update, error) {
-	b, err := proto.Marshal(upd.Value)
-	if err != nil {
-		return nil, err
-	}
-	lupd := &Update{
-		path:  utils.ToStrings(upd.GetPath(), false, false),
-		value: b,
-	}
-	return lupd, nil
-}
-
-func (c *localCache) Close() error {
-	return c.c.Close()
+	return l.Cache.InstanceIntentModify(ctx, cacheName, intent.GetIntentName(), b)
 }

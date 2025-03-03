@@ -5,9 +5,9 @@ import (
 	"math"
 
 	"github.com/beevik/etree"
-	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/tree/importer"
-	"github.com/sdcio/data-server/pkg/types"
+	"github.com/sdcio/data-server/pkg/tree/tree_persist"
+	"github.com/sdcio/data-server/pkg/tree/types"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -45,13 +45,13 @@ func newEntry(ctx context.Context, parent Entry, pathElemName string, tc *TreeCo
 // Entry is the primary Element of the Tree.
 type Entry interface {
 	// Path returns the Path as PathSlice
-	Path() PathSlice
+	Path() types.PathSlice
 	// PathName returns the last Path element, the name of the Entry
 	PathName() string
 	// addChild Add a child entry
 	addChild(context.Context, Entry) error
-	// AddCacheUpdateRecursive Add the given cache.Update to the tree
-	AddCacheUpdateRecursive(ctx context.Context, u *cache.Update, flags *UpdateInsertFlags) (Entry, error)
+	// AddUpdateRecursive Add the given cache.Update to the tree
+	AddUpdateRecursive(ctx context.Context, u *types.Update, flags *Flags) (Entry, error)
 	// StringIndent debug tree struct as indented string slice
 	StringIndent(result []string) []string
 	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
@@ -62,11 +62,11 @@ type Entry interface {
 	// will return an error if the Entry is not a Leaf
 	getHighestPrecedenceLeafValue(context.Context) (*LeafEntry, error)
 	// GetByOwner returns the branches Updates by owner
-	GetByOwner(owner string, result []*LeafEntry) []*LeafEntry
+	GetByOwner(owner string, result []*LeafEntry) LeafVariantSlice
 	// markOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
-	markOwnerDelete(o string, onlyIntended bool)
+	MarkOwnerDelete(o string, onlyIntended bool)
 	// GetDeletes returns the cache-updates that are not updated, have no lower priority value left and hence should be deleted completely
-	GetDeletes(entries []DeleteEntry, aggregatePaths bool) ([]DeleteEntry, error)
+	GetDeletes(entries []types.DeleteEntry, aggregatePaths bool) ([]types.DeleteEntry, error)
 	// Walk takes the EntryVisitor and applies it to every Entry in the tree
 	Walk(f EntryVisitor) error
 	// Validate kicks off validation
@@ -137,7 +137,8 @@ type Entry interface {
 	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
 	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error)
 	// ImportConfig allows importing config data received from e.g. the device in different formats (json, xml) to be imported into the tree.
-	ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32) error
+	ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *Flags) error
+	TreeExport(owner string) ([]*tree_persist.TreeElement, error)
 }
 
 type EntryVisitor func(s *sharedEntryAttributes) error

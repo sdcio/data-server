@@ -6,6 +6,10 @@ toolchain go1.23.5
 
 replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.0-2
 
+replace github.com/sdcio/cache => /home/mava/projects/cachev2
+
+replace github.com/sdcio/sdc-protos => /home/mava/projects/sdc-protos
+
 require (
 	github.com/AlekSi/pointer v1.2.0
 	github.com/beevik/etree v1.5.0
@@ -31,7 +35,6 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.6
 	go.uber.org/mock v0.5.0
-	golang.org/x/sync v0.10.0
 	google.golang.org/grpc v1.70.0
 	google.golang.org/protobuf v1.36.5
 	gopkg.in/yaml.v2 v2.4.0
@@ -82,7 +85,6 @@ require (
 	github.com/prometheus/common v0.60.1 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/rs/xid v1.6.0 // indirect
 	github.com/sirikothe/gotextfsm v1.0.1-0.20200816110946-6aa2cfd355e4 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opencensus.io v0.24.0 // indirect
@@ -90,6 +92,7 @@ require (
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f // indirect
 	golang.org/x/net v0.34.0 // indirect
 	golang.org/x/oauth2 v0.24.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/term v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect

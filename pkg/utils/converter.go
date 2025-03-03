@@ -37,6 +37,9 @@ func NewConverter(scb SchemaClientBound) *Converter {
 func (c *Converter) ExpandUpdates(ctx context.Context, updates []*sdcpb.Update, includeKeysAsLeaf bool) ([]*sdcpb.Update, error) {
 	outUpdates := make([]*sdcpb.Update, 0, len(updates))
 	for _, upd := range updates {
+		if upd.Value == nil {
+			continue
+		}
 		expUpds, err := c.ExpandUpdate(ctx, upd, includeKeysAsLeaf)
 		if err != nil {
 			return nil, err
@@ -114,11 +117,16 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update, include
 			}
 		}
 
-		// TODO: Check if value is json and convert to String ?
+		if rsp.Field.GetType().Type == "identityref" {
+			upd.Value, err = Convert(upd.GetValue().GetStringVal(), rsp.Field.GetType())
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		upds = append(upds, upd)
 		return upds, nil
 	case *sdcpb.SchemaElem_Leaflist:
-		// TODO: Check if value is json and convert to String ?
 		upds = append(upds, upd)
 		return upds, nil
 	}
@@ -238,6 +246,10 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		}
 		for k, v := range jv {
 			if isKey(k, cs) {
+				continue
+			}
+			// TODO remove the statement_annotate again ...
+			if k == "_annotate" {
 				continue
 			}
 			item, ok := getItem(ctx, k, cs, c.schemaClientBound)

@@ -26,7 +26,6 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 )
 
-var candidate string
 var target string
 var syncFile string
 var owner string
@@ -72,25 +71,14 @@ var datastoreCreateCmd = &cobra.Command{
 			req.Sync = sync
 		}
 
-		switch {
-		// create a candidate datastore
-		case candidate != "":
-			req.Datastore = &sdcpb.DataStore{
-				Type:     sdcpb.Type_CANDIDATE,
-				Name:     candidate,
-				Owner:    owner,
-				Priority: priority,
-			}
-			req.Target = tg
-			//create a main datastore
-		default:
-			req.Schema = &sdcpb.Schema{
-				Name:    schemaName,
-				Vendor:  schemaVendor,
-				Version: schemaVersion,
-			}
-			req.Target = tg
+		//create a datastore
+		req.Schema = &sdcpb.Schema{
+			Name:    schemaName,
+			Vendor:  schemaVendor,
+			Version: schemaVersion,
 		}
+		req.Target = tg
+
 		fmt.Println("request:")
 		fmt.Println(prototext.Format(req))
 		rsp, err := dataClient.CreateDataStore(ctx, req)

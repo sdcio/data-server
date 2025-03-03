@@ -56,7 +56,7 @@ func NewRemoteClient(cc *grpc.ClientConn, cacheConfig *config.RemoteSchemaCache)
 	}
 	// rc with cache
 	rc := &remoteClient{
-		schemaCache: ttlcache.New[cacheKey, *sdcpb.GetSchemaResponse](
+		schemaCache: ttlcache.New(
 			ttlcache.WithTTL[cacheKey, *sdcpb.GetSchemaResponse](cacheConfig.TTL),
 			ttlcache.WithCapacity[cacheKey, *sdcpb.GetSchemaResponse](cacheConfig.Capacity),
 		),

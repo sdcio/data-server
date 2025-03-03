@@ -62,7 +62,6 @@ mocks-gen: mocks-rm ## Generate mocks for all the defined interfaces.
 	mockgen -package=mockschemaclientbound -source=pkg/datastore/clients/schema/schemaClientBound.go -destination=$(MOCKDIR)/mockschemaclientbound/client.go
 	mockgen -package=mockcacheclient -source=pkg/cache/cache.go -destination=$(MOCKDIR)/mockcacheclient/client.go
 	mockgen -package=mocktarget -source=pkg/datastore/target/target.go -destination=$(MOCKDIR)/mocktarget/target.go
-	mockgen -package=mockvalidationclient -source=pkg/datastore/clients/validationClient.go -destination=$(MOCKDIR)/mockvalidationclient/client.go
 	mockgen -package=mockTreeEntry -source=pkg/tree/entry.go -destination=$(MOCKDIR)/mocktreeentry/entry.go
 
 .PHONY: mocks-rm
@@ -89,3 +88,12 @@ format_yang:
 goreleaser-nightly:
 	go install github.com/goreleaser/goreleaser/v2@latest
 	goreleaser release --clean -f .goreleaser.nightlies.yml --skip=validate
+
+.PHONY: proto
+CACHE_OUT_DIR := $(CURDIR)/pkg/tree/tree_persist
+
+proto:
+	clang-format -i -style=file:$(CURDIR)/proto/clang-format.style $(CURDIR)/proto/tree_persist.proto
+
+	mkdir -p $(CACHE_OUT_DIR)
+	protoc --go_out=$(CACHE_OUT_DIR) --go-grpc_out=$(CACHE_OUT_DIR) -I $(CURDIR)/proto $(CURDIR)/proto/tree_persist.proto

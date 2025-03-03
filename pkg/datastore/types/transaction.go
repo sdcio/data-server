@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sdcio/data-server/pkg/tree"
+	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 )
 
 type Transaction struct {
@@ -129,7 +130,7 @@ func (t *Transaction) AddTransactionIntent(ti *TransactionIntent, tit Transactio
 }
 
 // AddIntentContent add the content of an intent. If the intent did not exist, add the name of the intent and content == nil.
-func (t *Transaction) AddIntentContent(name string, tit TransactionIntentType, priority int32, content tree.UpdateSlice) error {
+func (t *Transaction) AddIntentContent(name string, tit TransactionIntentType, priority int32, content treetypes.UpdateSlice) error {
 	dstMap := t.getTransactionIntentTypeMap(tit)
 	_, exists := dstMap[name]
 	if exists {
@@ -142,9 +143,9 @@ func (t *Transaction) AddIntentContent(name string, tit TransactionIntentType, p
 	return nil
 }
 
-func (t *Transaction) GetPathSet(tit TransactionIntentType) *tree.PathSet {
+func (t *Transaction) GetPathSet(tit TransactionIntentType) *treetypes.PathSet {
 	srcMap := t.getTransactionIntentTypeMap(tit)
-	ps := tree.NewPathSet()
+	ps := treetypes.NewPathSet()
 	for _, intent := range srcMap {
 		ps.Join(intent.GetPathSet())
 	}

@@ -1,14 +1,13 @@
 package types
 
 import (
-	"github.com/sdcio/data-server/pkg/cache"
-	"github.com/sdcio/data-server/pkg/tree"
+	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 )
 
 type TransactionIntent struct {
 	name string
 	// updates is nil if the intent did not exist.
-	updates      tree.UpdateSlice
+	updates      treetypes.UpdateSlice
 	delete       bool
 	onlyIntended bool
 	priority     int32
@@ -28,11 +27,11 @@ func (ti *TransactionIntent) GetPriority() int32 {
 	return ti.priority
 }
 
-func (ti *TransactionIntent) AddUpdates(u tree.UpdateSlice) {
+func (ti *TransactionIntent) AddUpdates(u treetypes.UpdateSlice) {
 	ti.updates = append(ti.updates, u...)
 }
 
-func (ti *TransactionIntent) GetUpdates() tree.UpdateSlice {
+func (ti *TransactionIntent) GetUpdates() treetypes.UpdateSlice {
 	return ti.updates
 }
 
@@ -48,10 +47,10 @@ func (ti *TransactionIntent) SetDeleteOnlyIntendedFlag() {
 	ti.onlyIntended = true
 }
 
-func (ti *TransactionIntent) GetPathSet() *tree.PathSet {
+func (ti *TransactionIntent) GetPathSet() *treetypes.PathSet {
 	return ti.updates.ToPathSet()
 }
 
-func (ti *TransactionIntent) AddUpdate(u *cache.Update) {
+func (ti *TransactionIntent) AddUpdate(u *treetypes.Update) {
 	ti.updates = append(ti.updates, u)
 }

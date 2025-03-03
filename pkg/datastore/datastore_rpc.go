@@ -17,16 +17,11 @@ package datastore
 import (
 	"context"
 	"errors"
-	"fmt"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/sdcio/cache/proto/cachepb"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
@@ -38,14 +33,14 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/target"
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/schema"
-	"github.com/sdcio/data-server/pkg/utils"
+	"github.com/sdcio/data-server/pkg/tree"
 )
 
 type Datastore struct {
 	// datastore config
 	config *config.DatastoreConfig
 
-	cacheClient cache.Client
+	cacheClient cache.CacheClientBound
 
 	// SBI target of this datastore
 	sbi target.Target
@@ -73,20 +68,38 @@ type Datastore struct {
 
 	// TransactionManager
 	transactionManager *types.TransactionManager
+
+	// SyncTree
+	syncTree      *tree.RootEntry
+	syncTreeMutex *sync.RWMutex
+
+	syncTreeCandidat *tree.RootEntry
 }
 
 // New creates a new datastore, its schema server client and initializes the SBI target
 // func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Datastore {
-func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc cache.Client, opts ...grpc.DialOption) *Datastore {
+func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc cache.Client, opts ...grpc.DialOption) (*Datastore, error) {
+
+	scb := schemaClient.NewSchemaClientBound(c.Schema.GetSchema(), sc)
+	tc := tree.NewTreeContext(scb, tree.RunningIntentName)
+	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		return nil, err
+	}
+
+	ccb := cache.NewCacheClientBound(c.Name, cc)
+
 	ds := &Datastore{
 		config:                   c,
-		schemaClient:             schemaClient.NewSchemaClientBound(c.Schema.GetSchema(), sc),
-		cacheClient:              cc,
+		schemaClient:             scb,
+		cacheClient:              ccb,
 		m:                        &sync.RWMutex{},
 		md:                       &sync.RWMutex{},
 		dmutex:                   &sync.Mutex{},
 		deviationClients:         make(map[string]sdcpb.DataServer_WatchDeviationsServer),
 		currentIntentsDeviations: make(map[string][]*sdcpb.WatchDeviationResponse),
+		syncTree:                 syncTreeRoot,
+		syncTreeMutex:            &sync.RWMutex{},
 	}
 	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
 
@@ -117,25 +130,23 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 		// start deviation goroutine
 		ds.DeviationMgr(ctx)
 	}()
-	return ds
+	return ds, nil
+}
+
+func (d *Datastore) IntentsList(ctx context.Context) ([]string, error) {
+	return d.cacheClient.IntentsList(ctx)
 }
 
 func (d *Datastore) initCache(ctx context.Context) {
-START:
-	ok, err := d.cacheClient.Exists(ctx, d.config.Name)
-	if err != nil {
-		log.Errorf("failed to check cache instance %s, %s", d.config.Name, err)
-		time.Sleep(time.Second)
-		goto START
-	}
-	if ok {
+
+	exists := d.cacheClient.InstanceExists(ctx)
+	if exists {
 		log.Debugf("cache %q already exists", d.config.Name)
 		return
 	}
-
 	log.Infof("cache %s does not exist, creating it", d.config.Name)
 CREATE:
-	err = d.cacheClient.Create(ctx, d.config.Name, false, false)
+	err := d.cacheClient.InstanceCreate(ctx)
 	if err != nil {
 		log.Errorf("failed to create cache %s: %v", d.config.Name, err)
 		time.Sleep(time.Second)
@@ -181,42 +192,8 @@ func (d *Datastore) Config() *config.DatastoreConfig {
 	return d.config
 }
 
-func (d *Datastore) Candidates(ctx context.Context) ([]*sdcpb.DataStore, error) {
-	cand, err := d.cacheClient.GetCandidates(ctx, d.Name())
-	if err != nil {
-		return nil, err
-	}
-	rsp := make([]*sdcpb.DataStore, 0, len(cand))
-	for _, cd := range cand {
-		rsp = append(rsp, &sdcpb.DataStore{
-			Type:     sdcpb.Type_CANDIDATE,
-			Name:     cd.CandidateName,
-			Owner:    cd.Owner,
-			Priority: cd.Priority,
-		})
-	}
-	return rsp, nil
-}
-
-func (d *Datastore) Discard(ctx context.Context, req *sdcpb.DiscardRequest) error {
-	return d.cacheClient.Discard(ctx, req.GetName(), req.Datastore.GetName())
-}
-
-func (d *Datastore) CreateCandidate(ctx context.Context, ds *sdcpb.DataStore) error {
-	if ds.GetPriority() < 0 {
-		return fmt.Errorf("invalid priority value must be >0")
-	}
-	if ds.GetPriority() <= 0 {
-		ds.Priority = 1
-	}
-	if ds.GetOwner() == "" {
-		ds.Owner = DefaultOwner
-	}
-	return d.cacheClient.CreateCandidate(ctx, d.Name(), ds.GetName(), ds.GetOwner(), ds.GetPriority())
-}
-
-func (d *Datastore) DeleteCandidate(ctx context.Context, name string) error {
-	return d.cacheClient.DeleteCandidate(ctx, d.Name(), name)
+func (d *Datastore) Delete(ctx context.Context) error {
+	return d.cacheClient.InstanceDelete(ctx)
 }
 
 func (d *Datastore) ConnectionState() *target.TargetStatus {
@@ -241,21 +218,15 @@ func (d *Datastore) Stop() error {
 	return nil
 }
 
-func (d *Datastore) DeleteCache(ctx context.Context) error {
-	return d.cacheClient.Delete(ctx, d.config.Name)
-}
-
 func (d *Datastore) Sync(ctx context.Context) {
-	// this semaphore controls the number of concurrent writes to the cache
-	sem := semaphore.NewWeighted(d.config.Sync.WriteWorkers)
 	go d.sbi.Sync(ctx,
 		d.config.Sync,
 		d.synCh,
 	)
 
 	var err error
-	var pruneID string
-MAIN:
+	var startTs int64
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -264,48 +235,58 @@ MAIN:
 			}
 			return
 		case syncup := <-d.synCh:
-			if syncup.Start {
+			switch {
+			case syncup.Start:
 				log.Debugf("%s: sync start", d.Name())
-				for {
-					pruneID, err = d.cacheClient.CreatePruneID(ctx, d.Name(), syncup.Force)
-					if err != nil {
-						log.Errorf("datastore %s failed to create prune ID: %v", d.Name(), err)
-						time.Sleep(time.Second)
-						continue // retry
-					}
-					continue MAIN
-				}
-			}
-			if syncup.End && pruneID != "" {
-				log.Debugf("%s: sync end", d.Name())
-				for {
-					err = d.cacheClient.ApplyPrune(ctx, d.Name(), pruneID)
-					if err != nil {
-						log.Errorf("datastore %s failed to prune cache after update: %v", d.Name(), err)
-						time.Sleep(time.Second)
-						continue // retry
-					}
-					break
-				}
-				log.Debugf("%s: sync resetting pruneID", d.Name())
-				pruneID = ""
-				continue // MAIN FOR loop
-			}
-			// a regular notification
-			log.Debugf("%s: sync acquire semaphore", d.Name())
-			err = sem.Acquire(ctx, 1)
-			if err != nil {
-				if errors.Is(err, context.Canceled) {
-					log.Infof("datastore %s sync stopped", d.config.Name)
+				d.syncTreeCandidat, err = tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, tree.RunningIntentName))
+				if err != nil {
+					log.Errorf("creating a new synctree candidate: %v", err)
 					return
 				}
-				log.Errorf("failed to acquire semaphore: %v", err)
-				continue
+				startTs = time.Now().Unix()
+
+			case syncup.End:
+				log.Debugf("%s: sync end", d.Name())
+
+				d.syncTreeMutex.Lock()
+				d.syncTree = d.syncTreeCandidat
+				d.syncTreeMutex.Unlock()
+
+				runningExport, err := d.syncTree.TreeExport(tree.RunningIntentName)
+				runningExport.Priority = tree.RunningValuesPrio
+				if err != nil {
+					log.Errorf("issue doing proto tree export: %v", err)
+					continue
+				}
+				err = d.cacheClient.IntentModify(ctx, runningExport)
+				if err != nil {
+					log.Errorf("issue modifying running cache content: %v", err)
+					continue
+				}
+
+			default:
+				err := d.writeToSyncTreeCandidate(ctx, syncup.Update.GetUpdate(), startTs)
+				if err != nil {
+					log.Errorf("failed to write to sync tree: %v", err)
+				}
 			}
-			log.Debugf("%s: sync acquired semaphore", d.Name())
-			go d.storeSyncMsg(ctx, syncup, sem)
 		}
 	}
+}
+
+func (d *Datastore) writeToSyncTreeCandidate(ctx context.Context, updates []*sdcpb.Update, ts int64) error {
+	upds, err := d.expandAndConvertIntent(ctx, tree.RunningIntentName, tree.RunningValuesPrio, updates)
+	if err != nil {
+		return err
+	}
+
+	for _, upd := range upds {
+		_, err := d.syncTreeCandidat.AddUpdateRecursive(ctx, upd, tree.NewUpdateInsertFlags())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func isState(r *sdcpb.GetSchemaResponse) bool {
@@ -318,87 +299,6 @@ func isState(r *sdcpb.GetSchemaResponse) bool {
 		return r.Leaflist.IsState
 	}
 	return false
-}
-
-func (d *Datastore) storeSyncMsg(ctx context.Context, syncup *target.SyncUpdate, sem *semaphore.Weighted) {
-	defer sem.Release(1)
-
-	converter := utils.NewConverter(d.schemaClient)
-
-	cNotification, err := converter.ConvertNotificationTypedValues(ctx, syncup.Update)
-	if err != nil {
-		log.Errorf("failed to convert notification typedValue: %v", err)
-		return
-	}
-
-	upds := NewSdcpbUpdateDedup()
-	for _, x := range cNotification.GetUpdate() {
-		addUpds, err := converter.ExpandUpdateKeysAsLeaf(ctx, x)
-		if err != nil {
-			continue
-		}
-		upds.AddUpdate(x)
-		upds.AddUpdates(addUpds)
-	}
-	cNotification.Update = upds.Updates()
-
-	for _, x := range cNotification.GetUpdate() {
-		fmt.Printf("%s\n", x.String())
-	}
-
-	for _, del := range cNotification.GetDelete() {
-		store := cachepb.Store_CONFIG
-		if d.config.Sync != nil && d.config.Sync.Validate {
-			scRsp, err := d.schemaClient.GetSchemaSdcpbPath(ctx, del)
-			if err != nil {
-				log.Errorf("datastore %s failed to get schema for delete path %v: %v", d.config.Name, del, err)
-				continue
-			}
-			if isState(scRsp) {
-				store = cachepb.Store_STATE
-			}
-		}
-		delPath := utils.ToStrings(del, false, false)
-		rctx, cancel := context.WithTimeout(ctx, time.Minute) // TODO:
-		defer cancel()
-		err = d.cacheClient.Modify(rctx, d.Config().Name,
-			&cache.Opts{
-				Store: store,
-			},
-			[][]string{delPath}, nil)
-		if err != nil {
-			log.Errorf("datastore %s failed to delete path %v: %v", d.config.Name, delPath, err)
-		}
-	}
-
-	for _, upd := range cNotification.GetUpdate() {
-		store := cachepb.Store_CONFIG
-		if d.config.Sync != nil && d.config.Sync.Validate {
-			scRsp, err := d.schemaClient.GetSchemaSdcpbPath(ctx, upd.GetPath())
-			if err != nil {
-				log.Errorf("datastore %s failed to get schema for update path %v: %v", d.config.Name, upd.GetPath(), err)
-				continue
-			}
-			if isState(scRsp) {
-				store = cachepb.Store_STATE
-			}
-		}
-		// TODO:[KR] convert update typedValue if needed
-		cUpd, err := d.cacheClient.NewUpdate(upd)
-		if err != nil {
-			log.Errorf("datastore %s failed to create update from %v: %v", d.config.Name, upd, err)
-			continue
-		}
-
-		rctx, cancel := context.WithTimeout(ctx, time.Minute) // TODO:[KR] make this timeout configurable ?
-		defer cancel()
-		err = d.cacheClient.Modify(rctx, d.Config().Name, &cache.Opts{
-			Store: store,
-		}, nil, []*cache.Update{cUpd})
-		if err != nil {
-			log.Errorf("datastore %s failed to send modify request to cache: %v", d.config.Name, err)
-		}
-	}
 }
 
 type SdcpbUpdateDedup struct {
@@ -481,248 +381,248 @@ func (d *Datastore) DeviationMgr(ctx context.Context) {
 				dm[n] = devStream
 			}
 			d.m.RUnlock()
-			d.runDeviationUpdate(ctx, dm)
+			// d.runDeviationUpdate(ctx, dm)
 		}
 	}
 }
 
-func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.DataServer_WatchDeviationsServer) {
+// func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.DataServer_WatchDeviationsServer) {
 
-	sep := "/"
+// 	sep := "/"
 
-	// send deviation START
-	for _, dc := range dm {
-		err := dc.Send(&sdcpb.WatchDeviationResponse{
-			Name:  d.Name(),
-			Event: sdcpb.DeviationEvent_START,
-		})
-		if err != nil {
-			log.Errorf("%s: failed to send deviation start: %v", d.Name(), err)
-			continue
-		}
-	}
-	// collect intent deviations and store them for clearing
-	newDeviations := make(map[string][]*sdcpb.WatchDeviationResponse)
+// 	// send deviation START
+// 	for _, dc := range dm {
+// 		err := dc.Send(&sdcpb.WatchDeviationResponse{
+// 			Name:  d.Name(),
+// 			Event: sdcpb.DeviationEvent_START,
+// 		})
+// 		if err != nil {
+// 			log.Errorf("%s: failed to send deviation start: %v", d.Name(), err)
+// 			continue
+// 		}
+// 	}
+// 	// collect intent deviations and store them for clearing
+// 	newDeviations := make(map[string][]*sdcpb.WatchDeviationResponse)
 
-	configPaths := map[string]struct{}{}
+// 	configPaths := map[string]struct{}{}
 
-	// go through config and calculate deviations
-	for upd := range d.cacheClient.ReadCh(ctx, d.Name(), &cache.Opts{Store: cachepb.Store_CONFIG}, [][]string{nil}, 0) {
-		// save the updates path as an already checked path
-		configPaths[strings.Join(upd.GetPath(), sep)] = struct{}{}
+// 	// go through config and calculate deviations
+// 	for upd := range d.cacheClient.ReadCh(ctx, d.Name(), &cache.Opts{Store: cachepb.Store_CONFIG}, [][]string{nil}, 0) {
+// 		// save the updates path as an already checked path
+// 		configPaths[strings.Join(upd.GetPath(), sep)] = struct{}{}
 
-		v, err := upd.Value()
-		if err != nil {
-			log.Errorf("%s: failed to convert value: %v", d.Name(), err)
-			continue
-		}
+// 		v, err := upd.Value()
+// 		if err != nil {
+// 			log.Errorf("%s: failed to convert value: %v", d.Name(), err)
+// 			continue
+// 		}
 
-		intentsUpdates := d.cacheClient.Read(ctx, d.Name(), &cache.Opts{
-			Store:         cachepb.Store_INTENDED,
-			Owner:         "",
-			Priority:      0,
-			PriorityCount: 0,
-		}, [][]string{upd.GetPath()}, 0)
-		if len(intentsUpdates) == 0 {
-			log.Debugf("%s: has unhandled config %v: %v", d.Name(), upd.GetPath(), v)
-			// TODO: generate an unhandled config deviation
-			sp, err := d.schemaClient.ToPath(ctx, upd.GetPath())
-			if err != nil {
-				log.Errorf("%s: failed to convert cached path to xpath: %v", d.Name(), err)
-			}
+// 		intentsUpdates := d.cacheClient.Read(ctx, d.Name(), &cache.Opts{
+// 			Store:         cachepb.Store_INTENDED,
+// 			Owner:         "",
+// 			Priority:      0,
+// 			PriorityCount: 0,
+// 		}, [][]string{upd.GetPath()}, 0)
+// 		if len(intentsUpdates) == 0 {
+// 			log.Debugf("%s: has unhandled config %v: %v", d.Name(), upd.GetPath(), v)
+// 			// TODO: generate an unhandled config deviation
+// 			sp, err := d.schemaClient.ToPath(ctx, upd.GetPath())
+// 			if err != nil {
+// 				log.Errorf("%s: failed to convert cached path to xpath: %v", d.Name(), err)
+// 			}
 
-			rsp := &sdcpb.WatchDeviationResponse{
-				Name:         d.Name(),
-				Intent:       upd.Owner(),
-				Event:        sdcpb.DeviationEvent_UPDATE,
-				Reason:       sdcpb.DeviationReason_UNHANDLED,
-				Path:         sp,
-				CurrentValue: v,
-			}
-			for _, dc := range dm {
-				err = dc.Send(rsp)
-				if err != nil {
-					log.Errorf("%s: failed to send deviation: %v", d.Name(), err)
-					continue
-				}
-			}
-			continue
-		}
-		// NOT_APPLIED or OVERRULED deviation
-		// sort intent updates by priority/TS
-		sort.Slice(intentsUpdates, func(i, j int) bool {
-			if intentsUpdates[i].Priority() == intentsUpdates[j].Priority() {
-				return intentsUpdates[i].TS() < intentsUpdates[j].TS()
-			}
-			return intentsUpdates[i].Priority() < intentsUpdates[j].Priority()
-		})
-		// first intent
-		// // compare values with config
-		fiv, err := intentsUpdates[0].Value()
-		if err != nil {
-			log.Errorf("%s: failed to convert intent value: %v", d.Name(), err)
-			continue
-		}
-		sp, err := d.schemaClient.ToPath(ctx, intentsUpdates[0].GetPath())
-		if err != nil {
-			log.Errorf("%s: failed to convert path %v: %v", d.Name(), intentsUpdates[0].GetPath(), err)
-			continue
-		}
-		scRsp, err := d.schemaClient.GetSchemaSdcpbPath(ctx, sp)
-		if err != nil {
-			log.Errorf("%s: failed to get path schema: %v ", d.Name(), err)
-			continue
-		}
-		nfiv, err := utils.TypedValueToYANGType(fiv, scRsp.GetSchema())
-		if err != nil {
-			log.Errorf("%s: failed to convert value to its YANG type: %v ", d.Name(), err)
-			continue
-		}
-		if !utils.EqualTypedValues(nfiv, v) {
-			log.Debugf("%s: intent %s has a NOT_APPLIED deviation: configured: %v -> expected %v",
-				d.Name(), intentsUpdates[0].Owner(), v, nfiv)
-			rsp := &sdcpb.WatchDeviationResponse{
-				Name:          d.Name(),
-				Intent:        intentsUpdates[0].Owner(),
-				Event:         sdcpb.DeviationEvent_UPDATE,
-				Reason:        sdcpb.DeviationReason_NOT_APPLIED,
-				Path:          sp,
-				ExpectedValue: nfiv,
-				CurrentValue:  v,
-			}
-			for _, dc := range dm {
-				err = dc.Send(rsp)
-				if err != nil {
-					log.Errorf("%s: failed to send deviation: %v", d.Name(), err)
-					continue
-				}
-			}
-			xp := utils.ToXPath(sp, false)
-			if _, ok := newDeviations[xp]; !ok {
-				newDeviations[xp] = make([]*sdcpb.WatchDeviationResponse, 0, 1)
-			}
-			newDeviations[xp] = append(newDeviations[xp], rsp)
-		}
-		// remaining intents
-		for _, intUpd := range intentsUpdates[1:] {
-			iv, err := intUpd.Value()
-			if err != nil {
-				log.Errorf("%s: failed to convert intent value: %v", d.Name(), err)
-				continue
-			}
-			sp, err := d.schemaClient.ToPath(ctx, intUpd.GetPath())
-			if err != nil {
-				log.Errorf("%s: failed to convert path %v: %v", d.Name(), intUpd.GetPath(), err)
-				continue
-			}
-			scRsp, err := d.schemaClient.GetSchemaSdcpbPath(ctx, sp)
-			if err != nil {
-				log.Errorf("%s: failed to get path schema: %v ", d.Name(), err)
-				continue
-			}
-			niv, err := utils.TypedValueToYANGType(iv, scRsp.GetSchema())
-			if err != nil {
-				log.Errorf("%s: failed to convert value to its YANG type: %v ", d.Name(), err)
-				continue
-			}
-			if !utils.EqualTypedValues(nfiv, niv) {
-				log.Debugf("%s: intent %s has an OVERRULED deviation: ruling intent has: %v -> overruled intent has: %v",
-					d.Name(), intUpd.Owner(), nfiv, niv)
-				// TODO: generate an OVERRULED deviation
+// 			rsp := &sdcpb.WatchDeviationResponse{
+// 				Name:         d.Name(),
+// 				Intent:       upd.Owner(),
+// 				Event:        sdcpb.DeviationEvent_UPDATE,
+// 				Reason:       sdcpb.DeviationReason_UNHANDLED,
+// 				Path:         sp,
+// 				CurrentValue: v,
+// 			}
+// 			for _, dc := range dm {
+// 				err = dc.Send(rsp)
+// 				if err != nil {
+// 					log.Errorf("%s: failed to send deviation: %v", d.Name(), err)
+// 					continue
+// 				}
+// 			}
+// 			continue
+// 		}
+// 		// NOT_APPLIED or OVERRULED deviation
+// 		// sort intent updates by priority/TS
+// 		sort.Slice(intentsUpdates, func(i, j int) bool {
+// 			if intentsUpdates[i].Priority() == intentsUpdates[j].Priority() {
+// 				return intentsUpdates[i].TS() < intentsUpdates[j].TS()
+// 			}
+// 			return intentsUpdates[i].Priority() < intentsUpdates[j].Priority()
+// 		})
+// 		// first intent
+// 		// // compare values with config
+// 		fiv, err := intentsUpdates[0].Value()
+// 		if err != nil {
+// 			log.Errorf("%s: failed to convert intent value: %v", d.Name(), err)
+// 			continue
+// 		}
+// 		sp, err := d.schemaClient.ToPath(ctx, intentsUpdates[0].GetPath())
+// 		if err != nil {
+// 			log.Errorf("%s: failed to convert path %v: %v", d.Name(), intentsUpdates[0].GetPath(), err)
+// 			continue
+// 		}
+// 		scRsp, err := d.schemaClient.GetSchemaSdcpbPath(ctx, sp)
+// 		if err != nil {
+// 			log.Errorf("%s: failed to get path schema: %v ", d.Name(), err)
+// 			continue
+// 		}
+// 		nfiv, err := utils.TypedValueToYANGType(fiv, scRsp.GetSchema())
+// 		if err != nil {
+// 			log.Errorf("%s: failed to convert value to its YANG type: %v ", d.Name(), err)
+// 			continue
+// 		}
+// 		if !utils.EqualTypedValues(nfiv, v) {
+// 			log.Debugf("%s: intent %s has a NOT_APPLIED deviation: configured: %v -> expected %v",
+// 				d.Name(), intentsUpdates[0].Owner(), v, nfiv)
+// 			rsp := &sdcpb.WatchDeviationResponse{
+// 				Name:          d.Name(),
+// 				Intent:        intentsUpdates[0].Owner(),
+// 				Event:         sdcpb.DeviationEvent_UPDATE,
+// 				Reason:        sdcpb.DeviationReason_NOT_APPLIED,
+// 				Path:          sp,
+// 				ExpectedValue: nfiv,
+// 				CurrentValue:  v,
+// 			}
+// 			for _, dc := range dm {
+// 				err = dc.Send(rsp)
+// 				if err != nil {
+// 					log.Errorf("%s: failed to send deviation: %v", d.Name(), err)
+// 					continue
+// 				}
+// 			}
+// 			xp := utils.ToXPath(sp, false)
+// 			if _, ok := newDeviations[xp]; !ok {
+// 				newDeviations[xp] = make([]*sdcpb.WatchDeviationResponse, 0, 1)
+// 			}
+// 			newDeviations[xp] = append(newDeviations[xp], rsp)
+// 		}
+// 		// remaining intents
+// 		for _, intUpd := range intentsUpdates[1:] {
+// 			iv, err := intUpd.Value()
+// 			if err != nil {
+// 				log.Errorf("%s: failed to convert intent value: %v", d.Name(), err)
+// 				continue
+// 			}
+// 			sp, err := d.schemaClient.ToPath(ctx, intUpd.GetPath())
+// 			if err != nil {
+// 				log.Errorf("%s: failed to convert path %v: %v", d.Name(), intUpd.GetPath(), err)
+// 				continue
+// 			}
+// 			scRsp, err := d.schemaClient.GetSchemaSdcpbPath(ctx, sp)
+// 			if err != nil {
+// 				log.Errorf("%s: failed to get path schema: %v ", d.Name(), err)
+// 				continue
+// 			}
+// 			niv, err := utils.TypedValueToYANGType(iv, scRsp.GetSchema())
+// 			if err != nil {
+// 				log.Errorf("%s: failed to convert value to its YANG type: %v ", d.Name(), err)
+// 				continue
+// 			}
+// 			if !utils.EqualTypedValues(nfiv, niv) {
+// 				log.Debugf("%s: intent %s has an OVERRULED deviation: ruling intent has: %v -> overruled intent has: %v",
+// 					d.Name(), intUpd.Owner(), nfiv, niv)
+// 				// TODO: generate an OVERRULED deviation
 
-				rsp := &sdcpb.WatchDeviationResponse{
-					Name:          d.Name(),
-					Intent:        intUpd.Owner(),
-					Event:         sdcpb.DeviationEvent_UPDATE,
-					Reason:        sdcpb.DeviationReason_OVERRULED,
-					Path:          sp,
-					ExpectedValue: iv,
-					CurrentValue:  fiv,
-				}
-				for _, dc := range dm {
-					err = dc.Send(rsp)
-					if err != nil {
-						log.Errorf("%s: failed to send deviation: %v", d.Name(), err)
-						continue
-					}
-				}
-				xp := utils.ToXPath(sp, false)
-				if _, ok := newDeviations[xp]; !ok {
-					newDeviations[xp] = make([]*sdcpb.WatchDeviationResponse, 0, 1)
-				}
-				newDeviations[xp] = append(newDeviations[xp], rsp)
-			}
-		}
-	}
+// 				rsp := &sdcpb.WatchDeviationResponse{
+// 					Name:          d.Name(),
+// 					Intent:        intUpd.Owner(),
+// 					Event:         sdcpb.DeviationEvent_UPDATE,
+// 					Reason:        sdcpb.DeviationReason_OVERRULED,
+// 					Path:          sp,
+// 					ExpectedValue: iv,
+// 					CurrentValue:  fiv,
+// 				}
+// 				for _, dc := range dm {
+// 					err = dc.Send(rsp)
+// 					if err != nil {
+// 						log.Errorf("%s: failed to send deviation: %v", d.Name(), err)
+// 						continue
+// 					}
+// 				}
+// 				xp := utils.ToXPath(sp, false)
+// 				if _, ok := newDeviations[xp]; !ok {
+// 					newDeviations[xp] = make([]*sdcpb.WatchDeviationResponse, 0, 1)
+// 				}
+// 				newDeviations[xp] = append(newDeviations[xp], rsp)
+// 			}
+// 		}
+// 	}
 
-	intendedUpdates, err := d.readStoreKeysMeta(ctx, cachepb.Store_INTENDED)
-	if err != nil {
-		log.Error(err)
-		return
-	}
+// 	intendedUpdates, err := d.readStoreKeysMeta(ctx, cachepb.Store_INTENDED)
+// 	if err != nil {
+// 		log.Error(err)
+// 		return
+// 	}
 
-	for _, upds := range intendedUpdates {
-		for _, upd := range upds {
-			path := strings.Join(upd.GetPath(), sep)
-			if _, exists := configPaths[path]; !exists {
+// 	for _, upds := range intendedUpdates {
+// 		for _, upd := range upds {
+// 			path := strings.Join(upd.GetPath(), sep)
+// 			if _, exists := configPaths[path]; !exists {
 
-				// iv, err := upd.Value()
-				// if err != nil {
-				// 	log.Errorf("%s: failed to convert intent value: %v", d.Name(), err)
-				// 	continue
-				// }
+// 				// iv, err := upd.Value()
+// 				// if err != nil {
+// 				// 	log.Errorf("%s: failed to convert intent value: %v", d.Name(), err)
+// 				// 	continue
+// 				// }
 
-				path, err := d.schemaClient.ToPath(ctx, upd.GetPath())
-				if err != nil {
-					log.Error(err)
-					continue
-				}
-				// scRsp, err := d.getSchema(ctx, path)
-				// if err != nil {
-				// 	log.Errorf("%s: failed to get path schema: %v ", d.Name(), err)
-				// 	continue
-				// }
-				// niv, err := d.typedValueToYANGType(iv, scRsp.GetSchema())
-				// if err != nil {
-				// 	log.Errorf("%s: failed to convert value to its YANG type: %v ", d.Name(), err)
-				// 	continue
-				// }
+// 				path, err := d.schemaClient.ToPath(ctx, upd.GetPath())
+// 				if err != nil {
+// 					log.Error(err)
+// 					continue
+// 				}
+// 				// scRsp, err := d.getSchema(ctx, path)
+// 				// if err != nil {
+// 				// 	log.Errorf("%s: failed to get path schema: %v ", d.Name(), err)
+// 				// 	continue
+// 				// }
+// 				// niv, err := d.typedValueToYANGType(iv, scRsp.GetSchema())
+// 				// if err != nil {
+// 				// 	log.Errorf("%s: failed to convert value to its YANG type: %v ", d.Name(), err)
+// 				// 	continue
+// 				// }
 
-				rsp := &sdcpb.WatchDeviationResponse{
-					Name:          d.Name(),
-					Intent:        upd.Owner(),
-					Event:         sdcpb.DeviationEvent_UPDATE,
-					Reason:        sdcpb.DeviationReason_NOT_APPLIED,
-					Path:          path,
-					ExpectedValue: nil, // TODO this need to be fixed
-					CurrentValue:  nil,
-				}
-				for _, dc := range dm {
-					err = dc.Send(rsp)
-					if err != nil {
-						log.Errorf("%s: failed to send deviation: %v", d.Name(), err)
-						continue
-					}
-				}
-			}
-		}
-	}
+// 				rsp := &sdcpb.WatchDeviationResponse{
+// 					Name:          d.Name(),
+// 					Intent:        upd.Owner(),
+// 					Event:         sdcpb.DeviationEvent_UPDATE,
+// 					Reason:        sdcpb.DeviationReason_NOT_APPLIED,
+// 					Path:          path,
+// 					ExpectedValue: nil, // TODO this need to be fixed
+// 					CurrentValue:  nil,
+// 				}
+// 				for _, dc := range dm {
+// 					err = dc.Send(rsp)
+// 					if err != nil {
+// 						log.Errorf("%s: failed to send deviation: %v", d.Name(), err)
+// 						continue
+// 					}
+// 				}
+// 			}
+// 		}
+// 	}
 
-	// send deviation event END
-	for _, dc := range dm {
-		err := dc.Send(&sdcpb.WatchDeviationResponse{
-			Name:  d.Name(),
-			Event: sdcpb.DeviationEvent_END,
-		})
-		if err != nil {
-			log.Errorf("%s: failed to send deviation end: %v", d.Name(), err)
-			continue
-		}
-	}
-	d.md.Lock()
-	d.currentIntentsDeviations = newDeviations
-	d.md.Unlock()
-}
+// 	// send deviation event END
+// 	for _, dc := range dm {
+// 		err := dc.Send(&sdcpb.WatchDeviationResponse{
+// 			Name:  d.Name(),
+// 			Event: sdcpb.DeviationEvent_END,
+// 		})
+// 		if err != nil {
+// 			log.Errorf("%s: failed to send deviation end: %v", d.Name(), err)
+// 			continue
+// 		}
+// 	}
+// 	d.md.Lock()
+// 	d.currentIntentsDeviations = newDeviations
+// 	d.md.Unlock()
+// }
 
 // DatastoreRollbackAdapter implements the types.RollbackInterface and encapsulates the Datastore.
 type DatastoreRollbackAdapter struct {

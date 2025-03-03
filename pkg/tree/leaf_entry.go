@@ -4,13 +4,16 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/data-server/pkg/utils"
 )
 
 // LeafEntry stores the *cache.Update along with additional attributes.
 // These Attributes indicate if the entry is to be deleted / added (new) or updated.
 type LeafEntry struct {
-	*cache.Update
+	*types.Update
+
+	// helper values
 	parentEntry        Entry
 	IsNew              bool
 	Delete             bool
@@ -25,7 +28,7 @@ func (l *LeafEntry) GetEntry() Entry {
 }
 
 // MarkUpdate indicate that the entry is an Updated value
-func (l *LeafEntry) MarkUpdate(u *cache.Update) {
+func (l *LeafEntry) MarkUpdate(u *types.Update) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	// set the new value
@@ -97,18 +100,11 @@ func (l *LeafEntry) GetRootBasedEntryChain() []Entry {
 
 // String returns a string representation of the LeafEntry
 func (l *LeafEntry) String() string {
-	tv, err := l.Value()
-	var v string
-	if err != nil {
-		v = err.Error()
-	} else {
-		v = tv.String()
-	}
-	return fmt.Sprintf("Owner: %s, Priority: %d, Value: %s, New: %t, Delete: %t, Update: %t, DeleteIntendedOnly: %t", l.Owner(), l.Priority(), v, l.GetNewFlag(), l.GetDeleteFlag(), l.GetUpdateFlag(), l.GetDeleteOnlyIntendedFlag())
+	return fmt.Sprintf("Owner: %s, Priority: %d, Value: %s, New: %t, Delete: %t, Update: %t, DeleteIntendedOnly: %t", l.Owner(), l.Priority(), utils.TypedValueToString(l.Value()), l.GetNewFlag(), l.GetDeleteFlag(), l.GetUpdateFlag(), l.GetDeleteOnlyIntendedFlag())
 }
 
 // NewLeafEntry constructor for a new LeafEntry
-func NewLeafEntry(c *cache.Update, flags *UpdateInsertFlags, parent Entry) *LeafEntry {
+func NewLeafEntry(c *types.Update, flags *Flags, parent Entry) *LeafEntry {
 	le := &LeafEntry{
 		parentEntry: parent,
 		Update:      c,

@@ -16,8 +16,8 @@ import (
 )
 
 var (
-	flagsNew      *UpdateInsertFlags
-	flagsExisting *UpdateInsertFlags
+	flagsNew      *Flags
+	flagsExisting *Flags
 )
 
 func init() {

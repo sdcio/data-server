@@ -554,7 +554,7 @@ func expandUpdateFromConfig(ctx context.Context, conf *sdcio_schema.Device, conv
 		true)
 }
 
-func addToRoot(ctx context.Context, root *RootEntry, updates []*sdcpb.Update, flags *UpdateInsertFlags, owner string, prio int32) error {
+func addToRoot(ctx context.Context, root *RootEntry, updates []*sdcpb.Update, flags *Flags, owner string, prio int32) error {
 	for _, upd := range updates {
 		b, err := proto.Marshal(upd.Value)
 		if err != nil {

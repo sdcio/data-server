@@ -2,9 +2,12 @@ package tree
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
-	"github.com/sdcio/data-server/pkg/types"
+	"github.com/sdcio/data-server/pkg/tree/importer"
+	"github.com/sdcio/data-server/pkg/tree/tree_persist"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -47,10 +50,10 @@ func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 	return result, nil
 }
 
-func (r *RootEntry) AddCacheUpdatesRecursive(ctx context.Context, us UpdateSlice, flags *UpdateInsertFlags) error {
+func (r *RootEntry) AddCacheUpdatesRecursive(ctx context.Context, us types.UpdateSlice, flags *Flags) error {
 	var err error
 	for _, u := range us {
-		_, err = r.sharedEntryAttributes.AddCacheUpdateRecursive(ctx, u, flags)
+		_, err = r.sharedEntryAttributes.AddUpdateRecursive(ctx, u, flags)
 		if err != nil {
 			return err
 		}
@@ -58,26 +61,9 @@ func (r *RootEntry) AddCacheUpdatesRecursive(ctx context.Context, us UpdateSlice
 	return nil
 }
 
-func (r *RootEntry) LoadIntendedStoreOwnerData(ctx context.Context, owner string, deleteOnlyIntended bool) (UpdateSlice, error) {
-	tc := r.getTreeContext()
-
-	// Get all entries of the already existing intent
-	ownerCacheEntries := tc.GetTreeCacheClient().ReadUpdatesOwner(ctx, owner)
-
-	flags := NewUpdateInsertFlags()
-
-	// add all the existing entries
-	for _, entry := range ownerCacheEntries {
-		_, err := r.AddCacheUpdateRecursive(ctx, entry, flags)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Mark all the entries that belong to the owner / intent as deleted.
-	// This is to allow for intent updates. We mark all existing entries for deletion up front.
-	r.markOwnerDelete(owner, deleteOnlyIntended)
-	return ownerCacheEntries, nil
+func (r *RootEntry) ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *Flags) error {
+	r.treeContext.SetActualOwner(intentName)
+	return r.sharedEntryAttributes.ImportConfig(ctx, t, intentName, intentPrio, flags)
 }
 
 func (r *RootEntry) Validate(ctx context.Context, concurrent bool) types.ValidationResults {
@@ -110,25 +96,25 @@ func (r *RootEntry) String() string {
 }
 
 // GetUpdatesForOwner returns the updates that have been calculated for the given intent / owner
-func (r *RootEntry) GetUpdatesForOwner(owner string) UpdateSlice {
+func (r *RootEntry) GetUpdatesForOwner(owner string) types.UpdateSlice {
 	// retrieve all the entries from the tree that belong to the given
 	// Owner / Intent, skipping the once marked for deletion
 	// this is to insert / update entries in the cache.
-	return LeafEntriesToCacheUpdates(r.getByOwnerFiltered(owner, FilterNonDeletedButNewOrUpdated))
+	return LeafEntriesToUpdates(r.getByOwnerFiltered(owner, FilterNonDeletedButNewOrUpdated))
 }
 
 // GetDeletesForOwner returns the deletes that have been calculated for the given intent / owner
-func (r *RootEntry) GetDeletesForOwner(owner string) PathSlices {
+func (r *RootEntry) GetDeletesForOwner(owner string) types.PathSlices {
 	// retrieve all entries from the tree that belong to the given user
 	// and that are marked for deletion.
 	// This is to cover all the cases where an intent was changed and certain
 	// part of the config got deleted.
-	deletesOwnerUpdates := LeafEntriesToCacheUpdates(r.getByOwnerFiltered(owner, FilterDeleted))
+	deletesOwnerUpdates := LeafEntriesToUpdates(r.getByOwnerFiltered(owner, FilterDeleted))
 	// they are retrieved as cache.update, we just need the path for deletion from cache
-	deletesOwner := make(PathSlices, 0, len(deletesOwnerUpdates))
+	deletesOwner := make(types.PathSlices, 0, len(deletesOwnerUpdates))
 	// so collect the paths
 	for _, d := range deletesOwnerUpdates {
-		deletesOwner = append(deletesOwner, d.GetPath())
+		deletesOwner = append(deletesOwner, d.GetPathSlice())
 	}
 	return deletesOwner
 }
@@ -141,8 +127,8 @@ func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) LeafVariantSlice
 }
 
 // GetDeletes returns the paths that due to the Tree content are to be deleted from the southbound device.
-func (r *RootEntry) GetDeletes(aggregatePaths bool) (DeleteEntriesList, error) {
-	deletes := []DeleteEntry{}
+func (r *RootEntry) GetDeletes(aggregatePaths bool) (types.DeleteEntriesList, error) {
+	deletes := []types.DeleteEntry{}
 	return r.sharedEntryAttributes.GetDeletes(deletes, aggregatePaths)
 }
 
@@ -153,6 +139,20 @@ func (r *RootEntry) getTreeContext() *TreeContext {
 
 func (r *RootEntry) GetAncestorSchema() (*sdcpb.SchemaElem, int) {
 	return nil, 0
+}
+
+func (r *RootEntry) TreeExport(owner string) (*tree_persist.Intent, error) {
+	te, err := r.sharedEntryAttributes.TreeExport(owner)
+	if err != nil {
+		return nil, err
+	}
+	if te != nil {
+		return &tree_persist.Intent{
+			IntentName: owner,
+			Root:       te[0],
+		}, nil
+	}
+	return nil, fmt.Errorf("intent %q not present", owner)
 }
 
 // getByOwnerFiltered returns the Tree content filtered by owner, whilst allowing to filter further
@@ -172,41 +172,6 @@ NEXTELEMENT:
 			}
 		}
 		result = append(result, e)
-	}
-	return result
-}
-
-type DeleteEntry interface {
-	SdcpbPath() (*sdcpb.Path, error)
-	Path() PathSlice
-}
-
-// DeleteEntryImpl is a crutch to flag oldbestcases if on a choice, the active case changed
-type DeleteEntryImpl struct {
-	sdcpbPath *sdcpb.Path
-	pathslice PathSlice
-}
-
-func NewDeleteEntryImpl(sdcpbPath *sdcpb.Path, pathslice PathSlice) *DeleteEntryImpl {
-	return &DeleteEntryImpl{
-		sdcpbPath: sdcpbPath,
-		pathslice: pathslice,
-	}
-}
-
-func (d *DeleteEntryImpl) SdcpbPath() (*sdcpb.Path, error) {
-	return d.sdcpbPath, nil
-}
-func (d *DeleteEntryImpl) Path() PathSlice {
-	return d.pathslice
-}
-
-type DeleteEntriesList []DeleteEntry
-
-func (d DeleteEntriesList) PathSlices() PathSlices {
-	result := make(PathSlices, 0, len(d))
-	for _, del := range d {
-		result = append(result, del.Path())
 	}
 	return result
 }
