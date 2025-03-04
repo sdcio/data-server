@@ -50,7 +50,7 @@ func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 	return result, nil
 }
 
-func (r *RootEntry) AddCacheUpdatesRecursive(ctx context.Context, us types.UpdateSlice, flags *Flags) error {
+func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us types.UpdateSlice, flags *Flags) error {
 	var err error
 	for _, u := range us {
 		_, err = r.sharedEntryAttributes.AddUpdateRecursive(ctx, u, flags)

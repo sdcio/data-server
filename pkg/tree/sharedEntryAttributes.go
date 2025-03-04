@@ -1229,7 +1229,7 @@ func (s *sharedEntryAttributes) FinishInsertionPhase(ctx context.Context) error 
 // caches index (old intent content) as well as from the tree (new intent content).
 // the choiceResolver is fed with the resulting values and thereby ready to be queried
 // in a later stage (filterActiveChoiceCaseChilds()).
-func (s *sharedEntryAttributes) populateChoiceCaseResolvers(ctx context.Context) error {
+func (s *sharedEntryAttributes) populateChoiceCaseResolvers(_ context.Context) error {
 	if s.schema == nil {
 		return nil
 	}

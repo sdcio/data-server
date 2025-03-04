@@ -288,18 +288,6 @@ func (d *Datastore) writeToSyncTreeCandidate(ctx context.Context, updates []*sdc
 	return nil
 }
 
-func isState(r *sdcpb.GetSchemaResponse) bool {
-	switch r := r.Schema.Schema.(type) {
-	case *sdcpb.SchemaElem_Container:
-		return r.Container.IsState
-	case *sdcpb.SchemaElem_Field:
-		return r.Field.IsState
-	case *sdcpb.SchemaElem_Leaflist:
-		return r.Leaflist.IsState
-	}
-	return false
-}
-
 type SdcpbUpdateDedup struct {
 	lookup map[string]*sdcpb.Update
 }
@@ -331,11 +319,6 @@ func (s *SdcpbUpdateDedup) Updates() []*sdcpb.Update {
 		result = append(result, v)
 	}
 	return result
-}
-
-func (d *Datastore) validatePath(ctx context.Context, p *sdcpb.Path) error {
-	_, err := d.schemaClient.GetSchemaSdcpbPath(ctx, p)
-	return err
 }
 
 func (d *Datastore) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.DataServer_WatchDeviationsServer) error {

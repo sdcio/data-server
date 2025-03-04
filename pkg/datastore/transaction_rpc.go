@@ -95,17 +95,17 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	if err != nil {
 		return nil, err
 	}
-	les := tree.LeafVariantSlice{}
-	les = root.GetByOwner(tree.RunningIntentName, les)
 
-	transaction.GetOldRunning().AddUpdates(les.ToUpdateSlice())
+	// tpi, err := root.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
+
+	// transaction.SetOldRunning(tpi)
 
 	// creat a InsertFlags struct with the New flag set.
 	flagNew := tree.NewUpdateInsertFlags()
 	flagNew.SetNewFlag()
 
 	// add all the replace transaction updates with the New flag set
-	err = root.AddCacheUpdatesRecursive(ctx, transaction.GetReplace().GetUpdates(), flagNew)
+	err = root.AddUpdatesRecursive(ctx, transaction.GetReplace().GetUpdates(), flagNew)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 
 		// add the content to the Tree
-		err = root.AddCacheUpdatesRecursive(ctx, intent.GetUpdates(), flagNew)
+		err = root.AddUpdatesRecursive(ctx, intent.GetUpdates(), flagNew)
 		if err != nil {
 			return nil, err
 		}
@@ -354,7 +354,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(tree.RunningIntentName, tree.RunningValuesPrio)
 
 	// add the calculated updates to the tree, as running with adjusted prio and owner
-	err = root.AddCacheUpdatesRecursive(ctx, runningUpdates, tree.NewUpdateInsertFlags())
+	err = root.AddUpdatesRecursive(ctx, runningUpdates, tree.NewUpdateInsertFlags())
 	if err != nil {
 		return nil, err
 	}
@@ -493,14 +493,4 @@ func (d *Datastore) TransactionCancel(ctx context.Context, transactionId string)
 	defer d.dmutex.Unlock()
 
 	return d.transactionManager.Cancel(ctx, transactionId)
-}
-
-func pathIsKeyAsLeaf(p *sdcpb.Path) bool {
-	numPElem := len(p.GetElem())
-	if numPElem < 2 {
-		return false
-	}
-
-	_, ok := p.GetElem()[numPElem-2].GetKey()[p.GetElem()[numPElem-1].GetName()]
-	return ok
 }

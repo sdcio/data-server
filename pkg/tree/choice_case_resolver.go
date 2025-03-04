@@ -263,15 +263,6 @@ func (c *choicesCase) GetElementNames() []string {
 	return result
 }
 
-func (c *choicesCase) containsNew() bool {
-	for _, elem := range c.elements {
-		if elem.new {
-			return true
-		}
-	}
-	return false
-}
-
 func (c *choicesCase) getHighestPrecedenceNew() int32 {
 	result := int32(math.MaxInt32)
 	for _, elem := range c.elements {

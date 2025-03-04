@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sdcio/data-server/pkg/datastore"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -28,7 +27,6 @@ import (
 
 var target string
 var syncFile string
-var owner string
 var priority int32
 
 // datastoreCreateCmd represents the create command
@@ -96,7 +94,5 @@ func init() {
 
 	datastoreCreateCmd.Flags().StringVarP(&target, "target", "", "", "target definition file")
 	datastoreCreateCmd.Flags().StringVarP(&syncFile, "sync", "", "", "target sync definition file")
-	datastoreCreateCmd.Flags().StringVarP(&owner, "owner", "", datastore.DefaultOwner, "candidate owner")
 	datastoreCreateCmd.Flags().Int32VarP(&priority, "priority", "", 1, "candidate priority")
-
 }
