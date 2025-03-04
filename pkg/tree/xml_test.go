@@ -7,8 +7,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
-	"github.com/sdcio/data-server/mocks/mockcacheclient"
-	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -416,40 +414,35 @@ func TestToXMLTable(t *testing.T) {
 			}
 			owner := "owner1"
 
-			// mock cache client
-			ccMock := mockcacheclient.NewMockClient(mockCtrl)
+			// var runningCacheUpds []*types.Update
+			// if tt.runningConfig != nil {
+			// 	runningSdcpbUpds, err := tt.runningConfig(context.Background(), utils.NewConverter(scb))
+			// 	if err != nil {
+			// 		t.Error(err)
+			// 	}
+			// 	runningCacheUpds, err = utils.SdcpbUpdatesToCacheUpdates(runningSdcpbUpds, RunningIntentName, RunningValuesPrio)
+			// 	if err != nil {
+			// 		t.Error(err)
+			// 	}
+			// }
 
-			var runningCacheUpds []*cache.Update
-			if tt.runningConfig != nil {
-				runningSdcpbUpds, err := tt.runningConfig(context.Background(), utils.NewConverter(scb))
-				if err != nil {
-					t.Error(err)
-				}
-				runningCacheUpds, err = utils.SdcpbUpdatesToCacheUpdates(runningSdcpbUpds, RunningIntentName, RunningValuesPrio)
-				if err != nil {
-					t.Error(err)
-				}
-			}
-
-			var intendedCacheUpds []*cache.Update
-			if tt.existingConfig != nil {
-				intendedSdcpbUpds, err := tt.existingConfig(context.Background(), utils.NewConverter(scb))
-				if err != nil {
-					t.Error(err)
-				}
-				intendedCacheUpds, err = utils.SdcpbUpdatesToCacheUpdates(intendedSdcpbUpds, owner, 5)
-				if err != nil {
-					t.Error(err)
-				}
-			}
-
-			testhelper.ConfigureCacheClientMock(t, ccMock, intendedCacheUpds, runningCacheUpds, []*cache.Update{}, [][]string{})
+			// var intendedCacheUpds []*types.Update
+			// if tt.existingConfig != nil {
+			// 	intendedSdcpbUpds, err := tt.existingConfig(context.Background(), utils.NewConverter(scb))
+			// 	if err != nil {
+			// 		t.Error(err)
+			// 	}
+			// 	intendedCacheUpds, err = utils.SdcpbUpdatesToCacheUpdates(intendedSdcpbUpds, owner, 5)
+			// 	if err != nil {
+			// 		t.Error(err)
+			// 	}
+			// }
 
 			ctx := context.Background()
 
 			converter := utils.NewConverter(scb)
 
-			tc := NewTreeContext(NewTreeCacheClient("dev1", ccMock), scb, owner)
+			tc := NewTreeContext(scb, owner)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -468,7 +461,7 @@ func TestToXMLTable(t *testing.T) {
 			fmt.Println(root.String())
 
 			if tt.newConfig != nil {
-				root.markOwnerDelete(owner, false)
+				root.MarkOwnerDelete(owner, false)
 
 				newUpds, err := tt.newConfig(ctx, converter)
 				if err != nil {

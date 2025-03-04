@@ -318,25 +318,9 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	// update intent in intended store //
 	/////////////////////////////////////
 
-	// persist the intents in the cache
-	for _, intent := range transaction.GetNewIntents() {
-		tpi, err := root.TreeExport(intent.GetName())
-		if err != nil {
-			return nil, err
-		}
-		tpi.Priority = intent.GetPriority()
-		err = d.cacheClient.IntentModify(ctx, tpi)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	// logging
 	strSl := treetypes.Map(updates.ToUpdateSlice(), func(u *treetypes.Update) string { return u.String() })
 	log.Debugf("Updates\n%s", strings.Join(strSl, "\n"))
-
-	// delSl := deletes.PathSlices()
-
 	log.Debugf("Deletes:\n%s", strings.Join(strSl, "\n"))
 
 	for _, intent := range transaction.GetNewIntents() {
@@ -349,9 +333,9 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		log.Debugf("Updates Owner: %s\n%s", intent.GetName(), strings.Join(strSl, "\n"))
 
 		delSl := deletesOwner.StringSlice()
-		log.Debugf("Deletes Owner: %s \n%s", intent.GetName(), strings.Join(delSl, "\n"))
+		log.Debugf("Deletes Owner: %s\n%s", intent.GetName(), strings.Join(delSl, "\n"))
 
-		protoIntent, err := root.TreeExport(intent.GetName())
+		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority())
 		err = d.cacheClient.IntentModify(ctx, protoIntent)
 		if err != nil {
 			return nil, fmt.Errorf("failed updating the intended store for %s: %w", d.Name(), err)
@@ -366,6 +350,25 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	// if err != nil {
 	// 	return nil, fmt.Errorf("failed updating the running config store for %s: %w", d.Name(), err)
 	// }
+
+	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(tree.RunningIntentName, tree.RunningValuesPrio)
+
+	// add the calculated updates to the tree, as running with adjusted prio and owner
+	err = root.AddCacheUpdatesRecursive(ctx, runningUpdates, tree.NewUpdateInsertFlags())
+	if err != nil {
+		return nil, err
+	}
+
+	// perform deletes
+	root.DeleteSubtreePaths(deletes, tree.RunningIntentName)
+
+	newRunningIntent, err := root.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
+	err = d.cacheClient.IntentModify(ctx, newRunningIntent)
+	if err != nil {
+		return nil, fmt.Errorf("failed updating the running store for %s: %w", d.Name(), err)
+	}
+
+	fmt.Println(root.String())
 
 	log.Infof("ds=%s transaction=%s: completed", d.Name(), transaction.GetTransactionId())
 	// start the rollback ticker only if it was not already a rollback transaction.

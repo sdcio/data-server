@@ -7,6 +7,23 @@ import (
 // UpdateSlice A slice of *cache.Update, that defines additional helper functions.
 type UpdateSlice []*Update
 
+func (u UpdateSlice) CopyWithNewOwnerAndPrio(owner string, prio int32) UpdateSlice {
+	result := u.DeepCopy()
+	for _, x := range result {
+		x.SetPriority(prio)
+		x.SetOwner(owner)
+	}
+	return result
+}
+
+func (u UpdateSlice) DeepCopy() UpdateSlice {
+	result := make(UpdateSlice, 0, len(u))
+	for _, x := range u {
+		result = append(result, x.DeepCopy())
+	}
+	return result
+}
+
 // GetFirstPriorityValue returns the priority of the first element or math.MaxInt32 if len() is zero
 func (u UpdateSlice) GetFirstPriorityValue() int32 {
 	if len(u) > 0 {

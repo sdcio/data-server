@@ -3,6 +3,7 @@ package tree
 import (
 	"context"
 	"fmt"
+	"iter"
 	"math"
 	"regexp"
 	"slices"
@@ -67,6 +68,16 @@ type childMap struct {
 func newChildMap() *childMap {
 	return &childMap{
 		c: map[string]Entry{},
+	}
+}
+
+func (c *childMap) Items() iter.Seq2[string, Entry] {
+	return func(yield func(string, Entry) bool) {
+		for i, v := range c.c {
+			if !yield(i, v) {
+				return
+			}
+		}
 	}
 }
 
@@ -753,6 +764,21 @@ func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isR
 	}
 }
 
+func (s *sharedEntryAttributes) DeleteSubtree(relativePath types.PathSlice, owner string) {
+	if len(relativePath) > 0 {
+		remainingPath := relativePath[1:]
+		for _, child := range s.childs.Items() {
+			child.DeleteSubtree(remainingPath, owner)
+		}
+	}
+	// delete possibly existing leafvariants for the owner
+	s.leafVariants.DeleteByOwner(owner)
+	// recurse the call
+	for _, child := range s.childs.Items() {
+		child.DeleteSubtree(nil, owner)
+	}
+}
+
 // GetHighestPrecedence goes through the whole branch and returns the new and updated cache.Updates.
 // These are the updated that will be send to the device.
 func (s *sharedEntryAttributes) GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool) LeafVariantSlice {
@@ -855,11 +881,7 @@ func (s *sharedEntryAttributes) validateRange(resultChan chan<- *types.Validatio
 		return
 	}
 
-	tv, err := lv.Update.Value()
-	if err != nil {
-		resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("path %s, error validating ranges: %w", s.Path(), err), types.ValidationResultEntryTypeError)
-		return
-	}
+	tv := lv.Update.Value()
 
 	var tvs []*sdcpb.TypedValue
 	var typeSchema *sdcpb.SchemaLeafType
@@ -1097,9 +1119,6 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 		if tv.GetLeaflistVal() == nil {
 			scalarArr.Element = append(scalarArr.Element, tv)
 			tv = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: scalarArr}}
-			if err != nil {
-				return err
-			}
 		}
 
 		le.Update = types.NewUpdate(s.Path(), tv, intentPrio, intentName, 0)
@@ -1359,17 +1378,44 @@ func (s *sharedEntryAttributes) TreeExport(owner string) ([]*tree_persist.TreeEl
 			return nil, err
 		}
 	}
-	for _, child := range s.getChildren() {
-		c, err := child.TreeExport(owner)
+
+	if len(s.GetSchemaKeys()) > 0 {
+		children, err := s.FilterChilds(nil)
 		if err != nil {
 			return nil, err
 		}
-		if len(c) > 0 {
-			childResults = append(childResults, c...)
+		result := []*tree_persist.TreeElement{}
+		for _, c := range children {
+			childexport, err := c.TreeExport(owner)
+			if err != nil {
+				return nil, err
+			}
+			if len(childexport) == 0 {
+				// no childs belonging to the given owner
+				continue
+			}
+			if len(childexport) > 1 {
+				return nil, fmt.Errorf("unexpected value")
+			}
+			childexport[0].Name = s.pathElemName
+
+			result = append(result, childexport...)
 		}
-	}
-	if lvResult != nil || len(childResults) > 0 {
-		if s.schema != nil {
+		if len(result) > 0 {
+			return result, nil
+		}
+	} else {
+		for _, c := range s.getChildren() {
+			childExport, err := c.TreeExport(owner)
+			if err != nil {
+				return nil, err
+			}
+			if len(childExport) > 0 {
+				childResults = append(childResults, childExport...)
+			}
+
+		}
+		if lvResult != nil || len(childResults) > 0 {
 			return []*tree_persist.TreeElement{
 				{
 					Name:        s.pathElemName,
@@ -1377,8 +1423,6 @@ func (s *sharedEntryAttributes) TreeExport(owner string) ([]*tree_persist.TreeEl
 					LeafVariant: lvResult,
 				},
 			}, nil
-		} else {
-			return childResults, nil
 		}
 	}
 

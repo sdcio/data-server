@@ -23,7 +23,7 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 		t.Error(err)
 	}
 
-	tc := NewTreeContext(nil, scb, "owner1")
+	tc := NewTreeContext(scb, "owner1")
 
 	root, err := NewTreeRoot(ctx, tc)
 
@@ -63,7 +63,7 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 
 	jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
 
-	err = root.ImportConfig(ctx, jimporter, "owner1", 5)
+	err = root.ImportConfig(ctx, jimporter, "owner1", 5, NewUpdateInsertFlags())
 	if err != nil {
 		t.Error(err)
 	}
@@ -147,7 +147,7 @@ func TestValidate_RangesSigned(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			// the tree context
-			tc := NewTreeContext(nil, scb, "owner1")
+			tc := NewTreeContext(scb, "owner1")
 
 			// the tree root
 			root, err := NewTreeRoot(ctx, tc)
@@ -172,7 +172,7 @@ func TestValidate_RangesSigned(t *testing.T) {
 			jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
 
 			// import via importer
-			err = root.ImportConfig(ctx, jimporter, "owner1", 5)
+			err = root.ImportConfig(ctx, jimporter, "owner1", 5, NewUpdateInsertFlags())
 			if err != nil {
 				t.Error(err)
 			}
@@ -277,7 +277,7 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			// the tree context
-			tc := NewTreeContext(nil, scb, "owner1")
+			tc := NewTreeContext(scb, "owner1")
 
 			// the tree root
 			root, err := NewTreeRoot(ctx, tc)
@@ -302,7 +302,7 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 			jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
 
 			// import via importer
-			err = root.ImportConfig(ctx, jimporter, "owner1", 5)
+			err = root.ImportConfig(ctx, jimporter, "owner1", 5, NewUpdateInsertFlags())
 			if err != nil {
 				t.Error(err)
 			}

@@ -31,12 +31,33 @@ func NewUpdate(path PathSlice, val *sdcpb.TypedValue, prio int32, intent string,
 	}
 }
 
+func (u *Update) DeepCopy() *Update {
+
+	clonedVal := proto.Clone(u.Value()).(*sdcpb.TypedValue)
+
+	return &Update{
+		value:      clonedVal,
+		priority:   u.Priority(),
+		intentName: u.intentName,
+		timestamp:  u.timestamp,
+		path:       u.path.DeepCopy(),
+	}
+}
+
 func (u *Update) Owner() string {
 	return u.intentName
 }
 
+func (u *Update) SetOwner(owner string) {
+	u.intentName = owner
+}
+
 func (u *Update) Priority() int32 {
 	return u.priority
+}
+
+func (u *Update) SetPriority(prio int32) {
+	u.priority = prio
 }
 
 func (u *Update) Timestamp() int64 {

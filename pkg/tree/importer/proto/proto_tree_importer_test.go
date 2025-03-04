@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/sdcio/data-server/mocks/mockcacheclient"
 	"github.com/sdcio/data-server/pkg/tree"
 	jimport "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -44,6 +43,38 @@ func TestProtoTreeImporter(t *testing.T) {
 					"type": "routed"
 					}
 				]
+				},
+								{
+				"admin-state": "enable",
+				"description": "Bar",
+				"name": "ethernet-1/3",
+				"subinterface": [
+					{
+					"description": "Subinterface 5",
+					"index": 5,
+					"type": "routed"
+					}
+				]
+				}
+				,				{
+				"admin-state": "enable",
+				"description": "FooBar",
+				"name": "ethernet-1/4",
+				"subinterface": [
+					{
+					"description": "Subinterface 5",
+					"index": 5,
+					"type": "routed"
+					},					{
+					"description": "Subinterface 6",
+					"index": 6,
+					"type": "routed"
+					},					{
+					"description": "Subinterface 7",
+					"index": 7,
+					"type": "routed"
+					}
+				]
 				}
 			],
 			"leaflist": {
@@ -72,11 +103,6 @@ func TestProtoTreeImporter(t *testing.T) {
 	// create a gomock controller
 	controller := gomock.NewController(t)
 
-	// create a cache client mock
-	cacheClient := mockcacheclient.NewMockClient(controller)
-	testhelper.ConfigureCacheClientMock(t, cacheClient, nil, nil, nil, nil)
-
-	dsName := "dev1"
 	scb, err := testhelper.GetSchemaClientBound(t, controller)
 	if err != nil {
 		t.Error(err)
@@ -85,7 +111,7 @@ func TestProtoTreeImporter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tc := tree.NewTreeContext(tree.NewTreeCacheClient(dsName, cacheClient), scb, "test")
+			tc := tree.NewTreeContext(scb, "test")
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Error(err)
@@ -100,7 +126,7 @@ func TestProtoTreeImporter(t *testing.T) {
 			}
 
 			jti := jimport.NewJsonTreeImporter(j)
-			err = root.ImportConfig(ctx, jti, "owner1", 5)
+			err = root.ImportConfig(ctx, jti, "owner1", 5, tree.NewUpdateInsertFlags())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -108,14 +134,14 @@ func TestProtoTreeImporter(t *testing.T) {
 			root.FinishInsertionPhase(ctx)
 			t.Log(root.String())
 
-			protoIntent, err := root.TreeExport("owner1")
+			protoIntent, err := root.TreeExport("owner1", 5)
 			if err != nil {
 				t.Error(err)
 			}
 
-			fmt.Println(protoIntent.String())
+			fmt.Println(protoIntent.PrettyString("  "))
 
-			tcNew := tree.NewTreeContext(tree.NewTreeCacheClient(dsName, cacheClient), scb, "test")
+			tcNew := tree.NewTreeContext(scb, "test")
 			rootNew, err := tree.NewTreeRoot(ctx, tcNew)
 			if err != nil {
 				t.Error(err)
@@ -123,7 +149,7 @@ func TestProtoTreeImporter(t *testing.T) {
 
 			protoAdapter := NewProtoTreeImporter(protoIntent.GetRoot())
 
-			err = rootNew.ImportConfig(ctx, protoAdapter, protoIntent.GetIntentName(), protoIntent.GetPriority())
+			err = rootNew.ImportConfig(ctx, protoAdapter, protoIntent.GetIntentName(), protoIntent.GetPriority(), tree.NewUpdateInsertFlags())
 			if err != nil {
 				t.Error(err)
 			}

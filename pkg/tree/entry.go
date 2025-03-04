@@ -139,6 +139,7 @@ type Entry interface {
 	// ImportConfig allows importing config data received from e.g. the device in different formats (json, xml) to be imported into the tree.
 	ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *Flags) error
 	TreeExport(owner string) ([]*tree_persist.TreeElement, error)
+	DeleteSubtree(relativePath types.PathSlice, owner string)
 }
 
 type EntryVisitor func(s *sharedEntryAttributes) error

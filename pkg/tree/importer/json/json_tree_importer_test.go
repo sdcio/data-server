@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/sdcio/data-server/mocks/mockcacheclient"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	"go.uber.org/mock/gomock"
@@ -22,101 +21,108 @@ func TestJsonTreeImporter(t *testing.T) {
 		{
 			name: "JSON",
 			input: `
-				{
-			  "choices": {
-    "case1": {
-      "case-elem": {
-        "elem": "foocaseval"
-      }
-    }
-  },
-			"interface": [
-				{
-				"admin-state": "enable",
-				"description": "Foo",
-				"name": "ethernet-1/2",
-				"subinterface": [
-					{
-					"description": "Subinterface 5",
-					"index": 5,
-					"type": "routed"
-					}
-				]
-				}
-			],
-			"leaflist": {
-				"entry": [
-				"foo",
-				"bar"
-				]
-			},
-			"network-instance": [
-				{
-				"admin-state": "enable",
-				"description": "Other NI",
-				"name": "other",
-				"type": "ip-vrf",
-				"protocol":{
-					"bgp": {}
-				}
-				}
-			],
-			"patterntest": "hallo DU",
-			"emptyconf": {}
-			}`,
+						{
+					  "choices": {
+		    "case1": {
+		      "case-elem": {
+		        "elem": "foocaseval"
+		      }
+		    }
+		  },
+					"interface": [
+						{
+						"admin-state": "enable",
+						"description": "Foo",
+						"name": "ethernet-1/2",
+						"subinterface": [
+							{
+							"description": "Subinterface 5",
+							"index": 5,
+							"type": "routed"
+							}
+						]
+						},
+										{
+						"admin-state": "disable",
+						"description": "Bar",
+						"name": "ethernet-1/3",
+						"subinterface": [
+							{
+							"description": "Subinterface 7",
+							"index": 7,
+							"type": "routed"
+							}
+						]
+						}
+					],
+					"leaflist": {
+						"entry": [
+						"foo",
+						"bar"
+						]
+					},
+					"network-instance": [
+						{
+						"admin-state": "enable",
+						"description": "Other NI",
+						"name": "other",
+						"type": "ip-vrf",
+						"protocol":{
+							"bgp": {}
+						}
+						}
+					],
+					"patterntest": "hallo DU",
+					"emptyconf": {}
+					}`,
 		},
 		{
 			name: "JSON_IETF",
 			ietf: true,
 			input: `{
-				"sdcio_model:patterntest": "foo",
-				"sdcio_model_choice:choices": {
-				  "case1": {
-					"case-elem": {
-					  "elem": "foocaseval"
-					}
-				  }
-				},
-				"sdcio_model_if:interface": [
-				  {
-					"admin-state": "enable",
-					"description": "Foo",
-					"name": "ethernet-1/1",
-					"subinterface": [
-					  {
-						"description": "Subinterface 0",
-						"index": 0,
-						"type": "sdcio_model_common:routed"
-					  }
-					]
-				  }
-				],
-				"sdcio_model_leaflist:leaflist": {
-				  "entry": [
-					"foo",
-					"bar"
-				  ]
-				},
-				"sdcio_model_ni:network-instance": [
-				  {
-					"admin-state": "disable",
-					"description": "Default NI",
-					"name": "default",
-					"type": "sdcio_model_ni:default"
-				  }
-				]
-			  }`,
+						"sdcio_model:patterntest": "foo",
+						"sdcio_model_choice:choices": {
+						  "case1": {
+							"case-elem": {
+							  "elem": "foocaseval"
+							}
+						  }
+						},
+						"sdcio_model_if:interface": [
+						  {
+							"admin-state": "enable",
+							"description": "Foo",
+							"name": "ethernet-1/1",
+							"subinterface": [
+							  {
+								"description": "Subinterface 0",
+								"index": 0,
+								"type": "sdcio_model_common:routed"
+							  }
+							]
+						  }
+						],
+						"sdcio_model_leaflist:leaflist": {
+						  "entry": [
+							"foo",
+							"bar"
+						  ]
+						},
+						"sdcio_model_ni:network-instance": [
+						  {
+							"admin-state": "disable",
+							"description": "Default NI",
+							"name": "default",
+							"type": "sdcio_model_ni:default"
+						  }
+						]
+					  }`,
 		},
 	}
 
 	// create a gomock controller
 	controller := gomock.NewController(t)
 
-	// create a cache client mock
-	cacheClient := mockcacheclient.NewMockClient(controller)
-	testhelper.ConfigureCacheClientMock(t, cacheClient, nil, nil, nil, nil)
-
-	dsName := "dev1"
 	scb, err := testhelper.GetSchemaClientBound(t, controller)
 	if err != nil {
 		t.Error(err)
@@ -125,7 +131,7 @@ func TestJsonTreeImporter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tc := tree.NewTreeContext(tree.NewTreeCacheClient(dsName, cacheClient), scb, "test")
+			tc := tree.NewTreeContext(scb, "intent1")
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Error(err)
@@ -139,7 +145,7 @@ func TestJsonTreeImporter(t *testing.T) {
 				t.Fatalf("error parsing json document: %v", err)
 			}
 			jti := NewJsonTreeImporter(j)
-			err = root.ImportConfig(ctx, jti, "owner1", 5)
+			err = root.ImportConfig(ctx, jti, "owner1", 5, tree.NewUpdateInsertFlags())
 			if err != nil {
 				t.Fatal(err)
 			}

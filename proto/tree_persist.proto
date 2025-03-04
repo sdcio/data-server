@@ -28,4 +28,5 @@ message TreeElement {
   string               name         = 1;
   repeated TreeElement childs       = 4;
   bytes                leaf_variant = 5;
+  bool                 key_level    = 6;
 }

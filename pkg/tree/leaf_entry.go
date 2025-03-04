@@ -23,6 +23,18 @@ type LeafEntry struct {
 	mu sync.RWMutex
 }
 
+func (l *LeafEntry) DeepCopy() *LeafEntry {
+	return &LeafEntry{
+		Update:             l.Update.DeepCopy(),
+		parentEntry:        l.parentEntry,
+		IsNew:              l.IsNew,
+		Delete:             l.Delete,
+		DeleteOnlyIntended: l.DeleteOnlyIntended,
+		IsUpdated:          l.IsUpdated,
+		mu:                 sync.RWMutex{},
+	}
+}
+
 func (l *LeafEntry) GetEntry() Entry {
 	return l.parentEntry
 }
@@ -111,5 +123,4 @@ func NewLeafEntry(c *types.Update, flags *Flags, parent Entry) *LeafEntry {
 	}
 	flags.Apply(le)
 	return le
-
 }

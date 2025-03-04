@@ -252,10 +252,9 @@ func (d *Datastore) Sync(ctx context.Context) {
 				d.syncTree = d.syncTreeCandidat
 				d.syncTreeMutex.Unlock()
 
-				runningExport, err := d.syncTree.TreeExport(tree.RunningIntentName)
-				runningExport.Priority = tree.RunningValuesPrio
+				runningExport, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
 				if err != nil {
-					log.Errorf("issue doing proto tree export: %v", err)
+					log.Error(err)
 					continue
 				}
 				err = d.cacheClient.IntentModify(ctx, runningExport)

@@ -267,3 +267,13 @@ func (lv *LeafVariants) MarkOwnerForDeletion(owner string, onlyIntended bool) {
 		le.MarkDelete(onlyIntended)
 	}
 }
+
+func (lv *LeafVariants) DeleteByOwner(owner string) {
+	for i, l := range lv.les {
+		if l.Owner() == owner {
+			// Remove element from slice
+			lv.les = append(lv.les[:i], lv.les[i+1:]...)
+			return // Exit early since owner appears only once
+		}
+	}
+}

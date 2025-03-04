@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
-	"github.com/sdcio/data-server/mocks/mockcacheclient"
 	"github.com/sdcio/data-server/mocks/mocktarget"
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/config"
@@ -163,10 +162,6 @@ func TestDatastore_validateTree(t *testing.T) {
 			// create a gomock controller
 			controller := gomock.NewController(t)
 
-			// create a cache client mock
-			cacheClient := mockcacheclient.NewMockClient(controller)
-			testhelper.ConfigureCacheClientMock(t, cacheClient, tt.intendedStoreUpdates, nil, nil, nil)
-
 			sc, schema, err := testhelper.InitSDCIOSchema()
 			if err != nil {
 				t.Fatal(err)
@@ -182,7 +177,6 @@ func TestDatastore_validateTree(t *testing.T) {
 				},
 
 				sbi:          mocktarget.NewMockTarget(controller),
-				cacheClient:  cacheClient,
 				schemaClient: schemaClient.NewSchemaClientBound(schema.GetSchema(), sc),
 			}
 
@@ -200,8 +194,7 @@ func TestDatastore_validateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			tcc := tree.NewTreeCacheClient(dsName, d.cacheClient)
-			tc := tree.NewTreeContext(tcc, d.schemaClient, tt.intentName)
+			tc := tree.NewTreeContext(d.schemaClient, tt.intentName)
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Error(err)

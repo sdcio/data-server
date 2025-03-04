@@ -132,16 +132,11 @@ func (r *RootEntry) GetDeletes(aggregatePaths bool) (types.DeleteEntriesList, er
 	return r.sharedEntryAttributes.GetDeletes(deletes, aggregatePaths)
 }
 
-// getTreeContext returns the handle to the TreeContext
-func (r *RootEntry) getTreeContext() *TreeContext {
-	return r.treeContext
-}
-
 func (r *RootEntry) GetAncestorSchema() (*sdcpb.SchemaElem, int) {
 	return nil, 0
 }
 
-func (r *RootEntry) TreeExport(owner string) (*tree_persist.Intent, error) {
+func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Intent, error) {
 	te, err := r.sharedEntryAttributes.TreeExport(owner)
 	if err != nil {
 		return nil, err
@@ -150,6 +145,7 @@ func (r *RootEntry) TreeExport(owner string) (*tree_persist.Intent, error) {
 		return &tree_persist.Intent{
 			IntentName: owner,
 			Root:       te[0],
+			Priority:   priority,
 		}, nil
 	}
 	return nil, fmt.Errorf("intent %q not present", owner)
@@ -174,4 +170,10 @@ NEXTELEMENT:
 		result = append(result, e)
 	}
 	return result
+}
+
+func (r *RootEntry) DeleteSubtreePaths(deletes types.DeleteEntriesList, intentName string) {
+	for _, del := range deletes {
+		r.DeleteSubtree(del.Path(), intentName)
+	}
 }

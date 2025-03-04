@@ -8,14 +8,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
-	"github.com/sdcio/data-server/mocks/mockcacheclient"
-	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestToJsonTable(t *testing.T) {
@@ -380,11 +378,7 @@ func TestToJsonTable(t *testing.T) {
 
 			ctx := context.Background()
 
-			// create a cache client mock
-			cacheClient := mockcacheclient.NewMockClient(mockCtrl)
-			testhelper.ConfigureCacheClientMock(t, cacheClient, []*cache.Update{}, []*cache.Update{}, []*cache.Update{}, [][]string{})
-
-			tc := NewTreeContext(NewTreeCacheClient("dev1", cacheClient), scb, owner)
+			tc := NewTreeContext(scb, owner)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -556,13 +550,9 @@ func expandUpdateFromConfig(ctx context.Context, conf *sdcio_schema.Device, conv
 
 func addToRoot(ctx context.Context, root *RootEntry, updates []*sdcpb.Update, flags *Flags, owner string, prio int32) error {
 	for _, upd := range updates {
-		b, err := proto.Marshal(upd.Value)
-		if err != nil {
-			return err
-		}
-		cacheUpd := cache.NewUpdate(utils.ToStrings(upd.GetPath(), false, false), b, prio, owner, 0)
+		cacheUpd := types.NewUpdate(utils.ToStrings(upd.GetPath(), false, false), upd.Value, prio, owner, 0)
 
-		_, err = root.AddCacheUpdateRecursive(ctx, cacheUpd, flags)
+		_, err := root.AddUpdateRecursive(ctx, cacheUpd, flags)
 		if err != nil {
 			return err
 		}

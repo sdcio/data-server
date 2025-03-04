@@ -23,12 +23,24 @@ func (p *ProtoTreeImporter) GetElements() []importer.ImportConfigAdapter {
 	if len(p.data.Childs) == 0 {
 		return nil
 	}
-	result := make([]importer.ImportConfigAdapter, 0, len(p.data.Childs))
-	for _, x := range p.data.Childs {
-		result = append(result, NewProtoTreeImporter(x))
+	result := []importer.ImportConfigAdapter{}
+	for _, c := range p.data.Childs {
+		result = append(result, NewProtoTreeImporter(c))
 	}
 	return result
 }
+
+// func (p *ProtoTreeImporter) getListElements(elems []*tree_persist.TreeElement) []*tree_persist.TreeElement {
+// 	result := make([]*tree_persist.TreeElement, 0, len(elems))
+// 	for _, elem := range elems {
+// 		if elem.Name == "" {
+// 			result = append(result, &tree_persist.TreeElement{Name: p.data.Name, Childs: p.getListElements(elem.GetChilds())})
+// 		} else {
+// 			result = append(result, p.getListElements(elem.GetChilds())...)
+// 		}
+// 	}
+// 	return result
+// }
 
 func (p *ProtoTreeImporter) GetElement(key string) importer.ImportConfigAdapter {
 	for _, c := range p.data.Childs {
