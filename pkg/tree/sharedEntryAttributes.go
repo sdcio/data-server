@@ -1404,7 +1404,8 @@ func (s *sharedEntryAttributes) TreeExport(owner string) ([]*tree_persist.TreeEl
 	var err error
 
 	le := s.leafVariants.GetByOwner(owner)
-	if le != nil {
+
+	if le != nil && !le.Delete {
 		lvResult, err = le.ValueAsBytes()
 		if err != nil {
 			return nil, err

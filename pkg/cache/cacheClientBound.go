@@ -67,7 +67,7 @@ func (c *CacheClientBoundImpl) IntentModify(ctx context.Context, intent *tree_pe
 	return c.cacheClient.InstanceIntentModify(ctx, c.cacheName, intent)
 }
 func (c *CacheClientBoundImpl) IntentDelete(ctx context.Context, intentName string) error {
-	return c.IntentDelete(ctx, c.cacheName)
+	return c.cacheClient.InstanceIntentDelete(ctx, c.cacheName, intentName)
 }
 func (c *CacheClientBoundImpl) IntentExists(ctx context.Context, intentName string) (bool, error) {
 	return c.cacheClient.InstanceIntentExists(ctx, c.cacheName, intentName)

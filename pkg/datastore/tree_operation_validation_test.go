@@ -217,7 +217,7 @@ func TestDatastore_validateTree(t *testing.T) {
 
 			flagsNew := tree.NewUpdateInsertFlags()
 			flagsNew.SetNewFlag()
-			root.AddCacheUpdatesRecursive(ctx, updSlice, flagsNew)
+			root.AddUpdatesRecursive(ctx, updSlice, flagsNew)
 
 			root.FinishInsertionPhase(ctx)
 

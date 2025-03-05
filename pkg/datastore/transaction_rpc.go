@@ -101,7 +101,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	flagNew.SetNewFlag()
 
 	// add all the replace transaction updates with the New flag set
-	err = root.AddCacheUpdatesRecursive(ctx, transaction.GetReplace().GetUpdates(), flagNew)
+	err = root.AddUpdatesRecursive(ctx, transaction.GetReplace().GetUpdates(), flagNew)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +226,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 
 		// add the content to the Tree
-		err = root.AddCacheUpdatesRecursive(ctx, intent.GetUpdates(), flagNew)
+		err = root.AddUpdatesRecursive(ctx, intent.GetUpdates(), flagNew)
 		if err != nil {
 			return nil, err
 		}
@@ -339,6 +339,10 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority())
 		switch {
 		case errors.Is(err, tree.ErrorIntentNotPresent):
+			err = d.cacheClient.IntentDelete(ctx, intent.GetName())
+			if err != nil {
+				return nil, fmt.Errorf("failed deleting intent from store for %s: %w", d.Name(), err)
+			}
 			continue
 		case err != nil:
 			return nil, err
@@ -346,6 +350,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		err = d.cacheClient.IntentModify(ctx, protoIntent)
 		if err != nil {
 			return nil, fmt.Errorf("failed updating the intended store for %s: %w", d.Name(), err)
+
 		}
 	}
 
@@ -353,17 +358,13 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(tree.RunningIntentName, tree.RunningValuesPrio)
 
 	// add the calculated updates to the tree, as running with adjusted prio and owner
-	err = root.AddCacheUpdatesRecursive(ctx, runningUpdates, tree.NewUpdateInsertFlags())
+	err = root.AddUpdatesRecursive(ctx, runningUpdates, tree.NewUpdateInsertFlags())
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Println("BEFORE")
-	fmt.Println(root.String())
 	// perform deletes
 	root.DeleteSubtreePaths(deletes, tree.RunningIntentName)
-	fmt.Println("AFTER")
-	fmt.Println(root.String())
 
 	newRunningIntent, err := root.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
 	if newRunningIntent != nil {
