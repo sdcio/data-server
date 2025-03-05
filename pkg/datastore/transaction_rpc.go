@@ -96,16 +96,12 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 		return nil, err
 	}
 
-	// tpi, err := root.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
-
-	// transaction.SetOldRunning(tpi)
-
 	// creat a InsertFlags struct with the New flag set.
 	flagNew := tree.NewUpdateInsertFlags()
 	flagNew.SetNewFlag()
 
 	// add all the replace transaction updates with the New flag set
-	err = root.AddUpdatesRecursive(ctx, transaction.GetReplace().GetUpdates(), flagNew)
+	err = root.AddCacheUpdatesRecursive(ctx, transaction.GetReplace().GetUpdates(), flagNew)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +164,7 @@ func (d *Datastore) LoadAllIntents(ctx context.Context, root *tree.RootEntry) er
 		case err := <-ErrChan:
 			return err
 		case <-ctx.Done():
-			return fmt.Errorf("contexec closed while retrieving all intents")
+			return fmt.Errorf("context closed while retrieving all intents")
 		case intent, ok := <-IntentChan:
 			if !ok {
 				// IntentChan closed due to finish
@@ -193,6 +189,11 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 	// creat a new TreeRoot
 	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		return nil, err
+	}
+
+	err = d.LoadAllIntents(ctx, root)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +226,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 
 		// add the content to the Tree
-		err = root.AddUpdatesRecursive(ctx, intent.GetUpdates(), flagNew)
+		err = root.AddCacheUpdatesRecursive(ctx, intent.GetUpdates(), flagNew)
 		if err != nil {
 			return nil, err
 		}
@@ -236,10 +237,10 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		involvedPaths.Join(intent.GetUpdates().ToPathSet())
 	}
 
-	err = d.LoadAllIntents(ctx, root)
-	if err != nil {
-		return nil, err
-	}
+	les := tree.LeafVariantSlice{}
+	les = root.GetByOwner(tree.RunningIntentName, les)
+
+	transaction.GetOldRunning().AddUpdates(les.ToUpdateSlice())
 
 	log.Debugf("Transaction: %s - finish tree insertion phase", transaction.GetTransactionId())
 	// FinishInsertion Phase
@@ -336,39 +337,41 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		log.Debugf("Deletes Owner: %s\n%s", intent.GetName(), strings.Join(delSl, "\n"))
 
 		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority())
+		switch {
+		case errors.Is(err, tree.ErrorIntentNotPresent):
+			continue
+		case err != nil:
+			return nil, err
+		}
 		err = d.cacheClient.IntentModify(ctx, protoIntent)
 		if err != nil {
 			return nil, fmt.Errorf("failed updating the intended store for %s: %w", d.Name(), err)
 		}
 	}
 
-	// TODO: OPTIMISTIC WRITEBACK TO RUNNING
-	// // fast and optimistic writeback to the config store
-	// err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
-	// 	Store: cachepb.Store_CONFIG,
-	// }, delSl.ToStringSlice(), updates.ToCacheUpdateSlice())
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed updating the running config store for %s: %w", d.Name(), err)
-	// }
-
+	// OPTIMISTIC WRITEBACK TO RUNNING
 	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(tree.RunningIntentName, tree.RunningValuesPrio)
 
 	// add the calculated updates to the tree, as running with adjusted prio and owner
-	err = root.AddUpdatesRecursive(ctx, runningUpdates, tree.NewUpdateInsertFlags())
+	err = root.AddCacheUpdatesRecursive(ctx, runningUpdates, tree.NewUpdateInsertFlags())
 	if err != nil {
 		return nil, err
 	}
 
+	fmt.Println("BEFORE")
+	fmt.Println(root.String())
 	// perform deletes
 	root.DeleteSubtreePaths(deletes, tree.RunningIntentName)
+	fmt.Println("AFTER")
+	fmt.Println(root.String())
 
 	newRunningIntent, err := root.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
-	err = d.cacheClient.IntentModify(ctx, newRunningIntent)
-	if err != nil {
-		return nil, fmt.Errorf("failed updating the running store for %s: %w", d.Name(), err)
+	if newRunningIntent != nil {
+		err = d.cacheClient.IntentModify(ctx, newRunningIntent)
+		if err != nil {
+			return nil, fmt.Errorf("failed updating the running store for %s: %w", d.Name(), err)
+		}
 	}
-
-	fmt.Println(root.String())
 
 	log.Infof("ds=%s transaction=%s: completed", d.Name(), transaction.GetTransactionId())
 	// start the rollback ticker only if it was not already a rollback transaction.

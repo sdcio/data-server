@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/sdcio/data-server/pkg/tree"
-	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 )
 
@@ -16,7 +15,7 @@ type Transaction struct {
 	transactionManager *TransactionManager           // referernce to the TransactionManager this transaction is registered with
 	newIntents         map[string]*TransactionIntent // new Intents with their content
 	oldIntents         map[string]*TransactionIntent // old intents content
-	oldRunning         *tree_persist.TreeElement     // old running config
+	oldRunning         *TransactionIntent            // old running config
 	replace            *TransactionIntent            // possible replace config
 	isRollback         bool                          // indicates if the transaction is already a rollback transaction.
 	// Used to deactivate auto rollback triggering
@@ -28,6 +27,7 @@ func NewTransaction(id string, tm *TransactionManager) *Transaction {
 		transactionManager: tm,
 		newIntents:         map[string]*TransactionIntent{},
 		oldIntents:         map[string]*TransactionIntent{},
+		oldRunning:         NewTransactionIntent(tree.RunningIntentName, 600),
 		replace:            NewTransactionIntent(tree.ReplaceIntentName, tree.ReplaceValuesPrio),
 	}
 }
@@ -36,12 +36,8 @@ func (t *Transaction) GetNewIntents() map[string]*TransactionIntent {
 	return t.newIntents
 }
 
-func (t *Transaction) GetOldRunning() *tree_persist.TreeElement {
+func (t *Transaction) GetOldRunning() *TransactionIntent {
 	return t.oldRunning
-}
-
-func (t *Transaction) SetOldRunning(oldRunning *tree_persist.TreeElement) {
-	t.oldRunning = oldRunning
 }
 
 func (t *Transaction) GetReplace() *TransactionIntent {

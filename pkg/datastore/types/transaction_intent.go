@@ -15,7 +15,9 @@ type TransactionIntent struct {
 
 func NewTransactionIntent(name string, priority int32) *TransactionIntent {
 	return &TransactionIntent{
-		name: name,
+		name:     name,
+		updates:  make(treetypes.UpdateSlice, 0),
+		priority: priority,
 	}
 }
 

@@ -3,7 +3,6 @@ package tree_persist
 import (
 	"fmt"
 	"strings"
-	"unicode"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/proto"
@@ -25,9 +24,6 @@ func (te *TreeElement) PrettyString(indent string) string {
 func (x *TreeElement) prettyString(indent string, level int, sb *strings.Builder) {
 	prefix := strings.Repeat(indent, level)
 	keylevel := ""
-	if x.GetKeyLevel() {
-		keylevel = " [key level]"
-	}
 	sb.WriteString(fmt.Sprintf("%s%s%s\n", prefix, x.GetName(), keylevel))
 	for _, c := range x.GetChilds() {
 		c.prettyString(indent, level+1, sb)
@@ -37,15 +33,4 @@ func (x *TreeElement) prettyString(indent string, level int, sb *strings.Builder
 		proto.Unmarshal(x.LeafVariant, tv)
 		sb.WriteString(prefix + indent + tv.String() + "\n")
 	}
-}
-
-func filterReadable(input []byte) string {
-	var result []rune
-	for _, b := range input {
-		r := rune(b)
-		if unicode.IsPrint(r) { // Check if it's a printable character
-			result = append(result, r)
-		}
-	}
-	return string(result)
 }

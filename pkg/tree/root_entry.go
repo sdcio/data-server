@@ -16,6 +16,10 @@ type RootEntry struct {
 	*sharedEntryAttributes
 }
 
+var (
+	ErrorIntentNotPresent = fmt.Errorf("intent not present")
+)
+
 // NewTreeRoot Instantiate a new Tree Root element.
 func NewTreeRoot(ctx context.Context, tc *TreeContext) (*RootEntry, error) {
 	sea, err := newSharedEntryAttributes(ctx, nil, "", tc)
@@ -50,7 +54,7 @@ func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 	return result, nil
 }
 
-func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us types.UpdateSlice, flags *Flags) error {
+func (r *RootEntry) AddCacheUpdatesRecursive(ctx context.Context, us types.UpdateSlice, flags *Flags) error {
 	var err error
 	for _, u := range us {
 		_, err = r.sharedEntryAttributes.AddUpdateRecursive(ctx, u, flags)
@@ -148,7 +152,7 @@ func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Inte
 			Priority:   priority,
 		}, nil
 	}
-	return nil, fmt.Errorf("intent %q not present", owner)
+	return nil, ErrorIntentNotPresent
 }
 
 // getByOwnerFiltered returns the Tree content filtered by owner, whilst allowing to filter further

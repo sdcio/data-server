@@ -268,12 +268,24 @@ func (lv *LeafVariants) MarkOwnerForDeletion(owner string, onlyIntended bool) {
 	}
 }
 
-func (lv *LeafVariants) DeleteByOwner(owner string) {
+func (lv *LeafVariants) DeleteByOwner(owner string) (remainsToExist bool) {
+	foundOwner := false
 	for i, l := range lv.les {
+		// early exit if condition is met
+		if foundOwner && remainsToExist {
+			return remainsToExist
+		}
 		if l.Owner() == owner {
 			// Remove element from slice
 			lv.les = append(lv.les[:i], lv.les[i+1:]...)
-			return // Exit early since owner appears only once
+			foundOwner = true
+			continue
 		}
+		if l.Owner() == DefaultsIntentName {
+			continue
+		}
+		remainsToExist = true
+
 	}
+	return remainsToExist
 }

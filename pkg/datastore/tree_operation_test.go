@@ -795,7 +795,7 @@ func TestDatastore_populateTree(t *testing.T) {
 
 			flags := tree.NewUpdateInsertFlags()
 			flags.SetNewFlag()
-			root.AddUpdatesRecursive(ctx, updSlice, flags)
+			root.AddCacheUpdatesRecursive(ctx, updSlice, flags)
 
 			fmt.Println(root.String())
 			root.FinishInsertionPhase(ctx)

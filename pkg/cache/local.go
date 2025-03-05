@@ -66,17 +66,19 @@ func (l *LocalCache) InstanceIntentGetAll(ctx context.Context, cacheName string,
 	intentChan := make(chan *types.Intent, 5)
 	errChan := make(chan error, 1)
 
-	go func() {
-		defer close(intentChanOrig)
-		defer close(errChanOrig)
+	go l.Cache.InstanceIntentGetAll(ctx, cacheName, intentChan, errChan)
 
+	defer close(intentChanOrig)
+	defer close(errChanOrig)
+
+	for {
 		select {
-		case err := <-errChan: // forward errors
-			errChanOrig <- err
-			return
 		case <-ctx.Done(): // Or stop if context is canceled
 			return
-		case intent := <-intentChan: // retieve intent
+		case intent, ok := <-intentChan: // retieve intent
+			if !ok {
+				return
+			}
 			// unmarshall it into a tree_persit.Intent
 			tpIntent := &tree_persist.Intent{}
 			err := proto.Unmarshal(intent.Data(), tpIntent)
@@ -86,9 +88,15 @@ func (l *LocalCache) InstanceIntentGetAll(ctx context.Context, cacheName string,
 			}
 			// forward to caller
 			intentChanOrig <- tpIntent
+		case err, ok := <-errChan: // Handle errors after intents
+			if !ok {
+				errChan = nil // Mark errChan as nil so select ignores it
+				continue
+			}
+			errChanOrig <- err
+			return
 		}
-	}()
-	l.Cache.InstanceIntentGetAll(ctx, cacheName, intentChan, errChan)
+	}
 }
 
 func (l *LocalCache) InstanceIntentModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error {

@@ -81,6 +81,20 @@ func (c *childMap) Items() iter.Seq2[string, Entry] {
 	}
 }
 
+func (c *childMap) DeleteChilds(names []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, name := range names {
+		delete(c.c, name)
+	}
+}
+
+func (c *childMap) DeleteChild(name string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.c, name)
+}
+
 func (c *childMap) Add(e Entry) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -764,19 +778,37 @@ func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isR
 	}
 }
 
-func (s *sharedEntryAttributes) DeleteSubtree(relativePath types.PathSlice, owner string) {
+func (s *sharedEntryAttributes) DeleteSubtree(relativePath types.PathSlice, owner string) (bool, error) {
 	if len(relativePath) > 0 {
-		remainingPath := relativePath[1:]
-		for _, child := range s.childs.Items() {
-			child.DeleteSubtree(remainingPath, owner)
+		child, exists := s.childs.GetEntry(relativePath[0])
+		if !exists {
+			path := make([]string, 0, len(s.Path())+len(relativePath))
+			path = append(path, s.Path()...)
+			path = append(path, relativePath...)
+			return false, fmt.Errorf("trying to delete subtree %q but unable to find child %s at %s", path, relativePath[0], s.Path())
 		}
+		remainingPath := relativePath[1:]
+		return child.DeleteSubtree(remainingPath, owner)
 	}
+	remainsToExist := false
 	// delete possibly existing leafvariants for the owner
-	s.leafVariants.DeleteByOwner(owner)
+	remainsToExist = s.leafVariants.DeleteByOwner(owner)
+
+	deleteKeys := []string{}
 	// recurse the call
-	for _, child := range s.childs.Items() {
-		child.DeleteSubtree(nil, owner)
+	for childName, child := range s.childs.Items() {
+		childRemains, err := child.DeleteSubtree(nil, owner)
+		if err != nil {
+			return false, err
+		}
+		if !childRemains {
+			deleteKeys = append(deleteKeys, childName)
+		}
+		remainsToExist = remainsToExist || childRemains
 	}
+	// finally delete the childs
+	s.childs.DeleteChilds(deleteKeys)
+	return remainsToExist, nil
 }
 
 // GetHighestPrecedence goes through the whole branch and returns the new and updated cache.Updates.
