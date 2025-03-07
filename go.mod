@@ -4,7 +4,7 @@ go 1.23.4
 
 toolchain go1.23.5
 
-replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.0-2
+replace github.com/openconfig/goyang v1.6.0 => /home/mava/projects/goyang
 
 replace github.com/sdcio/cache => /home/mava/projects/cachev2
 
@@ -19,7 +19,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/jellydator/ttlcache/v3 v3.3.0
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/openconfig/gnmi v0.13.0
+	github.com/openconfig/gnmi v0.14.0
 	github.com/openconfig/gnmic/pkg/api v0.1.8
 	github.com/openconfig/gnmic/pkg/target v0.1.4
 	github.com/openconfig/gnmic/pkg/types v0.1.2

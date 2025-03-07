@@ -66,7 +66,6 @@ func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, resu
 				owner = s.leafVariants.GetHighestPrecedence(false, true).Owner()
 			}
 			resultChan <- types.NewValidationResultEntry(owner, err, types.ValidationResultEntryTypeError)
-			return
 		}
 	}
 }

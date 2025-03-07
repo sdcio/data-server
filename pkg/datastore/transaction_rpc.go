@@ -18,7 +18,12 @@ import (
 )
 
 var (
-	ErrDatastoreLocked = errors.New("Datastore is locked, other action is ongoing.")
+	ErrDatastoreLocked = errors.New("Datastore is locked, other action is ongoing")
+	ErrValidationError = errors.New("validation error")
+)
+
+const (
+	ConcurrentValidate = false
 )
 
 // expandAndConvertIntent takes a slice of Updates ([]*sdcpb.Update) and converts it into a tree.UpdateSlice, that contains *treetypes.Updates.
@@ -62,13 +67,13 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 	}
 
 	// convert the sdcpb.updates to tree.UpdateSlice
-	cacheUpdates, err := d.expandAndConvertIntent(ctx, req.GetIntent(), req.GetPriority(), req.GetUpdate())
+	Updates, err := d.expandAndConvertIntent(ctx, req.GetIntent(), req.GetPriority(), req.GetUpdate())
 	if err != nil {
 		return nil, err
 	}
 
 	// add the intent to the TransactionIntent
-	ti.AddUpdates(cacheUpdates)
+	ti.AddUpdates(Updates)
 
 	return ti, nil
 }
@@ -111,7 +116,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 
 	log.Debug(root.String())
 	// perform validation
-	validationResult := root.Validate(ctx, true)
+	validationResult := root.Validate(ctx, ConcurrentValidate)
 	validationResult.ErrorsStr()
 	if validationResult.HasErrors() {
 		return nil, validationResult.JoinErrors()
@@ -252,7 +257,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	log.Debug(root.String())
 
 	// perform validation
-	validationResult := root.Validate(ctx, true)
+	validationResult := root.Validate(ctx, ConcurrentValidate)
 
 	// prepare the response struct
 	result := &sdcpb.TransactionSetResponse{
@@ -279,7 +284,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 	// convert updates from cache.Update to sdcpb.Update
 	// adding them to the response
-	result.Update, err = cacheUpdateToSdcpbUpdate(updates)
+	result.Update, err = updateToSdcpbUpdate(updates)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +300,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 	// Error out if validation failed.
 	if validationResult.HasErrors() {
-		return result, nil
+		return result, ErrValidationError
 	}
 
 	log.Infof("Transaction: %s - validation passed", transaction.GetTransactionId())
@@ -350,7 +355,6 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		err = d.cacheClient.IntentModify(ctx, protoIntent)
 		if err != nil {
 			return nil, fmt.Errorf("failed updating the intended store for %s: %w", d.Name(), err)
-
 		}
 	}
 
@@ -448,6 +452,13 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	}
 
 	response, err := d.lowlevelTransactionSet(ctx, transaction, dryRun)
+	// if it is a validation error, we need to send the response while not successing the transaction guard
+	// since validation errors are transported in the response itself, not in the seperate error
+	if errors.Is(err, ErrValidationError) {
+		log.Errorf("Transaction: %s - validation failed\n%s", transactionId, strings.Join(response.GetErrors(), "\n"))
+		return response, nil
+	}
+	// if it is any other error, return a regular error
 	if err != nil {
 		log.Errorf("error executing transaction: %v", err)
 		return nil, err
@@ -460,7 +471,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	return response, err
 }
 
-func cacheUpdateToSdcpbUpdate(lvs tree.LeafVariantSlice) ([]*sdcpb.Update, error) {
+func updateToSdcpbUpdate(lvs tree.LeafVariantSlice) ([]*sdcpb.Update, error) {
 	result := make([]*sdcpb.Update, 0, len(lvs))
 	for _, lv := range lvs {
 		path, err := lv.GetEntry().SdcpbPath()

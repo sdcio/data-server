@@ -90,22 +90,10 @@ func (y *yangParserEntryAdapter) Navigate(p []string) (xpath.Entry, error) {
 		rootPath = true
 	}
 
-	lookedUpEntry := y.e
-	for idx, pelem := range p {
-		// if we move up, on a .. we should just go up, staying in the branch that represents the instance
-		// if there is another .. then we need to forward to the element with the schema and just then forward
-		// to the parent. Thereby skipping the key levels that sit inbetween
-		if pelem == ".." && lookedUpEntry.GetSchema().GetSchema() == nil {
-			lookedUpEntry, _ = lookedUpEntry.GetFirstAncestorWithSchema()
-		}
-
-		// rootPath && idx == 0 => means only allow true on first index, for sure false on all other
-		lookedUpEntry, err = lookedUpEntry.Navigate(y.ctx, []string{pelem}, rootPath && idx == 0)
-		if err != nil {
-			return newYangParserValueEntry(xpath.NewNodesetDatum([]xutils.XpathNode{}), err), nil
-		}
+	lookedUpEntry, err := y.e.Navigate(y.ctx, p, rootPath, true)
+	if err != nil {
+		return newYangParserValueEntry(xpath.NewNodesetDatum([]xutils.XpathNode{}), err), nil
 	}
-
 	return newYangParserEntryAdapter(y.ctx, lookedUpEntry), nil
 }
 

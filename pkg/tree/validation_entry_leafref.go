@@ -93,7 +93,7 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 
 		// we need to do the forwarding for all the already lookedup paths
 		for _, entry := range processEntries {
-			entry, err = entry.Navigate(ctx, []string{elem.Name}, false)
+			entry, err = entry.Navigate(ctx, []string{elem.Name}, false, false)
 			if err != nil {
 				return nil, err
 			}

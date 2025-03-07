@@ -714,12 +714,16 @@ func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, pathElems
 		e, exists := s.filterActiveChoiceCaseChilds()[pathElems[0].Name]
 		if !exists {
 			pth := &sdcpb.Path{Elem: pathElems}
-			pathStr := utils.ToXPath(pth, false)
-			return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist, trying to load defaults yielded %v", s.Path(), pathStr, err)
+			e, err = s.tryLoadingDefault(ctx, utils.ToStrings(pth, false, false))
+			if err != nil {
+				pathStr := utils.ToXPath(pth, false)
+				return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist, trying to load defaults yielded %v", s.Path(), pathStr, err)
+			}
+			return e, nil
 		}
 
 		for _, v := range pathElems[0].Key {
-			e, err = e.Navigate(ctx, []string{v}, false)
+			e, err = e.Navigate(ctx, []string{v}, false, false)
 			if err != nil {
 				return nil, err
 			}
@@ -754,27 +758,41 @@ func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path []st
 }
 
 // Navigate move through the tree, returns the Entry that is present under the given path
-func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isRootPath bool) (Entry, error) {
+func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isRootPath bool, dotdotSkipKeys bool) (Entry, error) {
 	if len(path) == 0 {
 		return s, nil
 	}
 
 	if isRootPath {
-		return s.GetRoot().Navigate(ctx, path, false)
+		return s.treeContext.root.Navigate(ctx, path, false, dotdotSkipKeys)
 	}
 	var err error
 	switch path[0] {
 	case ".":
-		return s.Navigate(ctx, path[1:], false)
+		return s.Navigate(ctx, path[1:], false, dotdotSkipKeys)
 	case "..":
-		return s.parent.Navigate(ctx, path[1:], false)
+		parent := s.parent
+		if dotdotSkipKeys {
+			// if dotdotSkipKeys is set, we need to advance to the next schema level above
+			// the issue is, that if there is a list, with keys, the last element even without a schema defined
+			// is the element to stop at.
+			// so here we need to check is the parent schema is nil and that we still want to move further up.
+			// if thats the case, move up to the next schema carrying element.
+			if parent.GetSchema() == nil && len(path) > 0 && path[1] == ".." {
+				parent, _ = parent.GetFirstAncestorWithSchema()
+			}
+		}
+		return parent.Navigate(ctx, path[1:], false, dotdotSkipKeys)
 	default:
 		e, exists := s.filterActiveChoiceCaseChilds()[path[0]]
 		if !exists {
-			return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist, trying to load defaults yielded %v", s.Path(), path, err)
+			e, err = s.tryLoadingDefault(ctx, append(s.Path(), path...))
+			if err != nil {
+				return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist, trying to load defaults yielded %v", s.Path(), path, err)
+			}
+			return e, nil
 		}
-
-		return e.Navigate(ctx, path[1:], false)
+		return e.Navigate(ctx, path[1:], false, dotdotSkipKeys)
 	}
 }
 

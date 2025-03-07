@@ -88,7 +88,7 @@ type Entry interface {
 	// GetParent returns the parent entry
 	GetParent() Entry
 	// Navigate navigates the tree according to the given path and returns the referenced entry or nil if it does not exist.
-	Navigate(ctx context.Context, path []string, isRootPath bool) (Entry, error)
+	Navigate(ctx context.Context, path []string, isRootPath bool, dotdotSkipKeys bool) (Entry, error)
 	NavigateSdcpbPath(ctx context.Context, path []*sdcpb.PathElem, isRootPath bool) (Entry, error)
 	// NavigateLeafRef follows the leafref and returns the referenced entry
 	NavigateLeafRef(ctx context.Context) ([]Entry, error)
