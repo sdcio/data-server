@@ -376,9 +376,6 @@ func (t *gnmiTarget) getSync(ctx context.Context, gnmiSync *config.SyncProtocol,
 		Name:     gnmiSync.Name,
 		Path:     paths,
 		DataType: sdcpb.DataType_CONFIG,
-		Datastore: &sdcpb.DataStore{
-			Type: sdcpb.Type_MAIN,
-		},
 		Encoding: sdcpb.Encoding(sdcpbEncoding(gnmiSync.Encoding)),
 	}
 

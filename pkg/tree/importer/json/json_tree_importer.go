@@ -82,3 +82,6 @@ func (j *JsonTreeImporter) GetTVValue(slt *sdcpb.SchemaLeafType) (*sdcpb.TypedVa
 func (j *JsonTreeImporter) GetName() string {
 	return j.name
 }
+
+// Function to ensure JsonTreeImporter implements ImportConfigAdapter (optional)
+var _ importer.ImportConfigAdapter = (*JsonTreeImporter)(nil)

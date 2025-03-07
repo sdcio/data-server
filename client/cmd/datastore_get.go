@@ -19,8 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
 
 	"github.com/olekukonko/tablewriter"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -72,7 +70,7 @@ func init() {
 
 func printDataStoreTable(rsp *sdcpb.GetDataStoreResponse) {
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "Schema", "Protocol", "Address", "State", "Candidate (C/O/P)"})
+	table.SetHeader([]string{"Name", "Schema", "Protocol", "Address", "State"})
 	table.SetAlignment(tablewriter.ALIGN_LEFT)
 	table.SetAutoFormatHeaders(false)
 	table.SetAutoWrapText(false)
@@ -81,20 +79,6 @@ func printDataStoreTable(rsp *sdcpb.GetDataStoreResponse) {
 }
 
 func toTableData(rsp *sdcpb.GetDataStoreResponse) [][]string {
-	candidates := make([]string, 0, len(rsp.GetDatastore()))
-	for _, ds := range rsp.GetDatastore() {
-		if ds.GetType() == sdcpb.Type_MAIN {
-			continue
-		}
-		candidateName := "- " + ds.GetName()
-		if ds.Owner != "" {
-			candidateName += "/" + ds.Owner
-		}
-		if ds.Priority != 0 {
-			candidateName += "/" + strconv.Itoa(int(ds.Priority))
-		}
-		candidates = append(candidates, candidateName)
-	}
 	return [][]string{
 		{
 			rsp.GetName(),
@@ -102,7 +86,6 @@ func toTableData(rsp *sdcpb.GetDataStoreResponse) [][]string {
 			rsp.GetTarget().GetType(),
 			rsp.GetTarget().GetAddress(),
 			rsp.GetTarget().GetStatus().String(),
-			strings.Join(candidates, "\n"),
 		},
 	}
 }

@@ -14,10 +14,7 @@ func (r *RootEntry) ToProtoUpdates(ctx context.Context, onlyNewOrUpdated bool) (
 
 	// updates
 	for _, cachUpdate := range cacheUpdates {
-		val, err := cachUpdate.Value()
-		if err != nil {
-			return nil, err
-		}
+		val := cachUpdate.Value()
 		path, err := cachUpdate.parentEntry.SdcpbPath()
 		if err != nil {
 			return nil, err

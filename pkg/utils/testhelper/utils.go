@@ -9,10 +9,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
-	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -20,12 +19,12 @@ const (
 )
 
 // diffCacheUpdates takes two []*cache.Update and compares the diff
-func DiffCacheUpdates(a, b []*cache.Update) string {
-	return cmp.Diff(CacheUpdateSliceToStringSlice(a), CacheUpdateSliceToStringSlice(b))
+func DiffUpdates(a, b []*types.Update) string {
+	return cmp.Diff(UpdateSliceToStringSlice(a), UpdateSliceToStringSlice(b))
 }
 
 // CacheUpdateSliceToStringSlice converts a []*cache.Update to []string
-func CacheUpdateSliceToStringSlice(s []*cache.Update) []string {
+func UpdateSliceToStringSlice(s []*types.Update) []string {
 	result := make([]string, 0, len(s))
 	for _, e := range s {
 		result = append(result, fmt.Sprintf("%v", e))
@@ -35,30 +34,18 @@ func CacheUpdateSliceToStringSlice(s []*cache.Update) []string {
 	return result
 }
 
-// GetStringTvProto takes a string and returns the sdcpb.TypedValue for it in proto encoding as []byte
-func GetStringTvProto(t *testing.T, s string) []byte {
-	result, err := proto.Marshal(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: s}})
-	if err != nil {
-		t.Error(err)
-	}
-	return result
+// GetStringTvProto takes a string and returns the sdcpb.TypedValue for it
+func GetStringTvProto(t *testing.T, s string) *sdcpb.TypedValue {
+	return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: s}}
 }
 
-func GetLeafListTvProto(t *testing.T, tvs []*sdcpb.TypedValue) []byte {
-	result, err := proto.Marshal(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: &sdcpb.ScalarArray{Element: tvs}}})
-	if err != nil {
-		t.Error(err)
-	}
-	return result
+func GetLeafListTvProto(t *testing.T, tvs []*sdcpb.TypedValue) *sdcpb.TypedValue {
+	return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: &sdcpb.ScalarArray{Element: tvs}}}
 }
 
-// GetStringTvProto takes a string and returns the sdcpb.TypedValue for it in proto encoding as []byte
-func GetUIntTvProto(t *testing.T, i uint64) []byte {
-	result, err := proto.Marshal(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_UintVal{UintVal: uint64(i)}})
-	if err != nil {
-		t.Error(err)
-	}
-	return result
+// GetStringTvProto takes a string and returns the sdcpb.TypedValue for it
+func GetUIntTvProto(t *testing.T, i uint64) *sdcpb.TypedValue {
+	return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_UintVal{UintVal: uint64(i)}}
 }
 
 // PathMapIndex calculates a common map index for string slice based paths

@@ -12,10 +12,7 @@ func getListEntrySortFunc(parent Entry) func(a, b Entry) int {
 			aEntry := aLvSlice[0]
 			bEntry := bLvSlice[0]
 
-			aTv, _ := aEntry.Value()
-			bTv, _ := bEntry.Value()
-
-			cmpResult = aTv.Cmp(bTv)
+			cmpResult = aEntry.Value().Cmp(bEntry.Value())
 			if cmpResult != 0 {
 				return cmpResult
 			}

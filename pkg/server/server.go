@@ -53,9 +53,6 @@ type Server struct {
 	ctx context.Context
 	cfn context.CancelFunc
 
-	md         *sync.RWMutex
-	datastores map[string]*datastore.Datastore // datastore group with sbi
-
 	srv *grpc.Server
 	sdcpb.UnimplementedDataServerServer
 	sdcpb.UnimplementedSchemaServerServer
@@ -63,12 +60,73 @@ type Server struct {
 	router *mux.Router
 	reg    *prometheus.Registry
 
-	// remoteSchemaClient sdcpb.SchemaServerClient
+	datastores *DatastoreMap
 
 	schemaClient schema.Client
 	cacheClient  cache.Client
 
 	gnmiOpts []grpc.DialOption
+}
+
+type DatastoreMap struct {
+	md         *sync.RWMutex
+	datastores map[string]*datastore.Datastore // datastore group with sbi
+}
+
+func NewDatastoreMap() *DatastoreMap {
+	return &DatastoreMap{
+		md:         &sync.RWMutex{},
+		datastores: map[string]*datastore.Datastore{},
+	}
+}
+func (d *DatastoreMap) StopAll() {
+	for _, ds := range d.datastores {
+		ds.Stop()
+	}
+}
+
+func (d *DatastoreMap) AddDatastore(ds *datastore.Datastore) {
+	d.md.Lock()
+	defer d.md.Unlock()
+	d.datastores[ds.Name()] = ds
+}
+
+func (d *DatastoreMap) DeleteDatastore(ctx context.Context, name string) error {
+	d.md.Lock()
+	defer d.md.Unlock()
+	ds, err := d.getDataStore(name)
+	if err != nil {
+		return err
+	}
+	ds.Delete(ctx)
+	delete(d.datastores, name)
+	return nil
+}
+
+func (d *DatastoreMap) GetDataStore(name string) (*datastore.Datastore, error) {
+	d.md.RLock()
+	defer d.md.RUnlock()
+	return d.getDataStore(name)
+}
+
+func (d *DatastoreMap) GetDatastoreAll() []*datastore.Datastore {
+	d.md.RLock()
+	defer d.md.RUnlock()
+	result := make([]*datastore.Datastore, 0, len(d.datastores))
+	for _, x := range d.datastores {
+		result = append(result, x)
+	}
+	return result
+}
+
+func (d *DatastoreMap) getDataStore(name string) (*datastore.Datastore, error) {
+	d.md.RLock()
+	defer d.md.RUnlock()
+	ds, exists := d.datastores[name]
+	if !exists {
+		return nil, fmt.Errorf("unknown datastore %s", name)
+	}
+	return ds, nil
 }
 
 func New(ctx context.Context, c *config.Config) (*Server, error) {
@@ -78,8 +136,7 @@ func New(ctx context.Context, c *config.Config) (*Server, error) {
 		ctx:    ctx,
 		cfn:    cancel,
 
-		md:         &sync.RWMutex{},
-		datastores: make(map[string]*datastore.Datastore),
+		datastores: NewDatastoreMap(),
 
 		router:   mux.NewRouter(),
 		reg:      prometheus.NewRegistry(),
@@ -159,16 +216,6 @@ func (s *Server) Serve(ctx context.Context) error {
 	return nil
 }
 
-func (s *Server) getDataStore(name string) (*datastore.Datastore, error) {
-	s.md.Lock()
-	defer s.md.Unlock()
-	ds, exists := s.datastores[name]
-	if !exists {
-		return nil, fmt.Errorf("unknown datastore %s", name)
-	}
-	return ds, nil
-}
-
 func (s *Server) ServeHTTP() {
 	s.router.Handle("/metrics", promhttp.HandlerFor(s.reg, promhttp.HandlerOpts{}))
 	s.reg.MustRegister(collectors.NewGoCollector())
@@ -187,9 +234,7 @@ func (s *Server) ServeHTTP() {
 
 func (s *Server) Stop() {
 	s.srv.Stop()
-	for _, ds := range s.datastores {
-		ds.Stop()
-	}
+	s.datastores.StopAll()
 	s.cfn()
 }
 
@@ -228,10 +273,9 @@ func (s *Server) createInitialDatastores(ctx context.Context) {
 		log.Debugf("creating datastore %s", dsCfg.Name)
 		go func(dsCfg *config.DatastoreConfig) {
 			defer wg.Done()
-			ds := datastore.New(ctx, dsCfg, s.schemaClient, s.cacheClient, s.gnmiOpts...)
-			s.md.Lock()
-			defer s.md.Unlock()
-			s.datastores[dsCfg.Name] = ds
+			// TODO: handle error
+			ds, _ := datastore.New(ctx, dsCfg, s.schemaClient, s.cacheClient, s.gnmiOpts...)
+			s.datastores.AddDatastore(ds)
 		}(dsCfg)
 	}
 	wg.Wait()
