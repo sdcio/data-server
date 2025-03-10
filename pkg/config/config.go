@@ -39,6 +39,7 @@ type Config struct {
 	Cache                     *CacheConfig                    `yaml:"cache,omitempty" json:"cache,omitempty"`
 	Prometheus                *PromConfig                     `yaml:"prometheus,omitempty" json:"prometheus,omitempty"`
 	DefaultTransactionTimeout time.Duration                   `yaml:"transaction-timeout,omitempty" json:"transaction-timeout,omitempty"`
+	Validation                *Validation                     `yaml:"validation,omitempty" json:"validation,omitempty"`
 }
 
 type TLS struct {
@@ -47,6 +48,8 @@ type TLS struct {
 	Key        string `yaml:"key,omitempty" json:"key,omitempty"`
 	SkipVerify bool   `yaml:"skip-verify,omitempty" json:"skip-verify,omitempty"`
 }
+
+var LoadedConfig *Config
 
 func New(file string) (*Config, error) {
 	c := new(Config)
@@ -62,7 +65,13 @@ func New(file string) (*Config, error) {
 		}
 	}
 	err := c.validateSetDefaults()
-	return c, err
+	if err != nil {
+		return nil, err
+	}
+
+	LoadedConfig = c
+
+	return c, nil
 }
 
 func (c *Config) validateSetDefaults() error {
@@ -128,6 +137,14 @@ func (c *Config) validateSetDefaults() error {
 	if c.DefaultTransactionTimeout == 0 {
 		c.DefaultTransactionTimeout = 5 * time.Minute
 	}
+
+	if c.Validation == nil {
+		c.Validation = &Validation{}
+	}
+	if err = c.Validation.validateSetDefaults(); err != nil {
+		return err
+	}
+
 	return nil
 }
 

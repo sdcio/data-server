@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/types"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -846,14 +847,28 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 
 	// validate the mandatory statement on this entry
 	if s.remainsToExist() {
-		s.validateMandatory(ctx, resultChan)
-		s.validateLeafRefs(ctx, resultChan)
-		s.validateLeafListMinMaxAttributes(resultChan)
-		s.validatePattern(resultChan)
-		s.validateMustStatements(ctx, resultChan)
-		s.validateLength(resultChan)
-		s.validateRange(resultChan)
-		// s.validateMaxElements(errChan)   // TODO
+		for _, validator := range config.AvailableValidators {
+			if config.LoadedConfig.Validation.IsEnabled(validator) {
+				switch validator {
+				case config.Mandatory:
+					s.validateMandatory(ctx, resultChan)
+				case config.Leafref:
+					s.validateLeafRefs(ctx, resultChan)
+				case config.LeafrefMinMaxAttributes:
+					s.validateLeafListMinMaxAttributes(resultChan)
+				case config.Pattern:
+					s.validatePattern(resultChan)
+				case config.MustStatements:
+					s.validateMustStatements(ctx, resultChan)
+				case config.Length:
+					s.validateLength(resultChan)
+				case config.Range:
+					s.validateRange(resultChan)
+					//case config.MaxElements: //TODO
+					//	s.validateMaxElements(resultChan)
+				}
+			}
+		}
 	}
 }
 
