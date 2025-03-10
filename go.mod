@@ -21,7 +21,7 @@ require (
 	github.com/openconfig/gnmic/pkg/types v0.1.2
 	github.com/openconfig/goyang v1.6.0
 	github.com/openconfig/ygot v0.29.20
-	github.com/prometheus/client_golang v1.20.5
+	github.com/prometheus/client_golang v1.21.1
 	github.com/scrapli/scrapligo v1.3.3
 	github.com/sdcio/cache v0.0.35
 	github.com/sdcio/schema-server v0.0.30
@@ -79,7 +79,7 @@ require (
 	github.com/openconfig/grpctunnel v0.1.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
-	github.com/prometheus/common v0.60.1 // indirect
+	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rs/xid v1.6.0 // indirect
