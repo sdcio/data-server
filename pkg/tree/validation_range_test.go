@@ -70,7 +70,7 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 
 	root.FinishInsertionPhase(ctx)
 
-	validationResult := root.Validate(ctx, false)
+	validationResult := root.Validate(ctx, validationConfig)
 
 	t.Logf("Validation Errors:\n%s", strings.Join(validationResult.ErrorsStr(), "\n"))
 	t.Log(root.String())
@@ -179,7 +179,7 @@ func TestValidate_RangesSigned(t *testing.T) {
 
 			root.FinishInsertionPhase(ctx)
 
-			validationResult := root.Validate(ctx, false)
+			validationResult := root.Validate(ctx, validationConfig)
 
 			t.Logf("Validation Errors:\n%s", strings.Join(validationResult.ErrorsStr(), "\n"))
 			t.Log(root.String())
@@ -310,7 +310,7 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 			root.FinishInsertionPhase(ctx)
 
 			// run validation
-			validationResults := root.Validate(ctx, false)
+			validationResults := root.Validate(ctx, validationConfig)
 
 			t.Logf("Validation Errors:\n%s", strings.Join(validationResults.ErrorsStr(), "\n"))
 			t.Log(root.String())

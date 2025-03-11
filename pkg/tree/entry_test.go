@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
@@ -16,14 +17,16 @@ import (
 )
 
 var (
-	flagsNew      *UpdateInsertFlags
-	flagsExisting *UpdateInsertFlags
+	flagsNew         *UpdateInsertFlags
+	flagsExisting    *UpdateInsertFlags
+	validationConfig *config.Validation
 )
 
 func init() {
 	flagsNew = NewUpdateInsertFlags()
 	flagsNew.SetNewFlag()
 	flagsExisting = NewUpdateInsertFlags()
+	validationConfig = &config.Validation{DisableConcurrency: true}
 }
 
 func Test_Entry(t *testing.T) {
@@ -485,7 +488,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			t.Log(root.String())
 
-			validationResult := root.Validate(context.TODO(), false)
+			validationResult := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -525,7 +528,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				}
 			}
 
-			validationResult := root.Validate(context.TODO(), false)
+			validationResult := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -571,7 +574,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				}
 			}
 
-			validationResult := root.Validate(context.TODO(), false)
+			validationResult := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1158,7 +1161,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 
 			root.FinishInsertionPhase(ctx)
 
-			validationResult := root.Validate(context.TODO(), false)
+			validationResult := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1192,7 +1195,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 
 			root.FinishInsertionPhase(ctx)
 
-			validationResult := root.Validate(context.TODO(), false)
+			validationResult := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1285,7 +1288,7 @@ func Test_Validation_Deref(t *testing.T) {
 
 			root.FinishInsertionPhase(ctx)
 
-			validationResult := root.Validate(context.TODO(), false)
+			validationResult := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors

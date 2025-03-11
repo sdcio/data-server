@@ -747,8 +747,9 @@ func TestDatastore_populateTree(t *testing.T) {
 			// create a datastore
 			d := &Datastore{
 				config: &config.DatastoreConfig{
-					Name:   dsName,
-					Schema: schema,
+					Name:       dsName,
+					Schema:     schema,
+					Validation: &config.Validation{DisableConcurrency: true},
 				},
 
 				sbi:          mocktarget.NewMockTarget(controller),
@@ -823,7 +824,7 @@ func TestDatastore_populateTree(t *testing.T) {
 
 			root.FinishInsertionPhase(ctx)
 
-			validationResult := root.Validate(ctx, false)
+			validationResult := root.Validate(ctx, d.config.Validation)
 
 			fmt.Printf("Validation Errors:\n%v\n", strings.Join(validationResult.ErrorsStr(), "\n"))
 			fmt.Printf("Tree:%s\n", root.String())

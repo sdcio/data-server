@@ -177,8 +177,9 @@ func TestDatastore_validateTree(t *testing.T) {
 			// create a datastore
 			d := &Datastore{
 				config: &config.DatastoreConfig{
-					Name:   dsName,
-					Schema: schema,
+					Name:       dsName,
+					Schema:     schema,
+					Validation: &config.Validation{DisableConcurrency: true},
 				},
 
 				sbi:          mocktarget.NewMockTarget(controller),
@@ -228,7 +229,7 @@ func TestDatastore_validateTree(t *testing.T) {
 
 			root.FinishInsertionPhase(ctx)
 
-			validationResult := root.Validate(ctx, false)
+			validationResult := root.Validate(ctx, d.config.Validation)
 
 			for _, x := range tt.expectedWarnings {
 				if !slices.Contains(validationResult.WarningsStr(), x) {
