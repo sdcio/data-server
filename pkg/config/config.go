@@ -39,7 +39,7 @@ type Config struct {
 	Cache                     *CacheConfig                    `yaml:"cache,omitempty" json:"cache,omitempty"`
 	Prometheus                *PromConfig                     `yaml:"prometheus,omitempty" json:"prometheus,omitempty"`
 	DefaultTransactionTimeout time.Duration                   `yaml:"transaction-timeout,omitempty" json:"transaction-timeout,omitempty"`
-	Validation                *Validation                     `yaml:"validation,omitempty" json:"validation,omitempty"`
+	Validation                *Validation                     `yaml:"validation-defaults,omitempty" json:"validation-defaults,omitempty"`
 }
 
 type TLS struct {
@@ -48,8 +48,6 @@ type TLS struct {
 	Key        string `yaml:"key,omitempty" json:"key,omitempty"`
 	SkipVerify bool   `yaml:"skip-verify,omitempty" json:"skip-verify,omitempty"`
 }
-
-var LoadedConfig *Config
 
 func New(file string) (*Config, error) {
 	c := new(Config)
@@ -68,8 +66,6 @@ func New(file string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	LoadedConfig = c
 
 	return c, nil
 }

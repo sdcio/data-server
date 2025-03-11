@@ -189,3 +189,15 @@ cache:
 # expose a prometheus server with cpu, mem and grpc metrics
 prometheus:
   address: ":56090"
+
+
+validation-defaults:
+  disabled-validators:
+    mandatory: false
+    leafref: false
+    leafref-min-max-attributes: false
+    pattern: false
+    must-statements: false
+    length: false
+    range: false
+    max-elements: false # Not yet implemented

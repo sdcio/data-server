@@ -827,7 +827,7 @@ func (s *sharedEntryAttributes) getHighestPrecedenceValueOfBranch() int32 {
 
 // Validate is the highlevel function to perform validation.
 // it will multiplex all the different Validations that need to happen
-func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, concurrent bool) {
+func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, vCfg *config.Validation) {
 
 	// recurse the call to the child elements
 	wg := sync.WaitGroup{}
@@ -835,10 +835,10 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 	for _, c := range s.filterActiveChoiceCaseChilds() {
 		wg.Add(1)
 		valFunc := func(x Entry) {
-			x.Validate(ctx, resultChan, concurrent)
+			x.Validate(ctx, resultChan, vCfg)
 			wg.Done()
 		}
-		if concurrent {
+		if vCfg.Concurrent {
 			go valFunc(c)
 		} else {
 			valFunc(c)
@@ -847,28 +847,30 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 
 	// validate the mandatory statement on this entry
 	if s.remainsToExist() {
-		for _, validator := range config.AvailableValidators {
-			if config.LoadedConfig.Validation.IsEnabled(validator) {
-				switch validator {
-				case config.Mandatory:
-					s.validateMandatory(ctx, resultChan)
-				case config.Leafref:
-					s.validateLeafRefs(ctx, resultChan)
-				case config.LeafrefMinMaxAttributes:
-					s.validateLeafListMinMaxAttributes(resultChan)
-				case config.Pattern:
-					s.validatePattern(resultChan)
-				case config.MustStatements:
-					s.validateMustStatements(ctx, resultChan)
-				case config.Length:
-					s.validateLength(resultChan)
-				case config.Range:
-					s.validateRange(resultChan)
-					//case config.MaxElements: //TODO
-					//	s.validateMaxElements(resultChan)
-				}
-			}
+		if !vCfg.DisabledValidators.Mandatory {
+			s.validateMandatory(ctx, resultChan)
 		}
+		if !vCfg.DisabledValidators.Leafref {
+			s.validateLeafRefs(ctx, resultChan)
+		}
+		if !vCfg.DisabledValidators.LeafrefMinMaxAttributes {
+			s.validateLeafListMinMaxAttributes(resultChan)
+		}
+		if !vCfg.DisabledValidators.Pattern {
+			s.validatePattern(resultChan)
+		}
+		if !vCfg.DisabledValidators.MustStatement {
+			s.validateMustStatements(ctx, resultChan)
+		}
+		if !vCfg.DisabledValidators.Length {
+			s.validateLength(resultChan)
+		}
+		if !vCfg.DisabledValidators.Range {
+			s.validateRange(resultChan)
+		}
+		//if !vCfg.DisabledValidators.MaxElements {
+		//	s.validateMaxElements(resultChan)
+		//}
 	}
 }
 

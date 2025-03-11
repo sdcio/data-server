@@ -1,37 +1,41 @@
 package config
 
 type Validation struct {
-	DisabledValidators []Validator `yaml:"disabled-validators,omitempty" json:"disabled-validators,omitempty"`
-	enabledMap         map[Validator]bool
+	DisabledValidators Validators `yaml:"disabled-validators,omitempty" json:"disabled-validators,omitempty"`
+	// ValidateConcurrently DO NOT USE THIS INTERNALLY! It is a user supplied setting and is migrated to Concurrent.
+	ValidateConcurrently *bool `yaml:"validate-concurrently,omitempty" json:"validate-concurrently,omitempty"`
+	Concurrent           bool
 }
 
-type Validator string
+type Validators struct {
+	Mandatory               bool `yaml:"mandatory,omitempty" json:"mandatory,omitempty"`
+	Leafref                 bool `yaml:"leafref,omitempty" json:"leafref,omitempty"`
+	LeafrefMinMaxAttributes bool `yaml:"leafref-min-max,omitempty" json:"leafref-min-max,omitempty"`
+	Pattern                 bool `yaml:"pattern,omitempty" json:"pattern,omitempty"`
+	MustStatement           bool `yaml:"must-statement,omitempty" json:"must-statement,omitempty"`
+	Length                  bool `yaml:"length,omitempty" json:"length,omitempty"`
+	Range                   bool `yaml:"range,omitempty" json:"range,omitempty"`
+	MaxElements             bool `yaml:"max-elements,omitempty" json:"max-elements,omitempty"`
+}
 
 const (
-	Mandatory               Validator = "mandatory"
-	Leafref                 Validator = "leafref"
-	LeafrefMinMaxAttributes Validator = "leafref-min-max-attributes"
-	Pattern                 Validator = "pattern"
-	MustStatements          Validator = "must-statements"
-	Length                  Validator = "length"
-	Range                   Validator = "range"
-	MaxElements             Validator = "max-elements"
+	Mandatory               string = "mandatory"
+	Leafref                 string = "leafref"
+	LeafrefMinMaxAttributes string = "leafref-min-max-attributes"
+	Pattern                 string = "pattern"
+	MustStatement           string = "must-statement"
+	Length                  string = "length"
+	Range                   string = "range"
+	MaxElements             string = "max-elements"
 )
 
-var AvailableValidators = [...]Validator{Mandatory, Leafref, LeafrefMinMaxAttributes, Pattern, MustStatements, Length, Range, MaxElements}
-
-func (v *Validation) IsEnabled(validator Validator) bool {
-	return v.enabledMap[validator]
-}
-
 func (v *Validation) validateSetDefaults() error {
-	// Generate enabled map
-	v.enabledMap = make(map[Validator]bool, len(AvailableValidators))
-	for _, validator := range AvailableValidators {
-		v.enabledMap[validator] = true
-	}
-	for _, validator := range v.DisabledValidators {
-		v.enabledMap[Validator(validator)] = false
+	if v.ValidateConcurrently != nil {
+		// if given, set the value internally
+		v.Concurrent = *v.ValidateConcurrently
+	} else {
+		// if unset, default true
+		v.Concurrent = true
 	}
 	return nil
 }
