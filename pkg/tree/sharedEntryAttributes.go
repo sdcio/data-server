@@ -838,7 +838,7 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 			x.Validate(ctx, resultChan, vCfg)
 			wg.Done()
 		}
-		if vCfg.Concurrent {
+		if !vCfg.DisableConcurrency {
 			go valFunc(c)
 		} else {
 			valFunc(c)

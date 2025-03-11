@@ -2,9 +2,7 @@ package config
 
 type Validation struct {
 	DisabledValidators Validators `yaml:"disabled-validators,omitempty" json:"disabled-validators,omitempty"`
-	// ValidateConcurrently DO NOT USE THIS INTERNALLY! It is a user supplied setting and is migrated to Concurrent.
-	ValidateConcurrently *bool `yaml:"validate-concurrently,omitempty" json:"validate-concurrently,omitempty"`
-	Concurrent           bool
+	DisableConcurrency bool       `yaml:"disable-concurrency,omitempty" json:"disable-concurrency,omitempty"`
 }
 
 type Validators struct {
@@ -18,24 +16,6 @@ type Validators struct {
 	MaxElements             bool `yaml:"max-elements,omitempty" json:"max-elements,omitempty"`
 }
 
-const (
-	Mandatory               string = "mandatory"
-	Leafref                 string = "leafref"
-	LeafrefMinMaxAttributes string = "leafref-min-max-attributes"
-	Pattern                 string = "pattern"
-	MustStatement           string = "must-statement"
-	Length                  string = "length"
-	Range                   string = "range"
-	MaxElements             string = "max-elements"
-)
-
 func (v *Validation) validateSetDefaults() error {
-	if v.ValidateConcurrently != nil {
-		// if given, set the value internally
-		v.Concurrent = *v.ValidateConcurrently
-	} else {
-		// if unset, default true
-		v.Concurrent = true
-	}
 	return nil
 }
