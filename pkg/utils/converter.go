@@ -52,14 +52,6 @@ func (c *Converter) ExpandUpdates(ctx context.Context, updates []*sdcpb.Update) 
 // expandUpdate Expands the value, in case of json to single typed value updates
 func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
 	upds := make([]*sdcpb.Update, 0)
-	// if includeKeysAsLeaf {
-	// 	// expand update path if it contains keys
-	// 	intUpd, err := c.ExpandUpdateKeysAsLeaf(ctx, upd)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	upds = append(upds, intUpd...)
-	// }
 	rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, upd.GetPath())
 	if err != nil {
 		return nil, err
