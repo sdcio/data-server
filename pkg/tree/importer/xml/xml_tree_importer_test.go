@@ -8,6 +8,7 @@ import (
 	"github.com/beevik/etree"
 	"github.com/google/go-cmp/cmp"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	"go.uber.org/mock/gomock"
@@ -91,7 +92,7 @@ func TestXmlTreeImporter(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = root.ImportConfig(ctx, NewXmlTreeImporter(&inputDoc.Element), "owner1", 5, tree.NewUpdateInsertFlags())
+			err = root.ImportConfig(ctx, NewXmlTreeImporter(&inputDoc.Element), "owner1", 5, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Fatal(err)
 			}

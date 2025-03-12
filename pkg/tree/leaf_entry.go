@@ -116,7 +116,7 @@ func (l *LeafEntry) String() string {
 }
 
 // NewLeafEntry constructor for a new LeafEntry
-func NewLeafEntry(c *types.Update, flags *Flags, parent Entry) *LeafEntry {
+func NewLeafEntry(c *types.Update, flags *types.UpdateInsertFlags, parent Entry) *LeafEntry {
 	le := &LeafEntry{
 		parentEntry: parent,
 		Update:      c,

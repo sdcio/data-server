@@ -39,7 +39,7 @@ var datastoreGetCmd = &cobra.Command{
 			return err
 		}
 		req := &sdcpb.GetDataStoreRequest{
-			Name: datastoreName,
+			DatastoreName: datastoreName,
 		}
 		// fmt.Println("request:")
 		// fmt.Println(prototext.Format(req))
@@ -81,7 +81,7 @@ func printDataStoreTable(rsp *sdcpb.GetDataStoreResponse) {
 func toTableData(rsp *sdcpb.GetDataStoreResponse) [][]string {
 	return [][]string{
 		{
-			rsp.GetName(),
+			rsp.GetDatastoreName(),
 			fmt.Sprintf("%s/%s/%s", rsp.GetSchema().GetName(), rsp.GetSchema().GetVendor(), rsp.GetSchema().GetVersion()),
 			rsp.GetTarget().GetType(),
 			rsp.GetTarget().GetAddress(),

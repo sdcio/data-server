@@ -21,6 +21,7 @@ import (
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 
+	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/schema"
 	"github.com/sdcio/data-server/pkg/utils"
 )
@@ -47,9 +48,9 @@ type SchemaClientBoundImpl struct {
 	indexMutex sync.RWMutex
 }
 
-func NewSchemaClientBound(s *sdcpb.Schema, sc schema.Client) *SchemaClientBoundImpl {
+func NewSchemaClientBound(s *config.SchemaConfig, sc schema.Client) *SchemaClientBoundImpl {
 	result := &SchemaClientBoundImpl{
-		schema:       s,
+		schema:       s.GetSchema(),
 		schemaClient: sc,
 		index:        sync.Map{},
 	}

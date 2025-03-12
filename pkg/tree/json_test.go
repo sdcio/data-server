@@ -359,10 +359,10 @@ func TestToJsonTable(t *testing.T) {
 		},
 	}
 
-	flagsNew := NewUpdateInsertFlags()
+	flagsNew := types.NewUpdateInsertFlags()
 	flagsNew.SetNewFlag()
 
-	flagsOld := NewUpdateInsertFlags()
+	flagsOld := types.NewUpdateInsertFlags()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -544,11 +544,10 @@ func expandUpdateFromConfig(ctx context.Context, conf *sdcio_schema.Device, conv
 				Elem: []*sdcpb.PathElem{},
 			},
 			Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: []byte(strJson)}},
-		},
-		true)
+		})
 }
 
-func addToRoot(ctx context.Context, root *RootEntry, updates []*sdcpb.Update, flags *Flags, owner string, prio int32) error {
+func addToRoot(ctx context.Context, root *RootEntry, updates []*sdcpb.Update, flags *types.UpdateInsertFlags, owner string, prio int32) error {
 	for _, upd := range updates {
 		cacheUpd := types.NewUpdate(utils.ToStrings(upd.GetPath(), false, false), upd.Value, prio, owner, 0)
 

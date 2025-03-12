@@ -48,10 +48,31 @@ func (y *yangParserEntryAdapter) valueToDatum(tv *sdcpb.TypedValue) xpath.Datum 
 }
 
 func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
-	if y.e.GetSchema() == nil || y.e.GetSchema().GetContainer() != nil {
+	if y.e.GetSchema() == nil {
 		return xpath.NewBoolDatum(true), nil
 	}
 
+	// if y.e is a container
+	if cs := y.e.GetSchema().GetContainer(); cs != nil {
+		// its a container
+		if len(cs.Keys) == 0 {
+			// regular container
+			return xpath.NewBoolDatum(true), nil
+		}
+		// list
+		childs, err := y.e.FilterChilds(nil)
+		if err != nil {
+			return nil, err
+		}
+		datums := make([]xutils.XpathNode, 0, len(childs))
+		for x := 0; x <= len(childs); x++ {
+			// this is a dirty fix, that will enable count() to evaluate the right value
+			datums = append(datums, nil)
+		}
+		return xpath.NewNodesetDatum(datums), nil
+	}
+
+	// if y.e is anything else then a container
 	lv, _ := y.e.getHighestPrecedenceLeafValue(y.ctx)
 	if lv == nil {
 		return xpath.NewNodesetDatum([]xutils.XpathNode{}), nil

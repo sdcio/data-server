@@ -14,232 +14,232 @@
 
 package datastore
 
-import (
-	"context"
-	"reflect"
-	"testing"
+// import (
+// 	"context"
+// 	"reflect"
+// 	"testing"
 
-	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
-	"github.com/sdcio/data-server/pkg/utils"
-	"github.com/sdcio/data-server/pkg/utils/testhelper"
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-)
+// 	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+// 	"github.com/sdcio/data-server/pkg/utils"
+// 	"github.com/sdcio/data-server/pkg/utils/testhelper"
+// 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+// )
 
-func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {
-	type args struct {
-		ctx context.Context
-		upd *sdcpb.Update
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    []*sdcpb.Update
-		wantErr bool
-	}{
-		{
-			name: "no_input",
-			args: args{
-				ctx: context.Background(),
-				upd: &sdcpb.Update{},
-			},
-			want:    []*sdcpb.Update{},
-			wantErr: false,
-		},
-		{
-			name: "no_keys",
-			args: args{
-				ctx: context.Background(),
-				upd: &sdcpb.Update{
-					Path: &sdcpb.Path{
-						Elem: []*sdcpb.PathElem{
-							{
-								Name: "system",
-							},
-							{
-								Name: "name",
-							},
-							{
-								Name: "host-name",
-							},
-						},
-					},
-					Value: &sdcpb.TypedValue{},
-				},
-			},
-			want:    []*sdcpb.Update{},
-			wantErr: false,
-		},
-		{
-			name: "single_key_end",
-			args: args{
-				ctx: context.Background(),
-				upd: &sdcpb.Update{
-					Path: &sdcpb.Path{
-						Elem: []*sdcpb.PathElem{
-							{
-								Name: "interface",
-								Key:  map[string]string{"name": "ethernet-1/1"},
-							},
-							{
-								Name: "admin-state",
-							},
-						},
-					},
-					Value: &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_StringVal{StringVal: "enable"},
-					},
-				},
-			},
-			want: []*sdcpb.Update{
-				{
-					Path: &sdcpb.Path{
-						Elem: []*sdcpb.PathElem{
-							{
-								Name: "interface",
-								Key:  map[string]string{"name": "ethernet-1/1"},
-							},
-							{
-								Name: "name",
-							},
-						},
-					},
-					Value: &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_StringVal{StringVal: "ethernet-1/1"},
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "single_key_middle",
-			args: args{
-				ctx: context.Background(),
-				upd: &sdcpb.Update{
-					Path: &sdcpb.Path{
-						Elem: []*sdcpb.PathElem{
-							{
-								Name: "interface",
-								Key:  map[string]string{"name": "ethernet-1/1"},
-							},
-							{
-								Name: "ethernet",
-							},
-							{
-								Name: "port-speed",
-							},
-						},
-					},
-					Value: &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_StringVal{StringVal: "400G"},
-					},
-				},
-			},
-			want: []*sdcpb.Update{
-				{
-					Path: &sdcpb.Path{
-						Elem: []*sdcpb.PathElem{
-							{
-								Name: "interface",
-								Key:  map[string]string{"name": "ethernet-1/1"},
-							},
-							{
-								Name: "name",
-							},
-						},
-					},
-					Value: &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_StringVal{StringVal: "ethernet-1/1"},
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "multiple_keys_end",
-			args: args{
-				ctx: context.Background(),
-				upd: &sdcpb.Update{
-					Path: &sdcpb.Path{
-						Elem: []*sdcpb.PathElem{
-							{
-								Name: "doublekey",
-								Key: map[string]string{
-									"key1": "foo",
-									"key2": "bar",
-								},
-							},
-							{
-								Name: "cont",
-							},
-							{
-								Name: "value1",
-							},
-						},
-					},
-				},
-			},
-			want: []*sdcpb.Update{
-				{
-					Path: &sdcpb.Path{
-						Elem: []*sdcpb.PathElem{
-							{
-								Name: "doublekey",
-								Key: map[string]string{
-									"key1": "foo",
-									"key2": "bar",
-								},
-							},
-							{
-								Name: "key1",
-							},
-						},
-					},
-					Value: &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_StringVal{StringVal: "foo"},
-					},
-				},
-				{
-					Path: &sdcpb.Path{
-						Elem: []*sdcpb.PathElem{
-							{
-								Name: "doublekey",
-								Key: map[string]string{
-									"key1": "foo",
-									"key2": "bar",
-								},
-							},
-							{
-								Name: "key2",
-							},
-						},
-					},
-					Value: &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_StringVal{StringVal: "bar"},
-					},
-				},
-			},
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+// func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {
+// 	type args struct {
+// 		ctx context.Context
+// 		upd *sdcpb.Update
+// 	}
+// 	tests := []struct {
+// 		name    string
+// 		args    args
+// 		want    []*sdcpb.Update
+// 		wantErr bool
+// 	}{
+// 		{
+// 			name: "no_input",
+// 			args: args{
+// 				ctx: context.Background(),
+// 				upd: &sdcpb.Update{},
+// 			},
+// 			want:    []*sdcpb.Update{},
+// 			wantErr: false,
+// 		},
+// 		{
+// 			name: "no_keys",
+// 			args: args{
+// 				ctx: context.Background(),
+// 				upd: &sdcpb.Update{
+// 					Path: &sdcpb.Path{
+// 						Elem: []*sdcpb.PathElem{
+// 							{
+// 								Name: "system",
+// 							},
+// 							{
+// 								Name: "name",
+// 							},
+// 							{
+// 								Name: "host-name",
+// 							},
+// 						},
+// 					},
+// 					Value: &sdcpb.TypedValue{},
+// 				},
+// 			},
+// 			want:    []*sdcpb.Update{},
+// 			wantErr: false,
+// 		},
+// 		{
+// 			name: "single_key_end",
+// 			args: args{
+// 				ctx: context.Background(),
+// 				upd: &sdcpb.Update{
+// 					Path: &sdcpb.Path{
+// 						Elem: []*sdcpb.PathElem{
+// 							{
+// 								Name: "interface",
+// 								Key:  map[string]string{"name": "ethernet-1/1"},
+// 							},
+// 							{
+// 								Name: "admin-state",
+// 							},
+// 						},
+// 					},
+// 					Value: &sdcpb.TypedValue{
+// 						Value: &sdcpb.TypedValue_StringVal{StringVal: "enable"},
+// 					},
+// 				},
+// 			},
+// 			want: []*sdcpb.Update{
+// 				{
+// 					Path: &sdcpb.Path{
+// 						Elem: []*sdcpb.PathElem{
+// 							{
+// 								Name: "interface",
+// 								Key:  map[string]string{"name": "ethernet-1/1"},
+// 							},
+// 							{
+// 								Name: "name",
+// 							},
+// 						},
+// 					},
+// 					Value: &sdcpb.TypedValue{
+// 						Value: &sdcpb.TypedValue_StringVal{StringVal: "ethernet-1/1"},
+// 					},
+// 				},
+// 			},
+// 			wantErr: false,
+// 		},
+// 		{
+// 			name: "single_key_middle",
+// 			args: args{
+// 				ctx: context.Background(),
+// 				upd: &sdcpb.Update{
+// 					Path: &sdcpb.Path{
+// 						Elem: []*sdcpb.PathElem{
+// 							{
+// 								Name: "interface",
+// 								Key:  map[string]string{"name": "ethernet-1/1"},
+// 							},
+// 							{
+// 								Name: "ethernet",
+// 							},
+// 							{
+// 								Name: "port-speed",
+// 							},
+// 						},
+// 					},
+// 					Value: &sdcpb.TypedValue{
+// 						Value: &sdcpb.TypedValue_StringVal{StringVal: "400G"},
+// 					},
+// 				},
+// 			},
+// 			want: []*sdcpb.Update{
+// 				{
+// 					Path: &sdcpb.Path{
+// 						Elem: []*sdcpb.PathElem{
+// 							{
+// 								Name: "interface",
+// 								Key:  map[string]string{"name": "ethernet-1/1"},
+// 							},
+// 							{
+// 								Name: "name",
+// 							},
+// 						},
+// 					},
+// 					Value: &sdcpb.TypedValue{
+// 						Value: &sdcpb.TypedValue_StringVal{StringVal: "ethernet-1/1"},
+// 					},
+// 				},
+// 			},
+// 			wantErr: false,
+// 		},
+// 		{
+// 			name: "multiple_keys_end",
+// 			args: args{
+// 				ctx: context.Background(),
+// 				upd: &sdcpb.Update{
+// 					Path: &sdcpb.Path{
+// 						Elem: []*sdcpb.PathElem{
+// 							{
+// 								Name: "doublekey",
+// 								Key: map[string]string{
+// 									"key1": "foo",
+// 									"key2": "bar",
+// 								},
+// 							},
+// 							{
+// 								Name: "cont",
+// 							},
+// 							{
+// 								Name: "value1",
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 			want: []*sdcpb.Update{
+// 				{
+// 					Path: &sdcpb.Path{
+// 						Elem: []*sdcpb.PathElem{
+// 							{
+// 								Name: "doublekey",
+// 								Key: map[string]string{
+// 									"key1": "foo",
+// 									"key2": "bar",
+// 								},
+// 							},
+// 							{
+// 								Name: "key1",
+// 							},
+// 						},
+// 					},
+// 					Value: &sdcpb.TypedValue{
+// 						Value: &sdcpb.TypedValue_StringVal{StringVal: "foo"},
+// 					},
+// 				},
+// 				{
+// 					Path: &sdcpb.Path{
+// 						Elem: []*sdcpb.PathElem{
+// 							{
+// 								Name: "doublekey",
+// 								Key: map[string]string{
+// 									"key1": "foo",
+// 									"key2": "bar",
+// 								},
+// 							},
+// 							{
+// 								Name: "key2",
+// 							},
+// 						},
+// 					},
+// 					Value: &sdcpb.TypedValue{
+// 						Value: &sdcpb.TypedValue_StringVal{StringVal: "bar"},
+// 					},
+// 				},
+// 			},
+// 			wantErr: false,
+// 		},
+// 	}
+// 	for _, tt := range tests {
+// 		t.Run(tt.name, func(t *testing.T) {
 
-			schemaClient, schema, err := testhelper.InitSDCIOSchema()
-			if err != nil {
-				t.Fatal(err)
-			}
+// 			schemaClient, schema, err := testhelper.InitSDCIOSchema()
+// 			if err != nil {
+// 				t.Fatal(err)
+// 			}
 
-			converter := utils.NewConverter(SchemaClient.NewSchemaClientBound(schema.GetSchema(), schemaClient))
+// 			converter := utils.NewConverter(SchemaClient.NewSchemaClientBound(schema.GetSchema(), schemaClient))
 
-			got, err := converter.ExpandUpdateKeysAsLeaf(tt.args.ctx, tt.args.upd)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Datastore.expandUpdateLeafAsKeys() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Datastore.expandUpdateLeafAsKeys() = got : %v", got)
-				t.Errorf("Datastore.expandUpdateLeafAsKeys() = want: %v", tt.want)
-			}
-		})
-	}
-}
+// 			got, err := converter.ExpandUpdateKeysAsLeaf(tt.args.ctx, tt.args.upd)
+// 			if (err != nil) != tt.wantErr {
+// 				t.Errorf("Datastore.expandUpdateLeafAsKeys() error = %v, wantErr %v", err, tt.wantErr)
+// 				return
+// 			}
+// 			if !reflect.DeepEqual(got, tt.want) {
+// 				t.Errorf("Datastore.expandUpdateLeafAsKeys() = got : %v", got)
+// 				t.Errorf("Datastore.expandUpdateLeafAsKeys() = want: %v", tt.want)
+// 			}
+// 		})
+// 	}
+// }

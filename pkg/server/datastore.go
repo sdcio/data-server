@@ -52,11 +52,11 @@ func (s *Server) ListDataStore(ctx context.Context, req *sdcpb.ListDataStoreRequ
 
 func (s *Server) GetDataStore(ctx context.Context, req *sdcpb.GetDataStoreRequest) (*sdcpb.GetDataStoreResponse, error) {
 	log.Debugf("Received GetDataStoreRequest: %v", req)
-	name := req.GetName()
+	name := req.GetDatastoreName()
 	if name == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
 	}
-	ds, err := s.datastores.GetDataStore(req.GetName())
+	ds, err := s.datastores.GetDataStore(req.GetDatastoreName())
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (s *Server) GetDataStore(ctx context.Context, req *sdcpb.GetDataStoreReques
 
 func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStoreRequest) (*sdcpb.CreateDataStoreResponse, error) {
 	log.Debugf("Received CreateDataStoreRequest: %v", req)
-	name := req.GetName()
+	name := req.GetDatastoreName()
 	lName := len(name)
 	if lName == 0 {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
@@ -232,7 +232,7 @@ func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.
 func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*sdcpb.GetDataStoreResponse, error) {
 	var err error
 	rsp := &sdcpb.GetDataStoreResponse{
-		Name: ds.Config().Name,
+		DatastoreName: ds.Config().Name,
 	}
 	rsp.Target = &sdcpb.Target{
 		Type:    ds.Config().SBI.Type,

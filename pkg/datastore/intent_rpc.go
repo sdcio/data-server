@@ -19,10 +19,14 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/beevik/etree"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/sdcio/data-server/pkg/datastore/target"
+	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/importer/proto"
+	"github.com/sdcio/data-server/pkg/tree/types"
 )
 
 var rawIntentPrefix = "__raw_intent__"
@@ -50,4 +54,59 @@ func (d *Datastore) applyIntent(ctx context.Context, source target.TargetSource)
 	log.Debugf("datastore %s SetResponse from SBI: %v", d.config.Name, rsp)
 
 	return rsp, nil
+}
+
+func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntentResponse, error) {
+	tp, err := d.cacheClient.IntentGet(ctx, intentName)
+	if err != nil {
+		return nil, err
+	}
+	protoImporter := proto.NewProtoTreeImporter(tp.GetRoot())
+
+	root, err := tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, tp.IntentName))
+	if err != nil {
+		return nil, err
+	}
+
+	err = root.ImportConfig(ctx, protoImporter, tp.GetIntentName(), tp.GetPriority(), types.NewUpdateInsertFlags())
+	if err != nil {
+		return nil, err
+	}
+	return newTreeRootToGetIntentResponse(root), nil
+}
+
+type GetIntentResponse interface {
+	// ToJson returns the Tree contained structure as JSON
+	// use e.g. json.MarshalIndent() on the returned struct
+	ToJson() (any, error)
+	// ToJsonIETF returns the Tree contained structure as JSON_IETF
+	// use e.g. json.MarshalIndent() on the returned struct
+	ToJsonIETF() (any, error)
+	ToXML() (*etree.Document, error)
+	ToProtoUpdates(ctx context.Context) ([]*sdcpb.Update, error)
+}
+
+type treeRootToGetIntentResponse struct {
+	root *tree.RootEntry
+}
+
+func newTreeRootToGetIntentResponse(root *tree.RootEntry) *treeRootToGetIntentResponse {
+	return &treeRootToGetIntentResponse{
+		root: root,
+	}
+}
+
+func (t *treeRootToGetIntentResponse) ToJson() (any, error) {
+	return t.root.ToJson(false)
+}
+
+func (t *treeRootToGetIntentResponse) ToJsonIETF() (any, error) {
+	return t.root.ToJsonIETF(false)
+}
+
+func (t *treeRootToGetIntentResponse) ToXML() (*etree.Document, error) {
+	return t.root.ToXML(false, true, false, false)
+}
+func (t *treeRootToGetIntentResponse) ToProtoUpdates(ctx context.Context) ([]*sdcpb.Update, error) {
+	return t.root.ToProtoUpdates(ctx, false)
 }

@@ -12,7 +12,6 @@ import (
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
-	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
@@ -25,32 +24,6 @@ var (
 const (
 	ConcurrentValidate = false
 )
-
-// expandAndConvertIntent takes a slice of Updates ([]*sdcpb.Update) and converts it into a tree.UpdateSlice, that contains *treetypes.Updates.
-func (d *Datastore) expandAndConvertIntent(ctx context.Context, intentName string, priority int32, upds []*sdcpb.Update) (treetypes.UpdateSlice, error) {
-	converter := utils.NewConverter(d.schemaClient)
-
-	// list of updates to be added to the cache
-	// Expands the value, in case of json to single typed value updates
-	expandedReqUpdates, err := converter.ExpandUpdates(ctx, upds, true)
-	if err != nil {
-		return nil, err
-	}
-
-	// temp storage for cache.Update of the req. They are to be added later.
-	newCacheUpdates := make(treetypes.UpdateSlice, 0, len(expandedReqUpdates))
-
-	for _, u := range expandedReqUpdates {
-		pathslice, err := utils.CompletePath(nil, u.GetPath())
-		if err != nil {
-			return nil, err
-		}
-
-		// construct the cache.Update
-		newCacheUpdates = append(newCacheUpdates, treetypes.NewUpdate(pathslice, u.GetValue(), priority, intentName, 0))
-	}
-	return newCacheUpdates, nil
-}
 
 // SdcpbTransactionIntentToInternalTI converts sdcpb.TransactionIntent to types.TransactionIntent
 func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req *sdcpb.TransactionIntent) (*types.TransactionIntent, error) {
@@ -67,7 +40,7 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 	}
 
 	// convert the sdcpb.updates to tree.UpdateSlice
-	Updates, err := d.expandAndConvertIntent(ctx, req.GetIntent(), req.GetPriority(), req.GetUpdate())
+	Updates, err := treetypes.ExpandAndConvertIntent(ctx, d.schemaClient, req.GetIntent(), req.GetPriority(), req.GetUpdate())
 	if err != nil {
 		return nil, err
 	}
@@ -96,13 +69,13 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 
 	// store the actual / old running in the transaction
 	runningProto, err := d.cacheClient.IntentGet(ctx, tree.RunningIntentName)
-	err = root.ImportConfig(ctx, treeproto.NewProtoTreeImporter(runningProto.GetRoot()), tree.RunningIntentName, tree.RunningValuesPrio, tree.NewUpdateInsertFlags())
+	err = root.ImportConfig(ctx, treeproto.NewProtoTreeImporter(runningProto.GetRoot()), tree.RunningIntentName, tree.RunningValuesPrio, treetypes.NewUpdateInsertFlags())
 	if err != nil {
 		return nil, err
 	}
 
 	// creat a InsertFlags struct with the New flag set.
-	flagNew := tree.NewUpdateInsertFlags()
+	flagNew := treetypes.NewUpdateInsertFlags()
 	flagNew.SetNewFlag()
 
 	// add all the replace transaction updates with the New flag set
@@ -178,7 +151,7 @@ func (d *Datastore) LoadAllIntents(ctx context.Context, root *tree.RootEntry) er
 			log.Debugf("adding intent %s to tree", intent.GetIntentName())
 			protoLoader := treeproto.NewProtoTreeImporter(intent.GetRoot())
 			log.Debugf(intent.String())
-			err := root.ImportConfig(ctx, protoLoader, intent.GetIntentName(), intent.GetPriority(), tree.NewUpdateInsertFlags())
+			err := root.ImportConfig(ctx, protoLoader, intent.GetIntentName(), intent.GetPriority(), treetypes.NewUpdateInsertFlags())
 			if err != nil {
 				return err
 			}
@@ -210,7 +183,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	involvedPaths := treetypes.NewPathSet()
 
 	// create a flags attribute
-	flagNew := tree.NewUpdateInsertFlags()
+	flagNew := treetypes.NewUpdateInsertFlags()
 	// where the New flag is set
 	flagNew.SetNewFlag()
 
@@ -362,7 +335,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(tree.RunningIntentName, tree.RunningValuesPrio)
 
 	// add the calculated updates to the tree, as running with adjusted prio and owner
-	err = root.AddUpdatesRecursive(ctx, runningUpdates, tree.NewUpdateInsertFlags())
+	err = root.AddUpdatesRecursive(ctx, runningUpdates, treetypes.NewUpdateInsertFlags())
 	if err != nil {
 		return nil, err
 	}

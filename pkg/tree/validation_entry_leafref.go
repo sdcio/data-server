@@ -173,7 +173,7 @@ func (s *sharedEntryAttributes) resolve_leafref_key_path(ctx context.Context, ke
 			return err
 		}
 
-		lvs := keyValue.GetHighestPrecedence(LeafVariantSlice{}, false)
+		lvs := keyValue.GetHighestPrecedence(LeafVariantSlice{}, false, false)
 		tv := lvs[0].Value()
 		keys[k].value = tv.GetStringVal()
 		keys[k].doNotResolve = true

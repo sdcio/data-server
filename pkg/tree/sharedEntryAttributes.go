@@ -3,7 +3,6 @@ package tree
 import (
 	"context"
 	"fmt"
-	"iter"
 	"math"
 	"regexp"
 	"slices"
@@ -44,6 +43,7 @@ type sharedEntryAttributes struct {
 	cacheShouldDelete *bool
 	cacheCanDelete    *bool
 	cacheRemains      *bool
+	level             *int
 	cacheMutex        sync.Mutex
 }
 
@@ -58,101 +58,6 @@ func (s *sharedEntryAttributes) deepCopy(tc *TreeContext, parent Entry) (*shared
 		choicesResolvers: s.choicesResolvers.deepCopy(),
 	}
 	return result, nil
-}
-
-type childMap struct {
-	c  map[string]Entry
-	mu sync.RWMutex
-}
-
-func newChildMap() *childMap {
-	return &childMap{
-		c: map[string]Entry{},
-	}
-}
-
-func (c *childMap) Items() iter.Seq2[string, Entry] {
-	return func(yield func(string, Entry) bool) {
-		for i, v := range c.c {
-			if !yield(i, v) {
-				return
-			}
-		}
-	}
-}
-
-func (c *childMap) DeleteChilds(names []string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for _, name := range names {
-		delete(c.c, name)
-	}
-}
-
-func (c *childMap) DeleteChild(name string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	delete(c.c, name)
-}
-
-func (c *childMap) Add(e Entry) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.c[e.PathName()] = e
-}
-
-func (c *childMap) GetEntry(s string) (Entry, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	e, exists := c.c[s]
-	return e, exists
-}
-
-func (c *childMap) GetAllSorted() []Entry {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	childNames := make([]string, 0, len(c.c))
-	for name := range c.c {
-		childNames = append(childNames, name)
-	}
-	slices.Sort(childNames)
-
-	result := make([]Entry, 0, len(c.c))
-	// range over children
-	for _, childName := range childNames {
-		result = append(result, c.c[childName])
-	}
-
-	return result
-}
-
-func (c *childMap) GetAll() map[string]Entry {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	result := map[string]Entry{}
-	for k, v := range c.c {
-		result[k] = v
-	}
-	return result
-}
-
-func (c *childMap) GetKeys() []string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	result := make([]string, 0, c.Length())
-	for k := range c.c {
-		result = append(result, k)
-	}
-	return result
-}
-
-func (c *childMap) Length() int {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return len(c.c)
 }
 
 func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName string, tc *TreeContext) (*sharedEntryAttributes, error) {
@@ -234,6 +139,65 @@ func (s *sharedEntryAttributes) loadDefaults(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
+			}
+		}
+	}
+	return nil
+}
+
+func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context) error {
+	// keys themselfes do not have a schema attached.
+	// keys must be added to the last keys level, since that is carrying the list elements data
+	// hence if the entry has a schema attached, there is nothing to be done, return.
+	if s.schema != nil {
+		return nil
+	}
+
+	// get the first ancestor with a schema and how many levels up that is
+	ancestor, levelsUp := s.GetFirstAncestorWithSchema()
+
+	// retrieve the container schema
+	ancestorContainerSchema := ancestor.GetSchema().GetContainer()
+	// if it is not a container, return
+	if ancestorContainerSchema == nil {
+		return nil
+	}
+
+	// if we're in the last level of keys, then we need to add the defaults
+	if len(ancestorContainerSchema.Keys) == levelsUp {
+		// iterate through the keys
+		for idx, k := range ancestor.GetSchemaKeys() {
+			// if the key Leaf exists continue with next key
+			if _, exists := s.childs.GetEntry(k); exists {
+				continue
+			}
+
+			// construct the key path
+			keyPath := append(s.Path(), k)
+			schem, err := s.treeContext.schemaClient.GetSchemaSlicePath(ctx, keyPath)
+			if err != nil {
+				return err
+			}
+
+			// convert the key value to the schema defined Typed_Value
+			tv, err := utils.Convert(keyPath[len(keyPath)-levelsUp-1+idx], schem.Schema.GetField().Type)
+			if err != nil {
+				return err
+			}
+
+			// create a new entry
+			c, err := newEntry(ctx, s, k, s.treeContext)
+			if err != nil {
+				return err
+			}
+
+			// add the key leaf variant
+			c.leafVariants.Add(NewLeafEntry(types.NewUpdate(keyPath, tv, KeyIntentPrio, KeyIntentName, 0), types.NewUpdateInsertFlags(), s))
+
+			// add the new child entry to s
+			err = s.addChild(ctx, c)
+			if err != nil {
+				return err
 			}
 		}
 	}
@@ -356,7 +320,19 @@ func (s *sharedEntryAttributes) IsRoot() bool {
 
 // GetLevel returns the level / depth position of this element in the tree
 func (s *sharedEntryAttributes) GetLevel() int {
-	return len(s.Path())
+	// if level is cached, return level
+	if s.level != nil {
+		return *s.level
+	}
+	// if we're at the root level, return 0
+	if s.parent == nil {
+		return 0
+	}
+	// Get parent level and add 1
+	l := s.parent.GetLevel() + 1
+	// cache level value
+	s.level = &l
+	return l
 }
 
 // Walk takes the EntryVisitor and applies it to every Entry in the tree
@@ -747,7 +723,7 @@ func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path []st
 		return nil, err
 	}
 
-	flags := NewUpdateInsertFlags()
+	flags := types.NewUpdateInsertFlags()
 
 	result, err := s.AddUpdateRecursive(ctx, upd, flags)
 	if err != nil {
@@ -831,16 +807,16 @@ func (s *sharedEntryAttributes) DeleteSubtree(relativePath types.PathSlice, owne
 
 // GetHighestPrecedence goes through the whole branch and returns the new and updated cache.Updates.
 // These are the updated that will be send to the device.
-func (s *sharedEntryAttributes) GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool) LeafVariantSlice {
+func (s *sharedEntryAttributes) GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool, includeDefaults bool) LeafVariantSlice {
 	// get the highes precedence LeafeVariant and add it to the list
-	lv := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, false)
+	lv := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, includeDefaults)
 	if lv != nil {
 		result = append(result, lv)
 	}
 
 	// continue with childs. Childs are part of choices, process only the "active" (highes precedence) childs
 	for _, c := range s.filterActiveChoiceCaseChilds() {
-		result = c.GetHighestPrecedence(result, onlyNewOrUpdated)
+		result = c.GetHighestPrecedence(result, onlyNewOrUpdated, includeDefaults)
 	}
 	return result
 }
@@ -862,6 +838,7 @@ func (s *sharedEntryAttributes) getHighestPrecedenceLeafValue(ctx context.Contex
 }
 
 func (s *sharedEntryAttributes) GetRootBasedEntryChain() []Entry {
+	s.GetLevel()
 	if s.IsRoot() {
 		return []Entry{}
 	}
@@ -1065,7 +1042,7 @@ func (s *sharedEntryAttributes) validatePattern(resultChan chan<- *types.Validat
 	}
 }
 
-func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32, insertFlags *Flags) error {
+func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32, insertFlags *types.UpdateInsertFlags) error {
 	var err error
 
 	switch x := s.schema.GetSchema().(type) {
@@ -1253,6 +1230,12 @@ func (s *sharedEntryAttributes) FinishInsertionPhase(ctx context.Context) error 
 
 	// populate the ChoiceCaseResolvers to determine the active case
 	err := s.populateChoiceCaseResolvers(ctx)
+	if err != nil {
+		return err
+	}
+
+	// make sure all the keys are also present as leafs
+	err = s.checkAndCreateKeysAsLeafs(ctx)
 	if err != nil {
 		return err
 	}
@@ -1504,7 +1487,7 @@ func (s *sharedEntryAttributes) getKeyName() (string, error) {
 
 // AddCacheUpdateRecursive recursively adds the given cache.Update to the tree. Thereby creating all the entries along the path.
 // if the entries along th path already exist, the existing entries are called to add the Update.
-func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, u *types.Update, flags *Flags) (Entry, error) {
+func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error) {
 	idx := 0
 	// if it is the root node, index remains == 0
 	if s.parent != nil {
@@ -1565,56 +1548,4 @@ func (s *sharedEntryAttributes) containsOnlyDefaults() bool {
 	}
 
 	return true
-}
-
-type Flags struct {
-	new          bool
-	delete       bool
-	onlyIntended bool
-}
-
-// NewUpdateInsertFlags returns a new *UpdateInsertFlags instance
-// with all values set to false, so not new, and not marked for deletion
-func NewUpdateInsertFlags() *Flags {
-	return &Flags{}
-}
-
-func (f *Flags) SetDeleteFlag() {
-	f.delete = true
-	f.new = false
-}
-
-func (f *Flags) SetDeleteOnlyUpdatedFlag() {
-	f.delete = true
-	f.onlyIntended = true
-	f.new = false
-}
-
-func (f *Flags) SetNewFlag() {
-	f.new = true
-	f.delete = false
-	f.onlyIntended = false
-}
-
-func (f *Flags) GetDeleteFlag() bool {
-	return f.delete
-}
-
-func (f *Flags) GetDeleteOnlyIntendedFlag() bool {
-	return f.onlyIntended
-}
-
-func (f *Flags) GetNewFlag() bool {
-	return f.new
-}
-
-func (f *Flags) Apply(le *LeafEntry) {
-	if f.delete {
-		le.MarkDelete(f.onlyIntended)
-		return
-	}
-	if f.new {
-		le.MarkNew()
-		return
-	}
 }

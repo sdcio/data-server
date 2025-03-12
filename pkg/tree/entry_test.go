@@ -15,14 +15,14 @@ import (
 )
 
 var (
-	flagsNew      *Flags
-	flagsExisting *Flags
+	flagsNew      *types.UpdateInsertFlags
+	flagsExisting *types.UpdateInsertFlags
 )
 
 func init() {
-	flagsNew = NewUpdateInsertFlags()
+	flagsNew = types.NewUpdateInsertFlags()
 	flagsNew.SetNewFlag()
-	flagsExisting = NewUpdateInsertFlags()
+	flagsExisting = types.NewUpdateInsertFlags()
 }
 
 func Test_Entry(t *testing.T) {
@@ -1164,7 +1164,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 			}
 		},
 	)
-	flagsNew := NewUpdateInsertFlags()
+	flagsNew := types.NewUpdateInsertFlags()
 	flagsNew.SetNewFlag()
 
 	t.Run("Test_Validation_String_Pattern - Two",
@@ -1257,7 +1257,7 @@ func Test_Validation_Deref(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	flagsNew := NewUpdateInsertFlags()
+	flagsNew := types.NewUpdateInsertFlags()
 	flagsNew.SetNewFlag()
 
 	t.Run("Test_Validation_String_Pattern - One",

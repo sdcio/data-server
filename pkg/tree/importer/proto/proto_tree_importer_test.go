@@ -10,6 +10,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/tree"
 	jimport "github.com/sdcio/data-server/pkg/tree/importer/json"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	"go.uber.org/mock/gomock"
 )
@@ -126,7 +127,7 @@ func TestProtoTreeImporter(t *testing.T) {
 			}
 
 			jti := jimport.NewJsonTreeImporter(j)
-			err = root.ImportConfig(ctx, jti, "owner1", 5, tree.NewUpdateInsertFlags())
+			err = root.ImportConfig(ctx, jti, "owner1", 5, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -149,7 +150,7 @@ func TestProtoTreeImporter(t *testing.T) {
 
 			protoAdapter := NewProtoTreeImporter(protoIntent.GetRoot())
 
-			err = rootNew.ImportConfig(ctx, protoAdapter, protoIntent.GetIntentName(), protoIntent.GetPriority(), tree.NewUpdateInsertFlags())
+			err = rootNew.ImportConfig(ctx, protoAdapter, protoIntent.GetIntentName(), protoIntent.GetPriority(), types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Error(err)
 			}

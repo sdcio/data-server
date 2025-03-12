@@ -32,9 +32,9 @@ var dataGetIntentCmd = &cobra.Command{
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		req := &sdcpb.GetIntentRequest{
-			Name:     datastoreName,
-			Intent:   intentName,
-			Priority: priority,
+			DatastoreName: datastoreName,
+			Intent:        intentName,
+			Format:        sdcpb.Format_Intent_Format_JSON,
 		}
 		ctx, cancel := context.WithCancel(cmd.Context())
 		defer cancel()

@@ -47,7 +47,7 @@ func (m *MockEntry) EXPECT() *MockEntryMockRecorder {
 }
 
 // AddUpdateRecursive mocks base method.
-func (m *MockEntry) AddUpdateRecursive(ctx context.Context, u *types.Update, flags *tree.Flags) (tree.Entry, error) {
+func (m *MockEntry) AddUpdateRecursive(ctx context.Context, u *types.Update, flags *types.UpdateInsertFlags) (tree.Entry, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddUpdateRecursive", ctx, u, flags)
 	ret0, _ := ret[0].(tree.Entry)

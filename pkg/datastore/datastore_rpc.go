@@ -34,6 +34,7 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/schema"
 	"github.com/sdcio/data-server/pkg/tree"
+	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 )
 
 type Datastore struct {
@@ -80,7 +81,7 @@ type Datastore struct {
 // func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Datastore {
 func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc cache.Client, opts ...grpc.DialOption) (*Datastore, error) {
 
-	scb := schemaClient.NewSchemaClientBound(c.Schema.GetSchema(), sc)
+	scb := schemaClient.NewSchemaClientBound(c.Schema, sc)
 	tc := tree.NewTreeContext(scb, tree.RunningIntentName)
 	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -274,13 +275,13 @@ func (d *Datastore) Sync(ctx context.Context) {
 }
 
 func (d *Datastore) writeToSyncTreeCandidate(ctx context.Context, updates []*sdcpb.Update, ts int64) error {
-	upds, err := d.expandAndConvertIntent(ctx, tree.RunningIntentName, tree.RunningValuesPrio, updates)
+	upds, err := treetypes.ExpandAndConvertIntent(ctx, d.schemaClient, tree.RunningIntentName, tree.RunningValuesPrio, updates)
 	if err != nil {
 		return err
 	}
 
 	for _, upd := range upds {
-		_, err := d.syncTreeCandidat.AddUpdateRecursive(ctx, upd, tree.NewUpdateInsertFlags())
+		_, err := d.syncTreeCandidat.AddUpdateRecursive(ctx, upd, treetypes.NewUpdateInsertFlags())
 		if err != nil {
 			return err
 		}

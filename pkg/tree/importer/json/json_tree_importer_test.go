@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	"go.uber.org/mock/gomock"
 )
@@ -145,7 +146,7 @@ func TestJsonTreeImporter(t *testing.T) {
 				t.Fatalf("error parsing json document: %v", err)
 			}
 			jti := NewJsonTreeImporter(j)
-			err = root.ImportConfig(ctx, jti, "owner1", 5, tree.NewUpdateInsertFlags())
+			err = root.ImportConfig(ctx, jti, "owner1", 5, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Fatal(err)
 			}

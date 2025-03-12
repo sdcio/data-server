@@ -54,7 +54,7 @@ var datastoreCreateCmd = &cobra.Command{
 			}
 		}
 		req := &sdcpb.CreateDataStoreRequest{
-			Name: datastoreName,
+			DatastoreName: datastoreName,
 		}
 		if syncFile != "" {
 			b, err := os.ReadFile(syncFile)

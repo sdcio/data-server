@@ -54,7 +54,7 @@ func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 	return result, nil
 }
 
-func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us types.UpdateSlice, flags *Flags) error {
+func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us types.UpdateSlice, flags *types.UpdateInsertFlags) error {
 	var err error
 	for _, u := range us {
 		_, err = r.sharedEntryAttributes.AddUpdateRecursive(ctx, u, flags)
@@ -65,7 +65,7 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us types.UpdateSlic
 	return nil
 }
 
-func (r *RootEntry) ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *Flags) error {
+func (r *RootEntry) ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error {
 	r.treeContext.SetActualOwner(intentName)
 	return r.sharedEntryAttributes.ImportConfig(ctx, t, intentName, intentPrio, flags)
 }
@@ -127,7 +127,7 @@ func (r *RootEntry) GetDeletesForOwner(owner string) types.PathSlices {
 // If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
 // It will append to the given list and provide a new pointer to the slice
 func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) LeafVariantSlice {
-	return r.sharedEntryAttributes.GetHighestPrecedence(make(LeafVariantSlice, 0), onlyNewOrUpdated)
+	return r.sharedEntryAttributes.GetHighestPrecedence(make(LeafVariantSlice, 0), onlyNewOrUpdated, false)
 }
 
 // GetDeletes returns the paths that due to the Tree content are to be deleted from the southbound device.

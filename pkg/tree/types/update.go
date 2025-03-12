@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"fmt"
 	"slices"
 
@@ -91,4 +92,30 @@ func (u *Update) Equal(other *Update) bool {
 
 func (u *Update) GetPathSlice() PathSlice {
 	return u.path
+}
+
+// ExpandAndConvertIntent takes a slice of Updates ([]*sdcpb.Update) and converts it into a tree.UpdateSlice, that contains *treetypes.Updates.
+func ExpandAndConvertIntent(ctx context.Context, scb utils.SchemaClientBound, intentName string, priority int32, upds []*sdcpb.Update) (UpdateSlice, error) {
+	converter := utils.NewConverter(scb)
+
+	// list of updates to be added to the cache
+	// Expands the value, in case of json to single typed value updates
+	expandedReqUpdates, err := converter.ExpandUpdates(ctx, upds)
+	if err != nil {
+		return nil, err
+	}
+
+	// temp storage for cache.Update of the req. They are to be added later.
+	newCacheUpdates := make(UpdateSlice, 0, len(expandedReqUpdates))
+
+	for _, u := range expandedReqUpdates {
+		pathslice, err := utils.CompletePath(nil, u.GetPath())
+		if err != nil {
+			return nil, err
+		}
+
+		// construct the cache.Update
+		newCacheUpdates = append(newCacheUpdates, NewUpdate(pathslice, u.GetValue(), priority, intentName, 0))
+	}
+	return newCacheUpdates, nil
 }

@@ -20,6 +20,8 @@ const (
 	RunningIntentName  = "running"
 	ReplaceValuesPrio  = int32(math.MaxInt32 - 110)
 	ReplaceIntentName  = "replace"
+	KeyIntentPrio      = int32(math.MaxInt32 - 120)
+	KeyIntentName      = "key-as-leaf"
 )
 
 type EntryImpl struct {
@@ -48,16 +50,18 @@ type Entry interface {
 	Path() types.PathSlice
 	// PathName returns the last Path element, the name of the Entry
 	PathName() string
+	// GetLevel returns the depth of the Entry in the tree
+	GetLevel() int
 	// addChild Add a child entry
 	addChild(context.Context, Entry) error
 	// AddUpdateRecursive Add the given cache.Update to the tree
-	AddUpdateRecursive(ctx context.Context, u *types.Update, flags *Flags) (Entry, error)
+	AddUpdateRecursive(ctx context.Context, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
 	// StringIndent debug tree struct as indented string slice
 	StringIndent(result []string) []string
 	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
 	// If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
 	// It will append to the given list and provide a new pointer to the slice
-	GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool) LeafVariantSlice
+	GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool, includeDefaults bool) LeafVariantSlice
 	// getHighestPrecedenceLeafValue returns the highest LeafValue of the Entry at hand
 	// will return an error if the Entry is not a Leaf
 	getHighestPrecedenceLeafValue(context.Context) (*LeafEntry, error)
@@ -137,7 +141,7 @@ type Entry interface {
 	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
 	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error)
 	// ImportConfig allows importing config data received from e.g. the device in different formats (json, xml) to be imported into the tree.
-	ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *Flags) error
+	ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
 	TreeExport(owner string) ([]*tree_persist.TreeElement, error)
 	DeleteSubtree(relativePath types.PathSlice, owner string) (remainsToExist bool, err error)
 }

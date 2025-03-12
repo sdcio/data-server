@@ -21,16 +21,14 @@ import (
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
-	"github.com/sdcio/data-server/mocks/mocktarget"
 	"github.com/sdcio/data-server/pkg/cache"
-	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	"go.uber.org/mock/gomock"
 )
 
 func TestDatastore_validateTree(t *testing.T) {
@@ -159,27 +157,12 @@ func TestDatastore_validateTree(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// create a gomock controller
-			controller := gomock.NewController(t)
 
 			sc, schema, err := testhelper.InitSDCIOSchema()
 			if err != nil {
 				t.Fatal(err)
 			}
-
-			dsName := "dev1"
-
-			// create a datastore
-			d := &Datastore{
-				config: &config.DatastoreConfig{
-					Name:   dsName,
-					Schema: schema,
-				},
-
-				sbi:          mocktarget.NewMockTarget(controller),
-				schemaClient: schemaClient.NewSchemaClientBound(schema.GetSchema(), sc),
-			}
-
+			scb := schemaClient.NewSchemaClientBound(schema, sc)
 			ctx := context.Background()
 
 			// marshall the intentReqValue into a byte slice
@@ -194,7 +177,7 @@ func TestDatastore_validateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			tc := tree.NewTreeContext(d.schemaClient, tt.intentName)
+			tc := tree.NewTreeContext(scb, tt.intentName)
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Error(err)
@@ -210,12 +193,12 @@ func TestDatastore_validateTree(t *testing.T) {
 				},
 			}
 
-			updSlice, err := d.expandAndConvertIntent(ctx, tt.intentName, tt.intentPrio, insertUpdates)
+			updSlice, err := types.ExpandAndConvertIntent(ctx, scb, tt.intentName, tt.intentPrio, insertUpdates)
 			if err != nil {
 				t.Error(err)
 			}
 
-			flagsNew := tree.NewUpdateInsertFlags()
+			flagsNew := types.NewUpdateInsertFlags()
 			flagsNew.SetNewFlag()
 			root.AddUpdatesRecursive(ctx, updSlice, flagsNew)
 
