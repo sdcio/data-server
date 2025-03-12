@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/types"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -826,7 +827,7 @@ func (s *sharedEntryAttributes) getHighestPrecedenceValueOfBranch() int32 {
 
 // Validate is the highlevel function to perform validation.
 // it will multiplex all the different Validations that need to happen
-func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, concurrent bool) {
+func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, vCfg *config.Validation) {
 
 	// recurse the call to the child elements
 	wg := sync.WaitGroup{}
@@ -834,10 +835,10 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 	for _, c := range s.filterActiveChoiceCaseChilds() {
 		wg.Add(1)
 		valFunc := func(x Entry) {
-			x.Validate(ctx, resultChan, concurrent)
+			x.Validate(ctx, resultChan, vCfg)
 			wg.Done()
 		}
-		if concurrent {
+		if !vCfg.DisableConcurrency {
 			go valFunc(c)
 		} else {
 			valFunc(c)
@@ -846,14 +847,30 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 
 	// validate the mandatory statement on this entry
 	if s.remainsToExist() {
-		s.validateMandatory(ctx, resultChan)
-		s.validateLeafRefs(ctx, resultChan)
-		s.validateLeafListMinMaxAttributes(resultChan)
-		s.validatePattern(resultChan)
-		s.validateMustStatements(ctx, resultChan)
-		s.validateLength(resultChan)
-		s.validateRange(resultChan)
-		// s.validateMaxElements(errChan)   // TODO
+		if !vCfg.DisabledValidators.Mandatory {
+			s.validateMandatory(ctx, resultChan)
+		}
+		if !vCfg.DisabledValidators.Leafref {
+			s.validateLeafRefs(ctx, resultChan)
+		}
+		if !vCfg.DisabledValidators.LeafrefMinMaxAttributes {
+			s.validateLeafListMinMaxAttributes(resultChan)
+		}
+		if !vCfg.DisabledValidators.Pattern {
+			s.validatePattern(resultChan)
+		}
+		if !vCfg.DisabledValidators.MustStatement {
+			s.validateMustStatements(ctx, resultChan)
+		}
+		if !vCfg.DisabledValidators.Length {
+			s.validateLength(resultChan)
+		}
+		if !vCfg.DisabledValidators.Range {
+			s.validateRange(resultChan)
+		}
+		//if !vCfg.DisabledValidators.MaxElements {
+		//	s.validateMaxElements(resultChan)
+		//}
 	}
 }
 

@@ -127,7 +127,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 
 	log.Debug(root.String())
 	// perform validation
-	validationResult := root.Validate(ctx, true)
+	validationResult := root.Validate(ctx, d.config.Validation)
 	validationResult.ErrorsStr()
 	if validationResult.HasErrors() {
 		return nil, validationResult.JoinErrors()
@@ -244,7 +244,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	log.Debug(root.String())
 
 	// perform validation
-	validationResult := root.Validate(ctx, true)
+	validationResult := root.Validate(ctx, d.config.Validation)
 
 	// prepare the response struct
 	result := &sdcpb.TransactionSetResponse{

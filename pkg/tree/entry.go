@@ -6,6 +6,7 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/types"
 
@@ -70,7 +71,7 @@ type Entry interface {
 	// Walk takes the EntryVisitor and applies it to every Entry in the tree
 	Walk(f EntryVisitor) error
 	// Validate kicks off validation
-	Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, concurrent bool)
+	Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, vCfg *config.Validation)
 	// validateMandatory the Mandatory schema field
 	validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry)
 	// validateMandatoryWithKeys is an internally used function that us called by validateMandatory in case

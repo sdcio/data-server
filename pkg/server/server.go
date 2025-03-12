@@ -228,6 +228,7 @@ func (s *Server) createInitialDatastores(ctx context.Context) {
 		log.Debugf("creating datastore %s", dsCfg.Name)
 		go func(dsCfg *config.DatastoreConfig) {
 			defer wg.Done()
+			dsCfg.Validation = s.config.Validation
 			ds := datastore.New(ctx, dsCfg, s.schemaClient, s.cacheClient, s.gnmiOpts...)
 			s.md.Lock()
 			defer s.md.Unlock()
