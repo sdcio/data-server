@@ -489,7 +489,10 @@ func TestToXMLTable(t *testing.T) {
 			t.Log(root.String())
 			fmt.Println(root.String())
 
-			root.FinishInsertionPhase(ctx)
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
 
 			xmlDoc, err := root.ToXML(tt.onlyNewOrUpdated, tt.honorNamespace, tt.operationWithNamespace, tt.useOperationRemove)
 			if err != nil {

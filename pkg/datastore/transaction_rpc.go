@@ -69,7 +69,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 
 	// store the actual / old running in the transaction
 	runningProto, err := d.cacheClient.IntentGet(ctx, tree.RunningIntentName)
-	err = root.ImportConfig(ctx, treeproto.NewProtoTreeImporter(runningProto.GetRoot()), tree.RunningIntentName, tree.RunningValuesPrio, treetypes.NewUpdateInsertFlags())
+	err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto.GetRoot()), tree.RunningIntentName, tree.RunningValuesPrio, treetypes.NewUpdateInsertFlags())
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,10 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	}
 
 	log.Debugf("Transaction Replace: %s - finish tree insertion phase", transaction.GetTransactionId())
-	root.FinishInsertionPhase(ctx)
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	log.Debug(root.String())
 	// perform validation
@@ -151,7 +154,7 @@ func (d *Datastore) LoadAllIntents(ctx context.Context, root *tree.RootEntry) er
 			log.Debugf("adding intent %s to tree", intent.GetIntentName())
 			protoLoader := treeproto.NewProtoTreeImporter(intent.GetRoot())
 			log.Debugf(intent.String())
-			err := root.ImportConfig(ctx, protoLoader, intent.GetIntentName(), intent.GetPriority(), treetypes.NewUpdateInsertFlags())
+			err := root.ImportConfig(ctx, nil, protoLoader, intent.GetIntentName(), intent.GetPriority(), treetypes.NewUpdateInsertFlags())
 			if err != nil {
 				return err
 			}

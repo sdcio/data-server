@@ -60,12 +60,12 @@ func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
 			return xpath.NewBoolDatum(true), nil
 		}
 		// list
-		childs, err := y.e.FilterChilds(nil)
+		childs, err := y.e.GetListChilds()
 		if err != nil {
 			return nil, err
 		}
 		datums := make([]xutils.XpathNode, 0, len(childs))
-		for x := 0; x <= len(childs); x++ {
+		for x := 0; x < len(childs); x++ {
 			// this is a dirty fix, that will enable count() to evaluate the right value
 			datums = append(datums, nil)
 		}
@@ -78,6 +78,20 @@ func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
 		return xpath.NewNodesetDatum([]xutils.XpathNode{}), nil
 	}
 	return y.valueToDatum(lv.Value()), nil
+}
+
+func (y *yangParserEntryAdapter) BreadthSearch(ctx context.Context, path string) ([]xpath.Entry, error) {
+	entries, err := y.e.BreadthSearch(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]xpath.Entry, 0, len(entries))
+	for _, x := range entries {
+		result = append(result, newYangParserEntryAdapter(ctx, x))
+	}
+
+	return result, nil
 }
 
 func (y *yangParserEntryAdapter) FollowLeafRef() (xpath.Entry, error) {
@@ -148,4 +162,8 @@ func (y *yangParserValueEntry) GetValue() (xpath.Datum, error) {
 
 func (y *yangParserValueEntry) GetPath() []string {
 	return nil
+}
+
+func (y *yangParserValueEntry) BreadthSearch(ctx context.Context, path string) ([]xpath.Entry, error) {
+	return nil, nil
 }

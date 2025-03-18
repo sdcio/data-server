@@ -16,6 +16,7 @@ package datastore
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"testing"
@@ -24,11 +25,11 @@ import (
 	"github.com/sdcio/data-server/pkg/cache"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/tree"
+	json_importer "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 func TestDatastore_validateTree(t *testing.T) {
@@ -160,13 +161,19 @@ func TestDatastore_validateTree(t *testing.T) {
 
 			sc, schema, err := testhelper.InitSDCIOSchema()
 			if err != nil {
-				t.Fatal(err)
+				t.Error(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
 			ctx := context.Background()
 
 			// marshall the intentReqValue into a byte slice
-			jsonConf, err := tt.intentReqValue()
+			jsonConfString, err := tt.intentReqValue()
+			if err != nil {
+				t.Error(err)
+			}
+
+			var jsonConf any
+			err = json.Unmarshal([]byte(jsonConfString), &jsonConf)
 			if err != nil {
 				t.Error(err)
 			}
@@ -183,28 +190,24 @@ func TestDatastore_validateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			insertUpdates := []*sdcpb.Update{
-				{
-					Path: path,
-					Value: &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_JsonVal{
-							JsonVal: []byte(jsonConf)},
-					},
-				},
-			}
+			flagsNew := types.NewUpdateInsertFlags()
+			flagsNew.SetNewFlag()
 
-			updSlice, err := types.ExpandAndConvertIntent(ctx, scb, tt.intentName, tt.intentPrio, insertUpdates)
+			importer := json_importer.NewJsonTreeImporter(jsonConf)
+
+			err = root.ImportConfig(ctx, utils.ToStrings(path, false, false), importer, tt.intentName, tt.intentPrio, flagsNew)
 			if err != nil {
 				t.Error(err)
 			}
 
-			flagsNew := types.NewUpdateInsertFlags()
-			flagsNew.SetNewFlag()
-			root.AddUpdatesRecursive(ctx, updSlice, flagsNew)
-
-			root.FinishInsertionPhase(ctx)
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
 
 			validationResult := root.Validate(ctx, false)
+
+			t.Log(root.String())
 
 			for _, x := range tt.expectedWarnings {
 				if !slices.Contains(validationResult.WarningsStr(), x) {

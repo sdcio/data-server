@@ -20,8 +20,6 @@ const (
 	RunningIntentName  = "running"
 	ReplaceValuesPrio  = int32(math.MaxInt32 - 110)
 	ReplaceIntentName  = "replace"
-	KeyIntentPrio      = int32(math.MaxInt32 - 120)
-	KeyIntentName      = "key-as-leaf"
 )
 
 type EntryImpl struct {
@@ -54,6 +52,10 @@ type Entry interface {
 	GetLevel() int
 	// addChild Add a child entry
 	addChild(context.Context, Entry) error
+	// getOrCreateChilds retrieves the sub-child pointed at by the path.
+	// if the path does not exist in its full extend, the entries will be added along the way
+	// if the path does not point to a schema defined path an error will be raise
+	getOrCreateChilds(ctx context.Context, path types.PathSlice) (Entry, error)
 	// AddUpdateRecursive Add the given cache.Update to the tree
 	AddUpdateRecursive(ctx context.Context, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
 	// StringIndent debug tree struct as indented string slice
@@ -141,9 +143,14 @@ type Entry interface {
 	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
 	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error)
 	// ImportConfig allows importing config data received from e.g. the device in different formats (json, xml) to be imported into the tree.
-	ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
+	ImportConfig(ctx context.Context, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
 	TreeExport(owner string) ([]*tree_persist.TreeElement, error)
 	DeleteSubtree(relativePath types.PathSlice, owner string) (remainsToExist bool, err error)
+	GetDeviations(ch chan<- *types.DeviationEntry, activeCase bool)
+	// getListChilds collects all the childs of the list. In the tree we store them seperated into their key branches.
+	// this is collecting all the last level key entries.
+	GetListChilds() ([]Entry, error)
+	BreadthSearch(ctx context.Context, path string) ([]Entry, error)
 }
 
 type EntryVisitor func(s *sharedEntryAttributes) error

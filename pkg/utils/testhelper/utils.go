@@ -48,6 +48,11 @@ func GetUIntTvProto(t *testing.T, i uint64) *sdcpb.TypedValue {
 	return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_UintVal{UintVal: uint64(i)}}
 }
 
+// GetStringTvProto takes a string and returns the sdcpb.TypedValue for it
+func GetIntTvProto(t *testing.T, i int) *sdcpb.TypedValue {
+	return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_IntVal{IntVal: int64(i)}}
+}
+
 // PathMapIndex calculates a common map index for string slice based paths
 func PathMapIndex(elems []string) string {
 	return strings.Join(elems, pathSep)

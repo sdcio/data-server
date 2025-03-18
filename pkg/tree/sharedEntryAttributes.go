@@ -97,7 +97,7 @@ func (s *sharedEntryAttributes) GetRoot() Entry {
 // loadDefaults helper to populate defaults on the initializiation of the sharedEntryAttribute
 func (s *sharedEntryAttributes) loadDefaults(ctx context.Context) error {
 
-	// if it is a container wihtout keys (not a list) then load the defaults
+	// if it is a container without keys (not a list) then load the defaults
 	if s.schema.GetContainer() != nil && len(s.schema.GetContainer().GetKeys()) == 0 {
 		for _, childname := range s.schema.GetContainer().ChildsWithDefaults {
 			// tryLoadingDefaults is using the pathslice, that contains keys as well,
@@ -145,7 +145,22 @@ func (s *sharedEntryAttributes) loadDefaults(ctx context.Context) error {
 	return nil
 }
 
-func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context) error {
+func (s *sharedEntryAttributes) GetDeviations(ch chan<- *types.DeviationEntry, activeCase bool) {
+	s.leafVariants.GetDeviations(ch, activeCase)
+
+	// get all active childs
+	activeChilds := s.filterActiveChoiceCaseChilds()
+
+	// iterate through all childs
+	for cName, c := range s.getChildren() {
+		// check if c is a active child (choice / case)
+		_, isActiveChild := activeChilds[cName]
+		// recurse the call
+		c.GetDeviations(ch, isActiveChild)
+	}
+}
+
+func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, intentName string, prio int32) error {
 	// keys themselfes do not have a schema attached.
 	// keys must be added to the last keys level, since that is carrying the list elements data
 	// hence if the entry has a schema attached, there is nothing to be done, return.
@@ -167,38 +182,43 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context) e
 	if len(ancestorContainerSchema.Keys) == levelsUp {
 		// iterate through the keys
 		for idx, k := range ancestor.GetSchemaKeys() {
+			child, entryExists := s.childs.GetEntry(k)
 			// if the key Leaf exists continue with next key
-			if _, exists := s.childs.GetEntry(k); exists {
-				continue
+			if entryExists {
+				// if it exists, we need to check that the entry for the owner exists.
+				var result []*LeafEntry
+				lvs := child.GetByOwner(intentName, result)
+				if len(lvs) > 0 {
+					continue
+				}
 			}
-
 			// construct the key path
 			keyPath := append(s.Path(), k)
+
 			schem, err := s.treeContext.schemaClient.GetSchemaSlicePath(ctx, keyPath)
 			if err != nil {
 				return err
 			}
-
 			// convert the key value to the schema defined Typed_Value
 			tv, err := utils.Convert(keyPath[len(keyPath)-levelsUp-1+idx], schem.Schema.GetField().Type)
 			if err != nil {
 				return err
 			}
-
-			// create a new entry
-			c, err := newEntry(ctx, s, k, s.treeContext)
-			if err != nil {
-				return err
+			if !entryExists {
+				// create a new entry
+				child, err = newEntry(ctx, s, k, s.treeContext)
+				if err != nil {
+					return err
+				}
+				// add the new child entry to s
+				err = s.addChild(ctx, child)
+				if err != nil {
+					return err
+				}
 			}
+			_, err = child.AddUpdateRecursive(ctx, types.NewUpdate(keyPath, tv, prio, intentName, 0), types.NewUpdateInsertFlags())
+			return err
 
-			// add the key leaf variant
-			c.leafVariants.Add(NewLeafEntry(types.NewUpdate(keyPath, tv, KeyIntentPrio, KeyIntentName, 0), types.NewUpdateInsertFlags(), s))
-
-			// add the new child entry to s
-			err = s.addChild(ctx, c)
-			if err != nil {
-				return err
-			}
 		}
 	}
 	return nil
@@ -256,6 +276,36 @@ func (s *sharedEntryAttributes) GetSchema() *sdcpb.SchemaElem {
 // GetChildren returns the children Map of the Entry
 func (s *sharedEntryAttributes) getChildren() map[string]Entry {
 	return s.childs.GetAll()
+}
+
+// getListChilds collects all the childs of the list. In the tree we store them seperated into their key branches.
+// this is collecting all the last level key entries.
+func (s *sharedEntryAttributes) GetListChilds() ([]Entry, error) {
+	if s.schema == nil {
+		return nil, fmt.Errorf("error GetListChilds() non schema level %s", s.Path().String())
+	}
+	if s.schema.GetContainer() == nil {
+		return nil, fmt.Errorf("error GetListChilds() not a Container %s", s.Path().String())
+	}
+	keys := s.schema.GetContainer().GetKeys()
+	if len(keys) == 0 {
+		return nil, fmt.Errorf("error GetListChilds() not a List Container %s", s.Path().String())
+	}
+	actualEntries := []Entry{s}
+	var newEntries []Entry
+
+	for level := 0; level < len(keys); level++ {
+		for _, e := range actualEntries {
+			// add all children
+			for _, c := range e.getChildren() {
+				newEntries = append(newEntries, c)
+			}
+		}
+		actualEntries = newEntries
+		newEntries = []Entry{}
+	}
+	return actualEntries, nil
+
 }
 
 // FilterChilds returns the child entries (skipping the key entries in the tree) that
@@ -1234,16 +1284,13 @@ func (s *sharedEntryAttributes) FinishInsertionPhase(ctx context.Context) error 
 		return err
 	}
 
-	// make sure all the keys are also present as leafs
-	err = s.checkAndCreateKeysAsLeafs(ctx)
-	if err != nil {
-		return err
-	}
-
 	// recurse the call to all (active) entries within the tree.
 	// Thereby already using the choiceCaseResolver via filterActiveChoiceCaseChilds()
 	for _, child := range s.filterActiveChoiceCaseChilds() {
-		child.FinishInsertionPhase(ctx)
+		err = child.FinishInsertionPhase(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	// reset state
@@ -1485,14 +1532,34 @@ func (s *sharedEntryAttributes) getKeyName() (string, error) {
 	return "", fmt.Errorf("error LeafList and Field should not have keys %s", strings.Join(s.Path(), " "))
 }
 
+func (s *sharedEntryAttributes) getOrCreateChilds(ctx context.Context, path types.PathSlice) (Entry, error) {
+	var err error
+	if len(path) == 0 {
+		return s, nil
+	}
+
+	e, exists := s.childs.GetEntry(path[0])
+	if !exists {
+		e, err = newEntry(ctx, s, path[0], s.treeContext)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return e.getOrCreateChilds(ctx, path[1:])
+}
+
 // AddCacheUpdateRecursive recursively adds the given cache.Update to the tree. Thereby creating all the entries along the path.
 // if the entries along th path already exist, the existing entries are called to add the Update.
 func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error) {
-	idx := 0
-	// if it is the root node, index remains == 0
-	if s.parent != nil {
-		idx = s.GetLevel()
+	idx := s.GetLevel()
+	var err error
+	// make sure all the keys are also present as leafs
+	err = s.checkAndCreateKeysAsLeafs(ctx, u.Owner(), u.Priority())
+	if err != nil {
+		return nil, err
 	}
+
 	// end of path reached, add LeafEntry
 	// continue with recursive add otherwise
 	if idx == len(u.GetPathSlice()) {
@@ -1502,7 +1569,7 @@ func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, u *types
 	}
 
 	var e Entry
-	var err error
+
 	var exists bool
 	// if child does not exist, create Entry
 	if e, exists = s.childs.GetEntry(u.GetPathSlice()[idx]); !exists {
@@ -1510,6 +1577,7 @@ func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, u *types
 		if err != nil {
 			return nil, err
 		}
+
 	}
 	return e.AddUpdateRecursive(ctx, u, flags)
 }

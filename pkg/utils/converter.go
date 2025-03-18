@@ -36,10 +36,8 @@ func NewConverter(scb SchemaClientBound) *Converter {
 
 func (c *Converter) ExpandUpdates(ctx context.Context, updates []*sdcpb.Update) ([]*sdcpb.Update, error) {
 	outUpdates := make([]*sdcpb.Update, 0, len(updates))
-	for _, upd := range updates {
-		if upd.Value == nil {
-			continue
-		}
+	for idx, upd := range updates {
+		_ = idx
 		expUpds, err := c.ExpandUpdate(ctx, upd)
 		if err != nil {
 			return nil, err
@@ -60,6 +58,16 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 	switch rsp := rsp.GetSchema().Schema.(type) {
 	case *sdcpb.SchemaElem_Container:
 		log.Debugf("expanding update %v on container %q", upd, rsp.Container.Name)
+
+		if upd.Value == nil {
+			rs, err := c.ExpandUpdateKeysAsLeaf(ctx, upd)
+			if err != nil {
+				return nil, err
+			}
+			upds := append(upds, rs...)
+			return upds, nil
+		}
+
 		var v interface{}
 		var err error
 		var jsonDecoder *json.Decoder
@@ -85,6 +93,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 		}
 		upds := append(upds, rs...)
 		return upds, nil
+
 	case *sdcpb.SchemaElem_Field:
 		var v interface{}
 		var err error
@@ -123,6 +132,44 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 		return upds, nil
 	}
 	return nil, nil
+}
+
+func (c *Converter) ExpandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
+	upds := make([]*sdcpb.Update, 0)
+	// expand update path if it contains keys
+	for i, pe := range upd.GetPath().GetElem() {
+		if len(pe.GetKey()) == 0 {
+			continue
+		}
+
+		for k, v := range pe.GetKey() {
+			intUpd := &sdcpb.Update{
+				Path: &sdcpb.Path{
+					Elem: make([]*sdcpb.PathElem, 0, i+1+1),
+				},
+			}
+			for j := 0; j <= i; j++ {
+				intUpd.Path.Elem = append(intUpd.Path.Elem,
+					&sdcpb.PathElem{
+						Name: upd.GetPath().GetElem()[j].GetName(),
+						Key:  upd.GetPath().GetElem()[j].GetKey(),
+					},
+				)
+			}
+			intUpd.Path.Elem = append(intUpd.Path.Elem, &sdcpb.PathElem{Name: k})
+
+			schemaRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, intUpd.Path)
+			if err != nil {
+				return nil, err
+			}
+			intUpd.Value, err = TypedValueToYANGType(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}, schemaRsp.GetSchema())
+			if err != nil {
+				return nil, err
+			}
+			upds = append(upds, intUpd)
+		}
+	}
+	return upds, nil
 }
 
 func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container) ([]*sdcpb.Update, error) {
@@ -308,15 +355,6 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		log.Warnf("unexpected json type cast %T", jv)
 		return nil, nil
 	}
-}
-
-func isKey(s string, cs *sdcpb.SchemaElem_Container) bool {
-	for _, k := range cs.Container.GetKeys() {
-		if k.Name == s {
-			return true
-		}
-	}
-	return false
 }
 
 func TypedValueToYANGType(tv *sdcpb.TypedValue, schemaObject *sdcpb.SchemaElem) (*sdcpb.TypedValue, error) {

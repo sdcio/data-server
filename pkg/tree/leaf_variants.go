@@ -5,7 +5,9 @@ import (
 	"math"
 	"sync"
 
+	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
+	log "github.com/sirupsen/logrus"
 )
 
 type LeafVariants struct {
@@ -288,4 +290,84 @@ func (lv *LeafVariants) DeleteByOwner(owner string) (remainsToExist bool) {
 
 	}
 	return remainsToExist
+}
+
+func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveCase bool) {
+	if len(lv.les) == 0 {
+		return
+	}
+
+	// get the path via the first LeafEntry
+	// is valida for all entries
+	sdcpbPath, err := lv.les[0].parentEntry.SdcpbPath()
+	if err != nil {
+		log.Error(err)
+	}
+
+	// we are part of an inactive case of a choice
+	if !isActiveCase {
+		for _, le := range lv.les {
+			ch <- types.NewDeviationEntry(le.Owner(), types.DeviationReasonOverruled, sdcpbPath).SetExpectedValue(le.Value())
+		}
+		return
+	}
+
+	var running *LeafEntry
+	var highest *LeafEntry
+
+	overruled := make([]*types.DeviationEntry, 0, len(lv.les))
+	for _, le := range lv.les {
+		// Defaults should be skipped
+		if le.Owner() == DefaultsIntentName {
+			continue
+		}
+		// running is stored in running var
+		if le.Owner() == RunningIntentName {
+			running = le
+			continue
+		}
+		// if no highest exists yet, set it
+		if highest == nil {
+			highest = le
+			continue
+		}
+		// if precedence of actual (le) is higher then highest
+		// replace highest with it
+		if le.Priority() < highest.Priority() {
+			de := types.NewDeviationEntry(highest.Owner(), types.DeviationReasonOverruled, sdcpbPath).SetExpectedValue(highest.Value())
+			overruled = append(overruled, de)
+			highest = le
+		}
+		// if precedence of actual (le) is lower then le needs to be adeded to overruled
+		if le.Priority() >= highest.Priority() {
+			de := types.NewDeviationEntry(le.Owner(), types.DeviationReasonOverruled, sdcpbPath).SetExpectedValue(le.Value())
+			overruled = append(overruled, de)
+		}
+	}
+
+	// send all the overruleds
+	for _, de := range overruled {
+		ch <- de.SetCurrentValue(highest.Value())
+	}
+
+	// if there is no running and no highest (probably a default), skip
+	if running == nil && highest == nil {
+		return
+	}
+
+	// unhandled -> running but no intent data
+	if running != nil && highest == nil {
+		ch <- types.NewDeviationEntry(running.Owner(), types.DeviationReasonUnhandled, sdcpbPath).SetCurrentValue(running.Value())
+		return
+	}
+
+	// if higeste exists but not running  OR   running != highest
+	if (running == nil && highest != nil) || running.Value().Cmp(highest.Value()) != 0 {
+		de := types.NewDeviationEntry(highest.Owner(), types.DeviationReasonNotApplied, sdcpbPath).SetExpectedValue(highest.Value())
+		if running != nil {
+			de.SetCurrentValue(running.Value())
+		}
+		ch <- de
+	}
+
 }

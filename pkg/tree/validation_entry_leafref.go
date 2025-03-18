@@ -10,30 +10,22 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-// NavigateLeafRef
-func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, error) {
+func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, path string) ([]Entry, error) {
+	var err error
+	var resultEntries []Entry
+	var processEntries []Entry
 
-	var lref string
-	switch {
-	case s.GetSchema().GetField().GetType().GetLeafref() != "":
-		lref = s.schema.GetField().GetType().GetLeafref()
-	case s.GetSchema().GetLeaflist().GetType().GetLeafref() != "":
-		lref = s.GetSchema().GetLeaflist().GetType().GetLeafref()
-	default:
-		return nil, fmt.Errorf("error not a leafref %s", s.Path().String())
-	}
-
-	lv := s.leafVariants.GetHighestPrecedence(false, true)
-
-	lref, err := utils.StripPathElemPrefix(lref)
+	lref, err := utils.StripPathElemPrefix(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed stripping namespaces from leafref %s LeafVariant %v: %w", s.Path(), lv, err)
+		return nil, fmt.Errorf("failed stripping namespaces from leafref %s: %w", s.Path(), err)
 	}
 
-	lrefSdcpbPath, err := utils.ParsePath(lref)
+	sdcpbPath, err := utils.ParsePath(lref)
 	if err != nil {
-		return nil, fmt.Errorf("failed parsing leafref path %s LeafVariant %v: %w", s.Path(), lv, err)
+		return nil, fmt.Errorf("failed parsing leafref path %s: %w", s.Path(), err)
 	}
+
+	lrefPath := newLrefPath(sdcpbPath)
 
 	// if the lrefs first character is "/" then it is a root based path
 	isRootBasedPath := false
@@ -41,21 +33,6 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 		isRootBasedPath = true
 	}
 
-	tv := lv.Value()
-	var values []*sdcpb.TypedValue
-
-	switch ttv := tv.Value.(type) {
-	case *sdcpb.TypedValue_LeaflistVal:
-		values = append(values, ttv.LeaflistVal.GetElement()...)
-	default:
-		values = append(values, tv)
-	}
-
-	var resultEntries []Entry
-
-	lrefPath := newLrefPath(lrefSdcpbPath)
-
-	var processEntries []Entry
 	if isRootBasedPath {
 		processEntries = []Entry{s.GetRoot()}
 	} else {
@@ -126,10 +103,44 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 		processEntries = resultEntries
 		count++
 	}
+	return resultEntries, nil
+}
+
+// NavigateLeafRef
+func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, error) {
+
+	var lref string
+	switch {
+	case s.GetSchema().GetField().GetType().GetLeafref() != "":
+		lref = s.schema.GetField().GetType().GetLeafref()
+	case s.GetSchema().GetLeaflist().GetType().GetLeafref() != "":
+		lref = s.GetSchema().GetLeaflist().GetType().GetLeafref()
+	default:
+		return nil, fmt.Errorf("error not a leafref %s", s.Path().String())
+	}
+
+	lv := s.leafVariants.GetHighestPrecedence(false, true)
+
+	tv := lv.Value()
+	var values []*sdcpb.TypedValue
+
+	switch ttv := tv.Value.(type) {
+	case *sdcpb.TypedValue_LeaflistVal:
+		values = append(values, ttv.LeaflistVal.GetElement()...)
+	default:
+		values = append(values, tv)
+	}
+
+	var resultEntries []Entry
+
+	foundEntries, err := s.BreadthSearch(ctx, lref)
+	if err != nil {
+		return nil, err
+	}
 
 	resultEntries = []Entry{}
 
-	for _, e := range processEntries {
+	for _, e := range foundEntries {
 
 		r, err := e.getHighestPrecedenceLeafValue(ctx)
 		if err != nil {

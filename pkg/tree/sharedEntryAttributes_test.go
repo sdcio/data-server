@@ -46,10 +46,14 @@ func Test_sharedEntryAttributes_checkAndCreateKeysAsLeafs(t *testing.T) {
 		t.Error(err)
 	}
 
-	root.FinishInsertionPhase(ctx)
 	t.Log(root.String())
 
 	fmt.Println(root.String())
-	root.FinishInsertionPhase(ctx)
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Error(err)
+	}
 	fmt.Println(root.String())
+
+	// TODO: check the result
 }

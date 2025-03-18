@@ -92,14 +92,17 @@ func TestXmlTreeImporter(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = root.ImportConfig(ctx, NewXmlTreeImporter(&inputDoc.Element), "owner1", 5, types.NewUpdateInsertFlags())
+			err = root.ImportConfig(ctx, nil, NewXmlTreeImporter(&inputDoc.Element), "owner1", 5, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Fatal(err)
 			}
 			t.Log(root.String())
 			fmt.Println(root.String())
 
-			root.FinishInsertionPhase(ctx)
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
 
 			result, err := root.ToXML(false, false, false, false)
 			if err != nil {

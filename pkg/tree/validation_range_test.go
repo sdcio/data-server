@@ -64,12 +64,15 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 
 	jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
 
-	err = root.ImportConfig(ctx, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
+	err = root.ImportConfig(ctx, types.PathSlice{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
 	if err != nil {
 		t.Error(err)
 	}
 
-	root.FinishInsertionPhase(ctx)
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Error(err)
+	}
 
 	validationResult := root.Validate(ctx, false)
 
@@ -173,12 +176,15 @@ func TestValidate_RangesSigned(t *testing.T) {
 			jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
 
 			// import via importer
-			err = root.ImportConfig(ctx, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
+			err = root.ImportConfig(ctx, types.PathSlice{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Error(err)
 			}
 
-			root.FinishInsertionPhase(ctx)
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
 
 			validationResult := root.Validate(ctx, false)
 
@@ -303,12 +309,15 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 			jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
 
 			// import via importer
-			err = root.ImportConfig(ctx, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
+			err = root.ImportConfig(ctx, types.PathSlice{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Error(err)
 			}
 
-			root.FinishInsertionPhase(ctx)
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
 
 			// run validation
 			validationResults := root.Validate(ctx, false)

@@ -74,6 +74,7 @@ type Datastore struct {
 	syncTree      *tree.RootEntry
 	syncTreeMutex *sync.RWMutex
 
+	// owned by sync
 	syncTreeCandidat *tree.RootEntry
 }
 
@@ -111,7 +112,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 	ds.cfn = cancel
 
 	// create cache instance if needed
-	// this is a blocking  call
+	// this is a blocking call
 	ds.initCache(ctx)
 
 	go func() {
@@ -289,39 +290,6 @@ func (d *Datastore) writeToSyncTreeCandidate(ctx context.Context, updates []*sdc
 	return nil
 }
 
-type SdcpbUpdateDedup struct {
-	lookup map[string]*sdcpb.Update
-}
-
-func NewSdcpbUpdateDedup() *SdcpbUpdateDedup {
-	return &SdcpbUpdateDedup{
-		lookup: map[string]*sdcpb.Update{},
-	}
-}
-
-func (s *SdcpbUpdateDedup) AddUpdates(upds []*sdcpb.Update) {
-	for _, upd := range upds {
-		s.AddUpdate(upd)
-	}
-}
-
-func (s *SdcpbUpdateDedup) AddUpdate(upd *sdcpb.Update) {
-	path := upd.Path.String()
-	if _, exists := s.lookup[path]; exists {
-		return
-	}
-	s.lookup[path] = upd
-}
-
-func (s *SdcpbUpdateDedup) Updates() []*sdcpb.Update {
-	result := make([]*sdcpb.Update, 0, len(s.lookup))
-
-	for _, v := range s.lookup {
-		result = append(result, v)
-	}
-	return result
-}
-
 func (d *Datastore) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.DataServer_WatchDeviationsServer) error {
 	d.m.Lock()
 	defer d.m.Unlock()
@@ -350,262 +318,109 @@ func (d *Datastore) StopDeviationsWatch(peer string) {
 func (d *Datastore) DeviationMgr(ctx context.Context) {
 	log.Infof("%s: starting deviationMgr...", d.Name())
 	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
+	defer func() {
+		ticker.Stop()
+	}()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// TODO: send deviation START
 			d.m.RLock()
-			// copy deviation streams
-			dm := make(map[string]sdcpb.DataServer_WatchDeviationsServer)
-			for n, devStream := range d.deviationClients {
-				dm[n] = devStream
+			deviationClients := make([]sdcpb.DataServer_WatchDeviationsServer, 0, len(d.deviationClients))
+			for _, devStream := range d.deviationClients {
+				deviationClients = append(deviationClients, devStream)
 			}
 			d.m.RUnlock()
-			// d.runDeviationUpdate(ctx, dm)
+			if len(deviationClients) == 0 {
+				continue
+			}
+			for _, dc := range deviationClients {
+				dc.Send(&sdcpb.WatchDeviationResponse{
+					Name:  d.config.Name,
+					Event: sdcpb.DeviationEvent_START,
+				})
+			}
+			deviationChan, err := d.calculateDeviations(ctx)
+			if err != nil {
+				log.Error(err)
+				continue
+			}
+			d.SendDeviations(deviationChan, deviationClients)
+			for _, dc := range deviationClients {
+				dc.Send(&sdcpb.WatchDeviationResponse{
+					Name:  d.config.Name,
+					Event: sdcpb.DeviationEvent_END,
+				})
+			}
 		}
 	}
 }
 
-// func (d *Datastore) runDeviationUpdate(ctx context.Context, dm map[string]sdcpb.DataServer_WatchDeviationsServer) {
+func (d *Datastore) SendDeviations(ch <-chan *treetypes.DeviationEntry, deviationClients []sdcpb.DataServer_WatchDeviationsServer) {
+	wg := &sync.WaitGroup{}
+	for {
+		select {
+		case de, ok := <-ch:
+			if !ok {
+				wg.Wait()
+				return
+			}
+			wg.Add(1)
+			go func(de DeviationEntry, dcs []sdcpb.DataServer_WatchDeviationsServer) {
+				for _, dc := range dcs {
+					dc.Send(&sdcpb.WatchDeviationResponse{
+						Name:          d.config.Name,
+						Intent:        de.IntentName(),
+						Event:         sdcpb.DeviationEvent_UPDATE,
+						Reason:        sdcpb.DeviationReason(de.Reason()),
+						Path:          de.Path(),
+						ExpectedValue: de.ExpectedValue(),
+						CurrentValue:  de.CurrentValue(),
+					})
+				}
+				wg.Done()
+			}(de, deviationClients)
+		}
+	}
+}
 
-// 	sep := "/"
+type DeviationEntry interface {
+	IntentName() string
+	Reason() treetypes.DeviationReason
+	Path() *sdcpb.Path
+	CurrentValue() *sdcpb.TypedValue
+	ExpectedValue() *sdcpb.TypedValue
+}
 
-// 	// send deviation START
-// 	for _, dc := range dm {
-// 		err := dc.Send(&sdcpb.WatchDeviationResponse{
-// 			Name:  d.Name(),
-// 			Event: sdcpb.DeviationEvent_START,
-// 		})
-// 		if err != nil {
-// 			log.Errorf("%s: failed to send deviation start: %v", d.Name(), err)
-// 			continue
-// 		}
-// 	}
-// 	// collect intent deviations and store them for clearing
-// 	newDeviations := make(map[string][]*sdcpb.WatchDeviationResponse)
+func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.DeviationEntry, error) {
+	deviationChan := make(chan *treetypes.DeviationEntry, 10)
 
-// 	configPaths := map[string]struct{}{}
+	d.syncTreeMutex.RLock()
+	defer d.syncTreeMutex.RUnlock()
 
-// 	// go through config and calculate deviations
-// 	for upd := range d.cacheClient.ReadCh(ctx, d.Name(), &cache.Opts{Store: cachepb.Store_CONFIG}, [][]string{nil}, 0) {
-// 		// save the updates path as an already checked path
-// 		configPaths[strings.Join(upd.GetPath(), sep)] = struct{}{}
+	deviationTree, err := d.syncTree.DeepCopy(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-// 		v, err := upd.Value()
-// 		if err != nil {
-// 			log.Errorf("%s: failed to convert value: %v", d.Name(), err)
-// 			continue
-// 		}
+	err = d.LoadAllIntents(ctx, deviationTree)
+	if err != nil {
+		return nil, err
+	}
 
-// 		intentsUpdates := d.cacheClient.Read(ctx, d.Name(), &cache.Opts{
-// 			Store:         cachepb.Store_INTENDED,
-// 			Owner:         "",
-// 			Priority:      0,
-// 			PriorityCount: 0,
-// 		}, [][]string{upd.GetPath()}, 0)
-// 		if len(intentsUpdates) == 0 {
-// 			log.Debugf("%s: has unhandled config %v: %v", d.Name(), upd.GetPath(), v)
-// 			// TODO: generate an unhandled config deviation
-// 			sp, err := d.schemaClient.ToPath(ctx, upd.GetPath())
-// 			if err != nil {
-// 				log.Errorf("%s: failed to convert cached path to xpath: %v", d.Name(), err)
-// 			}
+	err = deviationTree.FinishInsertionPhase(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-// 			rsp := &sdcpb.WatchDeviationResponse{
-// 				Name:         d.Name(),
-// 				Intent:       upd.Owner(),
-// 				Event:        sdcpb.DeviationEvent_UPDATE,
-// 				Reason:       sdcpb.DeviationReason_UNHANDLED,
-// 				Path:         sp,
-// 				CurrentValue: v,
-// 			}
-// 			for _, dc := range dm {
-// 				err = dc.Send(rsp)
-// 				if err != nil {
-// 					log.Errorf("%s: failed to send deviation: %v", d.Name(), err)
-// 					continue
-// 				}
-// 			}
-// 			continue
-// 		}
-// 		// NOT_APPLIED or OVERRULED deviation
-// 		// sort intent updates by priority/TS
-// 		sort.Slice(intentsUpdates, func(i, j int) bool {
-// 			if intentsUpdates[i].Priority() == intentsUpdates[j].Priority() {
-// 				return intentsUpdates[i].TS() < intentsUpdates[j].TS()
-// 			}
-// 			return intentsUpdates[i].Priority() < intentsUpdates[j].Priority()
-// 		})
-// 		// first intent
-// 		// // compare values with config
-// 		fiv, err := intentsUpdates[0].Value()
-// 		if err != nil {
-// 			log.Errorf("%s: failed to convert intent value: %v", d.Name(), err)
-// 			continue
-// 		}
-// 		sp, err := d.schemaClient.ToPath(ctx, intentsUpdates[0].GetPath())
-// 		if err != nil {
-// 			log.Errorf("%s: failed to convert path %v: %v", d.Name(), intentsUpdates[0].GetPath(), err)
-// 			continue
-// 		}
-// 		scRsp, err := d.schemaClient.GetSchemaSdcpbPath(ctx, sp)
-// 		if err != nil {
-// 			log.Errorf("%s: failed to get path schema: %v ", d.Name(), err)
-// 			continue
-// 		}
-// 		nfiv, err := utils.TypedValueToYANGType(fiv, scRsp.GetSchema())
-// 		if err != nil {
-// 			log.Errorf("%s: failed to convert value to its YANG type: %v ", d.Name(), err)
-// 			continue
-// 		}
-// 		if !utils.EqualTypedValues(nfiv, v) {
-// 			log.Debugf("%s: intent %s has a NOT_APPLIED deviation: configured: %v -> expected %v",
-// 				d.Name(), intentsUpdates[0].Owner(), v, nfiv)
-// 			rsp := &sdcpb.WatchDeviationResponse{
-// 				Name:          d.Name(),
-// 				Intent:        intentsUpdates[0].Owner(),
-// 				Event:         sdcpb.DeviationEvent_UPDATE,
-// 				Reason:        sdcpb.DeviationReason_NOT_APPLIED,
-// 				Path:          sp,
-// 				ExpectedValue: nfiv,
-// 				CurrentValue:  v,
-// 			}
-// 			for _, dc := range dm {
-// 				err = dc.Send(rsp)
-// 				if err != nil {
-// 					log.Errorf("%s: failed to send deviation: %v", d.Name(), err)
-// 					continue
-// 				}
-// 			}
-// 			xp := utils.ToXPath(sp, false)
-// 			if _, ok := newDeviations[xp]; !ok {
-// 				newDeviations[xp] = make([]*sdcpb.WatchDeviationResponse, 0, 1)
-// 			}
-// 			newDeviations[xp] = append(newDeviations[xp], rsp)
-// 		}
-// 		// remaining intents
-// 		for _, intUpd := range intentsUpdates[1:] {
-// 			iv, err := intUpd.Value()
-// 			if err != nil {
-// 				log.Errorf("%s: failed to convert intent value: %v", d.Name(), err)
-// 				continue
-// 			}
-// 			sp, err := d.schemaClient.ToPath(ctx, intUpd.GetPath())
-// 			if err != nil {
-// 				log.Errorf("%s: failed to convert path %v: %v", d.Name(), intUpd.GetPath(), err)
-// 				continue
-// 			}
-// 			scRsp, err := d.schemaClient.GetSchemaSdcpbPath(ctx, sp)
-// 			if err != nil {
-// 				log.Errorf("%s: failed to get path schema: %v ", d.Name(), err)
-// 				continue
-// 			}
-// 			niv, err := utils.TypedValueToYANGType(iv, scRsp.GetSchema())
-// 			if err != nil {
-// 				log.Errorf("%s: failed to convert value to its YANG type: %v ", d.Name(), err)
-// 				continue
-// 			}
-// 			if !utils.EqualTypedValues(nfiv, niv) {
-// 				log.Debugf("%s: intent %s has an OVERRULED deviation: ruling intent has: %v -> overruled intent has: %v",
-// 					d.Name(), intUpd.Owner(), nfiv, niv)
-// 				// TODO: generate an OVERRULED deviation
+	go func() {
+		deviationTree.GetDeviations(deviationChan)
+		close(deviationChan)
+	}()
 
-// 				rsp := &sdcpb.WatchDeviationResponse{
-// 					Name:          d.Name(),
-// 					Intent:        intUpd.Owner(),
-// 					Event:         sdcpb.DeviationEvent_UPDATE,
-// 					Reason:        sdcpb.DeviationReason_OVERRULED,
-// 					Path:          sp,
-// 					ExpectedValue: iv,
-// 					CurrentValue:  fiv,
-// 				}
-// 				for _, dc := range dm {
-// 					err = dc.Send(rsp)
-// 					if err != nil {
-// 						log.Errorf("%s: failed to send deviation: %v", d.Name(), err)
-// 						continue
-// 					}
-// 				}
-// 				xp := utils.ToXPath(sp, false)
-// 				if _, ok := newDeviations[xp]; !ok {
-// 					newDeviations[xp] = make([]*sdcpb.WatchDeviationResponse, 0, 1)
-// 				}
-// 				newDeviations[xp] = append(newDeviations[xp], rsp)
-// 			}
-// 		}
-// 	}
-
-// 	intendedUpdates, err := d.readStoreKeysMeta(ctx, cachepb.Store_INTENDED)
-// 	if err != nil {
-// 		log.Error(err)
-// 		return
-// 	}
-
-// 	for _, upds := range intendedUpdates {
-// 		for _, upd := range upds {
-// 			path := strings.Join(upd.GetPath(), sep)
-// 			if _, exists := configPaths[path]; !exists {
-
-// 				// iv, err := upd.Value()
-// 				// if err != nil {
-// 				// 	log.Errorf("%s: failed to convert intent value: %v", d.Name(), err)
-// 				// 	continue
-// 				// }
-
-// 				path, err := d.schemaClient.ToPath(ctx, upd.GetPath())
-// 				if err != nil {
-// 					log.Error(err)
-// 					continue
-// 				}
-// 				// scRsp, err := d.getSchema(ctx, path)
-// 				// if err != nil {
-// 				// 	log.Errorf("%s: failed to get path schema: %v ", d.Name(), err)
-// 				// 	continue
-// 				// }
-// 				// niv, err := d.typedValueToYANGType(iv, scRsp.GetSchema())
-// 				// if err != nil {
-// 				// 	log.Errorf("%s: failed to convert value to its YANG type: %v ", d.Name(), err)
-// 				// 	continue
-// 				// }
-
-// 				rsp := &sdcpb.WatchDeviationResponse{
-// 					Name:          d.Name(),
-// 					Intent:        upd.Owner(),
-// 					Event:         sdcpb.DeviationEvent_UPDATE,
-// 					Reason:        sdcpb.DeviationReason_NOT_APPLIED,
-// 					Path:          path,
-// 					ExpectedValue: nil, // TODO this need to be fixed
-// 					CurrentValue:  nil,
-// 				}
-// 				for _, dc := range dm {
-// 					err = dc.Send(rsp)
-// 					if err != nil {
-// 						log.Errorf("%s: failed to send deviation: %v", d.Name(), err)
-// 						continue
-// 					}
-// 				}
-// 			}
-// 		}
-// 	}
-
-// 	// send deviation event END
-// 	for _, dc := range dm {
-// 		err := dc.Send(&sdcpb.WatchDeviationResponse{
-// 			Name:  d.Name(),
-// 			Event: sdcpb.DeviationEvent_END,
-// 		})
-// 		if err != nil {
-// 			log.Errorf("%s: failed to send deviation end: %v", d.Name(), err)
-// 			continue
-// 		}
-// 	}
-// 	d.md.Lock()
-// 	d.currentIntentsDeviations = newDeviations
-// 	d.md.Unlock()
-// }
+	return deviationChan, nil
+}
 
 // DatastoreRollbackAdapter implements the types.RollbackInterface and encapsulates the Datastore.
 type DatastoreRollbackAdapter struct {

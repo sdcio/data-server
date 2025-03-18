@@ -65,9 +65,15 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us types.UpdateSlic
 	return nil
 }
 
-func (r *RootEntry) ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error {
+func (r *RootEntry) ImportConfig(ctx context.Context, path types.PathSlice, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error {
 	r.treeContext.SetActualOwner(intentName)
-	return r.sharedEntryAttributes.ImportConfig(ctx, t, intentName, intentPrio, flags)
+
+	e, err := r.sharedEntryAttributes.getOrCreateChilds(ctx, path)
+	if err != nil {
+		return err
+	}
+
+	return e.ImportConfig(ctx, importer, intentName, intentPrio, flags)
 }
 
 func (r *RootEntry) Validate(ctx context.Context, concurrent bool) types.ValidationResults {
@@ -138,6 +144,10 @@ func (r *RootEntry) GetDeletes(aggregatePaths bool) (types.DeleteEntriesList, er
 
 func (r *RootEntry) GetAncestorSchema() (*sdcpb.SchemaElem, int) {
 	return nil, 0
+}
+
+func (r *RootEntry) GetDeviations(ch chan<- *types.DeviationEntry) {
+	r.sharedEntryAttributes.GetDeviations(ch, true)
 }
 
 func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Intent, error) {

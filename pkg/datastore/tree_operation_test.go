@@ -798,7 +798,10 @@ package datastore
 // 			root.AddUpdatesRecursive(ctx, updSlice, flags)
 
 // 			fmt.Println(root.String())
-// 			root.FinishInsertionPhase(ctx)
+// 			err =root.FinishInsertionPhase(ctx)
+// if err != nil {
+// 	t.Error(err)
+// }
 // 			fmt.Println(root.String())
 
 // 			validationResult := root.Validate(ctx, false)

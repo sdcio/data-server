@@ -68,7 +68,7 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntent
 		return nil, err
 	}
 
-	err = root.ImportConfig(ctx, protoImporter, tp.GetIntentName(), tp.GetPriority(), types.NewUpdateInsertFlags())
+	err = root.ImportConfig(ctx, nil, protoImporter, tp.GetIntentName(), tp.GetPriority(), types.NewUpdateInsertFlags())
 	if err != nil {
 		return nil, err
 	}
