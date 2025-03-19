@@ -580,31 +580,39 @@ func (s *sharedEntryAttributes) getRegularDeletes(deletes []types.DeleteEntry, a
 	var err error
 	// if entry is a container type, check the keys, to be able to
 	// issue a delte for the whole branch at once via keys
-	switch s.schema.GetSchema().(type) {
-	case *sdcpb.SchemaElem_Container:
-		// // deletes for child elements (choice cases) that newly became inactive.
-		// for _, v := range s.choicesResolvers {
-		// 	oldBestCaseName := v.getOldBestCaseName()
-		// 	newBestCaseName := v.getBestCaseName()
-		// 	// so if we have an old and a new best cases (not "") and the names are different,
-		// 	// all the old to the deletion list
-		// 	if oldBestCaseName != "" && newBestCaseName != "" && oldBestCaseName != newBestCaseName {
-		// 		// try fetching the case from the childs
-		// 		oldBestCaseEntry, exists := s.childs.GetEntry(oldBestCaseName)
-		// 		if exists {
-		// 			deletes = append(deletes, oldBestCaseEntry)
-		// 		} else {
-		// 			// it might be that the child is not loaded into the tree, but just considered from the treecontext cache for the choice/case resolution
-		// 			// if so, we create and return the DeleteEntryImpl struct
-		// 			path, err := s.SdcpbPath()
-		// 			if err != nil {
-		// 				return nil, err
-		// 			}
-		// 			deletes = append(deletes, NewDeleteEntryImpl(path, append(s.Path(), oldBestCaseName)))
-		// 		}
-		// 	}
-		// }
-	}
+	// switch s.schema.GetSchema().(type) {
+	// case *sdcpb.SchemaElem_Container:
+	// 	// deletes for child elements (choice cases) that newly became inactive.
+	// 	for _, v := range s.choicesResolvers {
+	// 		// oldBestCaseName := v.getOldBestCaseName()
+	// 		// newBestCaseName := v.getBestCaseName()
+	// 		// // so if we have an old and a new best cases (not "") and the names are different,
+	// 		// // all the old to the deletion list
+	// 		// if oldBestCaseName != "" && newBestCaseName != "" && oldBestCaseName != newBestCaseName {
+	// 		// 	// try fetching the case from the childs
+	// 		// 	oldBestCaseEntry, exists := s.childs.GetEntry(oldBestCaseName)
+	// 		// 	if exists {
+	// 		// 		deletes = append(deletes, oldBestCaseEntry)
+	// 		// 	} else {
+	// 		// 		// it might be that the child is not loaded into the tree, but just considered from the treecontext cache for the choice/case resolution
+	// 		// 		// if so, we create and return the DeleteEntryImpl struct
+	// 		// 		path, err := s.SdcpbPath()
+	// 		// 		if err != nil {
+	// 		// 			return nil, err
+	// 		// 		}
+	// 		// 		deletes = append(deletes, types.NewDeleteEntryImpl(path, append(s.Path(), oldBestCaseName)))
+	// 		// 	}
+	// 		// }
+	// 		path, err := s.SdcpbPath()
+	// 		if err != nil {
+	// 			return nil, err
+	// 		}
+	// 		deleteElements := v.GetDeletes()
+	// 		for _, de := range deleteElements {
+	// 			deletes = append(deletes, types.NewDeleteEntryImpl(path, append(s.Path(), de)))
+	// 		}
+	// 	}
+	// }
 
 	if s.shouldDelete() && !s.IsRoot() && len(s.GetSchemaKeys()) == 0 {
 		return append(deletes, s), nil
@@ -895,16 +903,28 @@ func (s *sharedEntryAttributes) GetRootBasedEntryChain() []Entry {
 	return append(s.parent.GetRootBasedEntryChain(), s)
 }
 
+type HighestPrecedenceFilter func(le *LeafEntry) bool
+
+func HighestPrecedenceFilterAll(le *LeafEntry) bool {
+	return true
+}
+func HighestPrecedenceFilterWithoutNew(le *LeafEntry) bool {
+	return !le.IsNew
+}
+func HighestPrecedenceFilterWithoutDeleted(le *LeafEntry) bool {
+	return !le.Delete
+}
+
 // getHighestPrecedenceValueOfBranch goes through all the child branches to find the highest
 // precedence value (lowest priority value) for the entire branch and returns it.
-func (s *sharedEntryAttributes) getHighestPrecedenceValueOfBranch(includeDeleted bool) int32 {
+func (s *sharedEntryAttributes) getHighestPrecedenceValueOfBranch(filter HighestPrecedenceFilter) int32 {
 	result := int32(math.MaxInt32)
 	for _, e := range s.childs.GetAll() {
-		if val := e.getHighestPrecedenceValueOfBranch(includeDeleted); val < result {
+		if val := e.getHighestPrecedenceValueOfBranch(filter); val < result {
 			result = val
 		}
 	}
-	if val := s.leafVariants.GetHighestPrecedenceValue(includeDeleted); val < result {
+	if val := s.leafVariants.GetHighestPrecedenceValue(filter); val < result {
 		result = val
 	}
 
@@ -1316,33 +1336,33 @@ func (s *sharedEntryAttributes) populateChoiceCaseResolvers(_ context.Context) e
 	// if choice/cases exist, process it
 	for _, choiceResolver := range s.choicesResolvers {
 		for _, elem := range choiceResolver.GetElementNames() {
-			isNew := false
 			isDeleted := false
-
-			highestWDelete := int32(math.MaxInt32)
-			highestWODelete := int32(math.MaxInt32)
+			highestWDeleted := int32(math.MaxInt32)
+			highestWODeleted := int32(math.MaxInt32)
+			highestWONew := int32(math.MaxInt32)
 
 			child, childExists := s.childs.GetEntry(elem)
 			// set the value from the tree as well
 			if childExists {
-				valWDel := child.getHighestPrecedenceValueOfBranch(true)
-
-				if valWDel <= highestWDelete {
-					highestWDelete = valWDel
+				valWDeleted := child.getHighestPrecedenceValueOfBranch(HighestPrecedenceFilterAll)
+				if valWDeleted <= highestWDeleted {
+					highestWDeleted = valWDeleted
 					if child.canDelete() {
 						isDeleted = true
-					} else {
-						isNew = true
 					}
 				}
 
-				valNonDel := child.getHighestPrecedenceValueOfBranch(false)
-
-				if valNonDel <= highestWODelete {
-					highestWODelete = valNonDel
+				valWODeleted := child.getHighestPrecedenceValueOfBranch(HighestPrecedenceFilterWithoutDeleted)
+				if valWODeleted <= highestWODeleted {
+					highestWODeleted = valWODeleted
 				}
+				valWONew := child.getHighestPrecedenceValueOfBranch(HighestPrecedenceFilterWithoutNew)
+				if valWONew <= highestWONew {
+					highestWONew = valWONew
+				}
+
 			}
-			choiceResolver.SetValue(elem, highestWODelete, highestWDelete, isNew, isDeleted)
+			choiceResolver.SetValue(elem, highestWODeleted, highestWDeleted, highestWONew, isDeleted)
 		}
 	}
 	return nil

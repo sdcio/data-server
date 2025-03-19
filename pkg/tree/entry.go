@@ -83,7 +83,7 @@ type Entry interface {
 	// the container has keys defined that need to be skipped before the mandatory attributes can be checked
 	validateMandatoryWithKeys(ctx context.Context, level int, attribute string, resultChan chan<- *types.ValidationResultEntry)
 	// getHighestPrecedenceValueOfBranch returns the highes Precedence Value (lowest Priority value) of the brach that starts at this Entry
-	getHighestPrecedenceValueOfBranch(includeDeleted bool) int32
+	getHighestPrecedenceValueOfBranch(filter HighestPrecedenceFilter) int32
 	// GetSchema returns the *sdcpb.SchemaElem of the Entry
 	GetSchema() *sdcpb.SchemaElem
 	// IsRoot returns true if the Entry is the root of the tree

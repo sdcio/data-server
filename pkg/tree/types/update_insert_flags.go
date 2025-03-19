@@ -17,21 +17,24 @@ func NewUpdateInsertFlags() *UpdateInsertFlags {
 	return &UpdateInsertFlags{}
 }
 
-func (f *UpdateInsertFlags) SetDeleteFlag() {
+func (f *UpdateInsertFlags) SetDeleteFlag() *UpdateInsertFlags {
 	f.delete = true
 	f.new = false
+	return f
 }
 
-func (f *UpdateInsertFlags) SetDeleteOnlyUpdatedFlag() {
+func (f *UpdateInsertFlags) SetDeleteOnlyUpdatedFlag() *UpdateInsertFlags {
 	f.delete = true
 	f.onlyIntended = true
 	f.new = false
+	return f
 }
 
-func (f *UpdateInsertFlags) SetNewFlag() {
+func (f *UpdateInsertFlags) SetNewFlag() *UpdateInsertFlags {
 	f.new = true
 	f.delete = false
 	f.onlyIntended = false
+	return f
 }
 
 func (f *UpdateInsertFlags) GetDeleteFlag() bool {
@@ -46,13 +49,14 @@ func (f *UpdateInsertFlags) GetNewFlag() bool {
 	return f.new
 }
 
-func (f *UpdateInsertFlags) Apply(le LeafEntry) {
+func (f *UpdateInsertFlags) Apply(le LeafEntry) *UpdateInsertFlags {
 	if f.delete {
 		le.MarkDelete(f.onlyIntended)
-		return
+		return f
 	}
 	if f.new {
 		le.MarkNew()
-		return
+		return f
 	}
+	return f
 }

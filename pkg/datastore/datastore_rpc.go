@@ -264,7 +264,6 @@ func (d *Datastore) Sync(ctx context.Context) {
 					log.Errorf("issue modifying running cache content: %v", err)
 					continue
 				}
-
 			default:
 				err := d.writeToSyncTreeCandidate(ctx, syncup.Update.GetUpdate(), startTs)
 				if err != nil {

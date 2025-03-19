@@ -139,12 +139,12 @@ func (lv *LeafVariants) remainsToExist() bool {
 	return false
 }
 
-func (lv *LeafVariants) GetHighestPrecedenceValue(includeDelete bool) int32 {
+func (lv *LeafVariants) GetHighestPrecedenceValue(filter HighestPrecedenceFilter) int32 {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 	result := int32(math.MaxInt32)
 	for _, e := range lv.les {
-		if (!e.GetDeleteFlag() || includeDelete) && e.Owner() != DefaultsIntentName && e.Owner() != RunningIntentName && e.Update.Priority() < result {
+		if filter(e) && e.Owner() != DefaultsIntentName && e.Owner() != RunningIntentName && e.Update.Priority() < result {
 			result = e.Update.Priority()
 		}
 	}

@@ -80,7 +80,8 @@ func Test_Entry_One(t *testing.T) {
 
 	ts1 := int64(9999999)
 
-	u0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio100, owner1, ts1)
+	u0o1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio100, owner1, ts1)
+	u0o2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio50, owner2, ts1)
 	u1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "9", "description"}, desc1, prio100, owner1, ts1)
 	u1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "9", "index"}, testhelper.GetUIntTvProto(t, 9), prio100, owner1, ts1)
 	u2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc2, prio100, owner1, ts1)
@@ -106,7 +107,7 @@ func Test_Entry_One(t *testing.T) {
 	}
 
 	// start test
-	for _, u := range []*types.Update{u0, u1, u1_1, u2, u2_1, u3, u3_1} {
+	for _, u := range []*types.Update{u0o1, u1, u1_1, u2, u2_1, u3, u3_1} {
 		_, err := root.AddUpdateRecursive(ctx, u, flagsNew)
 		if err != nil {
 			t.Error(err)
@@ -126,7 +127,7 @@ func Test_Entry_One(t *testing.T) {
 		o1Le = root.GetByOwner(owner1, o1Le)
 		o1 := LeafEntriesToUpdates(o1Le)
 		// diff the result with the expected
-		if diff := testhelper.DiffUpdates([]*types.Update{u0, u2, u2_1, u1, u1_1}, o1); diff != "" {
+		if diff := testhelper.DiffUpdates([]*types.Update{u0o1, u2, u2_1, u1, u1_1}, o1); diff != "" {
 			t.Errorf("root.GetByOwner(owner1) mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -136,7 +137,7 @@ func Test_Entry_One(t *testing.T) {
 		o2Le = root.GetByOwner(owner2, o2Le)
 		o2 := LeafEntriesToUpdates(o2Le)
 		// diff the result with the expected
-		if diff := testhelper.DiffUpdates([]*types.Update{u3_1, u3}, o2); diff != "" {
+		if diff := testhelper.DiffUpdates([]*types.Update{u0o2, u3_1, u3}, o2); diff != "" {
 			t.Errorf("root.GetByOwner(owner2) mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -145,7 +146,7 @@ func Test_Entry_One(t *testing.T) {
 
 		highprec := root.GetHighestPrecedence(true)
 		// diff the result with the expected
-		if diff := testhelper.DiffUpdates([]*types.Update{u0, u1, u1_1, u3, u3_1}, highprec.ToUpdateSlice()); diff != "" {
+		if diff := testhelper.DiffUpdates([]*types.Update{u0o2, u1, u1_1, u3, u3_1}, highprec.ToUpdateSlice()); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -360,13 +361,21 @@ func Test_Entry_Four(t *testing.T) {
 	owner2 := "OwnerTwo"
 	ts1 := int64(9999999)
 
+	u1o1_0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio50, owner1, ts1)
 	u1o1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
+	u1o1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(t, 10), prio50, owner1, ts1)
 	u2o1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "description"}, desc3, prio50, owner1, ts1)
+	u2o1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "index"}, testhelper.GetUIntTvProto(t, 11), prio50, owner1, ts1)
 	u3 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "12", "description"}, desc3, prio50, owner1, ts1)
+	u3_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "12", "index"}, testhelper.GetUIntTvProto(t, 12), prio50, owner1, ts1)
 	u4 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
+	u4_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "13", "index"}, testhelper.GetUIntTvProto(t, 13), prio50, owner1, ts1)
 
+	u1o2_0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio55, owner2, ts1)
 	u1o2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc3, prio55, owner2, ts1)
+	u1o2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(t, 10), prio55, owner2, ts1)
 	u2o2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "description"}, desc3, prio55, owner2, ts1)
+	u2o2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "index"}, testhelper.GetUIntTvProto(t, 11), prio55, owner2, ts1)
 
 	ctx := context.TODO()
 
@@ -386,7 +395,7 @@ func Test_Entry_Four(t *testing.T) {
 	}
 
 	// start test add "existing" data
-	for _, u := range []*types.Update{u1o1, u2o1, u3, u4, u1o2, u2o2} {
+	for _, u := range []*types.Update{u1o1, u2o1, u1o1_1, u2o1_1, u3, u4, u3_1, u4_1, u1o2, u2o2} {
 		_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
 		if err != nil {
 			t.Error(err)
@@ -406,8 +415,8 @@ func Test_Entry_Four(t *testing.T) {
 		highprec := root.GetHighestPrecedence(false)
 
 		// diff the result with the expected
-		if diff := testhelper.DiffUpdates([]*types.Update{u1o1, u2o1, u3, u4}, highprec.ToUpdateSlice()); diff != "" {
-			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
+		if diff := testhelper.DiffUpdates([]*types.Update{u1o1_0, u1o1, u2o1, u3, u4, u1o1_1, u2o1_1, u3_1, u4_1}, highprec.ToUpdateSlice()); diff != "" {
+			t.Errorf("root.GetHighestPrecedence() mismatch (-want +got):\n%s", diff)
 		}
 	})
 
@@ -419,7 +428,10 @@ func Test_Entry_Four(t *testing.T) {
 	overwriteDesc := testhelper.GetStringTvProto(t, "Owerwrite Description")
 
 	// adding a new Update with same owner and priority with different value
+	//n0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio50, owner1, ts1)
+	// n1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetIntTvProto(t, 10), prio50, owner1, ts1)
 	n1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
+	// n2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "index"}, testhelper.GetIntTvProto(t, 11), prio50, owner1, ts1)
 	n2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "description"}, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*types.Update{n1, n2} {
@@ -452,18 +464,18 @@ func Test_Entry_Four(t *testing.T) {
 	})
 
 	t.Run("Check the old entries are gone from highest", func(t *testing.T) {
-		highpri := root.GetHighestPrecedence(true)
+		highpri := root.GetHighestPrecedence(false)
 		// diff the result with the expected
-		if diff := testhelper.DiffUpdates([]*types.Update{n1, n2, u1o2, u2o2}, highpri.ToUpdateSlice()); diff != "" {
-			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
+		if diff := testhelper.DiffUpdates([]*types.Update{u1o1_0, n1, n2, u2o1_1, u1o1_1, u3, u3_1, u4, u4_1}, highpri.ToUpdateSlice()); diff != "" {
+			t.Errorf("root.GetHighestPrecedence() mismatch (-want +got):\n%s", diff)
 		}
 	})
 
-	t.Run("Check the old entries are gone from highest (only New Or Updated)", func(t *testing.T) {
+	t.Run("Check the old entries are gone from highest (Only New Or Updated)", func(t *testing.T) {
 		highpri := root.GetHighestPrecedence(true)
 		// diff the result with the expected
-		if diff := testhelper.DiffUpdates([]*types.Update{u1o2, u2o2, n1, n2}, highpri.ToUpdateSlice()); diff != "" {
-			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
+		if diff := testhelper.DiffUpdates([]*types.Update{u1o2_0, n1, n2, u2o2_1, u1o2_1}, highpri.ToUpdateSlice()); diff != "" {
+			t.Errorf("root.GetHighestPrecedence() mismatch (-want +got):\n%s", diff)
 		}
 	})
 }
