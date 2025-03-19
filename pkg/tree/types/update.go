@@ -95,7 +95,7 @@ func (u *Update) GetPathSlice() PathSlice {
 }
 
 // ExpandAndConvertIntent takes a slice of Updates ([]*sdcpb.Update) and converts it into a tree.UpdateSlice, that contains *treetypes.Updates.
-func ExpandAndConvertIntent(ctx context.Context, scb utils.SchemaClientBound, intentName string, priority int32, upds []*sdcpb.Update) (UpdateSlice, error) {
+func ExpandAndConvertIntent(ctx context.Context, scb utils.SchemaClientBound, intentName string, priority int32, upds []*sdcpb.Update, ts int64) (UpdateSlice, error) {
 	converter := utils.NewConverter(scb)
 
 	// list of updates to be added to the cache
@@ -115,7 +115,7 @@ func ExpandAndConvertIntent(ctx context.Context, scb utils.SchemaClientBound, in
 		}
 
 		// construct the cache.Update
-		newCacheUpdates = append(newCacheUpdates, NewUpdate(pathslice, u.GetValue(), priority, intentName, 0))
+		newCacheUpdates = append(newCacheUpdates, NewUpdate(pathslice, u.GetValue(), priority, intentName, ts))
 	}
 	return newCacheUpdates, nil
 }
