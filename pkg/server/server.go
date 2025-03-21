@@ -85,10 +85,15 @@ func (d *DatastoreMap) StopAll() {
 	}
 }
 
-func (d *DatastoreMap) AddDatastore(ds *datastore.Datastore) {
+func (d *DatastoreMap) AddDatastore(ds *datastore.Datastore) error {
 	d.md.Lock()
 	defer d.md.Unlock()
+	if existingDs, _ := d.getDataStore(ds.Name()); existingDs != nil {
+		return fmt.Errorf("datastore %s already exists", ds.Name())
+	}
+
 	d.datastores[ds.Name()] = ds
+	return nil
 }
 
 func (d *DatastoreMap) DeleteDatastore(ctx context.Context, name string) error {
@@ -119,9 +124,8 @@ func (d *DatastoreMap) GetDatastoreAll() []*datastore.Datastore {
 	return result
 }
 
+// getDataStore expects that the mutex d.md is already held
 func (d *DatastoreMap) getDataStore(name string) (*datastore.Datastore, error) {
-	d.md.RLock()
-	defer d.md.RUnlock()
 	ds, exists := d.datastores[name]
 	if !exists {
 		return nil, fmt.Errorf("unknown datastore %s", name)

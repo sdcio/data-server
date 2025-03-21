@@ -57,7 +57,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 
 	switch rsp := rsp.GetSchema().Schema.(type) {
 	case *sdcpb.SchemaElem_Container:
-		log.Debugf("expanding update %v on container %q", upd, rsp.Container.Name)
+		// log.Debugf("expanding update %v on container %q", upd, rsp.Container.Name)
 
 		if upd.Value == nil {
 			rs, err := c.ExpandUpdateKeysAsLeaf(ctx, upd)
@@ -86,7 +86,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 		if err != nil {
 			return nil, err
 		}
-		log.Debugf("update has jsonVal: %T, %v\n", v, v)
+		// log.Debugf("update has jsonVal: %T, %v\n", v, v)
 		rs, err := c.ExpandContainerValue(ctx, upd.GetPath(), v, rsp)
 		if err != nil {
 			return nil, err
@@ -173,7 +173,7 @@ func (c *Converter) ExpandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Updat
 }
 
 func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container) ([]*sdcpb.Update, error) {
-	log.Debugf("expanding jsonVal %T | %v | %v", jv, jv, p)
+	// log.Debugf("expanding jsonVal %T | %v | %v", jv, jv, p)
 	switch jv := jv.(type) {
 	case string:
 		v := strings.Trim(jv, "\"")
@@ -213,7 +213,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		// handling keys in last element of the path or in the json value
 		for _, k := range cs.Container.GetKeys() {
 			if _, ok := jv[k.Name]; ok {
-				log.Debugf("handling key %s", k.Name)
+				// log.Debugf("handling key %s", k.Name)
 				if _, ok := keysInPath[k.Name]; ok {
 					return nil, fmt.Errorf("key %q is present in both the path and JSON value", k.Name)
 				}
@@ -239,7 +239,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 			}
 			switch item := item.(type) {
 			case *sdcpb.LeafSchema: // field
-				log.Debugf("handling field %s", item.Name)
+				// log.Debugf("handling field %s", item.Name)
 				np := proto.Clone(p).(*sdcpb.Path)
 				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item.Name})
 				upd := &sdcpb.Update{Path: np}
@@ -303,7 +303,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				upds = append(upds, upd)
 
 			case string: // child container
-				log.Debugf("handling child container %s", item)
+				// log.Debugf("handling child container %s", item)
 				np := proto.Clone(p).(*sdcpb.Path)
 				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item})
 				rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, np)

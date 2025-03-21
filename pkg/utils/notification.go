@@ -67,11 +67,11 @@ func FromGNMIPath(pre, p *gnmi.Path) *sdcpb.Path {
 }
 
 func FromGNMITypedValue(v *gnmi.TypedValue) *sdcpb.TypedValue {
-	log.Tracef("FromGNMITypedValue: %T : %v", v, v)
+	// log.Tracef("FromGNMITypedValue: %T : %v", v, v)
 	if v == nil {
 		return nil
 	}
-	log.Tracef("FromGNMITypedValue - Value: %T : %v", v.GetValue(), v.GetValue())
+	// log.Tracef("FromGNMITypedValue - Value: %T : %v", v.GetValue(), v.GetValue())
 	switch v.GetValue().(type) {
 	// case *gnmi.TypedValue:
 	case *gnmi.TypedValue_AnyVal:

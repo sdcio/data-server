@@ -3,6 +3,7 @@ package tree
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/sdcio/data-server/pkg/tree/importer"
@@ -37,6 +38,12 @@ func NewTreeRoot(ctx context.Context, tc *TreeContext) (*RootEntry, error) {
 	}
 
 	return root, nil
+}
+
+// stringToDisk just for debugging purpose
+func (r *RootEntry) stringToDisk(filename string) error {
+	err := os.WriteFile(filename, []byte(r.String()), 0755)
+	return err
 }
 
 func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {

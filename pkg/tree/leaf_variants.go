@@ -144,7 +144,7 @@ func (lv *LeafVariants) GetHighestPrecedenceValue(filter HighestPrecedenceFilter
 	defer lv.lesMutex.RUnlock()
 	result := int32(math.MaxInt32)
 	for _, e := range lv.les {
-		if filter(e) && e.Owner() != DefaultsIntentName && e.Owner() != RunningIntentName && e.Update.Priority() < result {
+		if filter(e) && e.Owner() != DefaultsIntentName && e.Update.Priority() < result {
 			result = e.Update.Priority()
 		}
 	}

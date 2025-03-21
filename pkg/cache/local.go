@@ -47,7 +47,6 @@ type LocalCache struct {
 }
 
 func (l *LocalCache) InstanceIntentGet(ctx context.Context, cacheName string, intentName string) (*tree_persist.Intent, error) {
-
 	b, err := l.Cache.InstanceIntentGet(ctx, cacheName, intentName)
 	if err != nil {
 		return nil, err

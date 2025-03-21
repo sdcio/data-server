@@ -57,18 +57,23 @@ func (d *Datastore) applyIntent(ctx context.Context, source target.TargetSource)
 }
 
 func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntentResponse, error) {
+	root, err := tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, intentName))
+	if err != nil {
+		return nil, err
+	}
+
 	tp, err := d.cacheClient.IntentGet(ctx, intentName)
 	if err != nil {
 		return nil, err
 	}
 	protoImporter := proto.NewProtoTreeImporter(tp.GetRoot())
 
-	root, err := tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, tp.IntentName))
+	err = root.ImportConfig(ctx, nil, protoImporter, tp.GetIntentName(), tp.GetPriority(), types.NewUpdateInsertFlags())
 	if err != nil {
 		return nil, err
 	}
 
-	err = root.ImportConfig(ctx, nil, protoImporter, tp.GetIntentName(), tp.GetPriority(), types.NewUpdateInsertFlags())
+	err = root.FinishInsertionPhase(ctx)
 	if err != nil {
 		return nil, err
 	}

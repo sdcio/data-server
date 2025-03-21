@@ -220,10 +220,14 @@ func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.
 
 	ds, err := s.datastores.GetDataStore(req.GetName()[0])
 	if err != nil {
+		log.Error(err)
 		return status.Errorf(codes.NotFound, "unknown datastore")
 	}
 
-	_ = ds.WatchDeviations(req, stream)
+	err = ds.WatchDeviations(req, stream)
+	if err != nil {
+		log.Error(err)
+	}
 	<-stream.Context().Done()
 	ds.StopDeviationsWatch(peerInfo.Addr.String())
 	return nil

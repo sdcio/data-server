@@ -10,8 +10,31 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*sdcpb.GetIntentResponse, error) {
+func (s *Server) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (*sdcpb.ListIntentResponse, error) {
+	if req.GetDatastoreName() == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
+	}
 
+	ds, err := s.datastores.getDataStore(req.GetDatastoreName())
+	if err != nil {
+		return nil, status.Error(codes.NotFound, err.Error())
+	}
+	resp := &sdcpb.ListIntentResponse{
+		DatastoreName: req.DatastoreName,
+	}
+
+	intentNames, err := ds.IntentsList(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	resp.Intent = intentNames
+
+	return resp, nil
+
+}
+
+func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*sdcpb.GetIntentResponse, error) {
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
 	}
@@ -59,7 +82,6 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 		}, nil
 
 	case sdcpb.Format_Intent_Format_XML:
-
 		doc, err := rsp.ToXML()
 		if err != nil {
 			return nil, err
