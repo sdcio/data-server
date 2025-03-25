@@ -81,7 +81,7 @@ type Entry interface {
 	validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry)
 	// validateMandatoryWithKeys is an internally used function that us called by validateMandatory in case
 	// the container has keys defined that need to be skipped before the mandatory attributes can be checked
-	validateMandatoryWithKeys(ctx context.Context, level int, attribute string, resultChan chan<- *types.ValidationResultEntry)
+	validateMandatoryWithKeys(ctx context.Context, level int, attributes []string, choiceName string, resultChan chan<- *types.ValidationResultEntry)
 	// getHighestPrecedenceValueOfBranch returns the highes Precedence Value (lowest Priority value) of the brach that starts at this Entry
 	getHighestPrecedenceValueOfBranch(filter HighestPrecedenceFilter) int32
 	// GetSchema returns the *sdcpb.SchemaElem of the Entry

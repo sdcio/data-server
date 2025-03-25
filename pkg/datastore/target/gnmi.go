@@ -26,8 +26,8 @@ import (
 	"github.com/AlekSi/pointer"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	gapi "github.com/openconfig/gnmic/pkg/api"
-	gtarget "github.com/openconfig/gnmic/pkg/target"
-	"github.com/openconfig/gnmic/pkg/types"
+	gtarget "github.com/openconfig/gnmic/pkg/api/target"
+	"github.com/openconfig/gnmic/pkg/api/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -410,6 +410,7 @@ func (t *gnmiTarget) internalGetSync(ctx context.Context, req *sdcpb.GetDataRequ
 		Start: true,
 	}
 	notificationsCount := 0
+
 	for _, n := range resp.GetNotification() {
 		syncCh <- &SyncUpdate{
 			Update: n,

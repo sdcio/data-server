@@ -36,8 +36,7 @@ func NewConverter(scb SchemaClientBound) *Converter {
 
 func (c *Converter) ExpandUpdates(ctx context.Context, updates []*sdcpb.Update) ([]*sdcpb.Update, error) {
 	outUpdates := make([]*sdcpb.Update, 0, len(updates))
-	for idx, upd := range updates {
-		_ = idx
+	for _, upd := range updates {
 		expUpds, err := c.ExpandUpdate(ctx, upd)
 		if err != nil {
 			return nil, err
@@ -57,18 +56,20 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 
 	switch rsp := rsp.GetSchema().Schema.(type) {
 	case *sdcpb.SchemaElem_Container:
-		// log.Debugf("expanding update %v on container %q", upd, rsp.Container.Name)
-
-		if upd.Value == nil {
-			rs, err := c.ExpandUpdateKeysAsLeaf(ctx, upd)
-			if err != nil {
-				return nil, err
-			}
-			upds := append(upds, rs...)
-			return upds, nil
+		// if it is not a presence container and the value is nil,
+		// return without doing anything
+		if !rsp.Container.GetIsPresence() && upd.Value == nil {
+			return nil, nil
 		}
 
-		var v interface{}
+		// if it is a presence container and no value is set, set upd value to EmptyVal
+		if rsp.Container.GetIsPresence() && upd.Value == nil {
+			upd.Value = &sdcpb.TypedValue{
+				Value: &sdcpb.TypedValue_EmptyVal{},
+			}
+		}
+
+		var v any
 		var err error
 		var jsonDecoder *json.Decoder
 		switch upd.GetValue().Value.(type) {
@@ -136,6 +137,8 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 
 func (c *Converter) ExpandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
 	upds := make([]*sdcpb.Update, 0)
+	var err error
+	var schemaRsp *sdcpb.GetSchemaResponse
 	// expand update path if it contains keys
 	for i, pe := range upd.GetPath().GetElem() {
 		if len(pe.GetKey()) == 0 {
@@ -158,17 +161,20 @@ func (c *Converter) ExpandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Updat
 			}
 			intUpd.Path.Elem = append(intUpd.Path.Elem, &sdcpb.PathElem{Name: k})
 
-			schemaRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, intUpd.Path)
+			schemaRsp, err = c.schemaClientBound.GetSchemaSdcpbPath(ctx, intUpd.Path)
 			if err != nil {
 				return nil, err
 			}
+
 			intUpd.Value, err = TypedValueToYANGType(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}, schemaRsp.GetSchema())
 			if err != nil {
 				return nil, err
 			}
+
 			upds = append(upds, intUpd)
 		}
 	}
+
 	return upds, nil
 }
 
