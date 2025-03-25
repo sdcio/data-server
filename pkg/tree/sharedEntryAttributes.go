@@ -16,6 +16,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -1233,27 +1234,73 @@ func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultCha
 		switch s.schema.GetSchema().(type) {
 		case *sdcpb.SchemaElem_Container:
 			for _, c := range s.schema.GetContainer().GetMandatoryChildrenConfig() {
-				s.validateMandatoryWithKeys(ctx, len(s.GetSchema().GetContainer().GetKeys()), c.Name, resultChan)
+				attributes := []string{}
+				choiceName := ""
+				// check if it is a ChildContainer
+				if slices.Contains(s.schema.GetContainer().GetChildren(), c.Name) {
+					attributes = append(attributes, c.Name)
+				}
+
+				// check if it is a Field
+				if slices.ContainsFunc(s.schema.GetContainer().GetFields(), func(x *sdcpb.LeafSchema) bool {
+					return x.Name == c.Name
+				}) {
+					attributes = append(attributes, c.Name)
+				}
+
+				// otherwise it will probably be a choice
+				if len(attributes) == 0 {
+					choice := s.schema.GetContainer().GetChoiceInfo().GetChoiceByName(c.Name)
+					if choice != nil {
+						attributes = append(attributes, choice.GetAllAttributes()...)
+						choiceName = c.Name
+					}
+				}
+
+				if len(attributes) == 0 {
+					log.Errorf("error path: %s, validationg mandatory attribute %s could not be found as child, field or choice.", s.Path(), c.Name)
+				}
+
+				s.validateMandatoryWithKeys(ctx, len(s.GetSchema().GetContainer().GetKeys()), attributes, choiceName, resultChan)
 			}
 		}
 	}
 }
 
-func (s *sharedEntryAttributes) validateMandatoryWithKeys(ctx context.Context, level int, attribute string, resultChan chan<- *types.ValidationResultEntry) {
+// validateMandatoryWithKeys steps down the tree, passing the key levels and checking the existence of the mandatory.
+// attributes is a string slice, it will be checked that at least of the the given attributes is defined
+// !Not checking all of these are defined (call multiple times with single entry in attributes for that matter)!
+func (s *sharedEntryAttributes) validateMandatoryWithKeys(ctx context.Context, level int, attributes []string, choiceName string, resultChan chan<- *types.ValidationResultEntry) {
 	if level == 0 {
-		// first check if the mandatory value is set via the intent, e.g. part of the tree already
-		v, existsInTree := s.filterActiveChoiceCaseChilds()[attribute]
-
+		success := false
+		existsInTree := false
+		var v Entry
+		// iterate over the attributes make sure any of these exists
+		for _, attr := range attributes {
+			// first check if the mandatory value is set via the intent, e.g. part of the tree already
+			v, existsInTree = s.filterActiveChoiceCaseChilds()[attr]
+			// if exists and remains to Exist
+			if existsInTree && v.remainsToExist() {
+				// set success to true and break the loop
+				success = true
+				break
+			}
+		}
 		// if not the path exists in the tree and is not to be deleted, then lookup in the paths index of the store
 		// and see if such path exists, if not raise the error
-		if !(existsInTree && v.remainsToExist()) {
-			resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child %s does not exist, path: %s", attribute, s.Path()), types.ValidationResultEntryTypeError)
+		if !success {
+			// if it is not a choice
+			if choiceName == "" {
+				resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child %s does not exist, path: %s", attributes, s.Path()), types.ValidationResultEntryTypeError)
+			}
+			// if it is a mandatory choice
+			resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory choice %s [attributes: %s] does not exist, path: %s", choiceName, attributes, s.Path()), types.ValidationResultEntryTypeError)
 		}
 		return
 	}
 
 	for _, c := range s.filterActiveChoiceCaseChilds() {
-		c.validateMandatoryWithKeys(ctx, level-1, attribute, resultChan)
+		c.validateMandatoryWithKeys(ctx, level-1, attributes, choiceName, resultChan)
 	}
 
 }
