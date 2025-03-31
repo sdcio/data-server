@@ -41,11 +41,11 @@ type sharedEntryAttributes struct {
 	treeContext *TreeContext
 
 	// state cache
+	cacheMutex        sync.Mutex
 	cacheShouldDelete *bool
 	cacheCanDelete    *bool
 	cacheRemains      *bool
 	level             *int
-	cacheMutex        sync.Mutex
 }
 
 func (s *sharedEntryAttributes) deepCopy(tc *TreeContext, parent Entry) (*sharedEntryAttributes, error) {

@@ -51,4 +51,5 @@ const (
 	DeviationReasonUnhandled
 	DeviationReasonNotApplied
 	DeviationReasonOverruled
+	DeviationReasonIntentExists
 )

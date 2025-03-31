@@ -133,8 +133,9 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	return warnings, nil
 }
 
-func (d *Datastore) LoadAllIntents(ctx context.Context, root *tree.RootEntry) error {
+func (d *Datastore) LoadAllIntents(ctx context.Context, root *tree.RootEntry) ([]string, error) {
 
+	IntentNames := []string{}
 	IntentChan := make(chan *tree_persist.Intent, 0)
 	ErrChan := make(chan error, 1)
 
@@ -143,20 +144,21 @@ func (d *Datastore) LoadAllIntents(ctx context.Context, root *tree.RootEntry) er
 	for {
 		select {
 		case err := <-ErrChan:
-			return err
+			return nil, err
 		case <-ctx.Done():
-			return fmt.Errorf("context closed while retrieving all intents")
+			return nil, fmt.Errorf("context closed while retrieving all intents")
 		case intent, ok := <-IntentChan:
 			if !ok {
 				// IntentChan closed due to finish
-				return nil
+				return nil, nil
 			}
+			IntentNames = append(IntentNames, intent.GetIntentName())
 			log.Debugf("adding intent %s to tree", intent.GetIntentName())
 			protoLoader := treeproto.NewProtoTreeImporter(intent.GetRoot())
 			log.Debugf(intent.String())
 			err := root.ImportConfig(ctx, nil, protoLoader, intent.GetIntentName(), intent.GetPriority(), treetypes.NewUpdateInsertFlags())
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
@@ -174,7 +176,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		return nil, err
 	}
 
-	err = d.LoadAllIntents(ctx, root)
+	_, err = d.LoadAllIntents(ctx, root)
 	if err != nil {
 		return nil, err
 	}

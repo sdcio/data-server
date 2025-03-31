@@ -403,9 +403,14 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 		return nil, err
 	}
 
-	err = d.LoadAllIntents(ctx, deviationTree)
+	addedIntentNames, err := d.LoadAllIntents(ctx, deviationTree)
 	if err != nil {
 		return nil, err
+	}
+
+	// Send IntentExists
+	for _, n := range addedIntentNames {
+		deviationChan <- treetypes.NewDeviationEntry(n, treetypes.DeviationReasonIntentExists, nil)
 	}
 
 	err = deviationTree.FinishInsertionPhase(ctx)
