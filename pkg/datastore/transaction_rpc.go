@@ -114,20 +114,6 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	// collect warnings
 	warnings = append(warnings, dataResp.GetWarnings()...)
 
-	// // query tree for deletes
-	// deletes, err := root.GetDeletes(true)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// // fast and optimistic writeback to the config store
-	// err = d.cacheClient.Modify(ctx, d.Name(), &cache.Opts{
-	// 	Store: cachepb.Store_CONFIG,
-	// }, deletes.PathSlices().ToStringSlice(), root.GetHighestPrecedence(false).ToCacheUpdateSlice())
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed updating the running config store for %s: %w", d.Name(), err)
-	// }
-
 	log.Infof("ds=%s transaction=%s applied", d.Name(), transaction.GetTransactionId()+" - replace")
 
 	return warnings, nil
