@@ -36,12 +36,12 @@ func Test_sharedEntryAttributes_checkAndCreateKeysAsLeafs(t *testing.T) {
 	prio := int32(5)
 	intentName := "intent1"
 
-	_, err = root.AddUpdateRecursive(ctx, types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio, intentName, 0), flags)
+	_, err = root.AddUpdateRecursive(ctx, types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), prio, intentName, 0), flags)
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = root.AddUpdateRecursive(ctx, types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue1"), prio, intentName, 0), flags)
+	_, err = root.AddUpdateRecursive(ctx, types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio, intentName, 0), flags)
 	if err != nil {
 		t.Error(err)
 	}

@@ -20,11 +20,11 @@ const (
 
 // diffCacheUpdates takes two []*cache.Update and compares the diff
 func DiffUpdates(a, b []*types.Update) string {
-	return cmp.Diff(UpdateSliceToStringSlice(a), UpdateSliceToStringSlice(b))
+	return cmp.Diff(CacheUpdateSliceToStringSlice(a), CacheUpdateSliceToStringSlice(b))
 }
 
 // CacheUpdateSliceToStringSlice converts a []*cache.Update to []string
-func UpdateSliceToStringSlice(s []*types.Update) []string {
+func CacheUpdateSliceToStringSlice(s []*types.Update) []string {
 	result := make([]string, 0, len(s))
 	for _, e := range s {
 		result = append(result, fmt.Sprintf("%v", e))
@@ -34,23 +34,19 @@ func UpdateSliceToStringSlice(s []*types.Update) []string {
 	return result
 }
 
-// GetStringTvProto takes a string and returns the sdcpb.TypedValue for it
-func GetStringTvProto(t *testing.T, s string) *sdcpb.TypedValue {
+// GetStringTvProto takes a string and returns the sdcpb.TypedValue for it in proto encoding as []byte
+func GetStringTvProto(s string) *sdcpb.TypedValue {
 	return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: s}}
 }
 
-func GetLeafListTvProto(t *testing.T, tvs []*sdcpb.TypedValue) *sdcpb.TypedValue {
-	return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: &sdcpb.ScalarArray{Element: tvs}}}
+func GetLeafListTvProto(tvs []*sdcpb.TypedValue) *sdcpb.TypedValue {
+	result := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: &sdcpb.ScalarArray{Element: tvs}}}
+	return result
 }
 
-// GetStringTvProto takes a string and returns the sdcpb.TypedValue for it
-func GetUIntTvProto(t *testing.T, i uint64) *sdcpb.TypedValue {
+// GetStringTvProto takes a string and returns the sdcpb.TypedValue for it in proto encoding as []byte
+func GetUIntTvProto(i uint64) *sdcpb.TypedValue {
 	return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_UintVal{UintVal: uint64(i)}}
-}
-
-// GetStringTvProto takes a string and returns the sdcpb.TypedValue for it
-func GetIntTvProto(t *testing.T, i int) *sdcpb.TypedValue {
-	return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_IntVal{IntVal: int64(i)}}
 }
 
 // PathMapIndex calculates a common map index for string slice based paths
