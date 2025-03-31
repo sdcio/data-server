@@ -31,10 +31,11 @@ const (
 )
 
 type DatastoreConfig struct {
-	Name   string        `yaml:"name,omitempty" json:"name,omitempty"`
-	Schema *SchemaConfig `yaml:"schema,omitempty" json:"schema,omitempty"`
-	SBI    *SBI          `yaml:"sbi,omitempty" json:"sbi,omitempty"`
-	Sync   *Sync         `yaml:"sync,omitempty" json:"sync,omitempty"`
+	Name       string        `yaml:"name,omitempty" json:"name,omitempty"`
+	Schema     *SchemaConfig `yaml:"schema,omitempty" json:"schema,omitempty"`
+	SBI        *SBI          `yaml:"sbi,omitempty" json:"sbi,omitempty"`
+	Sync       *Sync         `yaml:"sync,omitempty" json:"sync,omitempty"`
+	Validation *Validation   `yaml:"validation,omitempty" json:"validation,omitempty"`
 }
 
 type SBI struct {
@@ -114,6 +115,14 @@ func (ds *DatastoreConfig) ValidateSetDefaults() error {
 			return err
 		}
 	}
+
+	if ds.Validation == nil {
+		ds.Validation = &Validation{}
+	}
+	if err := ds.Validation.validateSetDefaults(); err != nil {
+		return err
+	}
+
 	return nil
 }
 

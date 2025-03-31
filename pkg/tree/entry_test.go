@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -15,8 +16,9 @@ import (
 )
 
 var (
-	flagsNew      *types.UpdateInsertFlags
-	flagsExisting *types.UpdateInsertFlags
+	flagsNew         *types.UpdateInsertFlags
+	flagsExisting    *types.UpdateInsertFlags
+	validationConfig = &config.Validation{DisableConcurrency: true}
 )
 
 func init() {
@@ -27,7 +29,7 @@ func init() {
 
 func Test_Entry(t *testing.T) {
 
-	desc := testhelper.GetStringTvProto(t, "MyDescription")
+	desc := testhelper.GetStringTvProto("MyDescription")
 
 	u1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "9", "description"}, desc, int32(100), "me", int64(9999999))
 	u2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc, int32(99), "me", int64(444))
@@ -68,9 +70,9 @@ func Test_Entry(t *testing.T) {
 }
 
 func Test_Entry_One(t *testing.T) {
-	desc1 := testhelper.GetStringTvProto(t, "DescriptionOne")
-	desc2 := testhelper.GetStringTvProto(t, "DescriptionTwo")
-	desc3 := testhelper.GetStringTvProto(t, "DescriptionThree")
+	desc1 := testhelper.GetStringTvProto("DescriptionOne")
+	desc2 := testhelper.GetStringTvProto("DescriptionTwo")
+	desc3 := testhelper.GetStringTvProto("DescriptionThree")
 
 	prio100 := int32(100)
 	prio50 := int32(50)
@@ -80,14 +82,14 @@ func Test_Entry_One(t *testing.T) {
 
 	ts1 := int64(9999999)
 
-	u0o1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio100, owner1, ts1)
-	u0o2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio50, owner2, ts1)
+	u0o1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio100, owner1, ts1)
+	u0o2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner2, ts1)
 	u1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "9", "description"}, desc1, prio100, owner1, ts1)
-	u1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "9", "index"}, testhelper.GetUIntTvProto(t, 9), prio100, owner1, ts1)
+	u1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "9", "index"}, testhelper.GetUIntTvProto(9), prio100, owner1, ts1)
 	u2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc2, prio100, owner1, ts1)
-	u2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(t, 10), prio100, owner1, ts1)
+	u2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(10), prio100, owner1, ts1)
 	u3 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc3, prio50, owner2, ts1)
-	u3_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(t, 10), prio50, owner2, ts1)
+	u3_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(10), prio50, owner2, ts1)
 
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -155,13 +157,13 @@ func Test_Entry_One(t *testing.T) {
 // Test_Entry_Two adding a new Update with same owner and priority but updating the value
 func Test_Entry_Two(t *testing.T) {
 
-	desc3 := testhelper.GetStringTvProto(t, "DescriptionThree")
+	desc3 := testhelper.GetStringTvProto("DescriptionThree")
 	prio50 := int32(50)
 	owner1 := "OwnerOne"
 	ts1 := int64(9999999)
-	u0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio50, owner1, ts1)
+	u0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
 	u1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
-	u1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(t, 10), prio50, owner1, ts1)
+	u1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(10), prio50, owner1, ts1)
 
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -189,7 +191,7 @@ func Test_Entry_Two(t *testing.T) {
 	}
 
 	// add incomming set intent reques data
-	overwriteDesc := testhelper.GetStringTvProto(t, "Owerwrite Description")
+	overwriteDesc := testhelper.GetStringTvProto("Owerwrite Description")
 
 	// adding a new Update with same owner and priority with different value
 	n1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
@@ -218,19 +220,19 @@ func Test_Entry_Two(t *testing.T) {
 
 // Test_Entry_Three Checks that an Intent update is processed properly
 func Test_Entry_Three(t *testing.T) {
-	desc3 := testhelper.GetStringTvProto(t, "DescriptionThree")
+	desc3 := testhelper.GetStringTvProto("DescriptionThree")
 	prio50 := int32(50)
 	owner1 := "OwnerOne"
 	ts1 := int64(9999999)
-	u0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio50, owner1, ts1)
+	u0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
 	u1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
-	u1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(t, 10), prio50, owner1, ts1)
+	u1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(10), prio50, owner1, ts1)
 	u2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "description"}, desc3, prio50, owner1, ts1)
-	u2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "index"}, testhelper.GetUIntTvProto(t, 11), prio50, owner1, ts1)
+	u2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "index"}, testhelper.GetUIntTvProto(11), prio50, owner1, ts1)
 	u3 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "12", "description"}, desc3, prio50, owner1, ts1)
-	u3_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "12", "index"}, testhelper.GetUIntTvProto(t, 12), prio50, owner1, ts1)
+	u3_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "12", "index"}, testhelper.GetUIntTvProto(12), prio50, owner1, ts1)
 	u4 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
-	u4_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "13", "index"}, testhelper.GetUIntTvProto(t, 13), prio50, owner1, ts1)
+	u4_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "13", "index"}, testhelper.GetUIntTvProto(13), prio50, owner1, ts1)
 
 	u1r := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc3, RunningValuesPrio, RunningIntentName, ts1)
 	u2r := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "description"}, desc3, RunningValuesPrio, RunningIntentName, ts1)
@@ -306,7 +308,7 @@ func Test_Entry_Three(t *testing.T) {
 	root.MarkOwnerDelete(owner1, false)
 
 	// add incomming set intent reques data
-	overwriteDesc := testhelper.GetStringTvProto(t, "Owerwrite Description")
+	overwriteDesc := testhelper.GetStringTvProto("Owerwrite Description")
 
 	// adding a new Update with same owner and priority with different value
 	n1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
@@ -354,28 +356,28 @@ func Test_Entry_Three(t *testing.T) {
 
 // Test_Entry_Four Checks that an Intent update is processed properly with an intent that is shadowed initially.
 func Test_Entry_Four(t *testing.T) {
-	desc3 := testhelper.GetStringTvProto(t, "DescriptionThree")
+	desc3 := testhelper.GetStringTvProto("DescriptionThree")
 	prio50 := int32(50)
 	prio55 := int32(55)
 	owner1 := "OwnerOne"
 	owner2 := "OwnerTwo"
 	ts1 := int64(9999999)
 
-	u1o1_0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio50, owner1, ts1)
+	u1o1_0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
 	u1o1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
-	u1o1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(t, 10), prio50, owner1, ts1)
+	u1o1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(10), prio50, owner1, ts1)
 	u2o1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "description"}, desc3, prio50, owner1, ts1)
-	u2o1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "index"}, testhelper.GetUIntTvProto(t, 11), prio50, owner1, ts1)
+	u2o1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "index"}, testhelper.GetUIntTvProto(11), prio50, owner1, ts1)
 	u3 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "12", "description"}, desc3, prio50, owner1, ts1)
-	u3_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "12", "index"}, testhelper.GetUIntTvProto(t, 12), prio50, owner1, ts1)
+	u3_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "12", "index"}, testhelper.GetUIntTvProto(12), prio50, owner1, ts1)
 	u4 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
-	u4_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "13", "index"}, testhelper.GetUIntTvProto(t, 13), prio50, owner1, ts1)
+	u4_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "13", "index"}, testhelper.GetUIntTvProto(13), prio50, owner1, ts1)
 
-	u1o2_0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio55, owner2, ts1)
+	u1o2_0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio55, owner2, ts1)
 	u1o2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc3, prio55, owner2, ts1)
-	u1o2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(t, 10), prio55, owner2, ts1)
+	u1o2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(10), prio55, owner2, ts1)
 	u2o2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "description"}, desc3, prio55, owner2, ts1)
-	u2o2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "index"}, testhelper.GetUIntTvProto(t, 11), prio55, owner2, ts1)
+	u2o2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "index"}, testhelper.GetUIntTvProto(11), prio55, owner2, ts1)
 
 	ctx := context.TODO()
 
@@ -425,7 +427,7 @@ func Test_Entry_Four(t *testing.T) {
 	root.MarkOwnerDelete(owner1, false)
 
 	// add incomming set intent reques data
-	overwriteDesc := testhelper.GetStringTvProto(t, "Owerwrite Description")
+	overwriteDesc := testhelper.GetStringTvProto("Owerwrite Description")
 
 	// adding a new Update with same owner and priority with different value
 	//n0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio50, owner1, ts1)
@@ -503,7 +505,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			leaflistval := testhelper.GetLeafListTvProto(t,
+			leaflistval := testhelper.GetLeafListTvProto(
 				[]*sdcpb.TypedValue{
 					{
 						Value: &sdcpb.TypedValue_StringVal{StringVal: "data"},
@@ -528,7 +530,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			t.Log(root.String())
 
-			validationResult := root.Validate(context.TODO(), false)
+			validationResult := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -547,7 +549,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			leaflistval := testhelper.GetLeafListTvProto(t,
+			leaflistval := testhelper.GetLeafListTvProto(
 				[]*sdcpb.TypedValue{
 					{
 						Value: &sdcpb.TypedValue_StringVal{StringVal: "data1"},
@@ -568,7 +570,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				}
 			}
 
-			validationResult := root.Validate(context.TODO(), false)
+			validationResult := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -587,7 +589,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			leaflistval := testhelper.GetLeafListTvProto(t,
+			leaflistval := testhelper.GetLeafListTvProto(
 				[]*sdcpb.TypedValue{
 					{
 						Value: &sdcpb.TypedValue_StringVal{StringVal: "data1"},
@@ -614,7 +616,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				}
 			}
 
-			validationResult := root.Validate(context.TODO(), false)
+			validationResult := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -627,16 +629,16 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 }
 
 func Test_Entry_Delete_Aggregation(t *testing.T) {
-	desc3 := testhelper.GetStringTvProto(t, "DescriptionThree")
+	desc3 := testhelper.GetStringTvProto("DescriptionThree")
 	prio50 := int32(50)
 	owner1 := "OwnerOne"
 	ts1 := int64(9999999)
 
 	u1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, desc3, prio50, owner1, ts1)
-	u2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio50, owner1, ts1)
-	u3 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "0", "index"}, testhelper.GetUIntTvProto(t, 0), prio50, owner1, ts1)
+	u2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
+	u3 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "0", "index"}, testhelper.GetUIntTvProto(0), prio50, owner1, ts1)
 	u4 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "0", "description"}, desc3, prio50, owner1, ts1)
-	u5 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio50, owner1, ts1)
+	u5 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(1), prio50, owner1, ts1)
 	u6 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "description"}, desc3, prio50, owner1, ts1)
 
 	ctx := context.TODO()
@@ -667,7 +669,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	root.MarkOwnerDelete(owner1, false)
 
 	u1n := types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, desc3, prio50, owner1, ts1)
-	u2n := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio50, owner1, ts1)
+	u2n := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
 
 	// start test add "new" / request data
 	for _, u := range []*types.Update{u1n, u2n} {
@@ -1194,7 +1196,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			leafval := testhelper.GetStringTvProto(t, "data123")
+			leafval := testhelper.GetStringTvProto("data123")
 
 			u1 := types.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
 
@@ -1210,7 +1212,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 				t.Error(err)
 			}
 
-			validationResult := root.Validate(context.TODO(), false)
+			validationResult := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1231,7 +1233,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			leafval := testhelper.GetStringTvProto(t, "hallo F")
+			leafval := testhelper.GetStringTvProto("hallo F")
 
 			u1 := types.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
 
@@ -1247,7 +1249,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 				t.Error(err)
 			}
 
-			validationResult := root.Validate(context.TODO(), false)
+			validationResult := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1327,7 +1329,7 @@ func Test_Validation_Deref(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			leafval := testhelper.GetStringTvProto(t, "data123")
+			leafval := testhelper.GetStringTvProto("data123")
 
 			u1 := types.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
 
@@ -1343,7 +1345,7 @@ func Test_Validation_Deref(t *testing.T) {
 				t.Error(err)
 			}
 
-			validationResult := root.Validate(context.TODO(), false)
+			validationResult := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors

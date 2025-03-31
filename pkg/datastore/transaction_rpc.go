@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/tree"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
@@ -92,7 +93,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 
 	log.Debug(root.String())
 	// perform validation
-	validationResult := root.Validate(ctx, ConcurrentValidate)
+	validationResult := root.Validate(ctx, &config.Validation{DisableConcurrency: !ConcurrentValidate})
 	validationResult.ErrorsStr()
 	if validationResult.HasErrors() {
 		return nil, validationResult.JoinErrors()
@@ -221,7 +222,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	log.Debug(root.String())
 
 	// perform validation
-	validationResult := root.Validate(ctx, ConcurrentValidate)
+	validationResult := root.Validate(ctx, &config.Validation{DisableConcurrency: !ConcurrentValidate})
 
 	// prepare the response struct
 	result := &sdcpb.TransactionSetResponse{

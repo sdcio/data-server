@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -83,14 +84,14 @@ func (r *RootEntry) ImportConfig(ctx context.Context, path types.PathSlice, impo
 	return e.ImportConfig(ctx, importer, intentName, intentPrio, flags)
 }
 
-func (r *RootEntry) Validate(ctx context.Context, concurrent bool) types.ValidationResults {
+func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation) types.ValidationResults {
 	// perform validation
 	// we use a channel and cumulate all the errors
 	validationResultEntryChan := make(chan *types.ValidationResultEntry, 10)
 
 	// start validation in a seperate goroutine
 	go func() {
-		r.sharedEntryAttributes.Validate(ctx, validationResultEntryChan, concurrent)
+		r.sharedEntryAttributes.Validate(ctx, validationResultEntryChan, vCfg)
 		close(validationResultEntryChan)
 	}()
 

@@ -2,6 +2,8 @@ name: CI/CD Test per PR
 on:
   workflow_dispatch:
   pull_request:
+  pull_request_target:
+    types: [labeled]
   push:
     branches:
       - "main"
@@ -31,7 +33,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
           fetch-depth: 0
 
       - name: Login to private k8s Container Registry
