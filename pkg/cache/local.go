@@ -60,12 +60,12 @@ func (l *LocalCache) InstanceIntentGet(ctx context.Context, cacheName string, in
 	return result, nil
 }
 
-func (l *LocalCache) InstanceIntentGetAll(ctx context.Context, cacheName string, intentChanOrig chan<- *tree_persist.Intent, errChanOrig chan<- error) {
+func (l *LocalCache) InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChanOrig chan<- *tree_persist.Intent, errChanOrig chan<- error) {
 	// create new channels
 	intentChan := make(chan *types.Intent, 5)
 	errChan := make(chan error, 1)
 
-	go l.Cache.InstanceIntentGetAll(ctx, cacheName, intentChan, errChan)
+	go l.Cache.InstanceIntentGetAll(ctx, cacheName, excludeIntentNames, intentChan, errChan)
 
 	defer close(intentChanOrig)
 	defer close(errChanOrig)

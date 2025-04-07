@@ -229,6 +229,12 @@ func (d *Datastore) Sync(ctx context.Context) {
 	var err error
 	var startTs int64
 
+	d.syncTreeCandidat, err = tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, tree.RunningIntentName))
+	if err != nil {
+		log.Errorf("creating a new synctree candidate: %v", err)
+		return
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -240,20 +246,25 @@ func (d *Datastore) Sync(ctx context.Context) {
 			switch {
 			case syncup.Start:
 				log.Debugf("%s: sync start", d.Name())
-				d.syncTreeCandidat, err = tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, tree.RunningIntentName))
-				if err != nil {
-					log.Errorf("creating a new synctree candidate: %v", err)
-					return
-				}
 				startTs = time.Now().Unix()
 
 			case syncup.End:
 				log.Debugf("%s: sync end", d.Name())
 
+				startTs = 0
+
 				d.syncTreeMutex.Lock()
 				d.syncTree = d.syncTreeCandidat
 				d.syncTreeMutex.Unlock()
 
+				// create new syncTreeCandidat
+				d.syncTreeCandidat, err = tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, tree.RunningIntentName))
+				if err != nil {
+					log.Errorf("creating a new synctree candidate: %v", err)
+					return
+				}
+
+				// export and write to cache
 				runningExport, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
 				if err != nil {
 					log.Error(err)
@@ -265,6 +276,9 @@ func (d *Datastore) Sync(ctx context.Context) {
 					continue
 				}
 			default:
+				if startTs == 0 {
+					startTs = time.Now().Unix()
+				}
 				err := d.writeToSyncTreeCandidate(ctx, syncup.Update.GetUpdate(), startTs)
 				if err != nil {
 					log.Errorf("failed to write to sync tree: %v", err)
@@ -403,7 +417,7 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 		return nil, err
 	}
 
-	addedIntentNames, err := d.LoadAllIntents(ctx, deviationTree)
+	addedIntentNames, err := d.LoadAllButRunningIntents(ctx, deviationTree)
 	if err != nil {
 		return nil, err
 	}

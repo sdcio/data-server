@@ -120,13 +120,13 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	return warnings, nil
 }
 
-func (d *Datastore) LoadAllIntents(ctx context.Context, root *tree.RootEntry) ([]string, error) {
+func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.RootEntry) ([]string, error) {
 
 	IntentNames := []string{}
 	IntentChan := make(chan *tree_persist.Intent, 0)
 	ErrChan := make(chan error, 1)
 
-	go d.cacheClient.IntentGetAll(ctx, IntentChan, ErrChan)
+	go d.cacheClient.IntentGetAll(ctx, []string{"running"}, IntentChan, ErrChan)
 
 	for {
 		select {
@@ -153,17 +153,15 @@ func (d *Datastore) LoadAllIntents(ctx context.Context, root *tree.RootEntry) ([
 
 // lowlevelTransactionSet
 func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *types.Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
-
-	// create a new TreeContext
-	tc := tree.NewTreeContext(d.schemaClient, d.Name())
-
-	// creat a new TreeRoot
-	root, err := tree.NewTreeRoot(ctx, tc)
+	// create a new TreeRoot
+	d.syncTreeMutex.Lock()
+	root, err := d.syncTree.DeepCopy(ctx)
+	d.syncTreeMutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = d.LoadAllIntents(ctx, root)
+	_, err = d.LoadAllButRunningIntents(ctx, root)
 	if err != nil {
 		return nil, err
 	}

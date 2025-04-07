@@ -29,7 +29,7 @@ type CacheClientBound interface {
 	IntentModify(ctx context.Context, intent *tree_persist.Intent) error
 	IntentDelete(ctx context.Context, intentName string) error
 	IntentExists(ctx context.Context, intentName string) (bool, error)
-	IntentGetAll(ctx context.Context, intentChan chan<- *tree_persist.Intent, errChan chan<- error)
+	IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error)
 	InstanceClose(ctx context.Context) error
 }
 
@@ -72,6 +72,6 @@ func (c *CacheClientBoundImpl) IntentDelete(ctx context.Context, intentName stri
 func (c *CacheClientBoundImpl) IntentExists(ctx context.Context, intentName string) (bool, error) {
 	return c.cacheClient.InstanceIntentExists(ctx, c.cacheName, intentName)
 }
-func (c *CacheClientBoundImpl) IntentGetAll(ctx context.Context, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
-	c.cacheClient.InstanceIntentGetAll(ctx, c.cacheName, intentChan, errChan)
+func (c *CacheClientBoundImpl) IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+	c.cacheClient.InstanceIntentGetAll(ctx, c.cacheName, excludeIntentNames, intentChan, errChan)
 }

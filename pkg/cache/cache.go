@@ -34,7 +34,7 @@ type Client interface {
 	InstanceIntentModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error
 	InstanceIntentDelete(ctx context.Context, cacheName string, intentName string) error
 	InstanceIntentExists(ctx context.Context, cacheName string, intentName string) (bool, error)
-	InstanceIntentGetAll(ctx context.Context, cacheName string, intentChan chan<- *tree_persist.Intent, errChan chan<- error)
+	InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error)
 }
 
 type Update struct {
