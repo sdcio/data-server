@@ -197,7 +197,7 @@ validation-defaults:
     leafref: false
     leafref-min-max-attributes: false
     pattern: false
-    must-statements: false
+    must-statement: false
     length: false
     range: false
     max-elements: false # Not yet implemented
