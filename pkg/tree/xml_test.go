@@ -7,8 +7,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
-	"github.com/sdcio/data-server/mocks/mockcacheclient"
-	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -82,7 +80,7 @@ func TestToXMLTable(t *testing.T) {
 		{
 			name:             "XML NewOrUpdated - some elements deleted, some updated",
 			onlyNewOrUpdated: true,
-			skip:             true,
+			skip:             false,
 			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
@@ -119,7 +117,7 @@ func TestToXMLTable(t *testing.T) {
 `,
 		},
 		{
-			name:             "XML - delete ethernet-1/1, honor namespace, operatin With namespace, remove",
+			name:             "XML - delete ethernet-1_1, honor namespace, operatin With namespace, remove",
 			onlyNewOrUpdated: true,
 			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
@@ -167,7 +165,7 @@ func TestToXMLTable(t *testing.T) {
 			},
 		},
 		{
-			name:             "XML - delete certain ethernet-1/1 attributes update another",
+			name:             "XML - delete certain ethernet-1_1 attributes update another",
 			onlyNewOrUpdated: true,
 			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
@@ -199,7 +197,7 @@ func TestToXMLTable(t *testing.T) {
 			},
 		},
 		{
-			name:             "XML - delete ethernet-1/1 add ethernet-1/2",
+			name:             "XML - delete ethernet-1_1 add ethernet-1_2",
 			onlyNewOrUpdated: true,
 			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config1()
@@ -209,10 +207,8 @@ func TestToXMLTable(t *testing.T) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
-			skip: true,
-			expected: `<choices>
-  <case1 operation="delete"/>
-</choices>
+			skip: false,
+			expected: `<choices operation="delete"/>
 <interface operation="delete">
   <name>ethernet-1/1</name>
 </interface>
@@ -369,6 +365,36 @@ func TestToXMLTable(t *testing.T) {
 				return upds, nil
 			},
 		},
+		{
+			name:             "XML - replace choice",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			expected: `<choices xmlns="urn:sdcio/model">
+  <case1 xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
+  <case2>
+    <log>true</log>
+  </case2>
+</choices>
+`,
+			honorNamespace:         true,
+			operationWithNamespace: true,
+			useOperationRemove:     true,
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				c.Choices.Case1 = nil
+				c.Choices.Case2 = &sdcio_schema.SdcioModel_Choices_Case2{
+					Log: ygot.Bool(true),
+				}
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -388,15 +414,35 @@ func TestToXMLTable(t *testing.T) {
 			}
 			owner := "owner1"
 
-			// mock cache client
-			ccMock := mockcacheclient.NewMockClient(mockCtrl)
-			testhelper.ConfigureCacheClientMock(t, ccMock, []*cache.Update{}, []*cache.Update{}, []*cache.Update{}, [][]string{})
+			// var runningCacheUpds []*types.Update
+			// if tt.runningConfig != nil {
+			// 	runningSdcpbUpds, err := tt.runningConfig(context.Background(), utils.NewConverter(scb))
+			// 	if err != nil {
+			// 		t.Error(err)
+			// 	}
+			// 	runningCacheUpds, err = utils.SdcpbUpdatesToCacheUpdates(runningSdcpbUpds, RunningIntentName, RunningValuesPrio)
+			// 	if err != nil {
+			// 		t.Error(err)
+			// 	}
+			// }
+
+			// var intendedCacheUpds []*types.Update
+			// if tt.existingConfig != nil {
+			// 	intendedSdcpbUpds, err := tt.existingConfig(context.Background(), utils.NewConverter(scb))
+			// 	if err != nil {
+			// 		t.Error(err)
+			// 	}
+			// 	intendedCacheUpds, err = utils.SdcpbUpdatesToCacheUpdates(intendedSdcpbUpds, owner, 5)
+			// 	if err != nil {
+			// 		t.Error(err)
+			// 	}
+			// }
 
 			ctx := context.Background()
 
 			converter := utils.NewConverter(scb)
 
-			tc := NewTreeContext(NewTreeCacheClient("dev1", ccMock), scb, owner)
+			tc := NewTreeContext(scb, owner)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -411,9 +457,11 @@ func TestToXMLTable(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			fmt.Println("AFTER EXISTING:")
+			fmt.Println(root.String())
 
 			if tt.newConfig != nil {
-				root.markOwnerDelete(owner, false)
+				root.MarkOwnerDelete(owner, false)
 
 				newUpds, err := tt.newConfig(ctx, converter)
 				if err != nil {
@@ -424,6 +472,8 @@ func TestToXMLTable(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			fmt.Println("AFTER NEW:")
+			fmt.Println(root.String())
 			if tt.runningConfig != nil {
 				runningUpds, err := tt.runningConfig(ctx, converter)
 				if err != nil {
@@ -434,10 +484,15 @@ func TestToXMLTable(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			root.FinishInsertionPhase(ctx)
+			fmt.Println("AFTER RUNNING:")
 
 			t.Log(root.String())
 			fmt.Println(root.String())
+
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
 
 			xmlDoc, err := root.ToXML(tt.onlyNewOrUpdated, tt.honorNamespace, tt.operationWithNamespace, tt.useOperationRemove)
 			if err != nil {

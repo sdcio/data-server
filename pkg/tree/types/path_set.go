@@ -1,6 +1,10 @@
-package tree
+package types
 
 import "strings"
+
+const (
+	KeysIndexSep = "_"
+)
 
 type PathSet struct {
 	index map[string]struct{}

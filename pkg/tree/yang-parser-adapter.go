@@ -48,20 +48,50 @@ func (y *yangParserEntryAdapter) valueToDatum(tv *sdcpb.TypedValue) xpath.Datum 
 }
 
 func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
-	if y.e.GetSchema() == nil || y.e.GetSchema().GetContainer() != nil {
+	if y.e.GetSchema() == nil {
 		return xpath.NewBoolDatum(true), nil
 	}
 
+	// if y.e is a container
+	if cs := y.e.GetSchema().GetContainer(); cs != nil {
+		// its a container
+		if len(cs.Keys) == 0 {
+			// regular container
+			return xpath.NewBoolDatum(true), nil
+		}
+		// list
+		childs, err := y.e.GetListChilds()
+		if err != nil {
+			return nil, err
+		}
+		datums := make([]xutils.XpathNode, 0, len(childs))
+		for x := 0; x < len(childs); x++ {
+			// this is a dirty fix, that will enable count() to evaluate the right value
+			datums = append(datums, nil)
+		}
+		return xpath.NewNodesetDatum(datums), nil
+	}
+
+	// if y.e is anything else then a container
 	lv, _ := y.e.getHighestPrecedenceLeafValue(y.ctx)
 	if lv == nil {
 		return xpath.NewNodesetDatum([]xutils.XpathNode{}), nil
 	}
-	tv, err := lv.Update.Value()
+	return y.valueToDatum(lv.Value()), nil
+}
+
+func (y *yangParserEntryAdapter) BreadthSearch(ctx context.Context, path string) ([]xpath.Entry, error) {
+	entries, err := y.e.BreadthSearch(ctx, path)
 	if err != nil {
 		return nil, err
 	}
 
-	return y.valueToDatum(tv), nil
+	result := make([]xpath.Entry, 0, len(entries))
+	for _, x := range entries {
+		result = append(result, newYangParserEntryAdapter(ctx, x))
+	}
+
+	return result, nil
 }
 
 func (y *yangParserEntryAdapter) FollowLeafRef() (xpath.Entry, error) {
@@ -95,22 +125,10 @@ func (y *yangParserEntryAdapter) Navigate(p []string) (xpath.Entry, error) {
 		rootPath = true
 	}
 
-	lookedUpEntry := y.e
-	for idx, pelem := range p {
-		// if we move up, on a .. we should just go up, staying in the branch that represents the instance
-		// if there is another .. then we need to forward to the element with the schema and just then forward
-		// to the parent. Thereby skipping the key levels that sit inbetween
-		if pelem == ".." && lookedUpEntry.GetSchema().GetSchema() == nil {
-			lookedUpEntry, _ = lookedUpEntry.GetFirstAncestorWithSchema()
-		}
-
-		// rootPath && idx == 0 => means only allow true on first index, for sure false on all other
-		lookedUpEntry, err = lookedUpEntry.Navigate(y.ctx, []string{pelem}, rootPath && idx == 0)
-		if err != nil {
-			return newYangParserValueEntry(xpath.NewNodesetDatum([]xutils.XpathNode{}), err), nil
-		}
+	lookedUpEntry, err := y.e.Navigate(y.ctx, p, rootPath, true)
+	if err != nil {
+		return newYangParserValueEntry(xpath.NewNodesetDatum([]xutils.XpathNode{}), err), nil
 	}
-
 	return newYangParserEntryAdapter(y.ctx, lookedUpEntry), nil
 }
 
@@ -144,4 +162,8 @@ func (y *yangParserValueEntry) GetValue() (xpath.Datum, error) {
 
 func (y *yangParserValueEntry) GetPath() []string {
 	return nil
+}
+
+func (y *yangParserValueEntry) BreadthSearch(ctx context.Context, path string) ([]xpath.Entry, error) {
+	return nil, nil
 }
