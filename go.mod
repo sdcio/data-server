@@ -3,7 +3,9 @@ module github.com/sdcio/data-server
 go 1.23.4
 
 toolchain go1.23.5
+
 replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.0-2
+
 require (
 	github.com/AlekSi/pointer v1.2.0
 	github.com/beevik/etree v1.5.0
