@@ -6,10 +6,6 @@ toolchain go1.23.5
 
 replace github.com/openconfig/goyang v1.6.0 => /home/mava/projects/goyang
 
-replace github.com/sdcio/cache => /home/mava/projects/cachev2
-
-replace github.com/sdcio/sdc-protos => /home/mava/projects/sdc-protos
-
 require (
 	github.com/AlekSi/pointer v1.2.0
 	github.com/beevik/etree v1.5.0
@@ -25,7 +21,7 @@ require (
 	github.com/openconfig/ygot v0.29.20
 	github.com/prometheus/client_golang v1.20.5
 	github.com/scrapli/scrapligo v1.3.3
-	github.com/sdcio/cache v0.0.35
+	github.com/sdcio/cache v0.0.36
 	github.com/sdcio/schema-server v0.0.30
 	github.com/sdcio/sdc-protos v0.0.40
 	github.com/sdcio/yang-parser v0.0.10
@@ -33,14 +29,14 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.6
 	go.uber.org/mock v0.5.0
-	google.golang.org/grpc v1.70.0
-	google.golang.org/protobuf v1.36.5
+	google.golang.org/grpc v1.71.1
+	google.golang.org/protobuf v1.36.6
 	gopkg.in/yaml.v2 v2.4.0
 	sigs.k8s.io/controller-runtime v0.20.1
 )
 
 require (
-	cloud.google.com/go/compute/metadata v0.5.2 // indirect
+	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bufbuild/protocompile v0.14.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -88,13 +84,13 @@ require (
 	golang.org/x/crypto v0.32.0 // indirect
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f // indirect
 	golang.org/x/net v0.34.0 // indirect
-	golang.org/x/oauth2 v0.24.0 // indirect
+	golang.org/x/oauth2 v0.25.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/term v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250106144421-5f5ef82da422 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250115164207-1a7da9e5054f // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
