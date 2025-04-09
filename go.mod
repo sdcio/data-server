@@ -21,15 +21,13 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/openconfig/gnmi v0.14.0
 	github.com/openconfig/gnmic/pkg/api v0.1.8
-	github.com/openconfig/gnmic/pkg/target v0.1.4
-	github.com/openconfig/gnmic/pkg/types v0.1.2
 	github.com/openconfig/goyang v1.6.0
 	github.com/openconfig/ygot v0.29.20
 	github.com/prometheus/client_golang v1.20.5
 	github.com/scrapli/scrapligo v1.3.3
 	github.com/sdcio/cache v0.0.35
 	github.com/sdcio/schema-server v0.0.30
-	github.com/sdcio/sdc-protos v0.0.39
+	github.com/sdcio/sdc-protos v0.0.40
 	github.com/sdcio/yang-parser v0.0.10
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.1
@@ -78,7 +76,6 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/openconfig/gnmic/pkg/utils v0.1.1 // indirect
 	github.com/openconfig/grpctunnel v0.1.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
