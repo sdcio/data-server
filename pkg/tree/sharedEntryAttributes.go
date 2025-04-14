@@ -1252,6 +1252,9 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 // validateMandatory validates that all the mandatory attributes,
 // defined by the schema are present either in the tree or in the index.
 func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry) {
+	if s.shouldDelete() {
+		return
+	}
 	if s.schema != nil {
 		switch s.schema.GetSchema().(type) {
 		case *sdcpb.SchemaElem_Container:

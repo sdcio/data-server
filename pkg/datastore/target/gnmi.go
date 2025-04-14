@@ -433,6 +433,7 @@ func (t *gnmiTarget) periodicSync(ctx context.Context, gnmiSync *config.SyncProt
 		gapi.EncodingCustom(encoding(gnmiSync.Encoding)),
 		gapi.SubscriptionListModeONCE(),
 		gapi.Subscription(subscriptionOpts...),
+		gapi.DataTypeCONFIG(),
 	)
 	subReq, err := gapi.NewSubscribeRequest(opts...)
 	if err != nil {
@@ -476,6 +477,7 @@ func (t *gnmiTarget) streamSync(ctx context.Context, gnmiSync *config.SyncProtoc
 		gapi.EncodingCustom(encoding(gnmiSync.Encoding)),
 		gapi.SubscriptionListModeSTREAM(),
 		gapi.Subscription(subscriptionOpts...),
+		gapi.DataTypeCONFIG(),
 	)
 	subReq, err := gapi.NewSubscribeRequest(opts...)
 	if err != nil {
