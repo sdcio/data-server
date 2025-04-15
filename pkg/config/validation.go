@@ -8,7 +8,7 @@ type Validation struct {
 type Validators struct {
 	Mandatory               bool `yaml:"mandatory,omitempty" json:"mandatory,omitempty"`
 	Leafref                 bool `yaml:"leafref,omitempty" json:"leafref,omitempty"`
-	LeafrefMinMaxAttributes bool `yaml:"leafref-min-max,omitempty" json:"leafref-min-max,omitempty"`
+	LeafrefMinMaxAttributes bool `yaml:"leafref-min-max-attributes,omitempty" json:"leafref-min-max,omitempty"`
 	Pattern                 bool `yaml:"pattern,omitempty" json:"pattern,omitempty"`
 	MustStatement           bool `yaml:"must-statement,omitempty" json:"must-statement,omitempty"`
 	Length                  bool `yaml:"length,omitempty" json:"length,omitempty"`
