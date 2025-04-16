@@ -19,6 +19,7 @@ import (
 
 var (
 	ErrDatastoreLocked = errors.New("Datastore is locked, other action is ongoing")
+	ErrContextDone     = errors.New("Context is closed (done)")
 	ErrValidationError = errors.New("validation error")
 )
 
@@ -378,7 +379,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 		case <-ctx.Done():
 			// Context was canceled or timed out
 			log.Errorf("Transaction: %s - context canceled or timed out: %v", transactionId, ctx.Err())
-			return nil, ErrDatastoreLocked
+			return nil, ErrContextDone
 		default:
 			// Start a transaction and prepare to cancel it if any error occurs
 			transactionGuard, err = d.transactionManager.RegisterTransaction(ctx, transaction)
@@ -386,8 +387,9 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 				defer transactionGuard.Done()
 				break
 			}
-			log.Warnf("Transaction: %s - failed to create transaction, retrying: %v", transactionId, err)
-			time.Sleep(time.Millisecond * 200)
+			// log.Warnf("Transaction: %s - failed to create transaction, retrying: %v", transactionId, err)
+			// time.Sleep(time.Millisecond * 200)
+			return nil, ErrDatastoreLocked
 		}
 		if transactionGuard != nil {
 			break
