@@ -229,7 +229,8 @@ func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			converter := utils.NewConverter(SchemaClient.NewSchemaClientBound(schema.GetSchema(), schemaClient))
+			scb := SchemaClient.NewSchemaClientBound(schema, schemaClient)
+			converter := utils.NewConverter(scb)
 
 			got, err := converter.ExpandUpdateKeysAsLeaf(tt.args.ctx, tt.args.upd)
 			if (err != nil) != tt.wantErr {

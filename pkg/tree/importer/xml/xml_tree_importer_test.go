@@ -7,8 +7,8 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/google/go-cmp/cmp"
-	"github.com/sdcio/data-server/mocks/mockcacheclient"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	"go.uber.org/mock/gomock"
@@ -71,18 +71,13 @@ func TestXmlTreeImporter(t *testing.T) {
 	// create a gomock controller
 	controller := gomock.NewController(t)
 
-	// create a cache client mock
-	cacheClient := mockcacheclient.NewMockClient(controller)
-	testhelper.ConfigureCacheClientMock(t, cacheClient, nil, nil, nil, nil)
-
-	dsName := "dev1"
 	scb, err := testhelper.GetSchemaClientBound(t, controller)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
 
-	tc := tree.NewTreeContext(tree.NewTreeCacheClient(dsName, cacheClient), scb, "test")
+	tc := tree.NewTreeContext(scb, "test")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -97,14 +92,17 @@ func TestXmlTreeImporter(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = root.ImportConfig(ctx, NewXmlTreeImporter(&inputDoc.Element), tree.RunningIntentName, tree.RunningValuesPrio)
+			err = root.ImportConfig(ctx, nil, NewXmlTreeImporter(&inputDoc.Element), "owner1", 5, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Fatal(err)
 			}
 			t.Log(root.String())
 			fmt.Println(root.String())
 
-			root.FinishInsertionPhase(ctx)
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
 
 			result, err := root.ToXML(false, false, false, false)
 			if err != nil {

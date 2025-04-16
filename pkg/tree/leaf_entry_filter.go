@@ -1,6 +1,6 @@
 package tree
 
-import "github.com/sdcio/data-server/pkg/cache"
+import "github.com/sdcio/data-server/pkg/tree/types"
 
 type LeafEntryFilter func(*LeafEntry) bool
 
@@ -35,8 +35,8 @@ func Unfiltered(l *LeafEntry) bool {
 }
 
 // LeafEntriesToCacheUpdates
-func LeafEntriesToCacheUpdates(l []*LeafEntry) []*cache.Update {
-	result := make([]*cache.Update, 0, len(l))
+func LeafEntriesToUpdates(l []*LeafEntry) []*types.Update {
+	result := make([]*types.Update, 0, len(l))
 	for _, e := range l {
 		result = append(result, e.Update)
 	}

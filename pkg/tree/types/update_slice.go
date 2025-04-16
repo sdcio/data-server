@@ -1,13 +1,28 @@
-package tree
+package types
 
 import (
 	"math"
-
-	"github.com/sdcio/data-server/pkg/cache"
 )
 
 // UpdateSlice A slice of *cache.Update, that defines additional helper functions.
-type UpdateSlice []*cache.Update
+type UpdateSlice []*Update
+
+func (u UpdateSlice) CopyWithNewOwnerAndPrio(owner string, prio int32) UpdateSlice {
+	result := u.DeepCopy()
+	for _, x := range result {
+		x.SetPriority(prio)
+		x.SetOwner(owner)
+	}
+	return result
+}
+
+func (u UpdateSlice) DeepCopy() UpdateSlice {
+	result := make(UpdateSlice, 0, len(u))
+	for _, x := range u {
+		result = append(result, x.DeepCopy())
+	}
+	return result
+}
 
 // GetFirstPriorityValue returns the priority of the first element or math.MaxInt32 if len() is zero
 func (u UpdateSlice) GetFirstPriorityValue() int32 {
@@ -32,12 +47,12 @@ func (u UpdateSlice) ToPathSet() *PathSet {
 	pathKeySet := NewPathSet()
 
 	for _, upd := range u {
-		pathKeySet.AddPath(upd.GetPath())
+		pathKeySet.AddPath(upd.GetPathSlice())
 	}
 	return pathKeySet
 }
 
-func Map[T any](u UpdateSlice, f func(*cache.Update) T) []T {
+func Map[T any](u UpdateSlice, f func(*Update) T) []T {
 	vsm := make([]T, len(u))
 	for i, v := range u {
 		vsm[i] = f(v)

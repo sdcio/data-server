@@ -16,36 +16,28 @@ package datastore
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
-	"github.com/sdcio/data-server/mocks/mockcacheclient"
-	"github.com/sdcio/data-server/mocks/mocktarget"
-	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/tree"
-	"github.com/sdcio/data-server/pkg/utils"
+	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
-	"google.golang.org/protobuf/proto"
 )
 
 var (
 	// TypedValue Bool True and false
-	TypedValueTrue  []byte
-	TypedValueFalse []byte
+	TypedValueTrue  = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: true}}
+	TypedValueFalse = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: false}}
 )
-
-func init() {
-	// Calculate the TypedValues for true and false
-	TypedValueTrue, _ = proto.Marshal(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: true}})
-	TypedValueFalse, _ = proto.Marshal(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: true}})
-}
 
 func TestDatastore_populateTree(t *testing.T) {
 	prio15 := int32(15)
@@ -65,23 +57,23 @@ func TestDatastore_populateTree(t *testing.T) {
 	tests := []struct {
 		name                 string
 		intentReqValue       func() (string, error) // depending on the path, this should be *testhelper.TestConfig or any sub-value
-		intentReqPath        string
+		intentReqPath        types.PathSlice
 		intentName           string
 		intentPrio           int32
 		intentDelete         bool
-		expectedModify       []*cache.Update
+		expectedModify       []*types.Update
 		expectedDeletes      [][]string
 		expectedOwnerDeletes [][]string
-		expectedOwnerUpdates []*cache.Update
-		intendedStoreUpdates []*cache.Update
-		runningStoreUpdates  []*cache.Update
+		expectedOwnerUpdates []*types.Update
+		intendedStoreUpdates []*types.Update
+		runningStoreUpdates  []*types.Update
 		NotOnlyNewOrUpdated  bool // it negated when used in the call, usually we want it to be true
 	}{
 		{
 			name:          "DoubleKey - Delete Single item",
 			intentName:    owner2,
 			intentPrio:    prio10,
-			intentReqPath: "/",
+			intentReqPath: nil,
 			intentReqValue: func() (string, error) {
 				d := &sdcio_schema.Device{
 					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
@@ -116,33 +108,33 @@ func TestDatastore_populateTree(t *testing.T) {
 					SkipValidation: false,
 				})
 			},
-			runningStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key1"}, testhelper.GetStringTvProto(t, "k1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key2"}, testhelper.GetStringTvProto(t, "k1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+			runningStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key1"}, testhelper.GetStringTvProto("k1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key2"}, testhelper.GetStringTvProto("k1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValue1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value1"}, testhelper.GetStringTvProto("containerval1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value2"}, testhelper.GetStringTvProto("containerval1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key1"}, testhelper.GetStringTvProto(t, "k1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key2"}, testhelper.GetStringTvProto(t, "k1.3"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key1"}, testhelper.GetStringTvProto("k1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key2"}, testhelper.GetStringTvProto("k1.3"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValue1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value1"}, testhelper.GetStringTvProto("containerval1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value2"}, testhelper.GetStringTvProto("containerval1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key1"}, testhelper.GetStringTvProto(t, "k2.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key2"}, testhelper.GetStringTvProto(t, "k2.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval2.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval2.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key1"}, testhelper.GetStringTvProto("k2.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key2"}, testhelper.GetStringTvProto("k2.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValue2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value1"}, testhelper.GetStringTvProto("containerval2.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value2"}, testhelper.GetStringTvProto("containerval2.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 			},
 			expectedDeletes: [][]string{
 				{"doublekey", "k1.1", "k1.3"},
 			},
-			expectedModify: []*cache.Update{
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValueOther"), prio10, owner2, 0),
+			expectedModify: []*types.Update{
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValueOther"), prio10, owner2, 0),
 			},
-			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValueOther"), prio10, owner2, 0),
+			expectedOwnerUpdates: []*types.Update{
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValueOther"), prio10, owner2, 0),
 			},
 			expectedOwnerDeletes: [][]string{
 				{"doublekey", "k1.1", "k1.3", "key1"},
@@ -151,31 +143,31 @@ func TestDatastore_populateTree(t *testing.T) {
 				{"doublekey", "k1.1", "k1.3", "cont", "value1"},
 				{"doublekey", "k1.1", "k1.3", "cont", "value2"},
 			},
-			intendedStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key1"}, testhelper.GetStringTvProto(t, "k1.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key2"}, testhelper.GetStringTvProto(t, "k1.2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval1.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval1.2"), prio10, owner2, 0),
+			intendedStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key1"}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key2"}, testhelper.GetStringTvProto("k1.2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value1"}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value2"}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
 
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key1"}, testhelper.GetStringTvProto(t, "k1.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key2"}, testhelper.GetStringTvProto(t, "k1.3"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval1.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval1.2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key1"}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key2"}, testhelper.GetStringTvProto("k1.3"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value1"}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value2"}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
 
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key1"}, testhelper.GetStringTvProto(t, "k2.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key2"}, testhelper.GetStringTvProto(t, "k2.2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval2.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval2.2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key1"}, testhelper.GetStringTvProto("k2.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key2"}, testhelper.GetStringTvProto("k2.2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValue2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value1"}, testhelper.GetStringTvProto("containerval2.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value2"}, testhelper.GetStringTvProto("containerval2.2"), prio10, owner2, 0),
 			},
 		},
 		{
 			name:          "DoubleKey - New Data",
 			intentName:    owner2,
 			intentPrio:    prio10,
-			intentReqPath: "/",
+			intentReqPath: nil,
 			intentReqValue: func() (string, error) {
 				d := &sdcio_schema.Device{
 					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
@@ -222,51 +214,51 @@ func TestDatastore_populateTree(t *testing.T) {
 					SkipValidation: false,
 				})
 			},
-			expectedModify: []*cache.Update{
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key1"}, testhelper.GetStringTvProto(t, "k1.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key2"}, testhelper.GetStringTvProto(t, "k1.2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval1.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval1.2"), prio10, owner2, 0),
+			expectedModify: []*types.Update{
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key1"}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key2"}, testhelper.GetStringTvProto("k1.2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value1"}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value2"}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
 
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key1"}, testhelper.GetStringTvProto(t, "k1.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key2"}, testhelper.GetStringTvProto(t, "k1.3"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval1.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval1.2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key1"}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key2"}, testhelper.GetStringTvProto("k1.3"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value1"}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value2"}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
 
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key1"}, testhelper.GetStringTvProto(t, "k2.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key2"}, testhelper.GetStringTvProto(t, "k2.2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval2.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval2.2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key1"}, testhelper.GetStringTvProto("k2.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key2"}, testhelper.GetStringTvProto("k2.2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValue2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value1"}, testhelper.GetStringTvProto("containerval2.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value2"}, testhelper.GetStringTvProto("containerval2.2"), prio10, owner2, 0),
 			},
-			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key1"}, testhelper.GetStringTvProto(t, "k1.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key2"}, testhelper.GetStringTvProto(t, "k1.2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval1.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval1.2"), prio10, owner2, 0),
+			expectedOwnerUpdates: []*types.Update{
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key1"}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "key2"}, testhelper.GetStringTvProto("k1.2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value1"}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "cont", "value2"}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
 
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key1"}, testhelper.GetStringTvProto(t, "k1.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key2"}, testhelper.GetStringTvProto(t, "k1.3"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval1.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval1.2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key1"}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "key2"}, testhelper.GetStringTvProto("k1.3"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value1"}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "cont", "value2"}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
 
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key1"}, testhelper.GetStringTvProto(t, "k2.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key2"}, testhelper.GetStringTvProto(t, "k2.2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "mandato"}, testhelper.GetStringTvProto(t, "TheMandatoryValue2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value1"}, testhelper.GetStringTvProto(t, "containerval2.1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value2"}, testhelper.GetStringTvProto(t, "containerval2.2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key1"}, testhelper.GetStringTvProto("k2.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "key2"}, testhelper.GetStringTvProto("k2.2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValue2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value1"}, testhelper.GetStringTvProto("containerval2.1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"doublekey", "k2.1", "k2.2", "cont", "value2"}, testhelper.GetStringTvProto("containerval2.2"), prio10, owner2, 0),
 			},
-			intendedStoreUpdates: []*cache.Update{},
+			intendedStoreUpdates: []*types.Update{},
 		},
 		{
 			name:          "Simple add to root path",
 			intentName:    owner1,
 			intentPrio:    prio10,
-			intentReqPath: "/",
+			intentReqPath: nil,
 			intentReqValue: func() (string, error) {
 				d := &sdcio_schema.Device{
 					Interface: map[string]*sdcio_schema.SdcioModel_Interface{},
@@ -281,13 +273,13 @@ func TestDatastore_populateTree(t *testing.T) {
 				})
 			},
 
-			expectedModify: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+			expectedModify: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
 			},
-			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+			expectedOwnerUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
 			},
 			intendedStoreUpdates: nil,
 		},
@@ -295,7 +287,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			name:          "Simple add with a specific path",
 			intentName:    owner1,
 			intentPrio:    prio10,
-			intentReqPath: "interface",
+			intentReqPath: types.PathSlice{"interface"},
 
 			intentReqValue: func() (string, error) {
 				i := &sdcio_schema.SdcioModel_Interface{
@@ -307,21 +299,21 @@ func TestDatastore_populateTree(t *testing.T) {
 					SkipValidation: false,
 				})
 			},
-			expectedModify: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+			expectedModify: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
 			},
-			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+			expectedOwnerUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
 			},
 			intendedStoreUpdates: nil,
 		},
 		{
-			name:          "Add with existing better prio same intent / owner",
+			name:          "Add with existing better prio same intent name",
 			intentName:    owner1,
 			intentPrio:    prio10,
-			intentReqPath: "interface",
+			intentReqPath: types.PathSlice{"interface"},
 			intentReqValue: func() (string, error) {
 				i := &sdcio_schema.SdcioModel_Interface{
 					Name:        ygot.String("ethernet-1/1"),
@@ -332,50 +324,50 @@ func TestDatastore_populateTree(t *testing.T) {
 					SkipValidation: false,
 				})
 			},
-			expectedModify: []*cache.Update{
+			expectedModify: []*types.Update{
 				// Right now, although the value stays the same, but the priority changes, we'll receive an update for these values.
 				// This maybe needs to be mitigated, but is not considered harmfull atm.
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
 			},
-			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+			expectedOwnerUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
 			},
-			intendedStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
+			intendedStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
 			},
 		},
 		{
 			name:          "Delete the highes priority values, making shadowed values become active",
 			intentName:    owner1,
 			intentPrio:    prio5,
-			intentReqPath: "/",
+			intentReqPath: nil,
 			intentReqValue: func() (string, error) {
 				return "{}", nil
 			},
 			intentDelete: true,
-			expectedModify: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
+			expectedModify: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
 			},
 			expectedOwnerDeletes: [][]string{
 				{"interface", "ethernet-1/1", "name"},
 				{"interface", "ethernet-1/1", "description"},
 			},
-			intendedStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
+			intendedStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
 			},
 		},
 		{
 			name:          "Delete - aggregate branch via keys",
 			intentName:    owner2,
 			intentPrio:    prio10,
-			intentReqPath: "/",
+			intentReqPath: nil,
 			intentReqValue: func() (string, error) {
 				return "{}", nil
 			},
@@ -388,17 +380,17 @@ func TestDatastore_populateTree(t *testing.T) {
 				{"interface", "ethernet-1/1", "description"},
 				{"interface", "ethernet-1/1", "admin-state"},
 			},
-			intendedStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "admin-state"}, testhelper.GetStringTvProto(t, "enable"), prio10, owner2, 0),
+			intendedStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "admin-state"}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
 			},
 		},
 		{
 			name:          "Delete - aggregate branch via keys, multiple entries (different keys)",
 			intentName:    owner2,
 			intentPrio:    prio10,
-			intentReqPath: "/",
+			intentReqPath: nil,
 			intentReqValue: func() (string, error) {
 				d := &sdcio_schema.Device{
 					Interface: map[string]*sdcio_schema.SdcioModel_Interface{
@@ -414,16 +406,16 @@ func TestDatastore_populateTree(t *testing.T) {
 				})
 			},
 			intentDelete:        true,
-			runningStoreUpdates: []*cache.Update{
-				// cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
-				// cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
-				// cache.NewUpdate([]string{"interface", "ethernet-1/1", "admin-state"}, testhelper.GetStringTvProto(t, "enable"), prio10, owner2, 0),
-				// cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio10, owner2, 0),
-				// cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
-				// cache.NewUpdate([]string{"interface", "ethernet-1/2", "admin-state"}, testhelper.GetStringTvProto(t, "enable"), prio10, owner2, 0),
-				// cache.NewUpdate([]string{"interface", "ethernet-1/3", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/3"), prio10, owner2, 0),
-				// cache.NewUpdate([]string{"interface", "ethernet-1/3", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
-				// cache.NewUpdate([]string{"interface", "ethernet-1/3", "admin-state"}, testhelper.GetStringTvProto(t, "enable"), prio10, owner2, 0),
+			runningStoreUpdates: []*types.Update{
+				// cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
+				// cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
+				// cache.NewUpdate([]string{"interface", "ethernet-1/1", "admin-state"}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
+				// cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto("ethernet-1/2"), prio10, owner2, 0),
+				// cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
+				// cache.NewUpdate([]string{"interface", "ethernet-1/2", "admin-state"}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
+				// cache.NewUpdate([]string{"interface", "ethernet-1/3", "name"}, testhelper.GetStringTvProto("ethernet-1/3"), prio10, owner2, 0),
+				// cache.NewUpdate([]string{"interface", "ethernet-1/3", "description"}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
+				// cache.NewUpdate([]string{"interface", "ethernet-1/3", "admin-state"}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
 			},
 			expectedDeletes: [][]string{
 				{"interface", "ethernet-1/1", "admin-state"},
@@ -439,30 +431,30 @@ func TestDatastore_populateTree(t *testing.T) {
 				{"interface", "ethernet-1/3", "description"},
 				{"interface", "ethernet-1/3", "admin-state"},
 			},
-			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyNonappliedDescription"), prio10, owner2, 0),
+			expectedOwnerUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyNonappliedDescription"), prio10, owner2, 0),
 			},
-			expectedModify: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyNonappliedDescription"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
+			expectedModify: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyNonappliedDescription"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
 			},
-			intendedStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "admin-state"}, testhelper.GetStringTvProto(t, "enable"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "admin-state"}, testhelper.GetStringTvProto(t, "enable"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/3", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/3"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/3", "description"}, testhelper.GetStringTvProto(t, "MyDescriptionOwner2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/3", "admin-state"}, testhelper.GetStringTvProto(t, "enable"), prio10, owner2, 0),
+			intendedStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "admin-state"}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto("ethernet-1/2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "admin-state"}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/3", "name"}, testhelper.GetStringTvProto("ethernet-1/3"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/3", "description"}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/3", "admin-state"}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
 			},
 		},
 		{
 			name:          "Add lower precedence intent, every value already shadowed",
 			intentName:    owner2,
 			intentPrio:    prio10,
-			intentReqPath: "interface",
+			intentReqPath: types.PathSlice{"interface"},
 			intentReqValue: func() (string, error) {
 				i := &sdcio_schema.SdcioModel_Interface{
 					Name:        ygot.String("ethernet-1/1"),
@@ -473,23 +465,22 @@ func TestDatastore_populateTree(t *testing.T) {
 					SkipValidation: false,
 				})
 			},
-			runningStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+			runningStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 			},
-
-			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyNonappliedDescription"), prio10, owner2, 0),
+			expectedOwnerUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyNonappliedDescription"), prio10, owner2, 0),
 			},
-			intendedStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
+			intendedStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
 			},
 		},
 		{
 			name:          "choices delete",
-			intentReqPath: "interface",
+			intentReqPath: types.PathSlice{"interface"},
 			intentReqValue: func() (string, error) {
 				i := &sdcio_schema.SdcioModel_Interface{
 					Name:        ygot.String("ethernet-1/1"),
@@ -502,19 +493,19 @@ func TestDatastore_populateTree(t *testing.T) {
 			},
 			intentPrio: 10,
 			intentName: owner1,
-			runningStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"choices", "case1", "case-elem"}, testhelper.GetStringTvProto(t, "Foobar"), prio10, owner1, 0),
+			runningStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"choices", "case1", "case-elem"}, testhelper.GetStringTvProto("Foobar"), prio10, owner1, 0),
 			},
-			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+			expectedOwnerUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
 			},
-			intendedStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"choices", "case1", "case-elem"}, testhelper.GetStringTvProto(t, "Foobar"), prio10, owner1, 0),
+			intendedStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"choices", "case1", "case-elem"}, testhelper.GetStringTvProto("Foobar"), prio10, owner1, 0),
 			},
-			expectedModify: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio10, owner1, 0),
+			expectedModify: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
 			},
 			expectedDeletes: [][]string{
 				{"choices"},
@@ -527,7 +518,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			name:          "Mixed, new entry, higher and lower precedence",
 			intentName:    owner2,
 			intentPrio:    prio10,
-			intentReqPath: "/",
+			intentReqPath: nil,
 
 			intentReqValue: func() (string, error) {
 				d := &sdcio_schema.Device{
@@ -559,46 +550,46 @@ func TestDatastore_populateTree(t *testing.T) {
 					SkipValidation: false,
 				})
 			},
-			runningStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio15, owner3, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "Owner3 Description"), prio15, owner3, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(t, 1), prio15, owner3, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio15, owner3, 0),
+			runningStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto("ethernet-1/2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto("Owner3 Description"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(2), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "description"}, testhelper.GetStringTvProto("Subinterface Desc"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 			},
-			expectedModify: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+			expectedModify: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto("ethernet-1/2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "description"}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
 			},
-			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+			expectedOwnerUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto("ethernet-1/2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "description"}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
 			},
-			intendedStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio15, owner3, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "Owner3 Description"), prio15, owner3, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(t, 1), prio15, owner3, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio15, owner3, 0),
+			intendedStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto("ethernet-1/2"), prio15, owner3, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto("Owner3 Description"), prio15, owner3, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(2), prio15, owner3, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "description"}, testhelper.GetStringTvProto("Subinterface Desc"), prio15, owner3, 0),
 			},
 		},
 		{
 			name:                "Mixed, new entry, higher and lower precedence. notOnlyUpdated set to TRUE",
 			intentName:          owner2,
 			intentPrio:          prio10,
-			intentReqPath:       "/",
+			intentReqPath:       nil,
 			NotOnlyNewOrUpdated: true,
 
 			intentReqValue: func() (string, error) {
@@ -631,44 +622,50 @@ func TestDatastore_populateTree(t *testing.T) {
 					SkipValidation: false,
 				})
 			},
-
-			expectedModify: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
-				// the next two are not part of the result, we might want to add the behaviour, such that one can query the entire intended.
-				// cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(t, 1), prio15, owner3, 0),
-				// cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "2", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio15, owner3, 0),
+			runningStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto("ethernet-1/2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto("Owner3 Description"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(1), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "description"}, testhelper.GetStringTvProto("Subinterface Desc"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 			},
-			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "MyOtherDescription"), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(t, 1), prio10, owner2, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio10, owner2, 0),
+			expectedModify: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto("ethernet-1/2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "description"}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(1), prio15, owner3, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "description"}, testhelper.GetStringTvProto("Subinterface Desc"), prio15, owner3, 0),
 			},
-			intendedStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto(t, "MyDescription"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/2"), prio15, owner3, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto(t, "Owner3 Description"), prio15, owner3, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(t, 1), prio15, owner3, 0),
-				cache.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "description"}, testhelper.GetStringTvProto(t, "Subinterface Desc"), prio15, owner3, 0),
+			expectedOwnerUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "description"}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto("ethernet-1/2"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "1", "description"}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
+			},
+			intendedStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto("ethernet-1/2"), prio15, owner3, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto("Owner3 Description"), prio15, owner3, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "index"}, testhelper.GetUIntTvProto(1), prio15, owner3, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "subinterface", "2", "description"}, testhelper.GetStringTvProto("Subinterface Desc"), prio15, owner3, 0),
 			},
 		},
 		{
-			name:          "ChoiceCase - new highes case",
+			name:          "ChoiceCase - new highest case",
 			intentName:    owner2,
 			intentPrio:    prio10,
-			intentReqPath: "/",
+			intentReqPath: nil,
 			intentReqValue: func() (string, error) {
 				d := &sdcio_schema.Device{
 					Choices: &sdcio_schema.SdcioModel_Choices{
@@ -682,25 +679,29 @@ func TestDatastore_populateTree(t *testing.T) {
 					SkipValidation: false,
 				})
 			},
-			expectedModify: []*cache.Update{
-				cache.NewUpdate([]string{"choices", "case2", "log"}, TypedValueTrue, prio10, owner2, 0),
+			expectedModify: []*types.Update{
+				types.NewUpdate([]string{"choices", "case2", "log"}, TypedValueTrue, prio10, owner2, 0),
 			},
 			expectedDeletes: [][]string{
 				{"choices", "case1"},
 			},
-			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"choices", "case2", "log"}, TypedValueTrue, prio10, owner2, 0),
+			expectedOwnerUpdates: []*types.Update{
+				types.NewUpdate([]string{"choices", "case2", "log"}, TypedValueTrue, prio10, owner2, 0),
 			},
-			intendedStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"choices", "case1", "case-elem", "elem"}, testhelper.GetStringTvProto(t, "case1-content"), prio15, owner1, 0),
-				cache.NewUpdate([]string{"choices", "case1", "log"}, TypedValueFalse, prio15, owner1, 0),
+			intendedStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"choices", "case1", "case-elem", "elem"}, testhelper.GetStringTvProto("case1-content"), prio15, owner1, 0),
+				types.NewUpdate([]string{"choices", "case1", "log"}, TypedValueFalse, prio15, owner1, 0),
+			},
+			runningStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"choices", "case1", "case-elem", "elem"}, testhelper.GetStringTvProto("case1-content"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"choices", "case1", "log"}, TypedValueFalse, tree.RunningValuesPrio, tree.RunningIntentName, 0),
 			},
 		},
 		{
-			name:          "ChoiceCase - old highes case",
+			name:          "ChoiceCase - old highest case",
 			intentName:    owner2,
 			intentPrio:    prio10,
-			intentReqPath: "/",
+			intentReqPath: nil,
 			intentReqValue: func() (string, error) {
 				d := &sdcio_schema.Device{
 					Choices: &sdcio_schema.SdcioModel_Choices{
@@ -714,16 +715,47 @@ func TestDatastore_populateTree(t *testing.T) {
 					SkipValidation: false,
 				})
 			},
-			expectedModify: []*cache.Update{
+			expectedModify: []*types.Update{
 				// no mods expected
 			},
-			expectedOwnerUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"choices", "case2", "log"}, TypedValueTrue, prio10, owner2, 0),
+			expectedOwnerUpdates: []*types.Update{
+				types.NewUpdate([]string{"choices", "case2", "log"}, TypedValueTrue, prio10, owner2, 0),
 			},
-			intendedStoreUpdates: []*cache.Update{
-				cache.NewUpdate([]string{"choices", "case1", "case-elem", "elem"}, testhelper.GetStringTvProto(t, "case1-content"), prio5, owner1, 0),
-				cache.NewUpdate([]string{"choices", "case1", "log"}, TypedValueFalse, prio5, owner1, 0),
+			intendedStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"choices", "case1", "case-elem", "elem"}, testhelper.GetStringTvProto("case1-content"), prio5, owner1, 0),
+				types.NewUpdate([]string{"choices", "case1", "log"}, TypedValueFalse, prio5, owner1, 0),
 			},
+			runningStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"choices", "case1", "case-elem", "elem"}, testhelper.GetStringTvProto("case1-content"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"choices", "case1", "log"}, TypedValueFalse, tree.RunningValuesPrio, tree.RunningIntentName, 0),
+			},
+		},
+		{
+			name:          "ChoiceCase - add first case",
+			intentName:    owner2,
+			intentPrio:    prio10,
+			intentReqPath: nil,
+			intentReqValue: func() (string, error) {
+				d := &sdcio_schema.Device{
+					Choices: &sdcio_schema.SdcioModel_Choices{
+						Case2: &sdcio_schema.SdcioModel_Choices_Case2{
+							Log: ygot.Bool(true),
+						},
+					},
+				}
+				return ygot.EmitJSON(d, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false,
+				})
+			},
+			expectedModify: []*types.Update{
+				types.NewUpdate([]string{"choices", "case2", "log"}, TypedValueTrue, prio10, owner2, 0),
+			},
+			expectedOwnerUpdates: []*types.Update{
+				types.NewUpdate([]string{"choices", "case2", "log"}, TypedValueTrue, prio10, owner2, 0),
+			},
+			intendedStoreUpdates: []*types.Update{},
+			runningStoreUpdates:  []*types.Update{},
 		},
 	}
 
@@ -731,108 +763,70 @@ func TestDatastore_populateTree(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// create a gomock controller
 			controller := gomock.NewController(t)
+			defer controller.Finish()
 
-			// create a cache client mock
-			cacheClient := mockcacheclient.NewMockClient(controller)
-			testhelper.ConfigureCacheClientMock(t, cacheClient, tt.intendedStoreUpdates, tt.runningStoreUpdates, tt.expectedModify, tt.expectedDeletes)
+			ctx := context.Background()
 
 			sc, schema, err := testhelper.InitSDCIOSchema()
 			if err != nil {
 				t.Fatal(err)
 			}
-
-			dsName := "dev1"
-			ctx := context.Background()
-
-			// create a datastore
-			d := &Datastore{
-				config: &config.DatastoreConfig{
-					Name:       dsName,
-					Schema:     schema,
-					Validation: &config.Validation{DisableConcurrency: true},
-				},
-
-				sbi:          mocktarget.NewMockTarget(controller),
-				cacheClient:  cacheClient,
-				schemaClient: schemaClient.NewSchemaClientBound(schema.GetSchema(), sc),
-			}
-
-			// marshall the intentReqValue into a byte slice
-			jsonConf, err := tt.intentReqValue()
-			if err != nil {
-				t.Error(err)
-			}
-
-			// parse the path under which the intent value is to be put
-			path, err := utils.ParsePath(tt.intentReqPath)
-			if err != nil {
-				t.Error(err)
-			}
-
-			// prepare the SetintentRequest
-			reqOne := &sdcpb.SetIntentRequest{
-				Name:     dsName,
-				Intent:   tt.intentName,
-				Priority: tt.intentPrio,
-				Update: []*sdcpb.Update{
-					{
-						Path: path,
-						Value: &sdcpb.TypedValue{
-							Value: &sdcpb.TypedValue_JsonVal{
-								JsonVal: []byte(jsonConf)},
-						},
-					},
-				},
-				Delete: tt.intentDelete,
-			}
-
-			tcc := tree.NewTreeCacheClient(d.Name(), cacheClient)
-			tc := tree.NewTreeContext(tcc, d.schemaClient, tt.intentName)
+			scb := schemaClient.NewSchemaClientBound(schema, sc)
+			tc := tree.NewTreeContext(scb, tt.intentName)
 
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Error(err)
 			}
 
-			updSlice, err := d.expandAndConvertIntent(ctx, reqOne.GetIntent(), reqOne.GetPriority(), reqOne.GetUpdate())
+			jconfStr, err := tt.intentReqValue()
 			if err != nil {
 				t.Error(err)
 			}
 
-			oldIntentContent, err := root.LoadIntendedStoreOwnerData(ctx, reqOne.GetIntent(), false)
+			var jsonConfAny any
+			err = json.Unmarshal([]byte(jconfStr), &jsonConfAny)
 			if err != nil {
 				t.Error(err)
 			}
 
-			loadHighest := oldIntentContent.ToPathSet()
-			loadHighest.Join(updSlice.ToPathSet())
-
-			err = loadIntendedStoreHighestPrio(ctx, tcc, root, loadHighest, []string{reqOne.GetIntent()})
+			// add intended content
+			err = root.AddUpdatesRecursive(ctx, tt.intendedStoreUpdates, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Error(err)
 			}
 
-			flags := tree.NewUpdateInsertFlags()
-			flags.SetNewFlag()
-			root.AddCacheUpdatesRecursive(ctx, updSlice, flags)
-
-			// populate Tree with running
-			err = populateTreeWithRunning(ctx, tcc, root)
+			// add running content
+			err = root.AddUpdatesRecursive(ctx, tt.runningStoreUpdates, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Error(err)
 			}
 
-			root.FinishInsertionPhase(ctx)
+			root.MarkOwnerDelete(tt.intentName, false)
 
-			validationResult := root.Validate(ctx, d.config.Validation)
+			newFlag := types.NewUpdateInsertFlags().SetNewFlag()
+
+			err = root.ImportConfig(ctx, tt.intentReqPath, jsonImporter.NewJsonTreeImporter(jsonConfAny), tt.intentName, tt.intentPrio, newFlag)
+			if err != nil {
+				t.Error(err)
+			}
+
+			fmt.Println(root.String())
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
+			fmt.Println(root.String())
+
+			validationResult := root.Validate(ctx, &config.Validation{DisableConcurrency: true})
 
 			fmt.Printf("Validation Errors:\n%v\n", strings.Join(validationResult.ErrorsStr(), "\n"))
 			fmt.Printf("Tree:%s\n", root.String())
 
 			// get the updates that are meant to be send down towards the device
 			updates := root.GetHighestPrecedence(!tt.NotOnlyNewOrUpdated)
-			if diff := testhelper.DiffCacheUpdates(tt.expectedModify, updates.ToCacheUpdateSlice()); diff != "" {
-				t.Errorf("root.GetHighestPrecedence(true) mismatch (-want +got):\n%s", diff)
+			if diff := testhelper.DiffUpdates(tt.expectedModify, updates.ToUpdateSlice()); diff != "" {
+				t.Errorf("root.GetHighestPrecedence(%t) mismatch (-want +got):\n%s", !tt.NotOnlyNewOrUpdated, diff)
 			}
 
 			// get the deletes that are meant to be send down towards the device
@@ -841,7 +835,7 @@ func TestDatastore_populateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			deletePathSlice := make(tree.PathSlices, 0, len(deletes))
+			deletePathSlice := make(types.PathSlices, 0, len(deletes))
 			for _, del := range deletes {
 				deletePathSlice = append(deletePathSlice, del.Path())
 			}
@@ -852,7 +846,7 @@ func TestDatastore_populateTree(t *testing.T) {
 
 			// get the updates that are meant to be send down towards the cache (INTENDED)
 			updatesOwner := root.GetUpdatesForOwner(tt.intentName)
-			if diff := testhelper.DiffCacheUpdates(tt.expectedOwnerUpdates, updatesOwner); diff != "" {
+			if diff := testhelper.DiffUpdates(tt.expectedOwnerUpdates, updatesOwner); diff != "" {
 				t.Errorf("root.GetUpdatesForOwner mismatch (-want +got):\n%s", diff)
 			}
 

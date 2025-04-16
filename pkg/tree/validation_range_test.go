@@ -8,6 +8,7 @@ import (
 
 	"github.com/openconfig/ygot/ygot"
 	json_importer "github.com/sdcio/data-server/pkg/tree/importer/json"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	"go.uber.org/mock/gomock"
@@ -23,7 +24,7 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 		t.Error(err)
 	}
 
-	tc := NewTreeContext(nil, scb, "owner1")
+	tc := NewTreeContext(scb, "owner1")
 
 	root, err := NewTreeRoot(ctx, tc)
 
@@ -63,12 +64,15 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 
 	jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
 
-	err = root.ImportConfig(ctx, jimporter, "owner1", 5)
+	err = root.ImportConfig(ctx, types.PathSlice{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
 	if err != nil {
 		t.Error(err)
 	}
 
-	root.FinishInsertionPhase(ctx)
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Error(err)
+	}
 
 	validationResult := root.Validate(ctx, validationConfig)
 
@@ -147,7 +151,7 @@ func TestValidate_RangesSigned(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			// the tree context
-			tc := NewTreeContext(nil, scb, "owner1")
+			tc := NewTreeContext(scb, "owner1")
 
 			// the tree root
 			root, err := NewTreeRoot(ctx, tc)
@@ -172,12 +176,15 @@ func TestValidate_RangesSigned(t *testing.T) {
 			jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
 
 			// import via importer
-			err = root.ImportConfig(ctx, jimporter, "owner1", 5)
+			err = root.ImportConfig(ctx, types.PathSlice{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Error(err)
 			}
 
-			root.FinishInsertionPhase(ctx)
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
 
 			validationResult := root.Validate(ctx, validationConfig)
 
@@ -277,7 +284,7 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			// the tree context
-			tc := NewTreeContext(nil, scb, "owner1")
+			tc := NewTreeContext(scb, "owner1")
 
 			// the tree root
 			root, err := NewTreeRoot(ctx, tc)
@@ -302,12 +309,15 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 			jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
 
 			// import via importer
-			err = root.ImportConfig(ctx, jimporter, "owner1", 5)
+			err = root.ImportConfig(ctx, types.PathSlice{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Error(err)
 			}
 
-			root.FinishInsertionPhase(ctx)
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
 
 			// run validation
 			validationResults := root.Validate(ctx, validationConfig)
