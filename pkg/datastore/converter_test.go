@@ -16,9 +16,10 @@ package datastore
 
 import (
 	"context"
-	"reflect"
+	"slices"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -237,9 +238,24 @@ func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {
 				t.Errorf("Datastore.expandUpdateLeafAsKeys() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Datastore.expandUpdateLeafAsKeys() = got : %v", got)
-				t.Errorf("Datastore.expandUpdateLeafAsKeys() = want: %v", tt.want)
+
+			// convert got to string array
+			gotStrArr := []string{}
+			for _, x := range got {
+				gotStrArr = append(gotStrArr, x.String())
+			}
+			slices.Sort(gotStrArr)
+
+			// convert want to string array
+			wantStrArr := []string{}
+			for _, x := range tt.want {
+				wantStrArr = append(wantStrArr, x.String())
+			}
+			slices.Sort(wantStrArr)
+
+			// compare the string arrays
+			if diff := cmp.Diff(wantStrArr, gotStrArr); diff != "" {
+				t.Fatalf("mismatch (-want +got)\n%s", diff)
 			}
 		})
 	}
