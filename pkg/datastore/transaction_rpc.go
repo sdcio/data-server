@@ -358,13 +358,13 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, transactionIntents []*types.TransactionIntent, replaceIntent *types.TransactionIntent, transactionTimeout time.Duration, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
 	var err error
 
+	log.Infof("Transaction: %s - start", transactionId)
 	// try locking the datastore if it is locked return the specific ErrDatastoreLocked error.
 	if !d.dmutex.TryLock() {
+		log.Infof("Transaction: %s - abort (%v)", transactionId, ErrDatastoreLocked)
 		return nil, ErrDatastoreLocked
 	}
 	defer d.dmutex.Unlock()
-
-	log.Infof("Transaction: %s - start", transactionId)
 
 	// create a new Transaction with the given transaction id
 	transaction := types.NewTransaction(transactionId, d.transactionManager)
