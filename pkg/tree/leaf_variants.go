@@ -151,6 +151,22 @@ func (lv *LeafVariants) GetHighestPrecedenceValue(filter HighestPrecedenceFilter
 	return result
 }
 
+func (lv *LeafVariants) DeepCopy(tc *TreeContext, parent Entry) *LeafVariants {
+	result := &LeafVariants{
+		lesMutex: sync.RWMutex{},
+		tc:       tc,
+		les:      make([]*LeafEntry, 0, len(lv.les)),
+	}
+
+	lv.lesMutex.RLock()
+	defer lv.lesMutex.RUnlock()
+	for _, x := range lv.les {
+		result.Add(x.DeepCopy(parent))
+	}
+
+	return result
+}
+
 // checkReturnDefault checks if defaults are allowed and if the given LeafEntry is owned by default
 func checkNotDefaultAllowedButIsDefaultOwner(le *LeafEntry, includeDefaults bool) bool {
 	return !includeDefaults && le.Update.Owner() == DefaultsIntentName

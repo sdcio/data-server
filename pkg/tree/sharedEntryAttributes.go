@@ -54,7 +54,6 @@ func (s *sharedEntryAttributes) deepCopy(tc *TreeContext, parent Entry) (*shared
 		parent:           parent,
 		pathElemName:     s.pathElemName,
 		childs:           newChildMap(),
-		leafVariants:     newLeafVariants(tc),
 		schema:           s.schema,
 		treeContext:      tc,
 		choicesResolvers: s.choicesResolvers.deepCopy(),
@@ -64,7 +63,19 @@ func (s *sharedEntryAttributes) deepCopy(tc *TreeContext, parent Entry) (*shared
 		level:            s.level,
 	}
 
+	// copy childs
+	for _, v := range s.childs.GetAll() {
+		result.childs.Add(v)
+	}
+
+	// copy leafvariants
+	result.leafVariants = s.leafVariants.DeepCopy(tc, result)
+
 	return result, nil
+}
+
+func (s *sharedEntryAttributes) DeepCopy(tc *TreeContext, parent Entry) (Entry, error) {
+	return s.deepCopy(tc, parent)
 }
 
 func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName string, tc *TreeContext) (*sharedEntryAttributes, error) {

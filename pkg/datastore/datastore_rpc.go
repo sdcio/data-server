@@ -410,12 +410,11 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 	deviationChan := make(chan *treetypes.DeviationEntry, 10)
 
 	d.syncTreeMutex.RLock()
-	defer d.syncTreeMutex.RUnlock()
-
 	deviationTree, err := d.syncTree.DeepCopy(ctx)
 	if err != nil {
 		return nil, err
 	}
+	d.syncTreeMutex.RUnlock()
 
 	addedIntentNames, err := d.LoadAllButRunningIntents(ctx, deviationTree)
 	if err != nil {

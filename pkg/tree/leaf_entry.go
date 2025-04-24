@@ -23,10 +23,10 @@ type LeafEntry struct {
 	mu sync.RWMutex
 }
 
-func (l *LeafEntry) DeepCopy() *LeafEntry {
+func (l *LeafEntry) DeepCopy(parentEntry Entry) *LeafEntry {
 	return &LeafEntry{
 		Update:             l.Update.DeepCopy(),
-		parentEntry:        l.parentEntry,
+		parentEntry:        parentEntry,
 		IsNew:              l.IsNew,
 		Delete:             l.Delete,
 		DeleteOnlyIntended: l.DeleteOnlyIntended,

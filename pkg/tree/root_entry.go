@@ -50,6 +50,9 @@ func (r *RootEntry) stringToDisk(filename string) error {
 func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 	tc := r.treeContext.deepCopy()
 	se, err := r.sharedEntryAttributes.deepCopy(tc, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	result := &RootEntry{
 		sharedEntryAttributes: se,

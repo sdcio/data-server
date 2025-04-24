@@ -92,7 +92,9 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 		return nil, err
 	}
 
-	log.Debug(root.String())
+	// log the tree in trace level, making it a func call to spare overhead in lower log levels.
+	log.TraceFn(func() []interface{} { return []interface{}{root.String()} })
+
 	// perform validation
 	validationResult := root.Validate(ctx, &config.Validation{DisableConcurrency: !ConcurrentValidate})
 	validationResult.ErrorsStr()
@@ -143,7 +145,7 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 			IntentNames = append(IntentNames, intent.GetIntentName())
 			log.Debugf("adding intent %s to tree", intent.GetIntentName())
 			protoLoader := treeproto.NewProtoTreeImporter(intent.GetRoot())
-			log.Debugf(intent.String())
+			log.Tracef(intent.String())
 			err := root.ImportConfig(ctx, nil, protoLoader, intent.GetIntentName(), intent.GetPriority(), treetypes.NewUpdateInsertFlags())
 			if err != nil {
 				return nil, err

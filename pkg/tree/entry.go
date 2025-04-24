@@ -152,6 +152,7 @@ type Entry interface {
 	// this is collecting all the last level key entries.
 	GetListChilds() ([]Entry, error)
 	BreadthSearch(ctx context.Context, path string) ([]Entry, error)
+	DeepCopy(tc *TreeContext, parent Entry) (Entry, error)
 }
 
 type EntryVisitor func(s *sharedEntryAttributes) error
