@@ -291,9 +291,9 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	/////////////////////////////////////
 
 	// logging
-	strSl := treetypes.Map(updates.ToUpdateSlice(), func(u *treetypes.Update) string { return u.String() })
-	log.Debugf("Updates\n%s", strings.Join(strSl, "\n"))
-	log.Debugf("Deletes:\n%s", strings.Join(strSl, "\n"))
+	updStrSl := treetypes.Map(updates.ToUpdateSlice(), func(u *treetypes.Update) string { return u.String() })
+	log.Debugf("Updates:\n%s", strings.Join(updStrSl, "\n"))
+	log.Debugf("Deletes:\n%s", strings.Join(deletes.PathSlices().StringSlice(), "\n"))
 
 	for _, intent := range transaction.GetNewIntents() {
 		// retrieve the data that is meant to be send towards the cache
