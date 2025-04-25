@@ -215,7 +215,8 @@ func (c *choicesCase) getHighestPrecedenceWODeleted() int32 {
 
 func (c *choicesCase) deepCopy() *choicesCase {
 	result := &choicesCase{
-		name: c.name,
+		name:     c.name,
+		elements: make(map[string]*caseElement),
 	}
 	for k, v := range c.elements {
 		result.elements[k] = v.deepCopy()

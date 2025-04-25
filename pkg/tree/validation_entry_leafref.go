@@ -193,6 +193,9 @@ func (s *sharedEntryAttributes) resolve_leafref_key_path(ctx context.Context, ke
 }
 
 func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan chan<- *types.ValidationResultEntry) {
+	if s.shouldDelete() {
+		return
+	}
 
 	lref := s.schema.GetField().GetType().GetLeafref()
 	if s.schema == nil || lref == "" {
@@ -212,7 +215,7 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan
 	}
 
 	// Only if the value remains, even after the SetIntent made it through, the LeafRef can be considered resolved.
-	if !entry[0].remainsToExist() {
+	if entry[0].shouldDelete() {
 		lv := s.leafVariants.GetHighestPrecedence(false, true)
 		EntryPath, _ := s.SdcpbPath()
 

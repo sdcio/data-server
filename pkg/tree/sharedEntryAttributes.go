@@ -65,7 +65,11 @@ func (s *sharedEntryAttributes) deepCopy(tc *TreeContext, parent Entry) (*shared
 
 	// copy childs
 	for _, v := range s.childs.GetAll() {
-		result.childs.Add(v)
+		vCopy, err := v.DeepCopy(tc, result)
+		if err != nil {
+			return nil, err
+		}
+		result.childs.Add(vCopy)
 	}
 
 	// copy leafvariants
@@ -1307,6 +1311,9 @@ func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultCha
 // attributes is a string slice, it will be checked that at least of the the given attributes is defined
 // !Not checking all of these are defined (call multiple times with single entry in attributes for that matter)!
 func (s *sharedEntryAttributes) validateMandatoryWithKeys(ctx context.Context, level int, attributes []string, choiceName string, resultChan chan<- *types.ValidationResultEntry) {
+	if s.shouldDelete() {
+		return
+	}
 	if level == 0 {
 		success := false
 		existsInTree := false
@@ -1338,7 +1345,6 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(ctx context.Context, l
 	for _, c := range s.filterActiveChoiceCaseChilds() {
 		c.validateMandatoryWithKeys(ctx, level-1, attributes, choiceName, resultChan)
 	}
-
 }
 
 // initChoiceCasesResolvers Choices and their cases are defined in the schema.
