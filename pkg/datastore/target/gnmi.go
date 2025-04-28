@@ -147,6 +147,7 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 	if err != nil {
 		return nil, err
 	}
+
 	schemaRsp := &sdcpb.GetDataResponse{
 		Notification: make([]*sdcpb.Notification, 0, len(gnmiRsp.GetNotification())),
 	}
@@ -411,7 +412,8 @@ func (t *gnmiTarget) internalGetSync(ctx context.Context, req *sdcpb.GetDataRequ
 	}
 	notificationsCount := 0
 
-	for _, n := range resp.GetNotification() {
+	for idx, n := range resp.GetNotification() {
+		_ = idx
 		syncCh <- &SyncUpdate{
 			Update: n,
 		}

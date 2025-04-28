@@ -1,10 +1,14 @@
 package types
 
 import (
+	"fmt"
 	"math"
+	"strings"
+
+	"github.com/sdcio/data-server/pkg/utils"
 )
 
-// UpdateSlice A slice of *cache.Update, that defines additional helper functions.
+// UpdateSlice A slice of *Update, that defines additional helper functions.
 type UpdateSlice []*Update
 
 func (u UpdateSlice) CopyWithNewOwnerAndPrio(owner string, prio int32) UpdateSlice {
@@ -14,6 +18,14 @@ func (u UpdateSlice) CopyWithNewOwnerAndPrio(owner string, prio int32) UpdateSli
 		x.SetOwner(owner)
 	}
 	return result
+}
+
+func (u UpdateSlice) String() string {
+	sb := &strings.Builder{}
+	for i, j := range u {
+		sb.WriteString(fmt.Sprintf("%d - %s -> %s\n", i, j.path.String(), utils.TypedValueToString(j.value)))
+	}
+	return sb.String()
 }
 
 func (u UpdateSlice) DeepCopy() UpdateSlice {

@@ -36,7 +36,8 @@ func NewConverter(scb SchemaClientBound) *Converter {
 
 func (c *Converter) ExpandUpdates(ctx context.Context, updates []*sdcpb.Update) ([]*sdcpb.Update, error) {
 	outUpdates := make([]*sdcpb.Update, 0, len(updates))
-	for _, upd := range updates {
+	for idx, upd := range updates {
+		_ = idx
 		expUpds, err := c.ExpandUpdate(ctx, upd)
 		if err != nil {
 			return nil, err
@@ -56,19 +57,42 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 
 	switch rsp := rsp.GetSchema().Schema.(type) {
 	case *sdcpb.SchemaElem_Container:
-		// if it is not a presence container and the value is nil,
-		// return without doing anything
-		if !rsp.Container.GetIsPresence() && upd.Value == nil {
+		if upd.Value == nil {
+			// if it is a presence container and no value is set, set upd value to EmptyVal
+			if rsp.Container.GetIsPresence() {
+				upd.Value = &sdcpb.TypedValue{
+					Value: &sdcpb.TypedValue_EmptyVal{},
+				}
+				return append(upds, upd), nil
+			}
+			if len(upd.Path.Elem) > 0 && len(upd.Path.Elem[len(upd.Path.Elem)-1].Key) > 0 {
+				newUpd := &sdcpb.Update{}
+				// if value is nil but the last path elem contains keys
+				for k, v := range upd.Path.Elem[len(upd.Path.Elem)-1].Key {
+					// deepcopy via marshall unmarshall
+					updBytes, err := proto.Marshal(upd)
+					if err != nil {
+						return nil, err
+					}
+					err = proto.Unmarshal(updBytes, newUpd)
+					if err != nil {
+						return nil, err
+					}
+					newUpd.Path.Elem = append(newUpd.Path.Elem, &sdcpb.PathElem{Name: k})
+					rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, newUpd.GetPath())
+					if err != nil {
+						return nil, err
+					}
+					newUpd.Value, err = ConvertToTypedValue(rsp.GetSchema(), v, 0)
+					if err != nil {
+						return nil, err
+					}
+				}
+				upds = append(upds, newUpd)
+				return upds, nil
+			}
 			return nil, nil
 		}
-
-		// if it is a presence container and no value is set, set upd value to EmptyVal
-		if rsp.Container.GetIsPresence() && upd.Value == nil {
-			upd.Value = &sdcpb.TypedValue{
-				Value: &sdcpb.TypedValue_EmptyVal{},
-			}
-		}
-
 		var v any
 		var err error
 		var jsonDecoder *json.Decoder

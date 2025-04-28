@@ -1658,7 +1658,7 @@ func (s *sharedEntryAttributes) getOrCreateChilds(ctx context.Context, path type
 	return e.getOrCreateChilds(ctx, path[1:])
 }
 
-// AddCacheUpdateRecursive recursively adds the given cache.Update to the tree. Thereby creating all the entries along the path.
+// AddUpdateRecursive recursively adds the given cache.Update to the tree. Thereby creating all the entries along the path.
 // if the entries along th path already exist, the existing entries are called to add the Update.
 func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error) {
 	idx := s.GetLevel()

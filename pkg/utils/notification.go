@@ -32,7 +32,8 @@ func ToSchemaNotification(n *gnmi.Notification) *sdcpb.Notification {
 	for _, del := range n.GetDelete() {
 		sn.Delete = append(sn.Delete, FromGNMIPath(n.GetPrefix(), del))
 	}
-	for _, upd := range n.GetUpdate() {
+	for idx, upd := range n.GetUpdate() {
+		_ = idx
 		scUpd := &sdcpb.Update{
 			Path:  FromGNMIPath(n.GetPrefix(), upd.GetPath()),
 			Value: FromGNMITypedValue(upd.GetVal()),

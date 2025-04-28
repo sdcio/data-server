@@ -20,11 +20,11 @@ const (
 
 // diffCacheUpdates takes two []*cache.Update and compares the diff
 func DiffUpdates(a, b []*types.Update) string {
-	return cmp.Diff(CacheUpdateSliceToStringSlice(a), CacheUpdateSliceToStringSlice(b))
+	return cmp.Diff(UpdateSliceToStringSlice(a), UpdateSliceToStringSlice(b))
 }
 
-// CacheUpdateSliceToStringSlice converts a []*cache.Update to []string
-func CacheUpdateSliceToStringSlice(s []*types.Update) []string {
+// UpdateSliceToStringSlice converts a []*Update to []string
+func UpdateSliceToStringSlice(s []*types.Update) []string {
 	result := make([]string, 0, len(s))
 	for _, e := range s {
 		result = append(result, fmt.Sprintf("%v", e))
