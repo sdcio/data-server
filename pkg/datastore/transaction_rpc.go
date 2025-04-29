@@ -125,7 +125,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 
 func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.RootEntry) ([]string, error) {
 
-	IntentNames := []string{}
+	intentNames := []string{}
 	IntentChan := make(chan *tree_persist.Intent, 0)
 	ErrChan := make(chan error, 1)
 
@@ -140,9 +140,9 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 		case intent, ok := <-IntentChan:
 			if !ok {
 				// IntentChan closed due to finish
-				return nil, nil
+				return intentNames, nil
 			}
-			IntentNames = append(IntentNames, intent.GetIntentName())
+			intentNames = append(intentNames, intent.GetIntentName())
 			log.Debugf("adding intent %s to tree", intent.GetIntentName())
 			protoLoader := treeproto.NewProtoTreeImporter(intent.GetRoot())
 			log.Tracef(intent.String())
