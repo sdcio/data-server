@@ -57,6 +57,14 @@ func (d *Datastore) applyIntent(ctx context.Context, source target.TargetSource)
 }
 
 func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntentResponse, error) {
+	// serve running from synctree
+	if intentName == tree.RunningIntentName {
+		d.syncTreeMutex.RLock()
+		defer d.syncTreeMutex.RUnlock()
+		return newTreeRootToGetIntentResponse(d.syncTree), nil
+	}
+
+	// otherwise consult cache
 	root, err := tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, intentName))
 	if err != nil {
 		return nil, err
