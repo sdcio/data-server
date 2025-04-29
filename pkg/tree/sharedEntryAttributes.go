@@ -239,8 +239,9 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 				}
 			}
 			_, err = child.AddUpdateRecursive(ctx, types.NewUpdate(keyPath, tv, prio, intentName, 0), types.NewUpdateInsertFlags())
-			return err
-
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
