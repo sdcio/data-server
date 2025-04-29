@@ -69,20 +69,17 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 				newUpd := &sdcpb.Update{}
 				// if value is nil but the last path elem contains keys
 				for k, v := range upd.Path.Elem[len(upd.Path.Elem)-1].Key {
+
 					// deepcopy via marshall unmarshall
-					updBytes, err := proto.Marshal(upd)
-					if err != nil {
-						return nil, err
-					}
-					err = proto.Unmarshal(updBytes, newUpd)
-					if err != nil {
-						return nil, err
-					}
+					newUpd = proto.Clone(upd).(*sdcpb.Update)
+
+					// adjust path
 					newUpd.Path.Elem = append(newUpd.Path.Elem, &sdcpb.PathElem{Name: k})
 					rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, newUpd.GetPath())
 					if err != nil {
 						return nil, err
 					}
+					// convert key string value to real typedvalue
 					newUpd.Value, err = ConvertToTypedValue(rsp.GetSchema(), v, 0)
 					if err != nil {
 						return nil, err
