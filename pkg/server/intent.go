@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -19,22 +20,20 @@ func (s *Server) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (
 	if err != nil {
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
+
 	resp := &sdcpb.ListIntentResponse{
 		DatastoreName: req.DatastoreName,
 	}
-
 	intentNames, err := ds.IntentsList(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	resp.Intent = intentNames
-
 	return resp, nil
-
 }
 
 func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*sdcpb.GetIntentResponse, error) {
+
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
 	}
@@ -42,7 +41,7 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 	if req.GetIntent() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing intent name")
 	}
-
+	log.Debugf("Received GetIntent: %v", req)
 	// retrieve the referenced datastore
 	ds, err := s.datastores.getDataStore(req.GetDatastoreName())
 	if err != nil {
