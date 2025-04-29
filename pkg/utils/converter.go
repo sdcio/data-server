@@ -220,13 +220,22 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		if numElems := len(p.GetElem()); numElems > 0 {
 			keysInPath = p.GetElem()[numElems-1].GetKey()
 		}
-		// // make sure all keys exist either in the JSON value or
-		// // in the path but NOT in both and build keySet
+		// make sure all keys exist either in the JSON value or
+		// in the path but NOT in both and build keySet
 		keySet := map[string]string{}
 		for _, k := range cs.Container.GetKeys() {
 			if v, ok := jv[k.Name]; ok {
 				if _, ok := keysInPath[k.Name]; ok {
 					return nil, fmt.Errorf("key %q is present in both the path and JSON value", k.Name)
+				}
+				// in case of json_ietf we need to cut the module prefix
+				if k.Type.Type == "identityref" {
+					val := v
+					found := false
+					_, val, found = strings.Cut(fmt.Sprintf("%v", v), ":")
+					if found {
+						v = val
+					}
 				}
 				keySet[k.Name] = fmt.Sprintf("%v", v)
 				continue
