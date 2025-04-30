@@ -11,15 +11,17 @@ import (
 )
 
 type LeafVariants struct {
-	les      []*LeafEntry
-	lesMutex sync.RWMutex
-	tc       *TreeContext
+	les         []*LeafEntry
+	lesMutex    sync.RWMutex
+	tc          *TreeContext
+	parentEntry Entry
 }
 
-func newLeafVariants(tc *TreeContext) *LeafVariants {
+func newLeafVariants(tc *TreeContext, parentEnty Entry) *LeafVariants {
 	return &LeafVariants{
-		les: make([]*LeafEntry, 0, 2),
-		tc:  tc,
+		les:         make([]*LeafEntry, 0, 2),
+		tc:          tc,
+		parentEntry: parentEnty,
 	}
 }
 
@@ -153,9 +155,10 @@ func (lv *LeafVariants) GetHighestPrecedenceValue(filter HighestPrecedenceFilter
 
 func (lv *LeafVariants) DeepCopy(tc *TreeContext, parent Entry) *LeafVariants {
 	result := &LeafVariants{
-		lesMutex: sync.RWMutex{},
-		tc:       tc,
-		les:      make([]*LeafEntry, 0, len(lv.les)),
+		lesMutex:    sync.RWMutex{},
+		tc:          tc,
+		les:         make([]*LeafEntry, 0, len(lv.les)),
+		parentEntry: parent,
 	}
 
 	lv.lesMutex.RLock()
@@ -247,6 +250,8 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 }
 
 func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
+	lv.lesMutex.RLock()
+	defer lv.lesMutex.RUnlock()
 	// if highes is already running or even default, return false
 	if highest.Update.Owner() == RunningIntentName {
 		return false
@@ -287,6 +292,8 @@ func (lv *LeafVariants) MarkOwnerForDeletion(owner string, onlyIntended bool) {
 }
 
 func (lv *LeafVariants) DeleteByOwner(owner string) (remainsToExist bool) {
+	lv.lesMutex.Lock()
+	defer lv.lesMutex.Unlock()
 	foundOwner := false
 	for i, l := range lv.les {
 		// early exit if condition is met
@@ -309,18 +316,21 @@ func (lv *LeafVariants) DeleteByOwner(owner string) (remainsToExist bool) {
 }
 
 func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveCase bool) {
+	lv.lesMutex.RLock()
+	defer lv.lesMutex.RUnlock()
+
 	if len(lv.les) == 0 {
 		return
 	}
 
 	// if it is a presence container that contains childs, skip
-	if lv.les[0].parentEntry.GetSchema().GetContainer().GetIsPresence() && len(lv.les[0].parentEntry.getChildren()) > 0 {
+	if lv.parentEntry.GetSchema().GetContainer().GetIsPresence() && len(lv.parentEntry.getChildren()) > 0 {
 		return
 	}
 
 	// get the path via the first LeafEntry
 	// is valida for all entries
-	sdcpbPath, err := lv.les[0].parentEntry.SdcpbPath()
+	sdcpbPath, err := lv.parentEntry.SdcpbPath()
 	if err != nil {
 		log.Error(err)
 	}

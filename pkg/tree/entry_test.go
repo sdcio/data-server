@@ -724,7 +724,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// because thats an update.
 	t.Run("Delete Non New",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{})
+			lv := newLeafVariants(&TreeContext{}, nil)
 
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 2, owner1, ts), flagsExisting, nil))
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 1, owner2, ts), flagsExisting, nil))
@@ -743,7 +743,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// should return nil
 	t.Run("Single entry thats also marked for deletion",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{})
+			lv := newLeafVariants(&TreeContext{}, nil)
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 1, owner1, ts), flagsExisting, nil))
 			lv.les[0].MarkDelete(false)
 
@@ -759,7 +759,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// on onlyIfPrioChanged == true we do not expect output.
 	t.Run("New Low Prio IsUpdate OnlyChanged True",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{})
+			lv := newLeafVariants(&TreeContext{}, nil)
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, RunningValuesPrio, RunningIntentName, ts), flagsExisting, nil))
@@ -776,7 +776,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// on onlyIfPrioChanged == false we do not expect the highes prio update to be returned.
 	t.Run("New Low Prio IsUpdate OnlyChanged False",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{})
+			lv := newLeafVariants(&TreeContext{}, nil)
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 6, owner1, ts), flagsNew, nil))
 
@@ -792,7 +792,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// // on onlyIfPrioChanged == true we do not expect output.
 	t.Run("New Low Prio IsNew OnlyChanged == True",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{})
+			lv := newLeafVariants(&TreeContext{}, nil)
 
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
@@ -810,7 +810,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// // on onlyIfPrioChanged == true we do not expect output.
 	t.Run("New Low Prio IsNew OnlyChanged == True, with running not existing",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{})
+			lv := newLeafVariants(&TreeContext{}, nil)
 
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
@@ -825,7 +825,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 
 	t.Run("New Low Prio IsNew OnlyChanged == False",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{})
+			lv := newLeafVariants(&TreeContext{}, nil)
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
 
@@ -853,7 +853,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// make sure the secondhighes is also populated if the highes was the first entry
 	t.Run("secondhighes populated if highes was first",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{})
+			lv := newLeafVariants(&TreeContext{}, nil)
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 1, owner1, ts), flagsExisting, nil))
 			lv.les[0].MarkDelete(false)
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 2, owner2, ts), flagsExisting, nil))

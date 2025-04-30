@@ -87,9 +87,9 @@ func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName st
 		parent:       parent,
 		pathElemName: pathElemName,
 		childs:       newChildMap(),
-		leafVariants: newLeafVariants(tc),
 		treeContext:  tc,
 	}
+	s.leafVariants = newLeafVariants(tc, s)
 
 	// populate the schema
 	err := s.populateSchema(ctx)
