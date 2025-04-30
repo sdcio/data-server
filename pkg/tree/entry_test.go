@@ -8,37 +8,32 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
-	"google.golang.org/protobuf/proto"
 )
 
 var (
-	flagsNew         *UpdateInsertFlags
-	flagsExisting    *UpdateInsertFlags
-	validationConfig *config.Validation
+	flagsNew         *types.UpdateInsertFlags
+	flagsExisting    *types.UpdateInsertFlags
+	validationConfig = &config.Validation{DisableConcurrency: true}
 )
 
 func init() {
-	flagsNew = NewUpdateInsertFlags()
+	flagsNew = types.NewUpdateInsertFlags()
 	flagsNew.SetNewFlag()
-	flagsExisting = NewUpdateInsertFlags()
-	validationConfig = &config.Validation{DisableConcurrency: true}
+	flagsExisting = types.NewUpdateInsertFlags()
 }
 
 func Test_Entry(t *testing.T) {
 
-	desc, err := proto.Marshal(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "MyDescription"}})
-	if err != nil {
-		t.Error(err)
-	}
+	desc := testhelper.GetStringTvProto("MyDescription")
 
-	u1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "9", "description"}, desc, int32(100), "me", int64(9999999))
-	u2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc, int32(99), "me", int64(444))
-	u3 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc, int32(98), "me", int64(88))
+	u1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "9", "description"}, desc, int32(100), "me", int64(9999999))
+	u2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc, int32(99), "me", int64(444))
+	u3 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc, int32(98), "me", int64(88))
 
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -50,21 +45,24 @@ func Test_Entry(t *testing.T) {
 
 	ctx := context.TODO()
 
-	tc := NewTreeContext(NewTreeCacheClient("dev1", nil), scb, "foo")
+	tc := NewTreeContext(scb, "foo")
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
 		t.Error(err)
 	}
 
-	for _, u := range []*cache.Update{u1, u2, u3} {
-		_, err = root.AddCacheUpdateRecursive(ctx, u, flagsNew)
+	for _, u := range []*types.Update{u1, u2, u3} {
+		_, err = root.AddUpdateRecursive(ctx, u, flagsNew)
 		if err != nil {
 			t.Error(err)
 		}
 	}
 
-	root.FinishInsertionPhase(ctx)
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Error(err)
+	}
 
 	r := []string{}
 	r = root.StringIndent(r)
@@ -72,9 +70,9 @@ func Test_Entry(t *testing.T) {
 }
 
 func Test_Entry_One(t *testing.T) {
-	desc1 := testhelper.GetStringTvProto(t, "DescriptionOne")
-	desc2 := testhelper.GetStringTvProto(t, "DescriptionTwo")
-	desc3 := testhelper.GetStringTvProto(t, "DescriptionThree")
+	desc1 := testhelper.GetStringTvProto("DescriptionOne")
+	desc2 := testhelper.GetStringTvProto("DescriptionTwo")
+	desc3 := testhelper.GetStringTvProto("DescriptionThree")
 
 	prio100 := int32(100)
 	prio50 := int32(50)
@@ -84,9 +82,14 @@ func Test_Entry_One(t *testing.T) {
 
 	ts1 := int64(9999999)
 
-	u1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "9", "description"}, desc1, prio100, owner1, ts1)
-	u2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc2, prio100, owner1, ts1)
-	u3 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner2, ts1)
+	u0o1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio100, owner1, ts1)
+	u0o2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner2, ts1)
+	u1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "9", "description"}, desc1, prio100, owner1, ts1)
+	u1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "9", "index"}, testhelper.GetUIntTvProto(9), prio100, owner1, ts1)
+	u2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc2, prio100, owner1, ts1)
+	u2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(10), prio100, owner1, ts1)
+	u3 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc3, prio50, owner2, ts1)
+	u3_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(10), prio50, owner2, ts1)
 
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -98,7 +101,7 @@ func Test_Entry_One(t *testing.T) {
 
 	ctx := context.TODO()
 
-	tc := NewTreeContext(NewTreeCacheClient("dev1", nil), scb, "foo")
+	tc := NewTreeContext(scb, "foo")
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -106,34 +109,37 @@ func Test_Entry_One(t *testing.T) {
 	}
 
 	// start test
-	for _, u := range []*cache.Update{u1, u2, u3} {
-		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsNew)
+	for _, u := range []*types.Update{u0o1, u1, u1_1, u2, u2_1, u3, u3_1} {
+		_, err := root.AddUpdateRecursive(ctx, u, flagsNew)
 		if err != nil {
 			t.Error(err)
 		}
 	}
 
-	root.FinishInsertionPhase(ctx)
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Error(err)
+	}
 
 	// log the tree
 	t.Log(root.String())
 
-	t.Run("Test 1 - expect 2 entry for owner1", func(t *testing.T) {
+	t.Run("Test 1 - expected entries for owner1", func(t *testing.T) {
 		o1Le := []*LeafEntry{}
 		o1Le = root.GetByOwner(owner1, o1Le)
-		o1 := LeafEntriesToCacheUpdates(o1Le)
+		o1 := LeafEntriesToUpdates(o1Le)
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u2, u1}, o1); diff != "" {
+		if diff := testhelper.DiffUpdates([]*types.Update{u0o1, u2, u2_1, u1, u1_1}, o1); diff != "" {
 			t.Errorf("root.GetByOwner(owner1) mismatch (-want +got):\n%s", diff)
 		}
 	})
 
-	t.Run("Test 2 - expect 1 entry for owner2", func(t *testing.T) {
+	t.Run("Test 2 - expected entries for owner2", func(t *testing.T) {
 		o2Le := []*LeafEntry{}
 		o2Le = root.GetByOwner(owner2, o2Le)
-		o2 := LeafEntriesToCacheUpdates(o2Le)
+		o2 := LeafEntriesToUpdates(o2Le)
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u3}, o2); diff != "" {
+		if diff := testhelper.DiffUpdates([]*types.Update{u0o2, u3_1, u3}, o2); diff != "" {
 			t.Errorf("root.GetByOwner(owner2) mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -142,7 +148,7 @@ func Test_Entry_One(t *testing.T) {
 
 		highprec := root.GetHighestPrecedence(true)
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1, u3}, highprec.ToCacheUpdateSlice()); diff != "" {
+		if diff := testhelper.DiffUpdates([]*types.Update{u0o2, u1, u1_1, u3, u3_1}, highprec.ToUpdateSlice()); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -151,11 +157,13 @@ func Test_Entry_One(t *testing.T) {
 // Test_Entry_Two adding a new Update with same owner and priority but updating the value
 func Test_Entry_Two(t *testing.T) {
 
-	desc3 := testhelper.GetStringTvProto(t, "DescriptionThree")
+	desc3 := testhelper.GetStringTvProto("DescriptionThree")
 	prio50 := int32(50)
 	owner1 := "OwnerOne"
 	ts1 := int64(9999999)
-	u1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
+	u0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
+	u1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
+	u1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(10), prio50, owner1, ts1)
 
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -167,7 +175,7 @@ func Test_Entry_Two(t *testing.T) {
 
 	ctx := context.TODO()
 
-	tc := NewTreeContext(NewTreeCacheClient("dev1", nil), scb, "foo")
+	tc := NewTreeContext(scb, "foo")
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -175,53 +183,61 @@ func Test_Entry_Two(t *testing.T) {
 	}
 
 	// start test add "existing" data
-	for _, u := range []*cache.Update{u1} {
-		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsExisting)
+	for _, u := range []*types.Update{u1} {
+		_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
 		if err != nil {
 			t.Error(err)
 		}
 	}
 
 	// add incomming set intent reques data
-	overwriteDesc := testhelper.GetStringTvProto(t, "Owerwrite Description")
+	overwriteDesc := testhelper.GetStringTvProto("Owerwrite Description")
 
 	// adding a new Update with same owner and priority with different value
-	n1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
+	n1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
 
-	for _, u := range []*cache.Update{n1} {
-		_, err = root.AddCacheUpdateRecursive(ctx, u, flagsNew)
+	for _, u := range []*types.Update{n1} {
+		_, err = root.AddUpdateRecursive(ctx, u, flagsNew)
 		if err != nil {
 			t.Error(err)
 		}
 	}
 
-	root.FinishInsertionPhase(ctx)
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Error(err)
+	}
 
 	// log the tree
 	t.Log(root.String())
 	highprec := root.GetHighestPrecedence(true)
 
 	// diff the result with the expected
-	if diff := testhelper.DiffCacheUpdates([]*cache.Update{n1}, highprec.ToCacheUpdateSlice()); diff != "" {
+	if diff := testhelper.DiffUpdates([]*types.Update{n1, u0, u1_1}, highprec.ToUpdateSlice()); diff != "" {
 		t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 	}
 }
 
 // Test_Entry_Three Checks that an Intent update is processed properly
 func Test_Entry_Three(t *testing.T) {
-	desc3 := testhelper.GetStringTvProto(t, "DescriptionThree")
+	desc3 := testhelper.GetStringTvProto("DescriptionThree")
 	prio50 := int32(50)
 	owner1 := "OwnerOne"
 	ts1 := int64(9999999)
-	u1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
-	u2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "11", "description"}, desc3, prio50, owner1, ts1)
-	u3 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "12", "description"}, desc3, prio50, owner1, ts1)
-	u4 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
+	u0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
+	u1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
+	u1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(10), prio50, owner1, ts1)
+	u2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "description"}, desc3, prio50, owner1, ts1)
+	u2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "index"}, testhelper.GetUIntTvProto(11), prio50, owner1, ts1)
+	u3 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "12", "description"}, desc3, prio50, owner1, ts1)
+	u3_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "12", "index"}, testhelper.GetUIntTvProto(12), prio50, owner1, ts1)
+	u4 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
+	u4_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "13", "index"}, testhelper.GetUIntTvProto(13), prio50, owner1, ts1)
 
-	u1r := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc3, RunningValuesPrio, RunningIntentName, ts1)
-	u2r := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "11", "description"}, desc3, RunningValuesPrio, RunningIntentName, ts1)
-	u3r := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "12", "description"}, desc3, RunningValuesPrio, RunningIntentName, ts1)
-	u4r := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "13", "description"}, desc3, RunningValuesPrio, RunningIntentName, ts1)
+	u1r := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc3, RunningValuesPrio, RunningIntentName, ts1)
+	u2r := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "description"}, desc3, RunningValuesPrio, RunningIntentName, ts1)
+	u3r := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "12", "description"}, desc3, RunningValuesPrio, RunningIntentName, ts1)
+	u4r := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "13", "description"}, desc3, RunningValuesPrio, RunningIntentName, ts1)
 
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -233,7 +249,7 @@ func Test_Entry_Three(t *testing.T) {
 
 	ctx := context.TODO()
 
-	tc := NewTreeContext(NewTreeCacheClient("dev1", nil), scb, "foo")
+	tc := NewTreeContext(scb, "foo")
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -241,22 +257,25 @@ func Test_Entry_Three(t *testing.T) {
 	}
 
 	// start test add "existing" data
-	for _, u := range []*cache.Update{u1, u2, u3, u4} {
-		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsExisting)
+	for _, u := range []*types.Update{u1, u2, u3, u4} {
+		_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
 		if err != nil {
 			t.Error(err)
 		}
 	}
 
 	// start test add "existing" data as running
-	for _, u := range []*cache.Update{u1r, u2r, u3r, u4r} {
-		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsExisting)
+	for _, u := range []*types.Update{u1r, u2r, u3r, u4r} {
+		_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
 		if err != nil {
 			t.Error(err)
 		}
 	}
 
-	root.FinishInsertionPhase(ctx)
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Error(err)
+	}
 
 	t.Run("Check the data is present", func(t *testing.T) {
 
@@ -266,7 +285,7 @@ func Test_Entry_Three(t *testing.T) {
 		highpri := root.GetHighestPrecedence(false)
 
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1, u2, u3, u4}, highpri.ToCacheUpdateSlice()); diff != "" {
+		if diff := testhelper.DiffUpdates([]*types.Update{u0, u1, u1_1, u2, u2_1, u3, u3_1, u4, u4_1}, highpri.ToUpdateSlice()); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -279,30 +298,33 @@ func Test_Entry_Three(t *testing.T) {
 		highpri := root.GetHighestPrecedence(true)
 
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{}, highpri.ToCacheUpdateSlice()); diff != "" {
+		if diff := testhelper.DiffUpdates([]*types.Update{}, highpri.ToUpdateSlice()); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
 
 	// indicate that the intent is receiving an update
 	// therefor invalidate all the present entries of the owner / intent
-	root.markOwnerDelete(owner1, false)
+	root.MarkOwnerDelete(owner1, false)
 
 	// add incomming set intent reques data
-	overwriteDesc := testhelper.GetStringTvProto(t, "Owerwrite Description")
+	overwriteDesc := testhelper.GetStringTvProto("Owerwrite Description")
 
 	// adding a new Update with same owner and priority with different value
-	n1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
-	n2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "11", "description"}, overwriteDesc, prio50, owner1, ts1)
+	n1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
+	n2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "description"}, overwriteDesc, prio50, owner1, ts1)
 
-	for _, u := range []*cache.Update{n1, n2} {
-		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsNew)
+	for _, u := range []*types.Update{n1, n2} {
+		_, err := root.AddUpdateRecursive(ctx, u, flagsNew)
 		if err != nil {
 			t.Error(err)
 		}
 	}
 
-	root.FinishInsertionPhase(ctx)
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Error(err)
+	}
 
 	// log the tree
 	t.Log(root.String())
@@ -314,10 +336,10 @@ func Test_Entry_Three(t *testing.T) {
 
 		highPriLe := root.getByOwnerFiltered(owner1, FilterNonDeleted)
 
-		highPri := LeafEntriesToCacheUpdates(highPriLe)
+		highPri := LeafEntriesToUpdates(highPriLe)
 
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{n1, n2}, highPri); diff != "" {
+		if diff := testhelper.DiffUpdates([]*types.Update{n1, n2}, highPri); diff != "" {
 			t.Errorf("root.GetByOwner() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -325,7 +347,7 @@ func Test_Entry_Three(t *testing.T) {
 	t.Run("Check the old entries are gone", func(t *testing.T) {
 		highpri := root.GetHighestPrecedence(true)
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{n1, n2}, highpri.ToCacheUpdateSlice()); diff != "" {
+		if diff := testhelper.DiffUpdates([]*types.Update{n1, n2}, highpri.ToUpdateSlice()); diff != "" {
 			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -334,20 +356,28 @@ func Test_Entry_Three(t *testing.T) {
 
 // Test_Entry_Four Checks that an Intent update is processed properly with an intent that is shadowed initially.
 func Test_Entry_Four(t *testing.T) {
-	desc3 := testhelper.GetStringTvProto(t, "DescriptionThree")
+	desc3 := testhelper.GetStringTvProto("DescriptionThree")
 	prio50 := int32(50)
 	prio55 := int32(55)
 	owner1 := "OwnerOne"
 	owner2 := "OwnerTwo"
 	ts1 := int64(9999999)
 
-	u1o1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
-	u2o1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "11", "description"}, desc3, prio50, owner1, ts1)
-	u3 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "12", "description"}, desc3, prio50, owner1, ts1)
-	u4 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
+	u1o1_0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
+	u1o1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc3, prio50, owner1, ts1)
+	u1o1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(10), prio50, owner1, ts1)
+	u2o1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "description"}, desc3, prio50, owner1, ts1)
+	u2o1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "index"}, testhelper.GetUIntTvProto(11), prio50, owner1, ts1)
+	u3 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "12", "description"}, desc3, prio50, owner1, ts1)
+	u3_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "12", "index"}, testhelper.GetUIntTvProto(12), prio50, owner1, ts1)
+	u4 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
+	u4_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "13", "index"}, testhelper.GetUIntTvProto(13), prio50, owner1, ts1)
 
-	u1o2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "10", "description"}, desc3, prio55, owner2, ts1)
-	u2o2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "11", "description"}, desc3, prio55, owner2, ts1)
+	u1o2_0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio55, owner2, ts1)
+	u1o2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc3, prio55, owner2, ts1)
+	u1o2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(10), prio55, owner2, ts1)
+	u2o2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "description"}, desc3, prio55, owner2, ts1)
+	u2o2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "index"}, testhelper.GetUIntTvProto(11), prio55, owner2, ts1)
 
 	ctx := context.TODO()
 
@@ -359,7 +389,7 @@ func Test_Entry_Four(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tc := NewTreeContext(NewTreeCacheClient("dev1", nil), scb, "foo")
+	tc := NewTreeContext(scb, "foo")
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -367,14 +397,17 @@ func Test_Entry_Four(t *testing.T) {
 	}
 
 	// start test add "existing" data
-	for _, u := range []*cache.Update{u1o1, u2o1, u3, u4, u1o2, u2o2} {
-		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsExisting)
+	for _, u := range []*types.Update{u1o1, u2o1, u1o1_1, u2o1_1, u3, u4, u3_1, u4_1, u1o2, u2o2} {
+		_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
 		if err != nil {
 			t.Error(err)
 		}
 	}
 
-	root.FinishInsertionPhase(ctx)
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Error(err)
+	}
 
 	t.Run("Check the data is present", func(t *testing.T) {
 
@@ -384,29 +417,35 @@ func Test_Entry_Four(t *testing.T) {
 		highprec := root.GetHighestPrecedence(false)
 
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1o1, u2o1, u3, u4}, highprec.ToCacheUpdateSlice()); diff != "" {
-			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
+		if diff := testhelper.DiffUpdates([]*types.Update{u1o1_0, u1o1, u2o1, u3, u4, u1o1_1, u2o1_1, u3_1, u4_1}, highprec.ToUpdateSlice()); diff != "" {
+			t.Errorf("root.GetHighestPrecedence() mismatch (-want +got):\n%s", diff)
 		}
 	})
 
 	// indicate that the intent is receiving an update
 	// therefor invalidate all the present entries of the owner / intent
-	root.markOwnerDelete(owner1, false)
+	root.MarkOwnerDelete(owner1, false)
 
 	// add incomming set intent reques data
-	overwriteDesc := testhelper.GetStringTvProto(t, "Owerwrite Description")
+	overwriteDesc := testhelper.GetStringTvProto("Owerwrite Description")
 
 	// adding a new Update with same owner and priority with different value
-	n1 := cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
-	n2 := cache.NewUpdate([]string{"interface", "ethernet-0/1", "subinterface", "11", "description"}, overwriteDesc, prio50, owner1, ts1)
+	//n0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio50, owner1, ts1)
+	// n1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetIntTvProto(t, 10), prio50, owner1, ts1)
+	n1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, overwriteDesc, prio50, owner1, ts1)
+	// n2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "index"}, testhelper.GetIntTvProto(t, 11), prio50, owner1, ts1)
+	n2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "description"}, overwriteDesc, prio50, owner1, ts1)
 
-	for _, u := range []*cache.Update{n1, n2} {
-		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsNew)
+	for _, u := range []*types.Update{n1, n2} {
+		_, err := root.AddUpdateRecursive(ctx, u, flagsNew)
 		if err != nil {
 			t.Error(err)
 		}
 	}
-	root.FinishInsertionPhase(ctx)
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Error(err)
+	}
 
 	// log the tree
 	t.Log(root.String())
@@ -418,27 +457,27 @@ func Test_Entry_Four(t *testing.T) {
 
 		highPriLe := root.getByOwnerFiltered(owner1, FilterNonDeleted)
 
-		highPri := LeafEntriesToCacheUpdates(highPriLe)
+		highPri := LeafEntriesToUpdates(highPriLe)
 
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{n1, n2}, highPri); diff != "" {
+		if diff := testhelper.DiffUpdates([]*types.Update{n1, n2}, highPri); diff != "" {
 			t.Errorf("root.GetByOwner() mismatch (-want +got):\n%s", diff)
 		}
 	})
 
 	t.Run("Check the old entries are gone from highest", func(t *testing.T) {
-		highpri := root.GetHighestPrecedence(true)
+		highpri := root.GetHighestPrecedence(false)
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{n1, n2, u1o2, u2o2}, highpri.ToCacheUpdateSlice()); diff != "" {
-			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
+		if diff := testhelper.DiffUpdates([]*types.Update{u1o1_0, n1, n2, u2o1_1, u1o1_1, u3, u3_1, u4, u4_1}, highpri.ToUpdateSlice()); diff != "" {
+			t.Errorf("root.GetHighestPrecedence() mismatch (-want +got):\n%s", diff)
 		}
 	})
 
-	t.Run("Check the old entries are gone from highest (only New Or Updated)", func(t *testing.T) {
+	t.Run("Check the old entries are gone from highest (Only New Or Updated)", func(t *testing.T) {
 		highpri := root.GetHighestPrecedence(true)
 		// diff the result with the expected
-		if diff := testhelper.DiffCacheUpdates([]*cache.Update{u1o2, u2o2, n1, n2}, highpri.ToCacheUpdateSlice()); diff != "" {
-			t.Errorf("root.GetHighesPrio() mismatch (-want +got):\n%s", diff)
+		if diff := testhelper.DiffUpdates([]*types.Update{u1o2_0, n1, n2, u2o2_1, u1o2_1}, highpri.ToUpdateSlice()); diff != "" {
+			t.Errorf("root.GetHighestPrecedence() mismatch (-want +got):\n%s", diff)
 		}
 	})
 }
@@ -460,13 +499,13 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 	t.Run("Test Leaflist min- & max- elements - One",
 		func(t *testing.T) {
 
-			tc := NewTreeContext(NewTreeCacheClient("dev1", nil), scb, owner1)
+			tc := NewTreeContext(scb, owner1)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			leaflistval := testhelper.GetLeafListTvProto(t,
+			leaflistval := testhelper.GetLeafListTvProto(
 				[]*sdcpb.TypedValue{
 					{
 						Value: &sdcpb.TypedValue_StringVal{StringVal: "data"},
@@ -474,17 +513,20 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				},
 			)
 
-			u1 := cache.NewUpdate([]string{"leaflist", "entry"}, leaflistval, prio50, owner1, ts1)
+			u1 := types.NewUpdate([]string{"leaflist", "entry"}, leaflistval, prio50, owner1, ts1)
 
 			// start test add "existing" data
-			for _, u := range []*cache.Update{u1} {
-				_, err := root.AddCacheUpdateRecursive(ctx, u, flagsExisting)
+			for _, u := range []*types.Update{u1} {
+				_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
 
-			root.FinishInsertionPhase(ctx)
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
 
 			t.Log(root.String())
 
@@ -501,13 +543,13 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 	t.Run("Test Leaflist min- & max- elements - Two",
 		func(t *testing.T) {
-			tc := NewTreeContext(NewTreeCacheClient("dev1", nil), scb, owner1)
+			tc := NewTreeContext(scb, owner1)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			leaflistval := testhelper.GetLeafListTvProto(t,
+			leaflistval := testhelper.GetLeafListTvProto(
 				[]*sdcpb.TypedValue{
 					{
 						Value: &sdcpb.TypedValue_StringVal{StringVal: "data1"},
@@ -518,11 +560,11 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				},
 			)
 
-			u1 := cache.NewUpdate([]string{"leaflist", "entry"}, leaflistval, prio50, owner1, ts1)
+			u1 := types.NewUpdate([]string{"leaflist", "entry"}, leaflistval, prio50, owner1, ts1)
 
 			// start test add "existing" data
-			for _, u := range []*cache.Update{u1} {
-				_, err := root.AddCacheUpdateRecursive(ctx, u, flagsExisting)
+			for _, u := range []*types.Update{u1} {
+				_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -541,13 +583,13 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 	t.Run("Test Leaflist min- & max- elements - Four",
 		func(t *testing.T) {
 
-			tc := NewTreeContext(NewTreeCacheClient("dev1", nil), scb, owner1)
+			tc := NewTreeContext(scb, owner1)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			leaflistval := testhelper.GetLeafListTvProto(t,
+			leaflistval := testhelper.GetLeafListTvProto(
 				[]*sdcpb.TypedValue{
 					{
 						Value: &sdcpb.TypedValue_StringVal{StringVal: "data1"},
@@ -564,11 +606,11 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				},
 			)
 
-			u1 := cache.NewUpdate([]string{"leaflist", "entry"}, leaflistval, prio50, owner1, ts1)
+			u1 := types.NewUpdate([]string{"leaflist", "entry"}, leaflistval, prio50, owner1, ts1)
 
 			// start test add "existing" data
-			for _, u := range []*cache.Update{u1} {
-				_, err := root.AddCacheUpdateRecursive(ctx, u, flagsExisting)
+			for _, u := range []*types.Update{u1} {
+				_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -587,17 +629,17 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 }
 
 func Test_Entry_Delete_Aggregation(t *testing.T) {
-	desc3 := testhelper.GetStringTvProto(t, "DescriptionThree")
+	desc3 := testhelper.GetStringTvProto("DescriptionThree")
 	prio50 := int32(50)
 	owner1 := "OwnerOne"
 	ts1 := int64(9999999)
 
-	u1 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "description"}, desc3, prio50, owner1, ts1)
-	u2 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/0"), prio50, owner1, ts1)
-	u3 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "0", "index"}, testhelper.GetStringTvProto(t, "0"), prio50, owner1, ts1)
-	u4 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "0", "description"}, desc3, prio50, owner1, ts1)
-	u5 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "index"}, testhelper.GetStringTvProto(t, "1"), prio50, owner1, ts1)
-	u6 := cache.NewUpdate([]string{"interface", "ethernet-0/0", "subinterface", "1", "description"}, desc3, prio50, owner1, ts1)
+	u1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, desc3, prio50, owner1, ts1)
+	u2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
+	u3 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "0", "index"}, testhelper.GetUIntTvProto(0), prio50, owner1, ts1)
+	u4 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "0", "description"}, desc3, prio50, owner1, ts1)
+	u5 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "index"}, testhelper.GetUIntTvProto(1), prio50, owner1, ts1)
+	u6 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "1", "description"}, desc3, prio50, owner1, ts1)
 
 	ctx := context.TODO()
 	mockCtrl := gomock.NewController(t)
@@ -608,7 +650,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tc := NewTreeContext(NewTreeCacheClient("dev1", nil), scb, "foo")
+	tc := NewTreeContext(scb, "foo")
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -616,28 +658,33 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	}
 
 	// start test add "existing" data
-	for _, u := range []*cache.Update{u1, u2, u3, u4, u5, u6} {
-		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsExisting)
+	for _, u := range []*types.Update{u1, u2, u3, u4, u5, u6} {
+		_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	// get ready to add the new intent data
-	root.markOwnerDelete(owner1, false)
+	root.MarkOwnerDelete(owner1, false)
 
-	u1n := cache.NewUpdate([]string{"interface", "ethernet-0/1", "description"}, desc3, prio50, owner1, ts1)
-	u2n := cache.NewUpdate([]string{"interface", "ethernet-0/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-0/1"), prio50, owner1, ts1)
+	u1n := types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, desc3, prio50, owner1, ts1)
+	u2n := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
 
 	// start test add "new" / request data
-	for _, u := range []*cache.Update{u1n, u2n} {
-		_, err := root.AddCacheUpdateRecursive(ctx, u, flagsNew)
+	for _, u := range []*types.Update{u1n, u2n} {
+		_, err := root.AddUpdateRecursive(ctx, u, flagsNew)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	root.FinishInsertionPhase(ctx)
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Log(root.String())
 
 	// retrieve the Deletes
 	deletesSlices, err := root.GetDeletes(true)
@@ -653,7 +700,8 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 
 	// define the expected result
 	expects := []string{
-		"interface/ethernet-0/0",
+		"interface/ethernet-1/1/subinterface/0",
+		"interface/ethernet-1/1/subinterface/1",
 	}
 	// sort both slices for equality check
 	slices.Sort(deletes)
@@ -676,10 +724,10 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// because thats an update.
 	t.Run("Delete Non New",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{})
+			lv := newLeafVariants(&TreeContext{}, nil)
 
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 2, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 1, owner2, ts), flagsExisting, nil))
+			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 2, owner1, ts), flagsExisting, nil))
+			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 1, owner2, ts), flagsExisting, nil))
 			lv.les[1].MarkDelete(false)
 
 			le := lv.GetHighestPrecedence(true, false)
@@ -695,8 +743,8 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// should return nil
 	t.Run("Single entry thats also marked for deletion",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{})
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 1, owner1, ts), flagsExisting, nil))
+			lv := newLeafVariants(&TreeContext{}, nil)
+			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 1, owner1, ts), flagsExisting, nil))
 			lv.les[0].MarkDelete(false)
 
 			le := lv.GetHighestPrecedence(true, false)
@@ -711,10 +759,10 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// on onlyIfPrioChanged == true we do not expect output.
 	t.Run("New Low Prio IsUpdate OnlyChanged True",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{})
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, RunningValuesPrio, RunningIntentName, ts), flagsExisting, nil))
+			lv := newLeafVariants(&TreeContext{}, nil)
+			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
+			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
+			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, RunningValuesPrio, RunningIntentName, ts), flagsExisting, nil))
 
 			le := lv.GetHighestPrecedence(true, false)
 
@@ -728,9 +776,9 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// on onlyIfPrioChanged == false we do not expect the highes prio update to be returned.
 	t.Run("New Low Prio IsUpdate OnlyChanged False",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{})
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner1, ts), flagsNew, nil))
+			lv := newLeafVariants(&TreeContext{}, nil)
+			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
+			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 6, owner1, ts), flagsNew, nil))
 
 			le := lv.GetHighestPrecedence(false, false)
 
@@ -744,11 +792,11 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// // on onlyIfPrioChanged == true we do not expect output.
 	t.Run("New Low Prio IsNew OnlyChanged == True",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{})
+			lv := newLeafVariants(&TreeContext{}, nil)
 
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, RunningValuesPrio, RunningIntentName, ts), flagsExisting, nil))
+			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
+			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
+			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, RunningValuesPrio, RunningIntentName, ts), flagsExisting, nil))
 
 			le := lv.GetHighestPrecedence(true, false)
 
@@ -762,10 +810,10 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// // on onlyIfPrioChanged == true we do not expect output.
 	t.Run("New Low Prio IsNew OnlyChanged == True, with running not existing",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{})
+			lv := newLeafVariants(&TreeContext{}, nil)
 
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
+			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
+			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
 
 			le := lv.GetHighestPrecedence(true, false)
 
@@ -777,9 +825,9 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 
 	t.Run("New Low Prio IsNew OnlyChanged == False",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{})
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
+			lv := newLeafVariants(&TreeContext{}, nil)
+			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
+			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
 
 			le := lv.GetHighestPrecedence(false, false)
 
@@ -805,10 +853,10 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// make sure the secondhighes is also populated if the highes was the first entry
 	t.Run("secondhighes populated if highes was first",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{})
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 1, owner1, ts), flagsExisting, nil))
+			lv := newLeafVariants(&TreeContext{}, nil)
+			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 1, owner1, ts), flagsExisting, nil))
 			lv.les[0].MarkDelete(false)
-			lv.Add(NewLeafEntry(cache.NewUpdate(path, nil, 2, owner2, ts), flagsExisting, nil))
+			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 2, owner2, ts), flagsExisting, nil))
 
 			le := lv.GetHighestPrecedence(true, false)
 
@@ -863,7 +911,7 @@ func Test_Schema_Population(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tc := NewTreeContext(NewTreeCacheClient("dev1", nil), scb, "foo")
+	tc := NewTreeContext(scb, "foo")
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -876,11 +924,11 @@ func Test_Schema_Population(t *testing.T) {
 	}
 	expectNotNil(t, interf.schema, "/interface schema")
 
-	e00, err := newSharedEntryAttributes(ctx, interf, "ethernet-0/0", tc)
+	e00, err := newSharedEntryAttributes(ctx, interf, "ethernet-1/1", tc)
 	if err != nil {
 		t.Error(err)
 	}
-	expectNil(t, e00.schema, "/interface/ethernet-0/0 schema")
+	expectNil(t, e00.schema, "/interface/ethernet-1/1 schema")
 
 	dk, err := newSharedEntryAttributes(ctx, root.sharedEntryAttributes, "doublekey", tc)
 	if err != nil {
@@ -918,7 +966,7 @@ func Test_sharedEntryAttributes_SdcpbPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tc := NewTreeContext(NewTreeCacheClient("dev1", nil), scb, "foo")
+	tc := NewTreeContext(scb, "foo")
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -930,7 +978,7 @@ func Test_sharedEntryAttributes_SdcpbPath(t *testing.T) {
 		t.Error(err)
 	}
 
-	e00, err := newSharedEntryAttributes(ctx, interf, "ethernet-0/0", tc)
+	e00, err := newSharedEntryAttributes(ctx, interf, "ethernet-1/1", tc)
 	if err != nil {
 		t.Error(err)
 	}
@@ -971,7 +1019,7 @@ func Test_sharedEntryAttributes_SdcpbPath(t *testing.T) {
 					{
 						Name: "interface",
 						Key: map[string]string{
-							"name": "ethernet-0/0",
+							"name": "ethernet-1/1",
 						},
 					},
 				},
@@ -992,7 +1040,7 @@ func Test_sharedEntryAttributes_SdcpbPath(t *testing.T) {
 					{
 						Name: "interface",
 						Key: map[string]string{
-							"name": "ethernet-0/0",
+							"name": "ethernet-1/1",
 						},
 					},
 					{
@@ -1045,7 +1093,7 @@ func Test_sharedEntryAttributes_getKeyName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tc := NewTreeContext(NewTreeCacheClient("dev1", nil), scb, "foo")
+	tc := NewTreeContext(scb, "foo")
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -1057,7 +1105,7 @@ func Test_sharedEntryAttributes_getKeyName(t *testing.T) {
 		t.Error(err)
 	}
 
-	e00, err := newSharedEntryAttributes(ctx, interf, "ethernet-0/0", tc)
+	e00, err := newSharedEntryAttributes(ctx, interf, "ethernet-1/1", tc)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1142,24 +1190,27 @@ func Test_Validation_String_Pattern(t *testing.T) {
 
 	t.Run("Test_Validation_String_Pattern - One",
 		func(t *testing.T) {
-			tc := NewTreeContext(NewTreeCacheClient("dev1", nil), scb, owner1)
+			tc := NewTreeContext(scb, owner1)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			leafval := testhelper.GetStringTvProto(t, "data123")
+			leafval := testhelper.GetStringTvProto("data123")
 
-			u1 := cache.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
+			u1 := types.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
 
-			for _, u := range []*cache.Update{u1} {
-				_, err := root.AddCacheUpdateRecursive(ctx, u, flagsNew)
+			for _, u := range []*types.Update{u1} {
+				_, err := root.AddUpdateRecursive(ctx, u, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
 
-			root.FinishInsertionPhase(ctx)
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
 
 			validationResult := root.Validate(context.TODO(), validationConfig)
 
@@ -1171,29 +1222,32 @@ func Test_Validation_String_Pattern(t *testing.T) {
 			}
 		},
 	)
-	flagsNew := NewUpdateInsertFlags()
+	flagsNew := types.NewUpdateInsertFlags()
 	flagsNew.SetNewFlag()
 
 	t.Run("Test_Validation_String_Pattern - Two",
 		func(t *testing.T) {
-			tc := NewTreeContext(NewTreeCacheClient("dev1", nil), scb, owner1)
+			tc := NewTreeContext(scb, owner1)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			leafval := testhelper.GetStringTvProto(t, "hallo F")
+			leafval := testhelper.GetStringTvProto("hallo F")
 
-			u1 := cache.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
+			u1 := types.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
 
-			for _, u := range []*cache.Update{u1} {
-				_, err := root.AddCacheUpdateRecursive(ctx, u, flagsNew)
+			for _, u := range []*types.Update{u1} {
+				_, err := root.AddUpdateRecursive(ctx, u, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
 
-			root.FinishInsertionPhase(ctx)
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
 
 			validationResult := root.Validate(context.TODO(), validationConfig)
 
@@ -1216,10 +1270,10 @@ func Test_Validation_String_Pattern(t *testing.T) {
 
 	// 		leafval := testhelper.GetStringTvProto(t, "hallo DU")
 
-	// 		u1 := cache.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
+	// 		u1 := types.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
 
-	// 		for _, u := range []*cache.Update{u1} {
-	// 			err := root.AddCacheUpdateRecursive(ctx, u, true)
+	// 		for _, u := range []*types.Update{u1} {
+	// 			err := root.AddUpdateRecursive(ctx, u, true)
 	// 			if err != nil {
 	// 				t.Fatal(err)
 	// 			}
@@ -1264,29 +1318,32 @@ func Test_Validation_Deref(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	flagsNew := NewUpdateInsertFlags()
+	flagsNew := types.NewUpdateInsertFlags()
 	flagsNew.SetNewFlag()
 
 	t.Run("Test_Validation_String_Pattern - One",
 		func(t *testing.T) {
-			tc := NewTreeContext(NewTreeCacheClient("dev1", nil), scb, owner1)
+			tc := NewTreeContext(scb, owner1)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			leafval := testhelper.GetStringTvProto(t, "data123")
+			leafval := testhelper.GetStringTvProto("data123")
 
-			u1 := cache.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
+			u1 := types.NewUpdate([]string{"patterntest"}, leafval, prio50, owner1, ts1)
 
-			for _, u := range []*cache.Update{u1} {
-				_, err := root.AddCacheUpdateRecursive(ctx, u, flagsNew)
+			for _, u := range []*types.Update{u1} {
+				_, err := root.AddUpdateRecursive(ctx, u, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
 
-			root.FinishInsertionPhase(ctx)
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
 
 			validationResult := root.Validate(context.TODO(), validationConfig)
 

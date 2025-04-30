@@ -32,7 +32,8 @@ func ToSchemaNotification(n *gnmi.Notification) *sdcpb.Notification {
 	for _, del := range n.GetDelete() {
 		sn.Delete = append(sn.Delete, FromGNMIPath(n.GetPrefix(), del))
 	}
-	for _, upd := range n.GetUpdate() {
+	for idx, upd := range n.GetUpdate() {
+		_ = idx
 		scUpd := &sdcpb.Update{
 			Path:  FromGNMIPath(n.GetPrefix(), upd.GetPath()),
 			Value: FromGNMITypedValue(upd.GetVal()),
@@ -67,11 +68,11 @@ func FromGNMIPath(pre, p *gnmi.Path) *sdcpb.Path {
 }
 
 func FromGNMITypedValue(v *gnmi.TypedValue) *sdcpb.TypedValue {
-	log.Tracef("FromGNMITypedValue: %T : %v", v, v)
+	// log.Tracef("FromGNMITypedValue: %T : %v", v, v)
 	if v == nil {
 		return nil
 	}
-	log.Tracef("FromGNMITypedValue - Value: %T : %v", v.GetValue(), v.GetValue())
+	// log.Tracef("FromGNMITypedValue - Value: %T : %v", v.GetValue(), v.GetValue())
 	switch v.GetValue().(type) {
 	// case *gnmi.TypedValue:
 	case *gnmi.TypedValue_AnyVal:

@@ -16,22 +16,21 @@ package datastore
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
-	"github.com/sdcio/data-server/mocks/mockcacheclient"
-	"github.com/sdcio/data-server/mocks/mocktarget"
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/tree"
+	json_importer "github.com/sdcio/data-server/pkg/tree/importer/json"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	"go.uber.org/mock/gomock"
 )
 
 func TestDatastore_validateTree(t *testing.T) {
@@ -160,37 +159,22 @@ func TestDatastore_validateTree(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// create a gomock controller
-			controller := gomock.NewController(t)
-
-			// create a cache client mock
-			cacheClient := mockcacheclient.NewMockClient(controller)
-			testhelper.ConfigureCacheClientMock(t, cacheClient, tt.intendedStoreUpdates, nil, nil, nil)
 
 			sc, schema, err := testhelper.InitSDCIOSchema()
 			if err != nil {
-				t.Fatal(err)
+				t.Error(err)
 			}
-
-			dsName := "dev1"
-
-			// create a datastore
-			d := &Datastore{
-				config: &config.DatastoreConfig{
-					Name:       dsName,
-					Schema:     schema,
-					Validation: &config.Validation{DisableConcurrency: true},
-				},
-
-				sbi:          mocktarget.NewMockTarget(controller),
-				cacheClient:  cacheClient,
-				schemaClient: schemaClient.NewSchemaClientBound(schema.GetSchema(), sc),
-			}
-
+			scb := schemaClient.NewSchemaClientBound(schema, sc)
 			ctx := context.Background()
 
 			// marshall the intentReqValue into a byte slice
-			jsonConf, err := tt.intentReqValue()
+			jsonConfString, err := tt.intentReqValue()
+			if err != nil {
+				t.Error(err)
+			}
+
+			var jsonConf any
+			err = json.Unmarshal([]byte(jsonConfString), &jsonConf)
 			if err != nil {
 				t.Error(err)
 			}
@@ -201,35 +185,30 @@ func TestDatastore_validateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			tcc := tree.NewTreeCacheClient(dsName, d.cacheClient)
-			tc := tree.NewTreeContext(tcc, d.schemaClient, tt.intentName)
+			tc := tree.NewTreeContext(scb, tt.intentName)
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Error(err)
 			}
 
-			insertUpdates := []*sdcpb.Update{
-				{
-					Path: path,
-					Value: &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_JsonVal{
-							JsonVal: []byte(jsonConf)},
-					},
-				},
-			}
+			flagsNew := types.NewUpdateInsertFlags()
+			flagsNew.SetNewFlag()
 
-			updSlice, err := d.expandAndConvertIntent(ctx, tt.intentName, tt.intentPrio, insertUpdates)
+			importer := json_importer.NewJsonTreeImporter(jsonConf)
+
+			err = root.ImportConfig(ctx, utils.ToStrings(path, false, false), importer, tt.intentName, tt.intentPrio, flagsNew)
 			if err != nil {
 				t.Error(err)
 			}
 
-			flagsNew := tree.NewUpdateInsertFlags()
-			flagsNew.SetNewFlag()
-			root.AddCacheUpdatesRecursive(ctx, updSlice, flagsNew)
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
 
-			root.FinishInsertionPhase(ctx)
+			validationResult := root.Validate(ctx, &config.Validation{DisableConcurrency: true})
 
-			validationResult := root.Validate(ctx, d.config.Validation)
+			t.Log(root.String())
 
 			for _, x := range tt.expectedWarnings {
 				if !slices.Contains(validationResult.WarningsStr(), x) {

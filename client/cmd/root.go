@@ -28,6 +28,7 @@ import (
 var schemaName string
 var schemaVendor string
 var schemaVersion string
+var format string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{

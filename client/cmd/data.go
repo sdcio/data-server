@@ -26,7 +26,5 @@ var dataCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(dataCmd)
-
-	dataCmd.PersistentFlags().StringVarP(&candidate, "candidate", "", "", "datastore (candidate) name")
 	dataCmd.PersistentFlags().StringVarP(&datastoreName, "ds", "", "", "datastore target name")
 }

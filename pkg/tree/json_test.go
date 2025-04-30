@@ -8,14 +8,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
-	"github.com/sdcio/data-server/mocks/mockcacheclient"
-	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestToJsonTable(t *testing.T) {
@@ -361,10 +359,10 @@ func TestToJsonTable(t *testing.T) {
 		},
 	}
 
-	flagsNew := NewUpdateInsertFlags()
+	flagsNew := types.NewUpdateInsertFlags()
 	flagsNew.SetNewFlag()
 
-	flagsOld := NewUpdateInsertFlags()
+	flagsOld := types.NewUpdateInsertFlags()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -380,11 +378,7 @@ func TestToJsonTable(t *testing.T) {
 
 			ctx := context.Background()
 
-			// create a cache client mock
-			cacheClient := mockcacheclient.NewMockClient(mockCtrl)
-			testhelper.ConfigureCacheClientMock(t, cacheClient, []*cache.Update{}, []*cache.Update{}, []*cache.Update{}, [][]string{})
-
-			tc := NewTreeContext(NewTreeCacheClient("dev1", cacheClient), scb, owner)
+			tc := NewTreeContext(scb, owner)
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -423,7 +417,10 @@ func TestToJsonTable(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			root.FinishInsertionPhase(ctx)
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
 
 			fmt.Println(root.String())
 
@@ -550,19 +547,14 @@ func expandUpdateFromConfig(ctx context.Context, conf *sdcio_schema.Device, conv
 				Elem: []*sdcpb.PathElem{},
 			},
 			Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: []byte(strJson)}},
-		},
-		true)
+		})
 }
 
-func addToRoot(ctx context.Context, root *RootEntry, updates []*sdcpb.Update, flags *UpdateInsertFlags, owner string, prio int32) error {
+func addToRoot(ctx context.Context, root *RootEntry, updates []*sdcpb.Update, flags *types.UpdateInsertFlags, owner string, prio int32) error {
 	for _, upd := range updates {
-		b, err := proto.Marshal(upd.Value)
-		if err != nil {
-			return err
-		}
-		cacheUpd := cache.NewUpdate(utils.ToStrings(upd.GetPath(), false, false), b, prio, owner, 0)
+		cacheUpd := types.NewUpdate(utils.ToStrings(upd.GetPath(), false, false), upd.Value, prio, owner, 0)
 
-		_, err = root.AddCacheUpdateRecursive(ctx, cacheUpd, flags)
+		_, err := root.AddUpdateRecursive(ctx, cacheUpd, flags)
 		if err != nil {
 			return err
 		}

@@ -34,10 +34,11 @@ func NewConverter(scb SchemaClientBound) *Converter {
 	}
 }
 
-func (c *Converter) ExpandUpdates(ctx context.Context, updates []*sdcpb.Update, includeKeysAsLeaf bool) ([]*sdcpb.Update, error) {
+func (c *Converter) ExpandUpdates(ctx context.Context, updates []*sdcpb.Update) ([]*sdcpb.Update, error) {
 	outUpdates := make([]*sdcpb.Update, 0, len(updates))
-	for _, upd := range updates {
-		expUpds, err := c.ExpandUpdate(ctx, upd, includeKeysAsLeaf)
+	for idx, upd := range updates {
+		_ = idx
+		expUpds, err := c.ExpandUpdate(ctx, upd)
 		if err != nil {
 			return nil, err
 		}
@@ -47,16 +48,8 @@ func (c *Converter) ExpandUpdates(ctx context.Context, updates []*sdcpb.Update, 
 }
 
 // expandUpdate Expands the value, in case of json to single typed value updates
-func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update, includeKeysAsLeaf bool) ([]*sdcpb.Update, error) {
+func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
 	upds := make([]*sdcpb.Update, 0)
-	if includeKeysAsLeaf {
-		// expand update path if it contains keys
-		intUpd, err := c.ExpandUpdateKeysAsLeaf(ctx, upd)
-		if err != nil {
-			return nil, err
-		}
-		upds = append(upds, intUpd...)
-	}
 	rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, upd.GetPath())
 	if err != nil {
 		return nil, err
@@ -64,8 +57,40 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update, include
 
 	switch rsp := rsp.GetSchema().Schema.(type) {
 	case *sdcpb.SchemaElem_Container:
-		log.Debugf("expanding update %v on container %q", upd, rsp.Container.Name)
-		var v interface{}
+		if upd.Value == nil {
+			// if it is a presence container and no value is set, set upd value to EmptyVal
+			if rsp.Container.GetIsPresence() {
+				upd.Value = &sdcpb.TypedValue{
+					Value: &sdcpb.TypedValue_EmptyVal{},
+				}
+				return append(upds, upd), nil
+			}
+			if len(upd.Path.Elem) > 0 && len(upd.Path.Elem[len(upd.Path.Elem)-1].Key) > 0 {
+				newUpd := &sdcpb.Update{}
+				// if value is nil but the last path elem contains keys
+				for k, v := range upd.Path.Elem[len(upd.Path.Elem)-1].Key {
+
+					// deepcopy via marshall unmarshall
+					newUpd = proto.Clone(upd).(*sdcpb.Update)
+
+					// adjust path
+					newUpd.Path.Elem = append(newUpd.Path.Elem, &sdcpb.PathElem{Name: k})
+					rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, newUpd.GetPath())
+					if err != nil {
+						return nil, err
+					}
+					// convert key string value to real typedvalue
+					newUpd.Value, err = ConvertToTypedValue(rsp.GetSchema(), v, 0)
+					if err != nil {
+						return nil, err
+					}
+				}
+				upds = append(upds, newUpd)
+				return upds, nil
+			}
+			return nil, nil
+		}
+		var v any
 		var err error
 		var jsonDecoder *json.Decoder
 		switch upd.GetValue().Value.(type) {
@@ -83,13 +108,14 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update, include
 		if err != nil {
 			return nil, err
 		}
-		log.Debugf("update has jsonVal: %T, %v\n", v, v)
-		rs, err := c.ExpandContainerValue(ctx, upd.GetPath(), v, rsp, includeKeysAsLeaf)
+		// log.Debugf("update has jsonVal: %T, %v\n", v, v)
+		rs, err := c.ExpandContainerValue(ctx, upd.GetPath(), v, rsp)
 		if err != nil {
 			return nil, err
 		}
 		upds := append(upds, rs...)
 		return upds, nil
+
 	case *sdcpb.SchemaElem_Field:
 		var v interface{}
 		var err error
@@ -114,11 +140,16 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update, include
 			}
 		}
 
-		// TODO: Check if value is json and convert to String ?
+		if rsp.Field.GetType().Type == "identityref" {
+			upd.Value, err = Convert(upd.GetValue().GetStringVal(), rsp.Field.GetType())
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		upds = append(upds, upd)
 		return upds, nil
 	case *sdcpb.SchemaElem_Leaflist:
-		// TODO: Check if value is json and convert to String ?
 		upds = append(upds, upd)
 		return upds, nil
 	}
@@ -127,6 +158,8 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update, include
 
 func (c *Converter) ExpandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
 	upds := make([]*sdcpb.Update, 0)
+	var err error
+	var schemaRsp *sdcpb.GetSchemaResponse
 	// expand update path if it contains keys
 	for i, pe := range upd.GetPath().GetElem() {
 		if len(pe.GetKey()) == 0 {
@@ -149,22 +182,25 @@ func (c *Converter) ExpandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Updat
 			}
 			intUpd.Path.Elem = append(intUpd.Path.Elem, &sdcpb.PathElem{Name: k})
 
-			schemaRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, intUpd.Path)
+			schemaRsp, err = c.schemaClientBound.GetSchemaSdcpbPath(ctx, intUpd.Path)
 			if err != nil {
 				return nil, err
 			}
+
 			intUpd.Value, err = TypedValueToYANGType(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}, schemaRsp.GetSchema())
 			if err != nil {
 				return nil, err
 			}
+
 			upds = append(upds, intUpd)
 		}
 	}
+
 	return upds, nil
 }
 
-func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container, includeKeysAsLeaf bool) ([]*sdcpb.Update, error) {
-	log.Debugf("expanding jsonVal %T | %v | %v", jv, jv, p)
+func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container) ([]*sdcpb.Update, error) {
+	// log.Debugf("expanding jsonVal %T | %v | %v", jv, jv, p)
 	switch jv := jv.(type) {
 	case string:
 		v := strings.Trim(jv, "\"")
@@ -192,6 +228,15 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				if _, ok := keysInPath[k.Name]; ok {
 					return nil, fmt.Errorf("key %q is present in both the path and JSON value", k.Name)
 				}
+				// in case of json_ietf we need to cut the module prefix
+				if k.Type.Type == "identityref" {
+					val := v
+					found := false
+					_, val, found = strings.Cut(fmt.Sprintf("%v", v), ":")
+					if found {
+						v = val
+					}
+				}
 				keySet[k.Name] = fmt.Sprintf("%v", v)
 				continue
 			}
@@ -203,8 +248,8 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		}
 		// handling keys in last element of the path or in the json value
 		for _, k := range cs.Container.GetKeys() {
-			if v, ok := jv[k.Name]; ok {
-				log.Debugf("handling key %s", k.Name)
+			if _, ok := jv[k.Name]; ok {
+				// log.Debugf("handling key %s", k.Name)
 				if _, ok := keysInPath[k.Name]; ok {
 					return nil, fmt.Errorf("key %q is present in both the path and JSON value", k.Name)
 				}
@@ -212,23 +257,6 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 					p.GetElem()[len(p.GetElem())-1].Key = make(map[string]string)
 				}
 				p.GetElem()[len(p.GetElem())-1].Key = keySet
-				if includeKeysAsLeaf {
-					np := proto.Clone(p).(*sdcpb.Path)
-					np.Elem = append(np.Elem, &sdcpb.PathElem{Name: k.Name})
-					schemaRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, np)
-					if err != nil {
-						return nil, err
-					}
-					updVal, err := TypedValueToYANGType(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: fmt.Sprintf("%v", v)}}, schemaRsp.GetSchema())
-					if err != nil {
-						return nil, err
-					}
-					upd := &sdcpb.Update{
-						Path:  np,
-						Value: updVal,
-					}
-					upds = append(upds, upd)
-				}
 				continue
 			}
 			// if key is not in the value it must be set in the path
@@ -237,7 +265,8 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 			}
 		}
 		for k, v := range jv {
-			if isKey(k, cs) {
+			// TODO remove the statement_annotate again ...
+			if k == "_annotate" {
 				continue
 			}
 			item, ok := getItem(ctx, k, cs, c.schemaClientBound)
@@ -246,7 +275,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 			}
 			switch item := item.(type) {
 			case *sdcpb.LeafSchema: // field
-				log.Debugf("handling field %s", item.Name)
+				// log.Debugf("handling field %s", item.Name)
 				np := proto.Clone(p).(*sdcpb.Path)
 				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item.Name})
 				upd := &sdcpb.Update{Path: np}
@@ -310,7 +339,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				upds = append(upds, upd)
 
 			case string: // child container
-				log.Debugf("handling child container %s", item)
+				// log.Debugf("handling child container %s", item)
 				np := proto.Clone(p).(*sdcpb.Path)
 				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item})
 				rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, np)
@@ -331,7 +360,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 								},
 							}}
 					} else {
-						rs, err = c.ExpandContainerValue(ctx, np, v, rsp, includeKeysAsLeaf)
+						rs, err = c.ExpandContainerValue(ctx, np, v, rsp)
 						if err != nil {
 							return nil, err
 						}
@@ -351,7 +380,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		upds := make([]*sdcpb.Update, 0)
 		for _, v := range jv {
 			np := proto.Clone(p).(*sdcpb.Path)
-			r, err := c.ExpandContainerValue(ctx, np, v, cs, includeKeysAsLeaf)
+			r, err := c.ExpandContainerValue(ctx, np, v, cs)
 			if err != nil {
 				return nil, err
 			}
@@ -362,15 +391,6 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		log.Warnf("unexpected json type cast %T", jv)
 		return nil, nil
 	}
-}
-
-func isKey(s string, cs *sdcpb.SchemaElem_Container) bool {
-	for _, k := range cs.Container.GetKeys() {
-		if k.Name == s {
-			return true
-		}
-	}
-	return false
 }
 
 func TypedValueToYANGType(tv *sdcpb.TypedValue, schemaObject *sdcpb.SchemaElem) (*sdcpb.TypedValue, error) {
@@ -529,6 +549,22 @@ func getItem(ctx context.Context, s string, cs *sdcpb.SchemaElem_Container, scb 
 	c, ok := getChild(ctx, s, cs, scb)
 	if ok {
 		return c, true
+	}
+	k, ok := getKey(s, cs)
+	if ok {
+		return k, true
+	}
+	return nil, false
+}
+
+func getKey(s string, cs *sdcpb.SchemaElem_Container) (*sdcpb.LeafSchema, bool) {
+	for _, f := range cs.Container.GetKeys() {
+		if f.Name == s {
+			return f, true
+		}
+		if fmt.Sprintf("%s:%s", f.ModuleName, f.Name) == s {
+			return f, true
+		}
 	}
 	return nil, false
 }
@@ -777,7 +813,7 @@ func (c *Converter) ConvertNotificationTypedValues(ctx context.Context, n *sdcpb
 		log.Debugf("converted update from: %v, to: %v", upd, nup)
 		// gNMI get() could return a Notification with a single path element containing a JSON/JSON_IETF blob, we need to expand this into several typed values.
 		if nup == nil && (upd.GetValue().GetJsonVal() != nil || upd.GetValue().GetJsonIetfVal() != nil) {
-			expUpds, err := c.ExpandUpdate(ctx, upd, true)
+			expUpds, err := c.ExpandUpdate(ctx, upd)
 			if err != nil {
 				return nil, err
 			}

@@ -30,7 +30,7 @@ var dataListIntentCmd = &cobra.Command{
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		req := &sdcpb.ListIntentRequest{
-			Name: datastoreName,
+			DatastoreName: datastoreName,
 		}
 		ctx, cancel := context.WithCancel(cmd.Context())
 		defer cancel()

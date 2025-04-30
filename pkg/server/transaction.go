@@ -32,7 +32,7 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 	}
 
 	// retrieve the referenced datastore
-	ds, err := s.getDataStore(req.DatastoreName)
+	ds, err := s.datastores.getDataStore(req.DatastoreName)
 	if err != nil {
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
@@ -76,7 +76,7 @@ func (s *Server) TransactionConfirm(ctx context.Context, req *sdcpb.TransactionC
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
 	}
 
-	ds, err := s.getDataStore(req.DatastoreName)
+	ds, err := s.datastores.GetDataStore(req.DatastoreName)
 	if err != nil {
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
@@ -93,7 +93,7 @@ func (s *Server) TransactionCancel(ctx context.Context, req *sdcpb.TransactionCa
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
 	}
 
-	ds, err := s.getDataStore(req.DatastoreName)
+	ds, err := s.datastores.GetDataStore(req.DatastoreName)
 	if err != nil {
 		return nil, status.Error(codes.NotFound, err.Error())
 	}

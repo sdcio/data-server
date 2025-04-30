@@ -5,10 +5,10 @@ import (
 	"math"
 
 	"github.com/beevik/etree"
-	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/importer"
-	"github.com/sdcio/data-server/pkg/types"
+	"github.com/sdcio/data-server/pkg/tree/tree_persist"
+	"github.com/sdcio/data-server/pkg/tree/types"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -46,28 +46,34 @@ func newEntry(ctx context.Context, parent Entry, pathElemName string, tc *TreeCo
 // Entry is the primary Element of the Tree.
 type Entry interface {
 	// Path returns the Path as PathSlice
-	Path() PathSlice
+	Path() types.PathSlice
 	// PathName returns the last Path element, the name of the Entry
 	PathName() string
+	// GetLevel returns the depth of the Entry in the tree
+	GetLevel() int
 	// addChild Add a child entry
 	addChild(context.Context, Entry) error
-	// AddCacheUpdateRecursive Add the given cache.Update to the tree
-	AddCacheUpdateRecursive(ctx context.Context, u *cache.Update, flags *UpdateInsertFlags) (Entry, error)
+	// getOrCreateChilds retrieves the sub-child pointed at by the path.
+	// if the path does not exist in its full extend, the entries will be added along the way
+	// if the path does not point to a schema defined path an error will be raise
+	getOrCreateChilds(ctx context.Context, path types.PathSlice) (Entry, error)
+	// AddUpdateRecursive Add the given cache.Update to the tree
+	AddUpdateRecursive(ctx context.Context, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
 	// StringIndent debug tree struct as indented string slice
 	StringIndent(result []string) []string
 	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
 	// If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
 	// It will append to the given list and provide a new pointer to the slice
-	GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool) LeafVariantSlice
+	GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool, includeDefaults bool) LeafVariantSlice
 	// getHighestPrecedenceLeafValue returns the highest LeafValue of the Entry at hand
 	// will return an error if the Entry is not a Leaf
 	getHighestPrecedenceLeafValue(context.Context) (*LeafEntry, error)
 	// GetByOwner returns the branches Updates by owner
-	GetByOwner(owner string, result []*LeafEntry) []*LeafEntry
+	GetByOwner(owner string, result []*LeafEntry) LeafVariantSlice
 	// markOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
-	markOwnerDelete(o string, onlyIntended bool)
+	MarkOwnerDelete(o string, onlyIntended bool)
 	// GetDeletes returns the cache-updates that are not updated, have no lower priority value left and hence should be deleted completely
-	GetDeletes(entries []DeleteEntry, aggregatePaths bool) ([]DeleteEntry, error)
+	GetDeletes(entries []types.DeleteEntry, aggregatePaths bool) ([]types.DeleteEntry, error)
 	// Walk takes the EntryVisitor and applies it to every Entry in the tree
 	Walk(f EntryVisitor) error
 	// Validate kicks off validation
@@ -76,20 +82,20 @@ type Entry interface {
 	validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry)
 	// validateMandatoryWithKeys is an internally used function that us called by validateMandatory in case
 	// the container has keys defined that need to be skipped before the mandatory attributes can be checked
-	validateMandatoryWithKeys(ctx context.Context, level int, attribute string, resultChan chan<- *types.ValidationResultEntry)
+	validateMandatoryWithKeys(ctx context.Context, level int, attributes []string, choiceName string, resultChan chan<- *types.ValidationResultEntry)
 	// getHighestPrecedenceValueOfBranch returns the highes Precedence Value (lowest Priority value) of the brach that starts at this Entry
-	getHighestPrecedenceValueOfBranch() int32
+	getHighestPrecedenceValueOfBranch(filter HighestPrecedenceFilter) int32
 	// GetSchema returns the *sdcpb.SchemaElem of the Entry
 	GetSchema() *sdcpb.SchemaElem
 	// IsRoot returns true if the Entry is the root of the tree
 	IsRoot() bool
 	// FinishInsertionPhase indicates, that the insertion of Entries into the tree is over
 	// Hence calculations for e.g. choice/case can be performed.
-	FinishInsertionPhase(ctx context.Context)
+	FinishInsertionPhase(ctx context.Context) error
 	// GetParent returns the parent entry
 	GetParent() Entry
 	// Navigate navigates the tree according to the given path and returns the referenced entry or nil if it does not exist.
-	Navigate(ctx context.Context, path []string, isRootPath bool) (Entry, error)
+	Navigate(ctx context.Context, path []string, isRootPath bool, dotdotSkipKeys bool) (Entry, error)
 	NavigateSdcpbPath(ctx context.Context, path []*sdcpb.PathElem, isRootPath bool) (Entry, error)
 	// NavigateLeafRef follows the leafref and returns the referenced entry
 	NavigateLeafRef(ctx context.Context) ([]Entry, error)
@@ -138,7 +144,15 @@ type Entry interface {
 	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
 	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error)
 	// ImportConfig allows importing config data received from e.g. the device in different formats (json, xml) to be imported into the tree.
-	ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32) error
+	ImportConfig(ctx context.Context, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
+	TreeExport(owner string) ([]*tree_persist.TreeElement, error)
+	DeleteSubtree(relativePath types.PathSlice, owner string) (remainsToExist bool, err error)
+	GetDeviations(ch chan<- *types.DeviationEntry, activeCase bool)
+	// getListChilds collects all the childs of the list. In the tree we store them seperated into their key branches.
+	// this is collecting all the last level key entries.
+	GetListChilds() ([]Entry, error)
+	BreadthSearch(ctx context.Context, path string) ([]Entry, error)
+	DeepCopy(tc *TreeContext, parent Entry) (Entry, error)
 }
 
 type EntryVisitor func(s *sharedEntryAttributes) error

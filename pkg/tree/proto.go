@@ -7,17 +7,13 @@ import (
 )
 
 func (r *RootEntry) ToProtoUpdates(ctx context.Context, onlyNewOrUpdated bool) ([]*sdcpb.Update, error) {
-
 	cacheUpdates := r.GetHighestPrecedence(onlyNewOrUpdated)
 
 	upds := make([]*sdcpb.Update, 0, len(cacheUpdates))
 
 	// updates
 	for _, cachUpdate := range cacheUpdates {
-		val, err := cachUpdate.Value()
-		if err != nil {
-			return nil, err
-		}
+		val := cachUpdate.Value()
 		path, err := cachUpdate.parentEntry.SdcpbPath()
 		if err != nil {
 			return nil, err
@@ -30,7 +26,6 @@ func (r *RootEntry) ToProtoUpdates(ctx context.Context, onlyNewOrUpdated bool) (
 }
 
 func (r *RootEntry) ToProtoDeletes(ctx context.Context) ([]*sdcpb.Path, error) {
-
 	cacheDeletes, err := r.GetDeletes(true)
 	if err != nil {
 		return nil, err

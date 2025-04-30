@@ -26,8 +26,8 @@ import (
 	"github.com/AlekSi/pointer"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	gapi "github.com/openconfig/gnmic/pkg/api"
-	gtarget "github.com/openconfig/gnmic/pkg/target"
-	"github.com/openconfig/gnmic/pkg/types"
+	gtarget "github.com/openconfig/gnmic/pkg/api/target"
+	"github.com/openconfig/gnmic/pkg/api/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -147,6 +147,7 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 	if err != nil {
 		return nil, err
 	}
+
 	schemaRsp := &sdcpb.GetDataResponse{
 		Notification: make([]*sdcpb.Notification, 0, len(gnmiRsp.GetNotification())),
 	}
@@ -376,9 +377,6 @@ func (t *gnmiTarget) getSync(ctx context.Context, gnmiSync *config.SyncProtocol,
 		Name:     gnmiSync.Name,
 		Path:     paths,
 		DataType: sdcpb.DataType_CONFIG,
-		Datastore: &sdcpb.DataStore{
-			Type: sdcpb.Type_MAIN,
-		},
 		Encoding: sdcpb.Encoding(sdcpbEncoding(gnmiSync.Encoding)),
 	}
 
@@ -413,7 +411,9 @@ func (t *gnmiTarget) internalGetSync(ctx context.Context, req *sdcpb.GetDataRequ
 		Start: true,
 	}
 	notificationsCount := 0
-	for _, n := range resp.GetNotification() {
+
+	for idx, n := range resp.GetNotification() {
+		_ = idx
 		syncCh <- &SyncUpdate{
 			Update: n,
 		}
@@ -435,6 +435,7 @@ func (t *gnmiTarget) periodicSync(ctx context.Context, gnmiSync *config.SyncProt
 		gapi.EncodingCustom(encoding(gnmiSync.Encoding)),
 		gapi.SubscriptionListModeONCE(),
 		gapi.Subscription(subscriptionOpts...),
+		gapi.DataTypeCONFIG(),
 	)
 	subReq, err := gapi.NewSubscribeRequest(opts...)
 	if err != nil {
@@ -478,6 +479,7 @@ func (t *gnmiTarget) streamSync(ctx context.Context, gnmiSync *config.SyncProtoc
 		gapi.EncodingCustom(encoding(gnmiSync.Encoding)),
 		gapi.SubscriptionListModeSTREAM(),
 		gapi.Subscription(subscriptionOpts...),
+		gapi.DataTypeCONFIG(),
 	)
 	subReq, err := gapi.NewSubscribeRequest(opts...)
 	if err != nil {

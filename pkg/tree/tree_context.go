@@ -8,14 +8,12 @@ import (
 
 type TreeContext struct {
 	root         Entry // the trees root element
-	cacheClient  TreeCacheClient
 	schemaClient schemaClient.SchemaClientBound
 	actualOwner  string
 }
 
-func NewTreeContext(cc TreeCacheClient, sc schemaClient.SchemaClientBound, actualOwner string) *TreeContext {
+func NewTreeContext(sc schemaClient.SchemaClientBound, actualOwner string) *TreeContext {
 	return &TreeContext{
-		cacheClient:  cc,
 		schemaClient: sc,
 		actualOwner:  actualOwner,
 	}
@@ -24,12 +22,8 @@ func NewTreeContext(cc TreeCacheClient, sc schemaClient.SchemaClientBound, actua
 // deepCopy root is required to be set manually
 func (t *TreeContext) deepCopy() *TreeContext {
 	return &TreeContext{
-		cacheClient: t.cacheClient,
+		schemaClient: t.schemaClient,
 	}
-}
-
-func (t *TreeContext) GetTreeSchemaCacheClient() TreeCacheClient {
-	return t.cacheClient
 }
 
 func (t *TreeContext) SetRoot(e Entry) error {

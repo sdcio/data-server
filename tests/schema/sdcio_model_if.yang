@@ -81,6 +81,15 @@ module sdcio_model_if {
         description
           "A user-entered description of this network instance.";
       }
+      leaf admin-state {
+        type sdcio_model_common:admin-state;
+        default "enable";
+        description
+          "The configured, desired state of the subinterface";
+        must "((. = 'enable') and starts-with(../../name, 'system0')) or not(starts-with(../../name, 'system0'))" {
+          error-message "admin-state must be enable";
+        }
+      }
     }
   }
 }

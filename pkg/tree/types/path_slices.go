@@ -1,4 +1,4 @@
-package tree
+package types
 
 import (
 	"strings"
@@ -11,8 +11,12 @@ func (p PathSlice) String() string {
 	return strings.Join(p, "/")
 }
 
-func (p PathSlice) ToStringSlice() []string {
-	return p
+func (p PathSlice) DeepCopy() PathSlice {
+	result := make(PathSlice, 0, len(p))
+	for _, entry := range p {
+		result = append(result, entry)
+	}
+	return result
 }
 
 // PathSlices is the slice collection of multiple PathSlice objects.

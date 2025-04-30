@@ -6,16 +6,21 @@ func getListEntrySortFunc(parent Entry) func(a, b Entry) int {
 		keys := parent.GetSchemaKeys()
 		var cmpResult int
 		for _, v := range keys {
-			aLvSlice := a.getChildren()[v].GetHighestPrecedence(LeafVariantSlice{}, false)
-			bLvSlice := b.getChildren()[v].GetHighestPrecedence(LeafVariantSlice{}, false)
+			achild, exists := a.getChildren()[v]
+			if !exists {
+				return 0
+			}
+			bchild, exists := b.getChildren()[v]
+			if !exists {
+				return 0
+			}
+			aLvSlice := achild.GetHighestPrecedence(LeafVariantSlice{}, false, true)
+			bLvSlice := bchild.GetHighestPrecedence(LeafVariantSlice{}, false, true)
 
 			aEntry := aLvSlice[0]
 			bEntry := bLvSlice[0]
 
-			aTv, _ := aEntry.Value()
-			bTv, _ := bEntry.Value()
-
-			cmpResult = aTv.Cmp(bTv)
+			cmpResult = aEntry.Value().Cmp(bEntry.Value())
 			if cmpResult != 0 {
 				return cmpResult
 			}

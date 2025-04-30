@@ -159,9 +159,6 @@ func Test_ncTarget_Get(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				req: &sdcpb.GetDataRequest{
-					Datastore: &sdcpb.DataStore{
-						Type: sdcpb.Type_MAIN,
-					},
 					Path: []*sdcpb.Path{
 						{
 							Elem: []*sdcpb.PathElem{

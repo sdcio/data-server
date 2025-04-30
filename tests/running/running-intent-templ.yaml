@@ -1,0 +1,15 @@
+apiVersion: config.sdcio.dev/v1alpha1
+kind: Config
+metadata:
+  name: running-intent-srl1
+  namespace: default
+  labels:
+    config.sdcio.dev/targetName: srl1
+    config.sdcio.dev/targetNamespace: default
+spec:
+  lifecycle:
+    deletionPolicy: orphan
+  priority: 32767
+  config:
+  - path: /
+    value:

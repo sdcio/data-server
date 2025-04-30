@@ -5,25 +5,29 @@ import (
 	"math"
 	"sync"
 
+	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
+	log "github.com/sirupsen/logrus"
 )
 
 type LeafVariants struct {
-	les      []*LeafEntry
-	lesMutex sync.RWMutex
-	tc       *TreeContext
+	les         []*LeafEntry
+	lesMutex    sync.RWMutex
+	tc          *TreeContext
+	parentEntry Entry
 }
 
-func newLeafVariants(tc *TreeContext) *LeafVariants {
+func newLeafVariants(tc *TreeContext, parentEnty Entry) *LeafVariants {
 	return &LeafVariants{
-		les: make([]*LeafEntry, 0, 2),
-		tc:  tc,
+		les:         make([]*LeafEntry, 0, 2),
+		tc:          tc,
+		parentEntry: parentEnty,
 	}
 }
 
 func (lv *LeafVariants) Add(le *LeafEntry) {
 	if leafVariant := lv.GetByOwner(le.Owner()); leafVariant != nil {
-		if leafVariant.EqualSkipPath(le.Update) {
+		if leafVariant.Equal(le.Update) {
 			// it seems like the element was not deleted, so drop the delete flag
 			leafVariant.DropDeleteFlag()
 		} else {
@@ -55,19 +59,6 @@ func (lv *LeafVariants) Length() int {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 	return len(lv.les)
-}
-
-// containsOtherOwnerThenDefaultOrRunning returns true if there is any other leafentry then default or running
-func (lv *LeafVariants) containsOtherOwnerThenDefaultOrRunning() bool {
-	foundOther := false
-	for _, le := range lv.les {
-		foundOther = le.Owner() != RunningIntentName && le.Owner() != DefaultsIntentName
-		if foundOther {
-			break
-		}
-	}
-
-	return foundOther
 }
 
 // canDelete returns true if leafValues exist that are not owned by default or running that do not have the DeleteFlag set [or if delete is set, also the DeleteOnlyIntendedFlag set]
@@ -150,15 +141,32 @@ func (lv *LeafVariants) remainsToExist() bool {
 	return false
 }
 
-func (lv *LeafVariants) GetHighestPrecedenceValue() int32 {
+func (lv *LeafVariants) GetHighestPrecedenceValue(filter HighestPrecedenceFilter) int32 {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 	result := int32(math.MaxInt32)
 	for _, e := range lv.les {
-		if !e.GetDeleteFlag() && e.Owner() != DefaultsIntentName && e.Update.Priority() < result {
+		if filter(e) && e.Owner() != DefaultsIntentName && e.Update.Priority() < result {
 			result = e.Update.Priority()
 		}
 	}
+	return result
+}
+
+func (lv *LeafVariants) DeepCopy(tc *TreeContext, parent Entry) *LeafVariants {
+	result := &LeafVariants{
+		lesMutex:    sync.RWMutex{},
+		tc:          tc,
+		les:         make([]*LeafEntry, 0, len(lv.les)),
+		parentEntry: parent,
+	}
+
+	lv.lesMutex.RLock()
+	defer lv.lesMutex.RUnlock()
+	for _, x := range lv.les {
+		result.Add(x.DeepCopy(parent))
+	}
+
 	return result
 }
 
@@ -242,6 +250,8 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 }
 
 func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
+	lv.lesMutex.RLock()
+	defer lv.lesMutex.RUnlock()
 	// if highes is already running or even default, return false
 	if highest.Update.Owner() == RunningIntentName {
 		return false
@@ -253,8 +263,8 @@ func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
 	}
 
 	// ignore errors, they should not happen :-P I know... should...
-	rval, _ := runVal.Value()
-	hval, _ := highest.Value()
+	rval := runVal.Value()
+	hval := highest.Value()
 
 	return !utils.EqualTypedValues(rval, hval)
 }
@@ -270,4 +280,120 @@ func (lv *LeafVariants) GetByOwner(owner string) *LeafEntry {
 		}
 	}
 	return nil
+}
+
+// MarkOwnerForDeletion searches for a LefVariant of given owner, if it exists
+// the entry is marked for deletion
+func (lv *LeafVariants) MarkOwnerForDeletion(owner string, onlyIntended bool) {
+	le := lv.GetByOwner(owner)
+	if le != nil {
+		le.MarkDelete(onlyIntended)
+	}
+}
+
+func (lv *LeafVariants) DeleteByOwner(owner string) (remainsToExist bool) {
+	lv.lesMutex.Lock()
+	defer lv.lesMutex.Unlock()
+	foundOwner := false
+	for i, l := range lv.les {
+		// early exit if condition is met
+		if foundOwner && remainsToExist {
+			return remainsToExist
+		}
+		if l.Owner() == owner {
+			// Remove element from slice
+			lv.les = append(lv.les[:i], lv.les[i+1:]...)
+			foundOwner = true
+			continue
+		}
+		if l.Owner() == DefaultsIntentName {
+			continue
+		}
+		remainsToExist = true
+
+	}
+	return remainsToExist
+}
+
+func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveCase bool) {
+	lv.lesMutex.RLock()
+	defer lv.lesMutex.RUnlock()
+
+	if len(lv.les) == 0 {
+		return
+	}
+
+	// get the path via the first LeafEntry
+	// is valida for all entries
+	sdcpbPath, err := lv.parentEntry.SdcpbPath()
+	if err != nil {
+		log.Error(err)
+	}
+
+	// we are part of an inactive case of a choice
+	if !isActiveCase {
+		for _, le := range lv.les {
+			ch <- types.NewDeviationEntry(le.Owner(), types.DeviationReasonOverruled, sdcpbPath).SetExpectedValue(le.Value())
+		}
+		return
+	}
+
+	var running *LeafEntry
+	var highest *LeafEntry
+
+	overruled := make([]*types.DeviationEntry, 0, len(lv.les))
+	for _, le := range lv.les {
+		// Defaults should be skipped
+		if le.Owner() == DefaultsIntentName {
+			continue
+		}
+		// running is stored in running var
+		if le.Owner() == RunningIntentName {
+			running = le
+			continue
+		}
+		// if no highest exists yet, set it
+		if highest == nil {
+			highest = le
+			continue
+		}
+		// if precedence of actual (le) is higher then highest
+		// replace highest with it
+		if le.Priority() < highest.Priority() {
+			de := types.NewDeviationEntry(highest.Owner(), types.DeviationReasonOverruled, sdcpbPath).SetExpectedValue(highest.Value())
+			overruled = append(overruled, de)
+			highest = le
+		}
+		// if precedence of actual (le) is lower then le needs to be adeded to overruled
+		if le.Priority() >= highest.Priority() {
+			de := types.NewDeviationEntry(le.Owner(), types.DeviationReasonOverruled, sdcpbPath).SetExpectedValue(le.Value())
+			overruled = append(overruled, de)
+		}
+	}
+
+	// send all the overruleds
+	for _, de := range overruled {
+		ch <- de.SetCurrentValue(highest.Value())
+	}
+
+	// if there is no running and no highest (probably a default), skip
+	if running == nil && highest == nil {
+		return
+	}
+
+	// unhandled -> running but no intent data
+	if running != nil && highest == nil {
+		ch <- types.NewDeviationEntry(running.Owner(), types.DeviationReasonUnhandled, sdcpbPath).SetCurrentValue(running.Value())
+		return
+	}
+
+	// if higeste exists but not running  OR   running != highest
+	if (running == nil && highest != nil) || running.Value().Cmp(highest.Value()) != 0 {
+		de := types.NewDeviationEntry(highest.Owner(), types.DeviationReasonNotApplied, sdcpbPath).SetExpectedValue(highest.Value())
+		if running != nil {
+			de.SetCurrentValue(running.Value())
+		}
+		ch <- de
+	}
+
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sdcio/data-server/pkg/types"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/yang-parser/xpath"
 	"github.com/sdcio/yang-parser/xpath/grammars/expr"
@@ -66,7 +66,6 @@ func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, resu
 				owner = s.leafVariants.GetHighestPrecedence(false, true).Owner()
 			}
 			resultChan <- types.NewValidationResultEntry(owner, err, types.ValidationResultEntryTypeError)
-			return
 		}
 	}
 }

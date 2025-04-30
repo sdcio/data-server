@@ -1,0 +1,1 @@
+kubectl get runningconfig srl1 -o yaml | yq eval '.status.value | {"spec": {"config": [{"value": .}]}}' - | yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' running-intent-templ.yaml - >> running-intent1.yaml
