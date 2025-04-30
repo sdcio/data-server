@@ -323,11 +323,6 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 		return
 	}
 
-	// if it is a presence container that contains childs, skip
-	if lv.parentEntry.GetSchema().GetContainer().GetIsPresence() && len(lv.parentEntry.getChildren()) > 0 {
-		return
-	}
-
 	// get the path via the first LeafEntry
 	// is valida for all entries
 	sdcpbPath, err := lv.parentEntry.SdcpbPath()
