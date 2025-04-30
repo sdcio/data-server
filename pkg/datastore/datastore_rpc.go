@@ -75,7 +75,7 @@ type Datastore struct {
 	syncTreeMutex *sync.RWMutex
 
 	// owned by sync
-	syncTreeCandidat *tree.RootEntry
+	syncTreeCandidate *tree.RootEntry
 }
 
 // New creates a new datastore, its schema server client and initializes the SBI target
@@ -229,7 +229,7 @@ func (d *Datastore) Sync(ctx context.Context) {
 	var err error
 	var startTs int64
 
-	d.syncTreeCandidat, err = tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, tree.RunningIntentName))
+	d.syncTreeCandidate, err = tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, tree.RunningIntentName))
 	if err != nil {
 		log.Errorf("creating a new synctree candidate: %v", err)
 		return
@@ -254,11 +254,11 @@ func (d *Datastore) Sync(ctx context.Context) {
 				startTs = 0
 
 				d.syncTreeMutex.Lock()
-				d.syncTree = d.syncTreeCandidat
+				d.syncTree = d.syncTreeCandidate
 				d.syncTreeMutex.Unlock()
 
 				// create new syncTreeCandidat
-				d.syncTreeCandidat, err = tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, tree.RunningIntentName))
+				d.syncTreeCandidate, err = tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, tree.RunningIntentName))
 				if err != nil {
 					log.Errorf("creating a new synctree candidate: %v", err)
 					return
@@ -294,9 +294,10 @@ func (d *Datastore) writeToSyncTreeCandidate(ctx context.Context, updates []*sdc
 		return err
 	}
 
+	// fmt.Println(upds.String())
 	for idx, upd := range upds {
 		_ = idx
-		_, err := d.syncTreeCandidat.AddUpdateRecursive(ctx, upd, treetypes.NewUpdateInsertFlags())
+		_, err := d.syncTreeCandidate.AddUpdateRecursive(ctx, upd, treetypes.NewUpdateInsertFlags())
 		if err != nil {
 			return err
 		}
