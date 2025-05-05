@@ -359,42 +359,40 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, transactionIntents []*types.TransactionIntent, replaceIntent *types.TransactionIntent, transactionTimeout time.Duration, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
 	var err error
+	var transaction *types.Transaction
+	var transactionGuard *types.TransactionGuard
 
 	log.Infof("Transaction: %s - start", transactionId)
-	// try locking the datastore if it is locked return the specific ErrDatastoreLocked error.
-	if !d.dmutex.TryLock() {
-		log.Infof("Transaction: %s - abort (%v)", transactionId, ErrDatastoreLocked)
-		return nil, ErrDatastoreLocked
-	}
-	defer d.dmutex.Unlock()
 
 	// create a new Transaction with the given transaction id
-	transaction := types.NewTransaction(transactionId, d.transactionManager)
+	transaction = types.NewTransaction(transactionId, d.transactionManager)
 	// set the timeout on the transaction
 	transaction.SetTimeout(transactionTimeout)
 
-	var transactionGuard *types.TransactionGuard
-
-	// Try to register the Transaction in the TransactionManager only a single transaction can be register (implicitly being active)
-	for {
-		select {
-		case <-ctx.Done():
-			// Context was canceled or timed out
-			log.Errorf("Transaction: %s - context canceled or timed out: %v", transactionId, ctx.Err())
-			return nil, ErrContextDone
-		default:
-			// Start a transaction and prepare to cancel it if any error occurs
-			transactionGuard, err = d.transactionManager.RegisterTransaction(ctx, transaction)
-			if transactionGuard != nil {
-				defer transactionGuard.Done()
-				break
-			}
-			// log.Warnf("Transaction: %s - failed to create transaction, retrying: %v", transactionId, err)
-			// time.Sleep(time.Millisecond * 200)
+	if !dryRun {
+		// try locking the datastore if it is locked return the specific ErrDatastoreLocked error.
+		if !d.dmutex.TryLock() {
+			log.Infof("Transaction: %s - abort (%v)", transactionId, ErrDatastoreLocked)
 			return nil, ErrDatastoreLocked
 		}
-		if transactionGuard != nil {
-			break
+		defer d.dmutex.Unlock()
+
+		// Try to register the Transaction in the TransactionManager only a single transaction can be register (implicitly being active)
+		for {
+			select {
+			case <-ctx.Done():
+				// Context was canceled or timed out
+				log.Errorf("Transaction: %s - context canceled or timed out: %v", transactionId, ctx.Err())
+				return nil, ErrContextDone
+			default:
+				// Start a transaction and prepare to cancel it if any error occurs
+				transactionGuard, err = d.transactionManager.RegisterTransaction(ctx, transaction)
+				if transactionGuard != nil {
+					defer transactionGuard.Done()
+					break
+				}
+				return nil, ErrDatastoreLocked
+			}
 		}
 	}
 
@@ -432,9 +430,12 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	}
 
 	// Mark the transaction as successfully committed
-	transactionGuard.Success()
+	if !dryRun {
+		// Mark the transaction as successfully committed
+		transactionGuard.Success()
 
-	log.Infof("Transaction: %s - transacted", transactionId)
+		log.Infof("Transaction: %s - transacted", transactionId)
+	}
 	return response, err
 }
 
