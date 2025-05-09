@@ -378,6 +378,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 		defer d.dmutex.Unlock()
 
 		// Try to register the Transaction in the TransactionManager only a single transaction can be register (implicitly being active)
+	outerloop:
 		for {
 			select {
 			case <-ctx.Done():
@@ -389,7 +390,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 				transactionGuard, err = d.transactionManager.RegisterTransaction(ctx, transaction)
 				if transactionGuard != nil {
 					defer transactionGuard.Done()
-					break
+					break outerloop
 				}
 				return nil, ErrDatastoreLocked
 			}
