@@ -4,7 +4,7 @@ go 1.23.4
 
 toolchain go1.23.5
 
-replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.0-2
+replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.0-3
 
 require (
 	github.com/AlekSi/pointer v1.2.0
