@@ -1,0 +1,14 @@
+coverage:
+  status:
+    patch:
+      default:
+        informational: true # don't fail the build if PR coverage is missing
+comment:
+  layout: "diff, files"
+  behavior: new
+github_checks:
+  annotations: false
+ignore:
+  - "tests/sdcioygot"
+  - "mocks"
+  - "client"
