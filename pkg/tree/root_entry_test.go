@@ -242,6 +242,52 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				return result
 			},
 		},
+		{
+			name: "Export Non-Existing Owner",
+			sharedEntryAttributes: func() *sharedEntryAttributes {
+				// create root sharedEntryAttributes
+				result := &sharedEntryAttributes{
+					parent:       nil,
+					pathElemName: "",
+					childs:       newChildMap(),
+					childsMutex:  sync.RWMutex{},
+					schemaMutex:  sync.RWMutex{},
+					cacheMutex:   sync.Mutex{},
+				}
+				result.leafVariants = newLeafVariants(tc, result)
+
+				// create /interface sharedEntryAttributes
+				interf := &sharedEntryAttributes{
+					parent:       result,
+					pathElemName: "interface",
+					childs:       newChildMap(),
+					childsMutex:  sync.RWMutex{},
+					schemaMutex:  sync.RWMutex{},
+					cacheMutex:   sync.Mutex{},
+				}
+				interf.leafVariants = newLeafVariants(tc, interf)
+				// add interf to result (root)
+				result.childs.Add(interf)
+
+				// add interface LeafVariant
+				interf.leafVariants.Add(
+					NewLeafEntry(
+						types.NewUpdate(types.PathSlice{},
+							&schema_server.TypedValue{
+								Value: &schema_server.TypedValue_StringVal{StringVal: "Value"},
+							}, 500, owner1, 0,
+						),
+						types.NewUpdateInsertFlags(), result),
+				)
+
+				return result
+			},
+			args: args{
+				owner:    owner2,
+				priority: 50,
+			},
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -254,7 +300,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				return
 			}
 
-			if !proto.Equal(got, tt.want(t)) {
+			if !tt.wantErr && !proto.Equal(got, tt.want(t)) {
 				t.Errorf("RootEntry.TreeExport() = %v, want %v", got, tt.want(t))
 			}
 		})
