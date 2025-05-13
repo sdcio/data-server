@@ -1,12 +1,21 @@
 package tree
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"sync"
 	"testing"
 
+	"github.com/openconfig/ygot/ygot"
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	"github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/data-server/pkg/utils/testhelper"
+	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	schema_server "github.com/sdcio/sdc-protos/sdcpb"
+	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -303,6 +312,128 @@ func TestRootEntry_TreeExport(t *testing.T) {
 			if !tt.wantErr && !proto.Equal(got, tt.want(t)) {
 				t.Errorf("RootEntry.TreeExport() = %v, want %v", got, tt.want(t))
 			}
+		})
+	}
+}
+
+func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
+	owner1 := "owner1"
+
+	type args struct {
+		deletes    types.DeleteEntriesList
+		intentName string
+	}
+	tests := []struct {
+		name string
+		re   func() ygot.GoStruct
+		args args
+	}{
+		{
+			name: "Delete one",
+			args: args{
+				deletes:    types.DeleteEntriesList{},
+				intentName: owner1,
+			},
+			re: func() ygot.GoStruct {
+				return &sdcio_schema.Device{
+					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
+						{
+							Key1: "k1.1",
+							Key2: "k1.2",
+						}: {
+							Key1:    ygot.String("k1.1"),
+							Key2:    ygot.String("k1.2"),
+							Mandato: ygot.String("TheMandatoryValue1"),
+							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+								Value1: ygot.String("containerval1.1"),
+								Value2: ygot.String("containerval1.2"),
+							},
+						},
+						{
+							Key1: "k2.1",
+							Key2: "k2.2",
+						}: {
+							Key1:    ygot.String("k2.1"),
+							Key2:    ygot.String("k2.2"),
+							Mandato: ygot.String("TheMandatoryValue2"),
+							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+								Value1: ygot.String("containerval2.1"),
+								Value2: ygot.String("containerval2.2"),
+							},
+						},
+						{
+							Key1: "k1.1",
+							Key2: "k1.3",
+						}: {
+							Key1:    ygot.String("k1.1"),
+							Key2:    ygot.String("k1.3"),
+							Mandato: ygot.String("TheMandatoryValue1"),
+							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+								Value1: ygot.String("containerval1.1"),
+								Value2: ygot.String("containerval1.2"),
+							},
+						},
+					},
+				}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			// create a gomock controller
+			controller := gomock.NewController(t)
+			defer controller.Finish()
+
+			ctx := context.Background()
+
+			sc, schema, err := testhelper.InitSDCIOSchema()
+			if err != nil {
+				t.Fatal(err)
+			}
+			scb := schemaClient.NewSchemaClientBound(schema, sc)
+			tc := NewTreeContext(scb, owner1)
+
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Error(err)
+			}
+
+			jconfStr, err := ygot.EmitJSON(tt.re(), &ygot.EmitJSONConfig{
+				Format:         ygot.RFC7951,
+				SkipValidation: false,
+			})
+			if err != nil {
+				t.Error(err)
+			}
+
+			var jsonConfAny any
+			err = json.Unmarshal([]byte(jconfStr), &jsonConfAny)
+			if err != nil {
+				t.Error(err)
+			}
+
+			newFlag := types.NewUpdateInsertFlags()
+
+			err = root.ImportConfig(ctx, types.PathSlice{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+			if err != nil {
+				t.Error(err)
+			}
+
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
+
+			fmt.Println(root.String())
+
+			_, err = root.DeleteSubtreePaths(tt.args.deletes, tt.args.intentName)
+			if err != nil {
+				t.Error(err)
+			}
+
+			fmt.Println(root.String())
+
 		})
 	}
 }
