@@ -3,11 +3,13 @@ coverage:
     patch:
       default:
         informational: true # don't fail the build if PR coverage is missing
+        if_ci_failed: success
 comment:
-  layout: "diff, files"
+  layout: "condensed_header, condensed_files, condensed_footer"
   behavior: new
 github_checks:
   annotations: false
+  require_ci_to_pass: yes
 ignore:
   - "tests/sdcioygot"
   - "mocks"
