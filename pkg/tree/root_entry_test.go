@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
@@ -17,6 +18,7 @@ import (
 	schema_server "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func TestRootEntry_TreeExport(t *testing.T) {
@@ -434,6 +436,106 @@ func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
 
 			fmt.Println(root.String())
 
+		})
+	}
+}
+
+func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
+	ctx := context.Background()
+	sc, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	scb := schemaClient.NewSchemaClientBound(schema, sc)
+	tc := NewTreeContext(scb, "intent1")
+
+	type fields struct {
+		sharedEntryAttributes func(t *testing.T) *sharedEntryAttributes
+	}
+	type args struct {
+		us    types.UpdateSlice
+		flags *types.UpdateInsertFlags
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+		want    func(t *testing.T) *RootEntry
+	}{
+		{
+			name: "simple add",
+			fields: fields{
+				sharedEntryAttributes: func(t *testing.T) *sharedEntryAttributes {
+					s, err := newSharedEntryAttributes(ctx, nil, "", tc)
+					if err != nil {
+						t.Fatal(err)
+					}
+					schema, err := tc.schemaClient.GetSchemaSlicePath(ctx, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					s.schema = schema.GetSchema()
+					s.leafVariants = newLeafVariants(tc, s)
+					return s
+				},
+			},
+			args: args{
+				us: types.UpdateSlice{
+					types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("test"), *proto.Int32(5), "owner1", 0),
+					types.NewUpdate(types.PathSlice{"network-instance", "ni1", "protocol", "bgp"}, &schema_server.TypedValue{Value: &schema_server.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}, *proto.Int32(5), "owner1", 0),
+				},
+				flags: types.NewUpdateInsertFlags(),
+			},
+			want: func(t *testing.T) *RootEntry {
+				s, err := newSharedEntryAttributes(ctx, nil, "", tc)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				jsonByte := []byte(`{
+	"interface": [
+		{
+			"name": "ethernet-1/1",
+			"description": "test"
+		}
+	],
+	"network-instance": [
+		{
+			"name": "ni1",
+			"protocol":	{
+					"bgp": {}
+			}
+		}
+	]
+}`)
+				var jsonAny any
+				err = json.Unmarshal(jsonByte, &jsonAny)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				err = s.ImportConfig(ctx, jsonImporter.NewJsonTreeImporter(jsonAny), "owner1", 5, types.NewUpdateInsertFlags())
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				return &RootEntry{sharedEntryAttributes: s}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &RootEntry{
+				sharedEntryAttributes: tt.fields.sharedEntryAttributes(t),
+			}
+			if err := r.AddUpdatesRecursive(ctx, tt.args.us, tt.args.flags); (err != nil) != tt.wantErr {
+				t.Errorf("RootEntry.AddUpdatesRecursive() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if diff := cmp.Diff(tt.want(t).String(), r.String()); diff != "" {
+				t.Fatalf("mismatch (-want +got)\n%s", diff)
+			}
 		})
 	}
 }

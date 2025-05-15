@@ -17,9 +17,6 @@ import (
 )
 
 func Test_sharedEntryAttributes_checkAndCreateKeysAsLeafs(t *testing.T) {
-	controller := gomock.NewController(t)
-	defer controller.Finish()
-
 	sc, schema, err := testhelper.InitSDCIOSchema()
 	if err != nil {
 		t.Fatal(err)
