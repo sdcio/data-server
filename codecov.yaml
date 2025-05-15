@@ -9,7 +9,7 @@ comment:
   behavior: new
 github_checks:
   annotations: false
-  require_ci_to_pass: yes
+  require_ci_to_pass: no
 ignore:
   - "tests/sdcioygot"
   - "mocks"
