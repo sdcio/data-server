@@ -208,8 +208,10 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 }
 
 func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.DataServer_WatchDeviationsServer) error {
-	log.Debugf("Received WatchDeviationRequest: %v", req)
 	ctx := stream.Context()
+	p, ok := peer.FromContext(ctx)
+	log.Debugf("Received WatchDeviationRequest from peer %s: %v", p.Addr.String(), req)
+
 	peerInfo, ok := peer.FromContext(ctx)
 	if !ok {
 		return status.Errorf(codes.InvalidArgument, "missing peer info")

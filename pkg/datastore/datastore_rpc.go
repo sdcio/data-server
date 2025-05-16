@@ -17,6 +17,7 @@ package datastore
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -316,10 +317,6 @@ func (d *Datastore) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdc
 	}
 	pName := p.Addr.String()
 
-	if oStream, ok := d.deviationClients[pName]; ok {
-		_ = oStream // TODO:
-	}
-
 	d.deviationClients[pName] = stream
 	return nil
 }
@@ -328,6 +325,7 @@ func (d *Datastore) StopDeviationsWatch(peer string) {
 	d.m.Lock()
 	defer d.m.Unlock()
 	delete(d.deviationClients, peer)
+	log.Debugf("deviation watcher %s removed", peer)
 }
 
 func (d *Datastore) DeviationMgr(ctx context.Context) {
@@ -342,19 +340,26 @@ func (d *Datastore) DeviationMgr(ctx context.Context) {
 			return
 		case <-ticker.C:
 			d.m.RLock()
-			deviationClients := make([]sdcpb.DataServer_WatchDeviationsServer, 0, len(d.deviationClients))
-			for _, devStream := range d.deviationClients {
-				deviationClients = append(deviationClients, devStream)
+			deviationClientNames := make([]string, 0, len(d.deviationClients))
+			deviationClients := map[string]sdcpb.DataServer_WatchDeviationsServer{}
+			for clientIdentifier, devStream := range d.deviationClients {
+				deviationClients[clientIdentifier] = devStream
+				deviationClientNames = append(deviationClientNames, clientIdentifier)
 			}
 			d.m.RUnlock()
 			if len(deviationClients) == 0 {
+				log.Debugf("no deviation clients present %s", d.config.Name)
 				continue
 			}
-			for _, dc := range deviationClients {
-				dc.Send(&sdcpb.WatchDeviationResponse{
+			log.Debugf("deviations clients for %s: [ %s ]", d.config.Name, strings.Join(deviationClientNames, ", "))
+			for clientIdentifier, dc := range deviationClients {
+				err := dc.Send(&sdcpb.WatchDeviationResponse{
 					Name:  d.config.Name,
 					Event: sdcpb.DeviationEvent_START,
 				})
+				if err != nil {
+					log.Errorf("error sending deviation to %s: %v", clientIdentifier, err)
+				}
 			}
 			deviationChan, err := d.calculateDeviations(ctx)
 			if err != nil {
@@ -362,17 +367,20 @@ func (d *Datastore) DeviationMgr(ctx context.Context) {
 				continue
 			}
 			d.SendDeviations(deviationChan, deviationClients)
-			for _, dc := range deviationClients {
-				dc.Send(&sdcpb.WatchDeviationResponse{
+			for clientIdentifier, dc := range deviationClients {
+				err := dc.Send(&sdcpb.WatchDeviationResponse{
 					Name:  d.config.Name,
 					Event: sdcpb.DeviationEvent_END,
 				})
+				if err != nil {
+					log.Errorf("error sending deviation to %s: %v", clientIdentifier, err)
+				}
 			}
 		}
 	}
 }
 
-func (d *Datastore) SendDeviations(ch <-chan *treetypes.DeviationEntry, deviationClients []sdcpb.DataServer_WatchDeviationsServer) {
+func (d *Datastore) SendDeviations(ch <-chan *treetypes.DeviationEntry, deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer) {
 	wg := &sync.WaitGroup{}
 	for {
 		select {
@@ -382,9 +390,9 @@ func (d *Datastore) SendDeviations(ch <-chan *treetypes.DeviationEntry, deviatio
 				return
 			}
 			wg.Add(1)
-			go func(de DeviationEntry, dcs []sdcpb.DataServer_WatchDeviationsServer) {
-				for _, dc := range dcs {
-					dc.Send(&sdcpb.WatchDeviationResponse{
+			go func(de DeviationEntry, dcs map[string]sdcpb.DataServer_WatchDeviationsServer) {
+				for clientIdentifier, dc := range dcs {
+					err := dc.Send(&sdcpb.WatchDeviationResponse{
 						Name:          d.config.Name,
 						Intent:        de.IntentName(),
 						Event:         sdcpb.DeviationEvent_UPDATE,
@@ -393,6 +401,9 @@ func (d *Datastore) SendDeviations(ch <-chan *treetypes.DeviationEntry, deviatio
 						ExpectedValue: de.ExpectedValue(),
 						CurrentValue:  de.CurrentValue(),
 					})
+					if err != nil {
+						log.Errorf("error sending deviation to %s: %v", clientIdentifier, err)
+					}
 				}
 				wg.Done()
 			}(de, deviationClients)
