@@ -1,8 +1,6 @@
 module github.com/sdcio/data-server
 
-go 1.23.4
-
-toolchain go1.23.5
+go 1.23.9
 
 replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.0-3
 

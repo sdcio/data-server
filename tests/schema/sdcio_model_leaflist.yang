@@ -10,6 +10,12 @@ module sdcio_model_leaflist {
         min-elements 2;
         max-elements 3;
       }
+      leaf-list with-default {
+        type string;
+        default "foo";
+        default "bar";
+      }
     }
+    
   }
 }

@@ -334,7 +334,10 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	}
 
 	// perform deletes
-	root.DeleteSubtreePaths(deletes, tree.RunningIntentName)
+	_, err = root.DeleteSubtreePaths(deletes, tree.RunningIntentName)
+	if err != nil {
+		return nil, err
+	}
 
 	newRunningIntent, err := root.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
 	if newRunningIntent != nil {

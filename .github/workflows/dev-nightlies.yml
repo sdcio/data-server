@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
 
 env:
-    GOVER: 1.23.3
+    GOVER: 1.23.9
 
 jobs:
   dev-release:
