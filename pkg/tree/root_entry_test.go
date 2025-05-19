@@ -596,6 +596,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			err = resultRoot.FinishInsertionPhase(ctx)
 			if err != nil {
 				t.Fatal(err)

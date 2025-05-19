@@ -190,7 +190,7 @@ func (s *sharedEntryAttributes) GetDeviations(ch chan<- *types.DeviationEntry, a
 	}
 }
 
-func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, intentName string, prio int32) error {
+func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, intentName string, prio int32, insertFlag *types.UpdateInsertFlags) error {
 	// keys themselfes do not have a schema attached.
 	// keys must be added to the last keys level, since that is carrying the list elements data
 	// hence if the entry has a schema attached, there is nothing to be done, return.
@@ -246,7 +246,7 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 					return err
 				}
 			}
-			_, err = child.AddUpdateRecursive(ctx, types.NewUpdate(keyPath, tv, prio, intentName, 0), types.NewUpdateInsertFlags())
+			_, err = child.AddUpdateRecursive(ctx, types.NewUpdate(keyPath, tv, prio, intentName, 0), insertFlag)
 			if err != nil {
 				return err
 			}
@@ -1676,7 +1676,7 @@ func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, u *types
 	idx := s.GetLevel()
 	var err error
 	// make sure all the keys are also present as leafs
-	err = s.checkAndCreateKeysAsLeafs(ctx, u.Owner(), u.Priority())
+	err = s.checkAndCreateKeysAsLeafs(ctx, u.Owner(), u.Priority(), flags)
 	if err != nil {
 		return nil, err
 	}

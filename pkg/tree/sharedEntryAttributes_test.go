@@ -151,3 +151,42 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 		})
 	}
 }
+
+// func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
+
+// 	type args struct {
+// 		relativePath types.PathSlice
+// 		owner        string
+// 	}
+// 	tests := []struct {
+// 		name                  string
+// 		sharedEntryAttributes func(t *testing.T) *sharedEntryAttributes
+// 		args                  args
+// 		want                  bool
+// 		wantErr               bool
+// 	}{
+// 		{
+// 			name: "one",
+// 			sharedEntryAttributes: func(t *testing.T) *sharedEntryAttributes {
+
+// 				return nil
+// 			},
+// 			args:    args{},
+// 			want:    true,
+// 			wantErr: false,
+// 		},
+// 	}
+// 	for _, tt := range tests {
+// 		t.Run(tt.name, func(t *testing.T) {
+// 			s := tt.sharedEntryAttributes(t)
+// 			got, err := s.DeleteSubtree(tt.args.relativePath, tt.args.owner)
+// 			if (err != nil) != tt.wantErr {
+// 				t.Errorf("sharedEntryAttributes.DeleteSubtree() error = %v, wantErr %v", err, tt.wantErr)
+// 				return
+// 			}
+// 			if got != tt.want {
+// 				t.Errorf("sharedEntryAttributes.DeleteSubtree() = %v, want %v", got, tt.want)
+// 			}
+// 		})
+// 	}
+// }

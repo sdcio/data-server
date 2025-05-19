@@ -67,7 +67,8 @@ func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 
 func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us types.UpdateSlice, flags *types.UpdateInsertFlags) error {
 	var err error
-	for _, u := range us {
+	for idx, u := range us {
+		_ = idx
 		_, err = r.sharedEntryAttributes.AddUpdateRecursive(ctx, u, flags)
 		if err != nil {
 			return err
