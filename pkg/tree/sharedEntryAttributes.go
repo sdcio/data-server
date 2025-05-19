@@ -1178,7 +1178,10 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 				if keyTransf == nil {
 					return fmt.Errorf("unable to find key attribute %s under %s", keyElemName, s.Path())
 				}
-				keyElemValue := keyTransf.GetKeyValue()
+				keyElemValue, err := keyTransf.GetKeyValue()
+				if err != nil {
+					return err
+				}
 				// if the child does not exist, create it
 				if keyChild, exists = actualEntry.getChildren()[keyElemValue]; !exists {
 					keyChild, err = newEntry(ctx, actualEntry, keyElemValue, s.treeContext)
