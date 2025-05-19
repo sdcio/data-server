@@ -28,7 +28,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
-	go.uber.org/mock v0.5.0
+	go.uber.org/mock v0.5.2
 	google.golang.org/grpc v1.71.1
 	google.golang.org/protobuf v1.36.6
 	gopkg.in/yaml.v2 v2.4.0
