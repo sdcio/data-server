@@ -16,7 +16,7 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.3.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/openconfig/gnmi v0.14.0
-	github.com/openconfig/gnmic/pkg/api v0.1.8
+	github.com/openconfig/gnmic/pkg/api v0.1.9
 	github.com/openconfig/goyang v1.6.0
 	github.com/openconfig/ygot v0.29.20
 	github.com/prometheus/client_golang v1.22.0
