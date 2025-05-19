@@ -72,7 +72,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 			want: func(t *testing.T) *tree_persist.Intent {
 				lv, err := proto.Marshal(&schema_server.TypedValue{Value: &schema_server.TypedValue_StringVal{StringVal: "Value"}})
 				if err != nil {
-					t.Error(err)
+					t.Fatal(err)
 				}
 
 				result := &tree_persist.Intent{
@@ -134,7 +134,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 			want: func(t *testing.T) *tree_persist.Intent {
 				lv, err := proto.Marshal(&schema_server.TypedValue{Value: &schema_server.TypedValue_StringVal{StringVal: "Value"}})
 				if err != nil {
-					t.Error(err)
+					t.Fatal(err)
 				}
 
 				result := &tree_persist.Intent{
@@ -307,12 +307,12 @@ func TestRootEntry_TreeExport(t *testing.T) {
 			}
 			got, err := r.TreeExport(tt.args.owner, tt.args.priority)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("RootEntry.TreeExport() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("RootEntry.TreeExport() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
 			if !tt.wantErr && !proto.Equal(got, tt.want(t)) {
-				t.Errorf("RootEntry.TreeExport() = %v, want %v", got, tt.want(t))
+				t.Fatalf("RootEntry.TreeExport() = %v, want %v", got, tt.want(t))
 			}
 		})
 	}
@@ -398,40 +398,24 @@ func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
 
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
-				t.Error(err)
+				t.Fatal(err)
 			}
 
-			jconfStr, err := ygot.EmitJSON(tt.re(), &ygot.EmitJSONConfig{
-				Format:         ygot.RFC7951,
-				SkipValidation: false,
-			})
+			err = testhelper.LoadYgotStructIntoTreeRoot(ctx, tt.re(), root, owner1, 500, flagsNew)
 			if err != nil {
-				t.Error(err)
-			}
-
-			var jsonConfAny any
-			err = json.Unmarshal([]byte(jconfStr), &jsonConfAny)
-			if err != nil {
-				t.Error(err)
-			}
-
-			newFlag := types.NewUpdateInsertFlags()
-
-			err = root.ImportConfig(ctx, types.PathSlice{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
-			if err != nil {
-				t.Error(err)
+				t.Fatal(err)
 			}
 
 			err = root.FinishInsertionPhase(ctx)
 			if err != nil {
-				t.Error(err)
+				t.Fatal(err)
 			}
 
 			fmt.Println(root.String())
 
 			_, err = root.DeleteSubtreePaths(tt.args.deletes, tt.args.intentName)
 			if err != nil {
-				t.Error(err)
+				t.Fatal(err)
 			}
 
 			fmt.Println(root.String())
@@ -536,6 +520,96 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 			if diff := cmp.Diff(tt.want(t).String(), r.String()); diff != "" {
 				t.Fatalf("mismatch (-want +got)\n%s", diff)
 			}
+		})
+	}
+}
+
+func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
+	ctx := context.Background()
+	sc, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	scb := schemaClient.NewSchemaClientBound(schema, sc)
+
+	owner1 := "owner1"
+	owner2 := "owner2"
+
+	tests := []struct {
+		name      string
+		rootEntry func(t *testing.T) *RootEntry
+		owner     string
+		want      func(t *testing.T) *RootEntry
+	}{
+		{
+			name: "One",
+			rootEntry: func(t *testing.T) *RootEntry {
+				tc := NewTreeContext(scb, "intent1")
+				root, err := NewTreeRoot(ctx, tc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, flagsNew)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 400, flagsNew)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = root.FinishInsertionPhase(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return root
+			},
+			owner: owner1,
+			want: func(t *testing.T) *RootEntry {
+				tc := NewTreeContext(scb, "intent1")
+				root, err := NewTreeRoot(ctx, tc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, flagsNew)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = root.FinishInsertionPhase(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return root
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := tt.rootEntry(t)
+			got := root.GetUpdatesForOwner(tt.owner)
+
+			tc := NewTreeContext(scb, "intent1")
+			resultRoot, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = resultRoot.AddUpdatesRecursive(ctx, got, flagsNew)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = resultRoot.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			wantStr := tt.want(t).String()
+
+			if diff := cmp.Diff(wantStr, resultRoot.String()); diff != "" {
+				t.Errorf("GetUpdatesForOwner mismatch (-want +got):\n%s", diff)
+
+				t.Logf("Want:\n%s", wantStr)
+				t.Logf("Got:\n%s", resultRoot.String())
+			}
+
 		})
 	}
 }

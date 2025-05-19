@@ -76,10 +76,10 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us types.UpdateSlic
 	return nil
 }
 
-func (r *RootEntry) ImportConfig(ctx context.Context, path types.PathSlice, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error {
+func (r *RootEntry) ImportConfig(ctx context.Context, basePath types.PathSlice, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error {
 	r.treeContext.SetActualOwner(intentName)
 
-	e, err := r.sharedEntryAttributes.getOrCreateChilds(ctx, path)
+	e, err := r.sharedEntryAttributes.getOrCreateChilds(ctx, basePath)
 	if err != nil {
 		return err
 	}
