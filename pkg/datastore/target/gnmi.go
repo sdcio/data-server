@@ -167,6 +167,12 @@ func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDa
 		return nil, fmt.Errorf("%s", "not connected")
 	}
 
+	// deletes from protos
+	deletes, err = source.ToProtoDeletes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	switch strings.ToLower(t.cfg.GnmiOptions.Encoding) {
 	case "json":
 		jsonData, err := source.ToJson(true)
@@ -179,11 +185,6 @@ func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDa
 				return nil, err
 			}
 			upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: jsonBytes}}}}
-		}
-		// deletes from protos
-		deletes, err = source.ToProtoDeletes(ctx)
-		if err != nil {
-			return nil, err
 		}
 
 	case "json_ietf":
@@ -198,18 +199,9 @@ func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDa
 			}
 			upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonIetfVal{JsonIetfVal: jsonBytes}}}}
 		}
-		// deletes from protos
-		deletes, err = source.ToProtoDeletes(ctx)
-		if err != nil {
-			return nil, err
-		}
 
 	case "proto":
 		upds, err = source.ToProtoUpdates(ctx, true)
-		if err != nil {
-			return nil, err
-		}
-		deletes, err = source.ToProtoDeletes(ctx)
 		if err != nil {
 			return nil, err
 		}
