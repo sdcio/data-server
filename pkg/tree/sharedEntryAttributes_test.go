@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 
@@ -13,10 +14,14 @@ import (
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
+	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	"go.uber.org/mock/gomock"
 )
 
 func Test_sharedEntryAttributes_checkAndCreateKeysAsLeafs(t *testing.T) {
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
 	sc, schema, err := testhelper.InitSDCIOSchema()
 	if err != nil {
 		t.Fatal(err)
@@ -190,3 +195,111 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 // 		})
 // 	}
 // }
+
+func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
+	owner1 := "owner1"
+
+	tests := []struct {
+		name      string
+		e         func(*testing.T) Entry
+		wantKeys  []string
+		wantNames []string
+		wantErr   bool
+	}{
+		{
+			name: "Double Key",
+			e: func(t *testing.T) Entry {
+				d := &sdcio_schema.Device{
+					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
+						{
+							Key1: "k1.1",
+							Key2: "k1.2",
+						}: {
+							Key1:    ygot.String("k1.1"),
+							Key2:    ygot.String("k1.2"),
+							Mandato: ygot.String("TheMandatoryValueOther"),
+							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+								Value1: ygot.String("containerval1.1"),
+								Value2: ygot.String("containerval1.2"),
+							},
+						},
+						{
+							Key1: "k2.1",
+							Key2: "k2.2",
+						}: {
+							Key1:    ygot.String("k2.1"),
+							Key2:    ygot.String("k2.2"),
+							Mandato: ygot.String("TheMandatoryValue2"),
+							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+								Value1: ygot.String("containerval2.1"),
+								Value2: ygot.String("containerval2.2"),
+							},
+						},
+					},
+				}
+
+				mockCtrl := gomock.NewController(t)
+				defer mockCtrl.Finish()
+
+				scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				ctx := context.TODO()
+				tc := NewTreeContext(scb, owner1)
+				root, err := NewTreeRoot(ctx, tc)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, d, root, owner1, 5, flagsNew)
+				if err != nil {
+					t.Fatal(err)
+				}
+				e, err := root.Navigate(ctx, []string{"doublekey"}, true, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return e
+			},
+			wantNames: []string{"k2.2", "k1.2"},
+			wantKeys:  []string{"key1", "key2", "cont", "mandato"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := tt.e(t)
+			got, err := e.GetListChilds()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("sharedEntryAttributes.GetListChilds() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			elemNames := []string{}
+			elemChilds := map[string][]string{}
+			for _, elem := range got {
+				elemNames = append(elemNames, elem.PathName())
+				elemChilds[elem.PathName()] = []string{}
+				for k := range elem.getChildren() {
+					elemChilds[elem.PathName()] = append(elemChilds[elem.PathName()], k)
+				}
+			}
+			slices.Sort(elemNames)
+			slices.Sort(tt.wantNames)
+
+			if diff := cmp.Diff(tt.wantNames, elemNames); diff != "" {
+				t.Errorf("mismatch (-want +got)\n%s", diff)
+			}
+
+			slices.Sort(tt.wantKeys)
+			for k, v := range elemChilds {
+				slices.Sort(v)
+				if diff := cmp.Diff(tt.wantKeys, v); diff != "" {
+					t.Errorf("key %s mismatch (-want +got)\n%s", k, diff)
+				}
+			}
+
+		})
+	}
+}
