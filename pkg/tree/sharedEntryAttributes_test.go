@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 
@@ -157,44 +158,86 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 	}
 }
 
-// func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
+func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
+	owner1 := "owner1"
+	owner2 := "owner2"
+	ctx := context.TODO()
+	type args struct {
+		relativePath types.PathSlice
+		owner        string
+	}
+	tests := []struct {
+		name                  string
+		sharedEntryAttributes func(t *testing.T) *sharedEntryAttributes
+		args                  args
+		want                  bool
+		wantErr               bool
+	}{
+		{
+			name: "one",
+			sharedEntryAttributes: func(t *testing.T) *sharedEntryAttributes {
+				mockCtrl := gomock.NewController(t)
+				defer mockCtrl.Finish()
 
-// 	type args struct {
-// 		relativePath types.PathSlice
-// 		owner        string
-// 	}
-// 	tests := []struct {
-// 		name                  string
-// 		sharedEntryAttributes func(t *testing.T) *sharedEntryAttributes
-// 		args                  args
-// 		want                  bool
-// 		wantErr               bool
-// 	}{
-// 		{
-// 			name: "one",
-// 			sharedEntryAttributes: func(t *testing.T) *sharedEntryAttributes {
+				scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-// 				return nil
-// 			},
-// 			args:    args{},
-// 			want:    true,
-// 			wantErr: false,
-// 		},
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			s := tt.sharedEntryAttributes(t)
-// 			got, err := s.DeleteSubtree(tt.args.relativePath, tt.args.owner)
-// 			if (err != nil) != tt.wantErr {
-// 				t.Errorf("sharedEntryAttributes.DeleteSubtree() error = %v, wantErr %v", err, tt.wantErr)
-// 				return
-// 			}
-// 			if got != tt.want {
-// 				t.Errorf("sharedEntryAttributes.DeleteSubtree() = %v, want %v", got, tt.want)
-// 			}
-// 		})
-// 	}
-// }
+				tc := NewTreeContext(scb, owner1)
+				root, err := NewTreeRoot(ctx, tc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, flagsNew)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, flagsNew)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				err = root.FinishInsertionPhase(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				return root.sharedEntryAttributes
+			},
+			args: args{
+				relativePath: types.PathSlice{"interface"},
+				owner:        owner1,
+			},
+			want:    true,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := tt.sharedEntryAttributes(t)
+			got, err := s.DeleteSubtree(tt.args.relativePath, tt.args.owner)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("sharedEntryAttributes.DeleteSubtree() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("sharedEntryAttributes.DeleteSubtree() = %v, want %v", got, tt.want)
+			}
+			e, err := s.Navigate(ctx, tt.args.relativePath, false, false)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			les := []*LeafEntry{}
+			result := e.GetByOwner(tt.args.owner, les)
+			if len(result) > 0 {
+				t.Errorf("expected all elements under %s to be deleted for owner %s but got %d elements", strings.Join(tt.args.relativePath, "/"), tt.args.owner, len(result))
+				return
+			}
+		})
+	}
+}
 
 func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 	owner1 := "owner1"
