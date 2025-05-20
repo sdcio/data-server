@@ -609,42 +609,6 @@ func (s *sharedEntryAttributes) remainsToExist() bool {
 // getRegularDeletes performs deletion calculation on elements that have a schema attached.
 func (s *sharedEntryAttributes) getRegularDeletes(deletes []types.DeleteEntry, aggregate bool) ([]types.DeleteEntry, error) {
 	var err error
-	// if entry is a container type, check the keys, to be able to
-	// issue a delte for the whole branch at once via keys
-	// switch s.schema.GetSchema().(type) {
-	// case *sdcpb.SchemaElem_Container:
-	// 	// deletes for child elements (choice cases) that newly became inactive.
-	// 	for _, v := range s.choicesResolvers {
-	// 		// oldBestCaseName := v.getOldBestCaseName()
-	// 		// newBestCaseName := v.getBestCaseName()
-	// 		// // so if we have an old and a new best cases (not "") and the names are different,
-	// 		// // all the old to the deletion list
-	// 		// if oldBestCaseName != "" && newBestCaseName != "" && oldBestCaseName != newBestCaseName {
-	// 		// 	// try fetching the case from the childs
-	// 		// 	oldBestCaseEntry, exists := s.childs.GetEntry(oldBestCaseName)
-	// 		// 	if exists {
-	// 		// 		deletes = append(deletes, oldBestCaseEntry)
-	// 		// 	} else {
-	// 		// 		// it might be that the child is not loaded into the tree, but just considered from the treecontext cache for the choice/case resolution
-	// 		// 		// if so, we create and return the DeleteEntryImpl struct
-	// 		// 		path, err := s.SdcpbPath()
-	// 		// 		if err != nil {
-	// 		// 			return nil, err
-	// 		// 		}
-	// 		// 		deletes = append(deletes, types.NewDeleteEntryImpl(path, append(s.Path(), oldBestCaseName)))
-	// 		// 	}
-	// 		// }
-	// 		path, err := s.SdcpbPath()
-	// 		if err != nil {
-	// 			return nil, err
-	// 		}
-	// 		deleteElements := v.GetDeletes()
-	// 		for _, de := range deleteElements {
-	// 			deletes = append(deletes, types.NewDeleteEntryImpl(path, append(s.Path(), de)))
-	// 		}
-	// 	}
-	// }
-
 	if s.shouldDelete() && !s.IsRoot() && len(s.GetSchemaKeys()) == 0 {
 		return append(deletes, s), nil
 	}
