@@ -542,3 +542,65 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 		})
 	}
 }
+
+func Test_sharedEntryAttributes_getOrCreateChilds(t *testing.T) {
+	ctx := context.TODO()
+	owner1 := "owner1"
+
+	tests := []struct {
+		name        string
+		s           func(t *testing.T) *RootEntry
+		path        types.PathSlice
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name: "one",
+			path: types.PathSlice{"interface", "ethernet-1/1", "description"},
+		},
+		{
+			name: "doublekey",
+			path: types.PathSlice{"doublekey", "k1.1", "k1.2", "mandato"},
+		},
+		{
+			name:        "non existing attribute",
+			path:        types.PathSlice{"network-instance", "ni1", "protocol", "osgp"},
+			wantErr:     true,
+			errContains: "container protocol - unknown element osgp",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+
+			scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			tc := NewTreeContext(scb, owner1)
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			x, err := root.getOrCreateChilds(ctx, tt.path)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("sharedEntryAttributes.getOrCreateChilds() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("expected error: %s, got error %s", err.Error(), tt.errContains)
+				}
+				return
+			}
+
+			if x.Path().String() != tt.path.String() {
+				t.Errorf("%s != %s", x.Path().String(), tt.path.String())
+			}
+		})
+	}
+}
