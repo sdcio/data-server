@@ -21,6 +21,7 @@ import (
 	"os"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -70,11 +71,9 @@ func init() {
 
 func printDataStoreTable(rsp *sdcpb.GetDataStoreResponse) {
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "Schema", "Protocol", "Address", "State"})
-	table.SetAlignment(tablewriter.ALIGN_LEFT)
-	table.SetAutoFormatHeaders(false)
-	table.SetAutoWrapText(false)
-	table.AppendBulk(toTableData(rsp))
+	table.Header([]string{"Name", "Schema", "Protocol", "Address", "State"})
+	table.Options(tablewriter.WithAlignment(tw.Alignment{tw.AlignLeft}))
+	table.Bulk(toTableData(rsp))
 	table.Render()
 }
 
