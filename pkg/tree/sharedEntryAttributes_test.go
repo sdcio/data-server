@@ -212,6 +212,45 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 			want:    true,
 			wantErr: false,
 		},
+		{
+			name: "wrong path",
+			sharedEntryAttributes: func(t *testing.T) *sharedEntryAttributes {
+				mockCtrl := gomock.NewController(t)
+				defer mockCtrl.Finish()
+
+				scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				tc := NewTreeContext(scb, owner1)
+				root, err := NewTreeRoot(ctx, tc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, flagsNew)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, flagsNew)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				err = root.FinishInsertionPhase(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				return root.sharedEntryAttributes
+			},
+			args: args{
+				relativePath: types.PathSlice{"interface", "ethernet-1/27"},
+				owner:        owner1,
+			},
+			want:    false,
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -219,6 +258,9 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 			got, err := s.DeleteSubtree(tt.args.relativePath, tt.args.owner)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("sharedEntryAttributes.DeleteSubtree() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
 				return
 			}
 			if got != tt.want {
