@@ -198,81 +198,100 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 
 func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 	owner1 := "owner1"
+	ctx := context.TODO()
+	device := func(t *testing.T) *RootEntry {
+		d := &sdcio_schema.Device{
+			Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
+				{
+					Key1: "k1.1",
+					Key2: "k1.2",
+				}: {
+					Key1:    ygot.String("k1.1"),
+					Key2:    ygot.String("k1.2"),
+					Mandato: ygot.String("TheMandatoryValueOther"),
+					Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+						Value1: ygot.String("containerval1.1"),
+						Value2: ygot.String("containerval1.2"),
+					},
+				},
+				{
+					Key1: "k2.1",
+					Key2: "k2.2",
+				}: {
+					Key1:    ygot.String("k2.1"),
+					Key2:    ygot.String("k2.2"),
+					Mandato: ygot.String("TheMandatoryValue2"),
+					Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+						Value1: ygot.String("containerval2.1"),
+						Value2: ygot.String("containerval2.2"),
+					},
+				},
+			},
+		}
+
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
+
+		scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		tc := NewTreeContext(scb, owner1)
+		root, err := NewTreeRoot(ctx, tc)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = testhelper.LoadYgotStructIntoTreeRoot(ctx, d, root, owner1, 5, flagsNew)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return root
+	}
 
 	tests := []struct {
 		name      string
-		e         func(*testing.T) Entry
+		path      []string
 		wantKeys  []string
 		wantNames []string
 		wantErr   bool
 	}{
 		{
-			name: "Double Key",
-			e: func(t *testing.T) Entry {
-				d := &sdcio_schema.Device{
-					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
-						{
-							Key1: "k1.1",
-							Key2: "k1.2",
-						}: {
-							Key1:    ygot.String("k1.1"),
-							Key2:    ygot.String("k1.2"),
-							Mandato: ygot.String("TheMandatoryValueOther"),
-							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
-								Value1: ygot.String("containerval1.1"),
-								Value2: ygot.String("containerval1.2"),
-							},
-						},
-						{
-							Key1: "k2.1",
-							Key2: "k2.2",
-						}: {
-							Key1:    ygot.String("k2.1"),
-							Key2:    ygot.String("k2.2"),
-							Mandato: ygot.String("TheMandatoryValue2"),
-							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
-								Value1: ygot.String("containerval2.1"),
-								Value2: ygot.String("containerval2.2"),
-							},
-						},
-					},
-				}
-
-				mockCtrl := gomock.NewController(t)
-				defer mockCtrl.Finish()
-
-				scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				ctx := context.TODO()
-				tc := NewTreeContext(scb, owner1)
-				root, err := NewTreeRoot(ctx, tc)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, d, root, owner1, 5, flagsNew)
-				if err != nil {
-					t.Fatal(err)
-				}
-				e, err := root.Navigate(ctx, []string{"doublekey"}, true, false)
-				if err != nil {
-					t.Fatal(err)
-				}
-				return e
-			},
+			name:      "Double Key - pass",
 			wantNames: []string{"k2.2", "k1.2"},
 			wantKeys:  []string{"key1", "key2", "cont", "mandato"},
+			path:      []string{"doublekey"},
+		},
+		{
+			name:    "nil schema",
+			path:    []string{"doublekey", "k1.1"},
+			wantErr: true,
+		},
+		{
+			name:    "non container",
+			path:    []string{"doublekey", "k1.1", "k1.2", "mandato"},
+			wantErr: true,
+		},
+		{
+			name:    "container not a list",
+			path:    []string{},
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			e := tt.e(t)
+			e, err := device(t).Navigate(ctx, tt.path, true, false)
+			if err != nil {
+				t.Error(err)
+				return
+			}
 			got, err := e.GetListChilds()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("sharedEntryAttributes.GetListChilds() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
 				return
 			}
 
@@ -290,6 +309,7 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 
 			if diff := cmp.Diff(tt.wantNames, elemNames); diff != "" {
 				t.Errorf("mismatch (-want +got)\n%s", diff)
+				return
 			}
 
 			slices.Sort(tt.wantKeys)
@@ -297,6 +317,7 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 				slices.Sort(v)
 				if diff := cmp.Diff(tt.wantKeys, v); diff != "" {
 					t.Errorf("key %s mismatch (-want +got)\n%s", k, diff)
+					return
 				}
 			}
 
