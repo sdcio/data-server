@@ -16,6 +16,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
+	schema_server "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 )
 
@@ -404,6 +405,138 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 					t.Errorf("key %s mismatch (-want +got)\n%s", k, diff)
 					return
 				}
+			}
+
+		})
+	}
+}
+
+func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
+	owner1 := "owner1"
+	ctx := context.TODO()
+
+	tests := []struct {
+		name string
+		s    func(t *testing.T) *RootEntry
+		want []*types.DeviationEntry
+	}{
+		{
+			name: "one",
+			s: func(t *testing.T) *RootEntry {
+
+				mockCtrl := gomock.NewController(t)
+				defer mockCtrl.Finish()
+
+				scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				tc := NewTreeContext(scb, owner1)
+				root, err := NewTreeRoot(ctx, tc)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				conf1 := config1()
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, flagsNew)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				running := config1()
+
+				running.Interface["ethernet-1/1"].Description = ygot.String("Changed Description")
+				running.Interface["ethernet-1/3"] = &sdcio_schema.SdcioModel_Interface{
+					Name:        ygot.String("ethernet-1/3"),
+					Description: ygot.String("ethernet-1/3 description"),
+				}
+
+				running.Patterntest = ygot.String("hallo 0")
+
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, running, root, RunningIntentName, RunningValuesPrio, flagsExisting)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				err = root.FinishInsertionPhase(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				return root
+			},
+			want: []*types.DeviationEntry{
+				// one
+				types.NewDeviationEntry(
+					owner1,
+					types.DeviationReasonNotApplied,
+					&schema_server.Path{
+						Elem: []*schema_server.PathElem{
+							{Name: "interface", Key: map[string]string{"name": "ethernet-1/1"}},
+							{Name: "description"}},
+					},
+				).SetCurrentValue(testhelper.GetStringTvProto("Changed Description")).SetExpectedValue(testhelper.GetStringTvProto("Foo")),
+				// two
+				types.NewDeviationEntry(
+					owner1,
+					types.DeviationReasonNotApplied,
+					&schema_server.Path{
+						Elem: []*schema_server.PathElem{
+							{Name: "patterntest"}},
+					},
+				).SetCurrentValue(testhelper.GetStringTvProto("hallo 0")).SetExpectedValue(testhelper.GetStringTvProto("foo")),
+				// three
+				types.NewDeviationEntry(
+					RunningIntentName,
+					types.DeviationReasonUnhandled,
+					&schema_server.Path{
+						Elem: []*schema_server.PathElem{
+							{Name: "interface", Key: map[string]string{"name": "ethernet-1/3"}},
+							{Name: "description"}},
+					},
+				).SetCurrentValue(testhelper.GetStringTvProto("ethernet-1/3 description")).SetExpectedValue(nil),
+				// four
+				types.NewDeviationEntry(
+					RunningIntentName,
+					types.DeviationReasonUnhandled,
+					&schema_server.Path{
+						Elem: []*schema_server.PathElem{
+							{Name: "interface", Key: map[string]string{"name": "ethernet-1/3"}},
+							{Name: "name"}},
+					},
+				).SetCurrentValue(testhelper.GetStringTvProto("ethernet-1/3")).SetExpectedValue(nil),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := tt.s(t)
+			ch := make(chan *types.DeviationEntry, 100)
+			root.GetDeviations(ch)
+			close(ch)
+
+			result := []string{}
+			for entry := range ch {
+				result = append(result, entry.String())
+			}
+
+			expected := []string{}
+			for _, entry := range tt.want {
+				expected = append(expected, entry.String())
+			}
+			// sort slices
+			slices.Sort(result)
+			slices.Sort(expected)
+
+			// combine into single string
+			expectedString := strings.Join(expected, "\n")
+			resultString := strings.Join(result, "\n")
+
+			// diff the expected and result Strings
+			if diff := cmp.Diff(expectedString, resultString); diff != "" {
+				t.Errorf("mismatch (-want +got)\n%s", diff)
+				return
 			}
 
 		})
