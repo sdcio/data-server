@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
+	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -153,7 +154,8 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(root.String(), newRoot.String()); diff != "" {
-				t.Fatalf("mismatching trees (-want +got)\n%s", diff)
+				t.Errorf("mismatching trees (-want +got)\n%s", diff)
+				return
 			}
 		})
 	}
@@ -549,7 +551,6 @@ func Test_sharedEntryAttributes_getOrCreateChilds(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		s           func(t *testing.T) *RootEntry
 		path        types.PathSlice
 		wantErr     bool
 		errContains string
@@ -601,6 +602,153 @@ func Test_sharedEntryAttributes_getOrCreateChilds(t *testing.T) {
 			if x.Path().String() != tt.path.String() {
 				t.Errorf("%s != %s", x.Path().String(), tt.path.String())
 			}
+		})
+	}
+}
+
+func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
+	ctx := context.TODO()
+	owner1 := "owner1"
+
+	tests := []struct {
+		name string
+		r    func(t *testing.T) *RootEntry
+		want []*types.ValidationResultEntry
+	}{
+		{
+			name: "no containers with mandatories",
+			r: func(t *testing.T) *RootEntry {
+
+				mockCtrl := gomock.NewController(t)
+				defer mockCtrl.Finish()
+
+				scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				tc := NewTreeContext(scb, owner1)
+				root, err := NewTreeRoot(ctx, tc)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				conf1 := config1()
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, flagsNew)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				err = root.FinishInsertionPhase(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				return root
+			},
+			want: []*types.ValidationResultEntry{},
+		},
+		{
+			name: "mandatories missing",
+			r: func(t *testing.T) *RootEntry {
+				mockCtrl := gomock.NewController(t)
+				defer mockCtrl.Finish()
+
+				scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				tc := NewTreeContext(scb, owner1)
+				root, err := NewTreeRoot(ctx, tc)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				conf1 := &sdcio_schema.Device{
+					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
+						{
+							Key1: "k1.1",
+							Key2: "k1.2",
+						}: {
+							Key1: ygot.String("k1.1"),
+							Key2: ygot.String("k1.2"),
+							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+								Value1: ygot.String("containerval1.1"),
+								Value2: ygot.String("containerval1.2"),
+							},
+						},
+					},
+					NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
+						"ni1": {
+							Name:        ygot.String("ni1"),
+							Description: ygot.String("ni1 Description"),
+							Protocol: &sdcio_schema.SdcioModel_NetworkInstance_Protocol{
+								Bgp: &sdcio_schema.SdcioModel_NetworkInstance_Protocol_Bgp{
+									AdminState: sdcio_schema.SdcioModelNi_AdminState_enable,
+								},
+							},
+						},
+					},
+				}
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, flagsNew)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				err = root.FinishInsertionPhase(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				return root
+			},
+			want: []*types.ValidationResultEntry{
+				types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child [mandato] does not exist, path: doublekey/k1.1/k1.2"), types.ValidationResultEntryTypeError),
+				types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child [autonomous-system] does not exist, path: network-instance/ni1/protocol/bgp"), types.ValidationResultEntryTypeError),
+				types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child [router-id] does not exist, path: network-instance/ni1/protocol/bgp"), types.ValidationResultEntryTypeError),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := tt.r(t)
+
+			dv := &config.Validators{}
+			dv.DisableAll()
+			dv.Mandatory = false
+
+			validationResults := root.Validate(ctx, &config.Validation{DisableConcurrency: true, DisabledValidators: *dv})
+
+			results := []string{}
+			for _, e := range validationResults {
+				results = append(results, e.ErrorsString()...)
+				results = append(results, e.WarningsString()...)
+			}
+
+			expected := types.ValidationResults{}
+			for _, e := range tt.want {
+				err := expected.AddEntry(e)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+			}
+
+			expectedStrArr := []string{}
+			for _, e := range expected {
+				expectedStrArr = append(expectedStrArr, e.ErrorsString()...)
+				expectedStrArr = append(expectedStrArr, e.WarningsString()...)
+			}
+
+			slices.Sort(results)
+			slices.Sort(expectedStrArr)
+
+			if diff := cmp.Diff(expectedStrArr, results); diff != "" {
+				t.Errorf("mismatching validation messages (-want +got)\n%s", diff)
+				return
+			}
+
 		})
 	}
 }
