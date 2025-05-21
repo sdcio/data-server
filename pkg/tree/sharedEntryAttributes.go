@@ -1311,9 +1311,11 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(ctx context.Context, l
 			// if it is not a choice
 			if choiceName == "" {
 				resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child %s does not exist, path: %s", attributes, s.Path()), types.ValidationResultEntryTypeError)
+				return
 			}
 			// if it is a mandatory choice
 			resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory choice %s [attributes: %s] does not exist, path: %s", choiceName, attributes, s.Path()), types.ValidationResultEntryTypeError)
+			return
 		}
 		return
 	}
