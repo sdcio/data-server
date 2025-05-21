@@ -1,6 +1,7 @@
 package types
 
 import (
+	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -12,13 +13,11 @@ type DeleteEntry interface {
 // DeleteEntryImpl is a crutch to flag oldbestcases if on a choice, the active case changed
 type DeleteEntryImpl struct {
 	sdcpbPath *sdcpb.Path
-	pathslice PathSlice
 }
 
-func NewDeleteEntryImpl(sdcpbPath *sdcpb.Path, pathslice PathSlice) *DeleteEntryImpl {
+func NewDeleteEntryImpl(sdcpbPath *sdcpb.Path) *DeleteEntryImpl {
 	return &DeleteEntryImpl{
 		sdcpbPath: sdcpbPath,
-		pathslice: pathslice,
 	}
 }
 
@@ -26,7 +25,7 @@ func (d *DeleteEntryImpl) SdcpbPath() (*sdcpb.Path, error) {
 	return d.sdcpbPath, nil
 }
 func (d *DeleteEntryImpl) Path() PathSlice {
-	return d.pathslice
+	return utils.ToStrings(d.sdcpbPath, false, false)
 }
 
 type DeleteEntriesList []DeleteEntry
