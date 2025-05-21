@@ -5,6 +5,10 @@ type Validation struct {
 	DisableConcurrency bool       `yaml:"disable-concurrency,omitempty" json:"disable-concurrency,omitempty"`
 }
 
+func (v *Validation) validateSetDefaults() error {
+	return nil
+}
+
 type Validators struct {
 	Mandatory               bool `yaml:"mandatory,omitempty" json:"mandatory,omitempty"`
 	Leafref                 bool `yaml:"leafref,omitempty" json:"leafref,omitempty"`
@@ -16,6 +20,13 @@ type Validators struct {
 	MaxElements             bool `yaml:"max-elements,omitempty" json:"max-elements,omitempty"`
 }
 
-func (v *Validation) validateSetDefaults() error {
-	return nil
+func (v *Validators) DisableAll() {
+	v.Leafref = true
+	v.LeafrefMinMaxAttributes = true
+	v.Length = true
+	v.Mandatory = true
+	v.MaxElements = true
+	v.MustStatement = true
+	v.Pattern = true
+	v.Range = true
 }
