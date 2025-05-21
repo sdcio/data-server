@@ -14,7 +14,7 @@ func DefaultValueExists(schema *sdcpb.SchemaElem) bool {
 	case *sdcpb.SchemaElem_Field:
 		return schem.Field.GetDefault() != ""
 	case *sdcpb.SchemaElem_Leaflist:
-		return schem.Leaflist.GetDefaults() != nil
+		return len(schem.Leaflist.GetDefaults()) > 0
 	}
 	return false
 }

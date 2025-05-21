@@ -190,7 +190,7 @@ func (s *sharedEntryAttributes) GetDeviations(ch chan<- *types.DeviationEntry, a
 	}
 }
 
-func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, intentName string, prio int32) error {
+func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, intentName string, prio int32, insertFlag *types.UpdateInsertFlags) error {
 	// keys themselfes do not have a schema attached.
 	// keys must be added to the last keys level, since that is carrying the list elements data
 	// hence if the entry has a schema attached, there is nothing to be done, return.
@@ -246,7 +246,7 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 					return err
 				}
 			}
-			_, err = child.AddUpdateRecursive(ctx, types.NewUpdate(keyPath, tv, prio, intentName, 0), types.NewUpdateInsertFlags())
+			_, err = child.AddUpdateRecursive(ctx, types.NewUpdate(keyPath, tv, prio, intentName, 0), insertFlag)
 			if err != nil {
 				return err
 			}
@@ -609,42 +609,6 @@ func (s *sharedEntryAttributes) remainsToExist() bool {
 // getRegularDeletes performs deletion calculation on elements that have a schema attached.
 func (s *sharedEntryAttributes) getRegularDeletes(deletes []types.DeleteEntry, aggregate bool) ([]types.DeleteEntry, error) {
 	var err error
-	// if entry is a container type, check the keys, to be able to
-	// issue a delte for the whole branch at once via keys
-	// switch s.schema.GetSchema().(type) {
-	// case *sdcpb.SchemaElem_Container:
-	// 	// deletes for child elements (choice cases) that newly became inactive.
-	// 	for _, v := range s.choicesResolvers {
-	// 		// oldBestCaseName := v.getOldBestCaseName()
-	// 		// newBestCaseName := v.getBestCaseName()
-	// 		// // so if we have an old and a new best cases (not "") and the names are different,
-	// 		// // all the old to the deletion list
-	// 		// if oldBestCaseName != "" && newBestCaseName != "" && oldBestCaseName != newBestCaseName {
-	// 		// 	// try fetching the case from the childs
-	// 		// 	oldBestCaseEntry, exists := s.childs.GetEntry(oldBestCaseName)
-	// 		// 	if exists {
-	// 		// 		deletes = append(deletes, oldBestCaseEntry)
-	// 		// 	} else {
-	// 		// 		// it might be that the child is not loaded into the tree, but just considered from the treecontext cache for the choice/case resolution
-	// 		// 		// if so, we create and return the DeleteEntryImpl struct
-	// 		// 		path, err := s.SdcpbPath()
-	// 		// 		if err != nil {
-	// 		// 			return nil, err
-	// 		// 		}
-	// 		// 		deletes = append(deletes, types.NewDeleteEntryImpl(path, append(s.Path(), oldBestCaseName)))
-	// 		// 	}
-	// 		// }
-	// 		path, err := s.SdcpbPath()
-	// 		if err != nil {
-	// 			return nil, err
-	// 		}
-	// 		deleteElements := v.GetDeletes()
-	// 		for _, de := range deleteElements {
-	// 			deletes = append(deletes, types.NewDeleteEntryImpl(path, append(s.Path(), de)))
-	// 		}
-	// 	}
-	// }
-
 	if s.shouldDelete() && !s.IsRoot() && len(s.GetSchemaKeys()) == 0 {
 		return append(deletes, s), nil
 	}
@@ -1178,7 +1142,10 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 				if keyTransf == nil {
 					return fmt.Errorf("unable to find key attribute %s under %s", keyElemName, s.Path())
 				}
-				keyElemValue := keyTransf.GetKeyValue()
+				keyElemValue, err := keyTransf.GetKeyValue()
+				if err != nil {
+					return err
+				}
 				// if the child does not exist, create it
 				if keyChild, exists = actualEntry.getChildren()[keyElemValue]; !exists {
 					keyChild, err = newEntry(ctx, actualEntry, keyElemValue, s.treeContext)
@@ -1344,9 +1311,11 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(ctx context.Context, l
 			// if it is not a choice
 			if choiceName == "" {
 				resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child %s does not exist, path: %s", attributes, s.Path()), types.ValidationResultEntryTypeError)
+				return
 			}
 			// if it is a mandatory choice
 			resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory choice %s [attributes: %s] does not exist, path: %s", choiceName, attributes, s.Path()), types.ValidationResultEntryTypeError)
+			return
 		}
 		return
 	}
@@ -1673,7 +1642,7 @@ func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, u *types
 	idx := s.GetLevel()
 	var err error
 	// make sure all the keys are also present as leafs
-	err = s.checkAndCreateKeysAsLeafs(ctx, u.Owner(), u.Priority())
+	err = s.checkAndCreateKeysAsLeafs(ctx, u.Owner(), u.Priority(), flags)
 	if err != nil {
 		return nil, err
 	}

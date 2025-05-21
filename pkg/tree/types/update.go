@@ -98,14 +98,13 @@ func (u *Update) GetPathSlice() PathSlice {
 func ExpandAndConvertIntent(ctx context.Context, scb utils.SchemaClientBound, intentName string, priority int32, upds []*sdcpb.Update, ts int64) (UpdateSlice, error) {
 	converter := utils.NewConverter(scb)
 
-	// list of updates to be added to the cache
 	// Expands the value, in case of json to single typed value updates
 	expandedReqUpdates, err := converter.ExpandUpdates(ctx, upds)
 	if err != nil {
 		return nil, err
 	}
 
-	// temp storage for cache.Update of the req. They are to be added later.
+	// temp storage for types.Update of the req. They are to be added later.
 	newCacheUpdates := make(UpdateSlice, 0, len(expandedReqUpdates))
 
 	for _, u := range expandedReqUpdates {
@@ -114,7 +113,7 @@ func ExpandAndConvertIntent(ctx context.Context, scb utils.SchemaClientBound, in
 			return nil, err
 		}
 
-		// construct the cache.Update
+		// construct the types.Update
 		newCacheUpdates = append(newCacheUpdates, NewUpdate(pathslice, u.GetValue(), priority, intentName, ts))
 	}
 	return newCacheUpdates, nil

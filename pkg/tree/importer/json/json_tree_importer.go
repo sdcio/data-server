@@ -71,8 +71,8 @@ func (j *JsonTreeImporter) GetElements() []importer.ImportConfigAdapter {
 	return result
 }
 
-func (j *JsonTreeImporter) GetKeyValue() string {
-	return fmt.Sprintf("%v", j.data)
+func (j *JsonTreeImporter) GetKeyValue() (string, error) {
+	return fmt.Sprintf("%v", j.data), nil
 }
 
 func (j *JsonTreeImporter) GetTVValue(slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {

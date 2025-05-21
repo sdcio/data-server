@@ -40,8 +40,8 @@ func (x *XmlTreeImporter) GetElements() []importer.ImportConfigAdapter {
 	return result
 }
 
-func (x *XmlTreeImporter) GetKeyValue() string {
-	return x.elem.Text()
+func (x *XmlTreeImporter) GetKeyValue() (string, error) {
+	return x.elem.Text(), nil
 }
 
 func (x *XmlTreeImporter) GetTVValue(slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {

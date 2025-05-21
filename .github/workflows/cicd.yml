@@ -9,7 +9,7 @@ on:
       - "main"
       - "!releases/**"
 env:
-  GOVER: 1.23.3
+  GOVER: 1.23.9
 
 jobs:
   unittest:

@@ -67,7 +67,8 @@ func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 
 func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us types.UpdateSlice, flags *types.UpdateInsertFlags) error {
 	var err error
-	for _, u := range us {
+	for idx, u := range us {
+		_ = idx
 		_, err = r.sharedEntryAttributes.AddUpdateRecursive(ctx, u, flags)
 		if err != nil {
 			return err
@@ -76,10 +77,10 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us types.UpdateSlic
 	return nil
 }
 
-func (r *RootEntry) ImportConfig(ctx context.Context, path types.PathSlice, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error {
+func (r *RootEntry) ImportConfig(ctx context.Context, basePath types.PathSlice, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error {
 	r.treeContext.SetActualOwner(intentName)
 
-	e, err := r.sharedEntryAttributes.getOrCreateChilds(ctx, path)
+	e, err := r.sharedEntryAttributes.getOrCreateChilds(ctx, basePath)
 	if err != nil {
 		return err
 	}
@@ -197,8 +198,14 @@ NEXTELEMENT:
 	return result
 }
 
-func (r *RootEntry) DeleteSubtreePaths(deletes types.DeleteEntriesList, intentName string) {
+// DeleteSubtree Deletes from the tree, all elements of the PathSlice defined branch of the given owner. Return values are remainsToExist and error if an error occured.
+func (r *RootEntry) DeleteSubtreePaths(deletes types.DeleteEntriesList, intentName string) (bool, error) {
+	remainsToExist := true
 	for _, del := range deletes {
-		r.DeleteSubtree(del.Path(), intentName)
+		remainsToExist, err := r.DeleteSubtree(del.Path(), intentName)
+		if err != nil {
+			return remainsToExist, err
+		}
 	}
+	return remainsToExist, nil
 }

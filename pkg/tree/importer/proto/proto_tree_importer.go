@@ -1,11 +1,12 @@
 package proto
 
 import (
+	"fmt"
+
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -51,12 +52,12 @@ func (p *ProtoTreeImporter) GetElement(key string) importer.ImportConfigAdapter 
 	return nil
 }
 
-func (p *ProtoTreeImporter) GetKeyValue() string {
+func (p *ProtoTreeImporter) GetKeyValue() (string, error) {
 	tv, err := p.GetTVValue(nil)
 	if err != nil {
-		log.Errorf("failed GetTVValue for %s", p.data.Name)
+		return "", fmt.Errorf("failed GetTVValue for %s", p.data.Name)
 	}
-	return utils.TypedValueToString(tv)
+	return utils.TypedValueToString(tv), nil
 }
 
 func (p *ProtoTreeImporter) GetTVValue(slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
