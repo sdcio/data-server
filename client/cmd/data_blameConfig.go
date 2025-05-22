@@ -3,9 +3,11 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var (
@@ -32,7 +34,19 @@ var dataBlameConfig = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Println(rsp.GetConfigTree().ToString())
+		switch format {
+		case "":
+			fmt.Println(rsp.GetConfigTree().ToString())
+		case "json":
+			opts := protojson.MarshalOptions{
+				Indent: "  ",
+			}
+			b, err := opts.Marshal(rsp.ConfigTree)
+			if err != nil {
+				fmt.Fprintf(os.Stdout, "%v", err)
+			}
+			fmt.Println(string(b))
+		}
 		return nil
 	},
 }
