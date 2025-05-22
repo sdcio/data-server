@@ -18,6 +18,7 @@ import (
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -1598,7 +1599,6 @@ func (s *sharedEntryAttributes) TreeExport(owner string) ([]*tree_persist.TreeEl
 }
 
 func (s *sharedEntryAttributes) BlameConfig(includeDefaults bool) (*sdcpb.BlameTreeElement, error) {
-
 	name := s.pathElemName
 	if s.GetLevel() == 0 {
 		name = fmt.Sprintf("root")
@@ -1606,10 +1606,18 @@ func (s *sharedEntryAttributes) BlameConfig(includeDefaults bool) (*sdcpb.BlameT
 	result := sdcpb.NewBlameTreeElement(name)
 
 	// process Value
-	le := s.leafVariants.GetHighestPrecedence(false, true)
-	if le != nil {
-		if le.Update.Owner() != DefaultsIntentName || includeDefaults {
-			result.SetValue(le.Update.Value()).SetOwner(le.Update.Owner())
+	highestLe := s.leafVariants.GetHighestPrecedence(false, true)
+	if highestLe != nil {
+		if highestLe.Update.Owner() != DefaultsIntentName || includeDefaults {
+			result.SetValue(highestLe.Update.Value()).SetOwner(highestLe.Update.Owner())
+
+			// check if running equals the expected
+			runningLe := s.leafVariants.GetRunning()
+			if runningLe != nil {
+				if !proto.Equal(runningLe.Update.Value(), highestLe.Update.Value()) {
+					result.DeviationValue = runningLe.Value()
+				}
+			}
 		} else {
 			// if it is default but no default is meant to be returned
 			return nil, nil

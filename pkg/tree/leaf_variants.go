@@ -187,6 +187,17 @@ func checkNotOwner(le *LeafEntry, owner string) bool {
 	return le.Owner() != owner
 }
 
+func (lv *LeafVariants) GetRunning() *LeafEntry {
+	lv.lesMutex.RLock()
+	defer lv.lesMutex.RUnlock()
+	for _, e := range lv.les {
+		if e.Update.Owner() == RunningIntentName {
+			return e
+		}
+	}
+	return nil
+}
+
 // GetHighesNewUpdated returns the LeafEntry with the highes priority
 // nil if no leaf entry exists.
 func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool) *LeafEntry {
