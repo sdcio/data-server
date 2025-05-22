@@ -1597,6 +1597,45 @@ func (s *sharedEntryAttributes) TreeExport(owner string) ([]*tree_persist.TreeEl
 	return nil, nil
 }
 
+func (s *sharedEntryAttributes) BlameConfig(includeDefaults bool) (*sdcpb.BlameTreeElement, error) {
+
+	name := s.pathElemName
+	if s.GetLevel() == 0 {
+		name = fmt.Sprintf("root")
+	}
+	result := sdcpb.NewBlameTreeElement(name)
+
+	// process Value
+	le := s.leafVariants.GetHighestPrecedence(false, true)
+	if le != nil {
+		if le.Update.Owner() != DefaultsIntentName || includeDefaults {
+			result.SetValue(le.Update.Value()).SetOwner(le.Update.Owner())
+		} else {
+			// if it is default but no default is meant to be returned
+			return nil, nil
+		}
+	}
+
+	// process Childs
+	for _, c := range s.filterActiveChoiceCaseChilds() {
+		childBlame, err := c.BlameConfig(includeDefaults)
+		if err != nil {
+			return nil, err
+		}
+		// if it is not meant to be added we will get nil, so check and skip in case
+		if childBlame != nil {
+			result.AddChild(childBlame)
+		}
+	}
+
+	// sort to make te output stable
+	slices.SortFunc(result.Childs, func(a *sdcpb.BlameTreeElement, b *sdcpb.BlameTreeElement) int {
+		return strings.Compare(a.GetName(), b.GetName())
+	})
+
+	return result, nil
+}
+
 // getKeyName checks if s is a key level element in the tree, if not an error is throw
 // if it is a key level element, the name of the key is determined via the ancestor schemas
 func (s *sharedEntryAttributes) getKeyName() (string, error) {

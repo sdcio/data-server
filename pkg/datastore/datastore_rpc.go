@@ -452,6 +452,29 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 	return deviationChan, nil
 }
 
+func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdcpb.BlameTreeElement, error) {
+	// create a new TreeRoot by copying the syncTree
+	d.syncTreeMutex.Lock()
+	root, err := d.syncTree.DeepCopy(ctx)
+	d.syncTreeMutex.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	// load all intents
+	_, err = d.LoadAllButRunningIntents(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	// calculate the Blame
+	bte, err := root.BlameConfig(includeDefaults)
+	if err != nil {
+		return nil, err
+	}
+	// set the root level elements name to the target name
+	bte.Name = d.config.Name
+	return bte, nil
+}
+
 // DatastoreRollbackAdapter implements the types.RollbackInterface and encapsulates the Datastore.
 type DatastoreRollbackAdapter struct {
 	d *Datastore
