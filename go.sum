@@ -164,8 +164,8 @@ github.com/onsi/ginkgo/v2 v2.22.0 h1:Yed107/8DjTr0lKCNt7Dn8yQ6ybuDRQoMGrNFKzMfHg
 github.com/onsi/ginkgo/v2 v2.22.0/go.mod h1:7Du3c42kxCUegi0IImZ1wUQzMBVecgIHjR1C+NkhLQo=
 github.com/onsi/gomega v1.36.1 h1:bJDPBO7ibjxcbHMgSCoo4Yj18UWbKDlLwX1x9sybDcw=
 github.com/onsi/gomega v1.36.1/go.mod h1:PvZbdDc8J6XJEpDK4HCuRBm8a6Fzp9/DmhC9C7yFlog=
-github.com/openconfig/gnmi v0.14.0 h1:lXAd3HgjtNBnLypevp0pxzpEXmsUD0TbKzaNJ/FboPM=
-github.com/openconfig/gnmi v0.14.0/go.mod h1:whr6zVq9PCU8mV1D0K9v7Ajd3+swoN6Yam9n8OH3eT0=
+github.com/openconfig/gnmi v0.14.1 h1:qKMuFvhIRR2/xxCOsStPQ25aKpbMDdWr3kI+nP9bhMs=
+github.com/openconfig/gnmi v0.14.1/go.mod h1:whr6zVq9PCU8mV1D0K9v7Ajd3+swoN6Yam9n8OH3eT0=
 github.com/openconfig/gnmic/pkg/api v0.1.9 h1:XPln4mDgC2Bjh9VqE+BY1LLvQrk1tGHZLivDnCR3Nbg=
 github.com/openconfig/gnmic/pkg/api v0.1.9/go.mod h1:Sbjj4ITlGT1w2cXt1qEMU6jBYpRm6aoR6Spe4Do86ec=
 github.com/openconfig/grpctunnel v0.1.0 h1:EN99qtlExZczgQgp5ANnHRC/Rs62cAG+Tz2BQ5m/maM=
@@ -198,8 +198,8 @@ github.com/scrapli/scrapligo v1.3.3 h1:D9zj1QrOYNYAQ30YT7wfQBINvPGxvs5L5Lz+2LnL7
 github.com/scrapli/scrapligo v1.3.3/go.mod h1:pOWxVyPsQRrWTrkoSSDg05tjOqtWfLffAZtAsCc0w3M=
 github.com/sdcio/cache v0.0.36 h1:3pCPJHZHVZ1JQ/lgc5j7M0OITTHM1VdbfFhvesqXmEM=
 github.com/sdcio/cache v0.0.36/go.mod h1:TbeFOQTWU9RH+NpvwwcUc0KNeYGItfn2y0XxVFBLkiE=
-github.com/sdcio/goyang v1.6.0-3 h1:kE4WmzzR9MntKMl7l02fe1nk5+j5XpcQoSxwvWePXuU=
-github.com/sdcio/goyang v1.6.0-3/go.mod h1:jzlGg+yjRpOcq1Kg6q6cSiLGQK5hrNNMsUx0fFxm4U0=
+github.com/sdcio/goyang v1.6.2-1 h1:jseaECSOuxKvl+WFwzjt4dhThJyfdjMp5PxrUp3WM4s=
+github.com/sdcio/goyang v1.6.2-1/go.mod h1:5WolITjek1NF8yrNERyVZ7jqjOClJTpO8p/+OwmETM4=
 github.com/sdcio/schema-server v0.0.30 h1:71/tb5T9qCC5qskbxfd3RYE/rQAyNUr2gOrU0NcsLSM=
 github.com/sdcio/schema-server v0.0.30/go.mod h1:q/S7DAIGTI5b7PZFlpzZ34cVXAtawVoGZtfju6uIaCo=
 github.com/sdcio/sdc-protos v0.0.40 h1:uexHKpoG6Td+JAg5dUlNegpOs8KYH0bsSf/tB2ACk3o=

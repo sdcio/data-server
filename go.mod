@@ -2,7 +2,7 @@ module github.com/sdcio/data-server
 
 go 1.23.9
 
-replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.0-3
+replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.2-1
 
 require (
 	github.com/AlekSi/pointer v1.2.0
@@ -13,7 +13,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/jellydator/ttlcache/v3 v3.3.0
 	github.com/olekukonko/tablewriter v1.0.6
-	github.com/openconfig/gnmi v0.14.0
+	github.com/openconfig/gnmi v0.14.1
 	github.com/openconfig/gnmic/pkg/api v0.1.9
 	github.com/openconfig/goyang v1.6.0
 	github.com/openconfig/ygot v0.29.20
