@@ -2,7 +2,7 @@ module github.com/sdcio/data-server
 
 go 1.23.9
 
-replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.2-1
+replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.2-2
 
 require (
 	github.com/AlekSi/pointer v1.2.0
