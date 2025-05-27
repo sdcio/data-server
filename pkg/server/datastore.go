@@ -261,3 +261,25 @@ func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*
 	rsp.Schema = ds.Config().Schema.GetSchema()
 	return rsp, nil
 }
+
+func (s *Server) BlameConfig(ctx context.Context, req *sdcpb.BlameConfigRequest) (*sdcpb.BlameConfigResponse, error) {
+
+	if req.GetDatastoreName() == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "missing datastore name")
+	}
+
+	ds, err := s.datastores.GetDataStore(req.GetDatastoreName())
+	if err != nil {
+		return nil, err
+	}
+
+	tree, err := ds.BlameConfig(ctx, req.GetIncludeDefaults())
+	if err != nil {
+		return nil, err
+	}
+
+	return &sdcpb.BlameConfigResponse{
+		ConfigTree: tree,
+	}, nil
+
+}
