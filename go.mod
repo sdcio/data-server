@@ -16,7 +16,7 @@ require (
 	github.com/openconfig/gnmi v0.14.1
 	github.com/openconfig/gnmic/pkg/api v0.1.9
 	github.com/openconfig/goyang v1.6.0
-	github.com/openconfig/ygot v0.29.20
+	github.com/openconfig/ygot v0.31.0
 	github.com/prometheus/client_golang v1.22.0
 	github.com/scrapli/scrapligo v1.3.3
 	github.com/sdcio/cache v0.0.36
@@ -85,7 +85,7 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/crypto v0.33.0 // indirect
-	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f // indirect
+	golang.org/x/exp v0.0.0-20250218142911-aa4b98e5adaa // indirect
 	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/oauth2 v0.26.0 // indirect
 	golang.org/x/sync v0.14.0 // indirect
