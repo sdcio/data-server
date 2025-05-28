@@ -198,8 +198,8 @@ github.com/scrapli/scrapligo v1.3.3 h1:D9zj1QrOYNYAQ30YT7wfQBINvPGxvs5L5Lz+2LnL7
 github.com/scrapli/scrapligo v1.3.3/go.mod h1:pOWxVyPsQRrWTrkoSSDg05tjOqtWfLffAZtAsCc0w3M=
 github.com/sdcio/cache v0.0.36 h1:3pCPJHZHVZ1JQ/lgc5j7M0OITTHM1VdbfFhvesqXmEM=
 github.com/sdcio/cache v0.0.36/go.mod h1:TbeFOQTWU9RH+NpvwwcUc0KNeYGItfn2y0XxVFBLkiE=
-github.com/sdcio/goyang v1.6.2-1 h1:jseaECSOuxKvl+WFwzjt4dhThJyfdjMp5PxrUp3WM4s=
-github.com/sdcio/goyang v1.6.2-1/go.mod h1:5WolITjek1NF8yrNERyVZ7jqjOClJTpO8p/+OwmETM4=
+github.com/sdcio/goyang v1.6.2-2 h1:qfeUKBmoKpiKAruuEc3+V8wgHKP/n1jRDEnTy23knV8=
+github.com/sdcio/goyang v1.6.2-2/go.mod h1:5WolITjek1NF8yrNERyVZ7jqjOClJTpO8p/+OwmETM4=
 github.com/sdcio/schema-server v0.0.30 h1:71/tb5T9qCC5qskbxfd3RYE/rQAyNUr2gOrU0NcsLSM=
 github.com/sdcio/schema-server v0.0.30/go.mod h1:q/S7DAIGTI5b7PZFlpzZ34cVXAtawVoGZtfju6uIaCo=
 github.com/sdcio/sdc-protos v0.0.40 h1:uexHKpoG6Td+JAg5dUlNegpOs8KYH0bsSf/tB2ACk3o=
