@@ -203,7 +203,7 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, fo
 	// execute netconf get
 	resp, err := t.Get(ctx, req)
 	if err != nil {
-		log.Errorf("failed getting config: %T | %v", err, err)
+		log.Errorf("failed getting config from target %v: %T | %v", t.name, err, err)
 		if strings.Contains(err.Error(), "EOF") {
 			t.Close()
 			go t.reconnect()
