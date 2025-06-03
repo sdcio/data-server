@@ -16,6 +16,7 @@ package netconf
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -167,7 +168,11 @@ func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.El
 	// process terminal values
 	tv, err := StringElementToTypedValue(e.Text(), ls)
 	if err != nil {
-		return fmt.Errorf("unable to convert value [%s] at path [%s] according to SchemaLeafType [%#v]: %w", e.Text(), e.GetPath(), ls.Type, err)
+		slt, errMarsh := json.Marshal(ls.Type)
+		if errMarsh != nil {
+			return fmt.Errorf("unable to represent leafref as JSON during error generation: %w", errMarsh)
+		}
+		return fmt.Errorf("unable to convert value [%s] at path [%s] according to SchemaLeafType [%s]: %w", e.Text(), e.GetPath(), slt, err)
 	}
 	// copy pathElems
 	npelem := make([]*sdcpb.PathElem, 0, len(pelems))
