@@ -167,7 +167,7 @@ func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.El
 	// process terminal values
 	tv, err := StringElementToTypedValue(e.Text(), ls)
 	if err != nil {
-		return fmt.Errorf("unable to convert value [%s] at path [%s]: %w", e.Text(), e.GetPath(), err)
+		return fmt.Errorf("unable to convert value [%s] at path [%s] according to SchemaLeafType [%#v]: %w", e.Text(), e.GetPath(), ls.Type, err)
 	}
 	// copy pathElems
 	npelem := make([]*sdcpb.PathElem, 0, len(pelems))
