@@ -160,7 +160,7 @@ func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.El
 		var schemaElem *sdcpb.SchemaElem_Field
 		var ok bool
 		if schemaElem, ok = schema.GetSchema().GetSchema().(*sdcpb.SchemaElem_Field); !ok {
-			return fmt.Errorf("leafref resolved to non-field schema type")
+			return fmt.Errorf("node [%s] with leafref [%s] has non-field target type [%T: %v]", e.GetPath(), ls.GetType().GetLeafref(), schema.GetSchema().GetSchema(), schema.GetSchema().GetSchema())
 		}
 		ls = schemaElem.Field
 	}
