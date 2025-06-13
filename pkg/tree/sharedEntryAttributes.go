@@ -18,6 +18,7 @@ import (
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -1595,6 +1596,52 @@ func (s *sharedEntryAttributes) TreeExport(owner string) ([]*tree_persist.TreeEl
 	}
 
 	return nil, nil
+}
+
+func (s *sharedEntryAttributes) BlameConfig(includeDefaults bool) (*sdcpb.BlameTreeElement, error) {
+	name := s.pathElemName
+	if s.GetLevel() == 0 {
+		name = fmt.Sprintf("root")
+	}
+	result := sdcpb.NewBlameTreeElement(name)
+
+	// process Value
+	highestLe := s.leafVariants.GetHighestPrecedence(false, true)
+	if highestLe != nil {
+		if highestLe.Update.Owner() != DefaultsIntentName || includeDefaults {
+			result.SetValue(highestLe.Update.Value()).SetOwner(highestLe.Update.Owner())
+
+			// check if running equals the expected
+			runningLe := s.leafVariants.GetRunning()
+			if runningLe != nil {
+				if !proto.Equal(runningLe.Update.Value(), highestLe.Update.Value()) {
+					result.DeviationValue = runningLe.Value()
+				}
+			}
+		} else {
+			// if it is default but no default is meant to be returned
+			return nil, nil
+		}
+	}
+
+	// process Childs
+	for _, c := range s.filterActiveChoiceCaseChilds() {
+		childBlame, err := c.BlameConfig(includeDefaults)
+		if err != nil {
+			return nil, err
+		}
+		// if it is not meant to be added we will get nil, so check and skip in case
+		if childBlame != nil {
+			result.AddChild(childBlame)
+		}
+	}
+
+	// sort to make te output stable
+	slices.SortFunc(result.Childs, func(a *sdcpb.BlameTreeElement, b *sdcpb.BlameTreeElement) int {
+		return strings.Compare(a.GetName(), b.GetName())
+	})
+
+	return result, nil
 }
 
 // getKeyName checks if s is a key level element in the tree, if not an error is throw
