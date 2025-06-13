@@ -718,7 +718,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 			dv.DisableAll()
 			dv.Mandatory = false
 
-			validationResults := root.Validate(ctx, &config.Validation{DisableConcurrency: true, DisabledValidators: *dv})
+			validationResults := root.Validate(ctx, &config.Validation{DisableConcurrency: true, DisabledValidators: dv})
 
 			results := []string{}
 			for _, e := range validationResults {

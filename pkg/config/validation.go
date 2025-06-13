@@ -1,12 +1,20 @@
 package config
 
 type Validation struct {
-	DisabledValidators Validators `yaml:"disabled-validators,omitempty" json:"disabled-validators,omitempty"`
-	DisableConcurrency bool       `yaml:"disable-concurrency,omitempty" json:"disable-concurrency,omitempty"`
+	DisabledValidators *Validators `yaml:"disabled-validators,omitempty" json:"disabled-validators,omitempty"`
+	DisableConcurrency bool        `yaml:"disable-concurrency,omitempty" json:"disable-concurrency,omitempty"`
 }
 
 func (v *Validation) validateSetDefaults() error {
+	// no change required, all the bools default to false
 	return nil
+}
+
+func (v *Validation) DeepCopy() *Validation {
+	return &Validation{
+		DisabledValidators: v.DisabledValidators.DeepCopy(),
+		DisableConcurrency: v.DisableConcurrency,
+	}
 }
 
 type Validators struct {
@@ -29,4 +37,17 @@ func (v *Validators) DisableAll() {
 	v.MustStatement = true
 	v.Pattern = true
 	v.Range = true
+}
+
+func (v *Validators) DeepCopy() *Validators {
+	return &Validators{
+		Mandatory:               v.Mandatory,
+		Leafref:                 v.Leafref,
+		LeafrefMinMaxAttributes: v.LeafrefMinMaxAttributes,
+		Pattern:                 v.Pattern,
+		MustStatement:           v.MustStatement,
+		Length:                  v.Length,
+		Range:                   v.Range,
+		MaxElements:             v.MaxElements,
+	}
 }
