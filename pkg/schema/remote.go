@@ -47,7 +47,7 @@ type remoteClient struct {
 	getOpts []ttlcache.Option[cacheKey, *sdcpb.GetSchemaResponse]
 }
 
-func NewRemoteClient(cc *grpc.ClientConn, cacheConfig *config.RemoteSchemaCache) Client {
+func NewRemoteClient(cc grpc.ClientConnInterface, cacheConfig *config.RemoteSchemaCache) Client {
 	// no cache
 	if cacheConfig == nil {
 		return &remoteClient{
