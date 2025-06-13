@@ -132,7 +132,8 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 			Vendor:  req.GetSchema().GetVendor(),
 			Version: req.GetSchema().GetVersion(),
 		},
-		SBI: sbi,
+		SBI:        sbi,
+		Validation: s.config.Validation.DeepCopy(),
 	}
 	if req.GetSync() != nil {
 		dsConfig.Sync = &config.Sync{

@@ -149,7 +149,7 @@ func TestDefaultValueRetrieve(t *testing.T) {
 				return rsp.GetSchema()
 			},
 			wanterr: false,
-			want:    types.NewUpdate(types.PathSlice{}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "foo"}}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "bar"}}}}}}, 5, "owner1", 0),
+			want:    types.NewUpdate(types.PathSlice{}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{{Value: &sdcpb.TypedValue_StringVal{StringVal: "foo"}}, {Value: &sdcpb.TypedValue_StringVal{StringVal: "bar"}}}}}}, 5, "owner1", 0),
 		},
 	}
 	for _, tt := range tests {
