@@ -30,7 +30,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
       # Make sure the @v0.8.0 matches the current version of the action
       - uses: webfactory/ssh-agent@v0.9.1
         with:
