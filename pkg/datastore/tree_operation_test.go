@@ -35,9 +35,14 @@ import (
 
 var (
 	// TypedValue Bool True and false
-	TypedValueTrue  = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: true}}
-	TypedValueFalse = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: false}}
+	TypedValueTrue   = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: true}}
+	TypedValueFalse  = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: false}}
+	validationConfig = config.NewValidationConfig()
 )
+
+func init() {
+	validationConfig.SetDisableConcurrency(true)
+}
 
 func TestDatastore_populateTree(t *testing.T) {
 	prio15 := int32(15)
@@ -818,7 +823,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			}
 			fmt.Println(root.String())
 
-			validationResult := root.Validate(ctx, &config.Validation{DisableConcurrency: true})
+			validationResult := root.Validate(ctx, validationConfig)
 
 			fmt.Printf("Validation Errors:\n%v\n", strings.Join(validationResult.ErrorsStr(), "\n"))
 			fmt.Printf("Tree:%s\n", root.String())

@@ -1,5 +1,12 @@
 package config
 
+func NewValidationConfig() *Validation {
+	return &Validation{
+		DisabledValidators: &Validators{},
+		DisableConcurrency: bool(false),
+	}
+}
+
 type Validation struct {
 	DisabledValidators *Validators `yaml:"disabled-validators,omitempty" json:"disabled-validators,omitempty"`
 	DisableConcurrency bool        `yaml:"disable-concurrency,omitempty" json:"disable-concurrency,omitempty"`
@@ -7,7 +14,14 @@ type Validation struct {
 
 func (v *Validation) validateSetDefaults() error {
 	// no change required, all the bools default to false
+	if v.DisabledValidators == nil {
+		v.DisabledValidators = &Validators{}
+	}
 	return nil
+}
+
+func (v *Validation) SetDisableConcurrency(b bool) {
+	v.DisableConcurrency = b
 }
 
 func (v *Validation) DeepCopy() *Validation {
