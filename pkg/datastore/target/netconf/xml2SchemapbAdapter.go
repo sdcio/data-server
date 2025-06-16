@@ -146,7 +146,8 @@ func (x *XML2sdcpbConfigAdapter) transformContainer(ctx context.Context, e *etre
 // transformField transforms an etree.element of a configuration as an update into the provided *sdcpb.Notification.
 func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, ls *sdcpb.LeafSchema, result *sdcpb.Notification) error {
 	path := pelems
-	for ls.GetType().GetLeafref() != "" {
+	schemaLeafType := ls.GetType()
+	for schemaLeafType.GetLeafref() != "" {
 		path, err := utils.NormalizedAbsPath(ls.Type.Leafref, path)
 		if err != nil {
 			return err
@@ -157,16 +158,18 @@ func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.El
 			return err
 		}
 
-		var schemaElem *sdcpb.SchemaElem_Field
-		var ok bool
-		if schemaElem, ok = schema.GetSchema().GetSchema().(*sdcpb.SchemaElem_Field); !ok {
-			return fmt.Errorf("node [%s] with leafref [%s] has non-field target type [%T: %v]", e.GetPath(), ls.GetType().GetLeafref(), schema.GetSchema().GetSchema(), schema.GetSchema().GetSchema())
+		switch se := schema.GetSchema().GetSchema().(type) {
+		case *sdcpb.SchemaElem_Leaflist:
+			schemaLeafType = se.Leaflist.GetType()
+		case *sdcpb.SchemaElem_Field:
+			schemaLeafType = se.Field.GetType()
+		default:
+			return fmt.Errorf("node [%s] with leafref [%s] has non-field or leaflist target type [%T]", e.GetPath(), ls.GetType().GetLeafref(), se)
 		}
-		ls = schemaElem.Field
 	}
 
 	// process terminal values
-	tv, err := StringElementToTypedValue(e.Text(), ls)
+	tv, err := utils.Convert(e.Text(), schemaLeafType)
 	if err != nil {
 		slt, errMarsh := json.Marshal(ls.Type)
 		if errMarsh != nil {

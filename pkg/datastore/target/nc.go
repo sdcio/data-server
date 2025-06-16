@@ -100,7 +100,7 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 		return nil, err
 	}
 
-	log.Debugf("netconf response:\n%s", ncResponse.DocAsString())
+	log.Debugf("%s: netconf response:\n%s", t.name, ncResponse.DocAsString())
 
 	// cmlImport := xml.NewXmlTreeImporter(ncResponse.Doc.Root())
 

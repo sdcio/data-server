@@ -951,6 +951,9 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 
 	// validate the mandatory statement on this entry
 	if s.remainsToExist() {
+
+		// TODO: Validate Enums
+
 		if !vCfg.DisabledValidators.Mandatory {
 			s.validateMandatory(ctx, resultChan)
 		}
