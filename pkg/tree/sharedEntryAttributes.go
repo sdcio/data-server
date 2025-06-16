@@ -212,7 +212,9 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 	// if we're in the last level of keys, then we need to add the defaults
 	if len(ancestorContainerSchema.Keys) == levelsUp {
 		// iterate through the keys
-		for idx, k := range ancestor.GetSchemaKeys() {
+		schemaKeys := ancestor.GetSchemaKeys()
+		slices.Sort(schemaKeys)
+		for idx, k := range schemaKeys {
 			child, entryExists := s.childs.GetEntry(k)
 			// if the key Leaf exists continue with next key
 			if entryExists {
@@ -1140,13 +1142,13 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 			var exists bool
 			var actualEntry Entry = s
 			var keyChild Entry
-			for _, keySchema := range s.schema.GetContainer().GetKeys() {
+			schemaKeys := s.GetSchemaKeys()
+			slices.Sort(schemaKeys)
+			for _, schemaKey := range schemaKeys {
 
-				keyElemName := keySchema.Name
-
-				keyTransf := t.GetElement(keyElemName)
+				keyTransf := t.GetElement(schemaKey)
 				if keyTransf == nil {
-					return fmt.Errorf("unable to find key attribute %s under %s", keyElemName, s.Path())
+					return fmt.Errorf("unable to find key attribute %s under %s", schemaKey, s.Path())
 				}
 				keyElemValue, err := keyTransf.GetKeyValue()
 				if err != nil {
