@@ -18,6 +18,7 @@ import (
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -190,7 +191,7 @@ func (s *sharedEntryAttributes) GetDeviations(ch chan<- *types.DeviationEntry, a
 	}
 }
 
-func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, intentName string, prio int32) error {
+func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, intentName string, prio int32, insertFlag *types.UpdateInsertFlags) error {
 	// keys themselfes do not have a schema attached.
 	// keys must be added to the last keys level, since that is carrying the list elements data
 	// hence if the entry has a schema attached, there is nothing to be done, return.
@@ -246,7 +247,7 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 					return err
 				}
 			}
-			_, err = child.AddUpdateRecursive(ctx, types.NewUpdate(keyPath, tv, prio, intentName, 0), types.NewUpdateInsertFlags())
+			_, err = child.AddUpdateRecursive(ctx, types.NewUpdate(keyPath, tv, prio, intentName, 0), insertFlag)
 			if err != nil {
 				return err
 			}
@@ -1144,7 +1145,10 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 				if keyTransf == nil {
 					return fmt.Errorf("unable to find key attribute %s under %s", keyElemName, s.Path())
 				}
-				keyElemValue := keyTransf.GetKeyValue()
+				keyElemValue, err := keyTransf.GetKeyValue()
+				if err != nil {
+					return err
+				}
 				// if the child does not exist, create it
 				if keyChild, exists = actualEntry.getChildren()[keyElemValue]; !exists {
 					keyChild, err = newEntry(ctx, actualEntry, keyElemValue, s.treeContext)
@@ -1310,9 +1314,11 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(ctx context.Context, l
 			// if it is not a choice
 			if choiceName == "" {
 				resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child %s does not exist, path: %s", attributes, s.Path()), types.ValidationResultEntryTypeError)
+				return
 			}
 			// if it is a mandatory choice
 			resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory choice %s [attributes: %s] does not exist, path: %s", choiceName, attributes, s.Path()), types.ValidationResultEntryTypeError)
+			return
 		}
 		return
 	}
@@ -1594,6 +1600,52 @@ func (s *sharedEntryAttributes) TreeExport(owner string) ([]*tree_persist.TreeEl
 	return nil, nil
 }
 
+func (s *sharedEntryAttributes) BlameConfig(includeDefaults bool) (*sdcpb.BlameTreeElement, error) {
+	name := s.pathElemName
+	if s.GetLevel() == 0 {
+		name = fmt.Sprintf("root")
+	}
+	result := sdcpb.NewBlameTreeElement(name)
+
+	// process Value
+	highestLe := s.leafVariants.GetHighestPrecedence(false, true)
+	if highestLe != nil {
+		if highestLe.Update.Owner() != DefaultsIntentName || includeDefaults {
+			result.SetValue(highestLe.Update.Value()).SetOwner(highestLe.Update.Owner())
+
+			// check if running equals the expected
+			runningLe := s.leafVariants.GetRunning()
+			if runningLe != nil {
+				if !proto.Equal(runningLe.Update.Value(), highestLe.Update.Value()) {
+					result.DeviationValue = runningLe.Value()
+				}
+			}
+		} else {
+			// if it is default but no default is meant to be returned
+			return nil, nil
+		}
+	}
+
+	// process Childs
+	for _, c := range s.filterActiveChoiceCaseChilds() {
+		childBlame, err := c.BlameConfig(includeDefaults)
+		if err != nil {
+			return nil, err
+		}
+		// if it is not meant to be added we will get nil, so check and skip in case
+		if childBlame != nil {
+			result.AddChild(childBlame)
+		}
+	}
+
+	// sort to make te output stable
+	slices.SortFunc(result.Childs, func(a *sdcpb.BlameTreeElement, b *sdcpb.BlameTreeElement) int {
+		return strings.Compare(a.GetName(), b.GetName())
+	})
+
+	return result, nil
+}
+
 // getKeyName checks if s is a key level element in the tree, if not an error is throw
 // if it is a key level element, the name of the key is determined via the ancestor schemas
 func (s *sharedEntryAttributes) getKeyName() (string, error) {
@@ -1639,7 +1691,7 @@ func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, u *types
 	idx := s.GetLevel()
 	var err error
 	// make sure all the keys are also present as leafs
-	err = s.checkAndCreateKeysAsLeafs(ctx, u.Owner(), u.Priority())
+	err = s.checkAndCreateKeysAsLeafs(ctx, u.Owner(), u.Priority(), flags)
 	if err != nil {
 		return nil, err
 	}

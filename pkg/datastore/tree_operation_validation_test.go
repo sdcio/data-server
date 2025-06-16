@@ -23,7 +23,6 @@ import (
 
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/pkg/cache"
-	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/tree"
 	json_importer "github.com/sdcio/data-server/pkg/tree/importer/json"
@@ -206,7 +205,7 @@ func TestDatastore_validateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			validationResult := root.Validate(ctx, &config.Validation{DisableConcurrency: true})
+			validationResult := root.Validate(ctx, validationConfig)
 
 			t.Log(root.String())
 

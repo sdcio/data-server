@@ -1,190 +1,178 @@
 package json
 
 import (
-	"context"
-	"encoding/json"
+	"reflect"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/sdcio/data-server/pkg/tree"
-	"github.com/sdcio/data-server/pkg/tree/types"
-	"github.com/sdcio/data-server/pkg/utils/testhelper"
-	"go.uber.org/mock/gomock"
+	"github.com/sdcio/data-server/pkg/tree/importer"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-func TestJsonTreeImporter(t *testing.T) {
-
+func TestJsonTreeImporter_GetElement(t *testing.T) {
+	type fields struct {
+		data any
+	}
+	type args struct {
+		key string
+	}
 	tests := []struct {
-		name  string
-		input string
-		ietf  bool
+		name   string
+		fields fields
+		args   args
+		want   importer.ImportConfigAdapter
 	}{
 		{
-			name: "JSON",
-			input: `
-						{
-					  "choices": {
-		    "case1": {
-		      "case-elem": {
-		        "elem": "foocaseval"
-		      }
-		    }
-		  },
-					"interface": [
-						{
-						"admin-state": "enable",
-						"description": "Foo",
-						"name": "ethernet-1/2",
-						"subinterface": [
-							{
-							"description": "Subinterface 5",
-							"index": 5,
-							"type": "routed"
-							}
-						]
-						},
-										{
-						"admin-state": "disable",
-						"description": "Bar",
-						"name": "ethernet-1/3",
-						"subinterface": [
-							{
-							"description": "Subinterface 7",
-							"index": 7,
-							"type": "routed"
-							}
-						]
-						}
-					],
-					"leaflist": {
-						"entry": [
-						"foo",
-						"bar"
-						]
-					},
-					"network-instance": [
-						{
-						"admin-state": "enable",
-						"description": "Other NI",
-						"name": "other",
-						"type": "ip-vrf",
-						"protocol":{
-							"bgp": {}
-						}
-						}
-					],
-					"patterntest": "hallo DU",
-					"emptyconf": {}
-					}`,
-		},
-		{
-			name: "JSON_IETF",
-			ietf: true,
-			input: `{
-						"sdcio_model:patterntest": "foo",
-						"sdcio_model_choice:choices": {
-						  "case1": {
-							"case-elem": {
-							  "elem": "foocaseval"
-							}
-						  }
-						},
-						"sdcio_model_if:interface": [
-						  {
-							"admin-state": "enable",
-							"description": "Foo",
-							"name": "ethernet-1/1",
-							"subinterface": [
-							  {
-								"description": "Subinterface 0",
-								"index": 0,
-								"type": "sdcio_model_common:routed"
-							  }
-							]
-						  }
-						],
-						"sdcio_model_leaflist:leaflist": {
-						  "entry": [
-							"foo",
-							"bar"
-						  ]
-						},
-						"sdcio_model_ni:network-instance": [
-						  {
-							"admin-state": "disable",
-							"description": "Default NI",
-							"name": "default",
-							"type": "sdcio_model_ni:default"
-						  }
-						]
-					  }`,
+			name: "one",
+			args: args{
+				key: "foo",
+			},
+			fields: fields{
+				data: map[string]any{
+					"foo": "bar",
+				},
+			},
+			want: &JsonTreeImporter{
+				data: "bar",
+				name: "foo",
+			},
 		},
 	}
-
-	// create a gomock controller
-	controller := gomock.NewController(t)
-
-	scb, err := testhelper.GetSchemaClientBound(t, controller)
-	if err != nil {
-		t.Error(err)
-	}
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tc := tree.NewTreeContext(scb, "intent1")
-			root, err := tree.NewTreeRoot(ctx, tc)
-			if err != nil {
-				t.Error(err)
+			j := NewJsonTreeImporter(tt.fields.data)
+			if got := j.GetElement(tt.args.key); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("JsonTreeImporter.GetElement() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
 
-			jsonBytes := []byte(tt.input)
+func TestJsonTreeImporter_GetKeyValue(t *testing.T) {
+	type fields struct {
+		data any
+		name string
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   string
+	}{
+		{
+			name: "string",
+			fields: fields{
+				data: "bar",
+				name: "foo",
+			},
+			want: "bar",
+		},
+		{
+			name: "int",
+			fields: fields{
+				data: 5,
+				name: "bar",
+			},
+			want: "5",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			j := newJsonTreeImporterInternal(tt.fields.name, tt.fields.data)
 
-			var j any
-			err = json.Unmarshal(jsonBytes, &j)
-			if err != nil {
-				t.Fatalf("error parsing json document: %v", err)
+			if got, _ := j.GetKeyValue(); got != tt.want {
+				t.Errorf("JsonTreeImporter.GetKeyValue() = %v, want %v", got, tt.want)
 			}
-			jti := NewJsonTreeImporter(j)
-			err = root.ImportConfig(ctx, nil, jti, "owner1", 5, types.NewUpdateInsertFlags())
-			if err != nil {
-				t.Fatal(err)
-			}
+		})
+	}
+}
 
-			err = root.FinishInsertionPhase(ctx)
-			if err != nil {
-				t.Error(err)
+func TestJsonTreeImporter_GetName(t *testing.T) {
+	type fields struct {
+		data any
+		name string
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   string
+	}{
+		{
+			name: "one",
+			fields: fields{
+				name: "foo",
+			},
+			want: "foo",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			j := &JsonTreeImporter{
+				data: tt.fields.data,
+				name: tt.fields.name,
 			}
-			t.Log(root.String())
+			if got := j.GetName(); got != tt.want {
+				t.Errorf("JsonTreeImporter.GetName() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
 
-			var result any
-			if tt.ietf {
-				result, err = root.ToJsonIETF(false)
-				if err != nil {
-					t.Fatal(err)
-				}
-			} else {
-				result, err = root.ToJson(false)
-				if err != nil {
-					t.Fatal(err)
-				}
+func TestJsonTreeImporter_GetTVValue(t *testing.T) {
+	type fields struct {
+		data any
+		name string
+	}
+	type args struct {
+		slt *sdcpb.SchemaLeafType
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    *sdcpb.TypedValue
+		wantErr bool
+	}{
+		{
+			name: "string",
+			fields: fields{
+				name: "foo",
+				data: "foobar",
+			},
+			args: args{
+				&sdcpb.SchemaLeafType{
+					Type: "string",
+				},
+			},
+			wantErr: false,
+			want:    &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "foobar"}},
+		},
+		{
+			name: "int",
+			fields: fields{
+				name: "foo",
+				data: int32(5),
+			},
+			args: args{
+				&sdcpb.SchemaLeafType{
+					Type: "int32",
+				},
+			},
+			wantErr: false,
+			want:    &sdcpb.TypedValue{Value: &sdcpb.TypedValue_IntVal{IntVal: 5}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			j := &JsonTreeImporter{
+				data: tt.fields.data,
+				name: tt.fields.name,
 			}
-
-			// we need to marshal and then unmarshall again,
-			// since it is not clear if a certain value is float64 or uint64...
-			// so we do the conversion back and forth again, such that the json package can take the same type desisions
-			bresult, err := json.MarshalIndent(result, "", "  ")
-			if err != nil {
-				t.Fatal(err)
+			got, err := j.GetTVValue(tt.args.slt)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("JsonTreeImporter.GetTVValue() error = %v, wantErr %v", err, tt.wantErr)
+				return
 			}
-			err = json.Unmarshal(bresult, &result)
-			if err != nil {
-				t.Fatalf("error parsing json document: %v", err)
-			}
-			t.Log(string(bresult))
-
-			if diff := cmp.Diff(j, result); diff != "" {
-				t.Errorf("Error imported data differs:%s", diff)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("JsonTreeImporter.GetTVValue() = %v, want %v", got, tt.want)
 			}
 		})
 	}

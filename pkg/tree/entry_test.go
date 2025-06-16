@@ -18,13 +18,14 @@ import (
 var (
 	flagsNew         *types.UpdateInsertFlags
 	flagsExisting    *types.UpdateInsertFlags
-	validationConfig = &config.Validation{DisableConcurrency: true}
+	validationConfig = config.NewValidationConfig()
 )
 
 func init() {
 	flagsNew = types.NewUpdateInsertFlags()
 	flagsNew.SetNewFlag()
 	flagsExisting = types.NewUpdateInsertFlags()
+	validationConfig.SetDisableConcurrency(true)
 }
 
 func Test_Entry(t *testing.T) {

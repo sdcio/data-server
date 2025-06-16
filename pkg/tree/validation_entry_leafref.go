@@ -25,7 +25,7 @@ func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, path string) 
 		return nil, fmt.Errorf("failed parsing leafref path %s: %w", s.Path(), err)
 	}
 
-	lrefPath := newLrefPath(sdcpbPath)
+	lrefPath := types.NewLrefPath(sdcpbPath)
 
 	// if the lrefs first character is "/" then it is a root based path
 	isRootBasedPath := false
@@ -158,17 +158,16 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 	return resultEntries, nil
 }
 
-func (s *sharedEntryAttributes) resolve_leafref_key_path(ctx context.Context, keys map[string]*lrefPathElemKeyValue) error {
+func (s *sharedEntryAttributes) resolve_leafref_key_path(ctx context.Context, keys map[string]*types.LrefPathElemKeyValue) error {
 	// resolve keys
 	for k, v := range keys {
-
-		if v.doNotResolve || !strings.Contains(v.value, "/") || !strings.Contains(v.value, "current") {
+		if v.DoNotResolve || !strings.Contains(v.Value, "/") || !strings.Contains(v.Value, "current") {
 			continue
 		}
 		isRootPath := true
 
 		var keyp *sdcpb.Path
-		keyp, err := utils.ParsePath(v.value)
+		keyp, err := utils.ParsePath(v.Value)
 		if err != nil {
 			return err
 		}
@@ -186,8 +185,8 @@ func (s *sharedEntryAttributes) resolve_leafref_key_path(ctx context.Context, ke
 
 		lvs := keyValue.GetHighestPrecedence(LeafVariantSlice{}, false, false)
 		tv := lvs[0].Value()
-		keys[k].value = tv.GetStringVal()
-		keys[k].doNotResolve = true
+		keys[k].Value = tv.GetStringVal()
+		keys[k].DoNotResolve = true
 	}
 	return nil
 }
@@ -238,61 +237,4 @@ func generateOptionalWarning(ctx context.Context, s Entry, lref string, resultCh
 	}
 	tvVal := lrefval.Value()
 	resultChan <- types.NewValidationResultEntry(lrefval.Owner(), fmt.Errorf("leafref %s value %s unable to resolve non-mandatory reference %s", s.Path().String(), utils.TypedValueToString(tvVal), lref), types.ValidationResultEntryTypeWarning)
-}
-
-// lrefPath for the leafref resolution we need to distinguish between already resolved values and not yet resolved xpath statements
-// this is a struct that provides this information
-type lrefPath []*lrefPathElem
-
-type lrefPathElem struct {
-	Name string
-	Keys map[string]*lrefPathElemKeyValue
-}
-
-func (l *lrefPathElem) KeysToMap() map[string]string {
-	result := map[string]string{}
-	for k, v := range l.Keys {
-		result[k] = v.value
-	}
-	return result
-}
-
-type lrefPathElemKeyValue struct {
-	doNotResolve bool
-	value        string
-}
-
-func newLrefPath(p *sdcpb.Path) lrefPath {
-	lp := lrefPath{}
-	for _, x := range p.Elem {
-		lrefpe := &lrefPathElem{
-			Name: x.Name,
-			Keys: map[string]*lrefPathElemKeyValue{},
-		}
-		for k, v := range x.Key {
-			lrefpe.Keys[k] = &lrefPathElemKeyValue{
-				value:        v,
-				doNotResolve: false,
-			}
-		}
-		lp = append(lp, lrefpe)
-	}
-
-	return lp
-
-}
-
-func (pes lrefPath) ToSdcpbPathElem() []*sdcpb.PathElem {
-	result := make([]*sdcpb.PathElem, 0, len(pes))
-	for _, e := range pes {
-		pe := &sdcpb.PathElem{
-			Name: e.Name,
-			Key:  map[string]string{},
-		}
-		for k, v := range e.Keys {
-			pe.Key[k] = v.value
-		}
-		result = append(result, pe)
-	}
-	return result
 }

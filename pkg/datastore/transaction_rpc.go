@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/tree"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
@@ -21,10 +20,6 @@ var (
 	ErrDatastoreLocked = errors.New("Datastore is locked, other action is ongoing")
 	ErrContextDone     = errors.New("Context is closed (done)")
 	ErrValidationError = errors.New("validation error")
-)
-
-const (
-	ConcurrentValidate = false
 )
 
 // SdcpbTransactionIntentToInternalTI converts sdcpb.TransactionIntent to types.TransactionIntent
@@ -96,7 +91,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	log.TraceFn(func() []interface{} { return []interface{}{root.String()} })
 
 	// perform validation
-	validationResult := root.Validate(ctx, &config.Validation{DisableConcurrency: !ConcurrentValidate})
+	validationResult := root.Validate(ctx, d.config.Validation)
 	validationResult.ErrorsStr()
 	if validationResult.HasErrors() {
 		return nil, validationResult.JoinErrors()
@@ -126,7 +121,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.RootEntry) ([]string, error) {
 
 	intentNames := []string{}
-	IntentChan := make(chan *tree_persist.Intent, 0)
+	IntentChan := make(chan *tree_persist.Intent)
 	ErrChan := make(chan error, 1)
 
 	go d.cacheClient.IntentGetAll(ctx, []string{"running"}, IntentChan, ErrChan)
@@ -223,7 +218,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	log.Debug(root.String())
 
 	// perform validation
-	validationResult := root.Validate(ctx, &config.Validation{DisableConcurrency: !ConcurrentValidate})
+	validationResult := root.Validate(ctx, d.config.Validation)
 
 	// prepare the response struct
 	result := &sdcpb.TransactionSetResponse{
@@ -334,7 +329,10 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	}
 
 	// perform deletes
-	root.DeleteSubtreePaths(deletes, tree.RunningIntentName)
+	_, err = root.DeleteSubtreePaths(deletes, tree.RunningIntentName)
+	if err != nil {
+		return nil, err
+	}
 
 	newRunningIntent, err := root.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
 	if newRunningIntent != nil {

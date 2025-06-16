@@ -227,7 +227,8 @@ func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {
 
 			schemaClient, schema, err := testhelper.InitSDCIOSchema()
 			if err != nil {
-				t.Fatal(err)
+				t.Error(err)
+				return
 			}
 
 			scb := SchemaClient.NewSchemaClientBound(schema, schemaClient)
@@ -255,7 +256,8 @@ func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {
 
 			// compare the string arrays
 			if diff := cmp.Diff(wantStrArr, gotStrArr); diff != "" {
-				t.Fatalf("mismatch (-want +got)\n%s", diff)
+				t.Errorf("mismatch (-want +got)\n%s", diff)
+				return
 			}
 		})
 	}

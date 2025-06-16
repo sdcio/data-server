@@ -179,6 +179,10 @@ type ValidationResultEntry struct {
 	typ        ValidationResultEntryType
 }
 
+func (v *ValidationResultEntry) String() string {
+	return fmt.Sprintf("Intent: %s, Type: %s, Message: %s", v.intentName, v.typ.String(), v.message)
+}
+
 func NewValidationResultEntry(intentName string, message error, typ ValidationResultEntryType) *ValidationResultEntry {
 	return &ValidationResultEntry{
 		intentName: intentName,
@@ -193,3 +197,13 @@ const (
 	ValidationResultEntryTypeError ValidationResultEntryType = iota
 	ValidationResultEntryTypeWarning
 )
+
+func (v ValidationResultEntryType) String() string {
+	switch v {
+	case ValidationResultEntryTypeError:
+		return "ERROR"
+	case ValidationResultEntryTypeWarning:
+		return "WARNING"
+	}
+	return "UNKNOWN"
+}
