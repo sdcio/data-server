@@ -91,6 +91,9 @@ func Test_ncTarget_Get(t *testing.T) {
 												Keys: []*sdcpb.LeafSchema{
 													{
 														Name: "name",
+														Type: &sdcpb.SchemaLeafType{
+															Type: "string",
+														},
 													},
 												},
 											},
@@ -110,6 +113,9 @@ func Test_ncTarget_Get(t *testing.T) {
 												Keys: []*sdcpb.LeafSchema{
 													{
 														Name: "name",
+														Type: &sdcpb.SchemaLeafType{
+															Type: "string",
+														},
 													},
 												},
 											},

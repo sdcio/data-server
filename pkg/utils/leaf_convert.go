@@ -27,6 +27,9 @@ import (
 )
 
 func Convert(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+	if lst == nil {
+		return nil, fmt.Errorf("schemaleaftype cannot be nil")
+	}
 	switch lst.Type {
 	case "string":
 		return ConvertString(value, lst)

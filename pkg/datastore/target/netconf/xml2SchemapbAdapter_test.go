@@ -90,6 +90,9 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 									Keys: []*sdcpb.LeafSchema{
 										{
 											Name: "name",
+											Type: &sdcpb.SchemaLeafType{
+												Type: "string",
+											},
 										},
 									},
 								},
