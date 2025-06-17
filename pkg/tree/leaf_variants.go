@@ -335,7 +335,7 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 	}
 
 	// get the path via the first LeafEntry
-	// is valida for all entries
+	// is valid for all entries
 	sdcpbPath, err := lv.parentEntry.SdcpbPath()
 	if err != nil {
 		log.Error(err)
@@ -375,7 +375,7 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 			overruled = append(overruled, de)
 			highest = le
 		}
-		// if precedence of actual (le) is lower then le needs to be adeded to overruled
+		// if precedence of actual (le) is lower then le needs to be added to overruled
 		if le.Priority() >= highest.Priority() {
 			de := types.NewDeviationEntry(le.Owner(), types.DeviationReasonOverruled, sdcpbPath).SetExpectedValue(le.Value())
 			overruled = append(overruled, de)
@@ -398,7 +398,7 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 		return
 	}
 
-	// if higeste exists but not running  OR   running != highest
+	// if highest exists but not running  OR   running != highest
 	if (running == nil && highest != nil) || running.Value().Cmp(highest.Value()) != 0 {
 		de := types.NewDeviationEntry(highest.Owner(), types.DeviationReasonNotApplied, sdcpbPath).SetExpectedValue(highest.Value())
 		if running != nil {
