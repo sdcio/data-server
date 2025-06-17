@@ -610,6 +610,7 @@ func (s *sharedEntryAttributes) remainsToExist() bool {
 // getRegularDeletes performs deletion calculation on elements that have a schema attached.
 func (s *sharedEntryAttributes) getRegularDeletes(deletes []types.DeleteEntry, aggregate bool) ([]types.DeleteEntry, error) {
 	var err error
+
 	if s.shouldDelete() && !s.IsRoot() && len(s.GetSchemaKeys()) == 0 {
 		return append(deletes, s), nil
 	}
@@ -619,7 +620,8 @@ func (s *sharedEntryAttributes) getRegularDeletes(deletes []types.DeleteEntry, a
 		if err != nil {
 			return nil, err
 		}
-		deletes = append(deletes, types.NewDeleteEntryImpl(path, append(s.Path(), elem)))
+		path.Elem = append(path.Elem, &sdcpb.PathElem{Name: elem})
+		deletes = append(deletes, types.NewDeleteEntryImpl(path))
 	}
 
 	for _, e := range s.childs.GetAll() {
