@@ -127,9 +127,8 @@ func (x *XML2sdcpbConfigAdapter) transformContainer(ctx context.Context, e *etre
 		if err != nil {
 			return err
 		}
-		keyValue := utils.TypedValueToString(tv)
 
-		cPElem[len(cPElem)-1].Key[ls.Name] = keyValue
+		cPElem[len(cPElem)-1].Key[ls.Name] = tv.ToString()
 	}
 
 	ntc := NewTransformationContext(cPElem)
