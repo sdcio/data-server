@@ -422,6 +422,8 @@ func TypedValueToYANGType(tv *sdcpb.TypedValue, schemaObject *sdcpb.SchemaElem) 
 		return tv, nil
 	case *sdcpb.TypedValue_AnyVal:
 		return tv, nil
+	case *sdcpb.TypedValue_IdentityrefVal:
+		return ConvertToTypedValue(schemaObject, tv.GetStringVal(), tv.GetTimestamp())
 	}
 	return tv, nil
 }

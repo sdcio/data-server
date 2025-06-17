@@ -124,7 +124,13 @@ func (x *XML2sdcpbConfigAdapter) transformContainer(ctx context.Context, e *etre
 		if cPElem[len(cPElem)-1].Key == nil {
 			cPElem[len(cPElem)-1].Key = map[string]string{}
 		}
-		cPElem[len(cPElem)-1].Key[ls.Name] = e.FindElement("./" + ls.Name).Text()
+		tv, err := utils.Convert(e.FindElement("./"+ls.Name).Text(), ls.Type)
+		if err != nil {
+			return err
+		}
+		keyValue := utils.TypedValueToString(tv)
+
+		cPElem[len(cPElem)-1].Key[ls.Name] = keyValue
 	}
 
 	ntc := NewTransformationContext(cPElem)

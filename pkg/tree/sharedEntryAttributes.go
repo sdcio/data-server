@@ -1659,18 +1659,18 @@ func (s *sharedEntryAttributes) getKeyName() (string, error) {
 		return "", fmt.Errorf("error %s is a schema element, can only get KeyNames for key element", strings.Join(s.Path(), " "))
 	}
 
-	// get ancestro schema
+	// get ancestor schema
 	ancestorWithSchema, levelUp := s.GetFirstAncestorWithSchema()
 
-	// only Contaieners have keys, so check for that
-	switch sch := ancestorWithSchema.GetSchema().GetSchema().(type) {
-	case *sdcpb.SchemaElem_Container:
-		// return the name of the levelUp-1 key
-		return sch.Container.GetKeys()[levelUp-1].Name, nil
+	// only Containers have keys, so check for that
+	schemaKeys := ancestorWithSchema.GetSchemaKeys()
+	if len(schemaKeys) == 0 {
+		// we probably called the function on a LeafList or LeafEntry which is not a valid call to be made.
+		return "", fmt.Errorf("error LeafList and Field should not have keys %s", strings.Join(s.Path(), " "))
 	}
 
-	// we probably called the function on a LeafList or LeafEntry which is not a valid call to be made.
-	return "", fmt.Errorf("error LeafList and Field should not have keys %s", strings.Join(s.Path(), " "))
+	slices.Sort(schemaKeys)
+	return schemaKeys[levelUp-1], nil
 }
 
 func (s *sharedEntryAttributes) getOrCreateChilds(ctx context.Context, path types.PathSlice) (Entry, error) {
