@@ -27,6 +27,9 @@ import (
 )
 
 func Convert(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+	if lst == nil {
+		return nil, fmt.Errorf("schemaleaftype cannot be nil")
+	}
 	switch lst.Type {
 	case "string":
 		return ConvertString(value, lst)
@@ -140,16 +143,26 @@ func ConvertSdcpbNumberToUint64(mm *sdcpb.Number) (uint64, error) {
 	return mm.Value, nil
 }
 
+func intAbs(x int64) uint64 {
+	ui := uint64(x)
+	if x < 0 {
+		return ^(ui) + 1
+	}
+	return ui
+}
+
 func ConvertSdcpbNumberToInt64(mm *sdcpb.Number) (int64, error) {
+	if mm.Negative {
+		if mm.Value > intAbs(math.MinInt64) {
+			return 0, fmt.Errorf("error converting -%d to int64: overflow", mm.Value)
+		}
+		return -int64(mm.Value), nil
+	}
+
 	if mm.Value > math.MaxInt64 {
 		return 0, fmt.Errorf("error converting %d to int64 overflow", mm.Value)
 	}
-
-	if mm.Negative {
-		return -int64(mm.Value), nil
-	} else {
-		return int64(mm.Value), nil
-	}
+	return int64(mm.Value), nil
 }
 
 func convertUint(value string, minMaxs []*sdcpb.SchemaMinMaxType, ranges *URnges) (*sdcpb.TypedValue, error) {

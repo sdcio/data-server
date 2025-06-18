@@ -109,6 +109,18 @@ func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, path string) 
 // NavigateLeafRef
 func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, error) {
 
+	// leafref path takes as an argument a string that MUST refer to a leaf or leaf-list node.
+	// e.g.
+	// leaf foo {
+	//   type leafref {
+	//     path "/bar/baz";
+	//   }
+	// }
+	// the runtime semantics are:
+	// If /bar/baz resolves to a leaf, then foo must have exactly the same value as that leaf.
+	// If /bar/baz resolves to a leaf-list, then foo must have a value equal to one of the existing entries in that leaf-list.
+	// Thus, the "pointer" is not to the entire leaf-list node, but to one instance of it, selected by value.
+
 	var lref string
 	switch {
 	case s.GetSchema().GetField().GetType().GetLeafref() != "":
@@ -121,34 +133,34 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 
 	lv := s.leafVariants.GetHighestPrecedence(false, true)
 
+	// value of node with type leafref
 	tv := lv.Value()
-	var values []*sdcpb.TypedValue
-
-	switch ttv := tv.Value.(type) {
-	case *sdcpb.TypedValue_LeaflistVal:
-		values = append(values, ttv.LeaflistVal.GetElement()...)
-	default:
-		values = append(values, tv)
-	}
-
-	var resultEntries []Entry
 
 	foundEntries, err := s.BreadthSearch(ctx, lref)
 	if err != nil {
 		return nil, err
 	}
 
-	resultEntries = []Entry{}
+	var resultEntries []Entry
 
 	for _, e := range foundEntries {
-
 		r, err := e.getHighestPrecedenceLeafValue(ctx)
 		if err != nil {
 			return nil, err
 		}
-		val := r.Value()
-		for _, value := range values {
-			if utils.EqualTypedValues(val, value) {
+		// Value of the resolved leafref
+		refVal := r.Value()
+		var vals []*sdcpb.TypedValue
+
+		switch tVal := refVal.Value.(type) {
+		case *sdcpb.TypedValue_LeaflistVal:
+			vals = append(vals, tVal.LeaflistVal.GetElement()...)
+		default:
+			vals = append(vals, refVal)
+		}
+		// loop through possible values of found reference (leaf -> 1 value, leaf-list -> 1+ values)
+		for _, val := range vals {
+			if utils.EqualTypedValues(val, tv) {
 				resultEntries = append(resultEntries, e)
 				break
 			}

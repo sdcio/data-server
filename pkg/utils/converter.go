@@ -140,7 +140,8 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 			}
 		}
 
-		if rsp.Field.GetType().Type == "identityref" {
+		// We expect that all identityrefs are sent by schema-server as a identityref type now, not string
+		if rsp.Field.GetType().Type == "identityref" && upd.GetValue().GetStringVal() != "" {
 			upd.Value, err = Convert(upd.GetValue().GetStringVal(), rsp.Field.GetType())
 			if err != nil {
 				return nil, err
@@ -421,6 +422,8 @@ func TypedValueToYANGType(tv *sdcpb.TypedValue, schemaObject *sdcpb.SchemaElem) 
 		return tv, nil
 	case *sdcpb.TypedValue_AnyVal:
 		return tv, nil
+	case *sdcpb.TypedValue_IdentityrefVal:
+		return ConvertToTypedValue(schemaObject, tv.GetStringVal(), tv.GetTimestamp())
 	}
 	return tv, nil
 }

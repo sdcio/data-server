@@ -212,7 +212,9 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 	// if we're in the last level of keys, then we need to add the defaults
 	if len(ancestorContainerSchema.Keys) == levelsUp {
 		// iterate through the keys
-		for idx, k := range ancestor.GetSchemaKeys() {
+		schemaKeys := ancestor.GetSchemaKeys()
+		slices.Sort(schemaKeys)
+		for idx, k := range schemaKeys {
 			child, entryExists := s.childs.GetEntry(k)
 			// if the key Leaf exists continue with next key
 			if entryExists {
@@ -951,6 +953,9 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 
 	// validate the mandatory statement on this entry
 	if s.remainsToExist() {
+
+		// TODO: Validate Enums
+
 		if !vCfg.DisabledValidators.Mandatory {
 			s.validateMandatory(ctx, resultChan)
 		}
@@ -1137,13 +1142,13 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 			var exists bool
 			var actualEntry Entry = s
 			var keyChild Entry
-			for _, keySchema := range s.schema.GetContainer().GetKeys() {
+			schemaKeys := s.GetSchemaKeys()
+			slices.Sort(schemaKeys)
+			for _, schemaKey := range schemaKeys {
 
-				keyElemName := keySchema.Name
-
-				keyTransf := t.GetElement(keyElemName)
+				keyTransf := t.GetElement(schemaKey)
 				if keyTransf == nil {
-					return fmt.Errorf("unable to find key attribute %s under %s", keyElemName, s.Path())
+					return fmt.Errorf("unable to find key attribute %s under %s", schemaKey, s.Path())
 				}
 				keyElemValue, err := keyTransf.GetKeyValue()
 				if err != nil {
@@ -1654,18 +1659,18 @@ func (s *sharedEntryAttributes) getKeyName() (string, error) {
 		return "", fmt.Errorf("error %s is a schema element, can only get KeyNames for key element", strings.Join(s.Path(), " "))
 	}
 
-	// get ancestro schema
+	// get ancestor schema
 	ancestorWithSchema, levelUp := s.GetFirstAncestorWithSchema()
 
-	// only Contaieners have keys, so check for that
-	switch sch := ancestorWithSchema.GetSchema().GetSchema().(type) {
-	case *sdcpb.SchemaElem_Container:
-		// return the name of the levelUp-1 key
-		return sch.Container.GetKeys()[levelUp-1].Name, nil
+	// only Containers have keys, so check for that
+	schemaKeys := ancestorWithSchema.GetSchemaKeys()
+	if len(schemaKeys) == 0 {
+		// we probably called the function on a LeafList or LeafEntry which is not a valid call to be made.
+		return "", fmt.Errorf("error LeafList and Field should not have keys %s", strings.Join(s.Path(), " "))
 	}
 
-	// we probably called the function on a LeafList or LeafEntry which is not a valid call to be made.
-	return "", fmt.Errorf("error LeafList and Field should not have keys %s", strings.Join(s.Path(), " "))
+	slices.Sort(schemaKeys)
+	return schemaKeys[levelUp-1], nil
 }
 
 func (s *sharedEntryAttributes) getOrCreateChilds(ctx context.Context, path types.PathSlice) (Entry, error) {

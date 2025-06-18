@@ -123,7 +123,12 @@ func (x *XML2sdcpbConfigAdapter) transformContainer(ctx context.Context, e *etre
 		if cPElem[len(cPElem)-1].Key == nil {
 			cPElem[len(cPElem)-1].Key = map[string]string{}
 		}
-		cPElem[len(cPElem)-1].Key[ls.Name] = e.FindElement("./" + ls.Name).Text()
+		tv, err := utils.Convert(e.FindElement("./"+ls.Name).Text(), ls.Type)
+		if err != nil {
+			return err
+		}
+
+		cPElem[len(cPElem)-1].Key[ls.Name] = tv.ToString()
 	}
 
 	ntc := NewTransformationContext(cPElem)
@@ -145,7 +150,8 @@ func (x *XML2sdcpbConfigAdapter) transformContainer(ctx context.Context, e *etre
 // transformField transforms an etree.element of a configuration as an update into the provided *sdcpb.Notification.
 func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, ls *sdcpb.LeafSchema, result *sdcpb.Notification) error {
 	path := pelems
-	for ls.GetType().GetLeafref() != "" {
+	schemaLeafType := ls.GetType()
+	for schemaLeafType.GetLeafref() != "" {
 		path, err := utils.NormalizedAbsPath(ls.Type.Leafref, path)
 		if err != nil {
 			return err
@@ -156,18 +162,20 @@ func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.El
 			return err
 		}
 
-		var schemaElem *sdcpb.SchemaElem_Field
-		var ok bool
-		if schemaElem, ok = schema.GetSchema().GetSchema().(*sdcpb.SchemaElem_Field); !ok {
-			return fmt.Errorf("leafref resolved to non-field schema type")
+		switch se := schema.GetSchema().GetSchema().(type) {
+		case *sdcpb.SchemaElem_Leaflist:
+			schemaLeafType = se.Leaflist.GetType()
+		case *sdcpb.SchemaElem_Field:
+			schemaLeafType = se.Field.GetType()
+		default:
+			return fmt.Errorf("node [%s] with leafref [%s] has non-field or leaflist target type [%T]", e.GetPath(), ls.GetType().GetLeafref(), se)
 		}
-		ls = schemaElem.Field
 	}
 
 	// process terminal values
-	tv, err := StringElementToTypedValue(e.Text(), ls)
+	tv, err := utils.Convert(e.Text(), schemaLeafType)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to convert value [%s] at path [%s] according to SchemaLeafType [%+v]: %w", e.Text(), e.GetPath(), schemaLeafType, err)
 	}
 	// copy pathElems
 	npelem := make([]*sdcpb.PathElem, 0, len(pelems))

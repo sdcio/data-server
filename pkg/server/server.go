@@ -275,6 +275,7 @@ func (s *Server) createInitialDatastores(ctx context.Context) {
 
 	for _, dsCfg := range s.config.Datastores {
 		log.Debugf("creating datastore %s", dsCfg.Name)
+		dsCfg.Validation = s.config.Validation.DeepCopy()
 		go func(dsCfg *config.DatastoreConfig) {
 			defer wg.Done()
 			// TODO: handle error
