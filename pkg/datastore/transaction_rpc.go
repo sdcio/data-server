@@ -11,9 +11,9 @@ import (
 	"github.com/sdcio/data-server/pkg/tree"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
-	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -61,6 +61,8 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 // replaceIntent takes a Transaction and treats it as a replaceIntent, replacing the whole device configuration with the content of the given intent.
 // returns the warnings as a []string and potential errors that happend during validation / from SBI Set()
 func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transaction) ([]string, error) {
+	log := logf.FromContext(ctx).WithValues("transaction-type", "replace")
+	ctx = logf.IntoContext(ctx, log)
 
 	// create a new TreeContext
 	tc := tree.NewTreeContext(d.schemaClient, d.Name())
@@ -94,14 +96,14 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 		return nil, err
 	}
 
-	log.Debugf("Transaction Replace: %s - finish tree insertion phase", transaction.GetTransactionId())
+	log.V(logf.VDebug).Info("transaction finish tree insertion phase")
 	err = root.FinishInsertionPhase(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// log the tree in trace level, making it a func call to spare overhead in lower log levels.
-	log.TraceFn(func() []interface{} { return []interface{}{root.String()} })
+	log.V(logf.VTrace).Info("populated tree", "tree", root.String())
 
 	// perform validation
 	validationResult, validationStats := root.Validate(ctx, d.config.Validation)
@@ -111,8 +113,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	}
 
 	warnings := validationResult.WarningsStr()
-	log.Debugf("Transaction: %s - validation stats - %s", transaction.GetTransactionId(), validationStats.String())
-	log.Infof("Transaction: %s - validation passed", transaction.GetTransactionId())
+	log.Info("transaction validation passed", "transaction-id", transaction.GetTransactionId(), "stats", validationStats.String())
 
 	// we use the TargetSourceReplace, that adjustes the tree results in a way
 	// that the whole config tree is getting replaced.
@@ -126,7 +127,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	// collect warnings
 	warnings = append(warnings, dataResp.GetWarnings()...)
 
-	log.Infof("ds=%s transaction=%s applied", d.Name(), transaction.GetTransactionId()+" - replace")
+	log.Info("transaction applied")
 
 	// retrieve the data that is meant to be send southbound (towards the device)
 	updates := root.GetHighestPrecedence(true)
@@ -142,6 +143,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 }
 
 func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.RootEntry, excludeDeviations bool) ([]string, error) {
+	log := logf.FromContext(ctx)
 
 	intentNames := []string{}
 	IntentChan := make(chan *tree_persist.Intent)
@@ -171,9 +173,9 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 				continue
 			}
 			intentNames = append(intentNames, intent.GetIntentName())
-			log.Debugf("%s: adding intent %s to tree", d.Name(), intent.GetIntentName())
+			log.V(logf.VDebug).Info("adding intent to tree", "intent", intent.GetIntentName())
 			protoLoader := treeproto.NewProtoTreeImporter(intent)
-			log.Tracef("%s", intent.String())
+			log.V(logf.VTrace).Info("adding intent to tree", "intent", intent.String())
 			err := root.ImportConfig(ctx, nil, protoLoader, intent.GetIntentName(), intent.GetPriority(), treetypes.NewUpdateInsertFlags())
 			if err != nil {
 				return nil, err
@@ -187,6 +189,7 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 
 // lowlevelTransactionSet
 func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *types.Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
+	log := logf.FromContext(ctx)
 	// create a new TreeRoot
 	d.syncTreeMutex.Lock()
 	root, err := d.syncTree.DeepCopy(ctx)
@@ -244,19 +247,19 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 	transaction.GetOldRunning().AddUpdates(les.ToUpdateSlice())
 
-	log.Debugf("Transaction: %s - finish tree insertion phase", transaction.GetTransactionId())
+	log.V(logf.VDebug).Info("transaction finish tree insertion phase")
 	// FinishInsertion Phase
 	err = root.FinishInsertionPhase(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Debug(root.String())
+	log.V(logf.VTrace).Info("populated tree", "tree", root.String())
 
 	// perform validation
 	validationResult, validationStats := root.Validate(ctx, d.config.Validation)
 
-	log.Debugf("Transaction: %s - Validation Stats: %s", transaction.GetTransactionId(), validationStats.String())
+	log.V(logf.VDebug).Info("transaction validation stats", "transaction-id", transaction.GetTransactionId(), "stats", validationStats.String())
 
 	// prepare the response struct
 	result := &sdcpb.TransactionSetResponse{
@@ -298,11 +301,11 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		return result, ErrValidationError
 	}
 
-	log.Infof("Transaction: %s - validation passed", transaction.GetTransactionId())
+	log.Info("transaction validation passed")
 
 	// if it is a dry run, return now, skipping updating the device or the cache
 	if dryRun {
-		log.Infof("Transaction: %s - dryrun finished successfull", transaction.GetTransactionId())
+		log.Info("transaction dry-run was successful")
 		return result, nil
 	}
 
@@ -313,7 +316,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	}
 	result.Warnings = append(result.Warnings, dataResp.GetWarnings()...)
 
-	log.Infof("ds=%s transaction=%s applied", d.Name(), transaction.GetTransactionId())
+	log.Info("transaction applied")
 
 	/////////////////////////////////////
 	// update intent in intended store //
@@ -321,8 +324,8 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 	// logging
 	updStrSl := treetypes.Map(updates.ToUpdateSlice(), func(u *treetypes.Update) string { return u.String() })
-	log.Debugf("Updates:\n%s", strings.Join(updStrSl, "\n"))
-	log.Debugf("Deletes:\n%s", strings.Join(deletes.SdcpbPaths().ToXPathSlice(), "\n"))
+	log.V(logf.VTrace).Info("generated updates", "updates", strings.Join(updStrSl, "\n"))
+	log.V(logf.VTrace).Info("generated deletes", "deletes", strings.Join(deletes.SdcpbPaths().ToXPathSlice(), "\n"))
 
 	for _, intent := range transaction.GetNewIntents() {
 		// retrieve the data that is meant to be send towards the cache
@@ -331,17 +334,17 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 		// logging
 		strSl := treetypes.Map(updatesOwner, func(u *treetypes.Update) string { return u.String() })
-		log.Debugf("Updates Owner: %s\n%s", intent.GetName(), strings.Join(strSl, "\n"))
+		log.V(logf.VTrace).Info("updates owner", "updates-owner", strSl, "\n")
 
 		delSl := deletesOwner.ToXPathSlice()
-		log.Debugf("Deletes Owner: %s\n%s", intent.GetName(), strings.Join(delSl, "\n"))
+		log.V(logf.VTrace).Info("deletes owner", "deletes-owner", delSl, "\n")
 
 		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority(), intent.Deviation())
 		switch {
 		case errors.Is(err, tree.ErrorIntentNotPresent):
 			err = d.cacheClient.IntentDelete(ctx, intent.GetName(), intent.GetDeleteIgnoreNonExisting())
 			if err != nil {
-				log.Warnf("failed deleting intent from store for %s: %v", d.Name(), err)
+				log.Error(err, "failed deleting intent from store")
 			}
 			continue
 		case err != nil:
@@ -359,11 +362,11 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		return nil, err
 	}
 
-	log.Infof("ds=%s transaction=%s: completed", d.Name(), transaction.GetTransactionId())
+	log.Info("transaction completed")
 	// start the rollback ticker only if it was not already a rollback transaction.
 	if !transaction.IsRollback() {
 		// start the RollbackTimer
-		err = transaction.StartRollbackTimer()
+		err = transaction.StartRollbackTimer(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -410,21 +413,22 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVari
 }
 
 func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, transactionIntents []*types.TransactionIntent, replaceIntent *types.TransactionIntent, transactionTimeout time.Duration, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
+	log := logf.FromContext(ctx)
 	var err error
 	var transaction *types.Transaction
 	var transactionGuard *types.TransactionGuard
 
-	log.Infof("Transaction: %s - start", transactionId)
+	log.Info("transaction start")
 
 	// create a new Transaction with the given transaction id
 	transaction = types.NewTransaction(transactionId, d.transactionManager)
 	// set the timeout on the transaction
-	transaction.SetTimeout(transactionTimeout)
+	transaction.SetTimeout(ctx, transactionTimeout)
 
 	if !dryRun {
 		// try locking the datastore if it is locked return the specific ErrDatastoreLocked error.
 		if !d.dmutex.TryLock() {
-			log.Infof("Transaction: %s - abort (%v)", transactionId, ErrDatastoreLocked)
+			log.Error(ErrDatastoreLocked, "transaction abort")
 			return nil, ErrDatastoreLocked
 		}
 		defer d.dmutex.Unlock()
@@ -435,7 +439,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 			select {
 			case <-ctx.Done():
 				// Context was canceled or timed out
-				log.Errorf("Transaction: %s - context canceled or timed out: %v", transactionId, ctx.Err())
+				log.Error(ctx.Err(), "transaction context canceled or timed out", ctx.Err())
 				return nil, ErrContextDone
 			default:
 				// Start a transaction and prepare to cancel it if any error occurs
@@ -459,7 +463,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	if transaction.GetReplace() != nil {
 		replaceWarn, err := d.replaceIntent(ctx, transaction)
 		if err != nil {
-			log.Errorf("error setting replace intent: %v", err)
+			log.Error(err, "error setting replace intent")
 			return nil, err
 		}
 		// TODO: do something with these warnings
@@ -468,7 +472,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 
 	err = transaction.AddTransactionIntents(transactionIntents, types.TransactionIntentNew)
 	if err != nil {
-		log.Errorf("error adding intents to transaction: %v", err)
+		log.Error(err, "error adding intents to transaction")
 		return nil, err
 	}
 
@@ -485,12 +489,12 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	// if it is a validation error, we need to send the response while not successing the transaction guard
 	// since validation errors are transported in the response itself, not in the seperate error
 	if errors.Is(err, ErrValidationError) {
-		log.Errorf("Transaction: %s - validation failed\n%s", transactionId, strings.Join(response.GetErrors(), "\n"))
+		log.Error(fmt.Errorf("%s", strings.Join(response.GetErrors(), ", ")), "transaction validation failed")
 		return response, nil
 	}
 	// if it is any other error, return a regular error
 	if err != nil {
-		log.Errorf("error executing transaction: %v", err)
+		log.Error(err, "error executing transaction")
 		return nil, err
 	}
 
@@ -499,7 +503,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 		// Mark the transaction as successfully committed
 		transactionGuard.Success()
 
-		log.Infof("Transaction: %s - transacted", transactionId)
+		log.Info("transaction success")
 	}
 	return response, err
 }
@@ -519,7 +523,8 @@ func updateToSdcpbUpdate(lvs tree.LeafVariantSlice) ([]*sdcpb.Update, error) {
 }
 
 func (d *Datastore) TransactionConfirm(ctx context.Context, transactionId string) error {
-	log.Infof("Transaction %s - Confirm", transactionId)
+	log := logf.FromContext(ctx)
+	log.Info("transaction confirm")
 
 	if !d.dmutex.TryLock() {
 		return ErrDatastoreLocked
@@ -530,7 +535,8 @@ func (d *Datastore) TransactionConfirm(ctx context.Context, transactionId string
 }
 
 func (d *Datastore) TransactionCancel(ctx context.Context, transactionId string) error {
-	log.Infof("Transaction %s - Cancel", transactionId)
+	log := logf.FromContext(ctx)
+	log.Info("transaction cancel")
 
 	if !d.dmutex.TryLock() {
 		return ErrDatastoreLocked
