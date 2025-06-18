@@ -18,11 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/beevik/etree"
+	logf "github.com/sdcio/data-server/pkg/log"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 
@@ -61,6 +63,7 @@ func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient s
 }
 
 func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+	log := logf.FromContext(ctx)
 	if !t.Status().IsConnected() {
 		return nil, fmt.Errorf("%s", TargetStatusNotConnected)
 	}
@@ -87,7 +90,7 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("netconf filter:\n%s", filterDoc)
+	log.V(1).Info("using netconf filter", "filter", filterDoc)
 
 	// execute the GetConfig rpc
 	ncResponse, err := t.driver.GetConfig(source, filterDoc)
@@ -99,7 +102,7 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 		return nil, err
 	}
 
-	log.Debugf("%s: netconf response:\n%s", t.name, ncResponse.DocAsString())
+	log.V(1).Info("received netconf response", "response", ncResponse.DocAsString())
 
 	// cmlImport := xml.NewXmlTreeImporter(ncResponse.Doc.Root())
 
@@ -149,11 +152,14 @@ func (t *ncTarget) Status() *TargetStatus {
 }
 
 func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
-	log.Infof("starting target %s [%s] sync", t.name, t.sbiConfig.Address)
+	log := logf.FromContext(ctx)
+	log.Info("starting target sync")
 
 	for _, ncc := range syncConfig.Config {
 		// periodic get
-		log.Debugf("target %s, starting sync: %s, Interval: %s, Paths: [ \"%s\" ]", t.name, ncc.Name, ncc.Interval.String(), strings.Join(ncc.Paths, "\", \""))
+		log = log.WithValues("sync-name", ncc.Name, "sync-interval", ncc.Interval.String(), "sync-paths", strings.Join(ncc.Paths, "\", \""))
+		ctx = logf.IntoContext(ctx, log)
+		log.V(1).Info("target starting sync")
 		go func(ncSync *config.SyncProtocol) {
 			t.internalSync(ctx, ncSync, true, syncCh)
 			ticker := time.NewTicker(ncSync.Interval)
@@ -171,11 +177,12 @@ func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh cha
 
 	<-ctx.Done()
 	if !errors.Is(ctx.Err(), context.Canceled) {
-		log.Errorf("datastore %s sync stopped: %v", t.name, ctx.Err())
+		log.Error(ctx.Err(), "datastore sync stopped")
 	}
 }
 
 func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, force bool, syncCh chan *SyncUpdate) {
+	log := logf.FromContext(ctx)
 	if !t.Status().IsConnected() {
 		return
 	}
@@ -185,7 +192,7 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, fo
 	for _, p := range sc.Paths {
 		path, err := sdcpb.ParsePath(p)
 		if err != nil {
-			log.Errorf("failed Parsing Path %q, %v", p, err)
+			log.Error(err, "failed parsing path", "path", p)
 			return
 		}
 		// add the parsed path
@@ -202,7 +209,7 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, fo
 	// execute netconf get
 	resp, err := t.Get(ctx, req)
 	if err != nil {
-		log.Errorf("failed getting config from target %v: %T | %v", t.name, err, err)
+		log.Error(err, "failed getting config from target", "err-type", reflect.TypeOf(err).String())
 		if strings.Contains(err.Error(), "EOF") {
 			t.Close()
 			go t.reconnect()
@@ -221,7 +228,7 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, fo
 		}
 		notificationsCount++
 	}
-	log.Debugf("%s: sync-ed %d notifications", t.name, notificationsCount)
+	log.V(1).Info("synced notifications", "notification-count", notificationsCount)
 	syncCh <- &SyncUpdate{
 		End: true,
 	}

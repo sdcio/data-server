@@ -21,11 +21,13 @@ import (
 	"strings"
 	"time"
 
+	logf "github.com/sdcio/data-server/pkg/log"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore"
@@ -188,7 +190,8 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 }
 
 func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStoreRequest) (*sdcpb.DeleteDataStoreResponse, error) {
-	log.Debugf("Received DeleteDataStoreRequest: %v", req)
+	log := logf.FromContext(ctx)
+	log.V(1).Info("Received DeleteDataStoreRequest", "request", prototext.Format(req))
 	name := req.GetName()
 	if name == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
@@ -201,18 +204,24 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 
 	err = ds.Stop()
 	if err != nil {
-		log.Errorf("failed to stop datastore %s: %v", name, err)
+		//TODO: Should we return error here and stop execution?
+		log.Error(err, "failed to stop datastore")
 	}
-	s.datastores.DeleteDatastore(ctx, name)
-	log.Infof("deleted datastore %s", name)
+	err = s.datastores.DeleteDatastore(ctx, name)
+	if err != nil {
+		log.Error(err, "failed to delete datastore")
+		//TODO: Should we return error here and stop execution?
+	}
+	log.Info("deleted datastore")
 
 	return &sdcpb.DeleteDataStoreResponse{}, nil
 }
 
 func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.DataServer_WatchDeviationsServer) error {
 	ctx := stream.Context()
+	log := logf.FromContext(ctx)
 	p, ok := peer.FromContext(ctx)
-	log.Debugf("Received WatchDeviationRequest from peer %s: %v", p.Addr.String(), req)
+	log.V(1).Info("Received WatchDeviationRequest from peer", "peer-address", p.Addr.String(), "request", prototext.Format(req))
 
 	peerInfo, ok := peer.FromContext(ctx)
 	if !ok {
@@ -222,15 +231,19 @@ func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.
 		return status.Errorf(codes.InvalidArgument, "missing datastore name")
 	}
 
+	if len(req.GetName()) == 0 {
+		return status.Errorf(codes.InvalidArgument, "missing datastore name")
+	}
+
 	ds, err := s.datastores.GetDataStore(req.GetName()[0])
 	if err != nil {
-		log.Error(err)
+		log.Error(err, "failed to get datastore")
 		return status.Errorf(codes.NotFound, "unknown datastore")
 	}
 
 	err = ds.WatchDeviations(req, stream)
 	if err != nil {
-		log.Error(err)
+		log.Error(err, "failed to watch deviations")
 	}
 	<-stream.Context().Done()
 	ds.StopDeviationsWatch(peerInfo.Addr.String())
