@@ -18,10 +18,9 @@ import (
 	"context"
 	"time"
 
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
-
 	"github.com/sdcio/data-server/pkg/config"
+	logf "github.com/sdcio/data-server/pkg/log"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 type noopTarget struct {
@@ -93,7 +92,8 @@ func (t *noopTarget) Status() *TargetStatus {
 }
 
 func (t *noopTarget) Sync(ctx context.Context, _ *config.Sync, syncCh chan *SyncUpdate) {
-	log.Infof("starting target %s sync", t.name)
+	log := logf.FromContext(ctx)
+	log.Info("starting target sync")
 }
 
 func (t *noopTarget) Close() error { return nil }

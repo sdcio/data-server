@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"strings"
 
+	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/yang-parser/xpath"
 	"github.com/sdcio/yang-parser/xpath/grammars/expr"
-	log "github.com/sirupsen/logrus"
 )
 
 func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, resultChan chan<- *types.ValidationResultEntry) {
+	log := logf.FromContext(ctx)
 
 	// if no schema, then there is nothing to be done, return
 	if s.schema == nil {
@@ -57,7 +58,7 @@ func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, resu
 				err = fmt.Errorf("error path: %s, must-statement [%s] %s", s.Path(), must.Statement, must.Error)
 			}
 			if strings.Contains(err.Error(), "Stack underflow") {
-				log.Debugf("stack underflow error: path=%v, mustExpr=%s", s.Path().String(), exprStr)
+				log.V(logf.VDebug).Error(err, "stack underflow", "path", s.Path().String(), "must-expression", exprStr)
 				continue
 			}
 			owner := "unknown"

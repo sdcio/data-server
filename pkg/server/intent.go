@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	logf "github.com/sdcio/data-server/pkg/log"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -33,6 +33,14 @@ func (s *Server) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (
 }
 
 func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*sdcpb.GetIntentResponse, error) {
+	log := logf.FromContext(ctx)
+	log = log.WithValues(
+		"intent-datastore", req.GetDatastoreName(),
+		"intent-name", req.GetIntent(),
+		"intent-format", req.GetFormat(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+	log.V(logf.VDebug).Info("received GetIntentRequest", "raw-request", req)
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
@@ -41,7 +49,6 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 	if req.GetIntent() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing intent name")
 	}
-	log.Debugf("Received GetIntent: %v", req)
 	// retrieve the referenced datastore
 	ds, err := s.datastores.getDataStore(req.GetDatastoreName())
 	if err != nil {

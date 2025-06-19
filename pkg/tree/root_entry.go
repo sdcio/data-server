@@ -158,8 +158,8 @@ func (r *RootEntry) GetAncestorSchema() (*sdcpb.SchemaElem, int) {
 	return nil, 0
 }
 
-func (r *RootEntry) GetDeviations(ch chan<- *types.DeviationEntry) {
-	r.sharedEntryAttributes.GetDeviations(ch, true)
+func (r *RootEntry) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry) {
+	r.sharedEntryAttributes.GetDeviations(ctx, ch, true)
 }
 
 func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Intent, error) {

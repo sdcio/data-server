@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	logf "github.com/sdcio/data-server/pkg/log"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -201,6 +201,7 @@ func (c *Converter) ExpandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Updat
 }
 
 func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container) ([]*sdcpb.Update, error) {
+	log := logf.FromContext(ctx)
 	// log.Debugf("expanding jsonVal %T | %v | %v", jv, jv, p)
 	switch jv := jv.(type) {
 	case string:
@@ -389,7 +390,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		}
 		return upds, nil
 	default:
-		log.Warnf("unexpected json type cast %T", jv)
+		log.Error(nil, "unexpected json type cast", "type", reflect.TypeOf(jv).String())
 		return nil, nil
 	}
 }
@@ -597,6 +598,7 @@ func getLeafList(s string, cs *sdcpb.SchemaElem_Container) (*sdcpb.LeafListSchem
 }
 
 func getChild(ctx context.Context, name string, cs *sdcpb.SchemaElem_Container, scb SchemaClientBound) (any, bool) {
+	log := logf.FromContext(ctx)
 
 	searchNames := []string{name}
 	if i := strings.Index(name, ":"); i >= 0 {
@@ -608,7 +610,7 @@ func getChild(ctx context.Context, name string, cs *sdcpb.SchemaElem_Container, 
 			for _, c := range cs.Container.GetChildren() {
 				rsp, err := scb.GetSchemaSdcpbPath(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: c}}})
 				if err != nil {
-					log.Errorf("Failed to get schema object %s: %v", c, err)
+					log.Error(err, "failed to get schema object", "schema-object", c)
 					return "", false
 				}
 				switch rsp := rsp.GetSchema().Schema.(type) {
@@ -794,6 +796,7 @@ type leafListNotification struct {
 }
 
 func (c *Converter) ConvertNotificationTypedValues(ctx context.Context, n *sdcpb.Notification) (*sdcpb.Notification, error) {
+	log := logf.FromContext(ctx)
 	// this map serves as a context to group leaf-lists
 	// sent as keys in separate updates.
 	leaflists := map[string]*leafListNotification{}
@@ -813,7 +816,7 @@ func (c *Converter) ConvertNotificationTypedValues(ctx context.Context, n *sdcpb
 		if err != nil {
 			return nil, err
 		}
-		log.Debugf("converted update from: %v, to: %v", upd, nup)
+		log.V(logf.VDebug).Info("converted update", "from", upd, "to", nup)
 		// gNMI get() could return a Notification with a single path element containing a JSON/JSON_IETF blob, we need to expand this into several typed values.
 		if nup == nil && (upd.GetValue().GetJsonVal() != nil || upd.GetValue().GetJsonIetfVal() != nil) {
 			expUpds, err := c.ExpandUpdate(ctx, upd)

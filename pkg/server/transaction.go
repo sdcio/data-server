@@ -7,17 +7,29 @@ import (
 
 	"github.com/sdcio/data-server/pkg/datastore"
 	"github.com/sdcio/data-server/pkg/datastore/types"
+	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/sdcio/data-server/pkg/tree"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/prototext"
 )
 
 func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRequest) (*sdcpb.TransactionSetResponse, error) {
 	pr, _ := peer.FromContext(ctx)
-	log.Debugf("received TransactionSetRequest request %v from peer %s", req, pr.Addr.String())
+
+	log := logf.FromContext(ctx)
+	log = log.WithName("transaction").WithValues(
+		"transaction-id", req.GetTransactionId(),
+		"transaction-datastore-name", req.GetDatastoreName(),
+		"transaction-dry-run", req.GetDryRun(),
+		"transaction-timeout", req.GetTimeout(),
+		"transaction-peer", pr.String(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.V(logf.VDebug).Info("received TransactionSetRequest", "raw-request", prototext.Format(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
@@ -70,7 +82,16 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 
 func (s *Server) TransactionConfirm(ctx context.Context, req *sdcpb.TransactionConfirmRequest) (*sdcpb.TransactionConfirmResponse, error) {
 	pr, _ := peer.FromContext(ctx)
-	log.Debugf("received TransactionConfirm request %v from peer %s", req, pr.Addr.String())
+
+	log := logf.FromContext(ctx)
+	log = log.WithName("transaction").WithValues(
+		"transaction-id", req.GetTransactionId(),
+		"transaction-datastore-name", req.GetDatastoreName(),
+		"transaction-peer", pr.String(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.V(logf.VDebug).Info("received TransactionConfirm request", "raw-request", prototext.Format(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
@@ -87,7 +108,16 @@ func (s *Server) TransactionConfirm(ctx context.Context, req *sdcpb.TransactionC
 
 func (s *Server) TransactionCancel(ctx context.Context, req *sdcpb.TransactionCancelRequest) (*sdcpb.TransactionCancelResponse, error) {
 	pr, _ := peer.FromContext(ctx)
-	log.Debugf("received TransactionCancel request %v from peer %s", req, pr.Addr.String())
+
+	log := logf.FromContext(ctx)
+	log = log.WithName("transaction").WithValues(
+		"transaction-id", req.GetTransactionId(),
+		"transaction-datastore-name", req.GetDatastoreName(),
+		"transaction-peer", pr.String(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.V(logf.VDebug).Info("received TransactionCancel request", "raw-request", prototext.Format(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")

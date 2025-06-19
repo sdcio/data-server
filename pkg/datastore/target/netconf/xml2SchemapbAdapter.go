@@ -20,11 +20,10 @@ import (
 	"strings"
 
 	"github.com/beevik/etree"
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
-
-	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 )
 
 // XML2sdcpbConfigAdapter is used to transform the provided XML configuration data into the gnmi-like sdcpb.Notifications.
@@ -60,6 +59,7 @@ func (x *XML2sdcpbConfigAdapter) Transform(ctx context.Context, doc *etree.Docum
 }
 
 func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, result *sdcpb.Notification, tc *TransformationContext) error {
+	log := logf.FromContext(ctx)
 	// add the current tag to the array of path elements that make up the actual abs path
 	pelems = append(pelems, &sdcpb.PathElem{Name: e.Tag})
 
@@ -76,7 +76,7 @@ func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etre
 	switch sr.GetSchema().Schema.(type) {
 	case *sdcpb.SchemaElem_Container:
 		// retrieved schema describes a yang container
-		log.Tracef("transforming container %q", e.Tag)
+		log.V(logf.VTrace).Info("transforming container", "name", e.Tag)
 		err = x.transformContainer(ctx, e, sr, pelems, result)
 		if err != nil {
 			return err
@@ -84,7 +84,7 @@ func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etre
 
 	case *sdcpb.SchemaElem_Field:
 		// retrieved schema describes a yang Field
-		log.Tracef("transforming field %q", e.Tag)
+		log.V(logf.VTrace).Info("transforming field", "name", e.Tag)
 		err = x.transformField(ctx, e, pelems, sr.GetSchema().GetField(), result)
 		if err != nil {
 			return err
@@ -92,7 +92,7 @@ func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etre
 
 	case *sdcpb.SchemaElem_Leaflist:
 		// retrieved schema describes a yang LeafList
-		log.Tracef("transforming leaflist %q", e.Tag)
+		log.V(logf.VTrace).Info("transforming leaflist", "name", e.Tag)
 		err = x.transformLeafList(ctx, e, pelems, tc)
 		if err != nil {
 			return err
