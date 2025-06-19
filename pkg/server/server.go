@@ -288,7 +288,7 @@ func (s *Server) createInitialDatastores(ctx context.Context) {
 	wg.Add(numConfiguredDS)
 
 	for _, dsCfg := range s.config.Datastores {
-		log.V(1).Info("creating datastore", "data-store-name", dsCfg.Name)
+		log.V(logf.VDebug).Info("creating datastore", "data-store-name", dsCfg.Name)
 		dsCfg.Validation = s.config.Validation.DeepCopy()
 		go func(dsCfg *config.DatastoreConfig) {
 			defer wg.Done()
@@ -321,7 +321,7 @@ func (s *Server) readyInterceptor(ctx context.Context, req interface{}, info *gr
 func contextLoggingInterceptor(logCtx context.Context) func(context.Context, interface{}, *grpc.UnaryServerInfo, grpc.UnaryHandler) (resp interface{}, err error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 		uuidString := uuid.New().String()
-		log := logf.FromContext(logCtx).WithValues("request-uuid", uuidString)
+		log := logf.FromContext(logCtx).WithName("grpc").WithValues("grpc-request-uuid", uuidString)
 		ctx = logf.IntoContext(ctx, log)
 
 		return handler(ctx, req)

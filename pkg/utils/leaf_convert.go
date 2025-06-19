@@ -21,8 +21,8 @@ import (
 	"strconv"
 	"strings"
 
+	logf "github.com/sdcio/data-server/pkg/log"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -75,7 +75,8 @@ func Convert(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error)
 	case "decimal64":
 		return ConvertDecimal64(value, lst)
 	}
-	log.Warnf("type %q not implemented", lst.Type)
+	//TODO: Do we want to use a context logger?
+	logf.DefaultLogger.V(logf.VDebug).Info("type conversion not implemented", "type", lst.Type)
 	return ConvertString(value, lst)
 }
 
@@ -323,7 +324,8 @@ func ConvertString(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, 
 		escaped := XMLRegexConvert(sp.Pattern)
 		re, err := regexp.Compile(escaped)
 		if err != nil {
-			log.Errorf("unable to compile regex %q", sp.Pattern)
+			// TODO do we want to use a context logger?
+			logf.DefaultLogger.Error(err, "unable to compile regex", "pattern", sp.Pattern)
 		}
 		match := re.MatchString(value)
 		// if it is a match and not inverted

@@ -1,10 +1,12 @@
 package tree
 
 import (
+	"context"
 	"iter"
 	"math"
 	"sync"
 
+	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -368,9 +370,12 @@ func (lv *LeafVariants) DeleteByOwner(owner string) *LeafEntry {
 	return nil
 }
 
-func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveCase bool) {
+func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, isActiveCase bool) {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
+
+	log := logf.FromContext(ctx)
+	log.V(logf.VDebug).Info("Calculating Deviations")
 
 	if len(lv.les) == 0 {
 		return

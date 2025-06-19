@@ -85,6 +85,17 @@ type Datastore struct {
 func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc cache.Client, opts ...grpc.DialOption) (*Datastore, error) {
 
 	log := logf.FromContext(ctx)
+	log = log.WithName("datastore").WithValues(
+		"datastore-name", c.Name,
+		"target-name", c.Name,
+		"schema-name", c.Schema.Name,
+		"schema-vendor", c.Schema.Vendor,
+		"schema-version", c.Schema.Version,
+		"sbi-type", c.SBI.Type,
+		"sbi-address", c.SBI.Address,
+		"sbi-port", c.SBI.Port,
+	)
+	ctx = logf.IntoContext(ctx, log)
 
 	scb := schemaClient.NewSchemaClientBound(c.Schema, sc)
 	tc := tree.NewTreeContext(scb, tree.RunningIntentName)
@@ -113,18 +124,6 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 		ds.synCh = make(chan *target.SyncUpdate, c.Sync.Buffer)
 	}
 
-	log = log.WithValues(
-		"datastore-name", c.Name,
-		"target-name", c.Name,
-		"schema-name", c.Schema.Name,
-		"schema-vendor", c.Schema.Vendor,
-		"schema-version", c.Schema.Version,
-		"sbi-type", c.SBI.Type,
-		"sbi-address", c.SBI.Address,
-		"sbi-port", c.SBI.Port,
-	)
-
-	ctx = logf.IntoContext(ctx, log)
 	ctx, cancel := context.WithCancel(ctx)
 	ds.cfn = cancel
 
@@ -161,10 +160,10 @@ func (d *Datastore) initCache(ctx context.Context) {
 
 	exists := d.cacheClient.InstanceExists(ctx)
 	if exists {
-		log.V(1).Info("cache already exists")
+		log.V(logf.VDebug).Info("cache already exists")
 		return
 	}
-	log.Info("cache does not exist - creating")
+	log.Info("creating cache instance")
 CREATE:
 	err := d.cacheClient.InstanceCreate(ctx)
 	if err != nil {
@@ -241,7 +240,8 @@ func (d *Datastore) Stop() error {
 }
 
 func (d *Datastore) Sync(ctx context.Context) {
-	log := logf.FromContext(ctx)
+	log := logf.FromContext(ctx).WithName("sync")
+	ctx = logf.IntoContext(ctx, log)
 
 	go d.sbi.Sync(ctx,
 		d.config.Sync,
@@ -267,11 +267,11 @@ func (d *Datastore) Sync(ctx context.Context) {
 		case syncup := <-d.synCh:
 			switch {
 			case syncup.Start:
-				log.V(1).Info("sync start")
+				log.V(logf.VDebug).Info("sync start")
 				startTs = time.Now().Unix()
 
 			case syncup.End:
-				log.V(1).Info("sync end")
+				log.V(logf.VDebug).Info("sync end")
 
 				startTs = 0
 
@@ -350,7 +350,8 @@ func (d *Datastore) StopDeviationsWatch(peer string) {
 }
 
 func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig) {
-	log := logf.FromContext(ctx)
+	log := logf.FromContext(ctx).WithName("deviation-mgr")
+	ctx = logf.IntoContext(ctx, log)
 	log.Info("starting deviationMgr")
 	ticker := time.NewTicker(c.Interval)
 	defer func() {
@@ -370,10 +371,10 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 			}
 			d.m.RUnlock()
 			if len(deviationClients) == 0 {
-				log.V(1).Info("no deviation clients present")
+				log.V(logf.VDebug).Info("no deviation clients present")
 				continue
 			}
-			log.V(1).Info("got deviations clients", "deviation-client-names", strings.Join(deviationClientNames, ", "))
+			log.V(logf.VDebug).Info("got deviations clients", "deviation-clients", strings.Join(deviationClientNames, ", "))
 			for clientIdentifier, dc := range deviationClients {
 				err := dc.Send(&sdcpb.WatchDeviationResponse{
 					Name:  d.config.Name,
@@ -469,7 +470,7 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 	}
 
 	go func() {
-		deviationTree.GetDeviations(deviationChan)
+		deviationTree.GetDeviations(ctx, deviationChan)
 		close(deviationChan)
 	}()
 

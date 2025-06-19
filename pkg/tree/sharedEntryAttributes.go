@@ -3,6 +3,7 @@ package tree
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -13,13 +14,17 @@ import (
 	"unicode/utf8"
 
 	"github.com/sdcio/data-server/pkg/config"
+	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/emptypb"
+)
+
+var (
+	ValidationError = errors.New("validation error")
 )
 
 // sharedEntryAttributes contains the attributes shared by Entry and RootEntry
@@ -167,7 +172,7 @@ func (s *sharedEntryAttributes) loadDefaults(ctx context.Context) error {
 	return nil
 }
 
-func (s *sharedEntryAttributes) GetDeviations(ch chan<- *types.DeviationEntry, activeCase bool) {
+func (s *sharedEntryAttributes) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, activeCase bool) {
 	evalLeafvariants := true
 	// if s is a presence container but has active childs, it should not be treated as a presence
 	// container, hence the leafvariants should not be processed. For presence container with
@@ -178,7 +183,7 @@ func (s *sharedEntryAttributes) GetDeviations(ch chan<- *types.DeviationEntry, a
 
 	if evalLeafvariants {
 		// calculate Deviation on the LeafVariants
-		s.leafVariants.GetDeviations(ch, activeCase)
+		s.leafVariants.GetDeviations(ctx, ch, activeCase)
 	}
 
 	// get all active childs
@@ -189,7 +194,7 @@ func (s *sharedEntryAttributes) GetDeviations(ch chan<- *types.DeviationEntry, a
 		// check if c is a active child (choice / case)
 		_, isActiveChild := activeChilds[cName]
 		// recurse the call
-		c.GetDeviations(ch, isActiveChild)
+		c.GetDeviations(ctx, ch, isActiveChild)
 	}
 }
 
@@ -1339,6 +1344,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 // validateMandatory validates that all the mandatory attributes,
 // defined by the schema are present either in the tree or in the index.
 func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats) {
+	log := logf.FromContext(ctx)
 	if s.shouldDelete() {
 		return
 	}
@@ -1370,7 +1376,7 @@ func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultCha
 				}
 
 				if len(attributes) == 0 {
-					log.Errorf("error path: %s, validationg mandatory attribute %s could not be found as child, field or choice.", s.SdcpbPath().ToXPath(false), c.Name)
+					log.Error(ValidationError, "mandatory attribute could not be found as child, field or choice", "path", s.SdcpbPath().ToXPath(false), "attribute", c.Name)
 				}
 
 				s.validateMandatoryWithKeys(ctx, len(s.GetSchema().GetContainer().GetKeys()), attributes, choiceName, resultChan)

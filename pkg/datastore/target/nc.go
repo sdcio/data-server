@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -26,7 +25,6 @@ import (
 	"github.com/beevik/etree"
 	logf "github.com/sdcio/data-server/pkg/log"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
@@ -90,19 +88,19 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	if err != nil {
 		return nil, err
 	}
-	log.V(1).Info("using netconf filter", "filter", filterDoc)
+	log.V(logf.VDebug).Info("using netconf filter", "filter", filterDoc)
 
 	// execute the GetConfig rpc
 	ncResponse, err := t.driver.GetConfig(source, filterDoc)
 	if err != nil {
 		if strings.Contains(err.Error(), "EOF") {
 			t.Close()
-			go t.reconnect()
+			go t.reconnect(ctx)
 		}
 		return nil, err
 	}
 
-	log.V(1).Info("received netconf response", "response", ncResponse.DocAsString())
+	log.V(logf.VTrace).Info("received netconf response", "response", ncResponse.DocAsString())
 
 	// cmlImport := xml.NewXmlTreeImporter(ncResponse.Doc.Root())
 
@@ -157,7 +155,7 @@ func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh cha
 		// periodic get
 		log = log.WithValues("sync-name", ncc.Name, "sync-interval", ncc.Interval.String(), "sync-paths", strings.Join(ncc.Paths, "\", \""))
 		ctx = logf.IntoContext(ctx, log)
-		log.V(1).Info("target starting sync")
+		log.V(logf.VDebug).Info("target starting sync")
 		go func(ncSync *config.SyncProtocol) {
 			t.internalSync(ctx, ncSync, true, syncCh)
 			ticker := time.NewTicker(ncSync.Interval)
@@ -207,10 +205,10 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, fo
 	// execute netconf get
 	resp, err := t.Get(ctx, req)
 	if err != nil {
-		log.Error(err, "failed getting config from target", "err-type", reflect.TypeOf(err).String())
+		log.Error(err, "failed getting config from target")
 		if strings.Contains(err.Error(), "EOF") {
 			t.Close()
-			go t.reconnect()
+			go t.reconnect(ctx)
 		}
 		return
 	}
@@ -226,7 +224,7 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, fo
 		}
 		notificationsCount++
 	}
-	log.V(1).Info("synced notifications", "notification-count", notificationsCount)
+	log.V(logf.VDebug).Info("synced notifications", "notification-count", notificationsCount)
 	syncCh <- &SyncUpdate{
 		End: true,
 	}
@@ -242,24 +240,26 @@ func (t *ncTarget) Close() error {
 	return t.driver.Close()
 }
 
-func (t *ncTarget) reconnect() {
+func (t *ncTarget) reconnect(ctx context.Context) {
 	t.m.Lock()
 	defer t.m.Unlock()
+
+	log := logf.FromContext(ctx)
 
 	if t.Status().IsConnected() {
 		return
 	}
 
 	var err error
-	log.Infof("%s: NETCONF reconnecting...", t.name)
+	log.Info("NETCONF reconnecting")
 	for {
 		t.driver, err = scrapligo.NewScrapligoNetconfTarget(t.sbiConfig)
 		if err != nil {
-			log.Errorf("failed to create NETCONF driver: %v", err)
+			log.Error(err, "failed to create NETCONF driver")
 			time.Sleep(t.sbiConfig.ConnectRetry)
 			continue
 		}
-		log.Infof("%s: NETCONF reconnected...", t.name)
+		log.Info("NETCONF reconnected")
 		return
 	}
 }
@@ -299,7 +299,7 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 		}, nil
 	}
 
-	log.V(1).Info("generated config XML", "xml", xdoc)
+	log.V(logf.VTrace).Info("generated config XML", "xml", xdoc)
 
 	// edit the config
 	resp, err := t.driver.EditConfig(commitDatastore, xdoc)
@@ -307,7 +307,7 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 		log.Error(err, "failed during edit-config")
 		if strings.Contains(err.Error(), "EOF") {
 			t.Close()
-			go t.reconnect()
+			go t.reconnect(ctx)
 			return nil, err
 		}
 
@@ -334,7 +334,7 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 		if err != nil {
 			if strings.Contains(err.Error(), "EOF") {
 				t.Close()
-				go t.reconnect()
+				go t.reconnect(ctx)
 			}
 			return nil, err
 		}

@@ -30,6 +30,8 @@ func (nr *NetconfResponse) DocAsString() string {
 	if nr.Doc == nil {
 		return ""
 	}
-	s, _ := nr.Doc.WriteToString()
+	doc := nr.Doc.Copy()
+	doc.Unindent()
+	s, _ := doc.WriteToString()
 	return s
 }

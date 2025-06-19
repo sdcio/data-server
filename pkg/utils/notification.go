@@ -15,9 +15,11 @@
 package utils
 
 import (
+	"reflect"
+
 	"github.com/openconfig/gnmi/proto/gnmi"
+	logf "github.com/sdcio/data-server/pkg/log"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 )
 
 func ToSchemaNotification(n *gnmi.Notification) *sdcpb.Notification {
@@ -134,7 +136,8 @@ func FromGNMITypedValue(v *gnmi.TypedValue) *sdcpb.TypedValue {
 			Value: &sdcpb.TypedValue_DoubleVal{DoubleVal: float64(v.GetFloatVal())},
 		}
 	default:
-		log.Errorf("FromGNMITypedValue unhandled type: %T: %v", v, v)
+		//TODO: should we use a context logger?
+		logf.DefaultLogger.Error(nil, "FromGNMITypedValue unhandled type: %T: %v", "type", reflect.TypeOf(v).String(), "value", v)
 		return nil
 	}
 	// return nil

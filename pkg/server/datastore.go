@@ -23,7 +23,6 @@ import (
 
 	logf "github.com/sdcio/data-server/pkg/log"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
@@ -36,7 +35,8 @@ import (
 
 // datastore
 func (s *Server) ListDataStore(ctx context.Context, req *sdcpb.ListDataStoreRequest) (*sdcpb.ListDataStoreResponse, error) {
-	log.Debug("Received ListDataStoreRequest")
+	log := logf.FromContext(ctx)
+	log.V(logf.VDebug).Info("received ListDataStoreRequest", "raw-request", req)
 
 	datastores := s.datastores.GetDatastoreAll()
 	rs := make([]*sdcpb.GetDataStoreResponse, 0, len(datastores))
@@ -53,7 +53,13 @@ func (s *Server) ListDataStore(ctx context.Context, req *sdcpb.ListDataStoreRequ
 }
 
 func (s *Server) GetDataStore(ctx context.Context, req *sdcpb.GetDataStoreRequest) (*sdcpb.GetDataStoreResponse, error) {
-	log.Debugf("Received GetDataStoreRequest: %v", req)
+	log := logf.FromContext(ctx)
+	log = log.WithValues(
+		"datastore-name", req.GetDatastoreName(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.V(logf.VDebug).Info("received GetDataStoreRequest", "raw-request", req)
 	name := req.GetDatastoreName()
 	if name == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
@@ -66,7 +72,15 @@ func (s *Server) GetDataStore(ctx context.Context, req *sdcpb.GetDataStoreReques
 }
 
 func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStoreRequest) (*sdcpb.CreateDataStoreResponse, error) {
-	log.Debugf("Received CreateDataStoreRequest: %v", req)
+	log := logf.FromContext(ctx)
+	log = log.WithValues(
+		"datastore-name", req.GetDatastoreName(),
+		"datastore-schema", req.GetSchema(),
+		"datastore-target", req.GetTarget(),
+		"datastore-sync", req.GetSync(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+	log.V(logf.VDebug).Info("received CreateDataStoreRequest", "raw-request", req)
 	name := req.GetDatastoreName()
 	lName := len(name)
 	if lName == 0 {
@@ -185,13 +199,16 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 	if err != nil {
 		return nil, err
 	}
-	s.datastores.AddDatastore(ds)
+	err = s.datastores.AddDatastore(ds)
+	if err != nil {
+		return nil, err
+	}
 	return &sdcpb.CreateDataStoreResponse{}, nil
 }
 
 func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStoreRequest) (*sdcpb.DeleteDataStoreResponse, error) {
 	log := logf.FromContext(ctx)
-	log.V(1).Info("Received DeleteDataStoreRequest", "request", prototext.Format(req))
+	log.V(logf.VDebug).Info("Received DeleteDataStoreRequest", "raw-request", prototext.Format(req))
 	name := req.GetName()
 	if name == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
@@ -219,9 +236,11 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 
 func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.DataServer_WatchDeviationsServer) error {
 	ctx := stream.Context()
-	log := logf.FromContext(ctx)
 	p, ok := peer.FromContext(ctx)
-	log.V(1).Info("Received WatchDeviationRequest from peer", "peer-address", p.Addr.String(), "request", prototext.Format(req))
+	log := logf.FromContext(ctx).WithName("watch-deviations").WithValues("peer", p.String())
+	ctx = logf.IntoContext(ctx, log)
+
+	log.V(logf.VDebug).Info("received WatchDeviationRequest from peer", "raw-request", prototext.Format(req))
 
 	peerInfo, ok := peer.FromContext(ctx)
 	if !ok {

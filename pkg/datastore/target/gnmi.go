@@ -221,7 +221,7 @@ func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDa
 		setReq.Update = append(setReq.Update, gupd)
 	}
 
-	log.V(1).Info("gnmi set request", "request", prototext.Format(setReq))
+	log.V(logf.VDebug).Info("gnmi set request", "raw-request", prototext.Format(setReq))
 
 	rsp, err := t.target.Set(ctx, setReq)
 	if err != nil {
@@ -414,7 +414,7 @@ func (t *gnmiTarget) internalGetSync(ctx context.Context, req *sdcpb.GetDataRequ
 		}
 		notificationsCount++
 	}
-	log.V(1).Info("synced notifications", "count", notificationsCount)
+	log.V(logf.VDebug).Info("synced notifications", "notification-count", notificationsCount)
 	syncCh <- &SyncUpdate{
 		End: true,
 	}

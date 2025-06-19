@@ -9,6 +9,12 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	VDebug = 1
+	VWarn  = 2
+	VTrace = 8
+)
+
 var FallbackLogger logr.Logger
 var DefaultLogger logr.Logger
 

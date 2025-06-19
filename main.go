@@ -27,6 +27,7 @@ import (
 	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/spf13/pflag"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/dslog"
@@ -37,6 +38,7 @@ var configFile string
 var debug bool
 var trace bool
 var stop bool
+var devZapConfig bool
 
 var versionFlag bool
 var version = "dev"
@@ -47,6 +49,7 @@ func main() {
 	pflag.BoolVarP(&debug, "debug", "d", false, "set log level to DEBUG")
 	pflag.BoolVarP(&trace, "trace", "t", false, "set log level to TRACE")
 	pflag.BoolVarP(&versionFlag, "version", "v", false, "print version")
+	pflag.BoolVarP(&devZapConfig, "dev-zap-config", "", false, "use zap development config")
 	pflag.Parse()
 
 	if versionFlag {
@@ -54,6 +57,15 @@ func main() {
 		return
 	}
 	zapConfig := zap.NewProductionConfig()
+	if devZapConfig {
+		zapConfig = zap.NewDevelopmentConfig()
+	}
+
+	// TODO define these
+	zapConfig.DisableCaller = true
+	zapConfig.DisableStacktrace = true
+	zapConfig.EncoderConfig.EncodeTime = zapcore.RFC3339TimeEncoder
+
 	if debug {
 		zapConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
 	}

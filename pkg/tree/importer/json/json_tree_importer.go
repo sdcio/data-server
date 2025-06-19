@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
+	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 )
 
 type JsonTreeImporter struct {
@@ -70,7 +70,7 @@ func (j *JsonTreeImporter) GetElements() []importer.ImportConfigAdapterElement {
 			}
 		}
 	default:
-		log.Error("error we hit a code path that was not meant to be hit.")
+		logf.DefaultLogger.Error(nil, "hit a code path that was not meant to be hit")
 	}
 	return result
 }

@@ -133,7 +133,7 @@ type Entry interface {
 	TreeExport(owner string) ([]*tree_persist.TreeElement, error)
 	// DeleteBranch Deletes from the tree, all elements of the PathSlice defined branch of the given owner
 	DeleteBranch(ctx context.Context, path *sdcpb.Path, owner string) (err error)
-	GetDeviations(ch chan<- *types.DeviationEntry, activeCase bool)
+	GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, activeCase bool)
 	// GetListChilds collects all the childs of the list. In the tree we store them seperated into their key branches.
 	// this is collecting all the last level key entries.
 	GetListChilds() ([]Entry, error)
