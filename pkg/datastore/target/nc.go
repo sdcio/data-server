@@ -61,7 +61,7 @@ func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient s
 }
 
 func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
-	log := logf.FromContext(ctx)
+	log := logf.FromContext(ctx).WithName("get")
 	if !t.Status().IsConnected() {
 		return nil, fmt.Errorf("%s", TargetStatusNotConnected)
 	}

@@ -13,13 +13,13 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRequest) (*sdcpb.TransactionSetResponse, error) {
 	pr, _ := peer.FromContext(ctx)
 
-	log := logf.FromContext(ctx)
+	log := logf.FromContext(ctx).WithName("TransactionSet")
 	log = log.WithName("transaction").WithValues(
 		"transaction-id", req.GetTransactionId(),
 		"transaction-datastore-name", req.GetDatastoreName(),
@@ -29,7 +29,7 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 	)
 	ctx = logf.IntoContext(ctx, log)
 
-	log.V(logf.VDebug).Info("received TransactionSetRequest", "raw-request", prototext.Format(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
@@ -83,7 +83,7 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 func (s *Server) TransactionConfirm(ctx context.Context, req *sdcpb.TransactionConfirmRequest) (*sdcpb.TransactionConfirmResponse, error) {
 	pr, _ := peer.FromContext(ctx)
 
-	log := logf.FromContext(ctx)
+	log := logf.FromContext(ctx).WithName("TransactionConfirm")
 	log = log.WithName("transaction").WithValues(
 		"transaction-id", req.GetTransactionId(),
 		"transaction-datastore-name", req.GetDatastoreName(),
@@ -91,7 +91,7 @@ func (s *Server) TransactionConfirm(ctx context.Context, req *sdcpb.TransactionC
 	)
 	ctx = logf.IntoContext(ctx, log)
 
-	log.V(logf.VDebug).Info("received TransactionConfirm request", "raw-request", prototext.Format(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
@@ -109,7 +109,7 @@ func (s *Server) TransactionConfirm(ctx context.Context, req *sdcpb.TransactionC
 func (s *Server) TransactionCancel(ctx context.Context, req *sdcpb.TransactionCancelRequest) (*sdcpb.TransactionCancelResponse, error) {
 	pr, _ := peer.FromContext(ctx)
 
-	log := logf.FromContext(ctx)
+	log := logf.FromContext(ctx).WithName("TransactionCancel")
 	log = log.WithName("transaction").WithValues(
 		"transaction-id", req.GetTransactionId(),
 		"transaction-datastore-name", req.GetDatastoreName(),
@@ -117,7 +117,7 @@ func (s *Server) TransactionCancel(ctx context.Context, req *sdcpb.TransactionCa
 	)
 	ctx = logf.IntoContext(ctx, log)
 
-	log.V(logf.VDebug).Info("received TransactionCancel request", "raw-request", prototext.Format(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")

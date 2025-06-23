@@ -13,6 +13,14 @@ import (
 )
 
 func (s *Server) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (*sdcpb.ListIntentResponse, error) {
+	log := logf.FromContext(ctx).WithName("ListIntent")
+	log = log.WithValues(
+		"intent-datastore", req.GetDatastoreName(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
+
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
 	}
@@ -34,14 +42,14 @@ func (s *Server) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (
 }
 
 func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*sdcpb.GetIntentResponse, error) {
-	log := logf.FromContext(ctx)
+	log := logf.FromContext(ctx).WithName("GetIntent")
 	log = log.WithValues(
 		"intent-datastore", req.GetDatastoreName(),
 		"intent-name", req.GetIntent(),
 		"intent-format", req.GetFormat(),
 	)
 	ctx = logf.IntoContext(ctx, log)
-	log.V(logf.VDebug).Info("received GetIntentRequest", "raw-request", protojson.Format(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")

@@ -32,7 +32,7 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/sdcio/data-server/pkg/config"
@@ -159,7 +159,8 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 }
 
 func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDataResponse, error) {
-	log := logf.FromContext(ctx)
+	log := logf.FromContext(ctx).WithName("Set")
+	ctx = logf.IntoContext(ctx, log)
 	var upds []*sdcpb.Update
 	var deletes []*sdcpb.Path
 	var err error
@@ -221,7 +222,7 @@ func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDa
 		setReq.Update = append(setReq.Update, gupd)
 	}
 
-	log.V(logf.VDebug).Info("gnmi set request", "raw-request", prototext.Format(setReq))
+	log.V(logf.VDebug).Info("created gnmi request", "raw-request", protojson.Format(setReq))
 
 	rsp, err := t.target.Set(ctx, setReq)
 	if err != nil {
@@ -455,7 +456,7 @@ func (t *gnmiTarget) periodicSync(ctx context.Context, gnmiSync *config.SyncProt
 }
 
 func (t *gnmiTarget) streamSync(ctx context.Context, gnmiSync *config.SyncProtocol) error {
-	log := logf.FromContext(ctx)
+	log := logf.FromContext(ctx).WithName("streamSync")
 	opts := make([]gapi.GNMIOption, 0)
 	subscriptionOpts := make([]gapi.GNMIOption, 0)
 	for _, p := range gnmiSync.Paths {
@@ -483,7 +484,7 @@ func (t *gnmiTarget) streamSync(ctx context.Context, gnmiSync *config.SyncProtoc
 
 	}
 	//TODO: don't use multiline prototext.Format()
-	log.Info("sync", "subRequest", prototext.Format(subReq))
+	log.Info("sync", "subRequest", protojson.Format(subReq))
 	go t.target.Subscribe(ctx, subReq, gnmiSync.Name)
 	return nil
 }
