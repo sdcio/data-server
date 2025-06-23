@@ -61,7 +61,9 @@ func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient s
 }
 
 func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
-	log := logf.FromContext(ctx).WithName("get")
+	log := logf.FromContext(ctx).WithName("Get")
+	ctx = logf.IntoContext(ctx, log)
+
 	if !t.Status().IsConnected() {
 		return nil, fmt.Errorf("%s", TargetStatusNotConnected)
 	}
@@ -123,6 +125,9 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 }
 
 func (t *ncTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDataResponse, error) {
+	log := logf.FromContext(ctx).WithName("Set")
+	ctx = logf.IntoContext(ctx, log)
+
 	if !t.Status().IsConnected() {
 		return nil, fmt.Errorf("%s", TargetStatusNotConnected)
 	}
@@ -148,7 +153,9 @@ func (t *ncTarget) Status() *TargetStatus {
 }
 
 func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
-	log := logf.FromContext(ctx)
+	log := logf.FromContext(ctx).WithName("Sync")
+	ctx = logf.IntoContext(ctx, log)
+
 	log.Info("starting target sync")
 
 	for _, ncc := range syncConfig.Config {

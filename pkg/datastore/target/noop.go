@@ -34,7 +34,10 @@ func newNoopTarget(_ context.Context, name string) (*noopTarget, error) {
 	return nt, nil
 }
 
-func (t *noopTarget) Get(_ context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+func (t *noopTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+	log := logf.FromContext(ctx).WithName("Get")
+	ctx = logf.IntoContext(ctx, log)
+
 	result := &sdcpb.GetDataResponse{
 		Notification: make([]*sdcpb.Notification, 0, len(req.GetPath())),
 	}
@@ -53,6 +56,8 @@ func (t *noopTarget) Get(_ context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 }
 
 func (t *noopTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDataResponse, error) {
+	log := logf.FromContext(ctx).WithName("Set")
+	ctx = logf.IntoContext(ctx, log)
 
 	upds, err := source.ToProtoUpdates(ctx, true)
 	if err != nil {
@@ -92,7 +97,9 @@ func (t *noopTarget) Status() *TargetStatus {
 }
 
 func (t *noopTarget) Sync(ctx context.Context, _ *config.Sync, syncCh chan *SyncUpdate) {
-	log := logf.FromContext(ctx)
+	log := logf.FromContext(ctx).WithName("Sync")
+	ctx = logf.IntoContext(ctx, log)
+
 	log.Info("starting target sync")
 }
 

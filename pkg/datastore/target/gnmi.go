@@ -123,6 +123,8 @@ func sdcpbEncodingToGNMIENcoding(x sdcpb.Encoding) (gnmi.Encoding, error) {
 }
 
 func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+	log := logf.FromContext(ctx).WithName("Get")
+	ctx = logf.IntoContext(ctx, log)
 	var err error
 	gnmiReq := &gnmi.GetRequest{
 		Path: make([]*gnmi.Path, 0, len(req.GetPath())),
@@ -261,7 +263,8 @@ func (t *gnmiTarget) Status() *TargetStatus {
 }
 
 func (t *gnmiTarget) Sync(octx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
-	log := logf.FromContext(octx)
+	log := logf.FromContext(octx).WithName("Sync")
+	octx = logf.IntoContext(octx, log)
 	if t != nil && t.target != nil && t.target.Config != nil {
 		log.Info("starting target sync")
 	}
