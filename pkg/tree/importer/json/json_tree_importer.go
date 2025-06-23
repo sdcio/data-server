@@ -1,6 +1,7 @@
 package json
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -79,7 +80,7 @@ func (j *JsonTreeImporter) GetKeyValue() (string, error) {
 	return fmt.Sprintf("%v", j.data), nil
 }
 
-func (j *JsonTreeImporter) GetTVValue(slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+func (j *JsonTreeImporter) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	return utils.ConvertJsonValueToTv(j.data, slt)
 }
 

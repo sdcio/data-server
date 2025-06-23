@@ -244,7 +244,7 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 			path := s.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(k.Name, nil))
 
 			// convert the key value to the schema defined Typed_Value
-			tv, err := utils.Convert(item.PathName(), k.GetType())
+			tv, err := utils.Convert(ctx, item.PathName(), k.GetType())
 			if err != nil {
 				return err
 			}
@@ -806,7 +806,7 @@ func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path *sdc
 		return nil, fmt.Errorf("error trying to load defaults for %s: %v", path.ToXPath(false), err)
 	}
 
-	upd, err := DefaultValueRetrieve(schema.GetSchema(), path)
+	upd, err := DefaultValueRetrieve(ctx, schema.GetSchema(), path)
 	if err != nil {
 		return nil, err
 	}
@@ -1302,7 +1302,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 		// 	s.treeContext.treeSchemaCacheClient.GetSchema(ctx,)
 		// }
 
-		tv, err := t.GetTVValue(fieldType)
+		tv, err := t.GetTVValue(ctx, fieldType)
 		if err != nil {
 			return err
 		}
@@ -1322,7 +1322,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 			scalarArr = &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{}}
 		}
 
-		tv, err := t.GetTVValue(x.Leaflist.GetType())
+		tv, err := t.GetTVValue(ctx, x.Leaflist.GetType())
 		if err != nil {
 			return err
 		}

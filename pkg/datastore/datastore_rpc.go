@@ -88,7 +88,6 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 	log = log.WithName("datastore").WithValues(
 		"datastore-name", c.Name,
 		"target-name", c.Name,
-		"schema-name", c.Schema.Name,
 		"schema-vendor", c.Schema.Vendor,
 		"schema-version", c.Schema.Version,
 		"sbi-type", c.SBI.Type,

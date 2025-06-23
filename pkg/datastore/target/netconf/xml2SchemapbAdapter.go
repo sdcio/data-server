@@ -123,7 +123,7 @@ func (x *XML2sdcpbConfigAdapter) transformContainer(ctx context.Context, e *etre
 		if cPElem[len(cPElem)-1].Key == nil {
 			cPElem[len(cPElem)-1].Key = map[string]string{}
 		}
-		tv, err := utils.Convert(e.FindElement("./"+ls.Name).Text(), ls.Type)
+		tv, err := utils.Convert(ctx, e.FindElement("./"+ls.Name).Text(), ls.Type)
 		if err != nil {
 			return err
 		}
@@ -209,7 +209,7 @@ func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.El
 	}
 
 	// process terminal values
-	tv, err := utils.Convert(e.Text(), schemaLeafType)
+	tv, err := utils.Convert(ctx, e.Text(), schemaLeafType)
 	if err != nil {
 		return fmt.Errorf("unable to convert value [%s] at path [%s] according to SchemaLeafType [%+v]: %w", e.Text(), e.GetPath(), schemaLeafType, err)
 	}

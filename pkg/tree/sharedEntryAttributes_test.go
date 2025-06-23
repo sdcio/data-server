@@ -537,7 +537,7 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			root := tt.s(t)
 			ch := make(chan *types.DeviationEntry, 100)
-			root.GetDeviations(ch)
+			root.GetDeviations(ctx, ch)
 			close(ch)
 
 			result := []string{}

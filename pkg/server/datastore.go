@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"github.com/sdcio/data-server/pkg/config"
@@ -73,14 +74,13 @@ func (s *Server) GetDataStore(ctx context.Context, req *sdcpb.GetDataStoreReques
 
 func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStoreRequest) (*sdcpb.CreateDataStoreResponse, error) {
 	log := logf.FromContext(ctx)
-	log = log.WithValues(
+	log = log.WithName("CreateDataStore").WithValues(
 		"datastore-name", req.GetDatastoreName(),
 		"datastore-schema", req.GetSchema(),
 		"datastore-target", req.GetTarget(),
-		"datastore-sync", req.GetSync(),
 	)
 	ctx = logf.IntoContext(ctx, log)
-	log.V(logf.VDebug).Info("received CreateDataStoreRequest", "raw-request", req)
+	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
 	name := req.GetDatastoreName()
 	lName := len(name)
 	if lName == 0 {
@@ -227,7 +227,7 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 	err = s.datastores.DeleteDatastore(ctx, name)
 	if err != nil {
 		log.Error(err, "failed to delete datastore")
-		//TODO: Should we return error here and stop execution?
+		return nil, fmt.Errorf("failed to delete datastore: %w", err)
 	}
 	log.Info("deleted datastore")
 

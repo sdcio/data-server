@@ -293,10 +293,13 @@ func (s *Server) createInitialDatastores(ctx context.Context) {
 		go func(dsCfg *config.DatastoreConfig) {
 			defer wg.Done()
 			// TODO: propagate error
-			ds, _ := datastore.New(ctx, dsCfg, s.schemaClient, s.cacheClient, s.gnmiOpts...)
-			err := s.datastores.AddDatastore(ds)
+			ds, err := datastore.New(ctx, dsCfg, s.schemaClient, s.cacheClient, s.gnmiOpts...)
 			if err != nil {
-				log.Error(err, "datastore creation failed")
+				log.Error(err, "failed to create datastore")
+			}
+			err = s.datastores.AddDatastore(ds)
+			if err != nil {
+				log.Error(err, "failed to create datastore")
 			}
 		}(dsCfg)
 	}
@@ -306,7 +309,6 @@ func (s *Server) createInitialDatastores(ctx context.Context) {
 
 func (s *Server) timeoutInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 	ctx, cfn := context.WithTimeout(ctx, s.config.GRPCServer.RPCTimeout)
-	// TODO: Does this not instantly cancel the timeout/context?
 	defer cfn()
 	return handler(ctx, req)
 }
@@ -330,7 +332,7 @@ func contextLoggingInterceptor(logCtx context.Context) func(context.Context, int
 
 func contextLoggingServerStreamInterceptor(ctx context.Context) func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		log := logf.FromContext(ctx)
+		log := logf.FromContext(ctx).WithName("grpc")
 		wss := grpc_middleware.WrapServerStream(ss)
 		wss.WrappedContext = logf.IntoContext(wss.WrappedContext, log)
 

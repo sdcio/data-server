@@ -15,6 +15,7 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"regexp"
@@ -26,7 +27,8 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-func Convert(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+func Convert(ctx context.Context, value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+	log := logf.FromContext(ctx)
 	if lst == nil {
 		return nil, fmt.Errorf("schemaleaftype cannot be nil")
 	}
@@ -34,7 +36,7 @@ func Convert(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error)
 	case "string":
 		return ConvertString(value, lst)
 	case "union":
-		return ConvertUnion(value, lst.UnionTypes)
+		return ConvertUnion(ctx, value, lst.UnionTypes)
 	case "boolean":
 		return ConvertBoolean(value, lst)
 	case "int8":
@@ -75,8 +77,7 @@ func Convert(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error)
 	case "decimal64":
 		return ConvertDecimal64(value, lst)
 	}
-	//TODO: Do we want to use a context logger?
-	logf.DefaultLogger.V(logf.VDebug).Info("type conversion not implemented", "type", lst.Type)
+	log.V(logf.VDebug).Info("type conversion not implemented", "type", lst.Type)
 	return ConvertString(value, lst)
 }
 
@@ -362,10 +363,10 @@ func ConvertDecimal64(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValu
 	}, nil
 }
 
-func ConvertUnion(value string, slts []*sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+func ConvertUnion(ctx context.Context, value string, slts []*sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// iterate over the union types try to convert without error
 	for _, slt := range slts {
-		tv, err := Convert(value, slt)
+		tv, err := Convert(ctx, value, slt)
 		// if no error type conversion was fine
 		if err != nil {
 			continue

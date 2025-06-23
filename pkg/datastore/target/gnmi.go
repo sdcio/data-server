@@ -152,7 +152,7 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 		Notification: make([]*sdcpb.Notification, 0, len(gnmiRsp.GetNotification())),
 	}
 	for _, n := range gnmiRsp.GetNotification() {
-		sn := utils.ToSchemaNotification(n)
+		sn := utils.ToSchemaNotification(ctx, n)
 		schemaRsp.Notification = append(schemaRsp.Notification, sn)
 	}
 	return schemaRsp, nil
@@ -306,7 +306,7 @@ START:
 			case *gnmi.SubscribeResponse_Update:
 				syncCh <- &SyncUpdate{
 					Store:  rsp.SubscriptionName,
-					Update: utils.ToSchemaNotification(r.Update),
+					Update: utils.ToSchemaNotification(ctx, r.Update),
 				}
 			}
 		case err := <-errCh:

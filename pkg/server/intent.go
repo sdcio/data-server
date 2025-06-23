@@ -9,6 +9,7 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func (s *Server) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (*sdcpb.ListIntentResponse, error) {
@@ -40,7 +41,7 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 		"intent-format", req.GetFormat(),
 	)
 	ctx = logf.IntoContext(ctx, log)
-	log.V(logf.VDebug).Info("received GetIntentRequest", "raw-request", req)
+	log.V(logf.VDebug).Info("received GetIntentRequest", "raw-request", protojson.Format(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")

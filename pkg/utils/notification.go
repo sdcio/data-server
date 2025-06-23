@@ -15,6 +15,7 @@
 package utils
 
 import (
+	"context"
 	"reflect"
 
 	"github.com/openconfig/gnmi/proto/gnmi"
@@ -22,7 +23,7 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-func ToSchemaNotification(n *gnmi.Notification) *sdcpb.Notification {
+func ToSchemaNotification(ctx context.Context, n *gnmi.Notification) *sdcpb.Notification {
 	if n == nil {
 		return nil
 	}
@@ -38,7 +39,7 @@ func ToSchemaNotification(n *gnmi.Notification) *sdcpb.Notification {
 		_ = idx
 		scUpd := &sdcpb.Update{
 			Path:  FromGNMIPath(n.GetPrefix(), upd.GetPath()),
-			Value: FromGNMITypedValue(upd.GetVal()),
+			Value: FromGNMITypedValue(ctx, upd.GetVal()),
 		}
 		sn.Update = append(sn.Update, scUpd)
 	}
@@ -69,7 +70,8 @@ func FromGNMIPath(pre, p *gnmi.Path) *sdcpb.Path {
 	return r
 }
 
-func FromGNMITypedValue(v *gnmi.TypedValue) *sdcpb.TypedValue {
+func FromGNMITypedValue(ctx context.Context, v *gnmi.TypedValue) *sdcpb.TypedValue {
+	log := logf.FromContext(ctx)
 	// log.Tracef("FromGNMITypedValue: %T : %v", v, v)
 	if v == nil {
 		return nil
@@ -110,7 +112,7 @@ func FromGNMITypedValue(v *gnmi.TypedValue) *sdcpb.TypedValue {
 			Element: make([]*sdcpb.TypedValue, 0, len(v.GetLeaflistVal().GetElement())),
 		}
 		for _, e := range v.GetLeaflistVal().GetElement() {
-			schemalf.Element = append(schemalf.Element, FromGNMITypedValue(e))
+			schemalf.Element = append(schemalf.Element, FromGNMITypedValue(ctx, e))
 		}
 		return &sdcpb.TypedValue{
 			Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: schemalf},
@@ -136,8 +138,7 @@ func FromGNMITypedValue(v *gnmi.TypedValue) *sdcpb.TypedValue {
 			Value: &sdcpb.TypedValue_DoubleVal{DoubleVal: float64(v.GetFloatVal())},
 		}
 	default:
-		//TODO: should we use a context logger?
-		logf.DefaultLogger.Error(nil, "FromGNMITypedValue unhandled type: %T: %v", "type", reflect.TypeOf(v).String(), "value", v)
+		log.Error(nil, "unhandled type", "type", reflect.TypeOf(v).String(), "value", v)
 		return nil
 	}
 	// return nil
