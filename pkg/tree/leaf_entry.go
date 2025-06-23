@@ -63,6 +63,10 @@ func (l *LeafEntry) MarkNew() {
 	l.IsNew = true
 }
 
+func (l *LeafEntry) RemoveDeleteFlag() {
+	l.Delete = false
+}
+
 func (l *LeafEntry) GetDeleteFlag() bool {
 	l.mu.RLock()
 	defer l.mu.RUnlock()

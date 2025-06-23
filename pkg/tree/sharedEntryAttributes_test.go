@@ -14,6 +14,7 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
+	"github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -918,6 +919,119 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 				t.Errorf("BlameConfig() mismatch (-want +got)\n%s", diff)
 				return
 			}
+		})
+	}
+}
+
+func Test_sharedEntryAttributes_ReApply(t *testing.T) {
+	ctx := context.TODO()
+	owner1 := "owner1"
+	owner1Prio := int32(50)
+
+	tests := []struct {
+		name      string
+		r         func(t *testing.T) *sdcio_schema.Device
+		numDelete int
+	}{
+		{
+			name: "multiple keys",
+			r: func(t *testing.T) *sdcio_schema.Device {
+				conf1 := &sdcio_schema.Device{
+					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
+						{
+							Key1: "k1.1",
+							Key2: "k1.2",
+						}: {
+							Key1: ygot.String("k1.1"),
+							Key2: ygot.String("k1.2"),
+							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+								Value1: ygot.String("containerval1.1"),
+								Value2: ygot.String("containerval1.2"),
+							},
+							Mandato: ygot.String("foo"),
+						},
+					},
+				}
+				return conf1
+			},
+			numDelete: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+
+			scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			tc := NewTreeContext(scb, owner1)
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			updSlice := types.UpdateSlice{
+				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValue1"), owner1Prio, owner1, 0),
+			}
+
+			err = root.AddUpdatesRecursive(ctx, updSlice, flagsNew)
+			if err != nil {
+				t.Error(err)
+			}
+
+			fmt.Println(root.String())
+
+			treepersist, err := root.TreeExport(owner1, owner1Prio)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+
+			persistByte, err := protojson.Marshal(treepersist)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			fmt.Println("\nTreeExport:")
+			fmt.Println(string(persistByte))
+
+			tcNew := NewTreeContext(scb, owner1)
+			newRoot, err := NewTreeRoot(ctx, tcNew)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = newRoot.ImportConfig(ctx, types.PathSlice{}, proto.NewProtoTreeImporter(treepersist.Root), owner1, owner1Prio, flagsExisting)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+
+			// mark owner delete
+			newRoot.MarkOwnerDelete(owner1, false)
+
+			err = newRoot.AddUpdatesRecursive(ctx, updSlice, flagsNew)
+			if err != nil {
+				t.Error(err)
+			}
+
+			fmt.Println(newRoot.String())
+
+			err = newRoot.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			deleteList, err := newRoot.GetDeletes(true)
+			if err != nil {
+				t.Error(err)
+			}
+			if len(deleteList) != tt.numDelete {
+				t.Errorf("%d deltes expected, got %d\n%s", tt.numDelete, len(deleteList), strings.Join(deleteList.PathSlices().StringSlice(), ", "))
+			}
+
 		})
 	}
 }
