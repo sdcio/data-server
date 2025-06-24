@@ -326,7 +326,6 @@ func ConvertString(ctx context.Context, value string, lst *sdcpb.SchemaLeafType)
 		escaped := XMLRegexConvert(sp.Pattern)
 		re, err := regexp.Compile(escaped)
 		if err != nil {
-			// TODO do we want to use a context logger?
 			log.Error(err, "unable to compile regex", "pattern", sp.Pattern)
 		}
 		match := re.MatchString(value)
