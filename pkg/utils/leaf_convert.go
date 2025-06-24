@@ -273,6 +273,29 @@ func ConvertInt64(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, e
 	return convertInt(value, lst.Range, ranges)
 }
 
+func EnsureEscaped(s string, toEscape string) string {
+	isTarget := func(r rune) bool { return strings.ContainsRune(toEscape, r) }
+
+	b := strings.Builder{}
+	b.Grow(len(s) + len(s)/4)
+	slashes := 0
+
+	for _, r := range s {
+		if r == '\\' {
+			slashes++
+			b.WriteRune(r)
+			continue
+		}
+
+		if isTarget(r) && slashes%2 == 0 {
+			b.WriteRune('\\')
+		}
+		slashes = 0
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
 func ConvertString(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// check length of the string if the length property is set
 	// length will contain a range like string definition "5..60" or "7..10|40..45"
@@ -289,7 +312,14 @@ func ConvertString(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, 
 	// If the type has multiple "pattern" statements, the expressions are
 	// ANDed together, i.e., all such expressions have to match.
 	for _, sp := range lst.Patterns {
-		re, err := regexp.Compile(sp.Pattern)
+		// The set of metacharacters is not the same between XML schema and perl/python/go REs
+		// the set of metacharacters for XML is: .\?*+{}()[] (https://www.w3.org/TR/xmlschema-2/#dt-metac)
+		// the set of metacharacters defined in go is: \.+*?()|[]{}^$ (go/libexec/src/regexp/regexp.go:714)
+		// we need therefore to escape some values
+		// TODO check about '^'
+	
+		escaped := EnsureEscaped(sp.Pattern, "$")
+		re, err := regexp.Compile(escaped)
 		if err != nil {
 			log.Errorf("unable to compile regex %q", sp.Pattern)
 		}
