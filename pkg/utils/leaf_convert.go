@@ -273,24 +273,32 @@ func ConvertInt64(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, e
 	return convertInt(value, lst.Range, ranges)
 }
 
-func EnsureEscaped(s string, toEscape string) string {
-	isTarget := func(r rune) bool { return strings.ContainsRune(toEscape, r) }
+func XMLRegexConvert(s string) string {
+
+	cTest := func(r rune, prev rune) bool {
+		// if ^ is not following a [ or if $ we want to return true
+		return (r == '^' && prev != '[') || r == '$'
+	}
 
 	b := strings.Builder{}
 	b.Grow(len(s) + len(s)/4)
 	slashes := 0
+	prevR := rune(0)
 
 	for _, r := range s {
 		if r == '\\' {
 			slashes++
+			prevR = r
 			b.WriteRune(r)
 			continue
 		}
 
-		if isTarget(r) && slashes%2 == 0 {
+		if cTest(r, prevR) && slashes%2 == 0 {
 			b.WriteRune('\\')
 		}
+
 		slashes = 0
+		prevR = r
 		b.WriteRune(r)
 	}
 	return b.String()
@@ -317,8 +325,8 @@ func ConvertString(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, 
 		// the set of metacharacters defined in go is: \.+*?()|[]{}^$ (go/libexec/src/regexp/regexp.go:714)
 		// we need therefore to escape some values
 		// TODO check about '^'
-	
-		escaped := EnsureEscaped(sp.Pattern, "$")
+
+		escaped := XMLRegexConvert(sp.Pattern)
 		re, err := regexp.Compile(escaped)
 		if err != nil {
 			log.Errorf("unable to compile regex %q", sp.Pattern)
