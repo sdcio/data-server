@@ -340,7 +340,7 @@ func Test_Entry_Three(t *testing.T) {
 		highPri := LeafEntriesToUpdates(highPriLe)
 
 		// diff the result with the expected
-		if diff := testhelper.DiffUpdates([]*types.Update{n1, n2}, highPri); diff != "" {
+		if diff := testhelper.DiffUpdates([]*types.Update{n1, n2, u0, u1_1, u2_1}, highPri); diff != "" {
 			t.Errorf("root.GetByOwner() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -374,11 +374,11 @@ func Test_Entry_Four(t *testing.T) {
 	u4 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "13", "description"}, desc3, prio50, owner1, ts1)
 	u4_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "13", "index"}, testhelper.GetUIntTvProto(13), prio50, owner1, ts1)
 
-	u1o2_0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio55, owner2, ts1)
+	// u1o2_0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio55, owner2, ts1)
 	u1o2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "description"}, desc3, prio55, owner2, ts1)
-	u1o2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(10), prio55, owner2, ts1)
+	// u1o2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetUIntTvProto(10), prio55, owner2, ts1)
 	u2o2 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "description"}, desc3, prio55, owner2, ts1)
-	u2o2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "index"}, testhelper.GetUIntTvProto(11), prio55, owner2, ts1)
+	// u2o2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "index"}, testhelper.GetUIntTvProto(11), prio55, owner2, ts1)
 
 	ctx := context.TODO()
 
@@ -461,7 +461,7 @@ func Test_Entry_Four(t *testing.T) {
 		highPri := LeafEntriesToUpdates(highPriLe)
 
 		// diff the result with the expected
-		if diff := testhelper.DiffUpdates([]*types.Update{n1, n2}, highPri); diff != "" {
+		if diff := testhelper.DiffUpdates([]*types.Update{n1, n2, u1o1_0, u1o1_1, u2o1_1}, highPri); diff != "" {
 			t.Errorf("root.GetByOwner() mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -477,7 +477,7 @@ func Test_Entry_Four(t *testing.T) {
 	t.Run("Check the old entries are gone from highest (Only New Or Updated)", func(t *testing.T) {
 		highpri := root.GetHighestPrecedence(true)
 		// diff the result with the expected
-		if diff := testhelper.DiffUpdates([]*types.Update{u1o2_0, n1, n2, u2o2_1, u1o2_1}, highpri.ToUpdateSlice()); diff != "" {
+		if diff := testhelper.DiffUpdates([]*types.Update{u1o1_0, n1, n2, u2o1_1, u1o1_1}, highpri.ToUpdateSlice()); diff != "" {
 			t.Errorf("root.GetHighestPrecedence() mismatch (-want +got):\n%s", diff)
 		}
 	})

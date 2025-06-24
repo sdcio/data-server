@@ -222,6 +222,7 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 				var result []*LeafEntry
 				lvs := child.GetByOwner(intentName, result)
 				if len(lvs) > 0 {
+					lvs[0].RemoveDeleteFlag()
 					continue
 				}
 			}
@@ -1608,7 +1609,7 @@ func (s *sharedEntryAttributes) TreeExport(owner string) ([]*tree_persist.TreeEl
 func (s *sharedEntryAttributes) BlameConfig(includeDefaults bool) (*sdcpb.BlameTreeElement, error) {
 	name := s.pathElemName
 	if s.GetLevel() == 0 {
-		name = fmt.Sprintf("root")
+		name = "root"
 	}
 	result := sdcpb.NewBlameTreeElement(name)
 
