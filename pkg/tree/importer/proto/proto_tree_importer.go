@@ -1,6 +1,7 @@
 package proto
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/sdcio/data-server/pkg/tree/importer"
@@ -53,14 +54,14 @@ func (p *ProtoTreeImporter) GetElement(key string) importer.ImportConfigAdapter 
 }
 
 func (p *ProtoTreeImporter) GetKeyValue() (string, error) {
-	tv, err := p.GetTVValue(nil)
+	tv, err := p.GetTVValue(context.Background(), nil)
 	if err != nil {
 		return "", fmt.Errorf("failed GetTVValue for %s", p.data.Name)
 	}
 	return utils.TypedValueToString(tv), nil
 }
 
-func (p *ProtoTreeImporter) GetTVValue(slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+func (p *ProtoTreeImporter) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	result := &sdcpb.TypedValue{}
 	err := proto.Unmarshal(p.data.LeafVariant, result)
 	if err != nil {

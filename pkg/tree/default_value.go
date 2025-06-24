@@ -1,6 +1,7 @@
 package tree
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -19,7 +20,7 @@ func DefaultValueExists(schema *sdcpb.SchemaElem) bool {
 	return false
 }
 
-func DefaultValueRetrieve(schema *sdcpb.SchemaElem, path []string, prio int32, intent string) (*types.Update, error) {
+func DefaultValueRetrieve(ctx context.Context, schema *sdcpb.SchemaElem, path []string, prio int32, intent string) (*types.Update, error) {
 	var tv *sdcpb.TypedValue
 	var err error
 	switch schem := schema.GetSchema().(type) {
@@ -28,7 +29,7 @@ func DefaultValueRetrieve(schema *sdcpb.SchemaElem, path []string, prio int32, i
 		if defaultVal == "" {
 			return nil, fmt.Errorf("no defaults defined for schema path: %s", strings.Join(path, "->"))
 		}
-		tv, err = utils.Convert(defaultVal, schem.Field.GetType())
+		tv, err = utils.Convert(ctx, defaultVal, schem.Field.GetType())
 		if err != nil {
 			return nil, err
 		}
@@ -39,7 +40,7 @@ func DefaultValueRetrieve(schema *sdcpb.SchemaElem, path []string, prio int32, i
 		}
 		tvlist := make([]*sdcpb.TypedValue, 0, len(listDefaults))
 		for _, dv := range schem.Leaflist.GetDefaults() {
-			tvelem, err := utils.Convert(dv, schem.Leaflist.GetType())
+			tvelem, err := utils.Convert(ctx, dv, schem.Leaflist.GetType())
 			if err != nil {
 				return nil, fmt.Errorf("error converting default to typed value for %s, type: %s ; value: %s; err: %v", strings.Join(path, " -> "), schem.Leaflist.GetType().GetTypeName(), dv, err)
 			}

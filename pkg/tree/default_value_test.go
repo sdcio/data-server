@@ -85,6 +85,7 @@ func TestDefaultValueExists(t *testing.T) {
 }
 
 func TestDefaultValueRetrieve(t *testing.T) {
+	ctx := context.TODO()
 	tests := []struct {
 		name       string
 		schemaElem func(t *testing.T) *sdcpb.SchemaElem
@@ -154,7 +155,7 @@ func TestDefaultValueRetrieve(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			val, err := DefaultValueRetrieve(tt.schemaElem(t), []string{}, 5, "owner1")
+			val, err := DefaultValueRetrieve(ctx, tt.schemaElem(t), []string{}, 5, "owner1")
 			if tt.wanterr {
 				if err == nil {
 					t.Fatalf("expected err, got non")

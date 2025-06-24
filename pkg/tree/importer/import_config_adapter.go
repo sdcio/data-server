@@ -1,6 +1,8 @@
 package importer
 
 import (
+	"context"
+
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -21,7 +23,7 @@ type ImportConfigAdapter interface {
 	// The String value is typically used for the keys.
 	GetKeyValue() (string, error)
 	// GetTVValue returns the TypedValue based value defined via the SchemaLeafType. Can also only be called on Leafs or LeafLists
-	GetTVValue(slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error)
+	GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error)
 	// returns the name of the actual Level.
 	GetName() string
 }

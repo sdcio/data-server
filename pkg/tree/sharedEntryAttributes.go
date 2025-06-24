@@ -2,6 +2,7 @@ package tree
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -12,14 +13,18 @@ import (
 	"unicode/utf8"
 
 	"github.com/sdcio/data-server/pkg/config"
+	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
+)
+
+var (
+	ValidationError = errors.New("validation error")
 )
 
 // sharedEntryAttributes contains the attributes shared by Entry and RootEntry
@@ -168,7 +173,7 @@ func (s *sharedEntryAttributes) loadDefaults(ctx context.Context) error {
 	return nil
 }
 
-func (s *sharedEntryAttributes) GetDeviations(ch chan<- *types.DeviationEntry, activeCase bool) {
+func (s *sharedEntryAttributes) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, activeCase bool) {
 	// if s is a presence container but has active childs, it should not be treated as a presence
 	// container, hence the leafvariants should not be processed. For presence container with
 	// childs the TypedValue.empty_val in the presence container is irrelevant.
@@ -177,7 +182,7 @@ func (s *sharedEntryAttributes) GetDeviations(ch chan<- *types.DeviationEntry, a
 	}
 
 	// calculate Deviation on the LeafVariants
-	s.leafVariants.GetDeviations(ch, activeCase)
+	s.leafVariants.GetDeviations(ctx, ch, activeCase)
 
 	// get all active childs
 	activeChilds := s.filterActiveChoiceCaseChilds()
@@ -187,7 +192,7 @@ func (s *sharedEntryAttributes) GetDeviations(ch chan<- *types.DeviationEntry, a
 		// check if c is a active child (choice / case)
 		_, isActiveChild := activeChilds[cName]
 		// recurse the call
-		c.GetDeviations(ch, isActiveChild)
+		c.GetDeviations(ctx, ch, isActiveChild)
 	}
 }
 
@@ -234,7 +239,7 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 				return err
 			}
 			// convert the key value to the schema defined Typed_Value
-			tv, err := utils.Convert(keyPath[len(keyPath)-levelsUp-1+idx], schem.Schema.GetField().Type)
+			tv, err := utils.Convert(ctx, keyPath[len(keyPath)-levelsUp-1+idx], schem.Schema.GetField().Type)
 			if err != nil {
 				return err
 			}
@@ -777,7 +782,7 @@ func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path []st
 		return nil, fmt.Errorf("error trying to load defaults for %s: %v", strings.Join(path, "->"), err)
 	}
 
-	upd, err := DefaultValueRetrieve(schema.GetSchema(), path, DefaultValuesPrio, DefaultsIntentName)
+	upd, err := DefaultValueRetrieve(ctx, schema.GetSchema(), path, DefaultValuesPrio, DefaultsIntentName)
 	if err != nil {
 		return nil, err
 	}
@@ -1210,7 +1215,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 		// 	s.treeContext.treeSchemaCacheClient.GetSchema(ctx,)
 		// }
 
-		tv, err := t.GetTVValue(fieldType)
+		tv, err := t.GetTVValue(ctx, fieldType)
 		if err != nil {
 			return err
 		}
@@ -1230,7 +1235,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 			scalarArr = &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{}}
 		}
 
-		tv, err := t.GetTVValue(x.Leaflist.GetType())
+		tv, err := t.GetTVValue(ctx, x.Leaflist.GetType())
 		if err != nil {
 			return err
 		}
@@ -1252,6 +1257,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 // validateMandatory validates that all the mandatory attributes,
 // defined by the schema are present either in the tree or in the index.
 func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry) {
+	log := logf.FromContext(ctx)
 	if s.shouldDelete() {
 		return
 	}
@@ -1283,7 +1289,7 @@ func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultCha
 				}
 
 				if len(attributes) == 0 {
-					log.Errorf("error path: %s, validationg mandatory attribute %s could not be found as child, field or choice.", s.Path(), c.Name)
+					log.Error(ValidationError, "mandatory attribute could not be found as child, field or choice", "path", s.Path(), "attribute", c.Name)
 				}
 
 				s.validateMandatoryWithKeys(ctx, len(s.GetSchema().GetContainer().GetKeys()), attributes, choiceName, resultChan)

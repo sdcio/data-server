@@ -1,13 +1,14 @@
 package json
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
+	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 )
 
 type JsonTreeImporter struct {
@@ -66,7 +67,7 @@ func (j *JsonTreeImporter) GetElements() []importer.ImportConfigAdapter {
 			}
 		}
 	default:
-		log.Error("error we hit a code path that was not meant to be hit.")
+		logf.DefaultLogger.Error(nil, "hit a code path that was not meant to be hit")
 	}
 	return result
 }
@@ -75,7 +76,7 @@ func (j *JsonTreeImporter) GetKeyValue() (string, error) {
 	return fmt.Sprintf("%v", j.data), nil
 }
 
-func (j *JsonTreeImporter) GetTVValue(slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+func (j *JsonTreeImporter) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	return utils.ConvertJsonValueToTv(j.data, slt)
 }
 

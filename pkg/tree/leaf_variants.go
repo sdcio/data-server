@@ -1,13 +1,14 @@
 package tree
 
 import (
+	"context"
 	"iter"
 	"math"
 	"sync"
 
+	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
-	log "github.com/sirupsen/logrus"
 )
 
 type LeafVariants struct {
@@ -326,9 +327,11 @@ func (lv *LeafVariants) DeleteByOwner(owner string) (remainsToExist bool) {
 	return remainsToExist
 }
 
-func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveCase bool) {
+func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, isActiveCase bool) {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
+
+	log := logf.FromContext(ctx)
 
 	if len(lv.les) == 0 {
 		return
@@ -338,7 +341,7 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 	// is valid for all entries
 	sdcpbPath, err := lv.parentEntry.SdcpbPath()
 	if err != nil {
-		log.Error(err)
+		log.Error(err, "error getting parent entry path")
 	}
 
 	// we are part of an inactive case of a choice

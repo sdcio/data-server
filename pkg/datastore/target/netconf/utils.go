@@ -15,6 +15,7 @@
 package netconf
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strconv"
@@ -37,7 +38,7 @@ func getNamespaceFromGetSchemaResponse(sr *sdcpb.GetSchemaResponse) string {
 	return ""
 }
 
-func valueAsString(v *sdcpb.TypedValue) (string, error) {
+func valueAsString(ctx context.Context, v *sdcpb.TypedValue) (string, error) {
 	switch v.Value.(type) {
 	case *sdcpb.TypedValue_StringVal:
 		return v.GetStringVal(), nil
@@ -59,7 +60,7 @@ func valueAsString(v *sdcpb.TypedValue) (string, error) {
 		sArr := []string{}
 		// iterate through list elements
 		for _, elem := range v.GetLeaflistVal().Element {
-			val, err := valueAsString(elem)
+			val, err := valueAsString(ctx, elem)
 			if err != nil {
 				return "", err
 			}
@@ -80,8 +81,8 @@ func valueAsString(v *sdcpb.TypedValue) (string, error) {
 	return "", fmt.Errorf("TypedValue to String failed")
 }
 
-func StringElementToTypedValue(s string, ls *sdcpb.LeafSchema) (*sdcpb.TypedValue, error) {
-	return utils.Convert(s, ls.Type)
+func StringElementToTypedValue(ctx context.Context, s string, ls *sdcpb.LeafSchema) (*sdcpb.TypedValue, error) {
+	return utils.Convert(ctx, s, ls.Type)
 }
 
 // pathElem2EtreePath takes the given pathElem and creates an xpath expression out of it,

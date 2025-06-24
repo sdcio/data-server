@@ -17,12 +17,13 @@ package datastore
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	logf "github.com/sdcio/data-server/pkg/log"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
@@ -83,6 +84,18 @@ type Datastore struct {
 // func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Datastore {
 func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc cache.Client, opts ...grpc.DialOption) (*Datastore, error) {
 
+	log := logf.FromContext(ctx)
+	log = log.WithName("datastore").WithValues(
+		"datastore-name", c.Name,
+		"target-name", c.Name,
+		"schema-vendor", c.Schema.Vendor,
+		"schema-version", c.Schema.Version,
+		"sbi-type", c.SBI.Type,
+		"sbi-address", c.SBI.Address,
+		"sbi-port", c.SBI.Port,
+	)
+	ctx = logf.IntoContext(ctx, log)
+
 	scb := schemaClient.NewSchemaClientBound(c.Schema, sc)
 	tc := tree.NewTreeContext(scb, tree.RunningIntentName)
 	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
@@ -109,6 +122,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 	if c.Sync != nil {
 		ds.synCh = make(chan *target.SyncUpdate, c.Sync.Buffer)
 	}
+
 	ctx, cancel := context.WithCancel(ctx)
 	ds.cfn = cancel
 
@@ -123,7 +137,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 			return
 		}
 		if err != nil {
-			log.Errorf("failed to create SBI for target %s: %v", ds.Config().Name, err)
+			log.Error(err, "failed to create SBI")
 			return
 		}
 		// start syncing goroutine
@@ -141,30 +155,33 @@ func (d *Datastore) IntentsList(ctx context.Context) ([]string, error) {
 }
 
 func (d *Datastore) initCache(ctx context.Context) {
+	log := logf.FromContext(ctx)
 
 	exists := d.cacheClient.InstanceExists(ctx)
 	if exists {
-		log.Debugf("cache %q already exists", d.config.Name)
+		log.V(logf.VDebug).Info("cache already exists")
 		return
 	}
-	log.Infof("cache %s does not exist, creating it", d.config.Name)
+	log.Info("creating cache instance")
 CREATE:
 	err := d.cacheClient.InstanceCreate(ctx)
 	if err != nil {
-		log.Errorf("failed to create cache %s: %v", d.config.Name, err)
+		log.Error(err, "failed to create cache")
 		time.Sleep(time.Second)
 		goto CREATE
 	}
 }
 
 func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) error {
+	log := logf.FromContext(ctx)
+
 	var err error
 	d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, opts...)
 	if err == nil {
 		return nil
 	}
 
-	log.Errorf("failed to create DS %s target: %v", d.config.Name, err)
+	log.Error(err, "failed to create DS target")
 	ticker := time.NewTicker(d.config.SBI.ConnectRetry)
 	defer ticker.Stop()
 
@@ -175,7 +192,7 @@ func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) err
 		case <-ticker.C:
 			d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, opts...)
 			if err != nil {
-				log.Errorf("failed to create DS %s target: %v", d.config.Name, err)
+				log.Error(err, "failed to create DS target")
 				continue
 			}
 			return nil
@@ -216,12 +233,15 @@ func (d *Datastore) Stop() error {
 	}
 	err := d.sbi.Close()
 	if err != nil {
-		log.Errorf("datastore %s failed to close the target connection: %v", d.Name(), err)
+		return fmt.Errorf("datastore %s failed to close the target connection: %v", d.Name(), err)
 	}
 	return nil
 }
 
 func (d *Datastore) Sync(ctx context.Context) {
+	log := logf.FromContext(ctx).WithName("sync")
+	ctx = logf.IntoContext(ctx, log)
+
 	go d.sbi.Sync(ctx,
 		d.config.Sync,
 		d.synCh,
@@ -232,7 +252,7 @@ func (d *Datastore) Sync(ctx context.Context) {
 
 	d.syncTreeCandidate, err = tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, tree.RunningIntentName))
 	if err != nil {
-		log.Errorf("creating a new synctree candidate: %v", err)
+		log.Error(err, "failed creating a new synctree candidate")
 		return
 	}
 
@@ -240,17 +260,17 @@ func (d *Datastore) Sync(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			if !errors.Is(ctx.Err(), context.Canceled) {
-				log.Errorf("datastore %s sync stopped: %v", d.Name(), ctx.Err())
+				log.Error(ctx.Err(), "datastore sync stopped")
 			}
 			return
 		case syncup := <-d.synCh:
 			switch {
 			case syncup.Start:
-				log.Debugf("%s: sync start", d.Name())
+				log.V(logf.VDebug).Info("sync start")
 				startTs = time.Now().Unix()
 
 			case syncup.End:
-				log.Debugf("%s: sync end", d.Name())
+				log.V(logf.VDebug).Info("sync end")
 
 				startTs = 0
 
@@ -261,19 +281,19 @@ func (d *Datastore) Sync(ctx context.Context) {
 				// create new syncTreeCandidat
 				d.syncTreeCandidate, err = tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, tree.RunningIntentName))
 				if err != nil {
-					log.Errorf("creating a new synctree candidate: %v", err)
+					log.Error(err, "failed creating a new synctree candidate")
 					return
 				}
 
 				// export and write to cache
 				runningExport, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
 				if err != nil {
-					log.Error(err)
+					log.Error(err, "failed exporting tree")
 					continue
 				}
 				err = d.cacheClient.IntentModify(ctx, runningExport)
 				if err != nil {
-					log.Errorf("issue modifying running cache content: %v", err)
+					log.Error(err, "failed modifying running cache content")
 					continue
 				}
 			default:
@@ -282,7 +302,7 @@ func (d *Datastore) Sync(ctx context.Context) {
 				}
 				err := d.writeToSyncTreeCandidate(ctx, syncup.Update.GetUpdate(), startTs)
 				if err != nil {
-					log.Errorf("failed to write to sync tree: %v", err)
+					log.Error(err, "failed to write to sync tree")
 				}
 			}
 		}
@@ -325,11 +345,13 @@ func (d *Datastore) StopDeviationsWatch(peer string) {
 	d.m.Lock()
 	defer d.m.Unlock()
 	delete(d.deviationClients, peer)
-	log.Debugf("deviation watcher %s removed", peer)
+	logf.DefaultLogger.V(1).Info("deviation watcher removed", "peer", peer)
 }
 
 func (d *Datastore) DeviationMgr(ctx context.Context) {
-	log.Infof("%s: starting deviationMgr...", d.Name())
+	log := logf.FromContext(ctx).WithName("deviation-mgr")
+	ctx = logf.IntoContext(ctx, log)
+	log.Info("starting deviationMgr")
 	ticker := time.NewTicker(30 * time.Second)
 	defer func() {
 		ticker.Stop()
@@ -348,22 +370,22 @@ func (d *Datastore) DeviationMgr(ctx context.Context) {
 			}
 			d.m.RUnlock()
 			if len(deviationClients) == 0 {
-				log.Debugf("no deviation clients present %s", d.config.Name)
+				log.V(logf.VDebug).Info("no deviation clients present")
 				continue
 			}
-			log.Debugf("deviations clients for %s: [ %s ]", d.config.Name, strings.Join(deviationClientNames, ", "))
+			log.V(logf.VDebug).Info("got deviations clients", "deviation-clients", strings.Join(deviationClientNames, ", "))
 			for clientIdentifier, dc := range deviationClients {
 				err := dc.Send(&sdcpb.WatchDeviationResponse{
 					Name:  d.config.Name,
 					Event: sdcpb.DeviationEvent_START,
 				})
 				if err != nil {
-					log.Errorf("error sending deviation to %s: %v", clientIdentifier, err)
+					log.Error(err, "error sending deviation", "client-identifier", clientIdentifier)
 				}
 			}
 			deviationChan, err := d.calculateDeviations(ctx)
 			if err != nil {
-				log.Error(err)
+				log.Error(err, "error calculating deviations")
 				continue
 			}
 			d.SendDeviations(deviationChan, deviationClients)
@@ -373,7 +395,7 @@ func (d *Datastore) DeviationMgr(ctx context.Context) {
 					Event: sdcpb.DeviationEvent_END,
 				})
 				if err != nil {
-					log.Errorf("error sending deviation to %s: %v", clientIdentifier, err)
+					log.Error(err, "error sending deviation", "client-identifier", clientIdentifier)
 				}
 			}
 		}
@@ -392,6 +414,8 @@ func (d *Datastore) SendDeviations(ch <-chan *treetypes.DeviationEntry, deviatio
 			wg.Add(1)
 			go func(de DeviationEntry, dcs map[string]sdcpb.DataServer_WatchDeviationsServer) {
 				for clientIdentifier, dc := range dcs {
+					ctx := dc.Context()
+					log := logf.FromContext(ctx)
 					err := dc.Send(&sdcpb.WatchDeviationResponse{
 						Name:          d.config.Name,
 						Intent:        de.IntentName(),
@@ -402,7 +426,7 @@ func (d *Datastore) SendDeviations(ch <-chan *treetypes.DeviationEntry, deviatio
 						CurrentValue:  de.CurrentValue(),
 					})
 					if err != nil {
-						log.Errorf("error sending deviation to %s: %v", clientIdentifier, err)
+						log.Error(err, "error sending deviation", "client-identifier", clientIdentifier)
 					}
 				}
 				wg.Done()
@@ -445,7 +469,7 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 	}
 
 	go func() {
-		deviationTree.GetDeviations(deviationChan)
+		deviationTree.GetDeviations(ctx, deviationChan)
 		close(deviationChan)
 	}()
 
