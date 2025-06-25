@@ -3,6 +3,8 @@ package utils
 import (
 	"reflect"
 	"testing"
+
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 func TestXMLRegexConvert(t *testing.T) {
@@ -57,6 +59,39 @@ func TestXMLRegexConvert(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := XMLRegexConvert(tt.in); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("XMLRegexConvert() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateBitString(t *testing.T) {
+	ref := []*sdcpb.Bit{
+		{Name: "a", Position: 0},
+		{Name: "b", Position: 0},
+		{Name: "c", Position: 0},
+	}
+
+	tests := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{"empty string", "", true},
+		{"exact match", "a b c", true},
+		{"skipped middle", "a c", true},
+		{"single first element", "a", true},
+		{"single last element", "c", true},
+		{"out of order", "a c b", false},
+		{"wrong order overall", "b c a", false},
+		{"unknown single element", "d", false},
+		{"unknown element in valid", "a c d", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := validateBitString(tc.input, ref)
+			if got != tc.want {
+				t.Fatalf("validateBitString(%q) = %v, want %v", tc.input, got, tc.want)
 			}
 		})
 	}
