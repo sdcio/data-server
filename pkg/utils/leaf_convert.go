@@ -61,7 +61,7 @@ func Convert(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error)
 	case "empty":
 		return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{}}, nil
 	case "bits":
-	// TODO: https://www.rfc-editor.org/rfc/rfc6020.html#section-9.7
+		return ConvertBits(value, lst)
 	case "binary": // https://www.rfc-editor.org/rfc/rfc6020.html#section-9.8
 		return ConvertBinary(value, lst)
 	case "leafref": // https://www.rfc-editor.org/rfc/rfc6020.html#section-9.9
@@ -494,4 +494,50 @@ func ConvertJsonValueToTv(d any, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, 
 	}
 
 	return nil, fmt.Errorf("error no case matched when converting from json to TV: %v, %v", d, slt)
+}
+
+func validateBitString(value string, allowed []*sdcpb.Bit) bool {
+	//split string to individual bits
+	bits := strings.Fields(value)
+	// empty string is fine
+	if len(bits) == 0 {
+		return true
+	}
+	// track pos inside allowed slice
+	pos := 0
+	for _, b := range bits {
+		// increase pos until we get to an allowed bit or we reach the end of the slice
+		for pos < len(allowed) && allowed[pos].GetName() != b {
+			pos++
+		}
+		// if we are at the end of the array, we did not validate
+		if pos == len(allowed) {
+			return false
+		}
+		//move past found element
+		pos++
+	}
+	return true
+}
+
+func ConvertBits(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+	if slt == nil {
+		return nil, fmt.Errorf("type information is nil")
+	}
+	if len(slt.Bits) == 0 {
+		return nil, fmt.Errorf("type information is missing bits information")
+	}
+	if validateBitString(value, slt.Bits) {
+		return &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_StringVal{
+				StringVal: value,
+			},
+		}, nil
+	}
+	// If value is not valid return an error
+	validBits := make([]string, 0, len(slt.Bits))
+	for _, b := range slt.Bits {
+		validBits = append(validBits, b.GetName())
+	}
+	return nil, fmt.Errorf("value %q does not follow required bit ordering [%s]", value, strings.Join(validBits, " "))
 }
