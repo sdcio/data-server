@@ -16,7 +16,7 @@ require (
 	github.com/openconfig/gnmi v0.14.1
 	github.com/openconfig/gnmic/pkg/api v0.1.9
 	github.com/openconfig/goyang v1.6.0
-	github.com/openconfig/ygot v0.29.20
+	github.com/openconfig/ygot v0.32.0
 	github.com/prometheus/client_golang v1.22.0
 	github.com/scrapli/scrapligo v1.3.3
 	github.com/sdcio/cache v0.0.37
@@ -88,7 +88,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.36.0 // indirect
 	go.opentelemetry.io/otel/trace v1.36.0 // indirect
 	golang.org/x/crypto v0.39.0 // indirect
-	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f // indirect
+	golang.org/x/exp v0.0.0-20250218142911-aa4b98e5adaa // indirect
 	golang.org/x/net v0.41.0 // indirect
 	golang.org/x/oauth2 v0.28.0 // indirect
 	golang.org/x/sync v0.15.0 // indirect
