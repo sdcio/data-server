@@ -521,6 +521,12 @@ func validateBitString(value string, allowed []*sdcpb.Bit) bool {
 }
 
 func ConvertBits(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+	if slt == nil {
+		return nil, fmt.Errorf("type information is nil")
+	}
+	if len(slt.Bits) == 0 {
+		return nil, fmt.Errorf("type information is missing bits information")
+	}
 	if validateBitString(value, slt.Bits) {
 		return &sdcpb.TypedValue{
 			Value: &sdcpb.TypedValue_StringVal{
