@@ -983,7 +983,7 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 
 			fmt.Println(root.String())
 
-			treepersist, err := root.TreeExport(owner1, owner1Prio)
+			treepersist, err := root.TreeExport(owner1, owner1Prio, false)
 			if err != nil {
 				t.Error(err)
 				return

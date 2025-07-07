@@ -4,6 +4,9 @@ go 1.23.9
 
 replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.2-2
 
+// replace github.com/sdcio/sdc-protos => /home/mava/projects/sdc-protos
+// replace github.com/sdcio/yang-parser => /home/mava/projects/yang-parser
+
 require (
 	github.com/AlekSi/pointer v1.2.0
 	github.com/beevik/etree v1.5.1
@@ -21,7 +24,7 @@ require (
 	github.com/scrapli/scrapligo v1.3.3
 	github.com/sdcio/cache v0.0.37
 	github.com/sdcio/schema-server v0.0.31
-	github.com/sdcio/sdc-protos v0.0.42
+	github.com/sdcio/sdc-protos v0.0.43
 	github.com/sdcio/yang-parser v0.0.11
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.9.1

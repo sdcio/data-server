@@ -162,7 +162,7 @@ func (r *RootEntry) GetDeviations(ch chan<- *types.DeviationEntry) {
 	r.sharedEntryAttributes.GetDeviations(ch, true)
 }
 
-func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Intent, error) {
+func (r *RootEntry) TreeExport(owner string, priority int32, deviation bool) (*tree_persist.Intent, error) {
 	te, err := r.sharedEntryAttributes.TreeExport(owner)
 	if err != nil {
 		return nil, err
@@ -172,6 +172,7 @@ func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Inte
 			IntentName: owner,
 			Root:       te[0],
 			Priority:   priority,
+			Deviation:  deviation,
 		}, nil
 	}
 	return nil, ErrorIntentNotPresent
