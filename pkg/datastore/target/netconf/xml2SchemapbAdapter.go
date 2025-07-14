@@ -73,7 +73,7 @@ func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etre
 		return err
 	}
 
-	switch sr.GetSchema().Schema.(type) {
+	switch schema := sr.GetSchema().Schema.(type) {
 	case *sdcpb.SchemaElem_Container:
 		// retrieved schema describes a yang container
 		log.Tracef("transforming container %q", e.Tag)
@@ -85,7 +85,7 @@ func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etre
 	case *sdcpb.SchemaElem_Field:
 		// retrieved schema describes a yang Field
 		log.Tracef("transforming field %q", e.Tag)
-		err = x.transformField(ctx, e, pelems, sr.GetSchema().GetField(), result)
+		err = x.transformField(ctx, e, pelems, schema.Field, result)
 		if err != nil {
 			return err
 		}
@@ -93,7 +93,7 @@ func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etre
 	case *sdcpb.SchemaElem_Leaflist:
 		// retrieved schema describes a yang LeafList
 		log.Tracef("transforming leaflist %q", e.Tag)
-		err = x.transformLeafList(ctx, e, pelems, tc)
+		err = x.transformLeafList(ctx, e, pelems, schema.Leaflist, tc)
 		if err != nil {
 			return err
 		}
@@ -147,19 +147,18 @@ func (x *XML2sdcpbConfigAdapter) transformContainer(ctx context.Context, e *etre
 	return nil
 }
 
-// transformField transforms an etree.element of a configuration as an update into the provided *sdcpb.Notification.
-func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, ls *sdcpb.LeafSchema, result *sdcpb.Notification) error {
-	path := pelems
-	schemaLeafType := ls.GetType()
+func (x *XML2sdcpbConfigAdapter) resolveSchemaLeafType(ctx context.Context, slt *sdcpb.SchemaLeafType, pelems []*sdcpb.PathElem) (*sdcpb.SchemaLeafType, error) {
+	// TODO: can we swap out this logic for slt.LeafrefTargetType?
+	schemaLeafType := slt
 	for schemaLeafType.GetLeafref() != "" {
-		path, err := utils.NormalizedAbsPath(ls.Type.Leafref, path)
+		path, err := utils.NormalizedAbsPath(schemaLeafType.Leafref, pelems)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		schema, err := x.schemaClient.GetSchemaSdcpbPath(ctx, path)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		switch se := schema.GetSchema().GetSchema().(type) {
@@ -168,8 +167,17 @@ func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.El
 		case *sdcpb.SchemaElem_Field:
 			schemaLeafType = se.Field.GetType()
 		default:
-			return fmt.Errorf("node [%s] with leafref [%s] has non-field or leaflist target type [%T]", e.GetPath(), ls.GetType().GetLeafref(), se)
+			return nil, fmt.Errorf("leafref [%s] has non-field or leaflist target type [%T]", slt.GetLeafref(), se)
 		}
+	}
+	return schemaLeafType, nil
+}
+
+// transformField transforms an etree.element of a configuration as an update into the provided *sdcpb.Notification.
+func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, ls *sdcpb.LeafSchema, result *sdcpb.Notification) error {
+	schemaLeafType, err := x.resolveSchemaLeafType(ctx, ls.GetType(), pelems)
+	if err != nil {
+		return fmt.Errorf("failed to resolve type of node %s: %w", e.GetPath(), err)
 	}
 
 	// process terminal values
@@ -199,14 +207,21 @@ func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.El
 // transformLeafList processes LeafList entries. These will be store in the TransformationContext.
 // A new TransformationContext is created when entering a new container. And the appropriate actions are taken when a container is exited.
 // Meaning the LeafLists will then be transformed into a single update with a sdcpb.TypedValue_LeaflistVal with all the values.
-func (x *XML2sdcpbConfigAdapter) transformLeafList(_ context.Context, e *etree.Element, pelems []*sdcpb.PathElem, tc *TransformationContext) error {
+func (x *XML2sdcpbConfigAdapter) transformLeafList(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, lls *sdcpb.LeafListSchema, tc *TransformationContext) error {
+	slt, err := x.resolveSchemaLeafType(ctx, lls.GetType(), pelems)
+	if err != nil {
+		return fmt.Errorf("failed to resolve type of node %s: %w", e.GetPath(), err)
+	}
 
 	// process terminal values
 	data := strings.TrimSpace(e.Text())
 
-	typedval := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: data}}
+	tv, err := utils.Convert(data, slt)
+	if err != nil {
+		return fmt.Errorf("failed to convert value %s to type %s: %w", data, slt.Type, err)
+	}
 
 	name := pelems[len(pelems)-1].Name
-	tc.AddLeafListEntry(name, typedval)
+	tc.AddLeafListEntry(name, tv)
 	return nil
 }
