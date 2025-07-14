@@ -270,9 +270,13 @@ func xmlAddKeyElements(s Entry, parent *etree.Element) {
 		// skip if the element already exists
 		existingElem := parent.SelectElement(schemaKeys[i])
 		if existingElem == nil {
-			// and finally we create the patheleme key attributes
-			parent.CreateElement(schemaKeys[i]).SetText(treeElem.PathName())
+			// and finally we create the key elements in schema order
+			keyElem := etree.NewElement(schemaKeys[i])
+			keyElem.SetText(treeElem.PathName())
+			xmlAddNamespaceConditional(parentSchema.GetParent(), parentSchema, keyElem, true)
+			parent.InsertChildAt(0, keyElem) // we go backwards, so always add to front of parent
 			treeElem = treeElem.GetParent()
 		}
 	}
+
 }

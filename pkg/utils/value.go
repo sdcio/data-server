@@ -16,7 +16,9 @@ package utils
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -393,8 +395,18 @@ func EqualTypedValues(v1, v2 *sdcpb.TypedValue) bool {
 			if len(v1.LeaflistVal.GetElement()) != len(v2.LeaflistVal.GetElement()) {
 				return false
 			}
-			for i := range v1.LeaflistVal.GetElement() {
-				if !EqualTypedValues(v1.LeaflistVal.Element[i], v2.LeaflistVal.Element[i]) {
+
+			ll1 := slices.Clone(v1.LeaflistVal.GetElement())
+			ll2 := slices.Clone(v2.LeaflistVal.GetElement())
+			sf := func(a,b *sdcpb.TypedValue) int {
+				return cmp.Compare(a.ToString(), b.ToString())
+			}
+			slices.SortFunc(ll1, sf)
+			slices.SortFunc(ll2, sf)
+
+
+			for i := range ll1 {
+				if !EqualTypedValues(ll1[i], ll2[i]) {
 					return false
 				}
 			}
@@ -441,7 +453,6 @@ func EqualTypedValues(v1, v2 *sdcpb.TypedValue) bool {
 			return false
 		}
 	}
-	// TODO: Why is this default case to return true??
 	return true
 }
 

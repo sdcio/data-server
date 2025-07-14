@@ -32,6 +32,7 @@ const (
 	defaultCacheDir           = "./cached/caches"
 	defaultWriteWorkers       = 16
 	defaultTimeout            = 30 * time.Second
+	defaultSyncInterval       = 30 * time.Second
 
 	defaultSchemaStorePath = "./schema-dir"
 )
