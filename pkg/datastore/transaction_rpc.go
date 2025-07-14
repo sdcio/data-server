@@ -38,6 +38,9 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 	if req.GetDeviation() {
 		ti.SetDeviation()
 	}
+	if req.GetDeleteIgnoreNoExist() {
+		ti.SetDeleteIgnoreNonExisting()
+	}
 
 	// convert the sdcpb.updates to tree.UpdateSlice
 	Updates, err := treetypes.ExpandAndConvertIntent(ctx, d.schemaClient, req.GetIntent(), req.GetPriority(), req.GetUpdate(), time.Now().Unix())
@@ -314,9 +317,9 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority(), intent.Deviation())
 		switch {
 		case errors.Is(err, tree.ErrorIntentNotPresent):
-			err = d.cacheClient.IntentDelete(ctx, intent.GetName())
+			err = d.cacheClient.IntentDelete(ctx, intent.GetName(), intent.GetDeleteIgnoreNonExisting())
 			if err != nil {
-				return nil, fmt.Errorf("failed deleting intent from store for %s: %w", d.Name(), err)
+				log.Warnf("failed deleting intent from store for %s: %v", d.Name(), err)
 			}
 			continue
 		case err != nil:
