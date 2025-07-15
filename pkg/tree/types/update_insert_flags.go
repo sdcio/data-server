@@ -60,3 +60,16 @@ func (f *UpdateInsertFlags) Apply(le LeafEntry) *UpdateInsertFlags {
 	}
 	return f
 }
+
+func (f *UpdateInsertFlags) String() string {
+	if f.GetNewFlag() {
+		return "new"
+	}
+	if f.GetDeleteOnlyIntendedFlag() {
+		return "delete (only intended)"
+	}
+	if f.GetDeleteFlag() {
+		return "delete"
+	}
+	return "update"
+}
