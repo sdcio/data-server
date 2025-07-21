@@ -500,6 +500,7 @@ func TestToXMLTable(t *testing.T) {
 			}
 
 			// Make sure the attributes are sorted, otherwise the comparison is an issue
+			//TODO: Follow order of schema
 			utils.XmlRecursiveSortElementsByTagName(&xmlDoc.Element)
 
 			xmlDoc.Indent(2)
