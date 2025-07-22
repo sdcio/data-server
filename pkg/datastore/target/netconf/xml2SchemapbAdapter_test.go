@@ -368,8 +368,8 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 				schemaClientMock.EXPECT().GetSchemaSdcpbPath(context.TODO(), gomock.Any()).AnyTimes().DoAndReturn(
 					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 						srcType := &sdcpb.SchemaLeafType{
-										Type: "string",
-									}
+							Type: "string",
+						}
 						selem := &sdcpb.SchemaElem{}
 						switch counter {
 						case 0:
@@ -379,7 +379,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 								},
 							}
 							expectedPath = "src"
-						case 1,4:
+						case 1, 4:
 							selem.Schema = &sdcpb.SchemaElem_Field{
 								Field: &sdcpb.LeafSchema{
 									Name: "item",
@@ -399,8 +399,8 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 								Field: &sdcpb.LeafSchema{
 									Name: "item",
 									Type: &sdcpb.SchemaLeafType{
-										Type: "leafref",
-										Leafref: "/src/item",
+										Type:              "leafref",
+										Leafref:           "/src/item",
 										LeafrefTargetType: srcType,
 									},
 								},
@@ -440,7 +440,6 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 								},
 							},
 						},
-						
 					},
 				},
 				{
@@ -490,8 +489,8 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 				schemaClientMock.EXPECT().GetSchemaSdcpbPath(context.TODO(), gomock.Any()).AnyTimes().DoAndReturn(
 					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 						srcType := &sdcpb.SchemaLeafType{
-										Type: "int32",
-									}
+							Type: "int32",
+						}
 						selem := &sdcpb.SchemaElem{}
 						switch counter {
 						case 0:
@@ -501,7 +500,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 								},
 							}
 							expectedPath = "src"
-						case 1,4:
+						case 1, 4:
 							selem.Schema = &sdcpb.SchemaElem_Field{
 								Field: &sdcpb.LeafSchema{
 									Name: "item",
@@ -521,8 +520,8 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 								Field: &sdcpb.LeafSchema{
 									Name: "item",
 									Type: &sdcpb.SchemaLeafType{
-										Type: "leafref",
-										Leafref: "/src/item",
+										Type:              "leafref",
+										Leafref:           "/src/item",
 										LeafrefTargetType: srcType,
 									},
 								},
@@ -562,7 +561,6 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 								},
 							},
 						},
-						
 					},
 				},
 				{
@@ -581,6 +579,143 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 							Value: &sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_IntVal{
 									IntVal: 123,
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "leafref leaflist",
+			args: args{
+				ctx: context.TODO(),
+				doc: func() *etree.Document {
+					doc := etree.NewDocument()
+					data := doc.CreateElement("data")
+					src := data.CreateElement("src")
+					ref := data.CreateElement("ref")
+					src.CreateElement("item").SetText("testdata")
+					ref.CreateElement("item").SetText("testdata")
+					return doc
+				}(),
+			},
+			getXML2sdcpbConfigAdapter: func(ctrl *gomock.Controller, t *testing.T) *XML2sdcpbConfigAdapter {
+
+				var expectedPath string
+
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
+				counter := 0
+				schemaClientMock.EXPECT().GetSchemaSdcpbPath(context.TODO(), gomock.Any()).AnyTimes().DoAndReturn(
+					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+						srcType := &sdcpb.SchemaLeafType{
+							Type: "string",
+						}
+						selem := &sdcpb.SchemaElem{}
+						switch counter {
+						case 0:
+							selem.Schema = &sdcpb.SchemaElem_Container{
+								Container: &sdcpb.ContainerSchema{
+									Name: "src",
+								},
+							}
+							expectedPath = "src"
+						case 1, 4:
+							selem.Schema = &sdcpb.SchemaElem_Leaflist{
+								Leaflist: &sdcpb.LeafListSchema{
+									Name: "item",
+									Type: srcType,
+								},
+							}
+							expectedPath = "src/item"
+						case 2:
+							selem.Schema = &sdcpb.SchemaElem_Container{
+								Container: &sdcpb.ContainerSchema{
+									Name: "ref",
+								},
+							}
+							expectedPath = "ref"
+						case 3:
+							selem.Schema = &sdcpb.SchemaElem_Leaflist{
+								Leaflist: &sdcpb.LeafListSchema{
+									Name: "item",
+									Type: &sdcpb.SchemaLeafType{
+										Type:              "leafref",
+										Leafref:           "/src/item",
+										LeafrefTargetType: srcType,
+									},
+								},
+							}
+							expectedPath = "ref/item"
+						}
+						// check for the right input
+						if rp := utils.ToXPath(path, false); rp != expectedPath {
+							t.Errorf("getSchema expected path %s but got %s", expectedPath, rp)
+						}
+
+						counter++
+						return &sdcpb.GetSchemaResponse{
+							Schema: selem,
+						}, nil
+					},
+				)
+				return NewXML2sdcpbConfigAdapter(schemaClientMock)
+			},
+			want: []*sdcpb.Notification{
+				{
+					Update: []*sdcpb.Update{
+						{
+							Path: &sdcpb.Path{
+								Elem: []*sdcpb.PathElem{
+									{
+										Name: "src",
+									},
+									{
+										Name: "item",
+									},
+								},
+							},
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_LeaflistVal{
+									LeaflistVal: &sdcpb.ScalarArray{
+										Element: []*sdcpb.TypedValue{
+											{
+												Value: &sdcpb.TypedValue_StringVal{
+													StringVal: "testdata",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Update: []*sdcpb.Update{
+						{
+							Path: &sdcpb.Path{
+								Elem: []*sdcpb.PathElem{
+									{
+										Name: "ref",
+									},
+									{
+										Name: "item",
+									},
+								},
+							},
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_LeaflistVal{
+									LeaflistVal: &sdcpb.ScalarArray{
+										Element: []*sdcpb.TypedValue{
+											{
+												Value: &sdcpb.TypedValue_StringVal{
+													StringVal: "testdata",
+												},
+											},
+										},
+									},
 								},
 							},
 						},
