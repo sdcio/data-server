@@ -3,6 +3,7 @@ package tree
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -394,6 +395,28 @@ func TestToXMLTable(t *testing.T) {
 				}
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
+		},
+		{
+			name:             "XML - device returns leaflist out of order",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				slices.Reverse(c.Leaflist.Entry)
+				upds, err := expandUpdateFromConfig(ctx, c, converter)
+				if err != nil {
+					return nil, err
+				}
+				return upds, nil
+			},
+			expected: ``,
+			honorNamespace:         true,
+			operationWithNamespace: true,
+			useOperationRemove:     true,
+			newConfig: nil,
 		},
 	}
 
