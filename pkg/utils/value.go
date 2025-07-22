@@ -385,33 +385,32 @@ func EqualTypedValues(v1, v2 *sdcpb.TypedValue) bool {
 		}
 	case *sdcpb.TypedValue_LeaflistVal:
 		switch v2 := v2.GetValue().(type) {
-			case *sdcpb.TypedValue_LeaflistVal:
-				if v1 == nil && v2 == nil {
-					return true
-				}
-				if v1 == nil || v2 == nil {
-					return false
-				}
-				if len(v1.LeaflistVal.GetElement()) != len(v2.LeaflistVal.GetElement()) {
-					return false
-				}
-
-				ll1 := slices.Clone(v1.LeaflistVal.GetElement())
-				ll2 := slices.Clone(v2.LeaflistVal.GetElement())
-				sf := func(a,b *sdcpb.TypedValue) int {
-					return cmp.Compare(a.ToString(), b.ToString())
-				}
-				slices.SortFunc(ll1, sf)
-				slices.SortFunc(ll2, sf)
-
-
-				for i := range ll1 {
-					if !EqualTypedValues(ll1[i], ll2[i]) {
-						return false
-					}
-				}
-			default:
+		case *sdcpb.TypedValue_LeaflistVal:
+			if v1 == nil && v2 == nil {
+				return true
+			}
+			if v1 == nil || v2 == nil {
 				return false
+			}
+			if len(v1.LeaflistVal.GetElement()) != len(v2.LeaflistVal.GetElement()) {
+				return false
+			}
+
+			ll1 := slices.Clone(v1.LeaflistVal.GetElement())
+			ll2 := slices.Clone(v2.LeaflistVal.GetElement())
+			sf := func(a, b *sdcpb.TypedValue) int {
+				return cmp.Compare(a.ToString(), b.ToString())
+			}
+			slices.SortFunc(ll1, sf)
+			slices.SortFunc(ll2, sf)
+
+			for i := range ll1 {
+				if !EqualTypedValues(ll1[i], ll2[i]) {
+					return false
+				}
+			}
+		default:
+			return false
 		}
 	case *sdcpb.TypedValue_ProtoBytes:
 		switch v2 := v2.GetValue().(type) {
