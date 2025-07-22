@@ -285,8 +285,6 @@ func xmlAddKeyElements(s Entry, parent *etree.Element) {
 			// and finally we create the key elements in schema order
 			keyElem := etree.NewElement(schemaKeys[i])
 			keyElem.SetText(treeElem.PathName())
-			//TODO: Do we need to add namespaces?
-			// xmlAddNamespaceConditional(parentSchema, parentSchema.GetParent(), keyElem, true)
 			parent.InsertChildAt(0, keyElem) // we go backwards, so always add to front of parent
 			treeElem = treeElem.GetParent()
 		}
