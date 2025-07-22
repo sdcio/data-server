@@ -307,6 +307,18 @@ func TestEqualTypedValues(t *testing.T) {
 			),
 			false,
 		},
+		{
+			"leaflist diff elements",
+			leaflist(
+				&sdcpb.TypedValue{Value: &sdcpb.TypedValue_IntVal{IntVal: 1}},
+				&sdcpb.TypedValue{Value: &sdcpb.TypedValue_IntVal{IntVal: 2}},
+			),
+			leaflist(
+				&sdcpb.TypedValue{Value: &sdcpb.TypedValue_IntVal{IntVal: 3}},
+				&sdcpb.TypedValue{Value: &sdcpb.TypedValue_IntVal{IntVal: 4}},
+			),
+			false,
+		},
 
 		// --- ProtoBytes ---
 		{
