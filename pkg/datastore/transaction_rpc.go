@@ -91,14 +91,14 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	log.TraceFn(func() []interface{} { return []interface{}{root.String()} })
 
 	// perform validation
-	validationResult := root.Validate(ctx, d.config.Validation)
+	validationResult, validationStats := root.Validate(ctx, d.config.Validation)
 	validationResult.ErrorsStr()
 	if validationResult.HasErrors() {
 		return nil, validationResult.JoinErrors()
 	}
 
 	warnings := validationResult.WarningsStr()
-
+	log.Debug("Transaction: %s - validation stats - %s", transaction.GetTransactionId(), validationStats.String())
 	log.Infof("Transaction: %s - validation passed", transaction.GetTransactionId())
 
 	// we use the TargetSourceReplace, that adjustes the tree results in a way
@@ -218,7 +218,9 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	log.Debug(root.String())
 
 	// perform validation
-	validationResult := root.Validate(ctx, d.config.Validation)
+	validationResult, validationStats := root.Validate(ctx, d.config.Validation)
+
+	log.Debugf("Transaction: %s - Validation Stats: %s", transaction.GetTransactionId(), validationStats.String())
 
 	// prepare the response struct
 	result := &sdcpb.TransactionSetResponse{

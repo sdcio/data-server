@@ -722,7 +722,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 			validationConfig.DisabledValidators.DisableAll()
 			validationConfig.DisabledValidators.Mandatory = false
 
-			validationResults := root.Validate(ctx, validationConfig)
+			validationResults, _ := root.Validate(ctx, validationConfig)
 
 			results := []string{}
 			for _, e := range validationResults {

@@ -220,6 +220,9 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 			fmt.Println(root.String())
 
 			e, err := root.Navigate(ctx, tt.lrefNodePath, true, false)
+			if err != nil {
+				t.Error(err)
+			}
 
 			s, ok := e.(*sharedEntryAttributes)
 			if !ok {
@@ -232,7 +235,8 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 			}
 
 			resultChan := make(chan<- *types.ValidationResultEntry, 20)
-			s.validateLeafRefs(ctx, resultChan)
+			statChan := make(chan<- *types.ValidationStat, 20)
+			s.validateLeafRefs(ctx, resultChan, statChan)
 
 			if len(resultChan) != tt.expectedResultLen {
 				t.Fatalf("expected %d, got %d errors on leafref validation", tt.expectedResultLen, len(resultChan))

@@ -12,7 +12,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, resultChan chan<- *types.ValidationResultEntry) {
+func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat) {
 
 	// if no schema, then there is nothing to be done, return
 	if s.schema == nil {
@@ -29,7 +29,10 @@ func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, resu
 		mustStatements = schem.Field.GetMustStatements()
 	}
 
+	stat := types.NewValidationStat(types.StatTypeMustStatement)
 	for _, must := range mustStatements {
+		// meantain stats
+		stat.PlusOne()
 		// extract actual must statement
 		exprStr := must.Statement
 		// init a ProgramBuilder
@@ -68,4 +71,5 @@ func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, resu
 			resultChan <- types.NewValidationResultEntry(owner, err, types.ValidationResultEntryTypeError)
 		}
 	}
+	statChan <- stat
 }

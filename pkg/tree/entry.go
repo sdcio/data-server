@@ -75,11 +75,11 @@ type Entry interface {
 	// GetDeletes returns the cache-updates that are not updated, have no lower priority value left and hence should be deleted completely
 	GetDeletes(entries []types.DeleteEntry, aggregatePaths bool) ([]types.DeleteEntry, error)
 	// Walk takes the EntryVisitor and applies it to every Entry in the tree
-	Walk(f EntryVisitor) error
+	Walk(ctx context.Context, v EntryVisitor) error
 	// Validate kicks off validation
-	Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, vCfg *config.Validation)
+	Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat, vCfg *config.Validation)
 	// validateMandatory the Mandatory schema field
-	validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry)
+	validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat)
 	// validateMandatoryWithKeys is an internally used function that us called by validateMandatory in case
 	// the container has keys defined that need to be skipped before the mandatory attributes can be checked
 	validateMandatoryWithKeys(ctx context.Context, level int, attributes []string, choiceName string, resultChan chan<- *types.ValidationResultEntry)
@@ -157,4 +157,7 @@ type Entry interface {
 	BlameConfig(includeDefaults bool) (*sdcpb.BlameTreeElement, error)
 }
 
-type EntryVisitor func(s *sharedEntryAttributes) error
+type EntryVisitor interface {
+	Visit(ctx context.Context, s *sharedEntryAttributes) error
+	Up()
+}
