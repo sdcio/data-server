@@ -7,7 +7,6 @@ import (
 
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
-	log "github.com/sirupsen/logrus"
 )
 
 type LeafVariants struct {
@@ -335,11 +334,8 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 	}
 
 	// get the path via the first LeafEntry
-	// is valid for all entries
-	sdcpbPath, err := lv.parentEntry.SdcpbPath()
-	if err != nil {
-		log.Error(err)
-	}
+	// is valida for all entries
+	sdcpbPath := lv.parentEntry.SdcpbPath()
 
 	// we are part of an inactive case of a choice
 	if !isActiveCase {

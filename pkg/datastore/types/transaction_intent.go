@@ -2,6 +2,7 @@ package types
 
 import (
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 type TransactionIntent struct {
@@ -49,8 +50,8 @@ func (ti *TransactionIntent) SetDeleteOnlyIntendedFlag() {
 	ti.onlyIntended = true
 }
 
-func (ti *TransactionIntent) GetPathSet() *treetypes.PathSet {
-	return ti.updates.ToPathSet()
+func (ti *TransactionIntent) GetPathSet() *sdcpb.PathSet {
+	return ti.updates.ToSdcpbPathSet()
 }
 
 func (ti *TransactionIntent) AddUpdate(u *treetypes.Update) {

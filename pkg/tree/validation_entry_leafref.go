@@ -15,14 +15,16 @@ func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, path string) 
 	var resultEntries []Entry
 	var processEntries []Entry
 
-	lref, err := utils.StripPathElemPrefix(path)
+	strPath := s.SdcpbPath().ToXPath(false)
+
+	lref, err := sdcpb.StripPathElemPrefix(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed stripping namespaces from leafref %s: %w", s.Path(), err)
+		return nil, fmt.Errorf("failed stripping namespaces from leafref %s: %w", strPath, err)
 	}
 
 	sdcpbPath, err := utils.ParsePath(lref)
 	if err != nil {
-		return nil, fmt.Errorf("failed parsing leafref path %s: %w", s.Path(), err)
+		return nil, fmt.Errorf("failed parsing leafref path %s: %w", strPath, err)
 	}
 
 	lrefPath := types.NewLrefPath(sdcpbPath)
@@ -70,7 +72,7 @@ func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, path string) 
 
 		// we need to do the forwarding for all the already lookedup paths
 		for _, entry := range processEntries {
-			entry, err = entry.Navigate(ctx, []string{elem.Name}, false, false)
+			entry, err = entry.NavigateSdcpbPath(ctx, []*sdcpb.PathElem{sdcpb.NewPathElem(elem.Name, nil)}, false)
 			if err != nil {
 				return nil, err
 			}
@@ -128,7 +130,7 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 	case s.GetSchema().GetLeaflist().GetType().GetLeafref() != "":
 		lref = s.GetSchema().GetLeaflist().GetType().GetLeafref()
 	default:
-		return nil, fmt.Errorf("error not a leafref %s", s.Path().String())
+		return nil, fmt.Errorf("error not a leafref %s", s.SdcpbPath())
 	}
 
 	lv := s.leafVariants.GetHighestPrecedence(false, true)
@@ -221,14 +223,14 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan
 			return
 		}
 		// if required, issue error
-		resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, false).Owner(), fmt.Errorf("missing leaf reference: failed resolving leafref %s for %s: %v", lref, s.Path().String(), err), types.ValidationResultEntryTypeError)
+		resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, false).Owner(), fmt.Errorf("missing leaf reference: failed resolving leafref %s for %s: %v", lref, s.SdcpbPath().ToXPath(false), err), types.ValidationResultEntryTypeError)
 		return
 	}
 
 	// Only if the value remains, even after the SetIntent made it through, the LeafRef can be considered resolved.
 	if entry[0].shouldDelete() {
 		lv := s.leafVariants.GetHighestPrecedence(false, true)
-		EntryPath, _ := s.SdcpbPath()
+		EntryPath := s.SdcpbPath()
 
 		// check if the OptionalInstance (!require-instances [https://datatracker.ietf.org/doc/html/rfc7950#section-9.9.3])
 		if s.schema.GetField().GetType().GetOptionalInstance() {
@@ -236,7 +238,7 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan
 			return
 		}
 		// if required, issue error
-		resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("missing leaf reference: failed resolving leafref %s for %s to path %s LeafVariant %v", lref, utils.ToXPath(EntryPath, false), s.Path().String(), lv), types.ValidationResultEntryTypeError)
+		resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("missing leaf reference: failed resolving leafref %s for %s to path %s LeafVariant %v", lref, EntryPath.ToXPath(false), s.SdcpbPath().ToXPath(false), lv), types.ValidationResultEntryTypeError)
 		return
 	}
 }
@@ -248,5 +250,5 @@ func generateOptionalWarning(ctx context.Context, s Entry, lref string, resultCh
 		return
 	}
 	tvVal := lrefval.Value()
-	resultChan <- types.NewValidationResultEntry(lrefval.Owner(), fmt.Errorf("leafref %s value %s unable to resolve non-mandatory reference %s", s.Path().String(), utils.TypedValueToString(tvVal), lref), types.ValidationResultEntryTypeWarning)
+	resultChan <- types.NewValidationResultEntry(lrefval.Owner(), fmt.Errorf("leafref %s value %s unable to resolve non-mandatory reference %s", s.SdcpbPath().ToXPath(false), utils.TypedValueToString(tvVal), lref), types.ValidationResultEntryTypeWarning)
 }

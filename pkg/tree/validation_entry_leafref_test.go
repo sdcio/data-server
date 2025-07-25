@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
@@ -13,6 +12,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 )
 
@@ -22,7 +22,7 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 	tests := []struct {
 		name              string
 		ygotDevice        func() ygot.GoStruct
-		lrefNodePath      []string
+		lrefNodePath      *sdcpb.Path
 		expectedResultLen int
 	}{
 		{
@@ -60,7 +60,18 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 				}
 				return d
 			},
-			lrefNodePath:      []string{"network-instance", "ni1", "interface", "ethernet-1/1", "interface-ref", "interface"},
+			lrefNodePath: &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("network-instance", map[string]string{
+						"name": "ni1",
+					}),
+					sdcpb.NewPathElem("interface", map[string]string{
+						"name": "ethernet-1/1",
+					}),
+					sdcpb.NewPathElem("interface-ref", nil),
+					sdcpb.NewPathElem("interface", nil),
+				},
+			},
 			expectedResultLen: 0,
 		},
 		{
@@ -98,7 +109,18 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 				}
 				return d
 			},
-			lrefNodePath:      []string{"network-instance", "ni1", "interface", "ethernet-1/1", "interface-ref", "subinterface"},
+			lrefNodePath: &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("network-instance", map[string]string{
+						"name": "ni1",
+					}),
+					sdcpb.NewPathElem("interface", map[string]string{
+						"name": "ethernet-1/1",
+					}),
+					sdcpb.NewPathElem("interface-ref", nil),
+					sdcpb.NewPathElem("subinterface", nil),
+				},
+			},
 			expectedResultLen: 0,
 		},
 		{
@@ -129,7 +151,18 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 				}
 				return d
 			},
-			lrefNodePath:      []string{"network-instance", "ni1", "interface", "ethernet-1/1", "interface-ref", "interface"},
+			lrefNodePath: &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("network-instance", map[string]string{
+						"name": "ni1",
+					}),
+					sdcpb.NewPathElem("interface", map[string]string{
+						"name": "ethernet-1/1",
+					}),
+					sdcpb.NewPathElem("interface-ref", nil),
+					sdcpb.NewPathElem("interface", nil),
+				},
+			},
 			expectedResultLen: 1,
 		},
 		{
@@ -166,7 +199,14 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 				}
 				return d
 			},
-			lrefNodePath:      []string{"network-instance", "ni1", "interface", "ethernet-1/1", "interface-ref", "subinterface"},
+			lrefNodePath: &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("network-instance", map[string]string{"name": "ni1"}),
+					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+					sdcpb.NewPathElem("interface-ref", nil),
+					sdcpb.NewPathElem("subinterface", nil),
+				},
+			},
 			expectedResultLen: 1,
 		},
 	}
@@ -207,7 +247,7 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			err = root.ImportConfig(ctx, types.PathSlice{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -219,7 +259,7 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 
 			fmt.Println(root.String())
 
-			e, err := root.Navigate(ctx, tt.lrefNodePath, true, false)
+			e, err := root.NavigateSdcpbPath(ctx, tt.lrefNodePath.Elem, true)
 
 			s, ok := e.(*sharedEntryAttributes)
 			if !ok {
@@ -228,7 +268,7 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 
 			// make sure we're looking at a leafref
 			if s.schema.GetField().GetType().GetType() != "leafref" {
-				t.Fatalf("referenced field %s not a leafref, fix test.", strings.Join(tt.lrefNodePath, "/"))
+				t.Fatalf("referenced field %s not a leafref, fix test.", tt.lrefNodePath.ToXPath(false))
 			}
 
 			resultChan := make(chan<- *types.ValidationResultEntry, 20)

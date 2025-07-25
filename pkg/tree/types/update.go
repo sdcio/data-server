@@ -15,14 +15,14 @@ type Update struct {
 	priority   int32
 	intentName string
 	timestamp  int64
-	path       PathSlice
+	path       *sdcpb.Path
 }
 
 func NewUpdateFromSdcpbUpdate(u *sdcpb.Update, prio int32, intent string, ts int64) *Update {
-	return NewUpdate(utils.ToStrings(u.GetPath(), false, false), u.GetValue(), prio, intent, ts)
+	return NewUpdate(u.GetPath(), u.GetValue(), prio, intent, ts)
 }
 
-func NewUpdate(path PathSlice, val *sdcpb.TypedValue, prio int32, intent string, ts int64) *Update {
+func NewUpdate(path *sdcpb.Path, val *sdcpb.TypedValue, prio int32, intent string, ts int64) *Update {
 	return &Update{
 		value:      val,
 		priority:   prio,
@@ -77,6 +77,13 @@ func (u *Update) String() string {
 	return fmt.Sprintf("path: %s, owner: %s, priority: %d, value: %s", u.path, u.intentName, u.priority, u.value.String())
 }
 
+func (u *Update) Path() *sdcpb.Path {
+	if u.path == nil {
+		return &sdcpb.Path{}
+	}
+	return u.path
+}
+
 // EqualSkipPath checks the equality of two updates.
 // It however skips comparing paths and timestamps.
 // This is a shortcut for performace, for cases in which it is already clear that the path is definately equal.
@@ -88,10 +95,6 @@ func (u *Update) Equal(other *Update) bool {
 	uVal, _ := u.ValueAsBytes()
 	oVal, _ := other.ValueAsBytes()
 	return slices.Equal(uVal, oVal)
-}
-
-func (u *Update) GetPathSlice() PathSlice {
-	return u.path
 }
 
 // ExpandAndConvertIntent takes a slice of Updates ([]*sdcpb.Update) and converts it into a tree.UpdateSlice, that contains *treetypes.Updates.
@@ -108,13 +111,8 @@ func ExpandAndConvertIntent(ctx context.Context, scb utils.SchemaClientBound, in
 	newCacheUpdates := make(UpdateSlice, 0, len(expandedReqUpdates))
 
 	for _, u := range expandedReqUpdates {
-		pathslice, err := utils.CompletePath(nil, u.GetPath())
-		if err != nil {
-			return nil, err
-		}
-
 		// construct the types.Update
-		newCacheUpdates = append(newCacheUpdates, NewUpdate(pathslice, u.GetValue(), priority, intentName, ts))
+		newCacheUpdates = append(newCacheUpdates, NewUpdate(u.GetPath(), u.GetValue(), priority, intentName, ts))
 	}
 	return newCacheUpdates, nil
 }

@@ -260,7 +260,7 @@ func TestToXPath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := ToXPath(tt.args.p, tt.args.noKeys); got != tt.want {
+			if got := tt.args.p.ToXPath(tt.args.noKeys); got != tt.want {
 				t.Errorf("ToXPath() = %v, want %v", got, tt.want)
 			}
 		})

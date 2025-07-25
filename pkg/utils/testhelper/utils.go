@@ -159,7 +159,7 @@ func GetSchemaClientBound(t *testing.T, mockCtrl *gomock.Controller) (*mockschem
 }
 
 type RootTreeImport interface {
-	ImportConfig(ctx context.Context, basePath types.PathSlice, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
+	ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
 }
 
 func LoadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root RootTreeImport, owner string, prio int32, flags *types.UpdateInsertFlags) error {
@@ -177,7 +177,7 @@ func LoadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root Root
 		return err
 	}
 
-	err = root.ImportConfig(ctx, types.PathSlice{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner, prio, flags)
+	err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner, prio, flags)
 	if err != nil {
 		return err
 	}

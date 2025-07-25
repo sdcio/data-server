@@ -15,7 +15,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
-	schema_server "github.com/sdcio/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -55,9 +55,9 @@ func TestRootEntry_TreeExport(t *testing.T) {
 
 				result.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(types.PathSlice{},
-							&schema_server.TypedValue{
-								Value: &schema_server.TypedValue_StringVal{StringVal: "Value"},
+						types.NewUpdate(&sdcpb.Path{},
+							&sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 500, owner1, 0,
 						),
 						types.NewUpdateInsertFlags(), result),
@@ -70,7 +70,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				priority: 500,
 			},
 			want: func(t *testing.T) *tree_persist.Intent {
-				lv, err := proto.Marshal(&schema_server.TypedValue{Value: &schema_server.TypedValue_StringVal{StringVal: "Value"}})
+				lv, err := proto.Marshal(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"}})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -117,9 +117,9 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(types.PathSlice{},
-							&schema_server.TypedValue{
-								Value: &schema_server.TypedValue_StringVal{StringVal: "Value"},
+						types.NewUpdate(&sdcpb.Path{},
+							&sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 500, owner1, 0,
 						),
 						types.NewUpdateInsertFlags(), result),
@@ -132,7 +132,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				priority: 500,
 			},
 			want: func(t *testing.T) *tree_persist.Intent {
-				lv, err := proto.Marshal(&schema_server.TypedValue{Value: &schema_server.TypedValue_StringVal{StringVal: "Value"}})
+				lv, err := proto.Marshal(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"}})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -183,9 +183,9 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(types.PathSlice{},
-							&schema_server.TypedValue{
-								Value: &schema_server.TypedValue_StringVal{StringVal: "Value"},
+						types.NewUpdate(&sdcpb.Path{},
+							&sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 500, owner1, 0,
 						),
 						types.NewUpdateInsertFlags(), result),
@@ -193,9 +193,9 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(types.PathSlice{},
-							&schema_server.TypedValue{
-								Value: &schema_server.TypedValue_StringVal{StringVal: "OtherValue"},
+						types.NewUpdate(&sdcpb.Path{},
+							&sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "OtherValue"},
 							}, 50, owner2, 0,
 						),
 						types.NewUpdateInsertFlags(), result),
@@ -217,9 +217,9 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(types.PathSlice{},
-							&schema_server.TypedValue{
-								Value: &schema_server.TypedValue_StringVal{StringVal: "Value"},
+						types.NewUpdate(&sdcpb.Path{},
+							&sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 50, owner2, 0,
 						),
 						types.NewUpdateInsertFlags(), result),
@@ -232,7 +232,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				priority: 500,
 			},
 			want: func(t *testing.T) *tree_persist.Intent {
-				lv, err := proto.Marshal(&schema_server.TypedValue{Value: &schema_server.TypedValue_StringVal{StringVal: "Value"}})
+				lv, err := proto.Marshal(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"}})
 				if err != nil {
 					t.Error(err)
 				}
@@ -283,9 +283,9 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(types.PathSlice{},
-							&schema_server.TypedValue{
-								Value: &schema_server.TypedValue_StringVal{StringVal: "Value"},
+						types.NewUpdate(&sdcpb.Path{},
+							&sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 500, owner1, 0,
 						),
 						types.NewUpdateInsertFlags(), result),
@@ -413,7 +413,7 @@ func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
 
 			fmt.Println(root.String())
 
-			_, err = root.DeleteSubtreePaths(tt.args.deletes, tt.args.intentName)
+			_, err = root.DeleteSubtreePaths(ctx, tt.args.deletes, tt.args.intentName)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -466,8 +466,19 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 			},
 			args: args{
 				us: types.UpdateSlice{
-					types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("test"), *proto.Int32(5), "owner1", 0),
-					types.NewUpdate(types.PathSlice{"network-instance", "ni1", "protocol", "bgp"}, &schema_server.TypedValue{Value: &schema_server.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}, *proto.Int32(5), "owner1", 0),
+					types.NewUpdate(&sdcpb.Path{
+						Elem: []*sdcpb.PathElem{
+							sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+							sdcpb.NewPathElem("description", nil),
+						},
+					}, testhelper.GetStringTvProto("test"), *proto.Int32(5), "owner1", 0),
+					types.NewUpdate(&sdcpb.Path{
+						Elem: []*sdcpb.PathElem{
+							sdcpb.NewPathElem("network-instance", map[string]string{
+								"name": "ni1",
+							}),
+						},
+					}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}, *proto.Int32(5), "owner1", 0),
 				},
 				flags: types.NewUpdateInsertFlags(),
 			},

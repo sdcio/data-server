@@ -19,6 +19,7 @@ import (
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	schema_server "github.com/sdcio/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -49,12 +50,23 @@ func Test_sharedEntryAttributes_checkAndCreateKeysAsLeafs(t *testing.T) {
 	prio := int32(5)
 	intentName := "intent1"
 
-	_, err = root.AddUpdateRecursive(ctx, types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescription"), prio, intentName, 0), flags)
+	p := &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}
+	_, err = root.AddUpdateRecursive(ctx, types.NewUpdate(p, testhelper.GetStringTvProto("MyDescription"), prio, intentName, 0), flags)
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = root.AddUpdateRecursive(ctx, types.NewUpdate([]string{"doublekey", "k1.1", "k1.3", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio, intentName, 0), flags)
+	p = &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("doublekey", map[string]string{
+				"key1": "k1.1",
+				"key2": "k1.3",
+			}),
+			sdcpb.NewPathElem("mandato", nil),
+		},
+	}
+
+	_, err = root.AddUpdateRecursive(ctx, types.NewUpdate(p, testhelper.GetStringTvProto("TheMandatoryValue1"), prio, intentName, 0), flags)
 	if err != nil {
 		t.Error(err)
 	}
@@ -132,7 +144,7 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 
 				newFlag := types.NewUpdateInsertFlags()
 
-				err = root.ImportConfig(ctx, types.PathSlice{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
 				if err != nil {
 					t.Error(err)
 				}
@@ -169,7 +181,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 	owner2 := "owner2"
 	ctx := context.TODO()
 	type args struct {
-		relativePath types.PathSlice
+		relativePath *sdcpb.Path
 		owner        string
 	}
 	tests := []struct {
@@ -212,7 +224,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				return root.sharedEntryAttributes
 			},
 			args: args{
-				relativePath: types.PathSlice{"interface"},
+				relativePath: &sdcpb.Path{Elem: []*sdcpb.PathElem{schema_server.NewPathElem("interface", nil)}},
 				owner:        owner1,
 			},
 			want:    true,
@@ -251,8 +263,10 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				return root.sharedEntryAttributes
 			},
 			args: args{
-				relativePath: types.PathSlice{"interface", "ethernet-1/27"},
-				owner:        owner1,
+				relativePath: &sdcpb.Path{
+					Elem: []*sdcpb.PathElem{schema_server.NewPathElem("interface", map[string]string{"name": "ethernet-1/27"})},
+				},
+				owner: owner1,
 			},
 			want:    false,
 			wantErr: true,
@@ -261,7 +275,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := tt.sharedEntryAttributes(t)
-			got, err := s.DeleteSubtree(tt.args.relativePath, tt.args.owner)
+			got, err := s.DeleteSubtree(ctx, tt.args.relativePath, tt.args.owner)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("sharedEntryAttributes.DeleteSubtree() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -272,7 +286,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("sharedEntryAttributes.DeleteSubtree() = %v, want %v", got, tt.want)
 			}
-			e, err := s.Navigate(ctx, tt.args.relativePath, false, false)
+			e, err := s.NavigateSdcpbPath(ctx, tt.args.relativePath.Elem, false)
 			if err != nil {
 				t.Error(err)
 				return
@@ -280,7 +294,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 			les := []*LeafEntry{}
 			result := e.GetByOwner(tt.args.owner, les)
 			if len(result) > 0 {
-				t.Errorf("expected all elements under %s to be deleted for owner %s but got %d elements", strings.Join(tt.args.relativePath, "/"), tt.args.owner, len(result))
+				t.Errorf("expected all elements under %s to be deleted for owner %s but got %d elements", tt.args.relativePath.ToXPath(false), tt.args.owner, len(result))
 				return
 			}
 		})
@@ -372,7 +386,19 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			e, err := device(t).Navigate(ctx, tt.path, true, false)
+			controller := gomock.NewController(t)
+			defer controller.Finish()
+
+			ctx := context.Background()
+
+			p := &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+					sdcpb.NewPathElem("description", nil),
+				},
+			}
+
+			e, err := device(t).NavigateSdcpbPath(ctx, p.GetElem(), true)
 			if err != nil {
 				t.Error(err)
 				return
@@ -554,21 +580,42 @@ func Test_sharedEntryAttributes_getOrCreateChilds(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		path        types.PathSlice
+		path        *sdcpb.Path
 		wantErr     bool
 		errContains string
 	}{
 		{
 			name: "one",
-			path: types.PathSlice{"interface", "ethernet-1/1", "description"},
+			path: &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+					sdcpb.NewPathElem("description", nil),
+				},
+			},
 		},
 		{
 			name: "doublekey",
-			path: types.PathSlice{"doublekey", "k1.1", "k1.2", "mandato"},
+			path: &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("doublekey", map[string]string{
+						"key1": "k1.1",
+						"key2": "k1.2",
+					}),
+					sdcpb.NewPathElem("mandato", nil),
+				},
+			},
 		},
 		{
-			name:        "non existing attribute",
-			path:        types.PathSlice{"network-instance", "ni1", "protocol", "osgp"},
+			name: "non existing attribute",
+			path: &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("network-instance", map[string]string{
+						"name": "ni1",
+					}),
+					sdcpb.NewPathElem("protocol", nil),
+					sdcpb.NewPathElem("osgp", nil),
+				},
+			},
 			wantErr:     true,
 			errContains: "container protocol - unknown element osgp",
 		},
@@ -602,8 +649,8 @@ func Test_sharedEntryAttributes_getOrCreateChilds(t *testing.T) {
 				return
 			}
 
-			if x.Path().String() != tt.path.String() {
-				t.Errorf("%s != %s", x.Path().String(), tt.path.String())
+			if x.SdcpbPath().ToXPath(false) != tt.path.ToXPath(false) {
+				t.Errorf("%s != %s", x.SdcpbPath().ToXPath(false), tt.path.ToXPath(false))
 			}
 		})
 	}
@@ -973,7 +1020,15 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 				t.Fatal(err)
 			}
 			updSlice := types.UpdateSlice{
-				types.NewUpdate([]string{"doublekey", "k1.1", "k1.2", "mandato"}, testhelper.GetStringTvProto("TheMandatoryValue1"), owner1Prio, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{
+					Elem: []*sdcpb.PathElem{
+						sdcpb.NewPathElem("doublekey", map[string]string{
+							"key1": "k1.1",
+							"key2": "k1.2",
+						}),
+						sdcpb.NewPathElem("mandato", nil),
+					},
+				}, testhelper.GetStringTvProto("TheMandatoryValue1"), owner1Prio, owner1, 0),
 			}
 
 			err = root.AddUpdatesRecursive(ctx, updSlice, flagsNew)
@@ -1003,7 +1058,7 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = newRoot.ImportConfig(ctx, types.PathSlice{}, proto.NewProtoTreeImporter(treepersist.Root), owner1, owner1Prio, flagsExisting)
+			err = newRoot.ImportConfig(ctx, &sdcpb.Path{}, proto.NewProtoTreeImporter(treepersist.Root), owner1, owner1Prio, flagsExisting)
 			if err != nil {
 				t.Error(err)
 				return
@@ -1029,9 +1084,8 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 				t.Error(err)
 			}
 			if len(deleteList) != tt.numDelete {
-				t.Errorf("%d deltes expected, got %d\n%s", tt.numDelete, len(deleteList), strings.Join(deleteList.PathSlices().StringSlice(), ", "))
+				t.Errorf("%d deltes expected, got %d\n%s", tt.numDelete, len(deleteList), strings.Join(deleteList.SdcpbPaths().ToXPathSlice(), ", "))
 			}
-
 		})
 	}
 }

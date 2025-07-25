@@ -751,7 +751,7 @@ func convertUpdateTypedValue(_ context.Context, upd *sdcpb.Update, scRsp *sdcpb.
 			// delete the key from the last elem (that's the leaf-list value)
 			p.GetElem()[len(p.GetElem())-1].Key = nil
 			// build unique path
-			sp := ToXPath(p, false)
+			sp := p.ToXPath(false)
 			if _, ok := leaflists[sp]; !ok {
 				leaflists[sp] = &leafListNotification{
 					path:      p,                               // modified path
@@ -804,7 +804,7 @@ func (c *Converter) ConvertNotificationTypedValues(ctx context.Context, n *sdcpb
 	}
 	// convert typed values to their YANG type
 	for _, upd := range n.GetUpdate() {
-		StripPathElemPrefixPath(upd.GetPath())
+		upd.GetPath().StripPathElemPrefixPath()
 		scRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, upd.GetPath())
 		if err != nil {
 			return nil, err

@@ -236,7 +236,7 @@ func NotificationsEqual(n1, n2 *sdcpb.Notification) bool {
 		return false
 	}
 	for i, dp := range n1.GetDelete() {
-		if !PathsEqual(dp, n2.GetDelete()[i]) {
+		if !dp.PathsEqual(n2.GetDelete()[i]) {
 			return false
 		}
 	}
@@ -244,7 +244,7 @@ func NotificationsEqual(n1, n2 *sdcpb.Notification) bool {
 		return false
 	}
 	for i, upd := range n1.GetUpdate() {
-		if !PathsEqual(upd.GetPath(), n2.GetUpdate()[i].GetPath()) {
+		if !upd.GetPath().PathsEqual(n2.GetUpdate()[i].GetPath()) {
 			return false
 		}
 		if !EqualTypedValues(upd.GetValue(), n2.GetUpdate()[i].GetValue()) {

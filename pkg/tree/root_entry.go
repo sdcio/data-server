@@ -77,7 +77,7 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us types.UpdateSlic
 	return nil
 }
 
-func (r *RootEntry) ImportConfig(ctx context.Context, basePath types.PathSlice, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error {
+func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error {
 	r.treeContext.SetActualOwner(intentName)
 
 	e, err := r.sharedEntryAttributes.getOrCreateChilds(ctx, basePath)
@@ -126,17 +126,17 @@ func (r *RootEntry) GetUpdatesForOwner(owner string) types.UpdateSlice {
 }
 
 // GetDeletesForOwner returns the deletes that have been calculated for the given intent / owner
-func (r *RootEntry) GetDeletesForOwner(owner string) types.PathSlices {
+func (r *RootEntry) GetDeletesForOwner(owner string) sdcpb.Paths {
 	// retrieve all entries from the tree that belong to the given user
 	// and that are marked for deletion.
 	// This is to cover all the cases where an intent was changed and certain
 	// part of the config got deleted.
 	deletesOwnerUpdates := LeafEntriesToUpdates(r.getByOwnerFiltered(owner, FilterDeleted))
 	// they are retrieved as cache.update, we just need the path for deletion from cache
-	deletesOwner := make(types.PathSlices, 0, len(deletesOwnerUpdates))
+	deletesOwner := make(sdcpb.Paths, 0, len(deletesOwnerUpdates))
 	// so collect the paths
 	for _, d := range deletesOwnerUpdates {
-		deletesOwner = append(deletesOwner, d.GetPathSlice())
+		deletesOwner = append(deletesOwner, d.Path())
 	}
 	return deletesOwner
 }
@@ -199,10 +199,10 @@ NEXTELEMENT:
 }
 
 // DeleteSubtree Deletes from the tree, all elements of the PathSlice defined branch of the given owner. Return values are remainsToExist and error if an error occured.
-func (r *RootEntry) DeleteSubtreePaths(deletes types.DeleteEntriesList, intentName string) (bool, error) {
+func (r *RootEntry) DeleteSubtreePaths(ctx context.Context, deletes types.DeleteEntriesList, intentName string) (bool, error) {
 	remainsToExist := true
 	for _, del := range deletes {
-		remainsToExist, err := r.DeleteSubtree(del.Path(), intentName)
+		remainsToExist, err := r.DeleteSubtree(ctx, del.SdcpbPath(), intentName)
 		if err != nil {
 			return remainsToExist, err
 		}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/tree"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 type Transaction struct {
@@ -143,9 +144,9 @@ func (t *Transaction) AddIntentContent(name string, tit TransactionIntentType, p
 	return nil
 }
 
-func (t *Transaction) GetPathSet(tit TransactionIntentType) *treetypes.PathSet {
+func (t *Transaction) GetPathSet(tit TransactionIntentType) *sdcpb.PathSet {
 	srcMap := t.getTransactionIntentTypeMap(tit)
-	ps := treetypes.NewPathSet()
+	ps := &sdcpb.PathSet{}
 	for _, intent := range srcMap {
 		ps.Join(intent.GetPathSet())
 	}

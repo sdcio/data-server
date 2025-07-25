@@ -125,7 +125,9 @@ func (s *sharedEntryAttributes) loadDefaults(ctx context.Context) error {
 		for _, childname := range s.schema.GetContainer().ChildsWithDefaults {
 			// tryLoadingDefaults is using the pathslice, that contains keys as well,
 			// so we need to make up for these extra entries in the slice
-			path := append(s.Path(), childname)
+			path := s.SdcpbPath()
+
+			path.AddPathElem(sdcpb.NewPathElem(childname, nil))
 			_, err := s.tryLoadingDefault(ctx, path)
 			if err != nil {
 				return err
@@ -157,8 +159,9 @@ func (s *sharedEntryAttributes) loadDefaults(ctx context.Context) error {
 		// if we're in the last level of keys, then we need to add the defaults
 		if len(ancestorContainerSchema.Keys) == levelsUp {
 			for _, childname := range ancestorContainerSchema.ChildsWithDefaults {
-				path := append(s.Path(), childname)
-				_, err := s.tryLoadingDefault(ctx, path)
+				newPath := s.SdcpbPath()
+				newPath.AddPathElem(sdcpb.NewPathElem(childname, nil))
+				_, err := s.tryLoadingDefault(ctx, newPath)
 				if err != nil {
 					return err
 				}
@@ -212,10 +215,9 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 	// if we're in the last level of keys, then we need to add the defaults
 	if len(ancestorContainerSchema.Keys) == levelsUp {
 		// iterate through the keys
-		schemaKeys := ancestor.GetSchemaKeys()
-		slices.Sort(schemaKeys)
-		for idx, k := range schemaKeys {
-			child, entryExists := s.childs.GetEntry(k)
+		var item Entry = s
+		for _, k := range ancestor.GetSchema().GetContainer().Keys {
+			child, entryExists := s.childs.GetEntry(k.Name)
 			// if the key Leaf exists continue with next key
 			if entryExists {
 				// if it exists, we need to check that the entry for the owner exists.
@@ -227,33 +229,34 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 				}
 			}
 			// construct the key path
-			keyPath := append(s.Path(), k)
+			path := s.SdcpbPath().DeepCopy()
+			path.AddPathElem(sdcpb.NewPathElem(k.Name, nil))
 
-			schem, err := s.treeContext.schemaClient.GetSchemaSlicePath(ctx, keyPath)
-			if err != nil {
-				return err
-			}
 			// convert the key value to the schema defined Typed_Value
-			tv, err := utils.Convert(keyPath[len(keyPath)-levelsUp-1+idx], schem.Schema.GetField().Type)
+			tv, err := utils.Convert(item.PathName(), k.GetType())
 			if err != nil {
 				return err
 			}
 			if !entryExists {
 				// create a new entry
-				child, err = newEntry(ctx, s, k, s.treeContext)
-				if err != nil {
-					return err
-				}
-				// add the new child entry to s
-				err = s.addChild(ctx, child)
+				child, err = newEntry(ctx, s, k.Name, s.treeContext)
 				if err != nil {
 					return err
 				}
 			}
-			_, err = child.AddUpdateRecursive(ctx, types.NewUpdate(keyPath, tv, prio, intentName, 0), insertFlag)
+			// add the new child entry to s
+			err = s.addChild(ctx, child)
 			if err != nil {
 				return err
 			}
+			// Add the update to the tree
+			_, err = child.AddUpdateRecursive(ctx, types.NewUpdate(path, tv, prio, intentName, 0), insertFlag)
+			if err != nil {
+				return err
+			}
+
+			// continue with parent Entry
+			item = s.parent
 		}
 	}
 	return nil
@@ -291,7 +294,7 @@ func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 
 	if getSchema {
 		// trieve if the getSchema var is still true
-		schemaResp, err := s.treeContext.schemaClient.GetSchemaSlicePath(ctx, s.Path())
+		schemaResp, err := s.treeContext.schemaClient.GetSchemaSdcpbPath(ctx, s.SdcpbPath())
 		if err != nil {
 			return err
 		}
@@ -317,14 +320,14 @@ func (s *sharedEntryAttributes) getChildren() map[string]Entry {
 // this is collecting all the last level key entries.
 func (s *sharedEntryAttributes) GetListChilds() ([]Entry, error) {
 	if s.schema == nil {
-		return nil, fmt.Errorf("error GetListChilds() non schema level %s", s.Path().String())
+		return nil, fmt.Errorf("error GetListChilds() non schema level %s", s.SdcpbPath().ToXPath(false))
 	}
 	if s.schema.GetContainer() == nil {
-		return nil, fmt.Errorf("error GetListChilds() not a Container %s", s.Path().String())
+		return nil, fmt.Errorf("error GetListChilds() not a Container %s", s.SdcpbPath().ToXPath(false))
 	}
 	keys := s.schema.GetContainer().GetKeys()
 	if len(keys) == 0 {
-		return nil, fmt.Errorf("error GetListChilds() not a List Container %s", s.Path().String())
+		return nil, fmt.Errorf("error GetListChilds() not a List Container %s", s.SdcpbPath().ToXPath(false))
 	}
 	actualEntries := []Entry{s}
 	var newEntries []Entry
@@ -348,7 +351,7 @@ func (s *sharedEntryAttributes) GetListChilds() ([]Entry, error) {
 // key level is considered a wildcard match (*)
 func (s *sharedEntryAttributes) FilterChilds(keys map[string]string) ([]Entry, error) {
 	if s.schema == nil {
-		return nil, fmt.Errorf("error non schema level %s", s.Path().String())
+		return nil, fmt.Errorf("error non schema level %s", s.SdcpbPath().ToXPath(false))
 	}
 
 	result := []Entry{}
@@ -619,12 +622,7 @@ func (s *sharedEntryAttributes) getRegularDeletes(deletes []types.DeleteEntry, a
 	}
 
 	for _, elem := range s.choicesResolvers.GetDeletes() {
-		path, err := s.SdcpbPath()
-		if err != nil {
-			return nil, err
-		}
-		path.Elem = append(path.Elem, &sdcpb.PathElem{Name: elem})
-		deletes = append(deletes, types.NewDeleteEntryImpl(path))
+		deletes = append(deletes, types.NewDeleteEntryImpl(s.SdcpbPath().DeepCopy().AddPathElem(sdcpb.NewPathElem(elem, nil))))
 	}
 
 	for _, e := range s.childs.GetAll() {
@@ -683,15 +681,6 @@ func (s *sharedEntryAttributes) GetByOwner(owner string, result []*LeafEntry) Le
 	return result
 }
 
-// Path returns the root based path of the Entry
-func (s *sharedEntryAttributes) Path() types.PathSlice {
-	// special handling for root node
-	if s.parent == nil {
-		return types.PathSlice{}
-	}
-	return append(s.parent.Path(), s.pathElemName)
-}
-
 // PathName returns the name of the Entry
 func (s *sharedEntryAttributes) PathName() string {
 	return s.pathElemName
@@ -699,7 +688,7 @@ func (s *sharedEntryAttributes) PathName() string {
 
 // String returns a string representation of the Entry
 func (s *sharedEntryAttributes) String() string {
-	return strings.Join(s.parent.Path(), "/")
+	return s.SdcpbPath().ToXPath(false)
 }
 
 // addChild add an entry to the list of child entries for the entry.
@@ -713,8 +702,8 @@ func (s *sharedEntryAttributes) addChild(ctx context.Context, e Entry) error {
 		}
 	}
 	// check the path of child is a subpath of s
-	if !slices.Equal(s.Path(), e.Path()[:len(e.Path())-1]) {
-		return fmt.Errorf("adding Child with diverging path, parent: %s, child: %s", s, strings.Join(e.Path()[:len(e.Path())-1], "/"))
+	if !slices.Equal(s.SdcpbPath().GetElem(), e.SdcpbPath().GetElem()[:len(e.SdcpbPath().GetElem())-1]) {
+		return fmt.Errorf("adding Child with diverging path, parent: %s, child: %s", s.SdcpbPath().ToXPath(false), e.SdcpbPath().ToXPath(false))
 	}
 	s.childs.Add(e)
 	return nil
@@ -749,16 +738,16 @@ func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, pathElems
 		e, exists := s.filterActiveChoiceCaseChilds()[pathElems[0].Name]
 		if !exists {
 			pth := &sdcpb.Path{Elem: pathElems}
-			e, err = s.tryLoadingDefault(ctx, utils.ToStrings(pth, false, false))
+			e, err = s.tryLoadingDefault(ctx, pth)
 			if err != nil {
-				pathStr := utils.ToXPath(pth, false)
-				return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist, trying to load defaults yielded %v", s.Path(), pathStr, err)
+				pathStr := pth.ToXPath(false)
+				return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist, trying to load defaults yielded %v", s.SdcpbPath().ToXPath(false), pathStr, err)
 			}
 			return e, nil
 		}
 
 		for _, v := range pathElems[0].Key {
-			e, err = e.Navigate(ctx, []string{v}, false, false)
+			e, err = e.NavigateSdcpbPath(ctx, []*sdcpb.PathElem{sdcpb.NewPathElem(v, nil)}, false)
 			if err != nil {
 				return nil, err
 			}
@@ -767,14 +756,14 @@ func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, pathElems
 		return e.NavigateSdcpbPath(ctx, pathElems[1:], false)
 	}
 
-	return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist", s.Path(), pathElems)
+	return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist", s.SdcpbPath().ToXPath(false), pathElems)
 }
 
-func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path []string) (Entry, error) {
+func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path *sdcpb.Path) (Entry, error) {
 
-	schema, err := s.treeContext.schemaClient.GetSchemaSlicePath(ctx, path)
+	schema, err := s.treeContext.schemaClient.GetSchemaSdcpbPath(ctx, path)
 	if err != nil {
-		return nil, fmt.Errorf("error trying to load defaults for %s: %v", strings.Join(path, "->"), err)
+		return nil, fmt.Errorf("error trying to load defaults for %s: %v", path.ToXPath(false), err)
 	}
 
 	upd, err := DefaultValueRetrieve(schema.GetSchema(), path, DefaultValuesPrio, DefaultsIntentName)
@@ -786,63 +775,23 @@ func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path []st
 
 	result, err := s.AddUpdateRecursive(ctx, upd, flags)
 	if err != nil {
-		return nil, fmt.Errorf("failed adding default value for %s to tree; %v", strings.Join(path, "/"), err)
+		return nil, fmt.Errorf("failed adding default value for %s to tree; %v", path.ToXPath(false), err)
 	}
 
 	return result, nil
 }
 
-// Navigate move through the tree, returns the Entry that is present under the given path
-func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isRootPath bool, dotdotSkipKeys bool) (Entry, error) {
-	if len(path) == 0 {
-		return s, nil
+func (s *sharedEntryAttributes) DeleteSubtree(ctx context.Context, relativePath *sdcpb.Path, owner string) (bool, error) {
+	// if the relativePath is present, we need to naviagate
+	if relativePath != nil {
+		entry, err := s.NavigateSdcpbPath(ctx, relativePath.Elem, false)
+		if err != nil {
+			return false, err
+		}
+		return entry.DeleteSubtree(ctx, nil, owner)
 	}
 
-	if isRootPath {
-		return s.treeContext.root.Navigate(ctx, path, false, dotdotSkipKeys)
-	}
-	var err error
-	switch path[0] {
-	case ".":
-		return s.Navigate(ctx, path[1:], false, dotdotSkipKeys)
-	case "..":
-		parent := s.parent
-		if dotdotSkipKeys {
-			// if dotdotSkipKeys is set, we need to advance to the next schema level above
-			// the issue is, that if there is a list, with keys, the last element even without a schema defined
-			// is the element to stop at.
-			// so here we need to check is the parent schema is nil and that we still want to move further up.
-			// if thats the case, move up to the next schema carrying element.
-			if parent.GetSchema() == nil && len(path) > 0 && path[1] == ".." {
-				parent, _ = parent.GetFirstAncestorWithSchema()
-			}
-		}
-		return parent.Navigate(ctx, path[1:], false, dotdotSkipKeys)
-	default:
-		e, exists := s.filterActiveChoiceCaseChilds()[path[0]]
-		if !exists {
-			e, err = s.tryLoadingDefault(ctx, append(s.Path(), path...))
-			if err != nil {
-				return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist, trying to load defaults yielded %v", s.Path(), path, err)
-			}
-			return e, nil
-		}
-		return e.Navigate(ctx, path[1:], false, dotdotSkipKeys)
-	}
-}
-
-func (s *sharedEntryAttributes) DeleteSubtree(relativePath types.PathSlice, owner string) (bool, error) {
-	if len(relativePath) > 0 {
-		child, exists := s.childs.GetEntry(relativePath[0])
-		if !exists {
-			path := make([]string, 0, len(s.Path())+len(relativePath))
-			path = append(path, s.Path()...)
-			path = append(path, relativePath...)
-			return false, fmt.Errorf("trying to delete subtree %q but unable to find child %s at %s", path, relativePath[0], s.Path())
-		}
-		remainingPath := relativePath[1:]
-		return child.DeleteSubtree(remainingPath, owner)
-	}
+	// if the relativePath is nil, then the actual deletion logic can kick in
 	remainsToExist := false
 	// delete possibly existing leafvariants for the owner
 	remainsToExist = s.leafVariants.DeleteByOwner(owner)
@@ -850,7 +799,7 @@ func (s *sharedEntryAttributes) DeleteSubtree(relativePath types.PathSlice, owne
 	deleteKeys := []string{}
 	// recurse the call
 	for childName, child := range s.childs.Items() {
-		childRemains, err := child.DeleteSubtree(nil, owner)
+		childRemains, err := child.DeleteSubtree(ctx, nil, owner)
 		if err != nil {
 			return false, err
 		}
@@ -887,21 +836,30 @@ func (s *sharedEntryAttributes) getHighestPrecedenceLeafValue(ctx context.Contex
 			return lv, nil
 		}
 		if x != "default" {
-			_, err := s.tryLoadingDefault(ctx, s.Path())
+			_, err := s.tryLoadingDefault(ctx, s.SdcpbPath())
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
-	return nil, fmt.Errorf("error no value present for %s", s.Path())
+	return nil, fmt.Errorf("error no value present for %s", s.SdcpbPath().ToXPath(false))
 }
 
 func (s *sharedEntryAttributes) GetRootBasedEntryChain() []Entry {
-	s.GetLevel()
-	if s.IsRoot() {
-		return []Entry{}
+	// Build the chain from root to this entry without recursion
+	var chain []Entry
+	var current Entry = s
+	for current != nil && !current.IsRoot() {
+		chain = append(chain, current)
+		current = current.GetParent()
 	}
-	return append(s.parent.GetRootBasedEntryChain(), s)
+	// Add the root if needed
+	if current != nil {
+		chain = append(chain, current)
+	}
+	// reverse the slice to get root-based order
+	slices.Reverse(chain)
+	return chain
 }
 
 type HighestPrecedenceFilter func(le *LeafEntry) bool
@@ -1033,7 +991,7 @@ func (s *sharedEntryAttributes) validateRange(resultChan chan<- *types.Validatio
 
 			// check the value laays within any of the ranges
 			if !urnges.IsWithinAnyRange(tv.GetUintVal()) {
-				resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("path %s, value %d not within any of the expected ranges %s", s.Path(), tv.GetUintVal(), urnges.String()), types.ValidationResultEntryTypeError)
+				resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("path %s, value %d not within any of the expected ranges %s", s.SdcpbPath().ToXPath(false), tv.GetUintVal(), urnges.String()), types.ValidationResultEntryTypeError)
 			}
 
 		case "int8", "int16", "int32", "int64":
@@ -1055,7 +1013,7 @@ func (s *sharedEntryAttributes) validateRange(resultChan chan<- *types.Validatio
 			}
 			// check the value laays within any of the ranges
 			if !srnges.IsWithinAnyRange(tv.GetIntVal()) {
-				resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("path %s, value %d not within any of the expected ranges %s", s.Path(), tv.GetIntVal(), srnges.String()), types.ValidationResultEntryTypeError)
+				resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("path %s, value %d not within any of the expected ranges %s", s.SdcpbPath().ToXPath(false), tv.GetIntVal(), srnges.String()), types.ValidationResultEntryTypeError)
 			}
 		}
 	}
@@ -1071,11 +1029,11 @@ func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(resultChan chan
 				if val := tv.GetLeaflistVal(); val != nil {
 					// check minelements if set
 					if schema.MinElements > 0 && len(val.GetElement()) < int(schema.GetMinElements()) {
-						resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("leaflist %s defines %d min-elements but only %d elements are present", s.Path().String(), schema.MinElements, len(val.GetElement())), types.ValidationResultEntryTypeError)
+						resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("leaflist %s defines %d min-elements but only %d elements are present", s.SdcpbPath().ToXPath(false), schema.MinElements, len(val.GetElement())), types.ValidationResultEntryTypeError)
 					}
 					// check maxelements if set
 					if len(val.GetElement()) > int(schema.GetMaxElements()) {
-						resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("leaflist %s defines %d max-elements but %d elements are present", s.Path().String(), schema.GetMaxElements(), len(val.GetElement())), types.ValidationResultEntryTypeError)
+						resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("leaflist %s defines %d max-elements but %d elements are present", s.SdcpbPath().ToXPath(false), schema.GetMaxElements(), len(val.GetElement())), types.ValidationResultEntryTypeError)
 					}
 				}
 			}
@@ -1106,7 +1064,7 @@ func (s *sharedEntryAttributes) validateLength(resultChan chan<- *types.Validati
 		for _, lengthDef := range schema.GetType().Length {
 			lenghts = append(lenghts, fmt.Sprintf("%d..%d", lengthDef.Min.Value, lengthDef.Max.Value))
 		}
-		resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("error length of Path: %s, Value: %s not within allowed length %s", s.Path(), value, strings.Join(lenghts, ", ")), types.ValidationResultEntryTypeError)
+		resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("error length of Path: %s, Value: %s not within allowed length %s", s.SdcpbPath().ToXPath(false), value, strings.Join(lenghts, ", ")), types.ValidationResultEntryTypeError)
 	}
 }
 
@@ -1121,11 +1079,11 @@ func (s *sharedEntryAttributes) validatePattern(resultChan chan<- *types.Validat
 			if p := pattern.GetPattern(); p != "" {
 				matched, err := regexp.MatchString(p, value)
 				if err != nil {
-					resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("failed compiling regex %s defined for %s", p, s.Path()), types.ValidationResultEntryTypeError)
+					resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("failed compiling regex %s defined for %s", p, s.SdcpbPath().ToXPath(false)), types.ValidationResultEntryTypeError)
 					continue
 				}
 				if (!matched && !pattern.Inverted) || (pattern.GetInverted() && matched) {
-					resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("value %s of %s does not match regex %s (inverted: %t)", value, s.Path(), p, pattern.GetInverted()), types.ValidationResultEntryTypeError)
+					resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("value %s of %s does not match regex %s (inverted: %t)", value, s.SdcpbPath().ToXPath(false), p, pattern.GetInverted()), types.ValidationResultEntryTypeError)
 				}
 			}
 		}
@@ -1146,10 +1104,9 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 			schemaKeys := s.GetSchemaKeys()
 			slices.Sort(schemaKeys)
 			for _, schemaKey := range schemaKeys {
-
 				keyTransf := t.GetElement(schemaKey)
 				if keyTransf == nil {
-					return fmt.Errorf("unable to find key attribute %s under %s", schemaKey, s.Path())
+					return fmt.Errorf("unable to find key attribute %s under %s", schemaKey, s.SdcpbPath().ToXPath(false))
 				}
 				keyElemValue, err := keyTransf.GetKeyValue()
 				if err != nil {
@@ -1177,7 +1134,8 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 				}
 				if schem.IsPresence {
 					tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}
-					upd := types.NewUpdate(s.Path(), tv, intentPrio, intentName, 0)
+
+					upd := types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
 					s.leafVariants.Add(NewLeafEntry(upd, insertFlags, s))
 				}
 			}
@@ -1190,7 +1148,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 				if child, exists = s.getChildren()[elem.GetName()]; !exists {
 					child, err = newEntry(ctx, s, elem.GetName(), s.treeContext)
 					if err != nil {
-						return fmt.Errorf("error trying to insert %s at path %v: %w", elem.GetName(), s.Path(), err)
+						return fmt.Errorf("error trying to insert %s at path %v: %w", elem.GetName(), s.SdcpbPath().ToXPath(false), err)
 					}
 					err = s.addChild(ctx, child)
 					if err != nil {
@@ -1214,7 +1172,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 		if err != nil {
 			return err
 		}
-		upd := types.NewUpdate(s.Path(), tv, intentPrio, intentName, 0)
+		upd := types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
 
 		s.leafVariants.Add(NewLeafEntry(upd, insertFlags, s))
 
@@ -1240,8 +1198,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 			scalarArr.Element = append(scalarArr.Element, tv)
 			tv = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: scalarArr}}
 		}
-
-		le.Update = types.NewUpdate(s.Path(), tv, intentPrio, intentName, 0)
+		le.Update = types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
 		if mustAdd {
 			s.leafVariants.Add(le)
 		}
@@ -1283,7 +1240,7 @@ func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultCha
 				}
 
 				if len(attributes) == 0 {
-					log.Errorf("error path: %s, validationg mandatory attribute %s could not be found as child, field or choice.", s.Path(), c.Name)
+					log.Errorf("error path: %s, validationg mandatory attribute %s could not be found as child, field or choice.", s.SdcpbPath().ToXPath(false), c.Name)
 				}
 
 				s.validateMandatoryWithKeys(ctx, len(s.GetSchema().GetContainer().GetKeys()), attributes, choiceName, resultChan)
@@ -1319,11 +1276,11 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(ctx context.Context, l
 		if !success {
 			// if it is not a choice
 			if choiceName == "" {
-				resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child %s does not exist, path: %s", attributes, s.Path()), types.ValidationResultEntryTypeError)
+				resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child %s does not exist, path: %s", attributes, s.SdcpbPath().ToXPath(false)), types.ValidationResultEntryTypeError)
 				return
 			}
 			// if it is a mandatory choice
-			resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory choice %s [attributes: %s] does not exist, path: %s", choiceName, attributes, s.Path()), types.ValidationResultEntryTypeError)
+			resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory choice %s [attributes: %s] does not exist, path: %s", choiceName, attributes, s.SdcpbPath().ToXPath(false)), types.ValidationResultEntryTypeError)
 			return
 		}
 		return
@@ -1496,52 +1453,40 @@ func (s *sharedEntryAttributes) MarkOwnerDelete(o string, onlyIntended bool) {
 	}
 }
 
-// SdcpbPath returns the sdcpb.Path, with its elements and keys based on the local schema
-func (s *sharedEntryAttributes) SdcpbPath() (*sdcpb.Path, error) {
-	return s.SdcpbPathInternal(s.Path())
-}
-
-// sdcpbPathInternal is the internale recursive function to calculate and the sdcpb.Path,
-// with its elements and keys based on the local schema
-func (s *sharedEntryAttributes) SdcpbPathInternal(spath []string) (*sdcpb.Path, error) {
-	// if we moved all the way up to the root
-	// we create a new sdcpb.Path and return it.
+func (s *sharedEntryAttributes) SdcpbPath() *sdcpb.Path {
+	path := &sdcpb.Path{Elem: []*sdcpb.PathElem{}}
 	if s.IsRoot() {
-		return &sdcpb.Path{
-			Elem: []*sdcpb.PathElem{},
-		}, nil
-	}
-	// if not root, we take the parents result of this
-	// recursive call and add our (s) information to the Path.
-	p, err := s.parent.SdcpbPathInternal(spath)
-	if err != nil {
-		return nil, err
+		return path
 	}
 
-	// the element has a schema attached, so we need to add a new element to the
-	// path.
-	if s.schema != nil {
-		switch s.schema.GetSchema().(type) {
-		case *sdcpb.SchemaElem_Container, *sdcpb.SchemaElem_Field, *sdcpb.SchemaElem_Leaflist:
-			pe := &sdcpb.PathElem{
-				Name: s.pathElemName,
-				Key:  map[string]string{},
+	chain := s.GetRootBasedEntryChain()
+	for _, ancestor := range chain {
+		if ancestor.GetSchema() == nil {
+			continue
+		}
+		pathElem := &sdcpb.PathElem{Name: ancestor.PathName()}
+
+		// If this ancestor is a list element, populate the key map
+		container := ancestor.GetSchema().GetContainer()
+		if container != nil && len(container.GetKeys()) > 0 {
+			keyMap := map[string]string{}
+			// For each key defined in the schema, get the value from the child map
+			for _, keySchema := range container.GetKeys() {
+				child, exists := ancestor.getChildren()[keySchema.Name]
+				if exists {
+					// The key value is the path element name of the child
+					keyMap[keySchema.Name] = child.PathName()
+				}
 			}
-			p.Elem = append(p.Elem, pe)
+			if len(keyMap) > 0 {
+				pathElem.Key = keyMap
+			}
 		}
-
-		// the element does not have a schema attached, hence we need to add a key to
-		// the last element that was pushed to the pathElems
-	} else {
-		name, err := s.getKeyName()
-		if err != nil {
-			return nil, err
-		}
-		p.Elem[len(p.Elem)-1].Key[name] = s.PathName()
+		path.Elem = append(path.Elem, pathElem)
 	}
-	return p, err
-}
 
+	return path
+}
 func (s *sharedEntryAttributes) TreeExport(owner string) ([]*tree_persist.TreeElement, error) {
 	var lvResult []byte
 	var childResults []*tree_persist.TreeElement
@@ -1657,38 +1602,65 @@ func (s *sharedEntryAttributes) BlameConfig(includeDefaults bool) (*sdcpb.BlameT
 func (s *sharedEntryAttributes) getKeyName() (string, error) {
 	// if the entry has a schema, it cannot be a Key attribute
 	if s.schema != nil {
-		return "", fmt.Errorf("error %s is a schema element, can only get KeyNames for key element", strings.Join(s.Path(), " "))
+		return "", fmt.Errorf("error %s is a schema element, can only get KeyNames for key element", s.SdcpbPath().ToXPath(false))
 	}
 
 	// get ancestor schema
-	ancestorWithSchema, levelUp := s.GetFirstAncestorWithSchema()
+	ancestorWithSchema, _ := s.GetFirstAncestorWithSchema()
 
 	// only Containers have keys, so check for that
 	schemaKeys := ancestorWithSchema.GetSchemaKeys()
 	if len(schemaKeys) == 0 {
 		// we probably called the function on a LeafList or LeafEntry which is not a valid call to be made.
-		return "", fmt.Errorf("error LeafList and Field should not have keys %s", strings.Join(s.Path(), " "))
+		return "", fmt.Errorf("error LeafList and Field should not have keys %s", s.SdcpbPath().ToXPath(false))
 	}
 
-	slices.Sort(schemaKeys)
-	return schemaKeys[levelUp-1], nil
+	// we probably called the function on a LeafList or LeafEntry which is not a valid call to be made.
+	return "", fmt.Errorf("error LeafList and Field should not have keys %s", s.SdcpbPath().ToXPath(false))
 }
 
-func (s *sharedEntryAttributes) getOrCreateChilds(ctx context.Context, path types.PathSlice) (Entry, error) {
-	var err error
-	if len(path) == 0 {
+func (s *sharedEntryAttributes) getOrCreateChilds(ctx context.Context, path *sdcpb.Path) (Entry, error) {
+	if path == nil || len(path.Elem) == 0 {
 		return s, nil
 	}
 
-	e, exists := s.childs.GetEntry(path[0])
-	if !exists {
-		e, err = newEntry(ctx, s, path[0], s.treeContext)
-		if err != nil {
-			return nil, err
+	var current Entry = s
+	for i, pe := range path.Elem {
+		// Step 1: Find or create the child for the path element name
+		child, exists := current.getChildren()[pe.Name]
+		if !exists {
+			var err error
+			child, err = newEntry(ctx, current, pe.Name, s.treeContext)
+			if err != nil {
+				return nil, err
+			}
+			if err := current.addChild(ctx, child); err != nil {
+				return nil, err
+			}
+		}
+
+		// Step 2: For each key, find or create the key child
+		for _, keyVal := range pe.Key {
+			keyChild, exists := current.getChildren()[keyVal]
+			if !exists {
+				var err error
+				keyChild, err = newEntry(ctx, current, keyVal, s.treeContext)
+				if err != nil {
+					return nil, err
+				}
+				if err := current.addChild(ctx, keyChild); err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		// If this is the last PathElem, return the current node
+		if i == len(path.Elem)-1 {
+			return current, nil
 		}
 	}
 
-	return e.getOrCreateChilds(ctx, path[1:])
+	return current, nil
 }
 
 // AddUpdateRecursive recursively adds the given cache.Update to the tree. Thereby creating all the entries along the path.

@@ -110,7 +110,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 							expectedPath = "interfaces/interface[name=eth0]/name"
 						}
 						// check for the right input
-						if rp := utils.ToXPath(path, false); rp != expectedPath {
+						if rp := path.ToXPath(false); rp != expectedPath {
 							t.Errorf("getSchema expected path %s but got %s", expectedPath, rp)
 						}
 

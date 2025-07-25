@@ -16,7 +16,6 @@ package utils
 
 import (
 	"errors"
-	"slices"
 	"sort"
 	"strings"
 
@@ -315,75 +314,6 @@ func CompletePathFromString(s string) ([]string, error) {
 	return CompletePath(nil, p)
 }
 
-func ToXPath(p *sdcpb.Path, noKeys bool) string {
-	if p == nil {
-		return ""
-	}
-	sb := strings.Builder{}
-	if p.Origin != "" {
-		sb.WriteString(p.Origin)
-		sb.WriteString(":")
-	}
-	elems := p.GetElem()
-	numElems := len(elems)
-	for i, pe := range elems {
-		sb.WriteString(pe.GetName())
-		if !noKeys {
-
-			// need to sort the keys to get them in the correct order
-			kvMap := pe.GetKey()
-			// create a slice for the keys
-			keySlice := make([]string, 0, len(pe.GetKey()))
-			// add the keys
-			for k := range kvMap {
-				keySlice = append(keySlice, k)
-			}
-			// sort the keys
-			slices.Sort(keySlice)
-
-			// iterate over the sorted keys slice
-			for _, k := range keySlice {
-				sb.WriteString("[")
-				sb.WriteString(k)
-				sb.WriteString("=")
-				sb.WriteString(kvMap[k])
-				sb.WriteString("]")
-			}
-		}
-		if i+1 != numElems {
-			sb.WriteString("/")
-		}
-	}
-	return sb.String()
-}
-
-func StripPathElemPrefixPath(p *sdcpb.Path) {
-	for _, pe := range p.GetElem() {
-		if i := strings.Index(pe.Name, ":"); i > 0 {
-			pe.Name = pe.Name[i+1:]
-		}
-		// process keys
-		for k, v := range pe.Key {
-			// delete prefix from key name
-			if i := strings.Index(k, ":"); i > 0 {
-				delete(pe.Key, k)
-				k = k[i+1:]
-			}
-			// delete prefix from key value
-			if strings.Contains(v, ":") {
-				kelems := strings.Split(v, "/")
-				for idx, kelem := range kelems {
-					if i := strings.Index(kelem, ":"); i > 0 {
-						kelems[idx] = kelem[i+1:]
-					}
-				}
-				v = strings.Join(kelems, "/")
-			}
-			pe.Key[k] = v
-		}
-	}
-}
-
 func StripPathElemPrefix(p string) (string, error) {
 	sp, err := ParsePath(p)
 	if err != nil {
@@ -417,71 +347,5 @@ func StripPathElemPrefix(p string) (string, error) {
 	if strings.HasPrefix(strings.TrimSpace(p), "/") {
 		prefix = "/"
 	}
-	return prefix + ToXPath(sp, false), nil
-}
-
-func PathsEqual(p1, p2 *sdcpb.Path) bool {
-	if p1 == nil && p2 == nil {
-		return true
-	}
-	if p1 == nil || p2 == nil {
-		return false
-	}
-	if len(p1.GetElem()) != len(p2.GetElem()) {
-		return false
-	}
-	for i, pe := range p1.GetElem() {
-		if !peEqual(pe, p2.GetElem()[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-func peEqual(pe1, pe2 *sdcpb.PathElem) bool {
-	if pe1 == nil && pe2 == nil {
-		return true
-	}
-	if pe1 == nil || pe2 == nil {
-		return false
-	}
-	if pe1.GetName() != pe2.GetName() {
-		return false
-	}
-	if len(pe1.GetKey()) != len(pe2.GetKey()) {
-		return false
-	}
-	for k, v := range pe1.GetKey() {
-		if pe2.GetKey()[k] != v {
-			return false
-		}
-	}
-	return true
-}
-
-func CopyPath(p *sdcpb.Path) *sdcpb.Path {
-	result := &sdcpb.Path{
-		Origin: p.Origin,
-		Target: p.Target,
-		Elem:   make([]*sdcpb.PathElem, 0, len(p.Elem)),
-	}
-	// copy each path element
-	for _, x := range p.Elem {
-		result.Elem = append(result.Elem, &sdcpb.PathElem{
-			Name: x.GetName(),
-			Key:  CopyMap(x.GetKey()),
-		})
-	}
-	return result
-}
-
-func CopyMap(m map[string]string) map[string]string {
-	if m == nil {
-		return nil
-	}
-	nm := make(map[string]string, len(m))
-	for k, v := range m {
-		nm[k] = v
-	}
-	return nm
+	return prefix + sp.ToXPath(false), nil
 }

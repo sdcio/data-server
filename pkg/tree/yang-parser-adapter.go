@@ -101,35 +101,28 @@ func (y *yangParserEntryAdapter) FollowLeafRef() (xpath.Entry, error) {
 	}
 
 	if len(entries) == 0 {
-		return nil, fmt.Errorf("error resolving leafref for %s", y.e.Path())
+		return nil, fmt.Errorf("error resolving leafref for %s", y.e.SdcpbPath().ToXPath(false))
 	}
 
 	return newYangParserEntryAdapter(y.ctx, entries[0]), nil
 }
 
-func (y *yangParserEntryAdapter) GetPath() []string {
-	return y.e.Path()
+func (y *yangParserEntryAdapter) GetSdcpbPath() *sdcpb.Path {
+	return y.e.SdcpbPath()
 }
 
-func (y *yangParserEntryAdapter) Navigate(p []string) (xpath.Entry, error) {
+func (y *yangParserEntryAdapter) Navigate(p []*sdcpb.PathElem) (xpath.Entry, error) {
 	var err error
-	var rootPath = false
 
 	if len(p) == 0 {
 		return y, nil
 	}
 
-	// if the path slice starts with a / then it is a root based path.
-	if p[0] == "/" {
-		p = p[1:]
-		rootPath = true
-	}
-
-	lookedUpEntry, err := y.e.Navigate(y.ctx, p, rootPath, true)
+	entry, err := y.e.NavigateSdcpbPath(y.ctx, p, true)
 	if err != nil {
 		return newYangParserValueEntry(xpath.NewNodesetDatum([]xutils.XpathNode{}), err), nil
 	}
-	return newYangParserEntryAdapter(y.ctx, lookedUpEntry), nil
+	return newYangParserEntryAdapter(y.ctx, entry), nil
 }
 
 type yangParserValueEntry struct {
@@ -152,7 +145,7 @@ func (y *yangParserValueEntry) FollowLeafRef() (xpath.Entry, error) {
 	return nil, fmt.Errorf("yangParserValueEntry navigation impossible")
 }
 
-func (y *yangParserValueEntry) Navigate(p []string) (xpath.Entry, error) {
+func (y *yangParserValueEntry) Navigate(p []*sdcpb.PathElem) (xpath.Entry, error) {
 	return nil, fmt.Errorf("yangParserValueEntry navigation impossible")
 }
 
@@ -160,7 +153,7 @@ func (y *yangParserValueEntry) GetValue() (xpath.Datum, error) {
 	return y.d, nil
 }
 
-func (y *yangParserValueEntry) GetPath() []string {
+func (y *yangParserValueEntry) GetSdcpbPath() []*sdcpb.PathElem {
 	return nil
 }
 

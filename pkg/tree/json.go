@@ -127,7 +127,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 		}
 		return utils.GetJsonValue(le.Value(), ietf)
 	}
-	return nil, fmt.Errorf("unable to convert to json (%s)", s.Path())
+	return nil, fmt.Errorf("unable to convert to json (%s)", s.SdcpbPath().ToXPath(false))
 }
 
 // jsonAddIetfPrefixConditional adds the module name

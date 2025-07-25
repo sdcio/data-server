@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -177,7 +176,8 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 				// recurse the call to all the children
 				child, exists := s.childs.GetEntry(k)
 				if !exists {
-					return false, fmt.Errorf("child %s does not exist for %s", k, strings.Join(s.Path(), "/"))
+
+					return false, fmt.Errorf("child %s does not exist for %s", k, s.SdcpbPath().ToXPath(false))
 				}
 				doAdd, err := child.toXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
 				if err != nil {
@@ -222,7 +222,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 		utils.TypedValueToXML(parent, le.Value(), s.PathName(), ns, onlyNewOrUpdated, operationWithNamespace, useOperationRemove)
 		return true, nil
 	}
-	return false, fmt.Errorf("unable to convert to xml (%s)", s.Path())
+	return false, fmt.Errorf("unable to convert to xml (%s)", s.SdcpbPath().ToXPath(false))
 }
 
 // namespaceIsEqual takes the two given Entries, gets the namespace

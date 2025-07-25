@@ -14,11 +14,7 @@ func (r *RootEntry) ToProtoUpdates(ctx context.Context, onlyNewOrUpdated bool) (
 	// updates
 	for _, cachUpdate := range cacheUpdates {
 		val := cachUpdate.Value()
-		path, err := cachUpdate.parentEntry.SdcpbPath()
-		if err != nil {
-			return nil, err
-		}
-
+		path := cachUpdate.parentEntry.SdcpbPath()
 		upds = append(upds, &sdcpb.Update{Path: path, Value: val})
 	}
 
@@ -34,11 +30,7 @@ func (r *RootEntry) ToProtoDeletes(ctx context.Context) ([]*sdcpb.Path, error) {
 	deletes := make([]*sdcpb.Path, 0, len(cacheDeletes))
 	// deletes
 	for _, cacheDelete := range cacheDeletes {
-		path, err := cacheDelete.SdcpbPath()
-		if err != nil {
-			return nil, err
-		}
-
+		path := cacheDelete.SdcpbPath()
 		deletes = append(deletes, path)
 	}
 

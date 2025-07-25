@@ -168,7 +168,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	// this is then used to load the IntendedStore highes prio into the tree, to decide if an update
 	// is to be applied or if a higher precedence update exists and is therefore not applicable. Also if the value got
 	// deleted and a previousely shadowed entry becomes active.
-	involvedPaths := treetypes.NewPathSet()
+	involvedPaths := sdcpb.PathSet{}
 
 	// create a flags attribute
 	flagNew := treetypes.NewUpdateInsertFlags()
@@ -198,9 +198,9 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 
 		// add the old intent contents paths to the involvedPaths slice
-		involvedPaths.Join(oldIntentContent.ToPathSet())
+		involvedPaths.Join(oldIntentContent.ToSdcpbPathSet())
 		// add the new intent contents paths to the involvedPaths slice
-		involvedPaths.Join(intent.GetUpdates().ToPathSet())
+		involvedPaths.Join(intent.GetUpdates().ToSdcpbPathSet())
 	}
 
 	les := tree.LeafVariantSlice{}
@@ -252,11 +252,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 	// add all the deletes to the setDataReq
 	for _, u := range deletes {
-		p, err := u.SdcpbPath()
-		if err != nil {
-			return nil, err
-		}
-		result.Delete = append(result.Delete, p)
+		result.Delete = append(result.Delete, u.SdcpbPath())
 	}
 
 	// Error out if validation failed.
@@ -288,7 +284,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	// logging
 	updStrSl := treetypes.Map(updates.ToUpdateSlice(), func(u *treetypes.Update) string { return u.String() })
 	log.Debugf("Updates:\n%s", strings.Join(updStrSl, "\n"))
-	log.Debugf("Deletes:\n%s", strings.Join(deletes.PathSlices().StringSlice(), "\n"))
+	log.Debugf("Deletes:\n%s", strings.Join(deletes.SdcpbPaths().ToXPathSlice(), "\n"))
 
 	for _, intent := range transaction.GetNewIntents() {
 		// retrieve the data that is meant to be send towards the cache
@@ -299,7 +295,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		strSl := treetypes.Map(updatesOwner, func(u *treetypes.Update) string { return u.String() })
 		log.Debugf("Updates Owner: %s\n%s", intent.GetName(), strings.Join(strSl, "\n"))
 
-		delSl := deletesOwner.StringSlice()
+		delSl := deletesOwner.ToXPathSlice()
 		log.Debugf("Deletes Owner: %s\n%s", intent.GetName(), strings.Join(delSl, "\n"))
 
 		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority())
@@ -329,7 +325,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	}
 
 	// perform deletes
-	_, err = root.DeleteSubtreePaths(deletes, tree.RunningIntentName)
+	_, err = root.DeleteSubtreePaths(ctx, deletes, tree.RunningIntentName)
 	if err != nil {
 		return nil, err
 	}
@@ -441,10 +437,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 func updateToSdcpbUpdate(lvs tree.LeafVariantSlice) ([]*sdcpb.Update, error) {
 	result := make([]*sdcpb.Update, 0, len(lvs))
 	for _, lv := range lvs {
-		path, err := lv.GetEntry().SdcpbPath()
-		if err != nil {
-			return nil, err
-		}
+		path := lv.GetEntry().SdcpbPath()
 		value := lv.Value()
 		upd := &sdcpb.Update{
 			Path:  path,
