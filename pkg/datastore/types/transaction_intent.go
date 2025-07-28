@@ -7,10 +7,15 @@ import (
 type TransactionIntent struct {
 	name string
 	// updates is nil if the intent did not exist.
-	updates      treetypes.UpdateSlice
-	delete       bool
+	updates treetypes.UpdateSlice
+	delete  bool
+	// onlyIntended, the orphan flag, delte only from intended store, but keep in device
 	onlyIntended bool
 	priority     int32
+	// doNotStore, mark the intent as a volatile, hence it is being used in the calculation in the tree,
+	// but it is not stored in the cache. This is mainly use for deviation that are meant to continue to exist,
+	// but should remain to be reported as deviations.
+	doNotStore bool
 }
 
 func NewTransactionIntent(name string, priority int32) *TransactionIntent {
@@ -39,6 +44,14 @@ func (ti *TransactionIntent) GetUpdates() treetypes.UpdateSlice {
 
 func (ti *TransactionIntent) GetOnlyIntended() bool {
 	return ti.onlyIntended
+}
+
+func (ti *TransactionIntent) SetDoNotStoreFlag() {
+	ti.doNotStore = true
+}
+
+func (ti *TransactionIntent) DoNotStore() bool {
+	return ti.doNotStore
 }
 
 func (ti *TransactionIntent) SetDeleteFlag() {

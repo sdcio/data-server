@@ -17,8 +17,8 @@ import (
 )
 
 var (
-	ErrDatastoreLocked = errors.New("Datastore is locked, other action is ongoing")
-	ErrContextDone     = errors.New("Context is closed (done)")
+	ErrDatastoreLocked = errors.New("datastore is locked, other action is ongoing")
+	ErrContextDone     = errors.New("context is closed (done)")
 	ErrValidationError = errors.New("validation error")
 )
 
@@ -34,6 +34,9 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 	}
 	if req.GetOrphan() {
 		ti.SetDeleteOnlyIntendedFlag()
+	}
+	if req.GetDoNotStore() {
+		ti.SetDoNotStoreFlag()
 	}
 
 	// convert the sdcpb.updates to tree.UpdateSlice
@@ -291,6 +294,11 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	log.Debugf("Deletes:\n%s", strings.Join(deletes.PathSlices().StringSlice(), "\n"))
 
 	for _, intent := range transaction.GetNewIntents() {
+		// if the intent is marked as DoNotStore, then we skip the presisting.
+		if intent.DoNotStore() {
+			continue
+		}
+
 		// retrieve the data that is meant to be send towards the cache
 		updatesOwner := root.GetUpdatesForOwner(intent.GetName())
 		deletesOwner := root.GetDeletesForOwner(intent.GetName())
