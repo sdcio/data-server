@@ -109,6 +109,9 @@ func (c *Config) validateSetDefaults() error {
 			return fmt.Errorf("unknown schema store type %q", c.SchemaStore.Type)
 		}
 	}
+	if c.SchemaStore != nil && c.SchemaStore.UploadPath == "" {
+		c.SchemaStore.UploadPath = "/schemas"
+	}
 	if c.SchemaStore == nil && (c.GRPCServer.SchemaServer == nil || !c.GRPCServer.SchemaServer.Enabled) {
 		return errors.New("schema-server RPCs cannot be exposed if the schema server is not enabled")
 	}
