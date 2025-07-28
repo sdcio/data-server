@@ -153,6 +153,577 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "leaflist string",
+			args: args{
+				ctx: context.TODO(),
+				doc: func() *etree.Document {
+					doc := etree.NewDocument()
+					data := doc.CreateElement("data")
+					container := data.CreateElement("leaf-list-container")
+					container.CreateElement("item").SetText("item-0")
+					container.CreateElement("item").SetText("item-1")
+					return doc
+				}(),
+			},
+			getXML2sdcpbConfigAdapter: func(ctrl *gomock.Controller, t *testing.T) *XML2sdcpbConfigAdapter {
+
+				var expectedPath string
+
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
+				counter := 0
+				schemaClientMock.EXPECT().GetSchemaSdcpbPath(context.TODO(), gomock.Any()).AnyTimes().DoAndReturn(
+					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+						lls := &sdcpb.LeafListSchema{
+							Name: "item",
+							Type: &sdcpb.SchemaLeafType{
+								Type: "string",
+							},
+						}
+						selem := &sdcpb.SchemaElem{}
+						switch counter {
+						case 0:
+							selem.Schema = &sdcpb.SchemaElem_Container{
+								Container: &sdcpb.ContainerSchema{
+									Name: "leaf-list-container",
+									Leaflists: []*sdcpb.LeafListSchema{
+										lls,
+									},
+								},
+							}
+							expectedPath = "leaf-list-container"
+						case 1, 2:
+							selem.Schema = &sdcpb.SchemaElem_Leaflist{
+								Leaflist: lls,
+							}
+							expectedPath = "leaf-list-container/item"
+						}
+						// check for the right input
+						if rp := utils.ToXPath(path, false); rp != expectedPath {
+							t.Errorf("getSchema expected path %s but got %s", expectedPath, rp)
+						}
+
+						counter++
+						return &sdcpb.GetSchemaResponse{
+							Schema: selem,
+						}, nil
+					},
+				)
+				return NewXML2sdcpbConfigAdapter(schemaClientMock)
+			},
+			want: []*sdcpb.Notification{
+				{
+					Update: []*sdcpb.Update{
+						{
+							Path: &sdcpb.Path{
+								Elem: []*sdcpb.PathElem{
+									{
+										Name: "leaf-list-container",
+									},
+									{
+										Name: "item",
+									},
+								},
+							},
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_LeaflistVal{
+									LeaflistVal: &sdcpb.ScalarArray{
+										Element: []*sdcpb.TypedValue{
+											{
+												Value: &sdcpb.TypedValue_StringVal{
+													StringVal: "item-0",
+												},
+											},
+											{
+												Value: &sdcpb.TypedValue_StringVal{
+													StringVal: "item-1",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "leaflist int32",
+			args: args{
+				ctx: context.TODO(),
+				doc: func() *etree.Document {
+					doc := etree.NewDocument()
+					data := doc.CreateElement("data")
+					container := data.CreateElement("leaf-list-container")
+					container.CreateElement("item").SetText("0")
+					container.CreateElement("item").SetText("1")
+					return doc
+				}(),
+			},
+			getXML2sdcpbConfigAdapter: func(ctrl *gomock.Controller, t *testing.T) *XML2sdcpbConfigAdapter {
+
+				var expectedPath string
+
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
+				counter := 0
+				schemaClientMock.EXPECT().GetSchemaSdcpbPath(context.TODO(), gomock.Any()).AnyTimes().DoAndReturn(
+					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+						lls := &sdcpb.LeafListSchema{
+							Name: "item",
+							Type: &sdcpb.SchemaLeafType{
+								Type: "int32",
+							},
+						}
+						selem := &sdcpb.SchemaElem{}
+						switch counter {
+						case 0:
+							selem.Schema = &sdcpb.SchemaElem_Container{
+								Container: &sdcpb.ContainerSchema{
+									Name: "leaf-list-container",
+									Leaflists: []*sdcpb.LeafListSchema{
+										lls,
+									},
+								},
+							}
+							expectedPath = "leaf-list-container"
+						case 1, 2:
+							selem.Schema = &sdcpb.SchemaElem_Leaflist{
+								Leaflist: lls,
+							}
+							expectedPath = "leaf-list-container/item"
+						}
+						// check for the right input
+						if rp := utils.ToXPath(path, false); rp != expectedPath {
+							t.Errorf("getSchema expected path %s but got %s", expectedPath, rp)
+						}
+
+						counter++
+						return &sdcpb.GetSchemaResponse{
+							Schema: selem,
+						}, nil
+					},
+				)
+				return NewXML2sdcpbConfigAdapter(schemaClientMock)
+			},
+			want: []*sdcpb.Notification{
+				{
+					Update: []*sdcpb.Update{
+						{
+							Path: &sdcpb.Path{
+								Elem: []*sdcpb.PathElem{
+									{
+										Name: "leaf-list-container",
+									},
+									{
+										Name: "item",
+									},
+								},
+							},
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_LeaflistVal{
+									LeaflistVal: &sdcpb.ScalarArray{
+										Element: []*sdcpb.TypedValue{
+											{
+												Value: &sdcpb.TypedValue_IntVal{
+													IntVal: 0,
+												},
+											},
+											{
+												Value: &sdcpb.TypedValue_IntVal{
+													IntVal: 1,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "leafref",
+			args: args{
+				ctx: context.TODO(),
+				doc: func() *etree.Document {
+					doc := etree.NewDocument()
+					data := doc.CreateElement("data")
+					src := data.CreateElement("src")
+					ref := data.CreateElement("ref")
+					src.CreateElement("item").SetText("test value")
+					ref.CreateElement("item").SetText("test value")
+					return doc
+				}(),
+			},
+			getXML2sdcpbConfigAdapter: func(ctrl *gomock.Controller, t *testing.T) *XML2sdcpbConfigAdapter {
+
+				var expectedPath string
+
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
+				counter := 0
+				schemaClientMock.EXPECT().GetSchemaSdcpbPath(context.TODO(), gomock.Any()).AnyTimes().DoAndReturn(
+					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+						srcType := &sdcpb.SchemaLeafType{
+							Type: "string",
+						}
+						selem := &sdcpb.SchemaElem{}
+						switch counter {
+						case 0:
+							selem.Schema = &sdcpb.SchemaElem_Container{
+								Container: &sdcpb.ContainerSchema{
+									Name: "src",
+								},
+							}
+							expectedPath = "src"
+						case 1, 4:
+							selem.Schema = &sdcpb.SchemaElem_Field{
+								Field: &sdcpb.LeafSchema{
+									Name: "item",
+									Type: srcType,
+								},
+							}
+							expectedPath = "src/item"
+						case 2:
+							selem.Schema = &sdcpb.SchemaElem_Container{
+								Container: &sdcpb.ContainerSchema{
+									Name: "ref",
+								},
+							}
+							expectedPath = "ref"
+						case 3:
+							selem.Schema = &sdcpb.SchemaElem_Field{
+								Field: &sdcpb.LeafSchema{
+									Name: "item",
+									Type: &sdcpb.SchemaLeafType{
+										Type:              "leafref",
+										Leafref:           "/src/item",
+										LeafrefTargetType: srcType,
+									},
+								},
+							}
+							expectedPath = "ref/item"
+						}
+						// check for the right input
+						if rp := utils.ToXPath(path, false); rp != expectedPath {
+							t.Errorf("getSchema expected path %s but got %s", expectedPath, rp)
+						}
+
+						counter++
+						return &sdcpb.GetSchemaResponse{
+							Schema: selem,
+						}, nil
+					},
+				)
+				return NewXML2sdcpbConfigAdapter(schemaClientMock)
+			},
+			want: []*sdcpb.Notification{
+				{
+					Update: []*sdcpb.Update{
+						{
+							Path: &sdcpb.Path{
+								Elem: []*sdcpb.PathElem{
+									{
+										Name: "src",
+									},
+									{
+										Name: "item",
+									},
+								},
+							},
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{
+									StringVal: "test value",
+								},
+							},
+						},
+					},
+				},
+				{
+					Update: []*sdcpb.Update{
+						{
+							Path: &sdcpb.Path{
+								Elem: []*sdcpb.PathElem{
+									{
+										Name: "ref",
+									},
+									{
+										Name: "item",
+									},
+								},
+							},
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{
+									StringVal: "test value",
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "leafref int32",
+			args: args{
+				ctx: context.TODO(),
+				doc: func() *etree.Document {
+					doc := etree.NewDocument()
+					data := doc.CreateElement("data")
+					src := data.CreateElement("src")
+					ref := data.CreateElement("ref")
+					src.CreateElement("item").SetText("123")
+					ref.CreateElement("item").SetText("123")
+					return doc
+				}(),
+			},
+			getXML2sdcpbConfigAdapter: func(ctrl *gomock.Controller, t *testing.T) *XML2sdcpbConfigAdapter {
+
+				var expectedPath string
+
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
+				counter := 0
+				schemaClientMock.EXPECT().GetSchemaSdcpbPath(context.TODO(), gomock.Any()).AnyTimes().DoAndReturn(
+					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+						srcType := &sdcpb.SchemaLeafType{
+							Type: "int32",
+						}
+						selem := &sdcpb.SchemaElem{}
+						switch counter {
+						case 0:
+							selem.Schema = &sdcpb.SchemaElem_Container{
+								Container: &sdcpb.ContainerSchema{
+									Name: "src",
+								},
+							}
+							expectedPath = "src"
+						case 1, 4:
+							selem.Schema = &sdcpb.SchemaElem_Field{
+								Field: &sdcpb.LeafSchema{
+									Name: "item",
+									Type: srcType,
+								},
+							}
+							expectedPath = "src/item"
+						case 2:
+							selem.Schema = &sdcpb.SchemaElem_Container{
+								Container: &sdcpb.ContainerSchema{
+									Name: "ref",
+								},
+							}
+							expectedPath = "ref"
+						case 3:
+							selem.Schema = &sdcpb.SchemaElem_Field{
+								Field: &sdcpb.LeafSchema{
+									Name: "item",
+									Type: &sdcpb.SchemaLeafType{
+										Type:              "leafref",
+										Leafref:           "/src/item",
+										LeafrefTargetType: srcType,
+									},
+								},
+							}
+							expectedPath = "ref/item"
+						}
+						// check for the right input
+						if rp := utils.ToXPath(path, false); rp != expectedPath {
+							t.Errorf("getSchema expected path %s but got %s", expectedPath, rp)
+						}
+
+						counter++
+						return &sdcpb.GetSchemaResponse{
+							Schema: selem,
+						}, nil
+					},
+				)
+				return NewXML2sdcpbConfigAdapter(schemaClientMock)
+			},
+			want: []*sdcpb.Notification{
+				{
+					Update: []*sdcpb.Update{
+						{
+							Path: &sdcpb.Path{
+								Elem: []*sdcpb.PathElem{
+									{
+										Name: "src",
+									},
+									{
+										Name: "item",
+									},
+								},
+							},
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_IntVal{
+									IntVal: 123,
+								},
+							},
+						},
+					},
+				},
+				{
+					Update: []*sdcpb.Update{
+						{
+							Path: &sdcpb.Path{
+								Elem: []*sdcpb.PathElem{
+									{
+										Name: "ref",
+									},
+									{
+										Name: "item",
+									},
+								},
+							},
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_IntVal{
+									IntVal: 123,
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "leafref leaflist",
+			args: args{
+				ctx: context.TODO(),
+				doc: func() *etree.Document {
+					doc := etree.NewDocument()
+					data := doc.CreateElement("data")
+					src := data.CreateElement("src")
+					ref := data.CreateElement("ref")
+					src.CreateElement("item").SetText("testdata")
+					ref.CreateElement("item").SetText("testdata")
+					return doc
+				}(),
+			},
+			getXML2sdcpbConfigAdapter: func(ctrl *gomock.Controller, t *testing.T) *XML2sdcpbConfigAdapter {
+
+				var expectedPath string
+
+				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
+				counter := 0
+				schemaClientMock.EXPECT().GetSchemaSdcpbPath(context.TODO(), gomock.Any()).AnyTimes().DoAndReturn(
+					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+						srcType := &sdcpb.SchemaLeafType{
+							Type: "string",
+						}
+						selem := &sdcpb.SchemaElem{}
+						switch counter {
+						case 0:
+							selem.Schema = &sdcpb.SchemaElem_Container{
+								Container: &sdcpb.ContainerSchema{
+									Name: "src",
+								},
+							}
+							expectedPath = "src"
+						case 1, 4:
+							selem.Schema = &sdcpb.SchemaElem_Leaflist{
+								Leaflist: &sdcpb.LeafListSchema{
+									Name: "item",
+									Type: srcType,
+								},
+							}
+							expectedPath = "src/item"
+						case 2:
+							selem.Schema = &sdcpb.SchemaElem_Container{
+								Container: &sdcpb.ContainerSchema{
+									Name: "ref",
+								},
+							}
+							expectedPath = "ref"
+						case 3:
+							selem.Schema = &sdcpb.SchemaElem_Leaflist{
+								Leaflist: &sdcpb.LeafListSchema{
+									Name: "item",
+									Type: &sdcpb.SchemaLeafType{
+										Type:              "leafref",
+										Leafref:           "/src/item",
+										LeafrefTargetType: srcType,
+									},
+								},
+							}
+							expectedPath = "ref/item"
+						}
+						// check for the right input
+						if rp := utils.ToXPath(path, false); rp != expectedPath {
+							t.Errorf("getSchema expected path %s but got %s", expectedPath, rp)
+						}
+
+						counter++
+						return &sdcpb.GetSchemaResponse{
+							Schema: selem,
+						}, nil
+					},
+				)
+				return NewXML2sdcpbConfigAdapter(schemaClientMock)
+			},
+			want: []*sdcpb.Notification{
+				{
+					Update: []*sdcpb.Update{
+						{
+							Path: &sdcpb.Path{
+								Elem: []*sdcpb.PathElem{
+									{
+										Name: "src",
+									},
+									{
+										Name: "item",
+									},
+								},
+							},
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_LeaflistVal{
+									LeaflistVal: &sdcpb.ScalarArray{
+										Element: []*sdcpb.TypedValue{
+											{
+												Value: &sdcpb.TypedValue_StringVal{
+													StringVal: "testdata",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Update: []*sdcpb.Update{
+						{
+							Path: &sdcpb.Path{
+								Elem: []*sdcpb.PathElem{
+									{
+										Name: "ref",
+									},
+									{
+										Name: "item",
+									},
+								},
+							},
+							Value: &sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_LeaflistVal{
+									LeaflistVal: &sdcpb.ScalarArray{
+										Element: []*sdcpb.TypedValue{
+											{
+												Value: &sdcpb.TypedValue_StringVal{
+													StringVal: "testdata",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

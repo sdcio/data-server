@@ -113,8 +113,18 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 				overallDoAdd = doAdd || overallDoAdd
 				// add the child only if doAdd is true
 				if doAdd {
-					xmlAddKeyElements(child, newElem)
-					// add all the key elements if they do not already exist
+					// Are we performing a replace?
+					replaceAttr := newElem.SelectAttr("nc:operation")
+					if replaceAttr != nil && replaceAttr.Value == string(utils.XMLOperationReplace) {
+						// If we are replacing, we need to have all child values added to the xml tree else they will be removed from the device
+						err := xmlAddAllChildValues(child, newElem, honorNamespace, operationWithNamespace, useOperationRemove)
+						if err != nil {
+							return false, err
+						}
+					} else {
+						// if we are not performing a replace, add all the key elements if they do not already exist
+						xmlAddKeyElements(child, newElem)
+					}
 					parent.AddChild(newElem)
 				}
 			}
@@ -179,6 +189,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 				if !exists {
 					return false, fmt.Errorf("child %s does not exist for %s", k, strings.Join(s.Path(), "/"))
 				}
+				// TODO: Do we also need to xmlAddAllChildValues here too?
 				doAdd, err := child.toXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
 				if err != nil {
 					return false, err
@@ -261,6 +272,7 @@ func xmlAddKeyElements(s Entry, parent *etree.Element) {
 	// retrieve the parent schema, we need to extract the key names
 	// values are the tree level names
 	parentSchema, levelsUp := s.GetFirstAncestorWithSchema()
+
 	// from the parent we get the keys as slice
 	schemaKeys := parentSchema.GetSchemaKeys()
 	var treeElem Entry = s
@@ -270,9 +282,20 @@ func xmlAddKeyElements(s Entry, parent *etree.Element) {
 		// skip if the element already exists
 		existingElem := parent.SelectElement(schemaKeys[i])
 		if existingElem == nil {
-			// and finally we create the patheleme key attributes
-			parent.CreateElement(schemaKeys[i]).SetText(treeElem.PathName())
+			// and finally we create the key elements in schema order
+			keyElem := etree.NewElement(schemaKeys[i])
+			keyElem.SetText(treeElem.PathName())
+			parent.InsertChildAt(0, keyElem) // we go backwards, so always add to front of parent
 			treeElem = treeElem.GetParent()
 		}
 	}
+}
+
+func xmlAddAllChildValues(s Entry, parent *etree.Element, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) error {
+	parent.Child = make([]etree.Token, 0)
+	_, err := s.toXmlInternal(parent, false, honorNamespace, operationWithNamespace, useOperationRemove)
+	if err != nil {
+		return err
+	}
+	return nil
 }

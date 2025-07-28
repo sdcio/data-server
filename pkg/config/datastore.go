@@ -177,6 +177,24 @@ func (s *Sync) validateSetDefaults() error {
 	if s.WriteWorkers <= 0 {
 		s.WriteWorkers = defaultWriteWorkers
 	}
+
+	var errs []error
+	for _, sp := range s.Config {
+		err := sp.validateSetDefaults()
+		errs = append(errs, err)
+	}
+	err := errors.Join(errs...)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *SyncProtocol) validateSetDefaults() error {
+	if s.Interval <= 0 {
+		s.Interval = defaultSyncInterval
+	}
 	return nil
 }
 

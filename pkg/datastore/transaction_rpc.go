@@ -140,7 +140,7 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 			intentNames = append(intentNames, intent.GetIntentName())
 			log.Debugf("adding intent %s to tree", intent.GetIntentName())
 			protoLoader := treeproto.NewProtoTreeImporter(intent.GetRoot())
-			log.Tracef(intent.String())
+			log.Tracef("%s", intent.String())
 			err := root.ImportConfig(ctx, nil, protoLoader, intent.GetIntentName(), intent.GetPriority(), treetypes.NewUpdateInsertFlags())
 			if err != nil {
 				return nil, err
