@@ -69,7 +69,7 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us types.UpdateSlic
 	var err error
 	for idx, u := range us {
 		_ = idx
-		_, err = r.sharedEntryAttributes.AddUpdateRecursive(ctx, u, flags)
+		_, err = r.sharedEntryAttributes.AddUpdateRecursive(ctx, u.Path().DeepCopy(), u, flags)
 		if err != nil {
 			return err
 		}

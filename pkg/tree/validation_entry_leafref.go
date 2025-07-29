@@ -15,27 +15,16 @@ func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, path string) 
 	var resultEntries []Entry
 	var processEntries []Entry
 
-	strPath := s.SdcpbPath().ToXPath(false)
-
-	lref, err := sdcpb.StripPathElemPrefix(path)
+	sdcpbPath, err := sdcpb.ParsePath(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed stripping namespaces from leafref %s: %w", strPath, err)
+		return nil, fmt.Errorf("failed parsing leafref path %s: %w", path, err)
 	}
 
-	sdcpbPath, err := utils.ParsePath(lref)
-	if err != nil {
-		return nil, fmt.Errorf("failed parsing leafref path %s: %w", strPath, err)
-	}
+	sdcpbPath.StripPathElemPrefixPath()
 
 	lrefPath := types.NewLrefPath(sdcpbPath)
 
-	// if the lrefs first character is "/" then it is a root based path
-	isRootBasedPath := false
-	if string(lref[0]) == "/" {
-		isRootBasedPath = true
-	}
-
-	if isRootBasedPath {
+	if sdcpbPath.GetIsRootBased() {
 		processEntries = []Entry{s.GetRoot()}
 	} else {
 		var entry Entry = s
@@ -52,7 +41,7 @@ func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, path string) 
 			dotdotcount++
 		}
 		// else navigate (basically up)
-		entry, err = entry.NavigateSdcpbPath(ctx, sdcpbUp, false)
+		entry, err = entry.NavigateSdcpbPath(ctx, &sdcpb.Path{Elem: sdcpbUp})
 		if err != nil {
 			return nil, err
 		}
@@ -72,7 +61,7 @@ func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, path string) 
 
 		// we need to do the forwarding for all the already lookedup paths
 		for _, entry := range processEntries {
-			entry, err = entry.NavigateSdcpbPath(ctx, []*sdcpb.PathElem{sdcpb.NewPathElem(elem.Name, nil)}, false)
+			entry, err = entry.NavigateSdcpbPath(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(elem.Name, nil)}})
 			if err != nil {
 				return nil, err
 			}
@@ -181,7 +170,7 @@ func (s *sharedEntryAttributes) resolve_leafref_key_path(ctx context.Context, ke
 		isRootPath := true
 
 		var keyp *sdcpb.Path
-		keyp, err := utils.ParsePath(v.Value)
+		keyp, err := sdcpb.ParsePath(v.Value)
 		if err != nil {
 			return err
 		}
@@ -191,8 +180,8 @@ func (s *sharedEntryAttributes) resolve_leafref_key_path(ctx context.Context, ke
 			keyp.Elem = keyp.Elem[1:]
 			isRootPath = false
 		}
-
-		keyValue, err := s.NavigateSdcpbPath(ctx, keyp.Elem, isRootPath)
+		keyp.SetIsRootBased(isRootPath)
+		keyValue, err := s.NavigateSdcpbPath(ctx, keyp)
 		if err != nil {
 			return err
 		}

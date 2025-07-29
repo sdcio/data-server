@@ -51,7 +51,7 @@ func Test_sharedEntryAttributes_checkAndCreateKeysAsLeafs(t *testing.T) {
 	intentName := "intent1"
 
 	p := &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}
-	_, err = root.AddUpdateRecursive(ctx, types.NewUpdate(p, testhelper.GetStringTvProto("MyDescription"), prio, intentName, 0), flags)
+	_, err = root.AddUpdateRecursive(ctx, p, types.NewUpdate(p, testhelper.GetStringTvProto("MyDescription"), prio, intentName, 0), flags)
 	if err != nil {
 		t.Error(err)
 	}
@@ -66,7 +66,7 @@ func Test_sharedEntryAttributes_checkAndCreateKeysAsLeafs(t *testing.T) {
 		},
 	}
 
-	_, err = root.AddUpdateRecursive(ctx, types.NewUpdate(p, testhelper.GetStringTvProto("TheMandatoryValue1"), prio, intentName, 0), flags)
+	_, err = root.AddUpdateRecursive(ctx, p, types.NewUpdate(p, testhelper.GetStringTvProto("TheMandatoryValue1"), prio, intentName, 0), flags)
 	if err != nil {
 		t.Error(err)
 	}
@@ -286,7 +286,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("sharedEntryAttributes.DeleteSubtree() = %v, want %v", got, tt.want)
 			}
-			e, err := s.NavigateSdcpbPath(ctx, tt.args.relativePath.Elem, false)
+			e, err := s.NavigateSdcpbPath(ctx, tt.args.relativePath)
 			if err != nil {
 				t.Error(err)
 				return
@@ -398,7 +398,7 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 				},
 			}
 
-			e, err := device(t).NavigateSdcpbPath(ctx, p.GetElem(), true)
+			e, err := device(t).NavigateSdcpbPath(ctx, p)
 			if err != nil {
 				t.Error(err)
 				return

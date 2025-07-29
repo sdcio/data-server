@@ -111,14 +111,14 @@ func (y *yangParserEntryAdapter) GetSdcpbPath() *sdcpb.Path {
 	return y.e.SdcpbPath()
 }
 
-func (y *yangParserEntryAdapter) Navigate(p []*sdcpb.PathElem) (xpath.Entry, error) {
+func (y *yangParserEntryAdapter) Navigate(p *sdcpb.Path) (xpath.Entry, error) {
 	var err error
 
-	if len(p) == 0 {
+	if len(p.GetElem()) == 0 {
 		return y, nil
 	}
 
-	entry, err := y.e.NavigateSdcpbPath(y.ctx, p, true)
+	entry, err := y.e.NavigateSdcpbPath(y.ctx, p)
 	if err != nil {
 		return newYangParserValueEntry(xpath.NewNodesetDatum([]xutils.XpathNode{}), err), nil
 	}
@@ -145,7 +145,7 @@ func (y *yangParserValueEntry) FollowLeafRef() (xpath.Entry, error) {
 	return nil, fmt.Errorf("yangParserValueEntry navigation impossible")
 }
 
-func (y *yangParserValueEntry) Navigate(p []*sdcpb.PathElem) (xpath.Entry, error) {
+func (y *yangParserValueEntry) Navigate(p *sdcpb.Path) (xpath.Entry, error) {
 	return nil, fmt.Errorf("yangParserValueEntry navigation impossible")
 }
 
@@ -153,7 +153,7 @@ func (y *yangParserValueEntry) GetValue() (xpath.Datum, error) {
 	return y.d, nil
 }
 
-func (y *yangParserValueEntry) GetSdcpbPath() []*sdcpb.PathElem {
+func (y *yangParserValueEntry) GetSdcpbPath() *sdcpb.Path {
 	return nil
 }
 

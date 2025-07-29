@@ -27,9 +27,9 @@ import (
 	"github.com/sdcio/data-server/pkg/tree"
 	json_importer "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
-	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 func TestDatastore_validateTree(t *testing.T) {
@@ -179,7 +179,7 @@ func TestDatastore_validateTree(t *testing.T) {
 			}
 
 			// parse the path under which the intent value is to be put
-			path, err := utils.ParsePath(tt.intentReqPath)
+			path, err := sdcpb.ParsePath(tt.intentReqPath)
 			if err != nil {
 				t.Error(err)
 			}

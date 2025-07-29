@@ -259,7 +259,7 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 
 			fmt.Println(root.String())
 
-			e, err := root.NavigateSdcpbPath(ctx, tt.lrefNodePath.Elem, true)
+			e, err := root.NavigateSdcpbPath(ctx, tt.lrefNodePath)
 
 			s, ok := e.(*sharedEntryAttributes)
 			if !ok {

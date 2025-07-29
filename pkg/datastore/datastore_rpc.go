@@ -298,7 +298,7 @@ func (d *Datastore) writeToSyncTreeCandidate(ctx context.Context, updates []*sdc
 	// fmt.Println(upds.String())
 	for idx, upd := range upds {
 		_ = idx
-		_, err := d.syncTreeCandidate.AddUpdateRecursive(ctx, upd, treetypes.NewUpdateInsertFlags())
+		_, err := d.syncTreeCandidate.AddUpdateRecursive(ctx, upd.Path(), upd, treetypes.NewUpdateInsertFlags())
 		if err != nil {
 			return err
 		}

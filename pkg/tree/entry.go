@@ -56,7 +56,7 @@ type Entry interface {
 	// if the path does not point to a schema defined path an error will be raise
 	getOrCreateChilds(ctx context.Context, path *sdcpb.Path) (Entry, error)
 	// AddUpdateRecursive Add the given cache.Update to the tree
-	AddUpdateRecursive(ctx context.Context, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
+	AddUpdateRecursive(ctx context.Context, relativePath *sdcpb.Path, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
 	// StringIndent debug tree struct as indented string slice
 	StringIndent(result []string) []string
 	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
@@ -92,7 +92,7 @@ type Entry interface {
 	FinishInsertionPhase(ctx context.Context) error
 	// GetParent returns the parent entry
 	GetParent() Entry
-	NavigateSdcpbPath(ctx context.Context, path []*sdcpb.PathElem, isRootPath bool) (Entry, error)
+	NavigateSdcpbPath(ctx context.Context, path *sdcpb.Path) (Entry, error)
 	// NavigateLeafRef follows the leafref and returns the referenced entry
 	NavigateLeafRef(ctx context.Context) ([]Entry, error)
 	// GetFirstAncestorWithSchema returns the first parent node which has a schema set.

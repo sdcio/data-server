@@ -16,14 +16,12 @@ package schemaClient
 
 import (
 	"context"
-	"strings"
 	"sync"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/schema"
-	"github.com/sdcio/data-server/pkg/utils"
 )
 
 const (
@@ -34,7 +32,7 @@ const (
 type SchemaClientBound interface {
 	// GetSchema retrieves the schema for the given path
 	GetSchemaSdcpbPath(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error)
-	GetSchemaSlicePath(ctx context.Context, path []string) (*sdcpb.GetSchemaResponse, error)
+	// GetSchemaSlicePath(ctx context.Context, path []string) (*sdcpb.GetSchemaResponse, error)
 	// GetSchemaElements retrieves the Schema Elements for all levels of the given path
 	GetSchemaElements(ctx context.Context, p *sdcpb.Path, done chan struct{}) (chan *sdcpb.GetSchemaResponse, error)
 	ToPath(ctx context.Context, path []string) (*sdcpb.Path, error)
@@ -76,8 +74,7 @@ func (scb *SchemaClientBoundImpl) GetSchemaSlicePath(ctx context.Context, path [
 
 func (scb *SchemaClientBoundImpl) Retrieve(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 	// convert the path into a keyless path, for schema index lookups.
-	keylessPathSlice := utils.ToStrings(path, false, true)
-	keylessPath := strings.Join(keylessPathSlice, PATHSEP)
+	keylessPath := path.ToXPath(true)
 
 	entryAny, loaded := scb.index.LoadOrStore(keylessPath, NewSchemaIndexEntry(nil, nil))
 	entry := entryAny.(*schemaIndexEntry)

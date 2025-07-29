@@ -455,7 +455,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					schema, err := tc.schemaClient.GetSchemaSlicePath(ctx, nil)
+					schema, err := tc.schemaClient.GetSchemaSdcpbPath(ctx, nil)
 					if err != nil {
 						t.Fatal(err)
 					}

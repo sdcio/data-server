@@ -62,7 +62,7 @@ func Test_Entry(t *testing.T) {
 	}
 
 	for _, u := range []*types.Update{u1, u2, u3} {
-		_, err = root.AddUpdateRecursive(ctx, u, flagsNew)
+		_, err = root.AddUpdateRecursive(ctx, u.Path(), u, flagsNew)
 		if err != nil {
 			t.Error(err)
 		}
@@ -143,7 +143,7 @@ func Test_Entry_One(t *testing.T) {
 
 	// start test
 	for _, u := range []*types.Update{u0o1, u1, u1_1, u2, u2_1, u3, u3_1} {
-		_, err := root.AddUpdateRecursive(ctx, u, flagsNew)
+		_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsNew)
 		if err != nil {
 			t.Error(err)
 		}
@@ -230,7 +230,7 @@ func Test_Entry_Two(t *testing.T) {
 
 	// start test add "existing" data
 	for _, u := range []*types.Update{u1} {
-		_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
+		_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsExisting)
 		if err != nil {
 			t.Error(err)
 		}
@@ -247,7 +247,7 @@ func Test_Entry_Two(t *testing.T) {
 	n1 := types.NewUpdate(pn1, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*types.Update{n1} {
-		_, err = root.AddUpdateRecursive(ctx, u, flagsNew)
+		_, err = root.AddUpdateRecursive(ctx, u.Path(), u, flagsNew)
 		if err != nil {
 			t.Error(err)
 		}
@@ -363,7 +363,7 @@ func Test_Entry_Three(t *testing.T) {
 
 	// start test add "existing" data
 	for _, u := range []*types.Update{u1, u2, u3, u4} {
-		_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
+		_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsExisting)
 		if err != nil {
 			t.Error(err)
 		}
@@ -371,7 +371,7 @@ func Test_Entry_Three(t *testing.T) {
 
 	// start test add "existing" data as running
 	for _, u := range []*types.Update{u1r, u2r, u3r, u4r} {
-		_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
+		_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsExisting)
 		if err != nil {
 			t.Error(err)
 		}
@@ -428,7 +428,7 @@ func Test_Entry_Three(t *testing.T) {
 	n2 := types.NewUpdate(pn2, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*types.Update{n1, n2} {
-		_, err := root.AddUpdateRecursive(ctx, u, flagsNew)
+		_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsNew)
 		if err != nil {
 			t.Error(err)
 		}
@@ -523,10 +523,10 @@ func Test_Entry_Four(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p1o2_0, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "name"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	// p1o2_0, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "name"})
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
 	p1o2, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "10", "description"})
 	if err != nil {
 		t.Fatal(err)
@@ -569,7 +569,7 @@ func Test_Entry_Four(t *testing.T) {
 
 	// start test add "existing" data
 	for _, u := range []*types.Update{u1o1, u2o1, u1o1_1, u2o1_1, u3, u4, u3_1, u4_1, u1o2, u2o2} {
-		_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
+		_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsExisting)
 		if err != nil {
 			t.Error(err)
 		}
@@ -616,7 +616,7 @@ func Test_Entry_Four(t *testing.T) {
 	n2 := types.NewUpdate(pn2, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*types.Update{n1, n2} {
-		_, err := root.AddUpdateRecursive(ctx, u, flagsNew)
+		_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsNew)
 		if err != nil {
 			t.Error(err)
 		}
@@ -700,7 +700,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			// start test add "existing" data
 			for _, u := range []*types.Update{u1} {
-				_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
+				_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -751,7 +751,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			// start test add "existing" data
 			for _, u := range []*types.Update{u1} {
-				_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
+				_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -801,7 +801,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			// start test add "existing" data
 			for _, u := range []*types.Update{u1} {
-				_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
+				_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -879,7 +879,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 
 	// start test add "existing" data
 	for _, u := range []*types.Update{u1, u2, u3, u4, u5, u6} {
-		_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
+		_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsExisting)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -901,7 +901,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 
 	// start test add "new" / request data
 	for _, u := range []*types.Update{u1n, u2n} {
-		_, err := root.AddUpdateRecursive(ctx, u, flagsNew)
+		_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsNew)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1417,7 +1417,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 			u1 := types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("patterntest", nil)}}, leafval, prio50, owner1, ts1)
 
 			for _, u := range []*types.Update{u1} {
-				_, err := root.AddUpdateRecursive(ctx, u, flagsNew)
+				_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1454,7 +1454,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 			u1 := types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("patterntest", nil)}}, leafval, prio50, owner1, ts1)
 
 			for _, u := range []*types.Update{u1} {
-				_, err := root.AddUpdateRecursive(ctx, u, flagsNew)
+				_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1550,7 +1550,7 @@ func Test_Validation_Deref(t *testing.T) {
 			u1 := types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("patterntest", nil)}}, leafval, prio50, owner1, ts1)
 
 			for _, u := range []*types.Update{u1} {
-				_, err := root.AddUpdateRecursive(ctx, u, flagsNew)
+				_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}

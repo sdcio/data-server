@@ -250,7 +250,7 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 				return err
 			}
 			// Add the update to the tree
-			_, err = child.AddUpdateRecursive(ctx, types.NewUpdate(path, tv, prio, intentName, 0), insertFlag)
+			_, err = child.AddUpdateRecursive(ctx, path, types.NewUpdate(path, tv, prio, intentName, 0), insertFlag)
 			if err != nil {
 				return err
 			}
@@ -263,8 +263,6 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 }
 
 func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
-	s.schemaMutex.Lock()
-	defer s.schemaMutex.Unlock()
 
 	getSchema := true
 
@@ -285,7 +283,7 @@ func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 		case *sdcpb.SchemaElem_Container:
 			// if it is a container and level up is less or equal the levelUp count
 			// this means, we are on a level this is for sure still a key level in the tree
-			if len(schem.Container.GetKeys()) >= levelUp {
+			if len(schem.Container.GetKeys()) > levelUp {
 				getSchema = false
 				break
 			}
@@ -298,6 +296,8 @@ func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		s.schemaMutex.Lock()
+		defer s.schemaMutex.Unlock()
 		s.schema = schemaResp.GetSchema()
 	}
 
@@ -701,27 +701,29 @@ func (s *sharedEntryAttributes) addChild(ctx context.Context, e Entry) error {
 			return fmt.Errorf("cannot add child to %s since it holds Leafs", s)
 		}
 	}
-	// check the path of child is a subpath of s
-	if !slices.Equal(s.SdcpbPath().GetElem(), e.SdcpbPath().GetElem()[:len(e.SdcpbPath().GetElem())-1]) {
-		return fmt.Errorf("adding Child with diverging path, parent: %s, child: %s", s.SdcpbPath().ToXPath(false), e.SdcpbPath().ToXPath(false))
-	}
+	// // check the path of child is a subpath of s
+	// if !slices.Equal(s.SdcpbPath().GetElem(), e.SdcpbPath().GetElem()[:len(e.SdcpbPath().GetElem())-1]) {
+	// 	return fmt.Errorf("adding Child with diverging path, parent: %s, child: %s", s.SdcpbPath().ToXPath(false), e.SdcpbPath().ToXPath(false))
+	// }
 	s.childs.Add(e)
 	return nil
 }
 
-func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, pathElems []*sdcpb.PathElem, isRootPath bool) (Entry, error) {
+func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, path *sdcpb.Path) (Entry, error) {
+
+	pathElems := path.GetElem()
 	var err error
 	if len(pathElems) == 0 {
 		return s, nil
 	}
 
-	if isRootPath {
-		return s.GetRoot().NavigateSdcpbPath(ctx, pathElems, false)
+	if path.IsRootBased {
+		return s.GetRoot().NavigateSdcpbPath(ctx, path.DeepCopy().SetIsRootBased(false))
 	}
 
 	switch pathElems[0].Name {
 	case ".":
-		s.NavigateSdcpbPath(ctx, pathElems[1:], false)
+		s.NavigateSdcpbPath(ctx, path.CopyAndRemoveFirstPathElem())
 	case "..":
 		var entry Entry
 		entry = s.parent
@@ -733,7 +735,7 @@ func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, pathElems
 		if len(pathElems) > 1 && pathElems[1].Name == ".." {
 			entry, _ = s.GetFirstAncestorWithSchema()
 		}
-		return entry.NavigateSdcpbPath(ctx, pathElems[1:], false)
+		return entry.NavigateSdcpbPath(ctx, path.CopyAndRemoveFirstPathElem())
 	default:
 		e, exists := s.filterActiveChoiceCaseChilds()[pathElems[0].Name]
 		if !exists {
@@ -746,14 +748,14 @@ func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, pathElems
 			return e, nil
 		}
 
-		for _, v := range pathElems[0].Key {
-			e, err = e.NavigateSdcpbPath(ctx, []*sdcpb.PathElem{sdcpb.NewPathElem(v, nil)}, false)
+		for v := range pathElems[0].PathElemNames() {
+			e, err = e.NavigateSdcpbPath(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(v, nil)}})
 			if err != nil {
 				return nil, err
 			}
 		}
 
-		return e.NavigateSdcpbPath(ctx, pathElems[1:], false)
+		return e.NavigateSdcpbPath(ctx, path.CopyAndRemoveFirstPathElem())
 	}
 
 	return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist", s.SdcpbPath().ToXPath(false), pathElems)
@@ -773,7 +775,7 @@ func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path *sdc
 
 	flags := types.NewUpdateInsertFlags()
 
-	result, err := s.AddUpdateRecursive(ctx, upd, flags)
+	result, err := s.AddUpdateRecursive(ctx, path, upd, flags)
 	if err != nil {
 		return nil, fmt.Errorf("failed adding default value for %s to tree; %v", path.ToXPath(false), err)
 	}
@@ -784,7 +786,7 @@ func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path *sdc
 func (s *sharedEntryAttributes) DeleteSubtree(ctx context.Context, relativePath *sdcpb.Path, owner string) (bool, error) {
 	// if the relativePath is present, we need to naviagate
 	if relativePath != nil {
-		entry, err := s.NavigateSdcpbPath(ctx, relativePath.Elem, false)
+		entry, err := s.NavigateSdcpbPath(ctx, relativePath)
 		if err != nil {
 			return false, err
 		}
@@ -1461,7 +1463,7 @@ func (s *sharedEntryAttributes) SdcpbPath() *sdcpb.Path {
 
 	chain := s.GetRootBasedEntryChain()
 	for _, ancestor := range chain {
-		if ancestor.GetSchema() == nil {
+		if ancestor.IsRoot() || ancestor.GetSchema() == nil {
 			continue
 		}
 		pathElem := &sdcpb.PathElem{Name: ancestor.PathName()}
@@ -1665,35 +1667,42 @@ func (s *sharedEntryAttributes) getOrCreateChilds(ctx context.Context, path *sdc
 
 // AddUpdateRecursive recursively adds the given cache.Update to the tree. Thereby creating all the entries along the path.
 // if the entries along th path already exist, the existing entries are called to add the Update.
-func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error) {
-	idx := s.GetLevel()
-	var err error
+func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, relativePath *sdcpb.Path, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error) {
 	// make sure all the keys are also present as leafs
-	err = s.checkAndCreateKeysAsLeafs(ctx, u.Owner(), u.Priority(), flags)
+	err := s.checkAndCreateKeysAsLeafs(ctx, u.Owner(), u.Priority(), flags)
 	if err != nil {
 		return nil, err
 	}
 
 	// end of path reached, add LeafEntry
 	// continue with recursive add otherwise
-	if idx == len(u.GetPathSlice()) {
+	if len(relativePath.Elem) == 0 || relativePath == nil {
 		// delegate update handling to leafVariants
 		s.leafVariants.Add(NewLeafEntry(u, flags, s))
 		return s, nil
 	}
 
 	var e Entry
-
+	var x Entry = s
 	var exists bool
-	// if child does not exist, create Entry
-	if e, exists = s.childs.GetEntry(u.GetPathSlice()[idx]); !exists {
-		e, err = newEntry(ctx, s, u.GetPathSlice()[idx], s.treeContext)
-		if err != nil {
-			return nil, err
+	for name := range relativePath.GetElem()[0].PathElemNames() {
+		if e, exists = x.getChildren()[name]; !exists {
+			newE, err := newEntry(ctx, x, name, s.treeContext)
+			if err != nil {
+				return nil, err
+			}
+			err = x.addChild(ctx, newE)
+			if err != nil {
+				return nil, err
+			}
+			e = newE
 		}
+		x = e
 
 	}
-	return e.AddUpdateRecursive(ctx, u, flags)
+
+	relativePath.Elem = relativePath.Elem[1:]
+	return x.AddUpdateRecursive(ctx, relativePath, u, flags)
 }
 
 // containsOnlyDefaults checks for presence containers, if only default values are present,
