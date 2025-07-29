@@ -283,7 +283,7 @@ func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 		case *sdcpb.SchemaElem_Container:
 			// if it is a container and level up is less or equal the levelUp count
 			// this means, we are on a level this is for sure still a key level in the tree
-			if len(schem.Container.GetKeys()) > levelUp {
+			if len(schem.Container.GetKeys()) >= levelUp {
 				getSchema = false
 				break
 			}
