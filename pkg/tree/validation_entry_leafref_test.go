@@ -71,6 +71,7 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 					sdcpb.NewPathElem("interface-ref", nil),
 					sdcpb.NewPathElem("interface", nil),
 				},
+				IsRootBased: true,
 			},
 			expectedResultLen: 0,
 		},
@@ -260,6 +261,9 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 			fmt.Println(root.String())
 
 			e, err := root.NavigateSdcpbPath(ctx, tt.lrefNodePath)
+			if err != nil {
+				t.Error(err)
+			}
 
 			s, ok := e.(*sharedEntryAttributes)
 			if !ok {

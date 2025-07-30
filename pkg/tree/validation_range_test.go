@@ -75,7 +75,13 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 		t.Error(err)
 	}
 
-	validationResult := root.Validate(ctx, validationConfig)
+	vc := validationConfig.DeepCopy()
+	// disable all
+	vc.DisabledValidators.DisableAll()
+	// re-enable range
+	vc.DisabledValidators.Range = false
+
+	validationResult := root.Validate(ctx, vc)
 
 	t.Logf("Validation Errors:\n%s", strings.Join(validationResult.ErrorsStr(), "\n"))
 	t.Log(root.String())

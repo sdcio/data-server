@@ -41,13 +41,22 @@ func Test_Entry(t *testing.T) {
 
 	desc := testhelper.GetStringTvProto("MyDescription")
 
-	p1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "9", "description"})
-	if err != nil {
-		t.Fatal(err)
+	p1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "9"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: false,
 	}
-	p2, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "10", "description"})
-	if err != nil {
-		t.Fatal(err)
+
+	p2 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: false,
 	}
 
 	u1 := types.NewUpdate(p1, desc, int32(100), "me", int64(9999999))
@@ -101,30 +110,58 @@ func Test_Entry_One(t *testing.T) {
 
 	ctx := context.TODO()
 
-	p0o1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "name"})
-	if err != nil {
-		t.Fatal(err)
+	p0o1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("name", nil),
+		},
+		IsRootBased: true,
 	}
-	p0o2, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "name"})
-	if err != nil {
-		t.Fatal(err)
+
+	p0o2 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("name", nil),
+		},
+		IsRootBased: true,
 	}
-	p1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "9", "description"})
-	if err != nil {
-		t.Fatal(err)
+
+	p1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "9"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
 	}
-	p1_1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "9", "index"})
-	if err != nil {
-		t.Fatal(err)
+
+	p1_1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "9"}),
+			sdcpb.NewPathElem("index", nil),
+		},
+		IsRootBased: true,
 	}
-	p2, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "10", "description"})
-	if err != nil {
-		t.Fatal(err)
+
+	p2 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
 	}
-	p2_1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "10", "index"})
-	if err != nil {
-		t.Fatal(err)
+
+	p2_1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
+			sdcpb.NewPathElem("index", nil),
+		},
+		IsRootBased: true,
 	}
+
 	u0o1 := types.NewUpdate(p0o1, testhelper.GetStringTvProto("ethernet-1/1"), prio100, owner1, ts1)
 	u0o2 := types.NewUpdate(p0o2, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner2, ts1)
 	u1 := types.NewUpdate(p1, desc1, prio100, owner1, ts1)
@@ -205,18 +242,32 @@ func Test_Entry_Two(t *testing.T) {
 
 	ctx := context.TODO()
 
-	p0, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "name"})
-	if err != nil {
-		t.Fatal(err)
+	p0 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("name", nil),
+		},
+		IsRootBased: true, // or true if needed
 	}
-	p1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "10", "description"})
-	if err != nil {
-		t.Fatal(err)
+
+	p1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
 	}
-	p1_1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "10", "index"})
-	if err != nil {
-		t.Fatal(err)
+
+	p1_1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
+			sdcpb.NewPathElem("index", nil),
+		},
+		IsRootBased: true,
 	}
+
 	u0 := types.NewUpdate(p0, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
 	u1 := types.NewUpdate(p1, desc3, prio50, owner1, ts1)
 	u1_1 := types.NewUpdate(p1_1, testhelper.GetUIntTvProto(10), prio50, owner1, ts1)
@@ -240,9 +291,13 @@ func Test_Entry_Two(t *testing.T) {
 	overwriteDesc := testhelper.GetStringTvProto("Owerwrite Description")
 
 	// adding a new Update with same owner and priority with different value
-	pn1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "10", "description"})
-	if err != nil {
-		t.Fatal(err)
+	pn1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: false,
 	}
 	n1 := types.NewUpdate(pn1, overwriteDesc, prio50, owner1, ts1)
 
@@ -285,43 +340,81 @@ func Test_Entry_Three(t *testing.T) {
 
 	ctx := context.TODO()
 
-	p0, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "name"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "10", "description"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p1_1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "10", "index"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p2, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "11", "description"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p2_1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "11", "index"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p3, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "12", "description"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p3_1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "12", "index"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p4, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "13", "description"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p4_1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "13", "index"})
-	if err != nil {
-		t.Fatal(err)
+	p0 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("name", nil),
+		},
+		IsRootBased: true,
 	}
 
+	p1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
+	}
+	p1_1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
+			sdcpb.NewPathElem("index", nil),
+		},
+		IsRootBased: true,
+	}
+
+	p2 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "11"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
+	}
+	p2_1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "11"}),
+			sdcpb.NewPathElem("index", nil),
+		},
+		IsRootBased: true,
+	}
+
+	p3 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "12"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
+	}
+	p3_1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "12"}),
+			sdcpb.NewPathElem("index", nil),
+		},
+		IsRootBased: true,
+	}
+
+	p4 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "13"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
+	}
+	p4_1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "13"}),
+			sdcpb.NewPathElem("index", nil),
+		},
+		IsRootBased: true,
+	}
 	u0 := types.NewUpdate(p0, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
 	u1 := types.NewUpdate(p1, desc3, prio50, owner1, ts1)
 	u1_1 := types.NewUpdate(p1_1, testhelper.GetUIntTvProto(10), prio50, owner1, ts1)
@@ -332,21 +425,37 @@ func Test_Entry_Three(t *testing.T) {
 	u4 := types.NewUpdate(p4, desc3, prio50, owner1, ts1)
 	u4_1 := types.NewUpdate(p4_1, testhelper.GetUIntTvProto(13), prio50, owner1, ts1)
 
-	p1r, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "10", "description"})
-	if err != nil {
-		t.Fatal(err)
+	p1r := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
 	}
-	p2r, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "11", "description"})
-	if err != nil {
-		t.Fatal(err)
+	p2r := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "11"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
 	}
-	p3r, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "12", "description"})
-	if err != nil {
-		t.Fatal(err)
+	p3r := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "12"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
 	}
-	p4r, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "13", "description"})
-	if err != nil {
-		t.Fatal(err)
+	p4r := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "13"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
 	}
 
 	u1r := types.NewUpdate(p1r, desc3, RunningValuesPrio, RunningIntentName, ts1)
@@ -416,14 +525,24 @@ func Test_Entry_Three(t *testing.T) {
 	overwriteDesc := testhelper.GetStringTvProto("Owerwrite Description")
 
 	// adding a new Update with same owner and priority with different value
-	pn1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "10", "description"})
-	if err != nil {
-		t.Fatal(err)
+	pn1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: false,
 	}
-	pn2, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "11", "description"})
-	if err != nil {
-		t.Fatal(err)
+
+	pn2 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "11"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: false,
 	}
+
 	n1 := types.NewUpdate(pn1, overwriteDesc, prio50, owner1, ts1)
 	n2 := types.NewUpdate(pn2, overwriteDesc, prio50, owner1, ts1)
 
@@ -486,58 +605,102 @@ func Test_Entry_Four(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p1o1_0, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "name"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p1o1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "10", "description"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p1o1_1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "10", "index"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p2o1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "11", "description"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p2o1_1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "11", "index"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p3, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "12", "description"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p3_1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "12", "index"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p4, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "13", "description"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p4_1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "13", "index"})
-	if err != nil {
-		t.Fatal(err)
+	p1o1_0 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("name", nil),
+		},
+		IsRootBased: true,
 	}
 
-	// p1o2_0, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "name"})
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
-	p1o2, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "10", "description"})
-	if err != nil {
-		t.Fatal(err)
+	p1o1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
 	}
-	// p1o2_1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "10", "index"})
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
-	p2o2, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "11", "description"})
-	if err != nil {
-		t.Fatal(err)
+
+	p1o1_1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
+			sdcpb.NewPathElem("index", nil),
+		},
+		IsRootBased: true,
+	}
+
+	p2o1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "11"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
+	}
+
+	p2o1_1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "11"}),
+			sdcpb.NewPathElem("index", nil),
+		},
+		IsRootBased: true,
+	}
+
+	p3 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "12"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
+	}
+
+	p3_1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "12"}),
+			sdcpb.NewPathElem("index", nil),
+		},
+		IsRootBased: true,
+	}
+
+	p4 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "13"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
+	}
+
+	p4_1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "13"}),
+			sdcpb.NewPathElem("index", nil),
+		},
+		IsRootBased: true,
+	}
+
+	p1o2 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
+	}
+
+	p2o2 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "11"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
 	}
 
 	u1o1_0 := types.NewUpdate(p1o1_0, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
@@ -603,15 +766,23 @@ func Test_Entry_Four(t *testing.T) {
 	// adding a new Update with same owner and priority with different value
 	//n0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio50, owner1, ts1)
 	// n1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetIntTvProto(t, 10), prio50, owner1, ts1)
-	pn1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "10", "description"})
-	if err != nil {
-		t.Fatal(err)
+	pn1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
 	}
 	n1 := types.NewUpdate(pn1, overwriteDesc, prio50, owner1, ts1)
 	// n2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "index"}, testhelper.GetIntTvProto(t, 11), prio50, owner1, ts1)
-	pn2, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "11", "description"})
-	if err != nil {
-		t.Fatal(err)
+	pn2 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "11"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
 	}
 	n2 := types.NewUpdate(pn2, overwriteDesc, prio50, owner1, ts1)
 
@@ -692,10 +863,14 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				},
 			)
 
-			p1, err := scb.ToPath(ctx, []string{"leaflist", "entry"})
-			if err != nil {
-				t.Fatal(err)
+			p1 := &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("leaflist", nil),
+					sdcpb.NewPathElem("entry", nil),
+				},
+				IsRootBased: true,
 			}
+
 			u1 := types.NewUpdate(p1, leaflistval, prio50, owner1, ts1)
 
 			// start test add "existing" data
@@ -743,10 +918,14 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				},
 			)
 
-			p1, err := scb.ToPath(ctx, []string{"leaflist", "entry"})
-			if err != nil {
-				t.Fatal(err)
+			p1 := &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("leaflist", nil),
+					sdcpb.NewPathElem("entry", nil),
+				},
+				IsRootBased: true,
 			}
+
 			u1 := types.NewUpdate(p1, leaflistval, prio50, owner1, ts1)
 
 			// start test add "existing" data
@@ -793,10 +972,14 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				},
 			)
 
-			p1, err := scb.ToPath(ctx, []string{"leaflist", "entry"})
-			if err != nil {
-				t.Fatal(err)
+			p1 := &sdcpb.Path{
+				Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("leaflist", nil),
+					sdcpb.NewPathElem("entry", nil),
+				},
+				IsRootBased: true,
 			}
+
 			u1 := types.NewUpdate(p1, leaflistval, prio50, owner1, ts1)
 
 			// start test add "existing" data
@@ -834,39 +1017,61 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p1, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "description"})
-	if err != nil {
-		t.Fatal(err)
+	p1 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
 	}
 	u1 := types.NewUpdate(p1, desc3, prio50, owner1, ts1)
 
-	p2, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "name"})
-	if err != nil {
-		t.Fatal(err)
+	p2 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("name", nil),
+		},
+		IsRootBased: true,
 	}
 	u2 := types.NewUpdate(p2, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
 
-	p3, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "0", "index"})
-	if err != nil {
-		t.Fatal(err)
+	p3 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "0"}),
+			sdcpb.NewPathElem("index", nil),
+		},
+		IsRootBased: true,
 	}
 	u3 := types.NewUpdate(p3, testhelper.GetUIntTvProto(0), prio50, owner1, ts1)
 
-	p4, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "0", "description"})
-	if err != nil {
-		t.Fatal(err)
+	p4 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "0"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
 	}
 	u4 := types.NewUpdate(p4, desc3, prio50, owner1, ts1)
 
-	p5, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "1", "index"})
-	if err != nil {
-		t.Fatal(err)
+	p5 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
+			sdcpb.NewPathElem("index", nil),
+		},
+		IsRootBased: true,
 	}
 	u5 := types.NewUpdate(p5, testhelper.GetUIntTvProto(1), prio50, owner1, ts1)
 
-	p6, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "subinterface", "1", "description"})
-	if err != nil {
-		t.Fatal(err)
+	p6 := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
 	}
 	u6 := types.NewUpdate(p6, desc3, prio50, owner1, ts1)
 
@@ -888,14 +1093,21 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	// get ready to add the new intent data
 	root.MarkOwnerDelete(owner1, false)
 
-	p1n, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "description"})
-	if err != nil {
-		t.Fatal(err)
+	p1n := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+		IsRootBased: true,
 	}
 	u1n := types.NewUpdate(p1n, desc3, prio50, owner1, ts1)
-	p2n, err := scb.ToPath(ctx, []string{"interface", "ethernet-1/1", "name"})
-	if err != nil {
-		t.Fatal(err)
+
+	p2n := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("name", nil),
+		},
+		IsRootBased: true,
 	}
 	u2n := types.NewUpdate(p2n, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
 
@@ -928,8 +1140,8 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 
 	// define the expected result
 	expects := []string{
-		"interface[name=ethernet-1/1]/subinterface[index=0]",
-		"interface[name=ethernet-1/1/subinterface[index=1]",
+		"/interface[name=ethernet-1/1]/subinterface[index=0]",
+		"/interface[name=ethernet-1/1]/subinterface[index=1]",
 	}
 	// sort both slices for equality check
 	slices.Sort(deletes)
@@ -1295,97 +1507,6 @@ func Test_sharedEntryAttributes_SdcpbPath(t *testing.T) {
 			cmp.Diff(dkkv.SdcpbPath().ToXPath(false), cmpPath.ToXPath(false))
 		},
 	)
-
-}
-
-func Test_sharedEntryAttributes_getKeyName(t *testing.T) {
-	ctx := context.TODO()
-
-	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
-
-	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	tc := NewTreeContext(scb, "foo")
-
-	root, err := NewTreeRoot(ctx, tc)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	interf, err := newSharedEntryAttributes(ctx, root.sharedEntryAttributes, "interface", tc)
-	if err != nil {
-		t.Error(err)
-	}
-
-	e00, err := newSharedEntryAttributes(ctx, interf, "ethernet-1/1", tc)
-	if err != nil {
-		t.Error(err)
-	}
-
-	e00desc, err := newSharedEntryAttributes(ctx, e00, "description", tc)
-	if err != nil {
-		t.Error(err)
-	}
-
-	dk, err := newSharedEntryAttributes(ctx, root.sharedEntryAttributes, "doublekey", tc)
-	if err != nil {
-		t.Error(err)
-	}
-
-	dkk1, err := newSharedEntryAttributes(ctx, dk, "key1", tc)
-	if err != nil {
-		t.Error(err)
-	}
-
-	dkk2, err := newSharedEntryAttributes(ctx, dkk1, "key2", tc)
-	if err != nil {
-		t.Error(err)
-	}
-
-	dkkv, err := newSharedEntryAttributes(ctx, dkk2, "mandato", tc)
-	if err != nil {
-		t.Error(err)
-	}
-
-	t.Run("double key", func(t *testing.T) {
-		_, err := dkkv.getKeyName()
-		if err == nil {
-			t.Errorf("expected an error when getKeyName on %s", dkkv.SdcpbPath().ToXPath(false))
-		}
-	})
-
-	t.Run("double key - key1", func(t *testing.T) {
-		s, err := dkk1.getKeyName()
-		if err != nil {
-			t.Errorf("expected no error getKeyName on %s", dkk1.SdcpbPath().ToXPath(false))
-		}
-		expected := "key1"
-		if s != expected {
-			t.Errorf("expected %s key value to be %s but got %s", dkkv.SdcpbPath().ToXPath(false), expected, s)
-		}
-	})
-
-	t.Run("double key - key2", func(t *testing.T) {
-		s, err := dkk2.getKeyName()
-		if err != nil {
-			t.Errorf("expected no error getKeyName on %s", dkkv.SdcpbPath().ToXPath(false))
-		}
-		expected := "key2"
-		if s != expected {
-			t.Errorf("expected %s key value to be %s but got %s", dkkv.SdcpbPath().ToXPath(false), expected, s)
-		}
-	})
-
-	t.Run("Leaf", func(t *testing.T) {
-		_, err := e00desc.getKeyName()
-		if err == nil {
-			t.Errorf("expected an error when getKeyName on %s", e00desc.SdcpbPath().ToXPath(false))
-		}
-	})
 
 }
 

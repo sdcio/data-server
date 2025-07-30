@@ -126,34 +126,6 @@ func GetSchemaClientBound(t *testing.T, mockCtrl *gomock.Controller) (*mockschem
 		},
 	)
 
-	// make the mock respond to GetSchema requests
-	mockscb.EXPECT().GetSchemaSlicePath(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-		func(ctx context.Context, path []string) (*sdcpb.GetSchemaResponse, error) {
-			p, err := mockscb.ToPath(ctx, path)
-			if err != nil {
-				return nil, err
-			}
-			return x.GetSchema(ctx, &sdcpb.GetSchemaRequest{
-				Path:   p,
-				Schema: sdcpbSchema,
-			})
-		},
-	)
-
-	// setup the ToPath() responses
-	mockscb.EXPECT().ToPath(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-		func(ctx context.Context, path []string) (*sdcpb.Path, error) {
-			pr, err := x.ToPath(ctx, &sdcpb.ToPathRequest{
-				PathElement: path,
-				Schema:      sdcpbSchema,
-			})
-			if err != nil {
-				return nil, err
-			}
-			return pr.GetPath(), nil
-		},
-	)
-
 	// return the mock
 	return mockscb, nil
 }

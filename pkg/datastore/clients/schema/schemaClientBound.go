@@ -32,10 +32,9 @@ const (
 type SchemaClientBound interface {
 	// GetSchema retrieves the schema for the given path
 	GetSchemaSdcpbPath(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error)
-	// GetSchemaSlicePath(ctx context.Context, path []string) (*sdcpb.GetSchemaResponse, error)
 	// GetSchemaElements retrieves the Schema Elements for all levels of the given path
 	GetSchemaElements(ctx context.Context, p *sdcpb.Path, done chan struct{}) (chan *sdcpb.GetSchemaResponse, error)
-	ToPath(ctx context.Context, path []string) (*sdcpb.Path, error)
+	// ToPath(ctx context.Context, path []string) (*sdcpb.Path, error)
 }
 
 type SchemaClientBoundImpl struct {

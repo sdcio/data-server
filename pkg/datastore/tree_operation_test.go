@@ -117,83 +117,83 @@ func TestDatastore_populateTree(t *testing.T) {
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("key1", nil),
-				}}, testhelper.GetStringTvProto("k1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("key2", nil),
-				}}, testhelper.GetStringTvProto("k1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("mandato", nil),
-				}}, testhelper.GetStringTvProto("TheMandatoryValue1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("TheMandatoryValue1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
-				}}, testhelper.GetStringTvProto("containerval1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
-				}}, testhelper.GetStringTvProto("containerval1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("key1", nil),
-				}}, testhelper.GetStringTvProto("k1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("key2", nil),
-				}}, testhelper.GetStringTvProto("k1.3"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k1.3"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("mandato", nil),
-				}}, testhelper.GetStringTvProto("TheMandatoryValue1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("TheMandatoryValue1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
-				}}, testhelper.GetStringTvProto("containerval1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
-				}}, testhelper.GetStringTvProto("containerval1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("key1", nil),
-				}}, testhelper.GetStringTvProto("k2.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k2.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("key2", nil),
-				}}, testhelper.GetStringTvProto("k2.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k2.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("mandato", nil),
-				}}, testhelper.GetStringTvProto("TheMandatoryValue2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("TheMandatoryValue2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
-				}}, testhelper.GetStringTvProto("containerval2.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval2.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
-				}}, testhelper.GetStringTvProto("containerval2.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval2.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 			},
 
 			expectedDeletes: []string{
@@ -204,14 +204,14 @@ func TestDatastore_populateTree(t *testing.T) {
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("mandato", nil),
-				}}, testhelper.GetStringTvProto("TheMandatoryValueOther"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("TheMandatoryValueOther"), prio10, owner2, 0),
 			},
 
 			expectedOwnerUpdates: []*types.Update{
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("mandato", nil),
-				}}, testhelper.GetStringTvProto("TheMandatoryValueOther"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("TheMandatoryValueOther"), prio10, owner2, 0),
 			},
 			expectedOwnerDeletes: []string{
 				"/doublekey[key1=k1.1][key2=k1.3]/key1",
@@ -224,83 +224,83 @@ func TestDatastore_populateTree(t *testing.T) {
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("key1", nil),
-				}}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("key2", nil),
-				}}, testhelper.GetStringTvProto("k1.2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k1.2"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("mandato", nil),
-				}}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
-				}}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
-				}}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("key1", nil),
-				}}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("key2", nil),
-				}}, testhelper.GetStringTvProto("k1.3"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k1.3"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("mandato", nil),
-				}}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
-				}}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
-				}}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("key1", nil),
-				}}, testhelper.GetStringTvProto("k2.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k2.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("key2", nil),
-				}}, testhelper.GetStringTvProto("k2.2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k2.2"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("mandato", nil),
-				}}, testhelper.GetStringTvProto("TheMandatoryValue2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("TheMandatoryValue2"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
-				}}, testhelper.GetStringTvProto("containerval2.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval2.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
-				}}, testhelper.GetStringTvProto("containerval2.2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval2.2"), prio10, owner2, 0),
 			},
 		},
 		{
@@ -358,166 +358,166 @@ func TestDatastore_populateTree(t *testing.T) {
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("key1", nil),
-				}}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("key2", nil),
-				}}, testhelper.GetStringTvProto("k1.2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k1.2"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("mandato", nil),
-				}}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
-				}}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
-				}}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("key1", nil),
-				}}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("key2", nil),
-				}}, testhelper.GetStringTvProto("k1.3"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k1.3"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("mandato", nil),
-				}}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
-				}}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
-				}}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("key1", nil),
-				}}, testhelper.GetStringTvProto("k2.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k2.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("key2", nil),
-				}}, testhelper.GetStringTvProto("k2.2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k2.2"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("mandato", nil),
-				}}, testhelper.GetStringTvProto("TheMandatoryValue2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("TheMandatoryValue2"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
-				}}, testhelper.GetStringTvProto("containerval2.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval2.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
-				}}, testhelper.GetStringTvProto("containerval2.2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval2.2"), prio10, owner2, 0),
 			},
 
 			expectedOwnerUpdates: []*types.Update{
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("key1", nil),
-				}}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("key2", nil),
-				}}, testhelper.GetStringTvProto("k1.2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k1.2"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("mandato", nil),
-				}}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
-				}}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
-				}}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("key1", nil),
-				}}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("key2", nil),
-				}}, testhelper.GetStringTvProto("k1.3"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k1.3"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("mandato", nil),
-				}}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
-				}}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
-				}}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("key1", nil),
-				}}, testhelper.GetStringTvProto("k2.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k2.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("key2", nil),
-				}}, testhelper.GetStringTvProto("k2.2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("k2.2"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("mandato", nil),
-				}}, testhelper.GetStringTvProto("TheMandatoryValue2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("TheMandatoryValue2"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
-				}}, testhelper.GetStringTvProto("containerval2.1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval2.1"), prio10, owner2, 0),
 
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
-				}}, testhelper.GetStringTvProto("containerval2.2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("containerval2.2"), prio10, owner2, 0),
 			},
 
 			intendedStoreUpdates: []*types.Update{},
@@ -542,12 +542,12 @@ func TestDatastore_populateTree(t *testing.T) {
 			},
 
 			expectedModify: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
 			},
 			expectedOwnerUpdates: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
 			},
 			intendedStoreUpdates: nil,
 		},
@@ -568,12 +568,12 @@ func TestDatastore_populateTree(t *testing.T) {
 				})
 			},
 			expectedModify: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
 			},
 			expectedOwnerUpdates: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
 			},
 			intendedStoreUpdates: nil,
 		},
@@ -595,16 +595,16 @@ func TestDatastore_populateTree(t *testing.T) {
 			expectedModify: []*types.Update{
 				// Right now, although the value stays the same, but the priority changes, we'll receive an update for these values.
 				// This maybe needs to be mitigated, but is not considered harmfull atm.
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
 			},
 			expectedOwnerUpdates: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
 			},
 			intendedStoreUpdates: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
 			},
 		},
 		{
@@ -617,18 +617,18 @@ func TestDatastore_populateTree(t *testing.T) {
 			},
 			intentDelete: true,
 			expectedModify: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
 			},
 			expectedDeletes: []string{
 				"/interface[name=ethernet-1/1]/name",
 				"/interface[name=ethernet-1/1]/description",
 			},
 			intendedStoreUpdates: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
 			},
 		},
 		{
@@ -649,9 +649,9 @@ func TestDatastore_populateTree(t *testing.T) {
 				"/interface[name=ethernet-1/1]/admin-state",
 			},
 			intendedStoreUpdates: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("admin-state", nil)}}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("admin-state", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
 			},
 		},
 		{
@@ -700,22 +700,22 @@ func TestDatastore_populateTree(t *testing.T) {
 				"/interface[name=ethernet-1/3]/admin-state",
 			},
 			expectedOwnerUpdates: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyNonappliedDescription"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyNonappliedDescription"), prio10, owner2, 0),
 			},
 			expectedModify: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyNonappliedDescription"), prio10, owner2, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyNonappliedDescription"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
 			},
 			intendedStoreUpdates: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("admin-state", nil)}}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/2"), prio10, owner2, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}), sdcpb.NewPathElem("admin-state", nil)}}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/3"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/3"), prio10, owner2, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/3"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/3"}), sdcpb.NewPathElem("admin-state", nil)}}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("admin-state", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/2"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}), sdcpb.NewPathElem("admin-state", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/3"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/3"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/3"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/3"}), sdcpb.NewPathElem("admin-state", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
 			},
 		},
 		{
@@ -734,16 +734,16 @@ func TestDatastore_populateTree(t *testing.T) {
 				})
 			},
 			runningStoreUpdates: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescription"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescription"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 			},
 			expectedOwnerUpdates: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyNonappliedDescription"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyNonappliedDescription"), prio10, owner2, 0),
 			},
 			intendedStoreUpdates: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
 			},
 		},
 		{
@@ -762,18 +762,18 @@ func TestDatastore_populateTree(t *testing.T) {
 			intentPrio: 10,
 			intentName: owner1,
 			runningStoreUpdates: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("choices", nil), sdcpb.NewPathElem("case1", nil), sdcpb.NewPathElem("case-elem", nil)}}, testhelper.GetStringTvProto("Foobar"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("choices", nil), sdcpb.NewPathElem("case1", nil), sdcpb.NewPathElem("case-elem", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("Foobar"), prio10, owner1, 0),
 			},
 			expectedOwnerUpdates: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
 			},
 			intendedStoreUpdates: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("choices", nil), sdcpb.NewPathElem("case1", nil), sdcpb.NewPathElem("case-elem", nil)}}, testhelper.GetStringTvProto("Foobar"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("choices", nil), sdcpb.NewPathElem("case1", nil), sdcpb.NewPathElem("case-elem", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("Foobar"), prio10, owner1, 0),
 			},
 			expectedModify: []*types.Update{
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
-				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner1, 0),
+				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescription"), prio10, owner1, 0),
 			},
 			expectedDeletes: []string{
 				"/choices",
@@ -822,125 +822,125 @@ func TestDatastore_populateTree(t *testing.T) {
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("name", nil),
-				}}, testhelper.GetStringTvProto("ethernet-1/1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("MyDescription"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescription"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("name", nil),
-				}}, testhelper.GetStringTvProto("ethernet-1/2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("Owner3 Description"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("Owner3 Description"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "2"}),
 					sdcpb.NewPathElem("index", nil),
-				}}, testhelper.GetUIntTvProto(2), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetUIntTvProto(2), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "2"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("Subinterface Desc"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("Subinterface Desc"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 			},
 			expectedModify: []*types.Update{
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 					sdcpb.NewPathElem("index", nil),
-				}}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("name", nil),
-				}}, testhelper.GetStringTvProto("ethernet-1/2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/2"), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 					sdcpb.NewPathElem("index", nil),
-				}}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
 			},
 			expectedOwnerUpdates: []*types.Update{
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("name", nil),
-				}}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 					sdcpb.NewPathElem("index", nil),
-				}}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("name", nil),
-				}}, testhelper.GetStringTvProto("ethernet-1/2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/2"), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 					sdcpb.NewPathElem("index", nil),
-				}}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
 			},
 			intendedStoreUpdates: []*types.Update{
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("name", nil),
-				}}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("name", nil),
-				}}, testhelper.GetStringTvProto("ethernet-1/2"), prio15, owner3, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/2"), prio15, owner3, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("Owner3 Description"), prio15, owner3, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("Owner3 Description"), prio15, owner3, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "2"}),
 					sdcpb.NewPathElem("index", nil),
-				}}, testhelper.GetUIntTvProto(2), prio15, owner3, 0),
+				}, IsRootBased: true}, testhelper.GetUIntTvProto(2), prio15, owner3, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "2"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("Subinterface Desc"), prio15, owner3, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("Subinterface Desc"), prio15, owner3, 0),
 			},
 		},
 		{
@@ -984,143 +984,143 @@ func TestDatastore_populateTree(t *testing.T) {
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("name", nil),
-				}}, testhelper.GetStringTvProto("ethernet-1/1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("MyDescription"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescription"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("name", nil),
-				}}, testhelper.GetStringTvProto("ethernet-1/2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("Owner3 Description"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("Owner3 Description"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "2"}),
 					sdcpb.NewPathElem("index", nil),
-				}}, testhelper.GetUIntTvProto(1), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetUIntTvProto(1), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "2"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("Subinterface Desc"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("Subinterface Desc"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 			},
 			expectedModify: []*types.Update{
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("name", nil),
-				}}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 					sdcpb.NewPathElem("index", nil),
-				}}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("name", nil),
-				}}, testhelper.GetStringTvProto("ethernet-1/2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/2"), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 					sdcpb.NewPathElem("index", nil),
-				}}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "2"}),
 					sdcpb.NewPathElem("index", nil),
-				}}, testhelper.GetUIntTvProto(1), prio15, owner3, 0),
+				}, IsRootBased: true}, testhelper.GetUIntTvProto(1), prio15, owner3, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "2"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("Subinterface Desc"), prio15, owner3, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("Subinterface Desc"), prio15, owner3, 0),
 			},
 			expectedOwnerUpdates: []*types.Update{
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("name", nil),
-				}}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 					sdcpb.NewPathElem("index", nil),
-				}}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("name", nil),
-				}}, testhelper.GetStringTvProto("ethernet-1/2"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/2"), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("MyOtherDescription"), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 					sdcpb.NewPathElem("index", nil),
-				}}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetUIntTvProto(1), prio10, owner2, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("Subinterface Desc"), prio10, owner2, 0),
 			},
 			intendedStoreUpdates: []*types.Update{
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("name", nil),
-				}}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/1"), prio5, owner1, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("MyDescription"), prio5, owner1, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("name", nil),
-				}}, testhelper.GetStringTvProto("ethernet-1/2"), prio15, owner3, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("ethernet-1/2"), prio15, owner3, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("Owner3 Description"), prio15, owner3, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("Owner3 Description"), prio15, owner3, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "2"}),
 					sdcpb.NewPathElem("index", nil),
-				}}, testhelper.GetUIntTvProto(1), prio15, owner3, 0),
+				}, IsRootBased: true}, testhelper.GetUIntTvProto(1), prio15, owner3, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "2"}),
 					sdcpb.NewPathElem("description", nil),
-				}}, testhelper.GetStringTvProto("Subinterface Desc"), prio15, owner3, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("Subinterface Desc"), prio15, owner3, 0),
 			},
 		},
 		{
@@ -1146,7 +1146,7 @@ func TestDatastore_populateTree(t *testing.T) {
 					sdcpb.NewPathElem("choices", nil),
 					sdcpb.NewPathElem("case2", nil),
 					sdcpb.NewPathElem("log", nil),
-				}}, TypedValueTrue, prio10, owner2, 0),
+				}, IsRootBased: true}, TypedValueTrue, prio10, owner2, 0),
 			},
 			expectedDeletes: []string{
 				"/choices/case1",
@@ -1156,7 +1156,7 @@ func TestDatastore_populateTree(t *testing.T) {
 					sdcpb.NewPathElem("choices", nil),
 					sdcpb.NewPathElem("case2", nil),
 					sdcpb.NewPathElem("log", nil),
-				}}, TypedValueTrue, prio10, owner2, 0),
+				}, IsRootBased: true}, TypedValueTrue, prio10, owner2, 0),
 			},
 			intendedStoreUpdates: []*types.Update{
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
@@ -1164,12 +1164,12 @@ func TestDatastore_populateTree(t *testing.T) {
 					sdcpb.NewPathElem("case1", nil),
 					sdcpb.NewPathElem("case-elem", nil),
 					sdcpb.NewPathElem("elem", nil),
-				}}, testhelper.GetStringTvProto("case1-content"), prio15, owner1, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("case1-content"), prio15, owner1, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("choices", nil),
 					sdcpb.NewPathElem("case1", nil),
 					sdcpb.NewPathElem("log", nil),
-				}}, TypedValueFalse, prio15, owner1, 0),
+				}, IsRootBased: true}, TypedValueFalse, prio15, owner1, 0),
 			},
 			runningStoreUpdates: []*types.Update{
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
@@ -1177,12 +1177,12 @@ func TestDatastore_populateTree(t *testing.T) {
 					sdcpb.NewPathElem("case1", nil),
 					sdcpb.NewPathElem("case-elem", nil),
 					sdcpb.NewPathElem("elem", nil),
-				}}, testhelper.GetStringTvProto("case1-content"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("case1-content"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("choices", nil),
 					sdcpb.NewPathElem("case1", nil),
 					sdcpb.NewPathElem("log", nil),
-				}}, TypedValueFalse, tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, TypedValueFalse, tree.RunningValuesPrio, tree.RunningIntentName, 0),
 			},
 		},
 		{
@@ -1211,7 +1211,7 @@ func TestDatastore_populateTree(t *testing.T) {
 					sdcpb.NewPathElem("choices", nil),
 					sdcpb.NewPathElem("case2", nil),
 					sdcpb.NewPathElem("log", nil),
-				}}, TypedValueTrue, prio10, owner2, 0),
+				}, IsRootBased: true}, TypedValueTrue, prio10, owner2, 0),
 			},
 			intendedStoreUpdates: []*types.Update{
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
@@ -1219,12 +1219,12 @@ func TestDatastore_populateTree(t *testing.T) {
 					sdcpb.NewPathElem("case1", nil),
 					sdcpb.NewPathElem("case-elem", nil),
 					sdcpb.NewPathElem("elem", nil),
-				}}, testhelper.GetStringTvProto("case1-content"), prio5, owner1, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("case1-content"), prio5, owner1, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("choices", nil),
 					sdcpb.NewPathElem("case1", nil),
 					sdcpb.NewPathElem("log", nil),
-				}}, TypedValueFalse, prio5, owner1, 0),
+				}, IsRootBased: true}, TypedValueFalse, prio5, owner1, 0),
 			},
 			runningStoreUpdates: []*types.Update{
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
@@ -1232,12 +1232,12 @@ func TestDatastore_populateTree(t *testing.T) {
 					sdcpb.NewPathElem("case1", nil),
 					sdcpb.NewPathElem("case-elem", nil),
 					sdcpb.NewPathElem("elem", nil),
-				}}, testhelper.GetStringTvProto("case1-content"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, testhelper.GetStringTvProto("case1-content"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("choices", nil),
 					sdcpb.NewPathElem("case1", nil),
 					sdcpb.NewPathElem("log", nil),
-				}}, TypedValueFalse, tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				}, IsRootBased: true}, TypedValueFalse, tree.RunningValuesPrio, tree.RunningIntentName, 0),
 			},
 		},
 		{
@@ -1263,14 +1263,14 @@ func TestDatastore_populateTree(t *testing.T) {
 					sdcpb.NewPathElem("choices", nil),
 					sdcpb.NewPathElem("case2", nil),
 					sdcpb.NewPathElem("log", nil),
-				}}, TypedValueTrue, prio10, owner2, 0),
+				}, IsRootBased: true}, TypedValueTrue, prio10, owner2, 0),
 			},
 			expectedOwnerUpdates: []*types.Update{
 				types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("choices", nil),
 					sdcpb.NewPathElem("case2", nil),
 					sdcpb.NewPathElem("log", nil),
-				}}, TypedValueTrue, prio10, owner2, 0),
+				}, IsRootBased: true}, TypedValueTrue, prio10, owner2, 0),
 			},
 			intendedStoreUpdates: []*types.Update{},
 			runningStoreUpdates:  []*types.Update{},

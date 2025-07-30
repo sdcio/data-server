@@ -18,7 +18,6 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
-	schema_server "github.com/sdcio/sdc-protos/sdcpb"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -224,7 +223,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				return root.sharedEntryAttributes
 			},
 			args: args{
-				relativePath: &sdcpb.Path{Elem: []*sdcpb.PathElem{schema_server.NewPathElem("interface", nil)}},
+				relativePath: &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", nil)}},
 				owner:        owner1,
 			},
 			want:    true,
@@ -264,7 +263,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 			},
 			args: args{
 				relativePath: &sdcpb.Path{
-					Elem: []*sdcpb.PathElem{schema_server.NewPathElem("interface", map[string]string{"name": "ethernet-1/27"})},
+					Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/27"})},
 				},
 				owner: owner1,
 			},
@@ -357,7 +356,7 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		path      []string
+		path      *sdcpb.Path
 		wantKeys  []string
 		wantNames []string
 		wantErr   bool
@@ -366,21 +365,21 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 			name:      "Double Key - pass",
 			wantNames: []string{"k2.2", "k1.2"},
 			wantKeys:  []string{"key1", "key2", "cont", "mandato"},
-			path:      []string{"doublekey"},
+			path:      &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("doublekey", nil)}, IsRootBased: true},
 		},
 		{
 			name:    "nil schema",
-			path:    []string{"doublekey", "k1.1"},
+			path:    &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1"})}, IsRootBased: true},
 			wantErr: true,
 		},
 		{
 			name:    "non container",
-			path:    []string{"doublekey", "k1.1", "k1.2", "mandato"},
+			path:    &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}), sdcpb.NewPathElem("mandato", nil)}, IsRootBased: true},
 			wantErr: true,
 		},
 		{
 			name:    "container not a list",
-			path:    []string{},
+			path:    &sdcpb.Path{Elem: []*sdcpb.PathElem{}, IsRootBased: true},
 			wantErr: true,
 		},
 	}
@@ -391,14 +390,7 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 
 			ctx := context.Background()
 
-			p := &sdcpb.Path{
-				Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
-					sdcpb.NewPathElem("description", nil),
-				},
-			}
-
-			e, err := device(t).NavigateSdcpbPath(ctx, p)
+			e, err := device(t).NavigateSdcpbPath(ctx, tt.path)
 			if err != nil {
 				t.Error(err)
 				return
@@ -502,39 +494,46 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 				types.NewDeviationEntry(
 					owner1,
 					types.DeviationReasonNotApplied,
-					&schema_server.Path{
-						Elem: []*schema_server.PathElem{
+					&sdcpb.Path{
+						Elem: []*sdcpb.PathElem{
 							{Name: "interface", Key: map[string]string{"name": "ethernet-1/1"}},
 							{Name: "description"}},
+						IsRootBased: true,
 					},
 				).SetCurrentValue(testhelper.GetStringTvProto("Changed Description")).SetExpectedValue(testhelper.GetStringTvProto("Foo")),
 				// two
 				types.NewDeviationEntry(
 					owner1,
 					types.DeviationReasonNotApplied,
-					&schema_server.Path{
-						Elem: []*schema_server.PathElem{
-							{Name: "patterntest"}},
+					&sdcpb.Path{
+						Elem: []*sdcpb.PathElem{
+							{Name: "patterntest"},
+						},
+						IsRootBased: true,
 					},
 				).SetCurrentValue(testhelper.GetStringTvProto("hallo 0")).SetExpectedValue(testhelper.GetStringTvProto("foo")),
 				// three
 				types.NewDeviationEntry(
 					RunningIntentName,
 					types.DeviationReasonUnhandled,
-					&schema_server.Path{
-						Elem: []*schema_server.PathElem{
+					&sdcpb.Path{
+						Elem: []*sdcpb.PathElem{
 							{Name: "interface", Key: map[string]string{"name": "ethernet-1/3"}},
-							{Name: "description"}},
+							{Name: "description"},
+						},
+						IsRootBased: true,
 					},
 				).SetCurrentValue(testhelper.GetStringTvProto("ethernet-1/3 description")).SetExpectedValue(nil),
 				// four
 				types.NewDeviationEntry(
 					RunningIntentName,
 					types.DeviationReasonUnhandled,
-					&schema_server.Path{
-						Elem: []*schema_server.PathElem{
+					&sdcpb.Path{
+						Elem: []*sdcpb.PathElem{
 							{Name: "interface", Key: map[string]string{"name": "ethernet-1/3"}},
-							{Name: "name"}},
+							{Name: "name"},
+						},
+						IsRootBased: true,
 					},
 				).SetCurrentValue(testhelper.GetStringTvProto("ethernet-1/3")).SetExpectedValue(nil),
 			},
@@ -591,6 +590,7 @@ func Test_sharedEntryAttributes_getOrCreateChilds(t *testing.T) {
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("description", nil),
 				},
+				IsRootBased: true,
 			},
 		},
 		{
@@ -603,6 +603,7 @@ func Test_sharedEntryAttributes_getOrCreateChilds(t *testing.T) {
 					}),
 					sdcpb.NewPathElem("mandato", nil),
 				},
+				IsRootBased: true,
 			},
 		},
 		{
@@ -615,9 +616,10 @@ func Test_sharedEntryAttributes_getOrCreateChilds(t *testing.T) {
 					sdcpb.NewPathElem("protocol", nil),
 					sdcpb.NewPathElem("osgp", nil),
 				},
+				IsRootBased: true,
 			},
 			wantErr:     true,
-			errContains: "container protocol - unknown element osgp",
+			errContains: "schema entry \"network-instance/protocol/osgp\" not found",
 		},
 	}
 	for _, tt := range tests {
@@ -644,7 +646,7 @@ func Test_sharedEntryAttributes_getOrCreateChilds(t *testing.T) {
 			}
 			if tt.wantErr {
 				if !strings.Contains(err.Error(), tt.errContains) {
-					t.Errorf("expected error: %s, got error %s", err.Error(), tt.errContains)
+					t.Errorf("expected error: %s, got error %s", tt.errContains, err.Error())
 				}
 				return
 			}
@@ -754,9 +756,9 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 				return root
 			},
 			want: []*types.ValidationResultEntry{
-				types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child [mandato] does not exist, path: doublekey/k1.1/k1.2"), types.ValidationResultEntryTypeError),
-				types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child [autonomous-system] does not exist, path: network-instance/ni1/protocol/bgp"), types.ValidationResultEntryTypeError),
-				types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child [router-id] does not exist, path: network-instance/ni1/protocol/bgp"), types.ValidationResultEntryTypeError),
+				types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child [mandato] does not exist, path: /doublekey[key1=k1.1][key2=k1.2]"), types.ValidationResultEntryTypeError),
+				types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child [autonomous-system] does not exist, path: /network-instance[name=ni1]/protocol/bgp"), types.ValidationResultEntryTypeError),
+				types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child [router-id] does not exist, path: /network-instance[name=ni1]/protocol/bgp"), types.ValidationResultEntryTypeError),
 			},
 		},
 	}
@@ -956,7 +958,7 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 
 			t.Log(got.ToString())
 
-			want := &schema_server.BlameTreeElement{}
+			want := &sdcpb.BlameTreeElement{}
 			err = protojson.Unmarshal([]byte(tt.want), want)
 			if err != nil {
 				t.Fatalf("failed to unmarshal JSON to proto: %v", err)
@@ -1027,7 +1029,7 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 							"key2": "k1.2",
 						}),
 						sdcpb.NewPathElem("mandato", nil),
-					},
+					}, IsRootBased: true,
 				}, testhelper.GetStringTvProto("TheMandatoryValue1"), owner1Prio, owner1, 0),
 			}
 
@@ -1072,19 +1074,18 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 				t.Error(err)
 			}
 
-			fmt.Println(newRoot.String())
-
 			err = newRoot.FinishInsertionPhase(ctx)
 			if err != nil {
 				t.Fatal(err)
 			}
+			fmt.Println(newRoot.String())
 
 			deleteList, err := newRoot.GetDeletes(true)
 			if err != nil {
 				t.Error(err)
 			}
 			if len(deleteList) != tt.numDelete {
-				t.Errorf("%d deltes expected, got %d\n%s", tt.numDelete, len(deleteList), strings.Join(deleteList.SdcpbPaths().ToXPathSlice(), ", "))
+				t.Errorf("%d deletes expected, got %d\n%s", tt.numDelete, len(deleteList), strings.Join(deleteList.SdcpbPaths().ToXPathSlice(), ", "))
 			}
 		})
 	}

@@ -18,7 +18,7 @@ func DefaultValueExists(schema *sdcpb.SchemaElem) bool {
 	return false
 }
 
-func DefaultValueRetrieve(schema *sdcpb.SchemaElem, path *sdcpb.Path, prio int32, intent string) (*types.Update, error) {
+func DefaultValueRetrieve(schema *sdcpb.SchemaElem, path *sdcpb.Path) (*types.Update, error) {
 	var tv *sdcpb.TypedValue
 	var err error
 	switch schem := schema.GetSchema().(type) {
@@ -55,5 +55,5 @@ func DefaultValueRetrieve(schema *sdcpb.SchemaElem, path *sdcpb.Path, prio int32
 		return nil, fmt.Errorf("no defaults defined for schema path: %s", path.ToXPath(false))
 	}
 
-	return types.NewUpdate(path, tv, prio, intent, 0), nil
+	return types.NewUpdate(path, tv, DefaultValuesPrio, DefaultsIntentName, 0), nil
 }

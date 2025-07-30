@@ -131,7 +131,7 @@ func TestDatastore_validateTree(t *testing.T) {
 			},
 			intentName:       owner1,
 			intentPrio:       prio10,
-			expectedWarnings: []string{"leafref leafref-optional value mgmt0 unable to resolve non-mandatory reference /interface/name"},
+			expectedWarnings: []string{"leafref /leafref-optional value mgmt0 unable to resolve non-mandatory reference /interface/name"},
 		},
 		{
 			name:          "leafref-optional (require-instance == false) exists",

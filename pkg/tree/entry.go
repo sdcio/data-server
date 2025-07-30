@@ -149,7 +149,6 @@ type Entry interface {
 	BreadthSearch(ctx context.Context, path string) ([]Entry, error)
 	DeepCopy(tc *TreeContext, parent Entry) (Entry, error)
 	BlameConfig(includeDefaults bool) (*sdcpb.BlameTreeElement, error)
-	getKeyName() (string, error)
 }
 
 type EntryVisitor func(s *sharedEntryAttributes) error

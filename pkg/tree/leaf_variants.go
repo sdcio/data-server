@@ -115,10 +115,7 @@ func (lv *LeafVariants) shouldDelete() bool {
 			return false
 		}
 	}
-	if !foundOtherThenRunningAndDefault {
-		return false
-	}
-	return true
+	return foundOtherThenRunningAndDefault
 }
 
 func (lv *LeafVariants) remainsToExist() bool {

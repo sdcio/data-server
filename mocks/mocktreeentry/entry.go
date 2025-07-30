@@ -48,18 +48,18 @@ func (m *MockEntry) EXPECT() *MockEntryMockRecorder {
 }
 
 // AddUpdateRecursive mocks base method.
-func (m *MockEntry) AddUpdateRecursive(ctx context.Context, u *types.Update, flags *types.UpdateInsertFlags) (tree.Entry, error) {
+func (m *MockEntry) AddUpdateRecursive(ctx context.Context, relativePath *schema_server.Path, u *types.Update, flags *types.UpdateInsertFlags) (tree.Entry, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddUpdateRecursive", ctx, u, flags)
+	ret := m.ctrl.Call(m, "AddUpdateRecursive", ctx, relativePath, u, flags)
 	ret0, _ := ret[0].(tree.Entry)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AddUpdateRecursive indicates an expected call of AddUpdateRecursive.
-func (mr *MockEntryMockRecorder) AddUpdateRecursive(ctx, u, flags any) *gomock.Call {
+func (mr *MockEntryMockRecorder) AddUpdateRecursive(ctx, relativePath, u, flags any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddUpdateRecursive", reflect.TypeOf((*MockEntry)(nil).AddUpdateRecursive), ctx, u, flags)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddUpdateRecursive", reflect.TypeOf((*MockEntry)(nil).AddUpdateRecursive), ctx, relativePath, u, flags)
 }
 
 // BlameConfig mocks base method.
@@ -108,18 +108,18 @@ func (mr *MockEntryMockRecorder) DeepCopy(tc, parent any) *gomock.Call {
 }
 
 // DeleteSubtree mocks base method.
-func (m *MockEntry) DeleteSubtree(relativePath *schema_server.Path, owner string) (bool, error) {
+func (m *MockEntry) DeleteSubtree(ctx context.Context, relativePath *schema_server.Path, owner string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteSubtree", relativePath, owner)
+	ret := m.ctrl.Call(m, "DeleteSubtree", ctx, relativePath, owner)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DeleteSubtree indicates an expected call of DeleteSubtree.
-func (mr *MockEntryMockRecorder) DeleteSubtree(relativePath, owner any) *gomock.Call {
+func (mr *MockEntryMockRecorder) DeleteSubtree(ctx, relativePath, owner any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSubtree", reflect.TypeOf((*MockEntry)(nil).DeleteSubtree), relativePath, owner)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSubtree", reflect.TypeOf((*MockEntry)(nil).DeleteSubtree), ctx, relativePath, owner)
 }
 
 // FilterChilds mocks base method.
@@ -376,18 +376,18 @@ func (mr *MockEntryMockRecorder) NavigateLeafRef(ctx any) *gomock.Call {
 }
 
 // NavigateSdcpbPath mocks base method.
-func (m *MockEntry) NavigateSdcpbPath(ctx context.Context, path []*schema_server.PathElem, isRootPath bool) (tree.Entry, error) {
+func (m *MockEntry) NavigateSdcpbPath(ctx context.Context, path *schema_server.Path) (tree.Entry, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NavigateSdcpbPath", ctx, path, isRootPath)
+	ret := m.ctrl.Call(m, "NavigateSdcpbPath", ctx, path)
 	ret0, _ := ret[0].(tree.Entry)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // NavigateSdcpbPath indicates an expected call of NavigateSdcpbPath.
-func (mr *MockEntryMockRecorder) NavigateSdcpbPath(ctx, path, isRootPath any) *gomock.Call {
+func (mr *MockEntryMockRecorder) NavigateSdcpbPath(ctx, path any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NavigateSdcpbPath", reflect.TypeOf((*MockEntry)(nil).NavigateSdcpbPath), ctx, path, isRootPath)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NavigateSdcpbPath", reflect.TypeOf((*MockEntry)(nil).NavigateSdcpbPath), ctx, path)
 }
 
 // PathName mocks base method.
@@ -587,6 +587,21 @@ func (m *MockEntry) getHighestPrecedenceValueOfBranch(filter tree.HighestPrecede
 func (mr *MockEntryMockRecorder) getHighestPrecedenceValueOfBranch(filter any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getHighestPrecedenceValueOfBranch", reflect.TypeOf((*MockEntry)(nil).getHighestPrecedenceValueOfBranch), filter)
+}
+
+// getKeyName mocks base method.
+func (m *MockEntry) getKeyName() (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "getKeyName")
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// getKeyName indicates an expected call of getKeyName.
+func (mr *MockEntryMockRecorder) getKeyName() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getKeyName", reflect.TypeOf((*MockEntry)(nil).getKeyName))
 }
 
 // getOrCreateChilds mocks base method.
