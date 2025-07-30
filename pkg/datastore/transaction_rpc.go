@@ -334,19 +334,22 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	// OPTIMISTIC WRITEBACK TO RUNNING
 	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(tree.RunningIntentName, tree.RunningValuesPrio)
 
+	d.syncTreeMutex.Lock()
+	defer d.syncTreeMutex.Unlock()
+
 	// add the calculated updates to the tree, as running with adjusted prio and owner
-	err = root.AddUpdatesRecursive(ctx, runningUpdates, treetypes.NewUpdateInsertFlags())
+	err = d.syncTree.AddUpdatesRecursive(ctx, runningUpdates, treetypes.NewUpdateInsertFlags())
 	if err != nil {
 		return nil, err
 	}
 
 	// perform deletes
-	_, err = root.DeleteSubtreePaths(deletes, tree.RunningIntentName)
+	_, err = d.syncTree.DeleteSubtreePaths(deletes, tree.RunningIntentName)
 	if err != nil {
 		return nil, err
 	}
 
-	newRunningIntent, err := root.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
+	newRunningIntent, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
 	if err != nil {
 		return nil, err
 	}
