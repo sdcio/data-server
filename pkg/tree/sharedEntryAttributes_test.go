@@ -261,7 +261,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := tt.sharedEntryAttributes(t)
-			got, err := s.DeleteSubtree(tt.args.relativePath, tt.args.owner)
+			got, err := s.DeleteSubtree(ctx, tt.args.relativePath, tt.args.owner)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("sharedEntryAttributes.DeleteSubtree() error = %v, wantErr %v", err, tt.wantErr)
 				return

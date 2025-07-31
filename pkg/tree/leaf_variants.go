@@ -304,26 +304,15 @@ func (lv *LeafVariants) MarkOwnerForDeletion(owner string, onlyIntended bool) {
 
 func (lv *LeafVariants) DeleteByOwner(owner string) (remainsToExist bool) {
 	lv.lesMutex.Lock()
-	defer lv.lesMutex.Unlock()
-	foundOwner := false
 	for i, l := range lv.les {
-		// early exit if condition is met
-		if foundOwner && remainsToExist {
-			return remainsToExist
-		}
 		if l.Owner() == owner {
 			// Remove element from slice
 			lv.les = append(lv.les[:i], lv.les[i+1:]...)
-			foundOwner = true
-			continue
+			break
 		}
-		if l.Owner() == DefaultsIntentName {
-			continue
-		}
-		remainsToExist = true
-
 	}
-	return remainsToExist
+	lv.lesMutex.Unlock()
+	return lv.remainsToExist()
 }
 
 func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveCase bool) {

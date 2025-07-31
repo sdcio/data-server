@@ -376,7 +376,7 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVari
 	}
 
 	// perform deletes
-	_, err = d.syncTree.DeleteSubtreePaths(deletes, tree.RunningIntentName)
+	_, err = d.syncTree.DeleteSubtreePaths(ctx, deletes, tree.RunningIntentName)
 	if err != nil {
 		return err
 	}

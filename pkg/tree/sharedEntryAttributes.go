@@ -831,26 +831,48 @@ func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isR
 	}
 }
 
-func (s *sharedEntryAttributes) DeleteSubtree(relativePath types.PathSlice, owner string) (bool, error) {
+func (s *sharedEntryAttributes) DeleteSubtree(ctx context.Context, relativePath types.PathSlice, owner string) (bool, error) {
+	var err error
+	var entry Entry
 	if len(relativePath) > 0 {
-		child, exists := s.childs.GetEntry(relativePath[0])
-		if !exists {
-			path := make([]string, 0, len(s.Path())+len(relativePath))
-			path = append(path, s.Path()...)
-			path = append(path, relativePath...)
-			return false, fmt.Errorf("trying to delete subtree %q but unable to find child %s at %s", path, relativePath[0], s.Path())
+		entry, err = s.Navigate(ctx, relativePath, true, false)
+		if err != nil {
+			return false, err
 		}
-		remainingPath := relativePath[1:]
-		return child.DeleteSubtree(remainingPath, owner)
+
+		remains, err := entry.DeleteSubtree(ctx, nil, owner)
+		if err != nil {
+			return false, err
+		}
+
+		// need to remove the leafvariants down from entry.
+		// however if the path points to a key, which is in fact getting deleted
+		// we also need to remove the key, which is the parent. Thats why we do it in this loop
+		// which is, forwarding entry to entry.GetParent() as a last step and depending on the remains
+		// return continuing to perform the delete forther up in the tree
+		// with remains initially set to false, we initially call DeleteSubtree on the referenced entry.
+		for !remains {
+			// calling DeleteSubtree with the empty string, because it should not delete the owner from the higher level keys,
+			// but what it will also do is delete possibly dangling key elements in the tree
+			remains, err = entry.DeleteSubtree(ctx, nil, "")
+			if err != nil {
+				return false, err
+			}
+			// forward the entry pointer to the parent
+			// depending on the remains var the DeleteSubtree is again called on that parent entry
+			entry = entry.GetParent()
+		}
+		return false, nil
 	}
-	remainsToExist := false
+
+	var remainsToExist bool
 	// delete possibly existing leafvariants for the owner
 	remainsToExist = s.leafVariants.DeleteByOwner(owner)
 
 	deleteKeys := []string{}
 	// recurse the call
 	for childName, child := range s.childs.Items() {
-		childRemains, err := child.DeleteSubtree(nil, owner)
+		childRemains, err := child.DeleteSubtree(ctx, nil, owner)
 		if err != nil {
 			return false, err
 		}

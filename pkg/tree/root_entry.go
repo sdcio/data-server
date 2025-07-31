@@ -200,10 +200,10 @@ NEXTELEMENT:
 }
 
 // DeleteSubtree Deletes from the tree, all elements of the PathSlice defined branch of the given owner. Return values are remainsToExist and error if an error occured.
-func (r *RootEntry) DeleteSubtreePaths(deletes types.DeleteEntriesList, intentName string) (bool, error) {
+func (r *RootEntry) DeleteSubtreePaths(ctx context.Context, deletes types.DeleteEntriesList, intentName string) (bool, error) {
 	remainsToExist := true
 	for _, del := range deletes {
-		remainsToExist, err := r.DeleteSubtree(del.Path(), intentName)
+		remainsToExist, err := r.DeleteSubtree(ctx, del.Path(), intentName)
 		if err != nil {
 			return remainsToExist, err
 		}
