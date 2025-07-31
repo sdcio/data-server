@@ -124,6 +124,19 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 
 	log.Infof("ds=%s transaction=%s applied", d.Name(), transaction.GetTransactionId()+" - replace")
 
+	// retrieve the data that is meant to be send southbound (towards the device)
+	updates := root.GetHighestPrecedence(true)
+	deletes, err := root.GetDeletes(true)
+	if err != nil {
+		return nil, err
+	}
+
+	// OPTIMISTIC WRITEBACK TO RUNNING / syncTree
+	err = d.writeBackSyncTree(ctx, updates, deletes)
+	if err != nil {
+		return nil, err
+	}
+
 	return warnings, nil
 }
 
@@ -331,33 +344,10 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 	}
 
-	// OPTIMISTIC WRITEBACK TO RUNNING
-	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(tree.RunningIntentName, tree.RunningValuesPrio)
-
-	d.syncTreeMutex.Lock()
-	defer d.syncTreeMutex.Unlock()
-
-	// add the calculated updates to the tree, as running with adjusted prio and owner
-	err = d.syncTree.AddUpdatesRecursive(ctx, runningUpdates, treetypes.NewUpdateInsertFlags())
+	// OPTIMISTIC WRITEBACK TO RUNNING / syncTree
+	err = d.writeBackSyncTree(ctx, updates, deletes)
 	if err != nil {
 		return nil, err
-	}
-
-	// perform deletes
-	_, err = d.syncTree.DeleteSubtreePaths(deletes, tree.RunningIntentName)
-	if err != nil {
-		return nil, err
-	}
-
-	newRunningIntent, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
-	if err != nil {
-		return nil, err
-	}
-	if newRunningIntent != nil {
-		err = d.cacheClient.IntentModify(ctx, newRunningIntent)
-		if err != nil {
-			return nil, fmt.Errorf("failed updating the running store for %s: %w", d.Name(), err)
-		}
 	}
 
 	log.Infof("ds=%s transaction=%s: completed", d.Name(), transaction.GetTransactionId())
@@ -371,6 +361,42 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	}
 
 	return result, nil
+}
+
+// writeBackSyncTree applies the provided changes to the syncTree and applies to the running cache intent
+func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVariantSlice, deletes treetypes.DeleteEntriesList) error {
+	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(tree.RunningIntentName, tree.RunningValuesPrio)
+
+	// lock the syncTree
+	d.syncTreeMutex.Lock()
+	// add the calculated updates to the tree, as running with adjusted prio and owner
+	err := d.syncTree.AddUpdatesRecursive(ctx, runningUpdates, treetypes.NewUpdateInsertFlags())
+	if err != nil {
+		return err
+	}
+
+	// perform deletes
+	_, err = d.syncTree.DeleteSubtreePaths(deletes, tree.RunningIntentName)
+	if err != nil {
+		return err
+	}
+
+	// release the syncTree lock
+	d.syncTreeMutex.Unlock()
+
+	// export the synctree
+	newRunningIntent, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
+	if err != nil {
+		return err
+	}
+	// write the synctree to disk
+	if newRunningIntent != nil {
+		err = d.cacheClient.IntentModify(ctx, newRunningIntent)
+		if err != nil {
+			return fmt.Errorf("failed updating the running store for %s: %w", d.Name(), err)
+		}
+	}
+	return nil
 }
 
 func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, transactionIntents []*types.TransactionIntent, replaceIntent *types.TransactionIntent, transactionTimeout time.Duration, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
