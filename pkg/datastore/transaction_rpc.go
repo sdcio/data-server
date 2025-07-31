@@ -17,9 +17,10 @@ import (
 )
 
 var (
-	ErrDatastoreLocked = errors.New("datastore is locked, other action is ongoing")
-	ErrContextDone     = errors.New("context is closed (done)")
-	ErrValidationError = errors.New("validation error")
+	ErrDatastoreLocked   = errors.New("datastore is locked, other action is ongoing")
+	ErrContextDone       = errors.New("context is closed (done)")
+	ErrValidationError   = errors.New("validation error")
+	ErrNoIntentsProvided = errors.New("no intents provided")
 )
 
 // SdcpbTransactionIntentToInternalTI converts sdcpb.TransactionIntent to types.TransactionIntent
@@ -457,6 +458,15 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	if err != nil {
 		log.Errorf("error adding intents to transaction: %v", err)
 		return nil, err
+	}
+
+	// no-op transaction
+	if transaction.IsNoOp() {
+		// we expect a transaction confirm from the client
+		transactionGuard.Success()
+		return &sdcpb.TransactionSetResponse{
+			Warnings: []string{"no intents provided"},
+		}, nil
 	}
 
 	response, err := d.lowlevelTransactionSet(ctx, transaction, dryRun)
