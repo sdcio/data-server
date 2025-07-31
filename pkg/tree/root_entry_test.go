@@ -330,55 +330,55 @@ func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
 		re   func() ygot.GoStruct
 		args args
 	}{
-		// {
-		// 	name: "Delete none",
-		// 	args: args{
-		// 		deletes:    types.DeleteEntriesList{},
-		// 		intentName: owner1,
-		// 	},
-		// 	re: func() ygot.GoStruct {
-		// 		return &sdcio_schema.Device{
-		// 			Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
-		// 				{
-		// 					Key1: "k1.1",
-		// 					Key2: "k1.2",
-		// 				}: {
-		// 					Key1:    ygot.String("k1.1"),
-		// 					Key2:    ygot.String("k1.2"),
-		// 					Mandato: ygot.String("TheMandatoryValue1"),
-		// 					Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
-		// 						Value1: ygot.String("containerval1.1"),
-		// 						Value2: ygot.String("containerval1.2"),
-		// 					},
-		// 				},
-		// 				{
-		// 					Key1: "k2.1",
-		// 					Key2: "k2.2",
-		// 				}: {
-		// 					Key1:    ygot.String("k2.1"),
-		// 					Key2:    ygot.String("k2.2"),
-		// 					Mandato: ygot.String("TheMandatoryValue2"),
-		// 					Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
-		// 						Value1: ygot.String("containerval2.1"),
-		// 						Value2: ygot.String("containerval2.2"),
-		// 					},
-		// 				},
-		// 				{
-		// 					Key1: "k1.1",
-		// 					Key2: "k1.3",
-		// 				}: {
-		// 					Key1:    ygot.String("k1.1"),
-		// 					Key2:    ygot.String("k1.3"),
-		// 					Mandato: ygot.String("TheMandatoryValue1"),
-		// 					Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
-		// 						Value1: ygot.String("containerval1.1"),
-		// 						Value2: ygot.String("containerval1.2"),
-		// 					},
-		// 				},
-		// 			},
-		// 		}
-		// 	},
-		// },
+		{
+			name: "Delete none",
+			args: args{
+				deletes:    types.DeleteEntriesList{},
+				intentName: owner1,
+			},
+			re: func() ygot.GoStruct {
+				return &sdcio_schema.Device{
+					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
+						{
+							Key1: "k1.1",
+							Key2: "k1.2",
+						}: {
+							Key1:    ygot.String("k1.1"),
+							Key2:    ygot.String("k1.2"),
+							Mandato: ygot.String("TheMandatoryValue1"),
+							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+								Value1: ygot.String("containerval1.1"),
+								Value2: ygot.String("containerval1.2"),
+							},
+						},
+						{
+							Key1: "k2.1",
+							Key2: "k2.2",
+						}: {
+							Key1:    ygot.String("k2.1"),
+							Key2:    ygot.String("k2.2"),
+							Mandato: ygot.String("TheMandatoryValue2"),
+							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+								Value1: ygot.String("containerval2.1"),
+								Value2: ygot.String("containerval2.2"),
+							},
+						},
+						{
+							Key1: "k1.1",
+							Key2: "k1.3",
+						}: {
+							Key1:    ygot.String("k1.1"),
+							Key2:    ygot.String("k1.3"),
+							Mandato: ygot.String("TheMandatoryValue1"),
+							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+								Value1: ygot.String("containerval1.1"),
+								Value2: ygot.String("containerval1.2"),
+							},
+						},
+					},
+				}
+			},
+		},
 		{
 			name: "Delete one",
 			args: args{
@@ -442,6 +442,40 @@ func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "Delete single key",
+			args: args{
+				deletes: types.DeleteEntriesList{
+					types.NewDeleteEntryImpl(
+						&schema_server.Path{
+							Elem: []*schema_server.PathElem{
+								{
+									Name: "interface",
+									Key: map[string]string{
+										"name": "ethernet-1/1",
+									},
+								},
+							},
+						},
+					),
+				},
+				intentName: owner1,
+			},
+			re: func() ygot.GoStruct {
+				return &sdcio_schema.Device{
+					Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+						"ethernet-1/1": {
+							Name:        ygot.String("ethernet-1/1"),
+							Description: ygot.String("description-1/1"),
+						},
+						"ethernet-1/2": {
+							Name:        ygot.String("ethernet-1/2"),
+							Description: ygot.String("description-1/2"),
+						},
+					},
+				}
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -464,7 +498,7 @@ func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = testhelper.LoadYgotStructIntoTreeRoot(ctx, tt.re(), root, owner1, 500, flagsNew)
+			err = testhelper.LoadYgotStructIntoTreeRoot(ctx, tt.re(), root, tt.args.intentName, 500, flagsNew)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -476,7 +510,7 @@ func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
 
 			fmt.Println(root.String())
 
-			_, err = root.DeleteSubtreePaths(ctx, tt.args.deletes, tt.args.intentName)
+			err = root.DeleteSubtreePaths(ctx, tt.args.deletes, tt.args.intentName)
 			if err != nil {
 				t.Fatal(err)
 			}

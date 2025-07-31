@@ -176,7 +176,6 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 		name                  string
 		sharedEntryAttributes func(t *testing.T) *sharedEntryAttributes
 		args                  args
-		want                  bool
 		wantErr               bool
 	}{
 		{
@@ -215,7 +214,6 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				relativePath: types.PathSlice{"interface"},
 				owner:        owner1,
 			},
-			want:    true,
 			wantErr: false,
 		},
 		{
@@ -254,23 +252,19 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				relativePath: types.PathSlice{"interface", "ethernet-1/27"},
 				owner:        owner1,
 			},
-			want:    false,
 			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := tt.sharedEntryAttributes(t)
-			got, err := s.DeleteSubtree(ctx, tt.args.relativePath, tt.args.owner)
+			err := s.DeleteSubtree(ctx, tt.args.relativePath, tt.args.owner)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("sharedEntryAttributes.DeleteSubtree() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if tt.wantErr {
 				return
-			}
-			if got != tt.want {
-				t.Errorf("sharedEntryAttributes.DeleteSubtree() = %v, want %v", got, tt.want)
 			}
 			e, err := s.Navigate(ctx, tt.args.relativePath, false, false)
 			if err != nil {

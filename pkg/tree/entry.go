@@ -147,7 +147,7 @@ type Entry interface {
 	ImportConfig(ctx context.Context, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
 	TreeExport(owner string) ([]*tree_persist.TreeElement, error)
 	// DeleteSubtree Deletes from the tree, all elements of the PathSlice defined branch of the given owner
-	DeleteSubtree(ctx context.Context, relativePath types.PathSlice, owner string) (remainsToExist bool, err error)
+	DeleteSubtree(ctx context.Context, relativePath types.PathSlice, owner string) (err error)
 	GetDeviations(ch chan<- *types.DeviationEntry, activeCase bool)
 	// GetListChilds collects all the childs of the list. In the tree we store them seperated into their key branches.
 	// this is collecting all the last level key entries.

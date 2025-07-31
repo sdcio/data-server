@@ -377,7 +377,7 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVari
 	}
 
 	// perform deletes
-	_, err = d.syncTree.DeleteSubtreePaths(ctx, deletes, tree.RunningIntentName)
+	err = d.syncTree.DeleteSubtreePaths(ctx, deletes, tree.RunningIntentName)
 	if err != nil {
 		return err
 	}
@@ -431,6 +431,9 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 			default:
 				// Start a transaction and prepare to cancel it if any error occurs
 				transactionGuard, err = d.transactionManager.RegisterTransaction(ctx, transaction)
+				if err != nil {
+					return nil, err
+				}
 				if transactionGuard != nil {
 					defer transactionGuard.Done()
 					break outerloop
