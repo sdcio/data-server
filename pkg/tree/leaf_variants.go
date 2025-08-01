@@ -61,6 +61,29 @@ func (lv *LeafVariants) Length() int {
 	return len(lv.les)
 }
 
+func (lv *LeafVariants) canDeleteBranch(keepDefault bool) bool {
+	lv.lesMutex.RLock()
+	defer lv.lesMutex.RUnlock()
+
+	// only procede if we have leave variants
+	if len(lv.les) == 0 {
+		return true
+	}
+
+	// go through all variants
+	for _, l := range lv.les {
+		// if the LeafVariant is not owned by running or default
+		if l.Update.Owner() != DefaultsIntentName || keepDefault {
+			// then we need to check that it remains, so not Delete Flag set or DeleteOnylIntended Flags set [which results in not doing a delete towards the device]
+			if l.GetDeleteOnlyIntendedFlag() || !l.GetDeleteFlag() {
+				// then this entry should not be deleted
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // canDelete returns true if leafValues exist that are not owned by default or running that do not have the DeleteFlag set [or if delete is set, also the DeleteOnlyIntendedFlag set]
 func (lv *LeafVariants) canDelete() bool {
 	lv.lesMutex.RLock()
