@@ -127,7 +127,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 
 	// retrieve the data that is meant to be send southbound (towards the device)
 	updates := root.GetHighestPrecedence(true)
-	deletes, err := root.GetDeletes(true)
+	deletes := treetypes.DeleteEntriesList{root}
 	if err != nil {
 		return nil, err
 	}
@@ -370,14 +370,15 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVari
 
 	// lock the syncTree
 	d.syncTreeMutex.Lock()
-	// add the calculated updates to the tree, as running with adjusted prio and owner
-	err := d.syncTree.AddUpdatesRecursive(ctx, runningUpdates, treetypes.NewUpdateInsertFlags())
+
+	// perform deletes
+	err := d.syncTree.DeleteBranchPaths(ctx, deletes, tree.RunningIntentName)
 	if err != nil {
 		return err
 	}
 
-	// perform deletes
-	err = d.syncTree.DeleteBranchPaths(ctx, deletes, tree.RunningIntentName)
+	// add the calculated updates to the tree, as running with adjusted prio and owner
+	err = d.syncTree.AddUpdatesRecursive(ctx, runningUpdates, treetypes.NewUpdateInsertFlags())
 	if err != nil {
 		return err
 	}
