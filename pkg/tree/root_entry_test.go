@@ -474,6 +474,8 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 							sdcpb.NewPathElem("network-instance", map[string]string{
 								"name": "ni1",
 							}),
+							sdcpb.NewPathElem("protocol", nil),
+							sdcpb.NewPathElem("bgp", nil),
 						},
 					}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}, *proto.Int32(5), "owner1", 0),
 				},
