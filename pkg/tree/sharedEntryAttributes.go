@@ -421,23 +421,22 @@ func (s *sharedEntryAttributes) GetLevel() int {
 }
 
 // Walk takes the EntryVisitor and applies it to every Entry in the tree
-func (s *sharedEntryAttributes) Walk(f EntryVisitor) error {
-
-	// TODO: COME UP WITH SOME CLEVER CONCURRENCY
+func (s *sharedEntryAttributes) Walk(ctx context.Context, v EntryVisitor) error {
 
 	// execute the function locally
-	err := f(s)
+	err := v.Visit(ctx, s)
 	if err != nil {
 		return err
 	}
 
 	// trigger the execution on all childs
 	for _, c := range s.childs.GetAll() {
-		err := c.Walk(f)
+		err := c.Walk(ctx, v)
 		if err != nil {
 			return err
 		}
 	}
+	v.Up()
 	return nil
 }
 
@@ -934,7 +933,7 @@ func (s *sharedEntryAttributes) getHighestPrecedenceValueOfBranch(filter Highest
 
 // Validate is the highlevel function to perform validation.
 // it will multiplex all the different Validations that need to happen
-func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, vCfg *config.Validation) {
+func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat, vCfg *config.Validation) {
 
 	// recurse the call to the child elements
 	wg := sync.WaitGroup{}
@@ -942,7 +941,7 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 	for _, c := range s.filterActiveChoiceCaseChilds() {
 		wg.Add(1)
 		valFunc := func(x Entry) {
-			x.Validate(ctx, resultChan, vCfg)
+			x.Validate(ctx, resultChan, statChan, vCfg)
 			wg.Done()
 		}
 		if !vCfg.DisableConcurrency {
@@ -958,35 +957,35 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 		// TODO: Validate Enums
 
 		if !vCfg.DisabledValidators.Mandatory {
-			s.validateMandatory(ctx, resultChan)
+			s.validateMandatory(ctx, resultChan, statChan)
 		}
 		if !vCfg.DisabledValidators.Leafref {
-			s.validateLeafRefs(ctx, resultChan)
+			s.validateLeafRefs(ctx, resultChan, statChan)
 		}
 		if !vCfg.DisabledValidators.LeafrefMinMaxAttributes {
-			s.validateLeafListMinMaxAttributes(resultChan)
+			s.validateLeafListMinMaxAttributes(resultChan, statChan)
 		}
 		if !vCfg.DisabledValidators.Pattern {
-			s.validatePattern(resultChan)
+			s.validatePattern(resultChan, statChan)
 		}
 		if !vCfg.DisabledValidators.MustStatement {
-			s.validateMustStatements(ctx, resultChan)
+			s.validateMustStatements(ctx, resultChan, statChan)
 		}
 		if !vCfg.DisabledValidators.Length {
-			s.validateLength(resultChan)
+			s.validateLength(resultChan, statChan)
 		}
 		if !vCfg.DisabledValidators.Range {
-			s.validateRange(resultChan)
+			s.validateRange(resultChan, statChan)
 		}
 		//if !vCfg.DisabledValidators.MaxElements {
-		//	s.validateMaxElements(resultChan)
+		//	s.validateMaxElements(resultChan, statChan)
 		//}
 	}
 }
 
 // validateRange int and uint types (Leaf and Leaflist) define ranges which configured values must lay in.
 // validateRange does check this condition.
-func (s *sharedEntryAttributes) validateRange(resultChan chan<- *types.ValidationResultEntry) {
+func (s *sharedEntryAttributes) validateRange(resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat) {
 
 	// if no schema present or Field and LeafList Types do not contain any ranges, return there is nothing to check
 	if s.GetSchema() == nil || (len(s.GetSchema().GetField().GetType().GetRange()) == 0 && len(s.GetSchema().GetLeaflist().GetType().GetRange()) == 0) {
@@ -1019,6 +1018,8 @@ func (s *sharedEntryAttributes) validateRange(resultChan chan<- *types.Validatio
 		return
 	}
 
+	stat := types.NewValidationStat(types.StatTypeRange)
+
 	// range through the tvs and check that they are in range
 	for _, tv := range tvs {
 		// we need to distinguish between unsigned and singned ints
@@ -1028,6 +1029,7 @@ func (s *sharedEntryAttributes) validateRange(resultChan chan<- *types.Validatio
 			urnges := utils.NewUrnges()
 			// add the defined ranges to the ranges struct
 			for _, r := range typeSchema.GetRange() {
+				stat.PlusOne()
 				urnges.AddRange(r.Min.Value, r.Max.Value)
 			}
 
@@ -1040,6 +1042,7 @@ func (s *sharedEntryAttributes) validateRange(resultChan chan<- *types.Validatio
 			// procede with the signed ints
 			srnges := utils.NewSrnges()
 			for _, r := range typeSchema.GetRange() {
+				stat.PlusOne()
 				// get the value
 				min := int64(r.GetMin().GetValue())
 				max := int64(r.GetMax().GetValue())
@@ -1059,36 +1062,40 @@ func (s *sharedEntryAttributes) validateRange(resultChan chan<- *types.Validatio
 			}
 		}
 	}
+	statChan <- stat
 }
 
 // validateLeafListMinMaxAttributes validates the Min-, and Max-Elements attribute of the Entry if it is a Leaflists.
-func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(resultChan chan<- *types.ValidationResultEntry) {
+func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat) {
 	if schema := s.schema.GetLeaflist(); schema != nil {
-		if schema.MinElements > 0 {
+		if schema.GetMinElements() > 0 || schema.GetMaxElements() < math.MaxUint64 {
 			if lv := s.leafVariants.GetHighestPrecedence(false, true); lv != nil {
 				tv := lv.Update.Value()
 
 				if val := tv.GetLeaflistVal(); val != nil {
 					// check minelements if set
-					if schema.MinElements > 0 && len(val.GetElement()) < int(schema.GetMinElements()) {
+					if schema.GetMinElements() > 0 && len(val.GetElement()) < int(schema.GetMinElements()) {
 						resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("leaflist %s defines %d min-elements but only %d elements are present", s.Path().String(), schema.MinElements, len(val.GetElement())), types.ValidationResultEntryTypeError)
 					}
 					// check maxelements if set
-					if len(val.GetElement()) > int(schema.GetMaxElements()) {
+					if uint64(len(val.GetElement())) > uint64(schema.GetMaxElements()) {
 						resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("leaflist %s defines %d max-elements but %d elements are present", s.Path().String(), schema.GetMaxElements(), len(val.GetElement())), types.ValidationResultEntryTypeError)
 					}
 				}
+				statChan <- types.NewValidationStat(types.StatTypeMinMax).PlusOne()
 			}
 		}
 	}
 }
 
-func (s *sharedEntryAttributes) validateLength(resultChan chan<- *types.ValidationResultEntry) {
+func (s *sharedEntryAttributes) validateLength(resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat) {
 	if schema := s.schema.GetField(); schema != nil {
 
-		if len(schema.GetType().Length) == 0 {
+		if len(schema.GetType().GetLength()) == 0 {
 			return
 		}
+
+		stat := types.NewValidationStat(types.StatTypeLength)
 
 		lv := s.leafVariants.GetHighestPrecedence(false, true)
 		if lv == nil {
@@ -1097,24 +1104,29 @@ func (s *sharedEntryAttributes) validateLength(resultChan chan<- *types.Validati
 		value := lv.Value().GetStringVal()
 		actualLength := utf8.RuneCountInString(value)
 
-		for _, lengthDef := range schema.GetType().Length {
+		for _, lengthDef := range schema.GetType().GetLength() {
+			stat.PlusOne()
 			if lengthDef.Min.Value <= uint64(actualLength) && uint64(actualLength) <= lengthDef.Max.Value {
-				return
+				// continue if the length is within the range
+				continue
 			}
+			// this is already the failure case
+			lenghts := []string{}
+			for _, lengthDef := range schema.GetType().GetLength() {
+				lenghts = append(lenghts, fmt.Sprintf("%d..%d", lengthDef.Min.Value, lengthDef.Max.Value))
+			}
+			resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("error length of Path: %s, Value: %s not within allowed length %s", s.Path(), value, strings.Join(lenghts, ", ")), types.ValidationResultEntryTypeError)
 		}
-		lenghts := []string{}
-		for _, lengthDef := range schema.GetType().Length {
-			lenghts = append(lenghts, fmt.Sprintf("%d..%d", lengthDef.Min.Value, lengthDef.Max.Value))
-		}
-		resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("error length of Path: %s, Value: %s not within allowed length %s", s.Path(), value, strings.Join(lenghts, ", ")), types.ValidationResultEntryTypeError)
+		statChan <- stat
 	}
 }
 
-func (s *sharedEntryAttributes) validatePattern(resultChan chan<- *types.ValidationResultEntry) {
+func (s *sharedEntryAttributes) validatePattern(resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat) {
 	if schema := s.schema.GetField(); schema != nil {
 		if len(schema.Type.Patterns) == 0 {
 			return
 		}
+		stat := types.NewValidationStat(types.StatTypePattern)
 		lv := s.leafVariants.GetHighestPrecedence(false, true)
 		value := lv.Value().GetStringVal()
 		for _, pattern := range schema.Type.Patterns {
@@ -1128,7 +1140,9 @@ func (s *sharedEntryAttributes) validatePattern(resultChan chan<- *types.Validat
 					resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("value %s of %s does not match regex %s (inverted: %t)", value, s.Path(), p, pattern.GetInverted()), types.ValidationResultEntryTypeError)
 				}
 			}
+			stat.PlusOne()
 		}
+		statChan <- stat
 	}
 }
 
@@ -1251,14 +1265,16 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 
 // validateMandatory validates that all the mandatory attributes,
 // defined by the schema are present either in the tree or in the index.
-func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry) {
+func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat) {
 	if s.shouldDelete() {
 		return
 	}
 	if s.schema != nil {
 		switch s.schema.GetSchema().(type) {
 		case *sdcpb.SchemaElem_Container:
+			stat := types.NewValidationStat(types.StatTypeMandatory)
 			for _, c := range s.schema.GetContainer().GetMandatoryChildrenConfig() {
+				stat.PlusOne()
 				attributes := []string{}
 				choiceName := ""
 				// check if it is a ChildContainer
@@ -1288,6 +1304,7 @@ func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultCha
 
 				s.validateMandatoryWithKeys(ctx, len(s.GetSchema().GetContainer().GetKeys()), attributes, choiceName, resultChan)
 			}
+			statChan <- stat
 		}
 	}
 }

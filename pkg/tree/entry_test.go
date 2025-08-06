@@ -531,7 +531,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			t.Log(root.String())
 
-			validationResult := root.Validate(context.TODO(), validationConfig)
+			validationResult, _ := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -571,7 +571,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				}
 			}
 
-			validationResult := root.Validate(context.TODO(), validationConfig)
+			validationResult, _ := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -617,7 +617,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				}
 			}
 
-			validationResult := root.Validate(context.TODO(), validationConfig)
+			validationResult, _ := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1213,7 +1213,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 				t.Error(err)
 			}
 
-			validationResult := root.Validate(context.TODO(), validationConfig)
+			validationResult, _ := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1250,7 +1250,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 				t.Error(err)
 			}
 
-			validationResult := root.Validate(context.TODO(), validationConfig)
+			validationResult, _ := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1346,7 +1346,7 @@ func Test_Validation_Deref(t *testing.T) {
 				t.Error(err)
 			}
 
-			validationResult := root.Validate(context.TODO(), validationConfig)
+			validationResult, _ := root.Validate(context.TODO(), validationConfig)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors

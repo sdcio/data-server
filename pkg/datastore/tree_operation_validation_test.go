@@ -205,7 +205,7 @@ func TestDatastore_validateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			validationResult := root.Validate(ctx, validationConfig)
+			validationResult, _ := root.Validate(ctx, validationConfig)
 
 			t.Log(root.String())
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/importer"
@@ -88,26 +89,44 @@ func (r *RootEntry) ImportConfig(ctx context.Context, basePath types.PathSlice, 
 	return e.ImportConfig(ctx, importer, intentName, intentPrio, flags)
 }
 
-func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation) types.ValidationResults {
+func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation) (types.ValidationResults, *types.ValidationStatOverall) {
 	// perform validation
 	// we use a channel and cumulate all the errors
 	validationResultEntryChan := make(chan *types.ValidationResultEntry, 10)
+	validationStatChan := make(chan *types.ValidationStat, 10)
 
 	// start validation in a seperate goroutine
 	go func() {
-		r.sharedEntryAttributes.Validate(ctx, validationResultEntryChan, vCfg)
+		r.sharedEntryAttributes.Validate(ctx, validationResultEntryChan, validationStatChan, vCfg)
 		close(validationResultEntryChan)
+		close(validationStatChan)
 	}()
 
 	// create a ValidationResult struct
 	validationResult := types.ValidationResults{}
+	validationStatOverall := types.NewValidationStatOverall()
 
-	// read from the validationResult channel
-	for e := range validationResultEntryChan {
-		validationResult.AddEntry(e)
-	}
+	syncWait := &sync.WaitGroup{}
+	syncWait.Add(1)
+	go func() {
+		// read from the validationResult channel
+		for e := range validationResultEntryChan {
+			validationResult.AddEntry(e)
+		}
+		syncWait.Done()
+	}()
 
-	return validationResult
+	syncWait.Add(1)
+	go func() {
+		// read from the validationResult channel
+		for e := range validationStatChan {
+			validationStatOverall.MergeStat(e)
+		}
+		syncWait.Done()
+	}()
+
+	syncWait.Wait()
+	return validationResult, validationStatOverall
 }
 
 // String returns the string representation of the Tree.

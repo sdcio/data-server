@@ -203,7 +203,7 @@ func (s *sharedEntryAttributes) resolve_leafref_key_path(ctx context.Context, ke
 	return nil
 }
 
-func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan chan<- *types.ValidationResultEntry) {
+func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat) {
 	if s.shouldDelete() {
 		return
 	}
@@ -212,7 +212,7 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan
 	if s.schema == nil || lref == "" {
 		return
 	}
-
+	statChan <- types.NewValidationStat(types.StatTypeLeafRef).PlusOne()
 	entry, err := s.NavigateLeafRef(ctx)
 	if err != nil || len(entry) == 0 {
 		// check if the OptionalInstance (!require-instances [https://datatracker.ietf.org/doc/html/rfc7950#section-9.9.3])
