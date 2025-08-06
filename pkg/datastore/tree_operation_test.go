@@ -807,7 +807,11 @@ func TestDatastore_populateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			root.MarkOwnerDelete(tt.intentName, false)
+			marksOwnerDeleteVisitor := tree.NewMarkOwnerDeleteVisitor(tt.intentName, false)
+			err = root.Walk(ctx, marksOwnerDeleteVisitor)
+			if err != nil {
+				t.Error(err)
+			}
 
 			newFlag := types.NewUpdateInsertFlags().SetNewFlag()
 
