@@ -98,7 +98,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	}
 
 	warnings := validationResult.WarningsStr()
-	log.Debug("Transaction: %s - validation stats - %s", transaction.GetTransactionId(), validationStats.String())
+	log.Debugf("Transaction: %s - validation stats - %s", transaction.GetTransactionId(), validationStats.String())
 	log.Infof("Transaction: %s - validation passed", transaction.GetTransactionId())
 
 	// we use the TargetSourceReplace, that adjustes the tree results in a way
