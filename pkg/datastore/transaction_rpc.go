@@ -12,6 +12,7 @@ import (
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
@@ -44,6 +45,11 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 
 	// add the intent to the TransactionIntent
 	ti.AddUpdates(Updates)
+
+	// add the deletes
+	for _, d := range req.Deletes {
+		ti.AddDelete(utils.ToStrings(d, false, false))
+	}
 
 	return ti, nil
 }

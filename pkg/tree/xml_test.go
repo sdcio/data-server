@@ -412,11 +412,11 @@ func TestToXMLTable(t *testing.T) {
 				}
 				return upds, nil
 			},
-			expected: ``,
+			expected:               ``,
 			honorNamespace:         true,
 			operationWithNamespace: true,
 			useOperationRemove:     true,
-			newConfig: nil,
+			newConfig:              nil,
 		},
 	}
 

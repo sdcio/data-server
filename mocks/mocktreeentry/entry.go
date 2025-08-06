@@ -448,17 +448,17 @@ func (mr *MockEntryMockRecorder) Validate(ctx, resultChan, concurrent any) *gomo
 }
 
 // Walk mocks base method.
-func (m *MockEntry) Walk(f tree.EntryVisitor) error {
+func (m *MockEntry) Walk(ctx context.Context, v tree.EntryVisitor) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Walk", f)
+	ret := m.ctrl.Call(m, "Walk", ctx, v)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Walk indicates an expected call of Walk.
-func (mr *MockEntryMockRecorder) Walk(f any) *gomock.Call {
+func (mr *MockEntryMockRecorder) Walk(ctx, v any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Walk", reflect.TypeOf((*MockEntry)(nil).Walk), f)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Walk", reflect.TypeOf((*MockEntry)(nil).Walk), ctx, v)
 }
 
 // addChild mocks base method.
@@ -487,6 +487,32 @@ func (m *MockEntry) canDelete() bool {
 func (mr *MockEntryMockRecorder) canDelete() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "canDelete", reflect.TypeOf((*MockEntry)(nil).canDelete))
+}
+
+// canDeleteBranch mocks base method.
+func (m *MockEntry) canDeleteBranch(keepDefault bool) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "canDeleteBranch", keepDefault)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// canDeleteBranch indicates an expected call of canDeleteBranch.
+func (mr *MockEntryMockRecorder) canDeleteBranch(keepDefault any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "canDeleteBranch", reflect.TypeOf((*MockEntry)(nil).canDeleteBranch), keepDefault)
+}
+
+// deleteCanDeleteChilds mocks base method.
+func (m *MockEntry) deleteCanDeleteChilds(keepDefault bool) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "deleteCanDeleteChilds", keepDefault)
+}
+
+// deleteCanDeleteChilds indicates an expected call of deleteCanDeleteChilds.
+func (mr *MockEntryMockRecorder) deleteCanDeleteChilds(keepDefault any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "deleteCanDeleteChilds", reflect.TypeOf((*MockEntry)(nil).deleteCanDeleteChilds), keepDefault)
 }
 
 // getChildren mocks base method.
@@ -591,15 +617,15 @@ func (mr *MockEntryMockRecorder) toXmlInternal(parent, onlyNewOrUpdated, honorNa
 }
 
 // validateMandatory mocks base method.
-func (m *MockEntry) validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry) {
+func (m *MockEntry) validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "validateMandatory", ctx, resultChan)
+	m.ctrl.Call(m, "validateMandatory", ctx, resultChan, statChan)
 }
 
 // validateMandatory indicates an expected call of validateMandatory.
-func (mr *MockEntryMockRecorder) validateMandatory(ctx, resultChan any) *gomock.Call {
+func (mr *MockEntryMockRecorder) validateMandatory(ctx, resultChan, statChan any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "validateMandatory", reflect.TypeOf((*MockEntry)(nil).validateMandatory), ctx, resultChan)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "validateMandatory", reflect.TypeOf((*MockEntry)(nil).validateMandatory), ctx, resultChan, statChan)
 }
 
 // validateMandatoryWithKeys mocks base method.
@@ -612,4 +638,54 @@ func (m *MockEntry) validateMandatoryWithKeys(ctx context.Context, level int, at
 func (mr *MockEntryMockRecorder) validateMandatoryWithKeys(ctx, level, attribute, resultChan any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "validateMandatoryWithKeys", reflect.TypeOf((*MockEntry)(nil).validateMandatoryWithKeys), ctx, level, attribute, resultChan)
+}
+
+// MockEntryVisitor is a mock of EntryVisitor interface.
+type MockEntryVisitor struct {
+	ctrl     *gomock.Controller
+	recorder *MockEntryVisitorMockRecorder
+	isgomock struct{}
+}
+
+// MockEntryVisitorMockRecorder is the mock recorder for MockEntryVisitor.
+type MockEntryVisitorMockRecorder struct {
+	mock *MockEntryVisitor
+}
+
+// NewMockEntryVisitor creates a new mock instance.
+func NewMockEntryVisitor(ctrl *gomock.Controller) *MockEntryVisitor {
+	mock := &MockEntryVisitor{ctrl: ctrl}
+	mock.recorder = &MockEntryVisitorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockEntryVisitor) EXPECT() *MockEntryVisitorMockRecorder {
+	return m.recorder
+}
+
+// Up mocks base method.
+func (m *MockEntryVisitor) Up() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Up")
+}
+
+// Up indicates an expected call of Up.
+func (mr *MockEntryVisitorMockRecorder) Up() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Up", reflect.TypeOf((*MockEntryVisitor)(nil).Up))
+}
+
+// Visit mocks base method.
+func (m *MockEntryVisitor) Visit(ctx context.Context, e tree.Entry) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Visit", ctx, e)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Visit indicates an expected call of Visit.
+func (mr *MockEntryVisitorMockRecorder) Visit(ctx, e any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Visit", reflect.TypeOf((*MockEntryVisitor)(nil).Visit), ctx, e)
 }

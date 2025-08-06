@@ -19,6 +19,7 @@ type LeafEntry struct {
 	Delete             bool
 	DeleteOnlyIntended bool
 	IsUpdated          bool
+	IsExplicitDelete   bool
 
 	mu sync.RWMutex
 }
@@ -31,6 +32,7 @@ func (l *LeafEntry) DeepCopy(parentEntry Entry) *LeafEntry {
 		Delete:             l.Delete,
 		DeleteOnlyIntended: l.DeleteOnlyIntended,
 		IsUpdated:          l.IsUpdated,
+		IsExplicitDelete:   l.IsExplicitDelete,
 		mu:                 sync.RWMutex{},
 	}
 }
@@ -73,6 +75,12 @@ func (l *LeafEntry) GetDeleteFlag() bool {
 	return l.Delete
 }
 
+func (l *LeafEntry) GetExplicitDeleteFlag() bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.IsExplicitDelete
+}
+
 func (l *LeafEntry) GetDeleteOnlyIntendedFlag() bool {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -110,13 +118,9 @@ func (l *LeafEntry) MarkDelete(onlyIntended bool) {
 	l.IsNew = false
 }
 
-func (l *LeafEntry) GetRootBasedEntryChain() []Entry {
-	return l.parentEntry.GetRootBasedEntryChain()
-}
-
 // String returns a string representation of the LeafEntry
 func (l *LeafEntry) String() string {
-	return fmt.Sprintf("Owner: %s, Priority: %d, Value: %s, New: %t, Delete: %t, Update: %t, DeleteIntendedOnly: %t", l.Owner(), l.Priority(), utils.TypedValueToString(l.Value()), l.GetNewFlag(), l.GetDeleteFlag(), l.GetUpdateFlag(), l.GetDeleteOnlyIntendedFlag())
+	return fmt.Sprintf("Owner: %s, Priority: %d, Value: %s, New: %t, Delete: %t, Update: %t, DeleteIntendedOnly: %t, ExplicitDelete: %t", l.Owner(), l.Priority(), utils.TypedValueToString(l.Value()), l.GetNewFlag(), l.GetDeleteFlag(), l.GetUpdateFlag(), l.GetDeleteOnlyIntendedFlag(), l.GetExplicitDeleteFlag())
 }
 
 // NewLeafEntry constructor for a new LeafEntry

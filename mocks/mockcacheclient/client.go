@@ -98,17 +98,17 @@ func (mr *MockClientMockRecorder) InstanceExists(ctx, cacheInstanceName any) *go
 }
 
 // InstanceIntentDelete mocks base method.
-func (m *MockClient) InstanceIntentDelete(ctx context.Context, cacheName, intentName string) error {
+func (m *MockClient) InstanceIntentDelete(ctx context.Context, cacheName, intentName string, IgnoreNonExisting bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstanceIntentDelete", ctx, cacheName, intentName)
+	ret := m.ctrl.Call(m, "InstanceIntentDelete", ctx, cacheName, intentName, IgnoreNonExisting)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstanceIntentDelete indicates an expected call of InstanceIntentDelete.
-func (mr *MockClientMockRecorder) InstanceIntentDelete(ctx, cacheName, intentName any) *gomock.Call {
+func (mr *MockClientMockRecorder) InstanceIntentDelete(ctx, cacheName, intentName, IgnoreNonExisting any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceIntentDelete", reflect.TypeOf((*MockClient)(nil).InstanceIntentDelete), ctx, cacheName, intentName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceIntentDelete", reflect.TypeOf((*MockClient)(nil).InstanceIntentDelete), ctx, cacheName, intentName, IgnoreNonExisting)
 }
 
 // InstanceIntentExists mocks base method.

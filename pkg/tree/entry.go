@@ -158,6 +158,6 @@ type Entry interface {
 }
 
 type EntryVisitor interface {
-	Visit(ctx context.Context, s *sharedEntryAttributes) error
+	Visit(ctx context.Context, e Entry) error
 	Up()
 }
