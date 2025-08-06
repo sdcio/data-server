@@ -11,7 +11,7 @@ import (
 )
 
 type LeafVariants struct {
-	les         []*LeafEntry
+	les         LeafVariantSlice
 	lesMutex    sync.RWMutex
 	tc          *TreeContext
 	parentEntry Entry
@@ -19,7 +19,7 @@ type LeafVariants struct {
 
 func newLeafVariants(tc *TreeContext, parentEnty Entry) *LeafVariants {
 	return &LeafVariants{
-		les:         make([]*LeafEntry, 0, 2),
+		les:         make(LeafVariantSlice, 0, 2),
 		tc:          tc,
 		parentEntry: parentEnty,
 	}
@@ -317,12 +317,15 @@ func (lv *LeafVariants) GetByOwner(owner string) *LeafEntry {
 }
 
 // MarkOwnerForDeletion searches for a LefVariant of given owner, if it exists
-// the entry is marked for deletion
-func (lv *LeafVariants) MarkOwnerForDeletion(owner string, onlyIntended bool) {
+// the entry is marked for deletion.
+// returning true if an owner entry was found, false if not
+func (lv *LeafVariants) MarkOwnerForDeletion(owner string, onlyIntended bool) *LeafEntry {
 	le := lv.GetByOwner(owner)
 	if le != nil {
 		le.MarkDelete(onlyIntended)
+		return le
 	}
+	return nil
 }
 
 func (lv *LeafVariants) DeleteByOwner(owner string) {
