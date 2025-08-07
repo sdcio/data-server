@@ -22,22 +22,22 @@ func NewBlameConfigVisitor(includeDefaults bool) *BlameConfigVisitor {
 	}
 }
 
-func (b *BlameConfigVisitor) Visit(ctx context.Context, s *sharedEntryAttributes) error {
-	name := s.pathElemName
-	if s.IsRoot() {
+func (b *BlameConfigVisitor) Visit(ctx context.Context, e Entry) error {
+	name := e.PathName()
+	if e.IsRoot() {
 		name = "root"
 	}
 	result := sdcpb.NewBlameTreeElement(name)
 	skipAdd := false
 
 	// process Value
-	highestLe := s.GetLeafVariantEntries().GetHighestPrecedence(false, true)
+	highestLe := e.GetLeafVariantEntries().GetHighestPrecedence(false, true)
 	if highestLe != nil {
 		if highestLe.Update.Owner() != DefaultsIntentName || b.includeDefaults {
 			result.SetValue(highestLe.Update.Value()).SetOwner(highestLe.Update.Owner())
 
 			// check if running equals the expected
-			runningLe := s.GetLeafVariantEntries().GetRunning()
+			runningLe := e.GetLeafVariantEntries().GetRunning()
 			if runningLe != nil {
 				if !proto.Equal(runningLe.Update.Value(), highestLe.Update.Value()) {
 					result.DeviationValue = runningLe.Value()

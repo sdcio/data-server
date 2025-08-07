@@ -142,15 +142,15 @@ func (mr *MockClientMockRecorder) InstanceIntentGet(ctx, cacheName, intentName a
 }
 
 // InstanceIntentGetAll mocks base method.
-func (m *MockClient) InstanceIntentGetAll(ctx context.Context, cacheName string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+func (m *MockClient) InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "InstanceIntentGetAll", ctx, cacheName, intentChan, errChan)
+	m.ctrl.Call(m, "InstanceIntentGetAll", ctx, cacheName, excludeIntentNames, intentChan, errChan)
 }
 
 // InstanceIntentGetAll indicates an expected call of InstanceIntentGetAll.
-func (mr *MockClientMockRecorder) InstanceIntentGetAll(ctx, cacheName, intentChan, errChan any) *gomock.Call {
+func (mr *MockClientMockRecorder) InstanceIntentGetAll(ctx, cacheName, excludeIntentNames, intentChan, errChan any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceIntentGetAll", reflect.TypeOf((*MockClient)(nil).InstanceIntentGetAll), ctx, cacheName, intentChan, errChan)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceIntentGetAll", reflect.TypeOf((*MockClient)(nil).InstanceIntentGetAll), ctx, cacheName, excludeIntentNames, intentChan, errChan)
 }
 
 // InstanceIntentModify mocks base method.
