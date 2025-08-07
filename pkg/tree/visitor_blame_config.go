@@ -15,6 +15,8 @@ type BlameConfigVisitor struct {
 	// skipUp          bool
 }
 
+var _ EntryVisitor = (*BlameConfigVisitor)(nil)
+
 func NewBlameConfigVisitor(includeDefaults bool) *BlameConfigVisitor {
 	return &BlameConfigVisitor{
 		stack:           []*sdcpb.BlameTreeElement{},
