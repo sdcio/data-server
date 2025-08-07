@@ -16,8 +16,8 @@ func NewMarkOwnerDeleteVisitor(owner string, onlyIntended bool) *MarkOwnerDelete
 	}
 }
 
-func (o *MarkOwnerDeleteVisitor) Visit(ctx context.Context, s *sharedEntryAttributes) error {
-	le := s.GetLeafVariantEntries().MarkOwnerForDeletion(o.owner, o.onlyIntended)
+func (o *MarkOwnerDeleteVisitor) Visit(ctx context.Context, e Entry) error {
+	le := e.GetLeafVariantEntries().MarkOwnerForDeletion(o.owner, o.onlyIntended)
 	if le != nil {
 		o.leafVariantsMatched = append(o.leafVariantsMatched, le)
 	}
