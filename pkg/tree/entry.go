@@ -161,3 +161,16 @@ type EntryVisitor interface {
 	Visit(ctx context.Context, e Entry) error
 	Up()
 }
+
+type LeafVariantEntry interface {
+	MarkDelete(onlyIntended bool)
+	GetEntry() Entry
+	String() string
+}
+
+type LeafVariantEntries interface {
+	MarkOwnerForDeletion(owner string, onlyIntended bool) *LeafEntry
+	GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool) *LeafEntry
+	GetRunning() *LeafEntry
+	DeleteByOwner(owner string) bool
+}
