@@ -17,7 +17,11 @@ func NewXmlTreeImporter(d *etree.Element) *XmlTreeImporter {
 	}
 }
 
-func (x *XmlTreeImporter) GetElement(key string) importer.ImportConfigAdapter {
+func (x *XmlTreeImporter) GetDeletes() *sdcpb.PathSet {
+	return sdcpb.NewPathSet()
+}
+
+func (x *XmlTreeImporter) GetElement(key string) importer.ImportConfigAdapterElement {
 	e := x.elem.FindElement(key)
 	if e == nil {
 		return nil
@@ -25,13 +29,13 @@ func (x *XmlTreeImporter) GetElement(key string) importer.ImportConfigAdapter {
 	return NewXmlTreeImporter(e)
 }
 
-func (x *XmlTreeImporter) GetElements() []importer.ImportConfigAdapter {
+func (x *XmlTreeImporter) GetElements() []importer.ImportConfigAdapterElement {
 	childs := x.elem.ChildElements()
 	if len(childs) == 0 {
 		return nil
 	}
 
-	result := make([]importer.ImportConfigAdapter, 0, len(childs))
+	result := make([]importer.ImportConfigAdapterElement, 0, len(childs))
 
 	for _, c := range childs {
 		result = append(result, NewXmlTreeImporter(c))

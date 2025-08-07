@@ -12,11 +12,13 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	log "github.com/sirupsen/logrus"
 )
 
 // RootEntry the root of the cache.Update tree
 type RootEntry struct {
 	*sharedEntryAttributes
+	explicitDeletes *DeletePaths
 }
 
 var (
@@ -32,6 +34,7 @@ func NewTreeRoot(ctx context.Context, tc *TreeContext) (*RootEntry, error) {
 
 	root := &RootEntry{
 		sharedEntryAttributes: sea,
+		explicitDeletes:       NewDeletePaths(),
 	}
 
 	err = tc.SetRoot(sea)
@@ -85,6 +88,8 @@ func (r *RootEntry) ImportConfig(ctx context.Context, basePath types.PathSlice, 
 	if err != nil {
 		return err
 	}
+
+	r.explicitDeletes.Add(intentName, importer.GetDeletes())
 
 	return e.ImportConfig(ctx, importer, intentName, intentPrio, flags)
 }
@@ -227,4 +232,21 @@ func (r *RootEntry) DeleteSubtreePaths(deletes types.DeleteEntriesList, intentNa
 		}
 	}
 	return remainsToExist, nil
+}
+
+func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
+	// apply the explicit deletes
+	edv := NewExplicitDeleteVisitor()
+	for path := range r.explicitDeletes.Items() {
+		entry, err := r.NavigateSdcpbPath(ctx, path.Elem, true)
+		if err != nil {
+			log.Warnf("Applying explicit delete: path %s not found, skipping", path.ToXPath(false))
+		}
+		err = entry.Walk(ctx, edv)
+		if err != nil {
+			return err
+		}
+	}
+
+	return r.sharedEntryAttributes.FinishInsertionPhase(ctx)
 }

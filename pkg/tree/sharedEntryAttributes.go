@@ -1146,7 +1146,7 @@ func (s *sharedEntryAttributes) validatePattern(resultChan chan<- *types.Validat
 	}
 }
 
-func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32, insertFlags *types.UpdateInsertFlags) error {
+func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.ImportConfigAdapterElement, intentName string, intentPrio int32, insertFlags *types.UpdateInsertFlags) error {
 	var err error
 
 	switch x := s.schema.GetSchema().(type) {
