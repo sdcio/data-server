@@ -465,11 +465,15 @@ func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdc
 	if err != nil {
 		return nil, err
 	}
+
 	// calculate the Blame
-	bte, err := root.BlameConfig(includeDefaults)
+	bcv := tree.NewBlameConfigVisitor(includeDefaults)
+	err = root.Walk(ctx, bcv)
 	if err != nil {
 		return nil, err
 	}
+	bte := bcv.GetResult()
+
 	// set the root level elements name to the target name
 	bte.Name = d.config.Name
 	return bte, nil
