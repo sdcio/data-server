@@ -8,6 +8,8 @@ type MarkOwnerDeleteVisitor struct {
 	leafVariantsMatched LeafVariantSlice
 }
 
+var _ EntryVisitor = (*MarkOwnerDeleteVisitor)(nil)
+
 func NewMarkOwnerDeleteVisitor(owner string, onlyIntended bool) *MarkOwnerDeleteVisitor {
 	return &MarkOwnerDeleteVisitor{
 		owner:               owner,
