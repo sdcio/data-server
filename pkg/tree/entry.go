@@ -154,8 +154,7 @@ type Entry interface {
 	GetListChilds() ([]Entry, error)
 	BreadthSearch(ctx context.Context, path string) ([]Entry, error)
 	DeepCopy(tc *TreeContext, parent Entry) (Entry, error)
-	canDeleteBranch(keepDefault bool) bool
-	deleteCanDeleteChilds(keepDefault bool)
+
 	GetLeafVariantEntries() LeafVariantEntries
 }
 
