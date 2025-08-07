@@ -146,8 +146,8 @@ type Entry interface {
 	// ImportConfig allows importing config data received from e.g. the device in different formats (json, xml) to be imported into the tree.
 	ImportConfig(ctx context.Context, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
 	TreeExport(owner string) ([]*tree_persist.TreeElement, error)
-	// DeleteSubtree Deletes from the tree, all elements of the PathSlice defined branch of the given owner
-	DeleteSubtree(relativePath types.PathSlice, owner string) (remainsToExist bool, err error)
+	// DeleteBranch Deletes from the tree, all elements of the PathSlice defined branch of the given owner
+	DeleteBranch(ctx context.Context, relativePath types.PathSlice, owner string) (err error)
 	GetDeviations(ch chan<- *types.DeviationEntry, activeCase bool)
 	// GetListChilds collects all the childs of the list. In the tree we store them seperated into their key branches.
 	// this is collecting all the last level key entries.
@@ -155,6 +155,8 @@ type Entry interface {
 	BreadthSearch(ctx context.Context, path string) ([]Entry, error)
 	DeepCopy(tc *TreeContext, parent Entry) (Entry, error)
 	BlameConfig(includeDefaults bool) (*sdcpb.BlameTreeElement, error)
+	canDeleteBranch(keepDefault bool) bool
+	deleteCanDeleteChilds(keepDefault bool)
 }
 
 type EntryVisitor interface {

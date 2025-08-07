@@ -266,7 +266,7 @@ func (d *Datastore) Sync(ctx context.Context) {
 				}
 
 				// export and write to cache
-				runningExport, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
+				runningExport, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
 				if err != nil {
 					log.Error(err)
 					continue
@@ -429,7 +429,7 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 	}
 	d.syncTreeMutex.RUnlock()
 
-	addedIntentNames, err := d.LoadAllButRunningIntents(ctx, deviationTree)
+	addedIntentNames, err := d.LoadAllButRunningIntents(ctx, deviationTree, true)
 	if err != nil {
 		return nil, err
 	}
@@ -461,7 +461,7 @@ func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdc
 		return nil, err
 	}
 	// load all intents
-	_, err = d.LoadAllButRunningIntents(ctx, root)
+	_, err = d.LoadAllButRunningIntents(ctx, root, false)
 	if err != nil {
 		return nil, err
 	}

@@ -22,6 +22,7 @@ message Intent {
   string      intent_name = 1;
   TreeElement root        = 2;
   int32       priority    = 3;
+  bool        deviation   = 4;
 }
 
 message TreeElement {

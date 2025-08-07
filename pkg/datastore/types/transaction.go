@@ -84,6 +84,10 @@ func (t *Transaction) GetIntentNames() []string {
 	return result
 }
 
+func (t *Transaction) IntentCount() int {
+	return len(t.newIntents)
+}
+
 func (t *Transaction) GetRollbackTransaction() *Transaction {
 	t.timer.Stop()
 	tr := NewTransaction(t.GetTransactionId()+" - Rollback", t.transactionManager)
@@ -96,6 +100,10 @@ func (t *Transaction) GetRollbackTransaction() *Transaction {
 
 func (t *Transaction) GetTransactionId() string {
 	return t.transactionId
+}
+
+func (t *Transaction) IsNoOp() bool {
+	return (t.IntentCount() == 0) && t.GetReplace() == nil
 }
 
 func (t *Transaction) getTransactionIntentTypeMap(tit TransactionIntentType) map[string]*TransactionIntent {
