@@ -155,6 +155,8 @@ type Entry interface {
 	BreadthSearch(ctx context.Context, path string) ([]Entry, error)
 	DeepCopy(tc *TreeContext, parent Entry) (Entry, error)
 	GetLeafVariantEntries() LeafVariantEntries
+	// returns true if the Entry contains leafvariants (presence container, field or leaflist)
+	HoldsLeafvariants() bool
 }
 
 type EntryVisitor interface {
@@ -163,7 +165,7 @@ type EntryVisitor interface {
 }
 
 type LeafVariantEntry interface {
-	MarkDelete(onlyIntended bool)
+	MarkDelete(onlyIntended bool) *LeafEntry
 	GetEntry() Entry
 	String() string
 }
@@ -172,5 +174,7 @@ type LeafVariantEntries interface {
 	MarkOwnerForDeletion(owner string, onlyIntended bool) *LeafEntry
 	GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool) *LeafEntry
 	GetRunning() *LeafEntry
-	DeleteByOwner(owner string) bool
+	DeleteByOwner(owner string) *LeafEntry
+	AddExplicitDeleteEntry(owner string, priority int32) *LeafEntry
+	GetByOwner(owner string) *LeafEntry
 }

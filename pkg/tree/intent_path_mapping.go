@@ -6,33 +6,60 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-type DeletePaths struct {
-	data map[string]*sdcpb.PathSet
+type DeletePathSet struct {
+	data map[string]*DeletePathPrio
 }
 
-func NewDeletePaths() *DeletePaths {
-	return &DeletePaths{
-		data: map[string]*sdcpb.PathSet{},
+func NewDeletePaths() *DeletePathSet {
+	return &DeletePathSet{
+		data: map[string]*DeletePathPrio{},
 	}
 }
 
-func (dp *DeletePaths) Add(intentName string, pathset *sdcpb.PathSet) {
-	set, exists := dp.data[intentName]
+func (dp *DeletePathSet) Add(intentName string, prio int32, pathset *sdcpb.PathSet) {
+	dpp, exists := dp.data[intentName]
 	if !exists {
-		set = sdcpb.NewPathSet()
-		dp.data[intentName] = set
+		dpp = NewDeletePathPrio(intentName, prio)
+		dp.data[intentName] = dpp
 	}
-	set.Join(pathset)
+	if pathset == nil {
+		return
+	}
+	dpp.paths.Join(pathset)
 }
 
-func (dp *DeletePaths) Items() iter.Seq[*sdcpb.Path] {
-	return func(yield func(*sdcpb.Path) bool) {
+func (dp *DeletePathSet) Items() iter.Seq[*DeletePathPrio] {
+	return func(yield func(*DeletePathPrio) bool) {
 		for _, val := range dp.data {
-			for path := range val.Items() {
-				if !yield(path) {
-					return
-				}
+			if !yield(val) {
+				return
 			}
 		}
 	}
+}
+
+type DeletePathPrio struct {
+	owner string
+	prio  int32
+	paths *sdcpb.PathSet
+}
+
+func NewDeletePathPrio(owner string, prio int32) *DeletePathPrio {
+	return &DeletePathPrio{
+		prio:  prio,
+		owner: owner,
+		paths: sdcpb.NewPathSet(),
+	}
+}
+
+func (dpp *DeletePathPrio) PathItems() iter.Seq[*sdcpb.Path] {
+	return dpp.paths.Items()
+}
+
+func (dpp *DeletePathPrio) GetPrio() int32 {
+	return dpp.prio
+}
+
+func (dpp *DeletePathPrio) GetOwner() string {
+	return dpp.owner
 }

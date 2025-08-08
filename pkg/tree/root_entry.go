@@ -11,6 +11,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	"github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
@@ -18,7 +19,7 @@ import (
 // RootEntry the root of the cache.Update tree
 type RootEntry struct {
 	*sharedEntryAttributes
-	explicitDeletes *DeletePaths
+	explicitDeletes *DeletePathSet
 }
 
 var (
@@ -89,9 +90,13 @@ func (r *RootEntry) ImportConfig(ctx context.Context, basePath types.PathSlice, 
 		return err
 	}
 
-	r.explicitDeletes.Add(intentName, importer.GetDeletes())
+	r.explicitDeletes.Add(intentName, intentPrio, importer.GetDeletes())
 
 	return e.ImportConfig(ctx, importer, intentName, intentPrio, flags)
+}
+
+func (r *RootEntry) AddExplicitDeletes(intentName string, priority int32, pathset *sdcpb.PathSet) {
+	r.explicitDeletes.Add(intentName, priority, pathset)
 }
 
 func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation) (types.ValidationResults, *types.ValidationStatOverall) {
@@ -235,18 +240,31 @@ func (r *RootEntry) DeleteSubtreePaths(deletes types.DeleteEntriesList, intentNa
 }
 
 func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
+	edvs := ExplicitDeleteVisitors{}
+
 	// apply the explicit deletes
-	edv := NewExplicitDeleteVisitor()
-	for path := range r.explicitDeletes.Items() {
-		entry, err := r.NavigateSdcpbPath(ctx, path.Elem, true)
-		if err != nil {
-			log.Warnf("Applying explicit delete: path %s not found, skipping", path.ToXPath(false))
-		}
-		err = entry.Walk(ctx, edv)
-		if err != nil {
-			return err
+	for deletePathPrio := range r.explicitDeletes.Items() {
+		edv := NewExplicitDeleteVisitor(deletePathPrio.GetOwner(), deletePathPrio.GetPrio())
+
+		for path := range deletePathPrio.PathItems() {
+			// set the priority
+			// navigate to the stated path
+			entry, err := r.NavigateSdcpbPath(ctx, path.GetElem(), true)
+			if err != nil {
+				log.Warnf("Applying explicit delete: path %s not found, skipping", path.ToXPath(false))
+			}
+
+			// walk the whole branch adding the explicit delete leafvariant
+			err = entry.Walk(ctx, edv)
+			if err != nil {
+				return err
+			}
+			edvs[deletePathPrio.GetOwner()] = edv
 		}
 	}
+	log.Debugf("ExplicitDeletes added: %s", utils.MapToString(edvs.Stats(), ", ", func(k string, v int) string {
+		return fmt.Sprintf("%s=%d", k, v)
+	}))
 
 	return r.sharedEntryAttributes.FinishInsertionPhase(ctx)
 }

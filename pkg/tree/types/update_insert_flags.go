@@ -2,6 +2,7 @@ package types
 
 type LeafEntry interface {
 	MarkDelete(onlyIntended bool)
+	MarkExpliciteDelete()
 	MarkNew()
 }
 
@@ -69,6 +70,9 @@ func (f *UpdateInsertFlags) Apply(le LeafEntry) *UpdateInsertFlags {
 	if f.new {
 		le.MarkNew()
 		return f
+	}
+	if f.explicitDelete {
+		le.MarkExpliciteDelete()
 	}
 	return f
 }

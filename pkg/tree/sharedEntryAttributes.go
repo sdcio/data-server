@@ -440,6 +440,18 @@ func (s *sharedEntryAttributes) Walk(ctx context.Context, v EntryVisitor) error 
 	return nil
 }
 
+func (s *sharedEntryAttributes) HoldsLeafvariants() bool {
+	switch x := s.schema.GetSchema().(type) {
+	case *sdcpb.SchemaElem_Container:
+		return x.Container.GetIsPresence()
+	case *sdcpb.SchemaElem_Leaflist:
+		return true
+	case *sdcpb.SchemaElem_Field:
+		return true
+	}
+	return false
+}
+
 // GetSchemaKeys checks for the schema of the entry, and returns the defined keys
 func (s *sharedEntryAttributes) GetSchemaKeys() []string {
 	if s.schema != nil {

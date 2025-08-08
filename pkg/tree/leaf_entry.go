@@ -2,6 +2,7 @@ package tree
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -65,8 +66,9 @@ func (l *LeafEntry) MarkNew() {
 	l.IsNew = true
 }
 
-func (l *LeafEntry) RemoveDeleteFlag() {
+func (l *LeafEntry) RemoveDeleteFlag() *LeafEntry {
 	l.Delete = false
+	return l
 }
 
 func (l *LeafEntry) GetDeleteFlag() bool {
@@ -99,11 +101,12 @@ func (l *LeafEntry) GetNewFlag() bool {
 	return l.IsNew
 }
 
-func (l *LeafEntry) DropDeleteFlag() {
+func (l *LeafEntry) DropDeleteFlag() *LeafEntry {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.Delete = false
 	l.DeleteOnlyIntended = false
+	return l
 }
 
 // MarkDelete indicate that the entry is to be deleted
@@ -118,9 +121,28 @@ func (l *LeafEntry) MarkDelete(onlyIntended bool) {
 	l.IsNew = false
 }
 
+// MarkExpliciteDelete indicate that the entry is to be explicitely deleted
+func (l *LeafEntry) MarkExpliciteDelete() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.Delete = true
+	l.IsExplicitDelete = true
+	l.IsUpdated = false
+	l.IsNew = false
+}
+
 // String returns a string representation of the LeafEntry
 func (l *LeafEntry) String() string {
 	return fmt.Sprintf("Owner: %s, Priority: %d, Value: %s, New: %t, Delete: %t, Update: %t, DeleteIntendedOnly: %t, ExplicitDelete: %t", l.Owner(), l.Priority(), utils.TypedValueToString(l.Value()), l.GetNewFlag(), l.GetDeleteFlag(), l.GetUpdateFlag(), l.GetDeleteOnlyIntendedFlag(), l.GetExplicitDeleteFlag())
+}
+
+// Compare used for slices.SortFunc. Sorts by path and if equal paths then by owner as the second criteria
+func (l *LeafEntry) Compare(other *LeafEntry) int {
+	result := strings.Compare(l.GetPathSlice().String(), other.GetPathSlice().String())
+	if result != 0 {
+		return result
+	}
+	return strings.Compare(l.Update.Owner(), other.Update.Owner())
 }
 
 // NewLeafEntry constructor for a new LeafEntry
@@ -131,4 +153,14 @@ func NewLeafEntry(c *types.Update, flags *types.UpdateInsertFlags, parent Entry)
 	}
 	flags.Apply(le)
 	return le
+}
+
+func (l *LeafEntry) Equal(other *LeafEntry) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	equal := l.Update.Equal(other.Update)
+	if !equal {
+		return false
+	}
+	return l.Delete == other.Delete && l.IsUpdated == other.IsUpdated && l.IsNew == other.IsNew && l.IsExplicitDelete == other.IsExplicitDelete && l.DeleteOnlyIntended == other.DeleteOnlyIntended
 }

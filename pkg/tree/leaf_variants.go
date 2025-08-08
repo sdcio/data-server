@@ -7,6 +7,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -27,7 +28,7 @@ func newLeafVariants(tc *TreeContext, parentEnty Entry) *LeafVariants {
 
 func (lv *LeafVariants) Add(le *LeafEntry) {
 	if leafVariant := lv.GetByOwner(le.Owner()); leafVariant != nil {
-		if leafVariant.Equal(le.Update) {
+		if leafVariant.Update.Equal(le.Update) {
 			// it seems like the element was not deleted, so drop the delete flag
 			leafVariant.DropDeleteFlag()
 		} else {
@@ -407,4 +408,10 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 		ch <- de
 	}
 
+}
+
+func (lv *LeafVariants) AddExplicitDeleteEntry(intentName string, priority int32) *LeafEntry {
+	le := NewLeafEntry(types.NewUpdate(lv.parentEntry.Path(), &sdcpb.TypedValue{}, priority, intentName, 0), types.NewUpdateInsertFlags().SetExplicitDeleteFlag(), lv.parentEntry)
+	lv.Add(le)
+	return le
 }
