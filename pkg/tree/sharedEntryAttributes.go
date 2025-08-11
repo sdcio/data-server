@@ -532,6 +532,26 @@ func (s *sharedEntryAttributes) canDelete() bool {
 	return *s.cacheCanDelete
 }
 
+func (s *sharedEntryAttributes) canDeleteBranch(keepDefault bool) bool {
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+
+	leafVariantCanDelete := s.leafVariants.canDeleteBranch(keepDefault)
+	if !leafVariantCanDelete {
+		return false
+	}
+
+	// handle containers
+	for _, c := range s.childs.Items() {
+		canDelete := c.canDeleteBranch(keepDefault)
+		if !canDelete {
+			return false
+		}
+	}
+
+	return true
+}
+
 // shouldDelete checks if a container or Leaf(List) is to be explicitly deleted.
 func (s *sharedEntryAttributes) shouldDelete() bool {
 	// see if we have the value cached
@@ -830,37 +850,63 @@ func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isR
 	}
 }
 
-func (s *sharedEntryAttributes) DeleteSubtree(relativePath types.PathSlice, owner string) (bool, error) {
+func (s *sharedEntryAttributes) DeleteBranch(ctx context.Context, relativePath types.PathSlice, owner string) error {
+	var err error
+	var entry Entry
 	if len(relativePath) > 0 {
-		child, exists := s.childs.GetEntry(relativePath[0])
-		if !exists {
-			path := make([]string, 0, len(s.Path())+len(relativePath))
-			path = append(path, s.Path()...)
-			path = append(path, relativePath...)
-			return false, fmt.Errorf("trying to delete subtree %q but unable to find child %s at %s", path, relativePath[0], s.Path())
+		entry, err = s.Navigate(ctx, relativePath, true, false)
+		if err != nil {
+			return err
 		}
-		remainingPath := relativePath[1:]
-		return child.DeleteSubtree(remainingPath, owner)
-	}
-	remainsToExist := false
-	// delete possibly existing leafvariants for the owner
-	remainsToExist = s.leafVariants.DeleteByOwner(owner)
 
-	deleteKeys := []string{}
+		err = entry.DeleteBranch(ctx, nil, owner)
+		if err != nil {
+			return err
+		}
+
+		// need to remove the leafvariants down from entry.
+		// however if the path points to a key, which is in fact getting deleted
+		// we also need to remove the key, which is the parent. Thats why we do it in this loop
+		// which is, forwarding entry to entry.GetParent() as a last step and depending on the remains
+		// return continuing to perform the delete forther up in the tree
+		// with remains initially set to false, we initially call DeleteSubtree on the referenced entry.
+		for entry.canDeleteBranch(false) {
+			// forward the entry pointer to the parent
+			// depending on the remains var the DeleteSubtree is again called on that parent entry
+			entry = entry.GetParent()
+			// calling DeleteSubtree with the empty string, because it should not delete the owner from the higher level keys,
+			// but what it will also do is delete possibly dangling key elements in the tree
+			entry.deleteCanDeleteChilds(true)
+		}
+		return nil
+	}
+	return s.deleteBranchInternal(ctx, owner)
+}
+
+func (s *sharedEntryAttributes) deleteCanDeleteChilds(keepDefault bool) {
+	// otherwise check all
+	for childname, child := range s.childs.Items() {
+		if child.canDeleteBranch(keepDefault) {
+			s.childs.DeleteChild(childname)
+		}
+	}
+}
+
+func (s *sharedEntryAttributes) deleteBranchInternal(ctx context.Context, owner string) error {
+	// delete possibly existing leafvariants for the owner
+	s.leafVariants.DeleteByOwner(owner)
+
 	// recurse the call
 	for childName, child := range s.childs.Items() {
-		childRemains, err := child.DeleteSubtree(nil, owner)
+		err := child.DeleteBranch(ctx, nil, owner)
 		if err != nil {
-			return false, err
+			return err
 		}
-		if !childRemains {
-			deleteKeys = append(deleteKeys, childName)
+		if child.canDeleteBranch(false) {
+			s.childs.DeleteChild(childName)
 		}
-		remainsToExist = remainsToExist || childRemains
 	}
-	// finally delete the childs
-	s.childs.DeleteChilds(deleteKeys)
-	return remainsToExist, nil
+	return nil
 }
 
 // GetHighestPrecedence goes through the whole branch and returns the new and updated cache.Updates.

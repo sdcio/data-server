@@ -32,7 +32,7 @@ type Client interface {
 	InstanceIntentsList(ctx context.Context, cacheInstanceName string) ([]string, error)
 	InstanceIntentGet(ctx context.Context, cacheName string, intentName string) (*tree_persist.Intent, error)
 	InstanceIntentModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error
-	InstanceIntentDelete(ctx context.Context, cacheName string, intentName string) error
+	InstanceIntentDelete(ctx context.Context, cacheName string, intentName string, IgnoreNonExisting bool) error
 	InstanceIntentExists(ctx context.Context, cacheName string, intentName string) (bool, error)
 	InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error)
 }

@@ -138,7 +138,7 @@ func TestProtoTreeImporter(t *testing.T) {
 			}
 			t.Log(root.String())
 
-			protoIntent, err := root.TreeExport("owner1", 5)
+			protoIntent, err := root.TreeExport("owner1", 5, false)
 			if err != nil {
 				t.Error(err)
 			}

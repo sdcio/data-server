@@ -17,9 +17,10 @@ import (
 )
 
 var (
-	ErrDatastoreLocked = errors.New("Datastore is locked, other action is ongoing")
-	ErrContextDone     = errors.New("Context is closed (done)")
-	ErrValidationError = errors.New("validation error")
+	ErrDatastoreLocked   = errors.New("datastore is locked, other action is ongoing")
+	ErrContextDone       = errors.New("context is closed (done)")
+	ErrValidationError   = errors.New("validation error")
+	ErrNoIntentsProvided = errors.New("no intents provided")
 )
 
 // SdcpbTransactionIntentToInternalTI converts sdcpb.TransactionIntent to types.TransactionIntent
@@ -34,6 +35,12 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 	}
 	if req.GetOrphan() {
 		ti.SetDeleteOnlyIntendedFlag()
+	}
+	if req.GetDeviation() {
+		ti.SetDeviation()
+	}
+	if req.GetDeleteIgnoreNoExist() {
+		ti.SetDeleteIgnoreNonExisting()
 	}
 
 	// convert the sdcpb.updates to tree.UpdateSlice
@@ -66,6 +73,9 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 
 	// store the actual / old running in the transaction
 	runningProto, err := d.cacheClient.IntentGet(ctx, tree.RunningIntentName)
+	if err != nil {
+		return nil, err
+	}
 	err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto.GetRoot()), tree.RunningIntentName, tree.RunningValuesPrio, treetypes.NewUpdateInsertFlags())
 	if err != nil {
 		return nil, err
@@ -115,10 +125,23 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 
 	log.Infof("ds=%s transaction=%s applied", d.Name(), transaction.GetTransactionId()+" - replace")
 
+	// retrieve the data that is meant to be send southbound (towards the device)
+	updates := root.GetHighestPrecedence(true)
+	deletes := treetypes.DeleteEntriesList{root}
+	if err != nil {
+		return nil, err
+	}
+
+	// OPTIMISTIC WRITEBACK TO RUNNING / syncTree
+	err = d.writeBackSyncTree(ctx, updates, deletes)
+	if err != nil {
+		return nil, err
+	}
+
 	return warnings, nil
 }
 
-func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.RootEntry) ([]string, error) {
+func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.RootEntry, excludeDeviations bool) ([]string, error) {
 
 	intentNames := []string{}
 	IntentChan := make(chan *tree_persist.Intent)
@@ -136,6 +159,9 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 			if !ok {
 				// IntentChan closed due to finish
 				return intentNames, nil
+			}
+			if excludeDeviations && intent.Deviation {
+				continue
 			}
 			intentNames = append(intentNames, intent.GetIntentName())
 			log.Debugf("adding intent %s to tree", intent.GetIntentName())
@@ -159,7 +185,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		return nil, err
 	}
 
-	_, err = d.LoadAllButRunningIntents(ctx, root)
+	_, err = d.LoadAllButRunningIntents(ctx, root, false)
 	if err != nil {
 		return nil, err
 	}
@@ -304,12 +330,12 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		delSl := deletesOwner.StringSlice()
 		log.Debugf("Deletes Owner: %s\n%s", intent.GetName(), strings.Join(delSl, "\n"))
 
-		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority())
+		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority(), intent.Deviation())
 		switch {
 		case errors.Is(err, tree.ErrorIntentNotPresent):
-			err = d.cacheClient.IntentDelete(ctx, intent.GetName())
+			err = d.cacheClient.IntentDelete(ctx, intent.GetName(), intent.GetDeleteIgnoreNonExisting())
 			if err != nil {
-				return nil, fmt.Errorf("failed deleting intent from store for %s: %w", d.Name(), err)
+				log.Warnf("failed deleting intent from store for %s: %v", d.Name(), err)
 			}
 			continue
 		case err != nil:
@@ -321,27 +347,10 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 	}
 
-	// OPTIMISTIC WRITEBACK TO RUNNING
-	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(tree.RunningIntentName, tree.RunningValuesPrio)
-
-	// add the calculated updates to the tree, as running with adjusted prio and owner
-	err = root.AddUpdatesRecursive(ctx, runningUpdates, treetypes.NewUpdateInsertFlags())
+	// OPTIMISTIC WRITEBACK TO RUNNING / syncTree
+	err = d.writeBackSyncTree(ctx, updates, deletes)
 	if err != nil {
 		return nil, err
-	}
-
-	// perform deletes
-	_, err = root.DeleteSubtreePaths(deletes, tree.RunningIntentName)
-	if err != nil {
-		return nil, err
-	}
-
-	newRunningIntent, err := root.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
-	if newRunningIntent != nil {
-		err = d.cacheClient.IntentModify(ctx, newRunningIntent)
-		if err != nil {
-			return nil, fmt.Errorf("failed updating the running store for %s: %w", d.Name(), err)
-		}
 	}
 
 	log.Infof("ds=%s transaction=%s: completed", d.Name(), transaction.GetTransactionId())
@@ -355,6 +364,43 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	}
 
 	return result, nil
+}
+
+// writeBackSyncTree applies the provided changes to the syncTree and applies to the running cache intent
+func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVariantSlice, deletes treetypes.DeleteEntriesList) error {
+	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(tree.RunningIntentName, tree.RunningValuesPrio)
+
+	// lock the syncTree
+	d.syncTreeMutex.Lock()
+
+	// perform deletes
+	err := d.syncTree.DeleteBranchPaths(ctx, deletes, tree.RunningIntentName)
+	if err != nil {
+		return err
+	}
+
+	// add the calculated updates to the tree, as running with adjusted prio and owner
+	err = d.syncTree.AddUpdatesRecursive(ctx, runningUpdates, treetypes.NewUpdateInsertFlags())
+	if err != nil {
+		return err
+	}
+
+	// release the syncTree lock
+	d.syncTreeMutex.Unlock()
+
+	// export the synctree
+	newRunningIntent, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
+	if err != nil {
+		return err
+	}
+	// write the synctree to disk
+	if newRunningIntent != nil {
+		err = d.cacheClient.IntentModify(ctx, newRunningIntent)
+		if err != nil {
+			return fmt.Errorf("failed updating the running store for %s: %w", d.Name(), err)
+		}
+	}
+	return nil
 }
 
 func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, transactionIntents []*types.TransactionIntent, replaceIntent *types.TransactionIntent, transactionTimeout time.Duration, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
@@ -388,6 +434,9 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 			default:
 				// Start a transaction and prepare to cancel it if any error occurs
 				transactionGuard, err = d.transactionManager.RegisterTransaction(ctx, transaction)
+				if err != nil {
+					return nil, err
+				}
 				if transactionGuard != nil {
 					defer transactionGuard.Done()
 					break outerloop
@@ -415,6 +464,15 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	if err != nil {
 		log.Errorf("error adding intents to transaction: %v", err)
 		return nil, err
+	}
+
+	// no-op transaction
+	if transaction.IsNoOp() {
+		// we expect a transaction confirm from the client
+		transactionGuard.Success()
+		return &sdcpb.TransactionSetResponse{
+			Warnings: []string{"no intents provided"},
+		}, nil
 	}
 
 	response, err := d.lowlevelTransactionSet(ctx, transaction, dryRun)
