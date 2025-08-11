@@ -158,6 +158,8 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 	return schemaRsp, nil
 }
 
+var nsMap = make(map[string]string)
+
 func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDataResponse, error) {
 	var upds []*sdcpb.Update
 	var deletes []*sdcpb.Path
@@ -193,11 +195,91 @@ func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDa
 			return nil, err
 		}
 		if jsonData != nil {
-			jsonBytes, err := json.Marshal(jsonData)
-			if err != nil {
-				return nil, err
+			upds = []*sdcpb.Update{}
+			for key, value := range jsonData.(map[string]any) {
+				keyParts := strings.Split(key, ":")
+				rootNamespace := ""
+				rootNodeName := ""
+				if len(keyParts) == 2 {
+					rootNamespace = keyParts[0]
+					rootNodeName = keyParts[1]
+				}
+
+				updsPerNs := make(map[string]map[string]any)
+
+				// check second level of data to distinguish namespaces
+				for k, v := range value.(map[string]any) {
+					kP := strings.Split(k, ":")
+					var leafNamespace string
+					var leafNodeName string
+					if len(kP) == 2 {
+						leafNodeName = kP[1]
+						if len(kP) == 2 && kP[0] != rootNamespace {
+							// diverged namespace
+							leafNamespace = kP[0]
+							nsMap[rootNodeName+"/"+leafNodeName] = rootNamespace
+						} else {
+							// root namespace
+							leafNamespace = rootNamespace
+						}
+					} else {
+						leafNodeName = kP[0]
+						leafNamespace = rootNamespace
+						nsMap[rootNodeName] = rootNamespace
+					}
+					_, found := updsPerNs[leafNamespace]
+					if !found {
+						updsPerNs[leafNamespace] = make(map[string]any)
+					}
+					updsPerNs[leafNamespace][leafNodeName] = v
+				}
+
+				for k, v := range updsPerNs {
+					updPath := &sdcpb.Path{Origin: k}
+
+					updKey := k + ":" + rootNodeName
+
+					singleUpd := map[string]any{}
+					singleUpd[updKey] = v
+
+					singleUpdBytes, err := json.Marshal(singleUpd)
+					if err != nil {
+						return nil, err
+					}
+					updValue := &sdcpb.TypedValue{
+						Value: &sdcpb.TypedValue_JsonIetfVal{
+							JsonIetfVal: singleUpdBytes,
+						},
+					}
+
+					upds = append(upds, &sdcpb.Update{
+						Path:  updPath,
+						Value: updValue,
+					})
+				}
 			}
-			upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonIetfVal{JsonIetfVal: jsonBytes}}}}
+		}
+
+		for _, delete := range deletes {
+			if len(delete.Elem) > 0 {
+				completePath := ""
+				found := false
+				var mostSpecificOrigin string
+				for _, elem := range delete.Elem {
+					if completePath != "" {
+						completePath += "/"
+					}
+					completePath += elem.Name
+					origin, f := nsMap[completePath]
+					if f {
+						found = true
+						mostSpecificOrigin = origin
+					}
+				}
+				if found {
+					delete.Origin = mostSpecificOrigin
+				}
+			}
 		}
 
 	case "proto":
@@ -368,7 +450,7 @@ func (t *gnmiTarget) getSync(ctx context.Context, gnmiSync *config.SyncProtocol,
 	req := &sdcpb.GetDataRequest{
 		Name:     gnmiSync.Name,
 		Path:     paths,
-		DataType: sdcpb.DataType_CONFIG,
+		DataType: sdcpb.DataType_ALL,
 		Encoding: sdcpb.Encoding(sdcpbEncoding(gnmiSync.Encoding)),
 	}
 

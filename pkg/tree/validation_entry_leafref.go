@@ -216,7 +216,7 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan
 	entry, err := s.NavigateLeafRef(ctx)
 	if err != nil || len(entry) == 0 {
 		// check if the OptionalInstance (!require-instances [https://datatracker.ietf.org/doc/html/rfc7950#section-9.9.3])
-		if s.schema.GetField().GetType().GetOptionalInstance() {
+		if !s.schema.GetField().IsMandatory {
 			generateOptionalWarning(ctx, s, lref, resultChan)
 			return
 		}
