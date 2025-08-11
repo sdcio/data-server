@@ -63,6 +63,9 @@ func (f *UpdateInsertFlags) GetNewFlag() bool {
 }
 
 func (f *UpdateInsertFlags) Apply(le LeafEntry) *UpdateInsertFlags {
+	if f.explicitDelete {
+		le.MarkExpliciteDelete()
+	}
 	if f.delete {
 		le.MarkDelete(f.onlyIntended)
 		return f
@@ -70,9 +73,6 @@ func (f *UpdateInsertFlags) Apply(le LeafEntry) *UpdateInsertFlags {
 	if f.new {
 		le.MarkNew()
 		return f
-	}
-	if f.explicitDelete {
-		le.MarkExpliciteDelete()
 	}
 	return f
 }

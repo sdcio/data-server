@@ -42,7 +42,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 		// if the entry remains so exist, we need to add it to the xml doc
 		overallDoAdd := false
 
-		childs := s.filterActiveChoiceCaseChilds()
+		childs := s.GetChilds(DescendMethodActiveChilds)
 
 		keys := make([]string, 0, len(childs))
 		for k := range childs {

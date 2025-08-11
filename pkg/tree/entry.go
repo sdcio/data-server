@@ -127,9 +127,7 @@ type Entry interface {
 	//    - remainsToExists() returns true, because they remain to exist even though implicitly.
 	//    - shouldDelete() returns false, because no explicit delete should be issued for them.
 	canDelete() bool
-	// getChildren returns all the child Entries of the Entry in a map indexed by there name.
-	// FYI: leaf values are not considered children
-	getChildren() map[string]Entry
+	GetChilds(DescendMethod) EntryMap
 	FilterChilds(keys map[string]string) ([]Entry, error)
 	// ToJson returns the Tree contained structure as JSON
 	// use e.g. json.MarshalIndent() on the returned struct
@@ -160,6 +158,7 @@ type Entry interface {
 }
 
 type EntryVisitor interface {
+	Config() *EntryVisitorConfig
 	Visit(ctx context.Context, e Entry) error
 	Up()
 }
@@ -178,3 +177,25 @@ type LeafVariantEntries interface {
 	AddExplicitDeleteEntry(owner string, priority int32) *LeafEntry
 	GetByOwner(owner string) *LeafEntry
 }
+
+type EntryVisitorConfig struct {
+	descendMethod DescendMethod
+}
+
+func NewEntryVisitorConfig() *EntryVisitorConfig {
+	return &EntryVisitorConfig{
+		descendMethod: DescendMethodActiveChilds,
+	}
+}
+
+func (e *EntryVisitorConfig) SetDescendingMethod(d DescendMethod) *EntryVisitorConfig {
+	e.descendMethod = d
+	return e
+}
+
+type DescendMethod int
+
+const (
+	DescendMethodAll DescendMethod = iota
+	DescendMethodActiveChilds
+)

@@ -391,7 +391,7 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 			for _, elem := range got {
 				elemNames = append(elemNames, elem.PathName())
 				elemChilds[elem.PathName()] = []string{}
-				for k := range elem.getChildren() {
+				for k := range elem.GetChilds(DescendMethodAll) {
 					elemChilds[elem.PathName()] = append(elemChilds[elem.PathName()], k)
 				}
 			}

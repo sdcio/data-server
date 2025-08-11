@@ -2,14 +2,13 @@ package tree
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
-	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
+	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 )
@@ -53,27 +52,10 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Error(err)
 				}
 
-				jconfStr, err := ygot.EmitJSON(config1(), &ygot.EmitJSONConfig{
-					Format:         ygot.RFC7951,
-					SkipValidation: true,
-				})
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, flagsNew)
 				if err != nil {
 					t.Error(err)
 				}
-
-				var jsonConfAny any
-				err = json.Unmarshal([]byte(jconfStr), &jsonConfAny)
-				if err != nil {
-					t.Error(err)
-				}
-
-				newFlag := types.NewUpdateInsertFlags()
-
-				err = root.ImportConfig(ctx, types.PathSlice{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, owner1Prio, newFlag)
-				if err != nil {
-					t.Error(err)
-				}
-
 				return root
 			},
 		},
@@ -98,23 +80,7 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Error(err)
 				}
 
-				jconfStr, err := ygot.EmitJSON(config1(), &ygot.EmitJSONConfig{
-					Format:         ygot.RFC7951,
-					SkipValidation: true,
-				})
-				if err != nil {
-					t.Error(err)
-				}
-
-				var jsonConfAny any
-				err = json.Unmarshal([]byte(jconfStr), &jsonConfAny)
-				if err != nil {
-					t.Error(err)
-				}
-
-				newFlag := types.NewUpdateInsertFlags()
-
-				err = root.ImportConfig(ctx, types.PathSlice{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, owner1Prio, newFlag)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, flagsNew)
 				if err != nil {
 					t.Error(err)
 				}
@@ -135,7 +101,7 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 			},
 		},
 		{
-			name:     "Delete Branch",
+			name:     "Delete Branch - existing owner data",
 			owner:    owner2,
 			priority: 50,
 			root: func() *RootEntry {
@@ -155,26 +121,17 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Error(err)
 				}
 
-				jconfStr, err := ygot.EmitJSON(config1(), &ygot.EmitJSONConfig{
-					Format:         ygot.RFC7951,
-					SkipValidation: true,
-				})
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, flagsNew)
 				if err != nil {
 					t.Error(err)
 				}
 
-				var jsonConfAny any
-				err = json.Unmarshal([]byte(jconfStr), &jsonConfAny)
-				if err != nil {
-					t.Error(err)
-				}
-
-				newFlag := types.NewUpdateInsertFlags()
-
-				err = root.ImportConfig(ctx, types.PathSlice{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, owner1Prio, newFlag)
-				if err != nil {
-					t.Error(err)
-				}
+				testhelper.LoadYgotStructIntoTreeRoot(ctx, &sdcio_schema.Device{Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+					"ethernet-1/1": {
+						Name:        ygot.String("ethernet-1/1"),
+						Description: ygot.String("mydesc"),
+					},
+				}}, root, owner2, owner2Prio, flagsNew)
 
 				return root
 			},
@@ -187,9 +144,9 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					},
 				),
 			expectedLeafVariants: LeafVariantSlice{
-				NewLeafEntry(types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "description"}, &sdcpb.TypedValue{}, owner2Prio, owner2, 0), types.NewUpdateInsertFlags().SetExplicitDeleteFlag(), nil),
+				NewLeafEntry(types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "description"}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "mydesc"}}, owner2Prio, owner2, 0), types.NewUpdateInsertFlags().SetExplicitDeleteFlag(), nil),
 				NewLeafEntry(types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "admin-state"}, &sdcpb.TypedValue{}, owner2Prio, owner2, 0), explicitDeleteFlag, nil),
-				NewLeafEntry(types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "name"}, &sdcpb.TypedValue{}, owner2Prio, owner2, 0), explicitDeleteFlag, nil),
+				NewLeafEntry(types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "name"}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{"ethernet-1/1"}}, owner2Prio, owner2, 0), explicitDeleteFlag, nil),
 				NewLeafEntry(types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "subinterface", "0", "index"}, &sdcpb.TypedValue{}, owner2Prio, owner2, 0), explicitDeleteFlag, nil),
 				NewLeafEntry(types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "subinterface", "0", "type"}, &sdcpb.TypedValue{}, owner2Prio, owner2, 0), explicitDeleteFlag, nil),
 				NewLeafEntry(types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "subinterface", "0", "description"}, &sdcpb.TypedValue{}, owner2Prio, owner2, 0), explicitDeleteFlag, nil),
@@ -207,6 +164,8 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 				t.Error(err)
 			}
 
+			t.Log(root.String())
+
 			lvs := LeafVariantSlice{}
 			lvs = root.GetByOwner(owner2, lvs)
 
@@ -215,10 +174,11 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 				t.Error(err)
 			}
 			if !equal {
-				t.Errorf("result differs from the expected\nExpected:\n%s\nGot:\n%s", tt.expectedLeafVariants.String(), lvs.String())
+				if diff := testhelper.SplitStringSortDiff(tt.expectedLeafVariants.String(), lvs.String(), "\n"); diff != "" {
+					t.Errorf("mismatch (-want +got)\n%s", diff)
+					return
+				}
 			}
-
-			t.Log(root.String())
 		})
 	}
 }
