@@ -155,6 +155,8 @@ type Entry interface {
 	BreadthSearch(ctx context.Context, path string) ([]Entry, error)
 	DeepCopy(tc *TreeContext, parent Entry) (Entry, error)
 	GetLeafVariantEntries() LeafVariantEntries
+	canDeleteBranch(keepDefault bool) bool
+	deleteCanDeleteChilds(keepDefault bool)
 }
 
 type EntryVisitor interface {
@@ -172,5 +174,5 @@ type LeafVariantEntries interface {
 	MarkOwnerForDeletion(owner string, onlyIntended bool) *LeafEntry
 	GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool) *LeafEntry
 	GetRunning() *LeafEntry
-	DeleteByOwner(owner string) bool
+	DeleteByOwner(owner string)
 }
