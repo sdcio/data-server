@@ -12,7 +12,6 @@ import (
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
-	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
@@ -47,9 +46,7 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 	ti.AddUpdates(Updates)
 
 	// add the deletes
-	for _, d := range req.Deletes {
-		ti.AddDelete(utils.ToStrings(d, false, false))
-	}
+	ti.AddDeletes(req.Deletes)
 
 	return ti, nil
 }
@@ -202,6 +199,9 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		if err != nil {
 			return nil, err
 		}
+
+		// add the explicit delete entries
+		root.AddExplicitDeletes(intent.GetName(), intent.GetPriority(), intent.GetDeletes())
 
 		// add the old intent contents paths to the involvedPaths slice
 		involvedPaths.Join(oldIntentContent.ToPathSet())
