@@ -76,10 +76,16 @@ func (lv *LeafVariants) canDelete() bool {
 		return false
 	}
 
+	// check if highest is explicit delete
+	highest := lv.GetHighestPrecedence(false, false)
+	if highest != nil && highest.IsExplicitDelete && lv.GetRunning() != nil {
+		return true
+	}
+
 	// go through all variants
 	for _, l := range lv.les {
 		// if the LeafVariant is not owned by running or default
-		if l.Update.Owner() != RunningIntentName && l.Update.Owner() != DefaultsIntentName {
+		if l.Update.Owner() != RunningIntentName && l.Update.Owner() != DefaultsIntentName && !l.IsExplicitDelete {
 			// then we need to check that it remains, so not Delete Flag set or DeleteOnylIntended Flags set [which results in not doing a delete towards the device]
 			if l.GetDeleteOnlyIntendedFlag() || !l.GetDeleteFlag() {
 				// then this entry should not be deleted
@@ -101,11 +107,17 @@ func (lv *LeafVariants) shouldDelete() bool {
 		return false
 	}
 
+	// check if highest is explicit delete
+	highest := lv.GetHighestPrecedence(false, false)
+	if highest != nil && highest.IsExplicitDelete && lv.GetRunning() != nil {
+		return true
+	}
+
 	foundOtherThenRunningAndDefault := false
 	// go through all variants
 	for _, l := range lv.les {
 		// if an entry exists that is not owned by running or default,
-		if l.Update.Owner() == RunningIntentName || l.Update.Owner() == DefaultsIntentName {
+		if l.Update.Owner() == RunningIntentName || l.Update.Owner() == DefaultsIntentName || l.IsExplicitDelete {
 			continue
 		}
 		foundOtherThenRunningAndDefault = true

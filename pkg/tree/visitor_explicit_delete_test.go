@@ -85,6 +85,11 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Error(err)
 				}
 
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, flagsNew)
+				if err != nil {
+					t.Error(err)
+				}
+
 				return root
 			},
 			explicitDeletes: sdcpb.NewPathSet().
@@ -122,6 +127,11 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 				}
 
 				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, flagsNew)
+				if err != nil {
+					t.Error(err)
+				}
+
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, flagsNew)
 				if err != nil {
 					t.Error(err)
 				}
@@ -179,6 +189,15 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					return
 				}
 			}
+
+			//
+			dels, err := root.GetDeletes(true)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			t.Logf("Deletes:\n%s", dels.PathSlices().StringSlice())
+			t.Errorf("foo")
 		})
 	}
 }
