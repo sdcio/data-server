@@ -886,11 +886,15 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := tt.r(t)
-			got, err := s.BlameConfig(tt.includeDefaults)
+
+			bcv := NewBlameConfigVisitor(tt.includeDefaults)
+			err := s.Walk(ctx, bcv)
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("sharedEntryAttributes.BlameConfig() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			got := bcv.GetResult()
 
 			// // generate the want part via
 			// // ---------------------------------------
@@ -1004,7 +1008,11 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 			}
 
 			// mark owner delete
-			newRoot.MarkOwnerDelete(owner1, false)
+			marksOwnerDeleteVisitor := NewMarkOwnerDeleteVisitor(owner1, false)
+			err = root.Walk(ctx, marksOwnerDeleteVisitor)
+			if err != nil {
+				t.Error(err)
+			}
 
 			err = newRoot.AddUpdatesRecursive(ctx, updSlice, flagsNew)
 			if err != nil {

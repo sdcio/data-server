@@ -70,8 +70,8 @@ type Entry interface {
 	getHighestPrecedenceLeafValue(context.Context) (*LeafEntry, error)
 	// GetByOwner returns the branches Updates by owner
 	GetByOwner(owner string, result []*LeafEntry) LeafVariantSlice
-	// markOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
-	MarkOwnerDelete(o string, onlyIntended bool)
+	// // markOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
+	// MarkOwnerDelete(o string, onlyIntended bool)
 	// GetDeletes returns the cache-updates that are not updated, have no lower priority value left and hence should be deleted completely
 	GetDeletes(entries []types.DeleteEntry, aggregatePaths bool) ([]types.DeleteEntry, error)
 	// Walk takes the EntryVisitor and applies it to every Entry in the tree
@@ -154,12 +154,25 @@ type Entry interface {
 	GetListChilds() ([]Entry, error)
 	BreadthSearch(ctx context.Context, path string) ([]Entry, error)
 	DeepCopy(tc *TreeContext, parent Entry) (Entry, error)
-	BlameConfig(includeDefaults bool) (*sdcpb.BlameTreeElement, error)
+	GetLeafVariantEntries() LeafVariantEntries
 	canDeleteBranch(keepDefault bool) bool
 	deleteCanDeleteChilds(keepDefault bool)
 }
 
 type EntryVisitor interface {
-	Visit(ctx context.Context, s *sharedEntryAttributes) error
+	Visit(ctx context.Context, e Entry) error
 	Up()
+}
+
+type LeafVariantEntry interface {
+	MarkDelete(onlyIntended bool)
+	GetEntry() Entry
+	String() string
+}
+
+type LeafVariantEntries interface {
+	MarkOwnerForDeletion(owner string, onlyIntended bool) *LeafEntry
+	GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool) *LeafEntry
+	GetRunning() *LeafEntry
+	DeleteByOwner(owner string)
 }

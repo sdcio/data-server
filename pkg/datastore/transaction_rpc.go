@@ -209,7 +209,11 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 		oldIntentContent := lvs.ToUpdateSlice()
 
-		root.MarkOwnerDelete(intent.GetName(), intent.GetOnlyIntended())
+		marksOwnerDeleteVisitor := tree.NewMarkOwnerDeleteVisitor(intent.GetName(), intent.GetOnlyIntended())
+		err := root.Walk(ctx, marksOwnerDeleteVisitor)
+		if err != nil {
+			return nil, err
+		}
 
 		// store the old intent content in the transaction as the old intent.
 		err = transaction.AddIntentContent(intent.GetName(), types.TransactionIntentOld, oldIntentContent.GetFirstPriorityValue(), oldIntentContent)
