@@ -5,6 +5,7 @@ import (
 )
 
 type ExplicitDeleteVisitor struct {
+	BaseVisitor
 	owner    string
 	priority int32
 
@@ -34,14 +35,6 @@ func (edv *ExplicitDeleteVisitor) Visit(ctx context.Context, e Entry) error {
 	}
 	edv.relatedLeafVariants = append(edv.relatedLeafVariants, le)
 	return nil
-}
-
-func (edv *ExplicitDeleteVisitor) Up() {
-	// noop
-}
-
-func (o *ExplicitDeleteVisitor) Config() *EntryVisitorConfig {
-	return NewEntryVisitorConfig().SetDescendingMethod(DescendMethodAll)
 }
 
 // GetExplicitDeleteCreationCount returns the amount of all the explicitDelete LeafVariants that where created.

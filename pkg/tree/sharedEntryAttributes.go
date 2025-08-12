@@ -430,7 +430,7 @@ func (s *sharedEntryAttributes) Walk(ctx context.Context, v EntryVisitor) error 
 	}
 
 	// trigger the execution on all childs
-	for _, c := range s.GetChilds(v.Config().descendMethod) {
+	for _, c := range s.GetChilds(v.DescendMethod()) {
 		err := c.Walk(ctx, v)
 		if err != nil {
 			return err

@@ -158,7 +158,7 @@ type Entry interface {
 }
 
 type EntryVisitor interface {
-	Config() *EntryVisitorConfig
+	DescendMethod() DescendMethod
 	Visit(ctx context.Context, e Entry) error
 	Up()
 }
@@ -176,21 +176,6 @@ type LeafVariantEntries interface {
 	DeleteByOwner(owner string) *LeafEntry
 	AddExplicitDeleteEntry(owner string, priority int32) *LeafEntry
 	GetByOwner(owner string) *LeafEntry
-}
-
-type EntryVisitorConfig struct {
-	descendMethod DescendMethod
-}
-
-func NewEntryVisitorConfig() *EntryVisitorConfig {
-	return &EntryVisitorConfig{
-		descendMethod: DescendMethodActiveChilds,
-	}
-}
-
-func (e *EntryVisitorConfig) SetDescendingMethod(d DescendMethod) *EntryVisitorConfig {
-	e.descendMethod = d
-	return e
 }
 
 type DescendMethod int

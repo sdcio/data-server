@@ -80,12 +80,12 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, flagsNew)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, flagsNew)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
@@ -126,12 +126,12 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, flagsNew)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, flagsNew)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
@@ -190,14 +190,18 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 				}
 			}
 
-			//
+			// get the resulting deletes
 			dels, err := root.GetDeletes(true)
 			if err != nil {
 				t.Error(err)
 				return
 			}
 			t.Logf("Deletes:\n%s", dels.PathSlices().StringSlice())
-			t.Errorf("foo")
+			updates := root.GetHighestPrecedence(true)
+
+			t.Logf("Updates:\n%s", updates.String())
+
+			t.Error(nil)
 		})
 	}
 }
