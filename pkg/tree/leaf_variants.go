@@ -318,7 +318,7 @@ func (lv *LeafVariants) GetByOwner(owner string) *LeafEntry {
 
 // MarkOwnerForDeletion searches for a LefVariant of given owner, if it exists
 // the entry is marked for deletion.
-// returning true if an owner entry was found, false if not
+// returning the leafentry if an owner entry was found, nil if not.
 func (lv *LeafVariants) MarkOwnerForDeletion(owner string, onlyIntended bool) *LeafEntry {
 	le := lv.GetByOwner(owner)
 	if le != nil {
