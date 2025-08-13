@@ -12,7 +12,7 @@ import (
 )
 
 type LeafVariants struct {
-	les         []*LeafEntry
+	les         LeafVariantSlice
 	lesMutex    sync.RWMutex
 	tc          *TreeContext
 	parentEntry Entry
@@ -20,7 +20,7 @@ type LeafVariants struct {
 
 func newLeafVariants(tc *TreeContext, parentEnty Entry) *LeafVariants {
 	return &LeafVariants{
-		les:         make([]*LeafEntry, 0, 2),
+		les:         make(LeafVariantSlice, 0, 2),
 		tc:          tc,
 		parentEntry: parentEnty,
 	}
@@ -60,6 +60,29 @@ func (lv *LeafVariants) Length() int {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 	return len(lv.les)
+}
+
+func (lv *LeafVariants) canDeleteBranch(keepDefault bool) bool {
+	lv.lesMutex.RLock()
+	defer lv.lesMutex.RUnlock()
+
+	// only procede if we have leave variants
+	if len(lv.les) == 0 {
+		return true
+	}
+
+	// go through all variants
+	for _, l := range lv.les {
+		// if the LeafVariant is not owned by running or default
+		if l.Update.Owner() != DefaultsIntentName || keepDefault {
+			// then we need to check that it remains, so not Delete Flag set or DeleteOnylIntended Flags set [which results in not doing a delete towards the device]
+			if l.GetDeleteOnlyIntendedFlag() || !l.GetDeleteFlag() {
+				// then this entry should not be deleted
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // canDelete returns true if leafValues exist that are not owned by default or running that do not have the DeleteFlag set [or if delete is set, also the DeleteOnlyIntendedFlag set]
@@ -307,36 +330,27 @@ func (lv *LeafVariants) GetByOwner(owner string) *LeafEntry {
 }
 
 // MarkOwnerForDeletion searches for a LefVariant of given owner, if it exists
-// the entry is marked for deletion
-func (lv *LeafVariants) MarkOwnerForDeletion(owner string, onlyIntended bool) {
+// the entry is marked for deletion.
+// returning the leafentry if an owner entry was found, nil if not.
+func (lv *LeafVariants) MarkOwnerForDeletion(owner string, onlyIntended bool) *LeafEntry {
 	le := lv.GetByOwner(owner)
 	if le != nil {
 		le.MarkDelete(onlyIntended)
+		return le
 	}
+	return nil
 }
 
-func (lv *LeafVariants) DeleteByOwner(owner string) (remainsToExist bool) {
+func (lv *LeafVariants) DeleteByOwner(owner string) {
 	lv.lesMutex.Lock()
 	defer lv.lesMutex.Unlock()
-	foundOwner := false
 	for i, l := range lv.les {
-		// early exit if condition is met
-		if foundOwner && remainsToExist {
-			return remainsToExist
-		}
 		if l.Owner() == owner {
 			// Remove element from slice
 			lv.les = append(lv.les[:i], lv.les[i+1:]...)
-			foundOwner = true
-			continue
+			break
 		}
-		if l.Owner() == DefaultsIntentName {
-			continue
-		}
-		remainsToExist = true
-
 	}
-	return remainsToExist
 }
 
 func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveCase bool) {

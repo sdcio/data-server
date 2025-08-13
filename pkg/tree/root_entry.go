@@ -191,7 +191,7 @@ func (r *RootEntry) GetDeviations(ch chan<- *types.DeviationEntry) {
 	r.sharedEntryAttributes.GetDeviations(ch, true)
 }
 
-func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Intent, error) {
+func (r *RootEntry) TreeExport(owner string, priority int32, deviation bool) (*tree_persist.Intent, error) {
 	te, err := r.sharedEntryAttributes.TreeExport(owner)
 	if err != nil {
 		return nil, err
@@ -201,6 +201,7 @@ func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Inte
 			IntentName: owner,
 			Root:       te[0],
 			Priority:   priority,
+			Deviation:  deviation,
 		}, nil
 	}
 	return nil, ErrorIntentNotPresent
@@ -228,15 +229,14 @@ NEXTELEMENT:
 }
 
 // DeleteSubtree Deletes from the tree, all elements of the PathSlice defined branch of the given owner. Return values are remainsToExist and error if an error occured.
-func (r *RootEntry) DeleteSubtreePaths(deletes types.DeleteEntriesList, intentName string) (bool, error) {
-	remainsToExist := true
+func (r *RootEntry) DeleteBranchPaths(ctx context.Context, deletes types.DeleteEntriesList, intentName string) error {
 	for _, del := range deletes {
-		remainsToExist, err := r.DeleteSubtree(del.Path(), intentName)
+		err := r.DeleteBranch(ctx, del.Path(), intentName)
 		if err != nil {
-			return remainsToExist, err
+			return err
 		}
 	}
-	return remainsToExist, nil
+	return nil
 }
 
 func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {

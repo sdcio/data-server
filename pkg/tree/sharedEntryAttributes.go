@@ -18,7 +18,6 @@ import (
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -111,7 +110,7 @@ func newSharedEntryAttributes(ctx context.Context, parent Entry, pathElemName st
 }
 
 func (s *sharedEntryAttributes) GetRoot() Entry {
-	if s.parent == nil {
+	if s.IsRoot() {
 		return s
 	}
 	return s.parent.GetRoot()
@@ -410,7 +409,7 @@ func (s *sharedEntryAttributes) GetLevel() int {
 		return *s.level
 	}
 	// if we're at the root level, return 0
-	if s.parent == nil {
+	if s.IsRoot() {
 		return 0
 	}
 	// Get parent level and add 1
@@ -544,6 +543,26 @@ func (s *sharedEntryAttributes) canDelete() bool {
 	return *s.cacheCanDelete
 }
 
+func (s *sharedEntryAttributes) canDeleteBranch(keepDefault bool) bool {
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+
+	leafVariantCanDelete := s.leafVariants.canDeleteBranch(keepDefault)
+	if !leafVariantCanDelete {
+		return false
+	}
+
+	// handle containers
+	for _, c := range s.childs.Items() {
+		canDelete := c.canDeleteBranch(keepDefault)
+		if !canDelete {
+			return false
+		}
+	}
+
+	return true
+}
+
 // shouldDelete checks if a container or Leaf(List) is to be explicitly deleted.
 func (s *sharedEntryAttributes) shouldDelete() bool {
 	// see if we have the value cached
@@ -665,7 +684,7 @@ func (s *sharedEntryAttributes) GetDeletes(deletes []types.DeleteEntry, aggregat
 // the level of recursion is indicated via the levelUp attribute
 func (s *sharedEntryAttributes) GetFirstAncestorWithSchema() (Entry, int) {
 	// if root node is reached
-	if s.parent == nil {
+	if s.IsRoot() {
 		return nil, 0
 	}
 	// check if the parent has a schema
@@ -697,7 +716,7 @@ func (s *sharedEntryAttributes) GetByOwner(owner string, result []*LeafEntry) Le
 // Path returns the root based path of the Entry
 func (s *sharedEntryAttributes) Path() types.PathSlice {
 	// special handling for root node
-	if s.parent == nil {
+	if s.IsRoot() {
 		return types.PathSlice{}
 	}
 	return append(s.parent.Path(), s.pathElemName)
@@ -842,37 +861,63 @@ func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isR
 	}
 }
 
-func (s *sharedEntryAttributes) DeleteSubtree(relativePath types.PathSlice, owner string) (bool, error) {
+func (s *sharedEntryAttributes) DeleteBranch(ctx context.Context, relativePath types.PathSlice, owner string) error {
+	var err error
+	var entry Entry
 	if len(relativePath) > 0 {
-		child, exists := s.childs.GetEntry(relativePath[0])
-		if !exists {
-			path := make([]string, 0, len(s.Path())+len(relativePath))
-			path = append(path, s.Path()...)
-			path = append(path, relativePath...)
-			return false, fmt.Errorf("trying to delete subtree %q but unable to find child %s at %s", path, relativePath[0], s.Path())
+		entry, err = s.Navigate(ctx, relativePath, true, false)
+		if err != nil {
+			return err
 		}
-		remainingPath := relativePath[1:]
-		return child.DeleteSubtree(remainingPath, owner)
-	}
-	remainsToExist := false
-	// delete possibly existing leafvariants for the owner
-	remainsToExist = s.leafVariants.DeleteByOwner(owner)
 
-	deleteKeys := []string{}
+		err = entry.DeleteBranch(ctx, nil, owner)
+		if err != nil {
+			return err
+		}
+
+		// need to remove the leafvariants down from entry.
+		// however if the path points to a key, which is in fact getting deleted
+		// we also need to remove the key, which is the parent. Thats why we do it in this loop
+		// which is, forwarding entry to entry.GetParent() as a last step and depending on the remains
+		// return continuing to perform the delete forther up in the tree
+		// with remains initially set to false, we initially call DeleteSubtree on the referenced entry.
+		for entry.canDeleteBranch(false) {
+			// forward the entry pointer to the parent
+			// depending on the remains var the DeleteSubtree is again called on that parent entry
+			entry = entry.GetParent()
+			// calling DeleteSubtree with the empty string, because it should not delete the owner from the higher level keys,
+			// but what it will also do is delete possibly dangling key elements in the tree
+			entry.deleteCanDeleteChilds(true)
+		}
+		return nil
+	}
+	return s.deleteBranchInternal(ctx, owner)
+}
+
+func (s *sharedEntryAttributes) deleteCanDeleteChilds(keepDefault bool) {
+	// otherwise check all
+	for childname, child := range s.childs.Items() {
+		if child.canDeleteBranch(keepDefault) {
+			s.childs.DeleteChild(childname)
+		}
+	}
+}
+
+func (s *sharedEntryAttributes) deleteBranchInternal(ctx context.Context, owner string) error {
+	// delete possibly existing leafvariants for the owner
+	s.leafVariants.DeleteByOwner(owner)
+
 	// recurse the call
 	for childName, child := range s.childs.Items() {
-		childRemains, err := child.DeleteSubtree(nil, owner)
+		err := child.DeleteBranch(ctx, nil, owner)
 		if err != nil {
-			return false, err
+			return err
 		}
-		if !childRemains {
-			deleteKeys = append(deleteKeys, childName)
+		if child.canDeleteBranch(false) {
+			s.childs.DeleteChild(childName)
 		}
-		remainsToExist = remainsToExist || childRemains
 	}
-	// finally delete the childs
-	s.childs.DeleteChilds(deleteKeys)
-	return remainsToExist, nil
+	return nil
 }
 
 // GetHighestPrecedence goes through the whole branch and returns the new and updated cache.Updates.
@@ -908,7 +953,6 @@ func (s *sharedEntryAttributes) getHighestPrecedenceLeafValue(ctx context.Contex
 }
 
 func (s *sharedEntryAttributes) GetRootBasedEntryChain() []Entry {
-	s.GetLevel()
 	if s.IsRoot() {
 		return []Entry{}
 	}
@@ -1544,15 +1588,6 @@ func (s *sharedEntryAttributes) StringIndent(result []string) []string {
 	return result
 }
 
-// markOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
-func (s *sharedEntryAttributes) MarkOwnerDelete(o string, onlyIntended bool) {
-	s.leafVariants.MarkOwnerForDeletion(o, onlyIntended)
-	// recurse into childs
-	for _, child := range s.childs.GetAll() {
-		child.MarkOwnerDelete(o, onlyIntended)
-	}
-}
-
 // SdcpbPath returns the sdcpb.Path, with its elements and keys based on the local schema
 func (s *sharedEntryAttributes) SdcpbPath() (*sdcpb.Path, error) {
 	return s.SdcpbPathInternal(s.Path())
@@ -1663,52 +1698,6 @@ func (s *sharedEntryAttributes) TreeExport(owner string) ([]*tree_persist.TreeEl
 	return nil, nil
 }
 
-func (s *sharedEntryAttributes) BlameConfig(includeDefaults bool) (*sdcpb.BlameTreeElement, error) {
-	name := s.pathElemName
-	if s.GetLevel() == 0 {
-		name = "root"
-	}
-	result := sdcpb.NewBlameTreeElement(name)
-
-	// process Value
-	highestLe := s.leafVariants.GetHighestPrecedence(false, true)
-	if highestLe != nil {
-		if highestLe.Update.Owner() != DefaultsIntentName || includeDefaults {
-			result.SetValue(highestLe.Update.Value()).SetOwner(highestLe.Update.Owner())
-
-			// check if running equals the expected
-			runningLe := s.leafVariants.GetRunning()
-			if runningLe != nil {
-				if !proto.Equal(runningLe.Update.Value(), highestLe.Update.Value()) {
-					result.DeviationValue = runningLe.Value()
-				}
-			}
-		} else {
-			// if it is default but no default is meant to be returned
-			return nil, nil
-		}
-	}
-
-	// process Childs
-	for _, c := range s.filterActiveChoiceCaseChilds() {
-		childBlame, err := c.BlameConfig(includeDefaults)
-		if err != nil {
-			return nil, err
-		}
-		// if it is not meant to be added we will get nil, so check and skip in case
-		if childBlame != nil {
-			result.AddChild(childBlame)
-		}
-	}
-
-	// sort to make te output stable
-	slices.SortFunc(result.Childs, func(a *sdcpb.BlameTreeElement, b *sdcpb.BlameTreeElement) int {
-		return strings.Compare(a.GetName(), b.GetName())
-	})
-
-	return result, nil
-}
-
 // getKeyName checks if s is a key level element in the tree, if not an error is throw
 // if it is a key level element, the name of the key is determined via the ancestor schemas
 func (s *sharedEntryAttributes) getKeyName() (string, error) {
@@ -1815,4 +1804,8 @@ func (s *sharedEntryAttributes) containsOnlyDefaults() bool {
 	}
 
 	return true
+}
+
+func (s *sharedEntryAttributes) GetLeafVariantEntries() LeafVariantEntries {
+	return s.leafVariants
 }

@@ -306,7 +306,11 @@ func Test_Entry_Three(t *testing.T) {
 
 	// indicate that the intent is receiving an update
 	// therefor invalidate all the present entries of the owner / intent
-	root.MarkOwnerDelete(owner1, false)
+	marksOwnerDeleteVisitor := NewMarkOwnerDeleteVisitor(owner1, false)
+	err = root.Walk(ctx, marksOwnerDeleteVisitor)
+	if err != nil {
+		t.Error(err)
+	}
 
 	// add incomming set intent reques data
 	overwriteDesc := testhelper.GetStringTvProto("Owerwrite Description")
@@ -425,7 +429,11 @@ func Test_Entry_Four(t *testing.T) {
 
 	// indicate that the intent is receiving an update
 	// therefor invalidate all the present entries of the owner / intent
-	root.MarkOwnerDelete(owner1, false)
+	marksOwnerDeleteVisitor := NewMarkOwnerDeleteVisitor(owner1, false)
+	err = root.Walk(ctx, marksOwnerDeleteVisitor)
+	if err != nil {
+		t.Error(err)
+	}
 
 	// add incomming set intent reques data
 	overwriteDesc := testhelper.GetStringTvProto("Owerwrite Description")
@@ -667,7 +675,11 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	}
 
 	// get ready to add the new intent data
-	root.MarkOwnerDelete(owner1, false)
+	marksOwnerDeleteVisitor := NewMarkOwnerDeleteVisitor(owner1, false)
+	err = root.Walk(ctx, marksOwnerDeleteVisitor)
+	if err != nil {
+		t.Error(err)
+	}
 
 	u1n := types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, desc3, prio50, owner1, ts1)
 	u2n := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)

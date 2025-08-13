@@ -29,12 +29,6 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/types"
 )
 
-var rawIntentPrefix = "__raw_intent__"
-
-const (
-	intentRawNameSep = "_"
-)
-
 var ErrIntentNotFound = errors.New("intent not found")
 
 func (d *Datastore) applyIntent(ctx context.Context, source target.TargetSource) (*sdcpb.SetDataResponse, error) {

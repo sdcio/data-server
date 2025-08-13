@@ -176,7 +176,6 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 		name                  string
 		sharedEntryAttributes func(t *testing.T) *sharedEntryAttributes
 		args                  args
-		want                  bool
 		wantErr               bool
 	}{
 		{
@@ -215,7 +214,6 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				relativePath: types.PathSlice{"interface"},
 				owner:        owner1,
 			},
-			want:    true,
 			wantErr: false,
 		},
 		{
@@ -254,23 +252,19 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				relativePath: types.PathSlice{"interface", "ethernet-1/27"},
 				owner:        owner1,
 			},
-			want:    false,
 			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := tt.sharedEntryAttributes(t)
-			got, err := s.DeleteSubtree(tt.args.relativePath, tt.args.owner)
+			err := s.DeleteBranch(ctx, tt.args.relativePath, tt.args.owner)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("sharedEntryAttributes.DeleteSubtree() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if tt.wantErr {
 				return
-			}
-			if got != tt.want {
-				t.Errorf("sharedEntryAttributes.DeleteSubtree() = %v, want %v", got, tt.want)
 			}
 			e, err := s.Navigate(ctx, tt.args.relativePath, false, false)
 			if err != nil {
@@ -892,11 +886,15 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := tt.r(t)
-			got, err := s.BlameConfig(tt.includeDefaults)
+
+			bcv := NewBlameConfigVisitor(tt.includeDefaults)
+			err := s.Walk(ctx, bcv)
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("sharedEntryAttributes.BlameConfig() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			got := bcv.GetResult()
 
 			// // generate the want part via
 			// // ---------------------------------------
@@ -983,7 +981,7 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 
 			fmt.Println(root.String())
 
-			treepersist, err := root.TreeExport(owner1, owner1Prio)
+			treepersist, err := root.TreeExport(owner1, owner1Prio, false)
 			if err != nil {
 				t.Error(err)
 				return
@@ -1010,7 +1008,11 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 			}
 
 			// mark owner delete
-			newRoot.MarkOwnerDelete(owner1, false)
+			marksOwnerDeleteVisitor := NewMarkOwnerDeleteVisitor(owner1, false)
+			err = root.Walk(ctx, marksOwnerDeleteVisitor)
+			if err != nil {
+				t.Error(err)
+			}
 
 			err = newRoot.AddUpdatesRecursive(ctx, updSlice, flagsNew)
 			if err != nil {

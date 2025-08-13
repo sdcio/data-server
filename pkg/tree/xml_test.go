@@ -484,7 +484,11 @@ func TestToXMLTable(t *testing.T) {
 			fmt.Println(root.String())
 
 			if tt.newConfig != nil {
-				root.MarkOwnerDelete(owner, false)
+				marksOwnerDeleteVisitor := NewMarkOwnerDeleteVisitor(owner, false)
+				err = root.Walk(ctx, marksOwnerDeleteVisitor)
+				if err != nil {
+					t.Error(err)
+				}
 
 				newUpds, err := tt.newConfig(ctx, converter)
 				if err != nil {

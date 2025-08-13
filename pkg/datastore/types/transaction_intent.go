@@ -8,8 +8,9 @@ import (
 type TransactionIntent struct {
 	name string
 	// updates is nil if the intent did not exist.
-	updates      treetypes.UpdateSlice
-	delete       bool
+	updates treetypes.UpdateSlice
+	delete  bool
+	// onlyIntended, the orphan flag, delte only from intended store, but keep in device
 	onlyIntended bool
 	priority     int32
 	// deviation indicates that the intent is a tolerated deviation.
@@ -52,9 +53,26 @@ func (ti *TransactionIntent) GetOnlyIntended() bool {
 	return ti.onlyIntended
 }
 
+func (ti *TransactionIntent) SetDeviation() {
+	ti.deviation = true
+}
+
+func (ti *TransactionIntent) Deviation() bool {
+	return ti.deviation
+}
+
+func (ti *TransactionIntent) SetDeleteIgnoreNonExisting() {
+	ti.deleteIgnoreNonExisting = true
+}
+
+func (ti *TransactionIntent) GetDeleteIgnoreNonExisting() bool {
+	return ti.deleteIgnoreNonExisting
+}
+
 func (ti *TransactionIntent) SetDeleteFlag() {
 	ti.delete = true
 }
+
 func (ti *TransactionIntent) SetDeleteOnlyIntendedFlag() {
 	ti.delete = true
 	ti.onlyIntended = true
