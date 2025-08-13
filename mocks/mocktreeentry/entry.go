@@ -92,19 +92,18 @@ func (mr *MockEntryMockRecorder) DeepCopy(tc, parent any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeepCopy", reflect.TypeOf((*MockEntry)(nil).DeepCopy), tc, parent)
 }
 
-// DeleteSubtree mocks base method.
-func (m *MockEntry) DeleteSubtree(relativePath types.PathSlice, owner string) (bool, error) {
+// DeleteBranch mocks base method.
+func (m *MockEntry) DeleteBranch(ctx context.Context, relativePath types.PathSlice, owner string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteSubtree", relativePath, owner)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "DeleteBranch", ctx, relativePath, owner)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
-// DeleteSubtree indicates an expected call of DeleteSubtree.
-func (mr *MockEntryMockRecorder) DeleteSubtree(relativePath, owner any) *gomock.Call {
+// DeleteBranch indicates an expected call of DeleteBranch.
+func (mr *MockEntryMockRecorder) DeleteBranch(ctx, relativePath, owner any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSubtree", reflect.TypeOf((*MockEntry)(nil).DeleteSubtree), relativePath, owner)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteBranch", reflect.TypeOf((*MockEntry)(nil).DeleteBranch), ctx, relativePath, owner)
 }
 
 // FilterChilds mocks base method.
@@ -148,6 +147,20 @@ func (m *MockEntry) GetByOwner(owner string, result []*tree.LeafEntry) tree.Leaf
 func (mr *MockEntryMockRecorder) GetByOwner(owner, result any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByOwner", reflect.TypeOf((*MockEntry)(nil).GetByOwner), owner, result)
+}
+
+// GetChilds mocks base method.
+func (m *MockEntry) GetChilds(arg0 tree.DescendMethod) tree.EntryMap {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetChilds", arg0)
+	ret0, _ := ret[0].(tree.EntryMap)
+	return ret0
+}
+
+// GetChilds indicates an expected call of GetChilds.
+func (mr *MockEntryMockRecorder) GetChilds(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetChilds", reflect.TypeOf((*MockEntry)(nil).GetChilds), arg0)
 }
 
 // GetDeletes mocks base method.
@@ -319,8 +332,22 @@ func (mr *MockEntryMockRecorder) GetSchemaKeys() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSchemaKeys", reflect.TypeOf((*MockEntry)(nil).GetSchemaKeys))
 }
 
+// HoldsLeafvariants mocks base method.
+func (m *MockEntry) HoldsLeafvariants() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HoldsLeafvariants")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// HoldsLeafvariants indicates an expected call of HoldsLeafvariants.
+func (mr *MockEntryMockRecorder) HoldsLeafvariants() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HoldsLeafvariants", reflect.TypeOf((*MockEntry)(nil).HoldsLeafvariants))
+}
+
 // ImportConfig mocks base method.
-func (m *MockEntry) ImportConfig(ctx context.Context, arg1 importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error {
+func (m *MockEntry) ImportConfig(ctx context.Context, arg1 importer.ImportConfigAdapterElement, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ImportConfig", ctx, arg1, intentName, intentPrio, flags)
 	ret0, _ := ret[0].(error)
@@ -604,20 +631,6 @@ func (mr *MockEntryMockRecorder) deleteCanDeleteChilds(keepDefault any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "deleteCanDeleteChilds", reflect.TypeOf((*MockEntry)(nil).deleteCanDeleteChilds), keepDefault)
 }
 
-// getChildren mocks base method.
-func (m *MockEntry) getChildren() map[string]tree.Entry {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "getChildren")
-	ret0, _ := ret[0].(map[string]tree.Entry)
-	return ret0
-}
-
-// getChildren indicates an expected call of getChildren.
-func (mr *MockEntryMockRecorder) getChildren() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getChildren", reflect.TypeOf((*MockEntry)(nil).getChildren))
-}
-
 // getHighestPrecedenceLeafValue mocks base method.
 func (m *MockEntry) getHighestPrecedenceLeafValue(arg0 context.Context) (*tree.LeafEntry, error) {
 	m.ctrl.T.Helper()
@@ -768,6 +781,20 @@ func (m *MockEntryVisitor) EXPECT() *MockEntryVisitorMockRecorder {
 	return m.recorder
 }
 
+// DescendMethod mocks base method.
+func (m *MockEntryVisitor) DescendMethod() tree.DescendMethod {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DescendMethod")
+	ret0, _ := ret[0].(tree.DescendMethod)
+	return ret0
+}
+
+// DescendMethod indicates an expected call of DescendMethod.
+func (mr *MockEntryVisitorMockRecorder) DescendMethod() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescendMethod", reflect.TypeOf((*MockEntryVisitor)(nil).DescendMethod))
+}
+
 // Up mocks base method.
 func (m *MockEntryVisitor) Up() {
 	m.ctrl.T.Helper()
@@ -833,9 +860,11 @@ func (mr *MockLeafVariantEntryMockRecorder) GetEntry() *gomock.Call {
 }
 
 // MarkDelete mocks base method.
-func (m *MockLeafVariantEntry) MarkDelete(onlyIntended bool) {
+func (m *MockLeafVariantEntry) MarkDelete(onlyIntended bool) *tree.LeafEntry {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "MarkDelete", onlyIntended)
+	ret := m.ctrl.Call(m, "MarkDelete", onlyIntended)
+	ret0, _ := ret[0].(*tree.LeafEntry)
+	return ret0
 }
 
 // MarkDelete indicates an expected call of MarkDelete.
@@ -882,11 +911,25 @@ func (m *MockLeafVariantEntries) EXPECT() *MockLeafVariantEntriesMockRecorder {
 	return m.recorder
 }
 
+// AddExplicitDeleteEntry mocks base method.
+func (m *MockLeafVariantEntries) AddExplicitDeleteEntry(owner string, priority int32) *tree.LeafEntry {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddExplicitDeleteEntry", owner, priority)
+	ret0, _ := ret[0].(*tree.LeafEntry)
+	return ret0
+}
+
+// AddExplicitDeleteEntry indicates an expected call of AddExplicitDeleteEntry.
+func (mr *MockLeafVariantEntriesMockRecorder) AddExplicitDeleteEntry(owner, priority any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddExplicitDeleteEntry", reflect.TypeOf((*MockLeafVariantEntries)(nil).AddExplicitDeleteEntry), owner, priority)
+}
+
 // DeleteByOwner mocks base method.
-func (m *MockLeafVariantEntries) DeleteByOwner(owner string) bool {
+func (m *MockLeafVariantEntries) DeleteByOwner(owner string) *tree.LeafEntry {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteByOwner", owner)
-	ret0, _ := ret[0].(bool)
+	ret0, _ := ret[0].(*tree.LeafEntry)
 	return ret0
 }
 
@@ -894,6 +937,20 @@ func (m *MockLeafVariantEntries) DeleteByOwner(owner string) bool {
 func (mr *MockLeafVariantEntriesMockRecorder) DeleteByOwner(owner any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteByOwner", reflect.TypeOf((*MockLeafVariantEntries)(nil).DeleteByOwner), owner)
+}
+
+// GetByOwner mocks base method.
+func (m *MockLeafVariantEntries) GetByOwner(owner string) *tree.LeafEntry {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByOwner", owner)
+	ret0, _ := ret[0].(*tree.LeafEntry)
+	return ret0
+}
+
+// GetByOwner indicates an expected call of GetByOwner.
+func (mr *MockLeafVariantEntriesMockRecorder) GetByOwner(owner any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByOwner", reflect.TypeOf((*MockLeafVariantEntries)(nil).GetByOwner), owner)
 }
 
 // GetHighestPrecedence mocks base method.
@@ -936,54 +993,4 @@ func (m *MockLeafVariantEntries) MarkOwnerForDeletion(owner string, onlyIntended
 func (mr *MockLeafVariantEntriesMockRecorder) MarkOwnerForDeletion(owner, onlyIntended any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkOwnerForDeletion", reflect.TypeOf((*MockLeafVariantEntries)(nil).MarkOwnerForDeletion), owner, onlyIntended)
-}
-
-// MockEntryVisitor is a mock of EntryVisitor interface.
-type MockEntryVisitor struct {
-	ctrl     *gomock.Controller
-	recorder *MockEntryVisitorMockRecorder
-	isgomock struct{}
-}
-
-// MockEntryVisitorMockRecorder is the mock recorder for MockEntryVisitor.
-type MockEntryVisitorMockRecorder struct {
-	mock *MockEntryVisitor
-}
-
-// NewMockEntryVisitor creates a new mock instance.
-func NewMockEntryVisitor(ctrl *gomock.Controller) *MockEntryVisitor {
-	mock := &MockEntryVisitor{ctrl: ctrl}
-	mock.recorder = &MockEntryVisitorMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockEntryVisitor) EXPECT() *MockEntryVisitorMockRecorder {
-	return m.recorder
-}
-
-// Up mocks base method.
-func (m *MockEntryVisitor) Up() {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Up")
-}
-
-// Up indicates an expected call of Up.
-func (mr *MockEntryVisitorMockRecorder) Up() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Up", reflect.TypeOf((*MockEntryVisitor)(nil).Up))
-}
-
-// Visit mocks base method.
-func (m *MockEntryVisitor) Visit(ctx context.Context, e tree.Entry) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Visit", ctx, e)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Visit indicates an expected call of Visit.
-func (mr *MockEntryVisitorMockRecorder) Visit(ctx, e any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Visit", reflect.TypeOf((*MockEntryVisitor)(nil).Visit), ctx, e)
 }

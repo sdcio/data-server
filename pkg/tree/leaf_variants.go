@@ -341,16 +341,17 @@ func (lv *LeafVariants) MarkOwnerForDeletion(owner string, onlyIntended bool) *L
 	return nil
 }
 
-func (lv *LeafVariants) DeleteByOwner(owner string) {
+func (lv *LeafVariants) DeleteByOwner(owner string) *LeafEntry {
 	lv.lesMutex.Lock()
 	defer lv.lesMutex.Unlock()
 	for i, l := range lv.les {
 		if l.Owner() == owner {
 			// Remove element from slice
 			lv.les = append(lv.les[:i], lv.les[i+1:]...)
-			break
+			return l
 		}
 	}
+	return nil
 }
 
 func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveCase bool) {
