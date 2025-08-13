@@ -52,6 +52,9 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 	// add the intent to the TransactionIntent
 	ti.AddUpdates(Updates)
 
+	// add the deletes
+	ti.AddDeletes(req.Deletes)
+
 	return ti, nil
 }
 
@@ -226,6 +229,9 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		if err != nil {
 			return nil, err
 		}
+
+		// add the explicit delete entries
+		root.AddExplicitDeletes(intent.GetName(), intent.GetPriority(), intent.GetDeletes())
 
 		// add the old intent contents paths to the involvedPaths slice
 		involvedPaths.Join(oldIntentContent.ToPathSet())

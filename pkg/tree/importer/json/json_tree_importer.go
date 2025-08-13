@@ -29,7 +29,11 @@ func NewJsonTreeImporter(d any) *JsonTreeImporter {
 	}
 }
 
-func (j *JsonTreeImporter) GetElement(key string) importer.ImportConfigAdapter {
+func (j *JsonTreeImporter) GetDeletes() *sdcpb.PathSet {
+	return sdcpb.NewPathSet()
+}
+
+func (j *JsonTreeImporter) GetElement(key string) importer.ImportConfigAdapterElement {
 	switch d := j.data.(type) {
 	case map[string]any:
 
@@ -46,11 +50,11 @@ func (j *JsonTreeImporter) GetElement(key string) importer.ImportConfigAdapter {
 	return nil
 }
 
-func (j *JsonTreeImporter) GetElements() []importer.ImportConfigAdapter {
-	var result []importer.ImportConfigAdapter
+func (j *JsonTreeImporter) GetElements() []importer.ImportConfigAdapterElement {
+	var result []importer.ImportConfigAdapterElement
 	switch d := j.data.(type) {
 	case map[string]any:
-		result = make([]importer.ImportConfigAdapter, 0, len(d))
+		result = make([]importer.ImportConfigAdapterElement, 0, len(d))
 		for k, v := range d {
 			beforeColon, key, found := strings.Cut(k, ":")
 			if !found {

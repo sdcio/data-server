@@ -171,7 +171,7 @@ func (s *sharedEntryAttributes) GetDeviations(ch chan<- *types.DeviationEntry, a
 	// if s is a presence container but has active childs, it should not be treated as a presence
 	// container, hence the leafvariants should not be processed. For presence container with
 	// childs the TypedValue.empty_val in the presence container is irrelevant.
-	if s.schema.GetContainer().GetIsPresence() && len(s.filterActiveChoiceCaseChilds()) > 0 {
+	if s.schema.GetContainer().GetIsPresence() && len(s.GetChilds(DescendMethodActiveChilds)) > 0 {
 		return
 	}
 
@@ -179,7 +179,7 @@ func (s *sharedEntryAttributes) GetDeviations(ch chan<- *types.DeviationEntry, a
 	s.leafVariants.GetDeviations(ch, activeCase)
 
 	// get all active childs
-	activeChilds := s.filterActiveChoiceCaseChilds()
+	activeChilds := s.GetChilds(DescendMethodActiveChilds)
 
 	// iterate through all childs
 	for cName, c := range s.getChildren() {
@@ -331,7 +331,7 @@ func (s *sharedEntryAttributes) GetListChilds() ([]Entry, error) {
 	for level := 0; level < len(keys); level++ {
 		for _, e := range actualEntries {
 			// add all children
-			for _, c := range e.getChildren() {
+			for _, c := range e.GetChilds(DescendMethodAll) {
 				newEntries = append(newEntries, c)
 			}
 		}
@@ -368,7 +368,7 @@ func (s *sharedEntryAttributes) FilterChilds(keys map[string]string) ([]Entry, e
 			// therefor we need to go through the processEntries List
 			// and collect all the matching childs
 			for _, entry := range processEntries {
-				childs := entry.getChildren()
+				childs := entry.GetChilds(DescendMethodAll)
 				matchEntry, childExists := childs[keyVal]
 				// so if such child, that matches the given filter value exists, we append it to the results
 				if childExists {
@@ -379,7 +379,7 @@ func (s *sharedEntryAttributes) FilterChilds(keys map[string]string) ([]Entry, e
 			// this is basically the wildcard case, so go through all childs and add them
 			result = []Entry{}
 			for _, entry := range processEntries {
-				childs := entry.getChildren()
+				childs := entry.GetChilds(DescendMethodAll)
 				for _, v := range childs {
 					// hence we add all the existing childs to the result list
 					result = append(result, v)
@@ -429,7 +429,7 @@ func (s *sharedEntryAttributes) Walk(ctx context.Context, v EntryVisitor) error 
 	}
 
 	// trigger the execution on all childs
-	for _, c := range s.childs.GetAll() {
+	for _, c := range s.GetChilds(v.DescendMethod()) {
 		err := c.Walk(ctx, v)
 		if err != nil {
 			return err
@@ -437,6 +437,18 @@ func (s *sharedEntryAttributes) Walk(ctx context.Context, v EntryVisitor) error 
 	}
 	v.Up()
 	return nil
+}
+
+func (s *sharedEntryAttributes) HoldsLeafvariants() bool {
+	switch x := s.schema.GetSchema().(type) {
+	case *sdcpb.SchemaElem_Container:
+		return x.Container.GetIsPresence()
+	case *sdcpb.SchemaElem_Leaflist:
+		return true
+	case *sdcpb.SchemaElem_Field:
+		return true
+	}
+	return false
 }
 
 // GetSchemaKeys checks for the schema of the entry, and returns the defined keys
@@ -520,7 +532,7 @@ func (s *sharedEntryAttributes) canDelete() bool {
 	}
 
 	// handle containers
-	for _, c := range s.filterActiveChoiceCaseChilds() {
+	for _, c := range s.GetChilds(DescendMethodActiveChilds) {
 		canDelete := c.canDelete()
 		if !canDelete {
 			s.cacheCanDelete = utils.BoolPtr(false)
@@ -567,7 +579,7 @@ func (s *sharedEntryAttributes) shouldDelete() bool {
 	// but a real delete should only be added if there is at least one shouldDelete() == true
 	shouldDelete := false
 
-	activeChilds := s.filterActiveChoiceCaseChilds()
+	activeChilds := s.GetChilds(DescendMethodActiveChilds)
 	// if we have no active childs, we can and should delete.
 	if len(s.choicesResolvers) > 0 && len(activeChilds) == 0 {
 		canDelete = true
@@ -614,7 +626,7 @@ func (s *sharedEntryAttributes) remainsToExist() bool {
 
 	// handle containers
 	childsRemain := false
-	for _, c := range s.filterActiveChoiceCaseChilds() {
+	for _, c := range s.GetChilds(DescendMethodActiveChilds) {
 		childsRemain = c.remainsToExist()
 		if childsRemain {
 			break
@@ -764,7 +776,7 @@ func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, pathElems
 		}
 		return entry.NavigateSdcpbPath(ctx, pathElems[1:], false)
 	default:
-		e, exists := s.filterActiveChoiceCaseChilds()[pathElems[0].Name]
+		e, exists := s.GetChilds(DescendMethodActiveChilds)[pathElems[0].Name]
 		if !exists {
 			pth := &sdcpb.Path{Elem: pathElems}
 			e, err = s.tryLoadingDefault(ctx, utils.ToStrings(pth, false, false))
@@ -837,7 +849,7 @@ func (s *sharedEntryAttributes) Navigate(ctx context.Context, path []string, isR
 		}
 		return parent.Navigate(ctx, path[1:], false, dotdotSkipKeys)
 	default:
-		e, exists := s.filterActiveChoiceCaseChilds()[path[0]]
+		e, exists := s.GetChilds(DescendMethodActiveChilds)[path[0]]
 		if !exists {
 			e, err = s.tryLoadingDefault(ctx, append(s.Path(), path...))
 			if err != nil {
@@ -918,7 +930,7 @@ func (s *sharedEntryAttributes) GetHighestPrecedence(result LeafVariantSlice, on
 	}
 
 	// continue with childs. Childs are part of choices, process only the "active" (highes precedence) childs
-	for _, c := range s.filterActiveChoiceCaseChilds() {
+	for _, c := range s.GetChilds(DescendMethodActiveChilds) {
 		result = c.GetHighestPrecedence(result, onlyNewOrUpdated, includeDefaults)
 	}
 	return result
@@ -982,7 +994,7 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 	// recurse the call to the child elements
 	wg := sync.WaitGroup{}
 	defer wg.Wait()
-	for _, c := range s.filterActiveChoiceCaseChilds() {
+	for _, c := range s.GetChilds(DescendMethodActiveChilds) {
 		wg.Add(1)
 		valFunc := func(x Entry) {
 			x.Validate(ctx, resultChan, statChan, vCfg)
@@ -1190,7 +1202,7 @@ func (s *sharedEntryAttributes) validatePattern(resultChan chan<- *types.Validat
 	}
 }
 
-func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.ImportConfigAdapter, intentName string, intentPrio int32, insertFlags *types.UpdateInsertFlags) error {
+func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.ImportConfigAdapterElement, intentName string, intentPrio int32, insertFlags *types.UpdateInsertFlags) error {
 	var err error
 
 	switch x := s.schema.GetSchema().(type) {
@@ -1214,7 +1226,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 					return err
 				}
 				// if the child does not exist, create it
-				if keyChild, exists = actualEntry.getChildren()[keyElemValue]; !exists {
+				if keyChild, exists = actualEntry.GetChilds(DescendMethodAll)[keyElemValue]; !exists {
 					keyChild, err = newEntry(ctx, actualEntry, keyElemValue, s.treeContext)
 					if err != nil {
 						return err
@@ -1367,7 +1379,7 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(ctx context.Context, l
 		// iterate over the attributes make sure any of these exists
 		for _, attr := range attributes {
 			// first check if the mandatory value is set via the intent, e.g. part of the tree already
-			v, existsInTree = s.filterActiveChoiceCaseChilds()[attr]
+			v, existsInTree = s.GetChilds(DescendMethodActiveChilds)[attr]
 			// if exists and remains to Exist
 			if existsInTree && v.remainsToExist() {
 				// set success to true and break the loop
@@ -1390,7 +1402,7 @@ func (s *sharedEntryAttributes) validateMandatoryWithKeys(ctx context.Context, l
 		return
 	}
 
-	for _, c := range s.filterActiveChoiceCaseChilds() {
+	for _, c := range s.GetChilds(DescendMethodActiveChilds) {
 		c.validateMandatoryWithKeys(ctx, level-1, attributes, choiceName, resultChan)
 	}
 }
@@ -1443,7 +1455,7 @@ func (s *sharedEntryAttributes) FinishInsertionPhase(ctx context.Context) error 
 
 	// recurse the call to all (active) entries within the tree.
 	// Thereby already using the choiceCaseResolver via filterActiveChoiceCaseChilds()
-	for _, child := range s.filterActiveChoiceCaseChilds() {
+	for _, child := range s.GetChilds(DescendMethodActiveChilds) {
 		err = child.FinishInsertionPhase(ctx)
 		if err != nil {
 			return err
@@ -1505,30 +1517,58 @@ func (s *sharedEntryAttributes) populateChoiceCaseResolvers(_ context.Context) e
 	return nil
 }
 
-// filterActiveChoiceCaseChilds returns the list of child elements. In case the Entry is
-// a container with a / multiple choices, the list of childs is filtered to only return the
-// cases that have the highest precedence.
-func (s *sharedEntryAttributes) filterActiveChoiceCaseChilds() map[string]Entry {
+func (s *sharedEntryAttributes) GetChilds(d DescendMethod) EntryMap {
 	if s.schema == nil {
 		return s.childs.GetAll()
 	}
 
-	skipAttributesList := s.choicesResolvers.GetSkipElements()
-	// if there are no items that should be skipped, take a shortcut
-	// and simply return all childs straight away
-	if len(skipAttributesList) == 0 {
+	switch d {
+	case DescendMethodAll:
 		return s.childs.GetAll()
-	}
-	result := map[string]Entry{}
-	// optimization option: sort the slices and forward in parallel, lifts extra burden that the contains call holds.
-	for childName, child := range s.childs.GetAll() {
-		if slices.Contains(skipAttributesList, childName) {
-			continue
+	case DescendMethodActiveChilds:
+		skipAttributesList := s.choicesResolvers.GetSkipElements()
+		// if there are no items that should be skipped, take a shortcut
+		// and simply return all childs straight away
+		if len(skipAttributesList) == 0 {
+			return s.childs.GetAll()
 		}
-		result[childName] = child
+		result := map[string]Entry{}
+		// optimization option: sort the slices and forward in parallel, lifts extra burden that the contains call holds.
+		for childName, child := range s.childs.GetAll() {
+			if slices.Contains(skipAttributesList, childName) {
+				continue
+			}
+			result[childName] = child
+		}
+		return result
 	}
-	return result
+	return nil
 }
+
+// // filterActiveChoiceCaseChilds returns the list of child elements. In case the Entry is
+// // a container with a / multiple choices, the list of childs is filtered to only return the
+// // cases that have the highest precedence.
+// func (s *sharedEntryAttributes) filterActiveChoiceCaseChilds() map[string]Entry {
+// 	if s.schema == nil {
+// 		return s.childs.GetAll()
+// 	}
+
+// 	skipAttributesList := s.choicesResolvers.GetSkipElements()
+// 	// if there are no items that should be skipped, take a shortcut
+// 	// and simply return all childs straight away
+// 	if len(skipAttributesList) == 0 {
+// 		return s.childs.GetAll()
+// 	}
+// 	result := map[string]Entry{}
+// 	// optimization option: sort the slices and forward in parallel, lifts extra burden that the contains call holds.
+// 	for childName, child := range s.childs.GetAll() {
+// 		if slices.Contains(skipAttributesList, childName) {
+// 			continue
+// 		}
+// 		result[childName] = child
+// 	}
+// 	return result
+// }
 
 // StringIndent returns the sharedEntryAttributes in its string representation
 // The string is intented according to the nesting level in the yang model

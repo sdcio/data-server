@@ -10,9 +10,9 @@ import (
 )
 
 type BlameConfigVisitor struct {
+	BaseVisitor
 	stack           []*sdcpb.BlameTreeElement
 	includeDefaults bool
-	// skipUp          bool
 }
 
 var _ EntryVisitor = (*BlameConfigVisitor)(nil)
@@ -68,6 +68,10 @@ func (b *BlameConfigVisitor) Up() {
 	if len(b.stack) > 1 {
 		b.stack = b.stack[:len(b.stack)-1]
 	}
+}
+
+func (o *BlameConfigVisitor) DescendMethod() DescendMethod {
+	return DescendMethodAll
 }
 
 func (b *BlameConfigVisitor) GetResult() *sdcpb.BlameTreeElement {
