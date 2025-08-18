@@ -23,20 +23,14 @@ func Test_childMap_DeleteChilds(t *testing.T) {
 			name: "Delete single entry",
 			fields: fields{
 				c: map[string]Entry{
-					"one": EntryImpl{
-						sharedEntryAttributes: &sharedEntryAttributes{
-							pathElemName: "one",
-						},
+					"one": &sharedEntryAttributes{
+						pathElemName: "one",
 					},
-					"two": EntryImpl{
-						sharedEntryAttributes: &sharedEntryAttributes{
-							pathElemName: "two",
-						},
+					"two": &sharedEntryAttributes{
+						pathElemName: "two",
 					},
-					"three": EntryImpl{
-						sharedEntryAttributes: &sharedEntryAttributes{
-							pathElemName: "three",
-						},
+					"three": &sharedEntryAttributes{
+						pathElemName: "three",
 					},
 				},
 				mu: sync.RWMutex{},
@@ -50,20 +44,14 @@ func Test_childMap_DeleteChilds(t *testing.T) {
 			name: "Delete two entries",
 			fields: fields{
 				c: map[string]Entry{
-					"one": EntryImpl{
-						sharedEntryAttributes: &sharedEntryAttributes{
-							pathElemName: "one",
-						},
+					"one": &sharedEntryAttributes{
+						pathElemName: "one",
 					},
-					"two": EntryImpl{
-						sharedEntryAttributes: &sharedEntryAttributes{
-							pathElemName: "two",
-						},
+					"two": &sharedEntryAttributes{
+						pathElemName: "two",
 					},
-					"three": EntryImpl{
-						sharedEntryAttributes: &sharedEntryAttributes{
-							pathElemName: "three",
-						},
+					"three": &sharedEntryAttributes{
+						pathElemName: "three",
 					},
 				},
 				mu: sync.RWMutex{},
@@ -77,20 +65,14 @@ func Test_childMap_DeleteChilds(t *testing.T) {
 			name: "Delete non-existing entry",
 			fields: fields{
 				c: map[string]Entry{
-					"one": EntryImpl{
-						sharedEntryAttributes: &sharedEntryAttributes{
-							pathElemName: "one",
-						},
+					"one": &sharedEntryAttributes{
+						pathElemName: "one",
 					},
-					"two": EntryImpl{
-						sharedEntryAttributes: &sharedEntryAttributes{
-							pathElemName: "two",
-						},
+					"two": &sharedEntryAttributes{
+						pathElemName: "two",
 					},
-					"three": EntryImpl{
-						sharedEntryAttributes: &sharedEntryAttributes{
-							pathElemName: "three",
-						},
+					"three": &sharedEntryAttributes{
+						pathElemName: "three",
 					},
 				},
 				mu: sync.RWMutex{},
@@ -133,20 +115,14 @@ func Test_childMap_DeleteChild(t *testing.T) {
 			name: "Delete existing entry",
 			fields: fields{
 				c: map[string]Entry{
-					"one": EntryImpl{
-						sharedEntryAttributes: &sharedEntryAttributes{
-							pathElemName: "one",
-						},
+					"one": &sharedEntryAttributes{
+						pathElemName: "one",
 					},
-					"two": EntryImpl{
-						sharedEntryAttributes: &sharedEntryAttributes{
-							pathElemName: "two",
-						},
+					"two": &sharedEntryAttributes{
+						pathElemName: "two",
 					},
-					"three": EntryImpl{
-						sharedEntryAttributes: &sharedEntryAttributes{
-							pathElemName: "three",
-						},
+					"three": &sharedEntryAttributes{
+						pathElemName: "three",
 					},
 				},
 				mu: sync.RWMutex{},
@@ -160,20 +136,14 @@ func Test_childMap_DeleteChild(t *testing.T) {
 			name: "Delete non-existing entry",
 			fields: fields{
 				c: map[string]Entry{
-					"one": EntryImpl{
-						sharedEntryAttributes: &sharedEntryAttributes{
-							pathElemName: "one",
-						},
+					"one": &sharedEntryAttributes{
+						pathElemName: "one",
 					},
-					"two": EntryImpl{
-						sharedEntryAttributes: &sharedEntryAttributes{
-							pathElemName: "two",
-						},
+					"two": &sharedEntryAttributes{
+						pathElemName: "two",
 					},
-					"three": EntryImpl{
-						sharedEntryAttributes: &sharedEntryAttributes{
-							pathElemName: "three",
-						},
+					"three": &sharedEntryAttributes{
+						pathElemName: "three",
 					},
 				},
 				mu: sync.RWMutex{},

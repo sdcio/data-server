@@ -23,24 +23,17 @@ const (
 	ReplaceIntentName  = "replace"
 )
 
-type EntryImpl struct {
-	*sharedEntryAttributes
-}
-
 // newEntry constructor for Entries
-func newEntry(ctx context.Context, parent Entry, pathElemName string, tc *TreeContext) (*EntryImpl, error) {
+func newEntry(ctx context.Context, parent Entry, pathElemName string, tc *TreeContext) (*sharedEntryAttributes, error) {
 	// create a new sharedEntryAttributes instance
 	sea, err := newSharedEntryAttributes(ctx, parent, pathElemName, tc)
 	if err != nil {
 		return nil, err
 	}
 
-	newEntry := &EntryImpl{
-		sharedEntryAttributes: sea,
-	}
 	// add the Entry as a child to the parent Entry
-	err = parent.addChild(ctx, newEntry)
-	return newEntry, err
+	err = parent.addChild(ctx, sea)
+	return sea, err
 }
 
 // Entry is the primary Element of the Tree.
