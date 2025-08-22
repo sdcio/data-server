@@ -7,6 +7,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -27,7 +28,7 @@ func newLeafVariants(tc *TreeContext, parentEnty Entry) *LeafVariants {
 
 func (lv *LeafVariants) Add(le *LeafEntry) {
 	if leafVariant := lv.GetByOwner(le.Owner()); leafVariant != nil {
-		if leafVariant.Equal(le.Update) {
+		if leafVariant.Update.Equal(le.Update) {
 			// it seems like the element was not deleted, so drop the delete flag
 			leafVariant.DropDeleteFlag()
 		} else {
@@ -98,10 +99,16 @@ func (lv *LeafVariants) canDelete() bool {
 		return false
 	}
 
+	// check if highest is explicit delete
+	highest := lv.GetHighestPrecedence(false, false)
+	if highest != nil && highest.IsExplicitDelete && lv.GetRunning() != nil {
+		return true
+	}
+
 	// go through all variants
 	for _, l := range lv.les {
 		// if the LeafVariant is not owned by running or default
-		if l.Update.Owner() != RunningIntentName && l.Update.Owner() != DefaultsIntentName {
+		if l.Update.Owner() != RunningIntentName && l.Update.Owner() != DefaultsIntentName && !l.IsExplicitDelete {
 			// then we need to check that it remains, so not Delete Flag set or DeleteOnylIntended Flags set [which results in not doing a delete towards the device]
 			if l.GetDeleteOnlyIntendedFlag() || !l.GetDeleteFlag() {
 				// then this entry should not be deleted
@@ -123,11 +130,17 @@ func (lv *LeafVariants) shouldDelete() bool {
 		return false
 	}
 
+	// check if highest is explicit delete
+	highest := lv.GetHighestPrecedence(false, false)
+	if highest != nil && highest.IsExplicitDelete && lv.GetRunning() != nil {
+		return true
+	}
+
 	foundOtherThenRunningAndDefault := false
 	// go through all variants
 	for _, l := range lv.les {
 		// if an entry exists that is not owned by running or default,
-		if l.Update.Owner() == RunningIntentName || l.Update.Owner() == DefaultsIntentName {
+		if l.Update.Owner() == RunningIntentName || l.Update.Owner() == DefaultsIntentName || l.IsExplicitDelete {
 			continue
 		}
 		foundOtherThenRunningAndDefault = true
@@ -328,16 +341,17 @@ func (lv *LeafVariants) MarkOwnerForDeletion(owner string, onlyIntended bool) *L
 	return nil
 }
 
-func (lv *LeafVariants) DeleteByOwner(owner string) {
+func (lv *LeafVariants) DeleteByOwner(owner string) *LeafEntry {
 	lv.lesMutex.Lock()
 	defer lv.lesMutex.Unlock()
 	for i, l := range lv.les {
 		if l.Owner() == owner {
 			// Remove element from slice
 			lv.les = append(lv.les[:i], lv.les[i+1:]...)
-			break
+			return l
 		}
 	}
+	return nil
 }
 
 func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveCase bool) {
@@ -421,4 +435,10 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 		ch <- de
 	}
 
+}
+
+func (lv *LeafVariants) AddExplicitDeleteEntry(intentName string, priority int32) *LeafEntry {
+	le := NewLeafEntry(types.NewUpdate(lv.parentEntry.Path(), &sdcpb.TypedValue{}, priority, intentName, 0), types.NewUpdateInsertFlags().SetExplicitDeleteFlag(), lv.parentEntry)
+	lv.Add(le)
+	return le
 }

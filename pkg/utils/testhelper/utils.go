@@ -183,3 +183,18 @@ func LoadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root Root
 	}
 	return nil
 }
+
+// SplitStringSortDiff split the two strings a and b on sep, sort alphabetical and return the diff
+func SplitStringSortDiff(a, b string, sep string) string {
+
+	splits := make([][]string, 0, 2)
+
+	for _, txt := range []string{a, b} {
+		// split
+		split := strings.Split(txt, sep)
+		// sort
+		slices.Sort(split)
+		splits = append(splits, split)
+	}
+	return cmp.Diff(splits[0], splits[1])
+}

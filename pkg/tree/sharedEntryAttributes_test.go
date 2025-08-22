@@ -82,7 +82,7 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 			root: func() *RootEntry {
 				tc := NewTreeContext(nil, owner1)
 				r := &RootEntry{
-					&sharedEntryAttributes{
+					sharedEntryAttributes: &sharedEntryAttributes{
 						pathElemName:     "__root__",
 						childs:           newChildMap(),
 						childsMutex:      sync.RWMutex{},
@@ -90,6 +90,7 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 						parent:           nil,
 						treeContext:      tc,
 					},
+					explicitDeletes: NewDeletePaths(),
 				}
 				r.leafVariants = newLeafVariants(tc, r.sharedEntryAttributes)
 				return r
@@ -385,7 +386,7 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 			for _, elem := range got {
 				elemNames = append(elemNames, elem.PathName())
 				elemChilds[elem.PathName()] = []string{}
-				for k := range elem.getChildren() {
+				for k := range elem.GetChilds(DescendMethodAll) {
 					elemChilds[elem.PathName()] = append(elemChilds[elem.PathName()], k)
 				}
 			}

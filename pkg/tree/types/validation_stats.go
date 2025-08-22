@@ -65,27 +65,27 @@ func (v *ValidationStat) Set(count uint) *ValidationStat {
 }
 
 type ValidationStatOverall struct {
-	counter map[StatType]uint
+	Counter map[string]uint `json:"counters"`
 }
 
 func NewValidationStatOverall() *ValidationStatOverall {
 	return &ValidationStatOverall{
-		counter: map[StatType]uint{},
+		Counter: map[string]uint{},
 	}
 }
 
 func (v *ValidationStatOverall) String() string {
-	result := make([]string, 0, len(v.counter))
-	for typ, count := range v.counter {
-		result = append(result, fmt.Sprintf("%s: %d", typ.String(), count))
+	result := make([]string, 0, len(v.Counter))
+	for typ, count := range v.Counter {
+		result = append(result, fmt.Sprintf("%s: %d", typ, count))
 	}
 	return strings.Join(result, ", ")
 }
 
 func (v *ValidationStatOverall) MergeStat(vs *ValidationStat) {
-	v.counter[vs.statType] = v.counter[vs.statType] + vs.count
+	v.Counter[vs.statType.String()] = v.Counter[vs.statType.String()] + vs.count
 }
 
-func (v *ValidationStatOverall) GetCounter() map[StatType]uint {
-	return v.counter
+func (v *ValidationStatOverall) GetCounter() map[string]uint {
+	return v.Counter
 }
