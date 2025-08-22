@@ -200,8 +200,6 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 			updates := root.GetHighestPrecedence(true)
 
 			t.Logf("Updates:\n%s", updates.String())
-
-			t.Error(nil)
 		})
 	}
 }

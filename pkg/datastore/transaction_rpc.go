@@ -131,9 +131,6 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	// retrieve the data that is meant to be send southbound (towards the device)
 	updates := root.GetHighestPrecedence(true)
 	deletes := treetypes.DeleteEntriesList{root}
-	if err != nil {
-		return nil, err
-	}
 
 	// OPTIMISTIC WRITEBACK TO RUNNING / syncTree
 	err = d.writeBackSyncTree(ctx, updates, deletes)

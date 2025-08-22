@@ -90,6 +90,7 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 						parent:           nil,
 						treeContext:      tc,
 					},
+					explicitDeletes: NewDeletePaths(),
 				}
 				r.leafVariants = newLeafVariants(tc, r.sharedEntryAttributes)
 				return r

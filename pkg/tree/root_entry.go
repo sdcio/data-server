@@ -61,6 +61,7 @@ func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 
 	result := &RootEntry{
 		sharedEntryAttributes: se,
+		explicitDeletes:       r.explicitDeletes.DeepCopy(),
 	}
 
 	err = tc.SetRoot(result.sharedEntryAttributes)
