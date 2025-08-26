@@ -168,15 +168,18 @@ func (s *sharedEntryAttributes) loadDefaults(ctx context.Context) error {
 }
 
 func (s *sharedEntryAttributes) GetDeviations(ch chan<- *types.DeviationEntry, activeCase bool) {
+	evalLeafvariants := true
 	// if s is a presence container but has active childs, it should not be treated as a presence
 	// container, hence the leafvariants should not be processed. For presence container with
 	// childs the TypedValue.empty_val in the presence container is irrelevant.
 	if s.schema.GetContainer().GetIsPresence() && len(s.GetChilds(DescendMethodActiveChilds)) > 0 {
-		return
+		evalLeafvariants = false
 	}
 
-	// calculate Deviation on the LeafVariants
-	s.leafVariants.GetDeviations(ch, activeCase)
+	if evalLeafvariants {
+		// calculate Deviation on the LeafVariants
+		s.leafVariants.GetDeviations(ch, activeCase)
+	}
 
 	// get all active childs
 	activeChilds := s.GetChilds(DescendMethodActiveChilds)
