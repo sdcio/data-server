@@ -427,7 +427,7 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 	}
 
 	// if highest exists but not running  OR   running != highest
-	if (running == nil && highest != nil) || running.Value().Cmp(highest.Value()) != 0 {
+	if (running == nil && highest != nil) || !utils.EqualTypedValues(running.Value(), highest.Value()) {
 		de := types.NewDeviationEntry(highest.Owner(), types.DeviationReasonNotApplied, sdcpbPath).SetExpectedValue(highest.Value())
 		if running != nil {
 			de.SetCurrentValue(running.Value())

@@ -42,7 +42,7 @@ func (b *BlameConfigVisitor) Visit(ctx context.Context, e Entry) error {
 			runningLe := e.GetLeafVariantEntries().GetRunning()
 			if runningLe != nil {
 				if !proto.Equal(runningLe.Update.Value(), highestLe.Update.Value()) {
-					result.DeviationValue = runningLe.Value()
+					result.SetDeviationValue(runningLe.Value())
 				}
 			}
 		} else {
