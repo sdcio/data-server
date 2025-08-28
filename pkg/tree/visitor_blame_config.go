@@ -33,7 +33,7 @@ func (b *BlameConfigVisitor) Visit(ctx context.Context, e Entry) error {
 	skipAdd := false
 
 	// process Value
-	highestLe := e.GetLeafVariantEntries().GetHighestPrecedence(false, true)
+	highestLe := e.GetLeafVariantEntries().GetHighestPrecedence(false, true, true)
 	if highestLe != nil {
 		if highestLe.Update.Owner() != DefaultsIntentName || b.includeDefaults {
 			result.SetValue(highestLe.Update.Value()).SetOwner(highestLe.Update.Owner())

@@ -925,23 +925,23 @@ func (s *sharedEntryAttributes) deleteBranchInternal(ctx context.Context, owner 
 
 // GetHighestPrecedence goes through the whole branch and returns the new and updated cache.Updates.
 // These are the updated that will be send to the device.
-func (s *sharedEntryAttributes) GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool, includeDefaults bool) LeafVariantSlice {
+func (s *sharedEntryAttributes) GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool, includeDefaults bool, includeExplicitDelete bool) LeafVariantSlice {
 	// get the highes precedence LeafeVariant and add it to the list
-	lv := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, includeDefaults)
+	lv := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, includeDefaults, includeExplicitDelete)
 	if lv != nil {
 		result = append(result, lv)
 	}
 
 	// continue with childs. Childs are part of choices, process only the "active" (highes precedence) childs
 	for _, c := range s.GetChilds(DescendMethodActiveChilds) {
-		result = c.GetHighestPrecedence(result, onlyNewOrUpdated, includeDefaults)
+		result = c.GetHighestPrecedence(result, onlyNewOrUpdated, includeDefaults, includeExplicitDelete)
 	}
 	return result
 }
 
 func (s *sharedEntryAttributes) getHighestPrecedenceLeafValue(ctx context.Context) (*LeafEntry, error) {
 	for _, x := range []string{"existing", "default"} {
-		lv := s.leafVariants.GetHighestPrecedence(false, true)
+		lv := s.leafVariants.GetHighestPrecedence(false, true, false)
 		if lv != nil {
 			return lv, nil
 		}
@@ -998,6 +998,10 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 	wg := sync.WaitGroup{}
 	defer wg.Wait()
 	for _, c := range s.GetChilds(DescendMethodActiveChilds) {
+		if c.canDeleteBranch(false) {
+			// skip validation of branches that can be deleted
+			continue
+		}
 		wg.Add(1)
 		valFunc := func(x Entry) {
 			x.Validate(ctx, resultChan, statChan, vCfg)
@@ -1051,7 +1055,7 @@ func (s *sharedEntryAttributes) validateRange(resultChan chan<- *types.Validatio
 		return
 	}
 
-	lv := s.leafVariants.GetHighestPrecedence(false, true)
+	lv := s.leafVariants.GetHighestPrecedence(false, true, false)
 	if lv == nil {
 		return
 	}
@@ -1128,7 +1132,7 @@ func (s *sharedEntryAttributes) validateRange(resultChan chan<- *types.Validatio
 func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat) {
 	if schema := s.schema.GetLeaflist(); schema != nil {
 		if schema.GetMinElements() > 0 || schema.GetMaxElements() < math.MaxUint64 {
-			if lv := s.leafVariants.GetHighestPrecedence(false, true); lv != nil {
+			if lv := s.leafVariants.GetHighestPrecedence(false, true, false); lv != nil {
 				tv := lv.Update.Value()
 
 				if val := tv.GetLeaflistVal(); val != nil {
@@ -1156,7 +1160,7 @@ func (s *sharedEntryAttributes) validateLength(resultChan chan<- *types.Validati
 
 		stat := types.NewValidationStat(types.StatTypeLength)
 
-		lv := s.leafVariants.GetHighestPrecedence(false, true)
+		lv := s.leafVariants.GetHighestPrecedence(false, true, false)
 		if lv == nil {
 			return
 		}
@@ -1186,7 +1190,10 @@ func (s *sharedEntryAttributes) validatePattern(resultChan chan<- *types.Validat
 			return
 		}
 		stat := types.NewValidationStat(types.StatTypePattern)
-		lv := s.leafVariants.GetHighestPrecedence(false, true)
+		lv := s.leafVariants.GetHighestPrecedence(false, true, false)
+		if lv == nil {
+			return
+		}
 		value := lv.Value().GetStringVal()
 		for _, pattern := range schema.Type.Patterns {
 			if p := pattern.GetPattern(); p != "" {

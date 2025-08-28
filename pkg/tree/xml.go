@@ -139,14 +139,14 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 			utils.AddXMLOperation(newElem, utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
 			return true, nil
 		case s.GetSchema().GetContainer().IsPresence && s.containsOnlyDefaults():
-			// process presence cotnainers with no childs
+			// process presence containers with no childs
 			if onlyNewOrUpdated {
 				// presence containers have leafvariantes with typedValue_Empty, so check that
 				if s.leafVariants.shouldDelete() {
 					return false, nil
 				}
-				le := s.leafVariants.GetHighestPrecedence(false, false)
-				if onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
+				le := s.leafVariants.GetHighestPrecedence(false, false, false)
+				if le == nil || onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
 					return false, nil
 				}
 			}
@@ -220,7 +220,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 		}
 		// if the Field or Leaflist remains to exist
 		// get highes Precedence value
-		le := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, false)
+		le := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, false, false)
 		if le == nil {
 			return false, nil
 		}

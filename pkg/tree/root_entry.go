@@ -175,7 +175,7 @@ func (r *RootEntry) GetDeletesForOwner(owner string) types.PathSlices {
 // If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
 // It will append to the given list and provide a new pointer to the slice
 func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) LeafVariantSlice {
-	return r.sharedEntryAttributes.GetHighestPrecedence(make(LeafVariantSlice, 0), onlyNewOrUpdated, false)
+	return r.sharedEntryAttributes.GetHighestPrecedence(make(LeafVariantSlice, 0), onlyNewOrUpdated, false, false)
 }
 
 // GetDeletes returns the paths that due to the Tree content are to be deleted from the southbound device.

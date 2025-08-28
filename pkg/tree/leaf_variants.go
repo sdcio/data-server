@@ -71,6 +71,11 @@ func (lv *LeafVariants) canDeleteBranch(keepDefault bool) bool {
 		return true
 	}
 
+	highest := lv.GetHighestPrecedence(false, false, true)
+	if highest != nil && highest.IsExplicitDelete {
+		return true
+	}
+
 	// go through all variants
 	for _, l := range lv.les {
 		// if the LeafVariant is not owned by running or default
@@ -100,8 +105,8 @@ func (lv *LeafVariants) canDelete() bool {
 	}
 
 	// check if highest is explicit delete
-	highest := lv.GetHighestPrecedence(false, false)
-	if highest != nil && highest.IsExplicitDelete && lv.GetRunning() != nil {
+	highest := lv.GetHighestPrecedence(false, false, true)
+	if highest != nil && highest.IsExplicitDelete {
 		return true
 	}
 
@@ -131,7 +136,7 @@ func (lv *LeafVariants) shouldDelete() bool {
 	}
 
 	// check if highest is explicit delete
-	highest := lv.GetHighestPrecedence(false, false)
+	highest := lv.GetHighestPrecedence(false, false, true)
 	if highest != nil && highest.IsExplicitDelete && lv.GetRunning() != nil {
 		return true
 	}
@@ -163,6 +168,12 @@ func (lv *LeafVariants) remainsToExist() bool {
 	defer lv.lesMutex.RUnlock()
 	// only procede if we have leave variants
 	if len(lv.les) == 0 {
+		return false
+	}
+
+	highest := lv.GetHighestPrecedence(false, false, true)
+
+	if highest != nil && highest.IsExplicitDelete {
 		return false
 	}
 
@@ -236,7 +247,7 @@ func (lv *LeafVariants) GetRunning() *LeafEntry {
 
 // GetHighesNewUpdated returns the LeafEntry with the highes priority
 // nil if no leaf entry exists.
-func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool) *LeafEntry {
+func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool, includeExplicitDelete bool) *LeafEntry {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 	if len(lv.les) == 0 {
@@ -271,6 +282,10 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 
 	// do not include defaults loaded at validation time
 	if checkNotDefaultAllowedButIsDefaultOwner(highest, includeDefaults) {
+		return nil
+	}
+
+	if highest.IsExplicitDelete && !includeExplicitDelete {
 		return nil
 	}
 

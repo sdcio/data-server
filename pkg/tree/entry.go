@@ -57,7 +57,7 @@ type Entry interface {
 	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
 	// If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
 	// It will append to the given list and provide a new pointer to the slice
-	GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool, includeDefaults bool) LeafVariantSlice
+	GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool, includeDefaults bool, includeExplicitDelete bool) LeafVariantSlice
 	// getHighestPrecedenceLeafValue returns the highest LeafValue of the Entry at hand
 	// will return an error if the Entry is not a Leaf
 	getHighestPrecedenceLeafValue(context.Context) (*LeafEntry, error)
@@ -167,7 +167,7 @@ type LeafVariantEntry interface {
 
 type LeafVariantEntries interface {
 	MarkOwnerForDeletion(owner string, onlyIntended bool) *LeafEntry
-	GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool) *LeafEntry
+	GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool, includeExplicitDeletes bool) *LeafEntry
 	GetRunning() *LeafEntry
 	DeleteByOwner(owner string) *LeafEntry
 	AddExplicitDeleteEntry(owner string, priority int32) *LeafEntry

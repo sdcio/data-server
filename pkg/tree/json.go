@@ -92,8 +92,8 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 				if s.leafVariants.shouldDelete() {
 					return nil, nil
 				}
-				le := s.leafVariants.GetHighestPrecedence(false, false)
-				if onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
+				le := s.leafVariants.GetHighestPrecedence(false, false, false)
+				if le == nil || onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
 					return nil, nil
 				}
 			}
@@ -121,7 +121,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 		if s.leafVariants.shouldDelete() {
 			return nil, nil
 		}
-		le := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, false)
+		le := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, false, false)
 		if le == nil {
 			return nil, nil
 		}
