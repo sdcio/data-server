@@ -200,10 +200,15 @@ func (r *RootEntry) TreeExport(owner string, priority int32, deviation bool) (*t
 
 	explicitDeletes := r.explicitDeletes.GetByIntentName(owner).ToPathSlice()
 
-	if treeExport != nil || len(explicitDeletes) > 0 {
+	var rootExportEntry *tree_persist.TreeElement
+	if len(treeExport) != 0 {
+		rootExportEntry = treeExport[0]
+	}
+
+	if rootExportEntry != nil || len(explicitDeletes) > 0 {
 		return &tree_persist.Intent{
 			IntentName:      owner,
-			Root:            treeExport[0],
+			Root:            rootExportEntry,
 			Priority:        priority,
 			Deviation:       deviation,
 			ExplicitDeletes: explicitDeletes,

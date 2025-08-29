@@ -42,7 +42,7 @@ func (p *ProtoTreeImporter) GetDeletes() *sdcpb.PathSet {
 }
 
 func (p *ProtoTreeImporterElement) GetElements() []importer.ImportConfigAdapterElement {
-	if len(p.data.Childs) == 0 {
+	if p.data == nil || len(p.data.Childs) == 0 {
 		return nil
 	}
 	result := []importer.ImportConfigAdapterElement{}
