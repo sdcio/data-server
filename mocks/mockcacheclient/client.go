@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	tree_persist "github.com/sdcio/data-server/pkg/tree/tree_persist"
+	tree_persist "github.com/sdcio/sdc-protos/tree_persist"
 	gomock "go.uber.org/mock/gomock"
 )
 

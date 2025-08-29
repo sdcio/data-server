@@ -9,10 +9,10 @@ import (
 
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/importer"
-	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/sdc-protos/tree_persist"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -193,16 +193,20 @@ func (r *RootEntry) GetDeviations(ch chan<- *types.DeviationEntry) {
 }
 
 func (r *RootEntry) TreeExport(owner string, priority int32, deviation bool) (*tree_persist.Intent, error) {
-	te, err := r.sharedEntryAttributes.TreeExport(owner)
+	treeExport, err := r.sharedEntryAttributes.TreeExport(owner)
 	if err != nil {
 		return nil, err
 	}
-	if te != nil {
+
+	explicitDeletes := r.explicitDeletes.GetByIntentName(owner).ToPathSlice()
+
+	if treeExport != nil || len(explicitDeletes) > 0 {
 		return &tree_persist.Intent{
-			IntentName: owner,
-			Root:       te[0],
-			Priority:   priority,
-			Deviation:  deviation,
+			IntentName:      owner,
+			Root:            treeExport[0],
+			Priority:        priority,
+			Deviation:       deviation,
+			ExplicitDeletes: explicitDeletes,
 		}, nil
 	}
 	return nil, ErrorIntentNotPresent

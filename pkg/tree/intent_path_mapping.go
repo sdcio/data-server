@@ -37,6 +37,14 @@ func (dp *DeletePathSet) Add(intentName string, prio int32, pathset *sdcpb.PathS
 	dpp.paths.Join(pathset)
 }
 
+func (dp *DeletePathSet) GetByIntentName(intentName string) *sdcpb.PathSet {
+	data, exists := dp.data[intentName]
+	if exists {
+		return data.paths
+	}
+	return sdcpb.NewPathSet()
+}
+
 func (dp *DeletePathSet) Items() iter.Seq[*DeletePathPrio] {
 	return func(yield func(*DeletePathPrio) bool) {
 		for _, val := range dp.data {

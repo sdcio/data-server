@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/sdcio/data-server/pkg/tree/importer"
-	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/sdc-protos/tree_persist"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -15,11 +15,15 @@ type ProtoTreeImporter struct {
 	deletes *sdcpb.PathSet
 }
 
-func NewProtoTreeImporter(data *tree_persist.TreeElement) *ProtoTreeImporter {
+func NewProtoTreeImporter(data *tree_persist.Intent) *ProtoTreeImporter {
+	pathSet := sdcpb.NewPathSet()
+	pathSet.AddPaths(data.GetExplicitDeletes())
+
 	return &ProtoTreeImporter{
 		ProtoTreeImporterElement: ProtoTreeImporterElement{
-			data: data,
+			data: data.GetRoot(),
 		},
+		deletes: pathSet,
 	}
 }
 

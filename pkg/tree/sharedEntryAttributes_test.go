@@ -1002,7 +1002,7 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = newRoot.ImportConfig(ctx, types.PathSlice{}, proto.NewProtoTreeImporter(treepersist.Root), owner1, owner1Prio, flagsExisting)
+			err = newRoot.ImportConfig(ctx, types.PathSlice{}, proto.NewProtoTreeImporter(treepersist), owner1, owner1Prio, flagsExisting)
 			if err != nil {
 				t.Error(err)
 				return

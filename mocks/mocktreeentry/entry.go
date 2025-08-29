@@ -17,9 +17,9 @@ import (
 	config "github.com/sdcio/data-server/pkg/config"
 	tree "github.com/sdcio/data-server/pkg/tree"
 	importer "github.com/sdcio/data-server/pkg/tree/importer"
-	tree_persist "github.com/sdcio/data-server/pkg/tree/tree_persist"
 	types "github.com/sdcio/data-server/pkg/tree/types"
-	schema_server "github.com/sdcio/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	tree_persist "github.com/sdcio/sdc-protos/tree_persist"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -206,17 +206,17 @@ func (mr *MockEntryMockRecorder) GetFirstAncestorWithSchema() *gomock.Call {
 }
 
 // GetHighestPrecedence mocks base method.
-func (m *MockEntry) GetHighestPrecedence(result tree.LeafVariantSlice, onlyNewOrUpdated, includeDefaults bool) tree.LeafVariantSlice {
+func (m *MockEntry) GetHighestPrecedence(result tree.LeafVariantSlice, onlyNewOrUpdated, includeDefaults, includeExplicitDelete bool) tree.LeafVariantSlice {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetHighestPrecedence", result, onlyNewOrUpdated, includeDefaults)
+	ret := m.ctrl.Call(m, "GetHighestPrecedence", result, onlyNewOrUpdated, includeDefaults, includeExplicitDelete)
 	ret0, _ := ret[0].(tree.LeafVariantSlice)
 	return ret0
 }
 
 // GetHighestPrecedence indicates an expected call of GetHighestPrecedence.
-func (mr *MockEntryMockRecorder) GetHighestPrecedence(result, onlyNewOrUpdated, includeDefaults any) *gomock.Call {
+func (mr *MockEntryMockRecorder) GetHighestPrecedence(result, onlyNewOrUpdated, includeDefaults, includeExplicitDelete any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHighestPrecedence", reflect.TypeOf((*MockEntry)(nil).GetHighestPrecedence), result, onlyNewOrUpdated, includeDefaults)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHighestPrecedence", reflect.TypeOf((*MockEntry)(nil).GetHighestPrecedence), result, onlyNewOrUpdated, includeDefaults, includeExplicitDelete)
 }
 
 // GetLeafVariantEntries mocks base method.
@@ -305,10 +305,10 @@ func (mr *MockEntryMockRecorder) GetRootBasedEntryChain() *gomock.Call {
 }
 
 // GetSchema mocks base method.
-func (m *MockEntry) GetSchema() *schema_server.SchemaElem {
+func (m *MockEntry) GetSchema() *sdcpb.SchemaElem {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetSchema")
-	ret0, _ := ret[0].(*schema_server.SchemaElem)
+	ret0, _ := ret[0].(*sdcpb.SchemaElem)
 	return ret0
 }
 
@@ -405,7 +405,7 @@ func (mr *MockEntryMockRecorder) NavigateLeafRef(ctx any) *gomock.Call {
 }
 
 // NavigateSdcpbPath mocks base method.
-func (m *MockEntry) NavigateSdcpbPath(ctx context.Context, path []*schema_server.PathElem, isRootPath bool) (tree.Entry, error) {
+func (m *MockEntry) NavigateSdcpbPath(ctx context.Context, path []*sdcpb.PathElem, isRootPath bool) (tree.Entry, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NavigateSdcpbPath", ctx, path, isRootPath)
 	ret0, _ := ret[0].(tree.Entry)
@@ -448,10 +448,10 @@ func (mr *MockEntryMockRecorder) PathName() *gomock.Call {
 }
 
 // SdcpbPath mocks base method.
-func (m *MockEntry) SdcpbPath() (*schema_server.Path, error) {
+func (m *MockEntry) SdcpbPath() (*sdcpb.Path, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SdcpbPath")
-	ret0, _ := ret[0].(*schema_server.Path)
+	ret0, _ := ret[0].(*sdcpb.Path)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -463,10 +463,10 @@ func (mr *MockEntryMockRecorder) SdcpbPath() *gomock.Call {
 }
 
 // SdcpbPathInternal mocks base method.
-func (m *MockEntry) SdcpbPathInternal(spath []string) (*schema_server.Path, error) {
+func (m *MockEntry) SdcpbPathInternal(spath []string) (*sdcpb.Path, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SdcpbPathInternal", spath)
-	ret0, _ := ret[0].(*schema_server.Path)
+	ret0, _ := ret[0].(*sdcpb.Path)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -954,17 +954,17 @@ func (mr *MockLeafVariantEntriesMockRecorder) GetByOwner(owner any) *gomock.Call
 }
 
 // GetHighestPrecedence mocks base method.
-func (m *MockLeafVariantEntries) GetHighestPrecedence(onlyNewOrUpdated, includeDefaults bool) *tree.LeafEntry {
+func (m *MockLeafVariantEntries) GetHighestPrecedence(onlyNewOrUpdated, includeDefaults, includeExplicitDeletes bool) *tree.LeafEntry {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetHighestPrecedence", onlyNewOrUpdated, includeDefaults)
+	ret := m.ctrl.Call(m, "GetHighestPrecedence", onlyNewOrUpdated, includeDefaults, includeExplicitDeletes)
 	ret0, _ := ret[0].(*tree.LeafEntry)
 	return ret0
 }
 
 // GetHighestPrecedence indicates an expected call of GetHighestPrecedence.
-func (mr *MockLeafVariantEntriesMockRecorder) GetHighestPrecedence(onlyNewOrUpdated, includeDefaults any) *gomock.Call {
+func (mr *MockLeafVariantEntriesMockRecorder) GetHighestPrecedence(onlyNewOrUpdated, includeDefaults, includeExplicitDeletes any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHighestPrecedence", reflect.TypeOf((*MockLeafVariantEntries)(nil).GetHighestPrecedence), onlyNewOrUpdated, includeDefaults)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHighestPrecedence", reflect.TypeOf((*MockLeafVariantEntries)(nil).GetHighestPrecedence), onlyNewOrUpdated, includeDefaults, includeExplicitDeletes)
 }
 
 // GetRunning mocks base method.

@@ -91,9 +91,3 @@ goreleaser-nightly:
 
 .PHONY: proto
 CACHE_OUT_DIR := $(CURDIR)/pkg/tree/tree_persist
-
-proto:
-	clang-format -i -style=file:$(CURDIR)/proto/clang-format.style $(CURDIR)/proto/tree_persist.proto
-
-	mkdir -p $(CACHE_OUT_DIR)
-	protoc --go_out=$(CACHE_OUT_DIR) --go-grpc_out=$(CACHE_OUT_DIR) -I $(CURDIR)/proto $(CURDIR)/proto/tree_persist.proto

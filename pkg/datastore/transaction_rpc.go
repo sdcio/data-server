@@ -10,9 +10,9 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/tree"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
-	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/sdc-protos/tree_persist"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -79,7 +79,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	if err != nil {
 		return nil, err
 	}
-	err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto.GetRoot()), tree.RunningIntentName, tree.RunningValuesPrio, treetypes.NewUpdateInsertFlags())
+	err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto), tree.RunningIntentName, tree.RunningValuesPrio, treetypes.NewUpdateInsertFlags())
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +165,7 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 			}
 			intentNames = append(intentNames, intent.GetIntentName())
 			log.Debugf("adding intent %s to tree", intent.GetIntentName())
-			protoLoader := treeproto.NewProtoTreeImporter(intent.GetRoot())
+			protoLoader := treeproto.NewProtoTreeImporter(intent)
 			log.Tracef("%s", intent.String())
 			err := root.ImportConfig(ctx, nil, protoLoader, intent.GetIntentName(), intent.GetPriority(), treetypes.NewUpdateInsertFlags())
 			if err != nil {

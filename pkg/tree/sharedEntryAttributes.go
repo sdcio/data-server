@@ -13,10 +13,10 @@ import (
 
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/importer"
-	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/sdc-protos/tree_persist"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/emptypb"
 )

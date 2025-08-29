@@ -21,7 +21,7 @@ import (
 	"github.com/sdcio/cache/pkg/config"
 	"github.com/sdcio/cache/pkg/store/filesystem"
 	"github.com/sdcio/cache/pkg/types"
-	"github.com/sdcio/data-server/pkg/tree/tree_persist"
+	"github.com/sdcio/sdc-protos/tree_persist"
 	"google.golang.org/protobuf/proto"
 )
 

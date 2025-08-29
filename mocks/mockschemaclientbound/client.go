@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	schema_server "github.com/sdcio/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -42,10 +42,10 @@ func (m *MockSchemaClientBound) EXPECT() *MockSchemaClientBoundMockRecorder {
 }
 
 // GetSchemaElements mocks base method.
-func (m *MockSchemaClientBound) GetSchemaElements(ctx context.Context, p *schema_server.Path, done chan struct{}) (chan *schema_server.GetSchemaResponse, error) {
+func (m *MockSchemaClientBound) GetSchemaElements(ctx context.Context, p *sdcpb.Path, done chan struct{}) (chan *sdcpb.GetSchemaResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetSchemaElements", ctx, p, done)
-	ret0, _ := ret[0].(chan *schema_server.GetSchemaResponse)
+	ret0, _ := ret[0].(chan *sdcpb.GetSchemaResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -57,10 +57,10 @@ func (mr *MockSchemaClientBoundMockRecorder) GetSchemaElements(ctx, p, done any)
 }
 
 // GetSchemaSdcpbPath mocks base method.
-func (m *MockSchemaClientBound) GetSchemaSdcpbPath(ctx context.Context, path *schema_server.Path) (*schema_server.GetSchemaResponse, error) {
+func (m *MockSchemaClientBound) GetSchemaSdcpbPath(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetSchemaSdcpbPath", ctx, path)
-	ret0, _ := ret[0].(*schema_server.GetSchemaResponse)
+	ret0, _ := ret[0].(*sdcpb.GetSchemaResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -72,10 +72,10 @@ func (mr *MockSchemaClientBoundMockRecorder) GetSchemaSdcpbPath(ctx, path any) *
 }
 
 // GetSchemaSlicePath mocks base method.
-func (m *MockSchemaClientBound) GetSchemaSlicePath(ctx context.Context, path []string) (*schema_server.GetSchemaResponse, error) {
+func (m *MockSchemaClientBound) GetSchemaSlicePath(ctx context.Context, path []string) (*sdcpb.GetSchemaResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetSchemaSlicePath", ctx, path)
-	ret0, _ := ret[0].(*schema_server.GetSchemaResponse)
+	ret0, _ := ret[0].(*sdcpb.GetSchemaResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -87,10 +87,10 @@ func (mr *MockSchemaClientBoundMockRecorder) GetSchemaSlicePath(ctx, path any) *
 }
 
 // ToPath mocks base method.
-func (m *MockSchemaClientBound) ToPath(ctx context.Context, path []string) (*schema_server.Path, error) {
+func (m *MockSchemaClientBound) ToPath(ctx context.Context, path []string) (*sdcpb.Path, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ToPath", ctx, path)
-	ret0, _ := ret[0].(*schema_server.Path)
+	ret0, _ := ret[0].(*sdcpb.Path)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

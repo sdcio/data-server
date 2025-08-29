@@ -7,8 +7,8 @@ import (
 	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/importer"
-	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	"github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/sdc-protos/tree_persist"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
