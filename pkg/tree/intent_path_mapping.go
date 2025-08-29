@@ -25,6 +25,10 @@ func (dp *DeletePathSet) DeepCopy() *DeletePathSet {
 	return result
 }
 
+func (dp *DeletePathSet) RemoveIntentDeletes(intentName string) {
+	delete(dp.data, intentName)
+}
+
 func (dp *DeletePathSet) Add(intentName string, prio int32, pathset *sdcpb.PathSet) {
 	dpp, exists := dp.data[intentName]
 	if !exists {

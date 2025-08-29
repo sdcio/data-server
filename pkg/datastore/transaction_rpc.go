@@ -214,6 +214,8 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		if err != nil {
 			return nil, err
 		}
+		// clear the owners existing explicit delete entries
+		root.RemoveExplicitDeletes(intent.GetName())
 
 		// store the old intent content in the transaction as the old intent.
 		err = transaction.AddIntentContent(intent.GetName(), types.TransactionIntentOld, oldIntentContent.GetFirstPriorityValue(), oldIntentContent)

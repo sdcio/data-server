@@ -71,6 +71,10 @@ func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 	return result, nil
 }
 
+func (r *RootEntry) RemoveExplicitDeletes(intentName string) {
+	r.explicitDeletes.RemoveIntentDeletes(intentName)
+}
+
 func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us types.UpdateSlice, flags *types.UpdateInsertFlags) error {
 	var err error
 	for idx, u := range us {
