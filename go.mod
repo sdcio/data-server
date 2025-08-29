@@ -4,6 +4,8 @@ go 1.23.9
 
 replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.2-2
 
+replace github.com/sdcio/sdc-protos => /home/mava/projects/sdc-protos
+
 require (
 	github.com/AlekSi/pointer v1.2.0
 	github.com/beevik/etree v1.5.1
@@ -28,7 +30,7 @@ require (
 	github.com/spf13/pflag v1.0.6
 	go.uber.org/mock v0.5.2
 	google.golang.org/grpc v1.74.2
-	google.golang.org/protobuf v1.36.6
+	google.golang.org/protobuf v1.36.8
 	gopkg.in/yaml.v2 v2.4.0
 	sigs.k8s.io/controller-runtime v0.20.4
 )

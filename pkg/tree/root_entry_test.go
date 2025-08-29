@@ -11,11 +11,11 @@ import (
 	"github.com/openconfig/ygot/ygot"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
-	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	schema_server "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/sdc-protos/tree_persist"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -304,6 +304,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &RootEntry{
 				sharedEntryAttributes: tt.sharedEntryAttributes(),
+				explicitDeletes:       NewDeletePaths(),
 			}
 			got, err := r.TreeExport(tt.args.owner, tt.args.priority, false)
 			if (err != nil) != tt.wantErr {

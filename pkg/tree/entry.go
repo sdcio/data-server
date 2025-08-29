@@ -7,8 +7,8 @@ import (
 	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/importer"
-	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	"github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/sdc-protos/tree_persist"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -23,24 +23,17 @@ const (
 	ReplaceIntentName  = "replace"
 )
 
-type EntryImpl struct {
-	*sharedEntryAttributes
-}
-
 // newEntry constructor for Entries
-func newEntry(ctx context.Context, parent Entry, pathElemName string, tc *TreeContext) (*EntryImpl, error) {
+func newEntry(ctx context.Context, parent Entry, pathElemName string, tc *TreeContext) (*sharedEntryAttributes, error) {
 	// create a new sharedEntryAttributes instance
 	sea, err := newSharedEntryAttributes(ctx, parent, pathElemName, tc)
 	if err != nil {
 		return nil, err
 	}
 
-	newEntry := &EntryImpl{
-		sharedEntryAttributes: sea,
-	}
 	// add the Entry as a child to the parent Entry
-	err = parent.addChild(ctx, newEntry)
-	return newEntry, err
+	err = parent.addChild(ctx, sea)
+	return sea, err
 }
 
 // Entry is the primary Element of the Tree.
@@ -64,7 +57,7 @@ type Entry interface {
 	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
 	// If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
 	// It will append to the given list and provide a new pointer to the slice
-	GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool, includeDefaults bool) LeafVariantSlice
+	GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool, includeDefaults bool, includeExplicitDelete bool) LeafVariantSlice
 	// getHighestPrecedenceLeafValue returns the highest LeafValue of the Entry at hand
 	// will return an error if the Entry is not a Leaf
 	getHighestPrecedenceLeafValue(context.Context) (*LeafEntry, error)
@@ -127,9 +120,7 @@ type Entry interface {
 	//    - remainsToExists() returns true, because they remain to exist even though implicitly.
 	//    - shouldDelete() returns false, because no explicit delete should be issued for them.
 	canDelete() bool
-	// getChildren returns all the child Entries of the Entry in a map indexed by there name.
-	// FYI: leaf values are not considered children
-	getChildren() map[string]Entry
+	GetChilds(DescendMethod) EntryMap
 	FilterChilds(keys map[string]string) ([]Entry, error)
 	// ToJson returns the Tree contained structure as JSON
 	// use e.g. json.MarshalIndent() on the returned struct
@@ -144,7 +135,7 @@ type Entry interface {
 	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
 	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error)
 	// ImportConfig allows importing config data received from e.g. the device in different formats (json, xml) to be imported into the tree.
-	ImportConfig(ctx context.Context, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
+	ImportConfig(ctx context.Context, importer importer.ImportConfigAdapterElement, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
 	TreeExport(owner string) ([]*tree_persist.TreeElement, error)
 	// DeleteBranch Deletes from the tree, all elements of the PathSlice defined branch of the given owner
 	DeleteBranch(ctx context.Context, relativePath types.PathSlice, owner string) (err error)
@@ -155,24 +146,37 @@ type Entry interface {
 	BreadthSearch(ctx context.Context, path string) ([]Entry, error)
 	DeepCopy(tc *TreeContext, parent Entry) (Entry, error)
 	GetLeafVariantEntries() LeafVariantEntries
+
+	// returns true if the Entry contains leafvariants (presence container, field or leaflist)
+	HoldsLeafvariants() bool
 	canDeleteBranch(keepDefault bool) bool
 	deleteCanDeleteChilds(keepDefault bool)
 }
 
 type EntryVisitor interface {
+	DescendMethod() DescendMethod
 	Visit(ctx context.Context, e Entry) error
 	Up()
 }
 
 type LeafVariantEntry interface {
-	MarkDelete(onlyIntended bool)
+	MarkDelete(onlyIntended bool) *LeafEntry
 	GetEntry() Entry
 	String() string
 }
 
 type LeafVariantEntries interface {
 	MarkOwnerForDeletion(owner string, onlyIntended bool) *LeafEntry
-	GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool) *LeafEntry
+	GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool, includeExplicitDeletes bool) *LeafEntry
 	GetRunning() *LeafEntry
-	DeleteByOwner(owner string)
+	DeleteByOwner(owner string) *LeafEntry
+	AddExplicitDeleteEntry(owner string, priority int32) *LeafEntry
+	GetByOwner(owner string) *LeafEntry
 }
+
+type DescendMethod int
+
+const (
+	DescendMethodAll DescendMethod = iota
+	DescendMethodActiveChilds
+)

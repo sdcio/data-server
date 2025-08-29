@@ -17,7 +17,7 @@ package cache
 import (
 	"context"
 
-	"github.com/sdcio/data-server/pkg/tree/tree_persist"
+	"github.com/sdcio/sdc-protos/tree_persist"
 )
 
 type CacheClientBound interface {

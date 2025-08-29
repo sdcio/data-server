@@ -5,7 +5,7 @@ TEST_IMAGE := $(IMAGE)-test
 USERID := 10000
 
 # go versions
-TARGET_GO_VERSION := go1.21.4
+TARGET_GO_VERSION := $(shell awk '/^go / {print "go"$$2}' go.mod)
 GO_FALLBACK := go
 # We prefer $TARGET_GO_VERSION if it is not available we go with whatever go we find ($GO_FALLBACK)
 GO_BIN := $(shell if [ "$$(which $(TARGET_GO_VERSION))" != "" ]; then echo $$(which $(TARGET_GO_VERSION)); else echo $$(which $(GO_FALLBACK)); fi)
@@ -91,9 +91,3 @@ goreleaser-nightly:
 
 .PHONY: proto
 CACHE_OUT_DIR := $(CURDIR)/pkg/tree/tree_persist
-
-proto:
-	clang-format -i -style=file:$(CURDIR)/proto/clang-format.style $(CURDIR)/proto/tree_persist.proto
-
-	mkdir -p $(CACHE_OUT_DIR)
-	protoc --go_out=$(CACHE_OUT_DIR) --go-grpc_out=$(CACHE_OUT_DIR) -I $(CURDIR)/proto $(CURDIR)/proto/tree_persist.proto

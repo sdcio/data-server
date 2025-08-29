@@ -151,7 +151,7 @@ func TestProtoTreeImporter(t *testing.T) {
 				t.Error(err)
 			}
 
-			protoAdapter := NewProtoTreeImporter(protoIntent.GetRoot())
+			protoAdapter := NewProtoTreeImporter(protoIntent)
 
 			err = rootNew.ImportConfig(ctx, nil, protoAdapter, protoIntent.GetIntentName(), protoIntent.GetPriority(), types.NewUpdateInsertFlags())
 			if err != nil {

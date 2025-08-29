@@ -16,7 +16,7 @@ import (
 	etree "github.com/beevik/etree"
 	config "github.com/sdcio/data-server/pkg/config"
 	target "github.com/sdcio/data-server/pkg/datastore/target"
-	schema_server "github.com/sdcio/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -59,10 +59,10 @@ func (mr *MockTargetMockRecorder) Close() *gomock.Call {
 }
 
 // Get mocks base method.
-func (m *MockTarget) Get(ctx context.Context, req *schema_server.GetDataRequest) (*schema_server.GetDataResponse, error) {
+func (m *MockTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", ctx, req)
-	ret0, _ := ret[0].(*schema_server.GetDataResponse)
+	ret0, _ := ret[0].(*sdcpb.GetDataResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -74,10 +74,10 @@ func (mr *MockTargetMockRecorder) Get(ctx, req any) *gomock.Call {
 }
 
 // Set mocks base method.
-func (m *MockTarget) Set(ctx context.Context, source target.TargetSource) (*schema_server.SetDataResponse, error) {
+func (m *MockTarget) Set(ctx context.Context, source target.TargetSource) (*sdcpb.SetDataResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Set", ctx, source)
-	ret0, _ := ret[0].(*schema_server.SetDataResponse)
+	ret0, _ := ret[0].(*sdcpb.SetDataResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -169,10 +169,10 @@ func (mr *MockTargetSourceMockRecorder) ToJsonIETF(onlyNewOrUpdated any) *gomock
 }
 
 // ToProtoDeletes mocks base method.
-func (m *MockTargetSource) ToProtoDeletes(ctx context.Context) ([]*schema_server.Path, error) {
+func (m *MockTargetSource) ToProtoDeletes(ctx context.Context) ([]*sdcpb.Path, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ToProtoDeletes", ctx)
-	ret0, _ := ret[0].([]*schema_server.Path)
+	ret0, _ := ret[0].([]*sdcpb.Path)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -184,10 +184,10 @@ func (mr *MockTargetSourceMockRecorder) ToProtoDeletes(ctx any) *gomock.Call {
 }
 
 // ToProtoUpdates mocks base method.
-func (m *MockTargetSource) ToProtoUpdates(ctx context.Context, onlyNewOrUpdated bool) ([]*schema_server.Update, error) {
+func (m *MockTargetSource) ToProtoUpdates(ctx context.Context, onlyNewOrUpdated bool) ([]*sdcpb.Update, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ToProtoUpdates", ctx, onlyNewOrUpdated)
-	ret0, _ := ret[0].([]*schema_server.Update)
+	ret0, _ := ret[0].([]*sdcpb.Update)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

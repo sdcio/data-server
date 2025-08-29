@@ -2,19 +2,32 @@ package types
 
 type LeafEntry interface {
 	MarkDelete(onlyIntended bool)
+	MarkExpliciteDelete()
 	MarkNew()
 }
 
 type UpdateInsertFlags struct {
-	new          bool
-	delete       bool
-	onlyIntended bool
+	new            bool
+	delete         bool
+	onlyIntended   bool
+	explicitDelete bool
 }
 
 // NewUpdateInsertFlags returns a new *UpdateInsertFlags instance
 // with all values set to false, so not new, and not marked for deletion
 func NewUpdateInsertFlags() *UpdateInsertFlags {
 	return &UpdateInsertFlags{}
+}
+
+func (f *UpdateInsertFlags) GetExplicitDeleteFlag() bool {
+	return f.explicitDelete
+}
+
+func (f *UpdateInsertFlags) SetExplicitDeleteFlag() *UpdateInsertFlags {
+	f.explicitDelete = true
+	f.delete = true
+	f.new = false
+	return f
 }
 
 func (f *UpdateInsertFlags) SetDeleteFlag() *UpdateInsertFlags {
@@ -50,6 +63,9 @@ func (f *UpdateInsertFlags) GetNewFlag() bool {
 }
 
 func (f *UpdateInsertFlags) Apply(le LeafEntry) *UpdateInsertFlags {
+	if f.explicitDelete {
+		le.MarkExpliciteDelete()
+	}
 	if f.delete {
 		le.MarkDelete(f.onlyIntended)
 		return f

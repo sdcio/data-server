@@ -18,8 +18,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/sdc-protos/tree_persist"
 	"google.golang.org/protobuf/proto"
 )
 
