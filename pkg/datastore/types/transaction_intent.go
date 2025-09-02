@@ -45,6 +45,10 @@ func (ti *TransactionIntent) GetUpdates() treetypes.UpdateSlice {
 	return ti.updates
 }
 
+func (ti *TransactionIntent) GetDeleteFlag() bool {
+	return ti.delete
+}
+
 func (ti *TransactionIntent) GetDeletes() *sdcpb.PathSet {
 	return ti.explicitDeletes
 }

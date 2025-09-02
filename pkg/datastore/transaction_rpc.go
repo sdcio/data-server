@@ -190,12 +190,6 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		return nil, err
 	}
 
-	// we need to curate a list of all the paths involved, of the old and new intent contents.
-	// this is then used to load the IntendedStore highes prio into the tree, to decide if an update
-	// is to be applied or if a higher precedence update exists and is therefore not applicable. Also if the value got
-	// deleted and a previousely shadowed entry becomes active.
-	involvedPaths := treetypes.NewPathSet()
-
 	// create a flags attribute
 	flagNew := treetypes.NewUpdateInsertFlags()
 	// where the New flag is set
@@ -223,19 +217,16 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 			return nil, err
 		}
 
-		// add the content to the Tree
-		err = root.AddUpdatesRecursive(ctx, intent.GetUpdates(), flagNew)
-		if err != nil {
-			return nil, err
+		if !intent.GetDeleteFlag() {
+			// add the content to the Tree
+			err = root.AddUpdatesRecursive(ctx, intent.GetUpdates(), flagNew)
+			if err != nil {
+				return nil, err
+			}
+
+			// add the explicit delete entries
+			root.AddExplicitDeletes(intent.GetName(), intent.GetPriority(), intent.GetDeletes())
 		}
-
-		// add the explicit delete entries
-		root.AddExplicitDeletes(intent.GetName(), intent.GetPriority(), intent.GetDeletes())
-
-		// add the old intent contents paths to the involvedPaths slice
-		involvedPaths.Join(oldIntentContent.ToPathSet())
-		// add the new intent contents paths to the involvedPaths slice
-		involvedPaths.Join(intent.GetUpdates().ToPathSet())
 	}
 
 	les := tree.LeafVariantSlice{}

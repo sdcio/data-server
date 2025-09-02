@@ -285,12 +285,12 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 		}
 	}
 
-	// do not include defaults loaded at validation time
-	if checkNotDefaultAllowedButIsDefaultOwner(highest, includeDefaults) {
+	if highest.IsExplicitDelete && !includeExplicitDelete {
 		return nil
 	}
 
-	if highest.IsExplicitDelete && !includeExplicitDelete {
+	// do not include defaults loaded at validation time
+	if checkNotDefaultAllowedButIsDefaultOwner(highest, includeDefaults) {
 		return nil
 	}
 
