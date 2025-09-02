@@ -258,7 +258,7 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 	if len(lv.les) == 0 {
 		return nil
 	}
-	if onlyNewOrUpdated && lv.canDeleteBranch(false) {
+	if onlyNewOrUpdated && lv.canDelete() {
 		return nil
 	}
 

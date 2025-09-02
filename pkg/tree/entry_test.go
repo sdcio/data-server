@@ -668,7 +668,14 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 
 	// start test add "existing" data
 	for _, u := range []*types.Update{u1, u2, u3, u4, u5, u6} {
+
 		_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// add also as running
+		runUpd := u.DeepCopy().SetOwner(RunningIntentName).SetPriority(RunningValuesPrio)
+		_, err = root.AddUpdateRecursive(ctx, runUpd, flagsExisting)
 		if err != nil {
 			t.Fatal(err)
 		}

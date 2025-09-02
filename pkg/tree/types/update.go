@@ -49,16 +49,18 @@ func (u *Update) Owner() string {
 	return u.intentName
 }
 
-func (u *Update) SetOwner(owner string) {
+func (u *Update) SetOwner(owner string) *Update {
 	u.intentName = owner
+	return u
 }
 
 func (u *Update) Priority() int32 {
 	return u.priority
 }
 
-func (u *Update) SetPriority(prio int32) {
+func (u *Update) SetPriority(prio int32) *Update {
 	u.priority = prio
+	return u
 }
 
 func (u *Update) Timestamp() int64 {
