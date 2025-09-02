@@ -7,6 +7,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/tree"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 type Transaction struct {
@@ -138,7 +139,7 @@ func (t *Transaction) AddTransactionIntent(ti *TransactionIntent, tit Transactio
 }
 
 // AddIntentContent add the content of an intent. If the intent did not exist, add the name of the intent and content == nil.
-func (t *Transaction) AddIntentContent(name string, tit TransactionIntentType, priority int32, content treetypes.UpdateSlice) error {
+func (t *Transaction) AddIntentContent(name string, tit TransactionIntentType, priority int32, content treetypes.UpdateSlice, explicitDeletes *sdcpb.PathSet) error {
 	dstMap := t.getTransactionIntentTypeMap(tit)
 	_, exists := dstMap[name]
 	if exists {
@@ -148,6 +149,7 @@ func (t *Transaction) AddIntentContent(name string, tit TransactionIntentType, p
 	dstMap[name] = ti
 
 	ti.AddUpdates(content)
+	ti.AddExplicitDeletes(explicitDeletes.ToPathSlice())
 	return nil
 }
 

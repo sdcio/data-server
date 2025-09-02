@@ -17,15 +17,15 @@ type TransactionIntent struct {
 	// it will be stored and used for change calculation but will be excluded when claculating actual deviations.
 	deviation               bool
 	deleteIgnoreNonExisting bool
-	deletes                 *sdcpb.PathSet
+	explicitDeletes         *sdcpb.PathSet
 }
 
 func NewTransactionIntent(name string, priority int32) *TransactionIntent {
 	return &TransactionIntent{
-		name:     name,
-		updates:  make(treetypes.UpdateSlice, 0),
-		priority: priority,
-		deletes:  sdcpb.NewPathSet(),
+		name:            name,
+		updates:         make(treetypes.UpdateSlice, 0),
+		priority:        priority,
+		explicitDeletes: sdcpb.NewPathSet(),
 	}
 }
 
@@ -46,7 +46,7 @@ func (ti *TransactionIntent) GetUpdates() treetypes.UpdateSlice {
 }
 
 func (ti *TransactionIntent) GetDeletes() *sdcpb.PathSet {
-	return ti.deletes
+	return ti.explicitDeletes
 }
 
 func (ti *TransactionIntent) GetOnlyIntended() bool {
@@ -86,8 +86,8 @@ func (ti *TransactionIntent) AddUpdate(u *treetypes.Update) {
 	ti.updates = append(ti.updates, u)
 }
 
-func (ti *TransactionIntent) AddDeletes(p []*sdcpb.Path) {
+func (ti *TransactionIntent) AddExplicitDeletes(p []*sdcpb.Path) {
 	for _, x := range p {
-		ti.deletes.AddPath(x)
+		ti.explicitDeletes.AddPath(x)
 	}
 }

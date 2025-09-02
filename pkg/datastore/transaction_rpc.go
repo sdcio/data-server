@@ -53,7 +53,7 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 	ti.AddUpdates(Updates)
 
 	// add the deletes
-	ti.AddDeletes(req.Deletes)
+	ti.AddExplicitDeletes(req.Deletes)
 
 	return ti, nil
 }
@@ -214,11 +214,11 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		if err != nil {
 			return nil, err
 		}
-		// clear the owners existing explicit delete entries
-		root.RemoveExplicitDeletes(intent.GetName())
+		// clear the owners existing explicit delete entries, retrieving the old entries for storing in the transaction for possible rollback
+		oldExplicitDeletes := root.RemoveExplicitDeletes(intent.GetName())
 
 		// store the old intent content in the transaction as the old intent.
-		err = transaction.AddIntentContent(intent.GetName(), types.TransactionIntentOld, oldIntentContent.GetFirstPriorityValue(), oldIntentContent)
+		err = transaction.AddIntentContent(intent.GetName(), types.TransactionIntentOld, oldIntentContent.GetFirstPriorityValue(), oldIntentContent, oldExplicitDeletes)
 		if err != nil {
 			return nil, err
 		}

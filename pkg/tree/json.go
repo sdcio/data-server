@@ -118,7 +118,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 		}
 
 	case *sdcpb.SchemaElem_Leaflist, *sdcpb.SchemaElem_Field:
-		if s.leafVariants.shouldDelete() {
+		if s.leafVariants.canDeleteBranch(false) {
 			return nil, nil
 		}
 		le := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, false, false)

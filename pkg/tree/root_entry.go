@@ -71,8 +71,8 @@ func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 	return result, nil
 }
 
-func (r *RootEntry) RemoveExplicitDeletes(intentName string) {
-	r.explicitDeletes.RemoveIntentDeletes(intentName)
+func (r *RootEntry) RemoveExplicitDeletes(intentName string) *sdcpb.PathSet {
+	return r.explicitDeletes.RemoveIntentDeletes(intentName)
 }
 
 func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us types.UpdateSlice, flags *types.UpdateInsertFlags) error {
