@@ -141,11 +141,16 @@ func (lv *LeafVariants) shouldDelete() bool {
 		return true
 	}
 
+	// if there is no running, no need to delete
+	if lv.GetRunning() == nil {
+		return false
+	}
+
 	foundOtherThenRunningAndDefault := false
 	// go through all variants
 	for _, l := range lv.les {
 		// if an entry exists that is not owned by running or default,
-		if l.Update.Owner() == RunningIntentName || l.Update.Owner() == DefaultsIntentName || l.IsExplicitDelete {
+		if l.Update.Owner() == RunningIntentName || l.Update.Owner() == DefaultsIntentName {
 			continue
 		}
 		foundOtherThenRunningAndDefault = true
@@ -253,7 +258,7 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 	if len(lv.les) == 0 {
 		return nil
 	}
-	if onlyNewOrUpdated && lv.shouldDelete() {
+	if onlyNewOrUpdated && lv.canDeleteBranch(false) {
 		return nil
 	}
 
@@ -303,7 +308,7 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 		return nil
 	}
 	// otherwise if the secondhighest is not marked for deletion return it
-	if !checkExistsAndDeleteFlagSet(secondHighest) && checkNotOwner(secondHighest, RunningIntentName) {
+	if secondHighest != nil && !checkExistsAndDeleteFlagSet(secondHighest) && checkNotOwner(secondHighest, RunningIntentName) {
 		return secondHighest
 	}
 
