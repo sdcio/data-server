@@ -151,7 +151,12 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 
 	for {
 		select {
-		case err := <-ErrChan:
+		case err, ok := <-ErrChan:
+			if !ok {
+				// ErrChan already closed which is fine, continue
+				ErrChan = nil
+				continue
+			}
 			return nil, err
 		case <-ctx.Done():
 			return nil, fmt.Errorf("context closed while retrieving all intents")
