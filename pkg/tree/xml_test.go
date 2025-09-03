@@ -86,6 +86,10 @@ func TestToXMLTable(t *testing.T) {
 				c := config1()
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				c := config1()
+				return expandUpdateFromConfig(ctx, c, converter)
+			},
 			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
 				c := config2()
 				return expandUpdateFromConfig(ctx, c, converter)

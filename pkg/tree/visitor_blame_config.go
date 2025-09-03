@@ -10,9 +10,9 @@ import (
 )
 
 type BlameConfigVisitor struct {
+	BaseVisitor
 	stack           []*sdcpb.BlameTreeElement
 	includeDefaults bool
-	// skipUp          bool
 }
 
 var _ EntryVisitor = (*BlameConfigVisitor)(nil)
@@ -33,7 +33,7 @@ func (b *BlameConfigVisitor) Visit(ctx context.Context, e Entry) error {
 	skipAdd := false
 
 	// process Value
-	highestLe := e.GetLeafVariantEntries().GetHighestPrecedence(false, true)
+	highestLe := e.GetLeafVariantEntries().GetHighestPrecedence(false, true, true)
 	if highestLe != nil {
 		if highestLe.Update.Owner() != DefaultsIntentName || b.includeDefaults {
 			result.SetValue(highestLe.Update.Value()).SetOwner(highestLe.Update.Owner())
@@ -42,7 +42,7 @@ func (b *BlameConfigVisitor) Visit(ctx context.Context, e Entry) error {
 			runningLe := e.GetLeafVariantEntries().GetRunning()
 			if runningLe != nil {
 				if !proto.Equal(runningLe.Update.Value(), highestLe.Update.Value()) {
-					result.DeviationValue = runningLe.Value()
+					result.SetDeviationValue(runningLe.Value())
 				}
 			}
 		} else {
@@ -68,6 +68,10 @@ func (b *BlameConfigVisitor) Up() {
 	if len(b.stack) > 1 {
 		b.stack = b.stack[:len(b.stack)-1]
 	}
+}
+
+func (o *BlameConfigVisitor) DescendMethod() DescendMethod {
+	return DescendMethodAll
 }
 
 func (b *BlameConfigVisitor) GetResult() *sdcpb.BlameTreeElement {

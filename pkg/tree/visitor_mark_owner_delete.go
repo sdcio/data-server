@@ -1,8 +1,11 @@
 package tree
 
-import "context"
+import (
+	"context"
+)
 
 type MarkOwnerDeleteVisitor struct {
+	BaseVisitor
 	owner               string
 	onlyIntended        bool
 	leafVariantsMatched LeafVariantSlice
@@ -25,9 +28,6 @@ func (o *MarkOwnerDeleteVisitor) Visit(ctx context.Context, e Entry) error {
 	}
 	return nil
 }
-
-// Up not required by this visitor
-func (o *MarkOwnerDeleteVisitor) Up() {}
 
 // GetHitCount returns the number of entries marked for deletion
 func (o *MarkOwnerDeleteVisitor) GetHitCount() int {

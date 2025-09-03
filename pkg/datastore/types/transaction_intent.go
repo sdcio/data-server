@@ -2,6 +2,7 @@ package types
 
 import (
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 type TransactionIntent struct {
@@ -16,13 +17,15 @@ type TransactionIntent struct {
 	// it will be stored and used for change calculation but will be excluded when claculating actual deviations.
 	deviation               bool
 	deleteIgnoreNonExisting bool
+	explicitDeletes         *sdcpb.PathSet
 }
 
 func NewTransactionIntent(name string, priority int32) *TransactionIntent {
 	return &TransactionIntent{
-		name:     name,
-		updates:  make(treetypes.UpdateSlice, 0),
-		priority: priority,
+		name:            name,
+		updates:         make(treetypes.UpdateSlice, 0),
+		priority:        priority,
+		explicitDeletes: sdcpb.NewPathSet(),
 	}
 }
 
@@ -40,6 +43,14 @@ func (ti *TransactionIntent) AddUpdates(u treetypes.UpdateSlice) {
 
 func (ti *TransactionIntent) GetUpdates() treetypes.UpdateSlice {
 	return ti.updates
+}
+
+func (ti *TransactionIntent) GetDeleteFlag() bool {
+	return ti.delete
+}
+
+func (ti *TransactionIntent) GetDeletes() *sdcpb.PathSet {
+	return ti.explicitDeletes
 }
 
 func (ti *TransactionIntent) GetOnlyIntended() bool {
@@ -77,4 +88,10 @@ func (ti *TransactionIntent) GetPathSet() *treetypes.PathSet {
 
 func (ti *TransactionIntent) AddUpdate(u *treetypes.Update) {
 	ti.updates = append(ti.updates, u)
+}
+
+func (ti *TransactionIntent) AddExplicitDeletes(p []*sdcpb.Path) {
+	for _, x := range p {
+		ti.explicitDeletes.AddPath(x)
+	}
 }

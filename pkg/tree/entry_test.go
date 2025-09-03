@@ -668,7 +668,14 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 
 	// start test add "existing" data
 	for _, u := range []*types.Update{u1, u2, u3, u4, u5, u6} {
+
 		_, err := root.AddUpdateRecursive(ctx, u, flagsExisting)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// add also as running
+		runUpd := u.DeepCopy().SetOwner(RunningIntentName).SetPriority(RunningValuesPrio)
+		_, err = root.AddUpdateRecursive(ctx, runUpd, flagsExisting)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -743,7 +750,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 1, owner2, ts), flagsExisting, nil))
 			lv.les[1].MarkDelete(false)
 
-			le := lv.GetHighestPrecedence(true, false)
+			le := lv.GetHighestPrecedence(true, false, false)
 
 			if le != lv.les[0] {
 				t.Errorf("expected to get entry %v, got %v", lv.les[0], le)
@@ -760,7 +767,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 1, owner1, ts), flagsExisting, nil))
 			lv.les[0].MarkDelete(false)
 
-			le := lv.GetHighestPrecedence(true, false)
+			le := lv.GetHighestPrecedence(true, false, false)
 
 			if le != nil {
 				t.Errorf("expected to get entry %v, got %v", nil, le)
@@ -777,7 +784,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, RunningValuesPrio, RunningIntentName, ts), flagsExisting, nil))
 
-			le := lv.GetHighestPrecedence(true, false)
+			le := lv.GetHighestPrecedence(true, false, false)
 
 			if le != nil {
 				t.Errorf("expected to get entry %v, got %v", nil, le)
@@ -793,7 +800,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 6, owner1, ts), flagsNew, nil))
 
-			le := lv.GetHighestPrecedence(false, false)
+			le := lv.GetHighestPrecedence(false, false, false)
 
 			if le != lv.les[0] {
 				t.Errorf("expected to get entry %v, got %v", lv.les[0], le)
@@ -811,7 +818,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, RunningValuesPrio, RunningIntentName, ts), flagsExisting, nil))
 
-			le := lv.GetHighestPrecedence(true, false)
+			le := lv.GetHighestPrecedence(true, false, false)
 
 			if le != nil {
 				t.Errorf("expected to get entry %v, got %v", nil, le)
@@ -828,7 +835,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
 
-			le := lv.GetHighestPrecedence(true, false)
+			le := lv.GetHighestPrecedence(true, false, false)
 
 			if le != lv.les[0] {
 				t.Errorf("expected to get entry %v, got %v", lv.les[0], le)
@@ -842,7 +849,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 5, owner1, ts), flagsExisting, nil))
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 6, owner2, ts), flagsNew, nil))
 
-			le := lv.GetHighestPrecedence(false, false)
+			le := lv.GetHighestPrecedence(false, false, false)
 
 			if le != lv.les[0] {
 				t.Errorf("expected to get entry %v, got %v", lv.les[0], le)
@@ -855,7 +862,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 		func(t *testing.T) {
 			lv := LeafVariants{}
 
-			le := lv.GetHighestPrecedence(true, false)
+			le := lv.GetHighestPrecedence(true, false, false)
 
 			if le != nil {
 				t.Errorf("expected to get entry %v, got %v", nil, le)
@@ -871,7 +878,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 			lv.les[0].MarkDelete(false)
 			lv.Add(NewLeafEntry(types.NewUpdate(path, nil, 2, owner2, ts), flagsExisting, nil))
 
-			le := lv.GetHighestPrecedence(true, false)
+			le := lv.GetHighestPrecedence(true, false, false)
 
 			if le != lv.les[1] {
 				t.Errorf("expected to get entry %v, got %v", lv.les[1], le)

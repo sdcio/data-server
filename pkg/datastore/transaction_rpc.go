@@ -10,9 +10,9 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/tree"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
-	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/sdc-protos/tree_persist"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -52,6 +52,9 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 	// add the intent to the TransactionIntent
 	ti.AddUpdates(Updates)
 
+	// add the deletes
+	ti.AddExplicitDeletes(req.Deletes)
+
 	return ti, nil
 }
 
@@ -76,7 +79,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	if err != nil {
 		return nil, err
 	}
-	err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto.GetRoot()), tree.RunningIntentName, tree.RunningValuesPrio, treetypes.NewUpdateInsertFlags())
+	err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto), tree.RunningIntentName, tree.RunningValuesPrio, treetypes.NewUpdateInsertFlags())
 	if err != nil {
 		return nil, err
 	}
@@ -128,9 +131,6 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	// retrieve the data that is meant to be send southbound (towards the device)
 	updates := root.GetHighestPrecedence(true)
 	deletes := treetypes.DeleteEntriesList{root}
-	if err != nil {
-		return nil, err
-	}
 
 	// OPTIMISTIC WRITEBACK TO RUNNING / syncTree
 	err = d.writeBackSyncTree(ctx, updates, deletes)
@@ -150,27 +150,37 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 	go d.cacheClient.IntentGetAll(ctx, []string{"running"}, IntentChan, ErrChan)
 
 	for {
+	selectLoop:
 		select {
-		case err := <-ErrChan:
+		case err, ok := <-ErrChan:
+			if !ok {
+				// ErrChan already closed which is fine, continue
+				ErrChan = nil
+				break selectLoop
+			}
 			return nil, err
 		case <-ctx.Done():
 			return nil, fmt.Errorf("context closed while retrieving all intents")
 		case intent, ok := <-IntentChan:
 			if !ok {
 				// IntentChan closed due to finish
-				return intentNames, nil
+				IntentChan = nil
+				break selectLoop
 			}
 			if excludeDeviations && intent.Deviation {
 				continue
 			}
 			intentNames = append(intentNames, intent.GetIntentName())
 			log.Debugf("adding intent %s to tree", intent.GetIntentName())
-			protoLoader := treeproto.NewProtoTreeImporter(intent.GetRoot())
+			protoLoader := treeproto.NewProtoTreeImporter(intent)
 			log.Tracef("%s", intent.String())
 			err := root.ImportConfig(ctx, nil, protoLoader, intent.GetIntentName(), intent.GetPriority(), treetypes.NewUpdateInsertFlags())
 			if err != nil {
 				return nil, err
 			}
+		}
+		if ErrChan == nil && IntentChan == nil {
+			return intentNames, nil
 		}
 	}
 }
@@ -190,12 +200,6 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		return nil, err
 	}
 
-	// we need to curate a list of all the paths involved, of the old and new intent contents.
-	// this is then used to load the IntendedStore highes prio into the tree, to decide if an update
-	// is to be applied or if a higher precedence update exists and is therefore not applicable. Also if the value got
-	// deleted and a previousely shadowed entry becomes active.
-	involvedPaths := treetypes.NewPathSet()
-
 	// create a flags attribute
 	flagNew := treetypes.NewUpdateInsertFlags()
 	// where the New flag is set
@@ -214,23 +218,25 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		if err != nil {
 			return nil, err
 		}
+		// clear the owners existing explicit delete entries, retrieving the old entries for storing in the transaction for possible rollback
+		oldExplicitDeletes := root.RemoveExplicitDeletes(intent.GetName())
 
 		// store the old intent content in the transaction as the old intent.
-		err = transaction.AddIntentContent(intent.GetName(), types.TransactionIntentOld, oldIntentContent.GetFirstPriorityValue(), oldIntentContent)
+		err = transaction.AddIntentContent(intent.GetName(), types.TransactionIntentOld, oldIntentContent.GetFirstPriorityValue(), oldIntentContent, oldExplicitDeletes)
 		if err != nil {
 			return nil, err
 		}
 
-		// add the content to the Tree
-		err = root.AddUpdatesRecursive(ctx, intent.GetUpdates(), flagNew)
-		if err != nil {
-			return nil, err
-		}
+		if !intent.GetDeleteFlag() {
+			// add the content to the Tree
+			err = root.AddUpdatesRecursive(ctx, intent.GetUpdates(), flagNew)
+			if err != nil {
+				return nil, err
+			}
 
-		// add the old intent contents paths to the involvedPaths slice
-		involvedPaths.Join(oldIntentContent.ToPathSet())
-		// add the new intent contents paths to the involvedPaths slice
-		involvedPaths.Join(intent.GetUpdates().ToPathSet())
+			// add the explicit delete entries
+			root.AddExplicitDeletes(intent.GetName(), intent.GetPriority(), intent.GetDeletes())
+		}
 	}
 
 	les := tree.LeafVariantSlice{}

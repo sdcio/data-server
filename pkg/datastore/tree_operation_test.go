@@ -390,6 +390,11 @@ func TestDatastore_populateTree(t *testing.T) {
 				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
 				types.NewUpdate([]string{"interface", "ethernet-1/1", "admin-state"}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
 			},
+			runningStoreUpdates: []*types.Update{
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescriptionOwner2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "admin-state"}, testhelper.GetStringTvProto("enable"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+			},
 		},
 		{
 			name:          "Delete - aggregate branch via keys, multiple entries (different keys)",
@@ -410,17 +415,17 @@ func TestDatastore_populateTree(t *testing.T) {
 					SkipValidation: false,
 				})
 			},
-			intentDelete:        true,
+			intentDelete: true,
 			runningStoreUpdates: []*types.Update{
-				// cache.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
-				// cache.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
-				// cache.NewUpdate([]string{"interface", "ethernet-1/1", "admin-state"}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
-				// cache.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto("ethernet-1/2"), prio10, owner2, 0),
-				// cache.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
-				// cache.NewUpdate([]string{"interface", "ethernet-1/2", "admin-state"}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
-				// cache.NewUpdate([]string{"interface", "ethernet-1/3", "name"}, testhelper.GetStringTvProto("ethernet-1/3"), prio10, owner2, 0),
-				// cache.NewUpdate([]string{"interface", "ethernet-1/3", "description"}, testhelper.GetStringTvProto("MyDescriptionOwner2"), prio10, owner2, 0),
-				// cache.NewUpdate([]string{"interface", "ethernet-1/3", "admin-state"}, testhelper.GetStringTvProto("enable"), prio10, owner2, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyDescriptionOwner2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/1", "admin-state"}, testhelper.GetStringTvProto("enable"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "name"}, testhelper.GetStringTvProto("ethernet-1/2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "description"}, testhelper.GetStringTvProto("MyDescriptionOwner2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/2", "admin-state"}, testhelper.GetStringTvProto("enable"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/3", "name"}, testhelper.GetStringTvProto("ethernet-1/3"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/3", "description"}, testhelper.GetStringTvProto("MyDescriptionOwner2"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+				types.NewUpdate([]string{"interface", "ethernet-1/3", "admin-state"}, testhelper.GetStringTvProto("enable"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 			},
 			expectedDeletes: [][]string{
 				{"interface", "ethernet-1/1", "admin-state"},
@@ -441,7 +446,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			},
 			expectedModify: []*types.Update{
 				types.NewUpdate([]string{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("MyNonappliedDescription"), prio10, owner2, 0),
-				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
+				// types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),
 			},
 			intendedStoreUpdates: []*types.Update{
 				types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto("ethernet-1/1"), prio10, owner2, 0),

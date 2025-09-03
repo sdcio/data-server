@@ -9,14 +9,17 @@ import (
 
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/importer"
-	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	"github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/sdc-protos/tree_persist"
+	log "github.com/sirupsen/logrus"
 )
 
 // RootEntry the root of the cache.Update tree
 type RootEntry struct {
 	*sharedEntryAttributes
+	explicitDeletes *DeletePathSet
 }
 
 var (
@@ -32,6 +35,7 @@ func NewTreeRoot(ctx context.Context, tc *TreeContext) (*RootEntry, error) {
 
 	root := &RootEntry{
 		sharedEntryAttributes: sea,
+		explicitDeletes:       NewDeletePaths(),
 	}
 
 	err = tc.SetRoot(sea)
@@ -57,6 +61,7 @@ func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 
 	result := &RootEntry{
 		sharedEntryAttributes: se,
+		explicitDeletes:       r.explicitDeletes.DeepCopy(),
 	}
 
 	err = tc.SetRoot(result.sharedEntryAttributes)
@@ -64,6 +69,10 @@ func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+func (r *RootEntry) RemoveExplicitDeletes(intentName string) *sdcpb.PathSet {
+	return r.explicitDeletes.RemoveIntentDeletes(intentName)
 }
 
 func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us types.UpdateSlice, flags *types.UpdateInsertFlags) error {
@@ -86,7 +95,13 @@ func (r *RootEntry) ImportConfig(ctx context.Context, basePath types.PathSlice, 
 		return err
 	}
 
+	r.explicitDeletes.Add(intentName, intentPrio, importer.GetDeletes())
+
 	return e.ImportConfig(ctx, importer, intentName, intentPrio, flags)
+}
+
+func (r *RootEntry) AddExplicitDeletes(intentName string, priority int32, pathset *sdcpb.PathSet) {
+	r.explicitDeletes.Add(intentName, priority, pathset)
 }
 
 func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation) (types.ValidationResults, *types.ValidationStatOverall) {
@@ -164,7 +179,7 @@ func (r *RootEntry) GetDeletesForOwner(owner string) types.PathSlices {
 // If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
 // It will append to the given list and provide a new pointer to the slice
 func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) LeafVariantSlice {
-	return r.sharedEntryAttributes.GetHighestPrecedence(make(LeafVariantSlice, 0), onlyNewOrUpdated, false)
+	return r.sharedEntryAttributes.GetHighestPrecedence(make(LeafVariantSlice, 0), onlyNewOrUpdated, false, false)
 }
 
 // GetDeletes returns the paths that due to the Tree content are to be deleted from the southbound device.
@@ -182,16 +197,25 @@ func (r *RootEntry) GetDeviations(ch chan<- *types.DeviationEntry) {
 }
 
 func (r *RootEntry) TreeExport(owner string, priority int32, deviation bool) (*tree_persist.Intent, error) {
-	te, err := r.sharedEntryAttributes.TreeExport(owner)
+	treeExport, err := r.sharedEntryAttributes.TreeExport(owner)
 	if err != nil {
 		return nil, err
 	}
-	if te != nil {
+
+	explicitDeletes := r.explicitDeletes.GetByIntentName(owner).ToPathSlice()
+
+	var rootExportEntry *tree_persist.TreeElement
+	if len(treeExport) != 0 {
+		rootExportEntry = treeExport[0]
+	}
+
+	if rootExportEntry != nil || len(explicitDeletes) > 0 {
 		return &tree_persist.Intent{
-			IntentName: owner,
-			Root:       te[0],
-			Priority:   priority,
-			Deviation:  deviation,
+			IntentName:      owner,
+			Root:            rootExportEntry,
+			Priority:        priority,
+			Deviation:       deviation,
+			ExplicitDeletes: explicitDeletes,
 		}, nil
 	}
 	return nil, ErrorIntentNotPresent
@@ -227,4 +251,34 @@ func (r *RootEntry) DeleteBranchPaths(ctx context.Context, deletes types.DeleteE
 		}
 	}
 	return nil
+}
+
+func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
+	edvs := ExplicitDeleteVisitors{}
+
+	// apply the explicit deletes
+	for deletePathPrio := range r.explicitDeletes.Items() {
+		edv := NewExplicitDeleteVisitor(deletePathPrio.GetOwner(), deletePathPrio.GetPrio())
+
+		for path := range deletePathPrio.PathItems() {
+			// set the priority
+			// navigate to the stated path
+			entry, err := r.NavigateSdcpbPath(ctx, path.GetElem(), true)
+			if err != nil {
+				log.Warnf("Applying explicit delete: path %s not found, skipping", path.ToXPath(false))
+			}
+
+			// walk the whole branch adding the explicit delete leafvariant
+			err = entry.Walk(ctx, edv)
+			if err != nil {
+				return err
+			}
+			edvs[deletePathPrio.GetOwner()] = edv
+		}
+	}
+	log.Debugf("ExplicitDeletes added: %s", utils.MapToString(edvs.Stats(), ", ", func(k string, v int) string {
+		return fmt.Sprintf("%s=%d", k, v)
+	}))
+
+	return r.sharedEntryAttributes.FinishInsertionPhase(ctx)
 }

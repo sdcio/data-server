@@ -131,8 +131,10 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 		return nil, fmt.Errorf("error not a leafref %s", s.Path().String())
 	}
 
-	lv := s.leafVariants.GetHighestPrecedence(false, true)
-
+	lv := s.leafVariants.GetHighestPrecedence(false, true, false)
+	if lv == nil {
+		return nil, fmt.Errorf("no leafvariant found")
+	}
 	// value of node with type leafref
 	tv := lv.Value()
 
@@ -195,7 +197,10 @@ func (s *sharedEntryAttributes) resolve_leafref_key_path(ctx context.Context, ke
 			return err
 		}
 
-		lvs := keyValue.GetHighestPrecedence(LeafVariantSlice{}, false, false)
+		lvs := keyValue.GetHighestPrecedence(LeafVariantSlice{}, false, false, false)
+		if lvs == nil {
+			return fmt.Errorf("no leafentry found")
+		}
 		tv := lvs[0].Value()
 		keys[k].Value = tv.GetStringVal()
 		keys[k].DoNotResolve = true
@@ -220,14 +225,22 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan
 			generateOptionalWarning(ctx, s, lref, resultChan)
 			return
 		}
+		owner := "unknown"
+		highest := s.leafVariants.GetHighestPrecedence(false, false, false)
+		if highest != nil {
+			owner = highest.Owner()
+		}
 		// if required, issue error
-		resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, false).Owner(), fmt.Errorf("missing leaf reference: failed resolving leafref %s for %s: %v", lref, s.Path().String(), err), types.ValidationResultEntryTypeError)
+		resultChan <- types.NewValidationResultEntry(owner, fmt.Errorf("missing leaf reference: failed resolving leafref %s for %s: %v", lref, s.Path().String(), err), types.ValidationResultEntryTypeError)
 		return
 	}
 
 	// Only if the value remains, even after the SetIntent made it through, the LeafRef can be considered resolved.
 	if entry[0].shouldDelete() {
-		lv := s.leafVariants.GetHighestPrecedence(false, true)
+		lv := s.leafVariants.GetHighestPrecedence(false, true, false)
+		if lv == nil {
+			return
+		}
 		EntryPath, _ := s.SdcpbPath()
 
 		// check if the OptionalInstance (!require-instances [https://datatracker.ietf.org/doc/html/rfc7950#section-9.9.3])

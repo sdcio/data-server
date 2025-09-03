@@ -41,7 +41,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 		// ancestor is a list with keys.
 		result := map[string]any{}
 
-		for key, c := range s.filterActiveChoiceCaseChilds() {
+		for key, c := range s.GetChilds(DescendMethodActiveChilds) {
 			ancest, _ := s.GetFirstAncestorWithSchema()
 			prefixedKey := jsonGetIetfPrefixConditional(key, c, ancest, ietf)
 			// recurse the call
@@ -92,8 +92,8 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 				if s.leafVariants.shouldDelete() {
 					return nil, nil
 				}
-				le := s.leafVariants.GetHighestPrecedence(false, false)
-				if onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
+				le := s.leafVariants.GetHighestPrecedence(false, false, false)
+				if le == nil || onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
 					return nil, nil
 				}
 			}
@@ -101,7 +101,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 		default:
 			// otherwise this is a map
 			result := map[string]any{}
-			for key, c := range s.filterActiveChoiceCaseChilds() {
+			for key, c := range s.GetChilds(DescendMethodActiveChilds) {
 				prefixedKey := jsonGetIetfPrefixConditional(key, c, s, ietf)
 				js, err := c.toJsonInternal(onlyNewOrUpdated, ietf)
 				if err != nil {
@@ -118,10 +118,10 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 		}
 
 	case *sdcpb.SchemaElem_Leaflist, *sdcpb.SchemaElem_Field:
-		if s.leafVariants.shouldDelete() {
+		if s.leafVariants.canDelete() {
 			return nil, nil
 		}
-		le := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, false)
+		le := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, false, false)
 		if le == nil {
 			return nil, nil
 		}

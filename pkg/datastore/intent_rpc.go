@@ -70,7 +70,7 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntent
 	if err != nil {
 		return nil, err
 	}
-	protoImporter := proto.NewProtoTreeImporter(tp.GetRoot())
+	protoImporter := proto.NewProtoTreeImporter(tp)
 
 	err = root.ImportConfig(ctx, nil, protoImporter, tp.GetIntentName(), tp.GetPriority(), types.NewUpdateInsertFlags())
 	if err != nil {

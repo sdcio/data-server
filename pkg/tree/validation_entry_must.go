@@ -43,7 +43,12 @@ func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, resu
 		lexer.Parse()
 		prog, err := lexer.CreateProgram(exprStr)
 		if err != nil {
-			resultChan <- types.NewValidationResultEntry(s.leafVariants.GetHighestPrecedence(false, false).Owner(), err, types.ValidationResultEntryTypeError)
+			owner := "unknown"
+			highest := s.leafVariants.GetHighestPrecedence(false, false, false)
+			if highest != nil {
+				owner = highest.Owner()
+			}
+			resultChan <- types.NewValidationResultEntry(owner, err, types.ValidationResultEntryTypeError)
 			return
 		}
 		machine := xpath.NewMachine(exprStr, prog, exprStr)
@@ -66,7 +71,10 @@ func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, resu
 			owner := "unknown"
 			// must statement might be assigned on a container, hence we might not have any LeafVariants
 			if s.leafVariants.Length() > 0 {
-				owner = s.leafVariants.GetHighestPrecedence(false, true).Owner()
+				highest := s.leafVariants.GetHighestPrecedence(false, false, false)
+				if highest != nil {
+					owner = highest.Owner()
+				}
 			}
 			resultChan <- types.NewValidationResultEntry(owner, err, types.ValidationResultEntryTypeError)
 		}
