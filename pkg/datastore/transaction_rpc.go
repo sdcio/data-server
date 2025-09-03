@@ -163,7 +163,8 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 		case intent, ok := <-IntentChan:
 			if !ok {
 				// IntentChan closed due to finish
-				return intentNames, nil
+				IntentChan = nil
+				continue
 			}
 			if excludeDeviations && intent.Deviation {
 				continue
@@ -176,6 +177,9 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 			if err != nil {
 				return nil, err
 			}
+		}
+		if ErrChan == nil && IntentChan == nil {
+			return intentNames, nil
 		}
 	}
 }
