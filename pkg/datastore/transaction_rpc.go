@@ -150,12 +150,13 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 	go d.cacheClient.IntentGetAll(ctx, []string{"running"}, IntentChan, ErrChan)
 
 	for {
+	selectLoop:
 		select {
 		case err, ok := <-ErrChan:
 			if !ok {
 				// ErrChan already closed which is fine, continue
 				ErrChan = nil
-				continue
+				break selectLoop
 			}
 			return nil, err
 		case <-ctx.Done():
@@ -164,7 +165,7 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 			if !ok {
 				// IntentChan closed due to finish
 				IntentChan = nil
-				continue
+				break selectLoop
 			}
 			if excludeDeviations && intent.Deviation {
 				continue
