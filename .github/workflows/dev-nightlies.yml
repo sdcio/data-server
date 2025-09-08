@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
       # Make sure the @v0.8.0 matches the current version of the action
@@ -42,7 +42,7 @@ jobs:
           git config --global url."ssh://git@github.com/".insteadOf "https://github.com/"
           mkdir -p -m 0700 /home/runner/.ssh && ssh-keyscan github.com >> /home/runner/.ssh/known_hosts
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GOVER }}
 
