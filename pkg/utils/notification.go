@@ -247,7 +247,7 @@ func NotificationsEqual(n1, n2 *sdcpb.Notification) bool {
 		if !PathsEqual(upd.GetPath(), n2.GetUpdate()[i].GetPath()) {
 			return false
 		}
-		if !EqualTypedValues(upd.GetValue(), n2.GetUpdate()[i].GetValue()) {
+		if !upd.GetValue().Equal(n2.GetUpdate()[i].GetValue()) {
 			return false
 		}
 	}

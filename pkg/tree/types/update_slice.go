@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"math"
 	"strings"
-
-	"github.com/sdcio/data-server/pkg/utils"
 )
 
 // UpdateSlice A slice of *Update, that defines additional helper functions.
@@ -23,7 +21,7 @@ func (u UpdateSlice) CopyWithNewOwnerAndPrio(owner string, prio int32) UpdateSli
 func (u UpdateSlice) String() string {
 	sb := &strings.Builder{}
 	for i, j := range u {
-		sb.WriteString(fmt.Sprintf("%d - %s -> %s\n", i, j.path.String(), utils.TypedValueToString(j.value)))
+		sb.WriteString(fmt.Sprintf("%d - %s -> %s\n", i, j.path.String(), j.value.ToString()))
 	}
 	return sb.String()
 }
