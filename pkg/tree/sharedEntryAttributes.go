@@ -1675,12 +1675,19 @@ func (s *sharedEntryAttributes) getOrCreateChilds(ctx context.Context, path *sdc
 		}
 		current = newCurrent
 
+		// sort keys
+		keys := make([]string, 0, len(pe.Key))
+		for key := range pe.Key {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+
 		// Step 2: For each key, find or create the key child
-		for _, keyVal := range pe.Key {
-			newCurrent, exists = current.GetChilds(DescendMethodAll)[keyVal]
+		for _, key := range keys {
+			newCurrent, exists = current.GetChilds(DescendMethodAll)[pe.Key[key]]
 			if !exists {
 				var err error
-				keyChild, err := newEntry(ctx, current, keyVal, s.treeContext)
+				keyChild, err := newEntry(ctx, current, pe.Key[key], s.treeContext)
 				if err != nil {
 					return nil, err
 				}
