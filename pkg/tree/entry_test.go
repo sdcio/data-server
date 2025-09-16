@@ -26,10 +26,6 @@ func init() {
 	flagsNew.SetNewFlag()
 	flagsExisting = types.NewUpdateInsertFlags()
 	validationConfig.SetDisableConcurrency(true)
-	validationConfig.DisabledValidators.DisableAll()
-	validationConfig.DisabledValidators.Range = false
-	validationConfig.DisabledValidators.MustStatement = false
-
 }
 
 func Test_Entry(t *testing.T) {
