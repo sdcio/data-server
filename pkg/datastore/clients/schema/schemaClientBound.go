@@ -16,14 +16,12 @@ package schemaClient
 
 import (
 	"context"
-	"strings"
 	"sync"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/schema"
-	"github.com/sdcio/data-server/pkg/utils"
 )
 
 const (
@@ -34,10 +32,8 @@ const (
 type SchemaClientBound interface {
 	// GetSchema retrieves the schema for the given path
 	GetSchemaSdcpbPath(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error)
-	GetSchemaSlicePath(ctx context.Context, path []string) (*sdcpb.GetSchemaResponse, error)
 	// GetSchemaElements retrieves the Schema Elements for all levels of the given path
 	GetSchemaElements(ctx context.Context, p *sdcpb.Path, done chan struct{}) (chan *sdcpb.GetSchemaResponse, error)
-	ToPath(ctx context.Context, path []string) (*sdcpb.Path, error)
 }
 
 type SchemaClientBoundImpl struct {
@@ -62,22 +58,9 @@ func (scb *SchemaClientBoundImpl) GetSchemaSdcpbPath(ctx context.Context, path *
 	return scb.Retrieve(ctx, path)
 }
 
-// GetSchema retrieves the given schema element from the schema-server.
-// relies on TreeSchemaCacheClientImpl.retrieveSchema(...) to source the internal lookup index (cache) of schemas
-func (scb *SchemaClientBoundImpl) GetSchemaSlicePath(ctx context.Context, path []string) (*sdcpb.GetSchemaResponse, error) {
-	// convert the []string path into sdcpb.path for schema retrieval
-	sdcpbPath, err := scb.ToPath(ctx, path)
-	if err != nil {
-		return nil, err
-	}
-
-	return scb.Retrieve(ctx, sdcpbPath)
-}
-
 func (scb *SchemaClientBoundImpl) Retrieve(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 	// convert the path into a keyless path, for schema index lookups.
-	keylessPathSlice := utils.ToStrings(path, false, true)
-	keylessPath := strings.Join(keylessPathSlice, PATHSEP)
+	keylessPath := path.ToXPath(true)
 
 	entryAny, loaded := scb.index.LoadOrStore(keylessPath, NewSchemaIndexEntry(nil, nil))
 	entry := entryAny.(*schemaIndexEntry)
@@ -102,41 +85,6 @@ func (scb *SchemaClientBoundImpl) Retrieve(ctx context.Context, path *sdcpb.Path
 	entry.ready = true
 
 	return entry.Get()
-}
-
-// ToPath local implementation of the ToPath functinality. It takes a string slice that contains schema elements as well as key values.
-// Via the help of the schema, the key elemens are being identified and an sdcpb.Path is returned.
-func (scb *SchemaClientBoundImpl) ToPath(ctx context.Context, path []string) (*sdcpb.Path, error) {
-	p := &sdcpb.Path{}
-	// iterate through the path slice
-	for i := 0; i < len(path); i++ {
-		// create a PathElem for the actual index
-		newPathElem := &sdcpb.PathElem{Name: path[i]}
-		// append the path elem to the path
-		p.Elem = append(p.Elem, newPathElem)
-		// retrieve the schema
-		schema, err := scb.Retrieve(ctx, p)
-		if err != nil {
-			return nil, err
-		}
-
-		// break early if the container itself is defined in the path, not a sub-element
-		if len(path) <= i+1 {
-			break
-		}
-
-		// if it is a container with keys
-		if schemaKeys := schema.GetSchema().GetContainer().GetKeys(); schemaKeys != nil {
-			// add key map
-			newPathElem.Key = make(map[string]string, len(schemaKeys))
-			// adding the keys with the value from path[i], which is the key value
-			for _, k := range schemaKeys {
-				i++
-				newPathElem.Key[k.Name] = path[i]
-			}
-		}
-	}
-	return p, nil
 }
 
 func (scb *SchemaClientBoundImpl) GetSchemaElements(ctx context.Context, p *sdcpb.Path, done chan struct{}) (chan *sdcpb.GetSchemaResponse, error) {

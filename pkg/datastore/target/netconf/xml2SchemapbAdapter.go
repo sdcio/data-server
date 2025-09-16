@@ -85,7 +85,7 @@ func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etre
 	case *sdcpb.SchemaElem_Field:
 		// retrieved schema describes a yang Field
 		log.Tracef("transforming field %q", e.Tag)
-		err = x.transformField(ctx, e, pelems, schema.Field, result)
+		err = x.transformField(ctx, e, &sdcpb.Path{Elem: pelems}, schema.Field, result)
 		if err != nil {
 			return err
 		}
@@ -151,12 +151,18 @@ func (x *XML2sdcpbConfigAdapter) resolveSchemaLeafType(ctx context.Context, slt 
 	// TODO: can we swap out this logic for slt.LeafrefTargetType?
 	schemaLeafType := slt
 	for schemaLeafType.GetLeafref() != "" {
-		path, err := utils.NormalizedAbsPath(schemaLeafType.Leafref, pelems)
+
+		lrefPath, err := sdcpb.ParsePath(schemaLeafType.Leafref)
 		if err != nil {
 			return nil, err
 		}
 
-		schema, err := x.schemaClient.GetSchemaSdcpbPath(ctx, path)
+		err = lrefPath.NormalizedAbsPath(&sdcpb.Path{Elem: pelems, IsRootBased: true})
+		if err != nil {
+			return nil, err
+		}
+
+		schema, err := x.schemaClient.GetSchemaSdcpbPath(ctx, lrefPath)
 		if err != nil {
 			return nil, err
 		}
@@ -174,10 +180,32 @@ func (x *XML2sdcpbConfigAdapter) resolveSchemaLeafType(ctx context.Context, slt 
 }
 
 // transformField transforms an etree.element of a configuration as an update into the provided *sdcpb.Notification.
-func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, ls *sdcpb.LeafSchema, result *sdcpb.Notification) error {
-	schemaLeafType, err := x.resolveSchemaLeafType(ctx, ls.GetType(), pelems)
-	if err != nil {
-		return fmt.Errorf("failed to resolve type of node %s: %w", e.GetPath(), err)
+func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.Element, path *sdcpb.Path, ls *sdcpb.LeafSchema, result *sdcpb.Notification) error {
+	schemaLeafType := ls.GetType()
+	for schemaLeafType.GetLeafref() != "" {
+
+		lrefPath, err := sdcpb.ParsePath(ls.Type.Leafref)
+		if err != nil {
+			return err
+		}
+		err = lrefPath.NormalizedAbsPath(path)
+		if err != nil {
+			return err
+		}
+
+		schema, err := x.schemaClient.GetSchemaSdcpbPath(ctx, lrefPath)
+		if err != nil {
+			return err
+		}
+
+		switch se := schema.GetSchema().GetSchema().(type) {
+		case *sdcpb.SchemaElem_Leaflist:
+			schemaLeafType = se.Leaflist.GetType()
+		case *sdcpb.SchemaElem_Field:
+			schemaLeafType = se.Field.GetType()
+		default:
+			return fmt.Errorf("node [%s] with leafref [%s] has non-field or leaflist target type [%T]", e.GetPath(), ls.GetType().GetLeafref(), se)
+		}
 	}
 
 	// process terminal values
@@ -186,8 +214,8 @@ func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.El
 		return fmt.Errorf("unable to convert value [%s] at path [%s] according to SchemaLeafType [%+v]: %w", e.Text(), e.GetPath(), schemaLeafType, err)
 	}
 	// copy pathElems
-	npelem := make([]*sdcpb.PathElem, 0, len(pelems))
-	for _, pe := range pelems {
+	npelem := make([]*sdcpb.PathElem, 0, len(path.Elem))
+	for _, pe := range path.Elem {
 		npelem = append(npelem, &sdcpb.PathElem{
 			Name: pe.GetName(),
 			Key:  pe.GetKey(),

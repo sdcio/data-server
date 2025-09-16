@@ -3,7 +3,6 @@ package types
 import (
 	"fmt"
 
-	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -47,7 +46,7 @@ func (d *DeviationEntry) SetExpectedValue(ev *sdcpb.TypedValue) *DeviationEntry 
 	return d
 }
 func (d *DeviationEntry) String() string {
-	return fmt.Sprintf("Intent: %s, Path: %s, Reason: %d, Expected: %s, Current: %s", d.IntentName(), utils.ToStrings(d.Path(), false, false), d.Reason(), d.ExpectedValue(), d.CurrentValue())
+	return fmt.Sprintf("Intent: %s, Path: %s, Reason: %d, Expected: %s, Current: %s", d.IntentName(), d.Path().ToXPath(false), d.Reason(), d.ExpectedValue(), d.CurrentValue())
 }
 
 type DeviationReason int

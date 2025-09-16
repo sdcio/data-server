@@ -51,7 +51,7 @@ func (lvs LeafVariantSlice) String() string {
 	sep := ""
 	for _, item := range lvs {
 		sb.WriteString(sep)
-		sb.WriteString(strings.Join(item.GetPathSlice(), " "))
+		sb.WriteString(item.Path().ToXPath(false))
 		sb.WriteString(" -> ")
 		sb.WriteString(item.String())
 		if first {

@@ -21,7 +21,6 @@ type SchemaClientBound interface {
 	GetSchemaSdcpbPath(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error)
 	// GetSchemaElements retrieves the Schema Elements for all levels of the given path
 	GetSchemaElements(ctx context.Context, p *sdcpb.Path, done chan struct{}) (chan *sdcpb.GetSchemaResponse, error)
-	ToPath(ctx context.Context, path []string) (*sdcpb.Path, error)
 }
 
 type Converter struct {
@@ -751,7 +750,7 @@ func convertUpdateTypedValue(_ context.Context, upd *sdcpb.Update, scRsp *sdcpb.
 			// delete the key from the last elem (that's the leaf-list value)
 			p.GetElem()[len(p.GetElem())-1].Key = nil
 			// build unique path
-			sp := ToXPath(p, false)
+			sp := p.ToXPath(false)
 			if _, ok := leaflists[sp]; !ok {
 				leaflists[sp] = &leafListNotification{
 					path:      p,                               // modified path
@@ -804,7 +803,7 @@ func (c *Converter) ConvertNotificationTypedValues(ctx context.Context, n *sdcpb
 	}
 	// convert typed values to their YANG type
 	for _, upd := range n.GetUpdate() {
-		StripPathElemPrefixPath(upd.GetPath())
+		upd.GetPath().StripPathElemPrefixPath()
 		scRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, upd.GetPath())
 		if err != nil {
 			return nil, err

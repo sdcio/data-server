@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
 )
@@ -63,7 +62,7 @@ var datastoreWatchDeviationCmd = &cobra.Command{
 					count++
 					fmt.Printf("%s: %s: %s: %s: %s : %s -> %s\n",
 						rsp.GetName(), rsp.GetIntent(), rsp.GetEvent(),
-						rsp.GetReason(), utils.ToXPath(rsp.GetPath(), false),
+						rsp.GetReason(), rsp.GetPath().ToXPath(false),
 						rsp.GetExpectedValue(), rsp.GetCurrentValue())
 				}
 			case "json":

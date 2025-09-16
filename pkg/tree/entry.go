@@ -38,8 +38,6 @@ func newEntry(ctx context.Context, parent Entry, pathElemName string, tc *TreeCo
 
 // Entry is the primary Element of the Tree.
 type Entry interface {
-	// Path returns the Path as PathSlice
-	Path() types.PathSlice
 	// PathName returns the last Path element, the name of the Entry
 	PathName() string
 	// GetLevel returns the depth of the Entry in the tree
@@ -49,9 +47,9 @@ type Entry interface {
 	// getOrCreateChilds retrieves the sub-child pointed at by the path.
 	// if the path does not exist in its full extend, the entries will be added along the way
 	// if the path does not point to a schema defined path an error will be raise
-	getOrCreateChilds(ctx context.Context, path types.PathSlice) (Entry, error)
+	getOrCreateChilds(ctx context.Context, path *sdcpb.Path) (Entry, error)
 	// AddUpdateRecursive Add the given cache.Update to the tree
-	AddUpdateRecursive(ctx context.Context, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
+	AddUpdateRecursive(ctx context.Context, relativePath *sdcpb.Path, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
 	// StringIndent debug tree struct as indented string slice
 	StringIndent(result []string) []string
 	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
@@ -87,9 +85,7 @@ type Entry interface {
 	FinishInsertionPhase(ctx context.Context) error
 	// GetParent returns the parent entry
 	GetParent() Entry
-	// Navigate navigates the tree according to the given path and returns the referenced entry or nil if it does not exist.
-	Navigate(ctx context.Context, path []string, isRootPath bool, dotdotSkipKeys bool) (Entry, error)
-	NavigateSdcpbPath(ctx context.Context, path []*sdcpb.PathElem, isRootPath bool) (Entry, error)
+	NavigateSdcpbPath(ctx context.Context, path *sdcpb.Path) (Entry, error)
 	// NavigateLeafRef follows the leafref and returns the referenced entry
 	NavigateLeafRef(ctx context.Context) ([]Entry, error)
 	// GetFirstAncestorWithSchema returns the first parent node which has a schema set.
@@ -97,9 +93,7 @@ type Entry interface {
 	// the level of recursion is indicated via the levelUp attribute
 	GetFirstAncestorWithSchema() (ancestor Entry, levelUp int)
 	// SdcpbPath returns the sdcpb.Path struct for the Entry
-	SdcpbPath() (*sdcpb.Path, error)
-	// SdcpbPathInternal is the internal function to calculate the SdcpbPath
-	SdcpbPathInternal(spath []string) (*sdcpb.Path, error)
+	SdcpbPath() *sdcpb.Path
 	// GetSchemaKeys checks for the schema of the entry, and returns the defined keys
 	GetSchemaKeys() []string
 	// GetRootBasedEntryChain returns all the entries starting from the root down to the actual Entry.
@@ -138,7 +132,7 @@ type Entry interface {
 	ImportConfig(ctx context.Context, importer importer.ImportConfigAdapterElement, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
 	TreeExport(owner string) ([]*tree_persist.TreeElement, error)
 	// DeleteBranch Deletes from the tree, all elements of the PathSlice defined branch of the given owner
-	DeleteBranch(ctx context.Context, relativePath types.PathSlice, owner string) (err error)
+	DeleteBranch(ctx context.Context, path *sdcpb.Path, owner string) (err error)
 	GetDeviations(ch chan<- *types.DeviationEntry, activeCase bool)
 	// GetListChilds collects all the childs of the list. In the tree we store them seperated into their key branches.
 	// this is collecting all the last level key entries.

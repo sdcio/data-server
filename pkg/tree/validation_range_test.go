@@ -11,6 +11,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 )
 
@@ -64,7 +65,7 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 
 	jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
 
-	err = root.ImportConfig(ctx, types.PathSlice{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
+	err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
 	if err != nil {
 		t.Error(err)
 	}
@@ -176,7 +177,7 @@ func TestValidate_RangesSigned(t *testing.T) {
 			jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
 
 			// import via importer
-			err = root.ImportConfig(ctx, types.PathSlice{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Error(err)
 			}
@@ -309,7 +310,7 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 			jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
 
 			// import via importer
-			err = root.ImportConfig(ctx, types.PathSlice{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Error(err)
 			}

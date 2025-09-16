@@ -5,7 +5,7 @@ import (
 	"math"
 	"strings"
 
-	"github.com/sdcio/data-server/pkg/utils"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 // UpdateSlice A slice of *Update, that defines additional helper functions.
@@ -23,7 +23,7 @@ func (u UpdateSlice) CopyWithNewOwnerAndPrio(owner string, prio int32) UpdateSli
 func (u UpdateSlice) String() string {
 	sb := &strings.Builder{}
 	for i, j := range u {
-		sb.WriteString(fmt.Sprintf("%d - %s -> %s\n", i, j.path.String(), utils.TypedValueToString(j.value)))
+		sb.WriteString(fmt.Sprintf("%d - %s -> %s\n", i, j.path.String(), j.value.ToString()))
 	}
 	return sb.String()
 }
@@ -55,13 +55,12 @@ func (u UpdateSlice) GetLowestPriorityValue(filters []CacheUpdateFilter) int32 {
 	return result
 }
 
-func (u UpdateSlice) ToPathSet() *PathSet {
-	pathKeySet := NewPathSet()
-
+func (u UpdateSlice) ToSdcpbPathSet() *sdcpb.PathSet {
+	result := &sdcpb.PathSet{}
 	for _, upd := range u {
-		pathKeySet.AddPath(upd.GetPathSlice())
+		result.AddPath(upd.path.DeepCopy())
 	}
-	return pathKeySet
+	return result
 }
 
 func Map[T any](u UpdateSlice, f func(*Update) T) []T {

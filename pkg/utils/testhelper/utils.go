@@ -126,40 +126,12 @@ func GetSchemaClientBound(t *testing.T, mockCtrl *gomock.Controller) (*mockschem
 		},
 	)
 
-	// make the mock respond to GetSchema requests
-	mockscb.EXPECT().GetSchemaSlicePath(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-		func(ctx context.Context, path []string) (*sdcpb.GetSchemaResponse, error) {
-			p, err := mockscb.ToPath(ctx, path)
-			if err != nil {
-				return nil, err
-			}
-			return x.GetSchema(ctx, &sdcpb.GetSchemaRequest{
-				Path:   p,
-				Schema: sdcpbSchema,
-			})
-		},
-	)
-
-	// setup the ToPath() responses
-	mockscb.EXPECT().ToPath(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-		func(ctx context.Context, path []string) (*sdcpb.Path, error) {
-			pr, err := x.ToPath(ctx, &sdcpb.ToPathRequest{
-				PathElement: path,
-				Schema:      sdcpbSchema,
-			})
-			if err != nil {
-				return nil, err
-			}
-			return pr.GetPath(), nil
-		},
-	)
-
 	// return the mock
 	return mockscb, nil
 }
 
 type RootTreeImport interface {
-	ImportConfig(ctx context.Context, basePath types.PathSlice, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
+	ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
 }
 
 func LoadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root RootTreeImport, owner string, prio int32, flags *types.UpdateInsertFlags) error {
@@ -177,7 +149,7 @@ func LoadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root Root
 		return err
 	}
 
-	err = root.ImportConfig(ctx, types.PathSlice{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner, prio, flags)
+	err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner, prio, flags)
 	if err != nil {
 		return err
 	}

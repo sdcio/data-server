@@ -1,13 +1,11 @@
 package types
 
 import (
-	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 type DeleteEntry interface {
-	SdcpbPath() (*sdcpb.Path, error)
-	Path() PathSlice
+	SdcpbPath() *sdcpb.Path
 }
 
 // DeleteEntryImpl is a crutch to flag oldbestcases if on a choice, the active case changed
@@ -21,19 +19,16 @@ func NewDeleteEntryImpl(sdcpbPath *sdcpb.Path) *DeleteEntryImpl {
 	}
 }
 
-func (d *DeleteEntryImpl) SdcpbPath() (*sdcpb.Path, error) {
-	return d.sdcpbPath, nil
-}
-func (d *DeleteEntryImpl) Path() PathSlice {
-	return utils.ToStrings(d.sdcpbPath, false, false)
+func (d *DeleteEntryImpl) SdcpbPath() *sdcpb.Path {
+	return d.sdcpbPath
 }
 
 type DeleteEntriesList []DeleteEntry
 
-func (d DeleteEntriesList) PathSlices() PathSlices {
-	result := make(PathSlices, 0, len(d))
+func (d DeleteEntriesList) SdcpbPaths() sdcpb.Paths {
+	result := make([]*sdcpb.Path, 0, len(d))
 	for _, del := range d {
-		result = append(result, del.Path())
+		result = append(result, del.SdcpbPath())
 	}
 	return result
 }

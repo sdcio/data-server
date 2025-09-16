@@ -26,7 +26,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/sdcio/data-server/pkg/config"
-	"github.com/sdcio/data-server/pkg/utils"
 )
 
 type cacheKey struct {
@@ -99,7 +98,7 @@ func (c *remoteClient) GetSchema(ctx context.Context, in *sdcpb.GetSchemaRequest
 		Name:    in.GetSchema().GetName(),
 		Vendor:  in.GetSchema().GetVendor(),
 		Version: in.GetSchema().GetVersion(),
-		Path:    utils.ToXPath(in.GetPath(), true),
+		Path:    in.GetPath().ToXPath(true),
 	}
 	// check if the key exists in the cache
 	if item := c.schemaCache.Get(key, c.getOpts...); item != nil {
