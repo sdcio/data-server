@@ -2,6 +2,8 @@ package tree
 
 import (
 	"context"
+
+	"github.com/sdcio/data-server/pkg/utils"
 )
 
 type ExplicitDeleteVisitor struct {
@@ -51,9 +53,7 @@ func (edv *ExplicitDeleteVisitor) GetCreatedExplicitDeleteLeafEntries() LeafVari
 type ExplicitDeleteVisitors map[string]*ExplicitDeleteVisitor
 
 func (e ExplicitDeleteVisitors) Stats() map[string]int {
-	result := map[string]int{}
-	for intent, edv := range e {
-		result[intent] = edv.GetExplicitDeleteCreationCount()
-	}
-	return result
+	return utils.MapApplyFuncToMap(e, func(k string, v *ExplicitDeleteVisitor) int {
+		return v.GetExplicitDeleteCreationCount()
+	})
 }
