@@ -63,7 +63,7 @@ func (scb *SchemaClientBoundImpl) Retrieve(ctx context.Context, path *sdcpb.Path
 	keylessPath := path.ToXPath(true)
 
 	entryAny, loaded := scb.index.LoadOrStore(keylessPath, NewSchemaIndexEntry(nil, nil))
-	entry := entryAny.(*schemaIndexEntry)
+	entry := entryAny.(*SchemaIndexEntry)
 
 	// Lock the entry to prevent race conditions
 	entry.mu.Lock()

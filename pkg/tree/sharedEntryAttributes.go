@@ -47,6 +47,7 @@ type sharedEntryAttributes struct {
 	cacheShouldDelete *bool
 	cacheCanDelete    *bool
 	cacheRemains      *bool
+	pathCache         *sdcpb.Path
 	level             *int
 }
 
@@ -123,11 +124,7 @@ func (s *sharedEntryAttributes) loadDefaults(ctx context.Context) error {
 	// if it is a container without keys (not a list) then load the defaults
 	if s.schema.GetContainer() != nil && len(s.schema.GetContainer().GetKeys()) == 0 {
 		for _, childname := range s.schema.GetContainer().ChildsWithDefaults {
-			// tryLoadingDefaults is using the pathslice, that contains keys as well,
-			// so we need to make up for these extra entries in the slice
-			path := s.SdcpbPath()
-
-			path.AddPathElem(sdcpb.NewPathElem(childname, nil))
+			path := s.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(childname, nil))
 			_, err := s.tryLoadingDefault(ctx, path)
 			if err != nil {
 				return err
@@ -159,8 +156,7 @@ func (s *sharedEntryAttributes) loadDefaults(ctx context.Context) error {
 		// if we're in the last level of keys, then we need to add the defaults
 		if len(ancestorContainerSchema.Keys) == levelsUp {
 			for _, childname := range ancestorContainerSchema.ChildsWithDefaults {
-				newPath := s.SdcpbPath()
-				newPath.AddPathElem(sdcpb.NewPathElem(childname, nil))
+				newPath := s.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(childname, nil))
 				_, err := s.tryLoadingDefault(ctx, newPath)
 				if err != nil {
 					return err
@@ -240,8 +236,7 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 				}
 			}
 			// construct the key path
-			path := s.SdcpbPath().DeepCopy()
-			path.AddPathElem(sdcpb.NewPathElem(k.Name, nil))
+			path := s.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(k.Name, nil))
 
 			// convert the key value to the schema defined Typed_Value
 			tv, err := utils.Convert(item.PathName(), k.GetType())
@@ -299,7 +294,7 @@ func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 				return nil
 			}
 		}
-		path = ancesterschema.SdcpbPath().AddPathElem(sdcpb.NewPathElem(s.pathElemName, nil))
+		path = ancesterschema.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(s.pathElemName, nil))
 	}
 
 	if getSchema {
@@ -665,7 +660,7 @@ func (s *sharedEntryAttributes) getRegularDeletes(deletes []types.DeleteEntry, a
 	}
 
 	for _, elem := range s.choicesResolvers.GetDeletes() {
-		deletes = append(deletes, types.NewDeleteEntryImpl(s.SdcpbPath().DeepCopy().AddPathElem(sdcpb.NewPathElem(elem, nil))))
+		deletes = append(deletes, types.NewDeleteEntryImpl(s.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(elem, nil))))
 	}
 
 	for _, e := range s.childs.GetAll() {
@@ -1240,11 +1235,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 				if child, exists = s.getChildren()[elem.GetName()]; !exists {
 					child, err = newEntry(ctx, s, elem.GetName(), s.treeContext)
 					if err != nil {
-						return fmt.Errorf("error trying to insert %s at path %v: %w", elem.GetName(), s.SdcpbPath().ToXPath(false), err)
-					}
-					err = s.addChild(ctx, child)
-					if err != nil {
-						return err
+						return fmt.Errorf("error trying to insert %s at path %s: %w", elem.GetName(), s.SdcpbPath().ToXPath(false), err)
 					}
 				}
 				err = child.ImportConfig(ctx, elem, intentName, intentPrio, insertFlags)
@@ -1570,22 +1561,29 @@ func (s *sharedEntryAttributes) StringIndent(result []string) []string {
 
 // SdcpbPath returns the sdcpb.Path, with its elements and keys based on the local schema
 func (s *sharedEntryAttributes) SdcpbPath() *sdcpb.Path {
+	if s.pathCache != nil {
+		return s.pathCache
+	}
 	if s.IsRoot() {
 		path := &sdcpb.Path{
 			IsRootBased: true,
 		}
+		// populate cache
+		s.pathCache = path
 		return path
 	}
 
-	path := s.parent.SdcpbPath()
-
+	var path *sdcpb.Path
 	if s.schema == nil {
+		path = s.parent.SdcpbPath().DeepCopy()
 		parentSchema, levelsUp := s.GetFirstAncestorWithSchema()
 		keyName := parentSchema.GetSchemaKeys()[levelsUp-1]
 		path.GetElem()[len(path.GetElem())-1].Key[keyName] = s.pathElemName
 	} else {
-		path.Elem = append(path.Elem, sdcpb.NewPathElem(s.pathElemName, map[string]string{}))
+		path = s.parent.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(s.pathElemName, map[string]string{}))
 	}
+	// populate cache
+	s.pathCache = path
 	return path
 }
 

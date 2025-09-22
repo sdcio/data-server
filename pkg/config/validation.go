@@ -3,7 +3,7 @@ package config
 func NewValidationConfig() *Validation {
 	return &Validation{
 		DisabledValidators: &Validators{},
-		DisableConcurrency: bool(false),
+		DisableConcurrency: false,
 	}
 }
 

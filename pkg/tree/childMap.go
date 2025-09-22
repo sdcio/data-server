@@ -77,7 +77,7 @@ func (c *childMap) GetAll() map[string]Entry {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	result := map[string]Entry{}
+	result := make(map[string]Entry, len(c.c))
 	for k, v := range c.c {
 		result[k] = v
 	}
