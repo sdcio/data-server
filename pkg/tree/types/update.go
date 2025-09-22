@@ -32,6 +32,13 @@ func NewUpdate(path *sdcpb.Path, val *sdcpb.TypedValue, prio int32, intent strin
 	}
 }
 
+func (u *Update) ToSdcpbUpdate() *sdcpb.Update {
+	return &sdcpb.Update{
+		Path:  u.path,
+		Value: u.value,
+	}
+}
+
 func (u *Update) DeepCopy() *Update {
 
 	clonedVal := proto.Clone(u.Value()).(*sdcpb.TypedValue)

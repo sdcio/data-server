@@ -102,6 +102,10 @@ func (l *LeafEntry) GetNewFlag() bool {
 	return l.IsNew
 }
 
+func (l *LeafEntry) GetUpdate() *types.Update {
+	return l.Update
+}
+
 func (l *LeafEntry) DropDeleteFlag() *LeafEntry {
 	l.mu.Lock()
 	defer l.mu.Unlock()

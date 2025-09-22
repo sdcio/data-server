@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sdcio/data-server/pkg/tree/types"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 type LeafVariantSlice []*LeafEntry
@@ -14,6 +15,14 @@ func (lvs LeafVariantSlice) ToUpdateSlice() types.UpdateSlice {
 	result := make([]*types.Update, 0, len(lvs))
 	for _, x := range lvs {
 		result = append(result, x.Update)
+	}
+	return result
+}
+
+func (lvs LeafVariantSlice) ToSdcpbUpdateSlice() []*sdcpb.Update {
+	result := make([]*sdcpb.Update, 0, len(lvs))
+	for _, x := range lvs {
+		result = append(result, x.ToSdcpbUpdate())
 	}
 	return result
 }
