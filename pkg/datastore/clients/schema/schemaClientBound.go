@@ -40,8 +40,7 @@ type SchemaClientBoundImpl struct {
 	schema       *sdcpb.Schema
 	schemaClient schema.Client
 
-	index      sync.Map // string -> schemaIndexEntry
-	indexMutex sync.RWMutex
+	index sync.Map // string -> schemaIndexEntry
 }
 
 func NewSchemaClientBound(s *config.SchemaConfig, sc schema.Client) *SchemaClientBoundImpl {
