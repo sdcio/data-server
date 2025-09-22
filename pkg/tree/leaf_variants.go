@@ -432,6 +432,10 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 
 	// send all the overruleds
 	for _, de := range overruled {
+		if de.ExpectedValue().Equal(highest.Value()) {
+			// skip if higher prio equals the overruled
+			continue
+		}
 		ch <- de.SetCurrentValue(highest.Value())
 	}
 
