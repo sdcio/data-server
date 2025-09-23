@@ -94,7 +94,7 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	ncResponse, err := t.driver.GetConfig(source, filterDoc)
 	if err != nil {
 		if strings.Contains(err.Error(), "EOF") {
-			t.Close()
+			_ = t.Close()
 			go t.reconnect()
 		}
 		return nil, err
@@ -205,7 +205,7 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, fo
 	if err != nil {
 		log.Errorf("failed getting config from target %v: %T | %v", t.name, err, err)
 		if strings.Contains(err.Error(), "EOF") {
-			t.Close()
+			_ = t.Close()
 			go t.reconnect()
 		}
 		return
@@ -286,7 +286,7 @@ func (t *ncTarget) setRunning(source TargetSource) (*sdcpb.SetDataResponse, erro
 	if err != nil {
 		log.Errorf("datastore %s failed edit-config: %v", t.name, err)
 		if strings.Contains(err.Error(), "EOF") {
-			t.Close()
+			_ = t.Close()
 			go t.reconnect()
 			return nil, err
 		}
@@ -345,7 +345,7 @@ func (t *ncTarget) setCandidate(source TargetSource) (*sdcpb.SetDataResponse, er
 	if err != nil {
 		log.Errorf("datastore %s failed edit-config: %v", t.name, err)
 		if strings.Contains(err.Error(), "EOF") {
-			t.Close()
+			_ = t.Close()
 			go t.reconnect()
 			return nil, err
 		}
@@ -366,7 +366,7 @@ func (t *ncTarget) setCandidate(source TargetSource) (*sdcpb.SetDataResponse, er
 	err = t.driver.Commit()
 	if err != nil {
 		if strings.Contains(err.Error(), "EOF") {
-			t.Close()
+			_ = t.Close()
 			go t.reconnect()
 		}
 		return nil, err

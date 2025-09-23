@@ -295,7 +295,7 @@ func TestLeafList(t *testing.T) {
 		HonorNamespace:     true,
 	})
 
-	xmlBuilder.AddValue(ctx, &sdcpb.Path{
+	err = xmlBuilder.AddValue(ctx, &sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			{
 				Name: "leaflist",
@@ -305,6 +305,9 @@ func TestLeafList(t *testing.T) {
 			},
 		},
 	}, leaflistValue)
+	if err != nil {
+		t.Error(err)
+	}
 
 	expectedResult := `<leaflist xmlns="urn:sdcio/model" operation="replace">
   <entry>entry-one</entry>
@@ -386,7 +389,10 @@ func Test_filterRPCErrors(t *testing.T) {
 	`
 
 	doc := etree.NewDocument()
-	doc.ReadFromString(xml)
+	err := doc.ReadFromString(xml)
+	if err != nil {
+		t.Error(err)
+	}
 
 	type args struct {
 		xml      *etree.Document

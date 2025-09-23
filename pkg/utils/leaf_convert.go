@@ -446,11 +446,11 @@ func ConvertJsonValueToTv(d any, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, 
 		}, nil
 	case "boolean":
 		var b bool
-		switch d.(type) {
+		switch d := d.(type) {
 		case bool:
-			b = d.(bool)
+			b = d
 		case string:
-			b, err = strconv.ParseBool(d.(string))
+			b, err = strconv.ParseBool(d)
 			if err != nil {
 				return nil, err
 			}

@@ -37,7 +37,10 @@ func (t *TransactionManager) RegisterTransaction(ctx context.Context, trans *Tra
 
 	return NewTransactionGuard(func() {
 		log.Infof("Transaction: %s - canceling due to error", trans.transactionId)
-		t.CleanupTransaction(trans.transactionId)
+		err := t.CleanupTransaction(trans.transactionId)
+		if err != nil {
+			log.Error(err)
+		}
 	}), nil
 }
 

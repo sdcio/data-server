@@ -222,6 +222,6 @@ func (x *XML2sdcpbConfigAdapter) transformLeafList(ctx context.Context, e *etree
 	}
 
 	name := pelems[len(pelems)-1].Name
-	tc.AddLeafListEntry(name, tv)
-	return nil
+	err = tc.AddLeafListEntry(name, tv)
+	return err
 }

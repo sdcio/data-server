@@ -121,6 +121,7 @@ func GetSchemaValue(updValue *sdcpb.TypedValue) (interface{}, error) {
 	case *sdcpb.TypedValue_EmptyVal:
 		value = updValue.GetEmptyVal()
 	case *sdcpb.TypedValue_FloatVal:
+		//lint:ignore SA1019
 		value = updValue.GetFloatVal()
 	case *sdcpb.TypedValue_DoubleVal:
 		value = updValue.GetDoubleVal()
@@ -466,6 +467,7 @@ func TypedValueToString(tv *sdcpb.TypedValue) string {
 	case *sdcpb.TypedValue_BytesVal:
 		return string(tv.GetBytesVal()) // questionable...
 	case *sdcpb.TypedValue_DecimalVal:
+		//lint:ignore SA1019
 		d := tv.GetDecimalVal()
 		digitsStr := strconv.FormatInt(d.Digits, 10)
 		negative := false

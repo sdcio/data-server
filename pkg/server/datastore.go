@@ -182,7 +182,10 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 	if err != nil {
 		return nil, err
 	}
-	s.datastores.AddDatastore(ds)
+	err = s.datastores.AddDatastore(ds)
+	if err != nil {
+		return nil, err
+	}
 	return &sdcpb.CreateDataStoreResponse{}, nil
 }
 
@@ -202,7 +205,10 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 	if err != nil {
 		log.Errorf("failed to stop datastore %s: %v", name, err)
 	}
-	s.datastores.DeleteDatastore(ctx, name)
+	err = s.datastores.DeleteDatastore(ctx, name)
+	if err != nil {
+		log.Error(err)
+	}
 	log.Infof("deleted datastore %s", name)
 
 	return &sdcpb.DeleteDataStoreResponse{}, nil
@@ -211,6 +217,9 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.DataServer_WatchDeviationsServer) error {
 	ctx := stream.Context()
 	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return status.Errorf(codes.InvalidArgument, "missing peer info")
+	}
 	log.Debugf("Received WatchDeviationRequest from peer %s: %v", p.Addr.String(), req)
 
 	peerInfo, ok := peer.FromContext(ctx)

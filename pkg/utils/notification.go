@@ -131,6 +131,7 @@ func FromGNMITypedValue(v *gnmi.TypedValue) *sdcpb.TypedValue {
 		}
 	case *gnmi.TypedValue_FloatVal:
 		return &sdcpb.TypedValue{
+			//lint:ignore SA1019
 			Value: &sdcpb.TypedValue_DoubleVal{DoubleVal: float64(v.GetFloatVal())},
 		}
 	default:

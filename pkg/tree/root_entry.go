@@ -47,13 +47,13 @@ func NewTreeRoot(ctx context.Context, tc *TreeContext) (*RootEntry, error) {
 }
 
 // stringToDisk just for debugging purpose
-func (r *RootEntry) stringToDisk(filename string) error {
-	err := os.WriteFile(filename, []byte(r.String()), 0755)
-	return err
+func (r *RootEntry) stringToDisk(filename string) error { //lint:ignore
+	return os.WriteFile(filename, []byte(r.String()), 0755)
 }
 
 func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 	tc := r.treeContext.deepCopy()
+	//lint:ignore QF1008
 	se, err := r.sharedEntryAttributes.deepCopy(tc, nil)
 	if err != nil {
 		return nil, err
@@ -90,7 +90,7 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us types.UpdateSlic
 func (r *RootEntry) ImportConfig(ctx context.Context, basePath types.PathSlice, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error {
 	r.treeContext.SetActualOwner(intentName)
 
-	e, err := r.sharedEntryAttributes.getOrCreateChilds(ctx, basePath)
+	e, err := r.getOrCreateChilds(ctx, basePath)
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,10 @@ func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation) (type
 	go func() {
 		// read from the validationResult channel
 		for e := range validationResultEntryChan {
-			validationResult.AddEntry(e)
+			err := validationResult.AddEntry(e)
+			if err != nil {
+				log.Error(fmt.Errorf("error reading from validation result channel %v", err))
+			}
 		}
 		syncWait.Done()
 	}()

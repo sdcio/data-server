@@ -26,9 +26,6 @@ func TestRootEntry_TreeExport(t *testing.T) {
 	owner2 := "owner2"
 	tc := NewTreeContext(nil, owner1)
 
-	type fields struct {
-		sharedEntryAttributes *sharedEntryAttributes
-	}
 	type args struct {
 		owner    string
 		priority int32

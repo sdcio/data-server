@@ -55,7 +55,10 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntent
 	if intentName == tree.RunningIntentName {
 		d.syncTreeMutex.RLock()
 		defer d.syncTreeMutex.RUnlock()
-		d.syncTree.FinishInsertionPhase(ctx)
+		err := d.syncTree.FinishInsertionPhase(ctx)
+		if err != nil {
+			return nil, err
+		}
 
 		return newTreeRootToGetIntentResponse(d.syncTree), nil
 	}

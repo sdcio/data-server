@@ -23,7 +23,8 @@ func (u UpdateSlice) CopyWithNewOwnerAndPrio(owner string, prio int32) UpdateSli
 func (u UpdateSlice) String() string {
 	sb := &strings.Builder{}
 	for i, j := range u {
-		sb.WriteString(fmt.Sprintf("%d - %s -> %s\n", i, j.path.String(), utils.TypedValueToString(j.value)))
+		fmt.Fprintf(sb, "%d - %s -> %s\n", i, j.path.String(), utils.TypedValueToString(j.value))
+
 	}
 	return sb.String()
 }

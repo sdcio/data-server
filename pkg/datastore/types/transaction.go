@@ -8,6 +8,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	log "github.com/sirupsen/logrus"
 )
 
 type Transaction struct {
@@ -63,7 +64,10 @@ func (t *Transaction) Confirm() error {
 
 func (t *Transaction) rollback() {
 	ctx := context.Background()
-	t.transactionManager.Rollback(ctx, t.GetRollbackTransaction())
+	err := t.transactionManager.Rollback(ctx, t.GetRollbackTransaction())
+	if err != nil {
+		log.Warn(err)
+	}
 }
 
 func (t *Transaction) StartRollbackTimer() error {
@@ -93,7 +97,10 @@ func (t *Transaction) GetRollbackTransaction() *Transaction {
 	t.timer.Stop()
 	tr := NewTransaction(t.GetTransactionId()+" - Rollback", t.transactionManager)
 	for _, v := range t.oldIntents {
-		tr.AddTransactionIntent(v, TransactionIntentNew)
+		err := tr.AddTransactionIntent(v, TransactionIntentNew)
+		if err != nil {
+			log.Warn(err)
+		}
 	}
 	tr.isRollback = true
 	return tr
