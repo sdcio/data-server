@@ -81,7 +81,10 @@ func NewDatastoreMap() *DatastoreMap {
 }
 func (d *DatastoreMap) StopAll() {
 	for _, ds := range d.datastores {
-		ds.Stop()
+		err := ds.Stop()
+		if err != nil {
+			log.Error(err)
+		}
 	}
 }
 
@@ -103,7 +106,10 @@ func (d *DatastoreMap) DeleteDatastore(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	ds.Delete(ctx)
+	err = ds.Delete(ctx)
+	if err != nil {
+		return err
+	}
 	delete(d.datastores, name)
 	return nil
 }
@@ -280,7 +286,7 @@ func (s *Server) createInitialDatastores(ctx context.Context) {
 			defer wg.Done()
 			// TODO: handle error
 			ds, _ := datastore.New(ctx, dsCfg, s.schemaClient, s.cacheClient, s.gnmiOpts...)
-			s.datastores.AddDatastore(ds)
+			_ = s.datastores.AddDatastore(ds)
 		}(dsCfg)
 	}
 	wg.Wait()

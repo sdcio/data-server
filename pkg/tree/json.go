@@ -93,7 +93,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 					return nil, nil
 				}
 				le := s.leafVariants.GetHighestPrecedence(false, false, false)
-				if le == nil || onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
+				if le == nil || onlyNewOrUpdated && !le.IsNew && !le.IsUpdated {
 					return nil, nil
 				}
 			}
@@ -151,7 +151,7 @@ func jsonAddKeyElements(s Entry, dict map[string]any) {
 	parentSchema, levelsUp := s.GetFirstAncestorWithSchema()
 	// from the parent we get the keys as slice
 	schemaKeys := parentSchema.GetSchemaKeys()
-	var treeElem Entry = s
+	treeElem := s
 	// the keys do match the levels up in the tree in reverse order
 	// hence we init i with levelUp and count down
 	for i := levelsUp - 1; i >= 0; i-- {

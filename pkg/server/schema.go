@@ -83,7 +83,7 @@ func (s *Server) createLocalSchemaStore(ctx context.Context) {
 				log.Errorf("schema %s parsing failed: %v", sCfg.Name, err)
 				return
 			}
-			store.AddSchema(sc)
+			_ = store.AddSchema(sc)
 		}(sCfg, store)
 	}
 	wg.Wait()
@@ -92,9 +92,7 @@ func (s *Server) createLocalSchemaStore(ctx context.Context) {
 
 func (s *Server) createRemoteSchemaClient(ctx context.Context) {
 SCHEMA_CONNECT:
-	opts := []grpc.DialOption{
-		grpc.WithBlock(),
-	}
+	opts := []grpc.DialOption{}
 	switch s.config.SchemaServer.TLS {
 	case nil:
 		opts = append(opts,
@@ -113,9 +111,7 @@ SCHEMA_CONNECT:
 		)
 	}
 
-	dialCtx, cancel := context.WithTimeout(ctx, schemaServerConnectRetry)
-	defer cancel()
-	cc, err := grpc.DialContext(dialCtx, s.config.SchemaServer.Address, opts...)
+	cc, err := grpc.NewClient(s.config.SchemaServer.Address, opts...)
 	if err != nil {
 		log.Errorf("failed to connect DS to schema server: %v", err)
 		time.Sleep(time.Second)

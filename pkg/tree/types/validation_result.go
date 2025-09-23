@@ -67,7 +67,7 @@ func (v ValidationResults) JoinErrors() error {
 	var result error
 
 	for _, intent := range v {
-		errors.Join(result, errors.Join(intent.errors...))
+		result = errors.Join(result, errors.Join(intent.errors...))
 	}
 	return result
 }
@@ -76,7 +76,7 @@ func (v ValidationResults) JoinWarnings() error {
 	var result error
 
 	for _, intent := range v {
-		errors.Join(result, errors.Join(intent.warnings...))
+		result = errors.Join(result, errors.Join(intent.warnings...))
 	}
 	return result
 }

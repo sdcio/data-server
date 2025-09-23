@@ -13,10 +13,7 @@ func (p PathSlice) String() string {
 
 func (p PathSlice) DeepCopy() PathSlice {
 	result := make(PathSlice, 0, len(p))
-	for _, entry := range p {
-		result = append(result, entry)
-	}
-	return result
+	return append(result, p...)
 }
 
 // PathSlices is the slice collection of multiple PathSlice objects.

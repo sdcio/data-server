@@ -50,7 +50,10 @@ var datastoreListCmd = &cobra.Command{
 		case "":
 			fmt.Println(prototext.Format(rsp))
 		case "table":
-			printDataStoresTable(rsp)
+			err = printDataStoresTable(rsp)
+			if err != nil {
+				return err
+			}
 		case "json":
 			b, err := json.MarshalIndent(rsp, "", "  ")
 			if err != nil {
@@ -67,7 +70,7 @@ func init() {
 	datastoreCmd.AddCommand(datastoreListCmd)
 }
 
-func printDataStoresTable(rsp *sdcpb.ListDataStoreResponse) {
+func printDataStoresTable(rsp *sdcpb.ListDataStoreResponse) error {
 	tableData := make([][]string, 0, len(rsp.GetDatastores()))
 	for _, r := range rsp.GetDatastores() {
 		tableData = append(tableData, toTableData(r)...)
@@ -78,6 +81,13 @@ func printDataStoresTable(rsp *sdcpb.ListDataStoreResponse) {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.Header([]string{"Name", "Schema", "Protocol", "Address", "State", "Candidate (C/O/P)"})
 	table.Options(tablewriter.WithAlignment(tw.Alignment{tw.AlignLeft}))
-	table.Bulk(tableData)
-	table.Render()
+	err := table.Bulk(tableData)
+	if err != nil {
+		return err
+	}
+	err = table.Render()
+	if err != nil {
+		return err
+	}
+	return nil
 }

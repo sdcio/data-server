@@ -17,7 +17,6 @@ package cmd
 import (
 	"context"
 	"os"
-	"time"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
@@ -54,11 +53,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&format, "format", "", "", "print format, '','table', 'flat' or 'json'")
 }
 
-func createDataClient(ctx context.Context, addr string) (sdcpb.DataServerClient, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	cc, err := grpc.DialContext(ctx, addr,
-		grpc.WithBlock(),
+func createDataClient(_ context.Context, addr string) (sdcpb.DataServerClient, error) {
+	cc, err := grpc.NewClient(addr,
 		grpc.WithTransportCredentials(
 			insecure.NewCredentials(),
 		),

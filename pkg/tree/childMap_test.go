@@ -99,8 +99,7 @@ func Test_childMap_DeleteChilds(t *testing.T) {
 
 func Test_childMap_DeleteChild(t *testing.T) {
 	type fields struct {
-		c  map[string]Entry
-		mu sync.RWMutex
+		c map[string]Entry
 	}
 	type args struct {
 		name string
@@ -125,7 +124,6 @@ func Test_childMap_DeleteChild(t *testing.T) {
 						pathElemName: "three",
 					},
 				},
-				mu: sync.RWMutex{},
 			},
 			args: args{
 				name: "three",
@@ -146,7 +144,6 @@ func Test_childMap_DeleteChild(t *testing.T) {
 						pathElemName: "three",
 					},
 				},
-				mu: sync.RWMutex{},
 			},
 			args: args{
 				name: "four",
@@ -158,7 +155,7 @@ func Test_childMap_DeleteChild(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &childMap{
 				c:  tt.fields.c,
-				mu: tt.fields.mu,
+				mu: sync.RWMutex{},
 			}
 			c.DeleteChild(tt.args.name)
 			if len(c.c) != tt.expectedLength {

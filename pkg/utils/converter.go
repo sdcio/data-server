@@ -231,7 +231,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				}
 				// in case of json_ietf we need to cut the module prefix
 				if k.Type.Type == "identityref" {
-					val := v
+					var val string
 					found := false
 					_, val, found = strings.Cut(fmt.Sprintf("%v", v), ":")
 					if found {
