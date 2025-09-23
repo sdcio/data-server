@@ -1038,3 +1038,143 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 		})
 	}
 }
+
+func Test_sharedEntryAttributes_validateMinMaxElements(t *testing.T) {
+	tests := []struct {
+		name           string
+		ygotDevice     func() ygot.GoStruct
+		expectedErrors int
+	}{
+		{
+			name: "Within MinMax",
+			ygotDevice: func() ygot.GoStruct {
+				d := &sdcio_schema.Device{
+					ListMinmax: &sdcio_schema.SdcioModel_ListMinmax{
+						Entries: map[string]*sdcio_schema.SdcioModel_ListMinmax_Entries{
+							"one": {
+								KeyAttr: ygot.String("one"),
+								Attr1:   ygot.String("attr1"),
+							},
+							"two": {
+								KeyAttr: ygot.String("two"),
+								Attr2:   ygot.String("attr2"),
+							},
+						},
+					},
+				}
+				return d
+			},
+			expectedErrors: 0,
+		},
+		{
+			name: "Below Min",
+			ygotDevice: func() ygot.GoStruct {
+				d := &sdcio_schema.Device{
+					ListMinmax: &sdcio_schema.SdcioModel_ListMinmax{
+						Entries: map[string]*sdcio_schema.SdcioModel_ListMinmax_Entries{
+							"one": {
+								KeyAttr: ygot.String("one"),
+								Attr1:   ygot.String("attr1"),
+							},
+						},
+					},
+				}
+				return d
+			},
+			expectedErrors: 1,
+		},
+		{
+			name: "Above Max",
+			ygotDevice: func() ygot.GoStruct {
+				d := &sdcio_schema.Device{
+					ListMinmax: &sdcio_schema.SdcioModel_ListMinmax{
+						Entries: map[string]*sdcio_schema.SdcioModel_ListMinmax_Entries{
+							"one": {
+								KeyAttr: ygot.String("one"),
+								Attr1:   ygot.String("attr1"),
+							},
+							"two": {
+								KeyAttr: ygot.String("two"),
+								Attr1:   ygot.String("attr1"),
+							},
+							"three": {
+								KeyAttr: ygot.String("three"),
+								Attr1:   ygot.String("attr1"),
+							},
+							"four": {
+								KeyAttr: ygot.String("four"),
+								Attr1:   ygot.String("attr1"),
+							},
+						},
+					},
+				}
+				return d
+			},
+			expectedErrors: 1,
+		},
+	}
+	for _, tt := range tests {
+
+		owner1 := "owner1"
+
+		t.Run(tt.name, func(t *testing.T) {
+			// create a gomock controller
+			controller := gomock.NewController(t)
+			defer controller.Finish()
+
+			ctx := context.Background()
+
+			sc, schema, err := testhelper.InitSDCIOSchema()
+			if err != nil {
+				t.Fatal(err)
+			}
+			scb := schemaClient.NewSchemaClientBound(schema, sc)
+			tc := NewTreeContext(scb, owner1)
+
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			jconfStr, err := ygot.EmitJSON(tt.ygotDevice(), &ygot.EmitJSONConfig{
+				Format:         ygot.RFC7951,
+				SkipValidation: true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var jsonConfAny any
+			err = json.Unmarshal([]byte(jconfStr), &jsonConfAny)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			newFlag := types.NewUpdateInsertFlags()
+
+			err = root.ImportConfig(ctx, types.PathSlice{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			fmt.Println(root.String())
+
+			valConfig := validationConfig.DeepCopy()
+			valConfig.DisabledValidators.DisableAll()
+			valConfig.DisabledValidators.MaxElements = false
+
+			result, _ := root.Validate(ctx, valConfig)
+
+			t.Log(strings.Join(result.ErrorsStr(), "\n"))
+
+			if len(result.ErrorsStr()) != tt.expectedErrors {
+				t.Fatalf("expected %d, got %d errors on Min-Max-Elements check", tt.expectedErrors, len(result.ErrorsStr()))
+			}
+		})
+	}
+}

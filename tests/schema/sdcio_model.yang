@@ -21,6 +21,9 @@ module sdcio_model {
   import sdcio_model_list_unique {
     prefix sdcio_model_list_unique;
   }
+  import sdcio_model_list_minmax {
+    prefix sdcio_model_list_minmax;
+  }
   import sdcio_model_deref {
     prefix sdcio_model_deref;
   }
@@ -45,6 +48,7 @@ module sdcio_model {
   uses sdcio_model_doublekey:doublekey-top;
   uses sdcio_model_leaflist:leaflist-top;
   uses sdcio_model_list_unique:list-unique-top;
+  uses sdcio_model_list_minmax:list-minmax-top;
   uses sdcio_model_deref:deref-top;
   uses sdcio_model_identity:identityref-top;
   uses sdcio_model_leafref:leafref-top;
