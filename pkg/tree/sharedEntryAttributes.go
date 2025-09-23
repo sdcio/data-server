@@ -1150,12 +1150,18 @@ func (s *sharedEntryAttributes) validateMinMaxElements(resultChan chan<- *types.
 
 	// define function to figure out associated owners / intents
 	determineOwners := func() []string {
-		owners := []string{}
+		ownersSet := map[string]struct{}{}
 		for _, child := range childs {
 			childAttributes := child.GetChilds(DescendMethodActiveChilds)
 			owner := childAttributes[contSchema.GetKeys()[0].GetName()].GetHighestPrecedence(nil, false, false, false)[0].Update.Owner()
-			owners = append(owners, owner)
+			ownersSet[owner] = struct{}{}
 		}
+		// dedup the owners
+		owners := []string{}
+		for k := range ownersSet {
+			owners = append(owners, k)
+		}
+
 		return owners
 	}
 
@@ -1183,11 +1189,11 @@ func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(resultChan chan
 				if val := tv.GetLeaflistVal(); val != nil {
 					// check minelements if set
 					if schema.GetMinElements() > 0 && len(val.GetElement()) < int(schema.GetMinElements()) {
-						resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("leaflist %s defines %d min-elements but only %d elements are present", s.Path().String(), schema.MinElements, len(val.GetElement())), types.ValidationResultEntryTypeError)
+						resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("leaflist %s defines %d min-elements but only %d elements are present", s.SdcpbPath().ToXpath(false), schema.MinElements, len(val.GetElement())), types.ValidationResultEntryTypeError)
 					}
 					// check maxelements if set
 					if uint64(len(val.GetElement())) > uint64(schema.GetMaxElements()) {
-						resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("leaflist %s defines %d max-elements but %d elements are present", s.Path().String(), schema.GetMaxElements(), len(val.GetElement())), types.ValidationResultEntryTypeError)
+						resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("leaflist %s defines %d max-elements but %d elements are present", s.SdcpbPath().ToXpath(false), schema.GetMaxElements(), len(val.GetElement())), types.ValidationResultEntryTypeError)
 					}
 				}
 				statChan <- types.NewValidationStat(types.StatTypeMinMax).PlusOne()
