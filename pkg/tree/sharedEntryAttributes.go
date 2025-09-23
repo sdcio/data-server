@@ -959,26 +959,6 @@ func (s *sharedEntryAttributes) getHighestPrecedenceValueOfBranch(filter Highest
 // it will multiplex all the different Validations that need to happen
 func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat, vCfg *config.Validation) {
 
-	// recurse the call to the child elements
-	wg := sync.WaitGroup{}
-	defer wg.Wait()
-	for _, c := range s.GetChilds(DescendMethodActiveChilds) {
-		if c.canDeleteBranch(false) {
-			// skip validation of branches that can be deleted
-			continue
-		}
-		wg.Add(1)
-		valFunc := func(x Entry) {
-			x.Validate(ctx, resultChan, statChan, vCfg)
-			wg.Done()
-		}
-		if !vCfg.DisableConcurrency {
-			go valFunc(c)
-		} else {
-			valFunc(c)
-		}
-	}
-
 	// validate the mandatory statement on this entry
 	if s.remainsToExist() {
 
@@ -1008,6 +988,26 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 		//if !vCfg.DisabledValidators.MaxElements {
 		//	s.validateMaxElements(resultChan, statChan)
 		//}
+
+		// recurse the call to the child elements
+		wg := sync.WaitGroup{}
+		defer wg.Wait()
+		for _, c := range s.GetChilds(DescendMethodActiveChilds) {
+			if c.canDeleteBranch(false) {
+				// skip validation of branches that can be deleted
+				continue
+			}
+			wg.Add(1)
+			valFunc := func(x Entry) {
+				x.Validate(ctx, resultChan, statChan, vCfg)
+				wg.Done()
+			}
+			if !vCfg.DisableConcurrency {
+				go valFunc(c)
+			} else {
+				valFunc(c)
+			}
+		}
 	}
 }
 
