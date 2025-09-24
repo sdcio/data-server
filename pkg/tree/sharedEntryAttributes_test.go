@@ -1267,7 +1267,7 @@ func Test_sharedEntryAttributes_validateMinMaxElements(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			err = root.ImportConfig(ctx, types.PathSlice{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1435,7 +1435,7 @@ func Test_sharedEntryAttributes_validateMinMaxElementsDoubleKey(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			err = root.ImportConfig(ctx, types.PathSlice{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
 			if err != nil {
 				t.Fatal(err)
 			}
