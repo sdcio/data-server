@@ -20,7 +20,7 @@ module sdcio_model_list_minmax {
         }
       }
     }
-        container list-minmax-double-key {
+    container list-minmax-double-key {
       list entries {
         key "keyAttr1 keyAttr2";
         max-elements 3;
@@ -37,8 +37,4 @@ module sdcio_model_list_minmax {
       }
     }
   }
-
- 
-
-  
 }
