@@ -52,7 +52,7 @@ func (s *Server) createLocalSchemaStore(ctx context.Context) {
 		store = schemaMemoryStore.New()
 	case schemaConfig.StoreTypePersistent:
 		var err error
-		store, err = schemaPersistentStore.New(ctx, s.config.SchemaStore.Path, s.config.SchemaStore.Cache)
+		store, err = schemaPersistentStore.New(ctx, s.config.SchemaStore.Path, s.config.SchemaStore.Cache, s.config.SchemaStore.ReadOnly)
 		if err != nil {
 			log.Errorf("failed to create a persistent schema store: %v", err)
 			os.Exit(1)

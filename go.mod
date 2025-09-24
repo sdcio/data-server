@@ -20,7 +20,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/scrapli/scrapligo v1.3.3
 	github.com/sdcio/cache v0.0.38
-	github.com/sdcio/schema-server v0.0.32
+	github.com/sdcio/schema-server v0.0.33
 	github.com/sdcio/sdc-protos v0.0.46
 	github.com/sdcio/yang-parser v0.0.12
 	github.com/sirupsen/logrus v1.9.3
