@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/tree/types"
-	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -138,7 +137,7 @@ func (l *LeafEntry) MarkExpliciteDelete() {
 
 // String returns a string representation of the LeafEntry
 func (l *LeafEntry) String() string {
-	return fmt.Sprintf("Owner: %s, Priority: %d, Value: %s, New: %t, Delete: %t, Update: %t, DeleteIntendedOnly: %t, ExplicitDelete: %t", l.Owner(), l.Priority(), utils.TypedValueToString(l.Value()), l.GetNewFlag(), l.GetDeleteFlag(), l.GetUpdateFlag(), l.GetDeleteOnlyIntendedFlag(), l.GetExplicitDeleteFlag())
+	return fmt.Sprintf("Owner: %s, Priority: %d, Value: %s, New: %t, Delete: %t, Update: %t, DeleteIntendedOnly: %t, ExplicitDelete: %t", l.Owner(), l.Priority(), l.Value().ToString(), l.GetNewFlag(), l.GetDeleteFlag(), l.GetUpdateFlag(), l.GetDeleteOnlyIntendedFlag(), l.GetExplicitDeleteFlag())
 }
 
 // Compare used for slices.SortFunc. Sorts by path and if equal paths then by owner as the second criteria
