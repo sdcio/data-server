@@ -1,0 +1,45 @@
+module sdcio_model_count {
+  yang-version 1.1;
+  namespace "urn:sdcio/model_count";
+  prefix sdcio_model_count;
+
+  grouping count-top {
+    container count {
+      list server {
+        key "keyAttr";
+        leaf keyAttr {
+          type string;
+        }
+        leaf attr {
+          type string;
+        }
+      }
+      must 'count(./server) = 2' {
+        error-message "Relative Path - There must be exactly 2 server entries.";
+      }
+      must 'count(/count/server) = 2' {
+        error-message "Absolute Path - There must be exactly 2 server entries.";
+      }
+    }
+    container count-doublekey {
+      list server {
+        key "keyAttr1 keyAttr2";
+        leaf keyAttr1 {
+          type string;
+        }
+        leaf keyAttr2 {
+          type string;
+        }
+        leaf attr {
+          type string;
+        }
+      }
+      must 'count(./server) = 2' {
+        error-message "Relative Path - There must be exactly 2 server entries.";
+      }
+      must 'count(/count-doublekey/server) = 2' {
+        error-message "Absolute Path - There must be exactly 2 server entries.";
+      }
+    }
+  }
+}

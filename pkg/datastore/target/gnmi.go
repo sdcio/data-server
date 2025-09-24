@@ -357,7 +357,7 @@ func (t *gnmiTarget) getSync(ctx context.Context, gnmiSync *config.SyncProtocol,
 	paths := make([]*sdcpb.Path, 0, len(gnmiSync.Paths))
 	// iterate referenced paths
 	for _, p := range gnmiSync.Paths {
-		path, err := utils.ParsePath(p)
+		path, err := sdcpb.ParsePath(p)
 		if err != nil {
 			return err
 		}

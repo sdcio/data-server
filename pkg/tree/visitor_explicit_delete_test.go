@@ -2,6 +2,7 @@ package tree
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
@@ -102,7 +103,13 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					},
 				),
 			expectedLeafVariants: LeafVariantSlice{
-				NewLeafEntry(types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "description"}, &sdcpb.TypedValue{}, owner2Prio, owner2, 0), explicitDeleteFlag, nil),
+				NewLeafEntry(types.NewUpdate(&sdcpb.Path{
+					IsRootBased: true,
+					Elem: []*sdcpb.PathElem{
+						sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+						sdcpb.NewPathElem("description", nil),
+					},
+				}, &sdcpb.TypedValue{}, owner2Prio, owner2, 0), explicitDeleteFlag, nil),
 			},
 		},
 		{
@@ -154,13 +161,115 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					},
 				),
 			expectedLeafVariants: LeafVariantSlice{
-				NewLeafEntry(types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "description"}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "mydesc"}}, owner2Prio, owner2, 0), types.NewUpdateInsertFlags().SetExplicitDeleteFlag(), nil),
-				NewLeafEntry(types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "admin-state"}, &sdcpb.TypedValue{}, owner2Prio, owner2, 0), explicitDeleteFlag, nil),
-				NewLeafEntry(types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "name"}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{"ethernet-1/1"}}, owner2Prio, owner2, 0), explicitDeleteFlag, nil),
-				NewLeafEntry(types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "subinterface", "0", "index"}, &sdcpb.TypedValue{}, owner2Prio, owner2, 0), explicitDeleteFlag, nil),
-				NewLeafEntry(types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "subinterface", "0", "type"}, &sdcpb.TypedValue{}, owner2Prio, owner2, 0), explicitDeleteFlag, nil),
-				NewLeafEntry(types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "subinterface", "0", "description"}, &sdcpb.TypedValue{}, owner2Prio, owner2, 0), explicitDeleteFlag, nil),
-				NewLeafEntry(types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "subinterface", "0", "admin-state"}, &sdcpb.TypedValue{}, owner2Prio, owner2, 0), explicitDeleteFlag, nil),
+				NewLeafEntry(
+					types.NewUpdate(
+						&sdcpb.Path{
+							IsRootBased: true,
+							Elem: []*sdcpb.PathElem{
+								sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+								sdcpb.NewPathElem("description", nil),
+							},
+						},
+						&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "mydesc"}},
+						owner2Prio, owner2, 0,
+					),
+					types.NewUpdateInsertFlags().SetExplicitDeleteFlag(),
+					nil,
+				),
+				NewLeafEntry(
+					types.NewUpdate(
+						&sdcpb.Path{
+							IsRootBased: true,
+							Elem: []*sdcpb.PathElem{
+								sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+								sdcpb.NewPathElem("admin-state", nil),
+							},
+						},
+						&sdcpb.TypedValue{},
+						owner2Prio, owner2, 0,
+					),
+					explicitDeleteFlag,
+					nil,
+				),
+				NewLeafEntry(
+					types.NewUpdate(
+						&sdcpb.Path{
+							IsRootBased: true,
+							Elem: []*sdcpb.PathElem{
+								sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+								sdcpb.NewPathElem("name", nil),
+							},
+						},
+						&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "ethernet-1/1"}},
+						owner2Prio, owner2, 0,
+					),
+					explicitDeleteFlag,
+					nil,
+				),
+				NewLeafEntry(
+					types.NewUpdate(
+						&sdcpb.Path{
+							IsRootBased: true,
+							Elem: []*sdcpb.PathElem{
+								sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+								sdcpb.NewPathElem("subinterface", map[string]string{"index": "0"}),
+								sdcpb.NewPathElem("index", nil),
+							},
+						},
+						&sdcpb.TypedValue{},
+						owner2Prio, owner2, 0,
+					),
+					explicitDeleteFlag,
+					nil,
+				),
+				NewLeafEntry(
+					types.NewUpdate(
+						&sdcpb.Path{
+							IsRootBased: true,
+							Elem: []*sdcpb.PathElem{
+								sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+								sdcpb.NewPathElem("subinterface", map[string]string{"index": "0"}),
+								sdcpb.NewPathElem("type", nil),
+							},
+						},
+						&sdcpb.TypedValue{},
+						owner2Prio, owner2, 0,
+					),
+					explicitDeleteFlag,
+					nil,
+				),
+				NewLeafEntry(
+					types.NewUpdate(
+						&sdcpb.Path{
+							IsRootBased: true,
+							Elem: []*sdcpb.PathElem{
+								sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+								sdcpb.NewPathElem("subinterface", map[string]string{"index": "0"}),
+								sdcpb.NewPathElem("description", nil),
+							},
+						},
+						&sdcpb.TypedValue{},
+						owner2Prio, owner2, 0,
+					),
+					explicitDeleteFlag,
+					nil,
+				),
+				NewLeafEntry(
+					types.NewUpdate(
+						&sdcpb.Path{
+							IsRootBased: true,
+							Elem: []*sdcpb.PathElem{
+								sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+								sdcpb.NewPathElem("subinterface", map[string]string{"index": "0"}),
+								sdcpb.NewPathElem("admin-state", nil),
+							},
+						},
+						&sdcpb.TypedValue{},
+						owner2Prio, owner2, 0,
+					),
+					explicitDeleteFlag,
+					nil,
+				),
 			},
 		},
 	}
@@ -196,7 +305,7 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			t.Logf("Deletes:\n%s", dels.PathSlices().StringSlice())
+			t.Logf("Deletes:\n%s", strings.Join(dels.SdcpbPaths().ToXPathSlice(), "\n"))
 			updates := root.GetHighestPrecedence(true)
 
 			t.Logf("Updates:\n%s", updates.String())

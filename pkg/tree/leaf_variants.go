@@ -7,7 +7,6 @@ import (
 
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 )
 
 type LeafVariants struct {
@@ -161,10 +160,7 @@ func (lv *LeafVariants) shouldDelete() bool {
 			return false
 		}
 	}
-	if !foundOtherThenRunningAndDefault {
-		return false
-	}
-	return true
+	return foundOtherThenRunningAndDefault
 }
 
 func (lv *LeafVariants) remainsToExist() bool {
@@ -382,10 +378,7 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 
 	// get the path via the first LeafEntry
 	// is valid for all entries
-	sdcpbPath, err := lv.parentEntry.SdcpbPath()
-	if err != nil {
-		log.Error(err)
-	}
+	sdcpbPath := lv.parentEntry.SdcpbPath()
 
 	// we are part of an inactive case of a choice
 	if !isActiveCase {
@@ -460,7 +453,7 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 }
 
 func (lv *LeafVariants) AddExplicitDeleteEntry(intentName string, priority int32) *LeafEntry {
-	le := NewLeafEntry(types.NewUpdate(lv.parentEntry.Path(), &sdcpb.TypedValue{}, priority, intentName, 0), types.NewUpdateInsertFlags().SetExplicitDeleteFlag(), lv.parentEntry)
+	le := NewLeafEntry(types.NewUpdate(lv.parentEntry.SdcpbPath(), &sdcpb.TypedValue{}, priority, intentName, 0), types.NewUpdateInsertFlags().SetExplicitDeleteFlag(), lv.parentEntry)
 	lv.Add(le)
 	return le
 }

@@ -30,6 +30,9 @@ module sdcio_model {
   import sdcio_model_leafref {
     prefix sdcio_model_leafref;
   }
+  import sdcio_model_count {
+    prefix sdcio_model_count;
+  }
 
   description
     "This is the test schema for sdcio";
@@ -39,6 +42,7 @@ module sdcio_model {
       "Test schema first attempt";
   }
 
+  uses sdcio_model_count:count-top;
   uses sdcio_model_if:interface-top;
   uses sdcio_model_ni:network-instance-top;
   uses sdcio_model_choice:choicecase-top;

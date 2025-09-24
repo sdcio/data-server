@@ -16,6 +16,7 @@ package netconf
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/beevik/etree"
@@ -110,7 +111,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 							expectedPath = "interfaces/interface[name=eth0]/name"
 						}
 						// check for the right input
-						if rp := utils.ToXPath(path, false); rp != expectedPath {
+						if rp := path.ToXPath(false); rp != expectedPath {
 							t.Errorf("getSchema expected path %s but got %s", expectedPath, rp)
 						}
 
@@ -199,7 +200,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 							expectedPath = "leaf-list-container/item"
 						}
 						// check for the right input
-						if rp := utils.ToXPath(path, false); rp != expectedPath {
+						if rp := path.ToXPath(false); rp != expectedPath {
 							t.Errorf("getSchema expected path %s but got %s", expectedPath, rp)
 						}
 
@@ -295,7 +296,7 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 							expectedPath = "leaf-list-container/item"
 						}
 						// check for the right input
-						if rp := utils.ToXPath(path, false); rp != expectedPath {
+						if rp := path.ToXPath(false); rp != expectedPath {
 							t.Errorf("getSchema expected path %s but got %s", expectedPath, rp)
 						}
 
@@ -360,61 +361,53 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 				}(),
 			},
 			getXML2sdcpbConfigAdapter: func(ctrl *gomock.Controller, t *testing.T) *XML2sdcpbConfigAdapter {
-
-				var expectedPath string
-
 				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
-				counter := 0
 				schemaClientMock.EXPECT().GetSchemaSdcpbPath(context.TODO(), gomock.Any()).AnyTimes().DoAndReturn(
 					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 						srcType := &sdcpb.SchemaLeafType{
 							Type: "string",
 						}
-						selem := &sdcpb.SchemaElem{}
-						switch counter {
-						case 0:
-							selem.Schema = &sdcpb.SchemaElem_Container{
-								Container: &sdcpb.ContainerSchema{
-									Name: "src",
-								},
-							}
-							expectedPath = "src"
-						case 1, 4:
-							selem.Schema = &sdcpb.SchemaElem_Field{
-								Field: &sdcpb.LeafSchema{
-									Name: "item",
-									Type: srcType,
-								},
-							}
-							expectedPath = "src/item"
-						case 2:
-							selem.Schema = &sdcpb.SchemaElem_Container{
-								Container: &sdcpb.ContainerSchema{
-									Name: "ref",
-								},
-							}
-							expectedPath = "ref"
-						case 3:
-							selem.Schema = &sdcpb.SchemaElem_Field{
-								Field: &sdcpb.LeafSchema{
-									Name: "item",
-									Type: &sdcpb.SchemaLeafType{
-										Type:              "leafref",
-										Leafref:           "/src/item",
-										LeafrefTargetType: srcType,
+
+						resp := map[string]*sdcpb.SchemaElem{
+							"/src": {
+								Schema: &sdcpb.SchemaElem_Container{
+									Container: &sdcpb.ContainerSchema{
+										Name: "src",
 									},
 								},
-							}
-							expectedPath = "ref/item"
+							},
+							"/src/item": {
+								Schema: &sdcpb.SchemaElem_Field{
+									Field: &sdcpb.LeafSchema{
+										Name: "item",
+										Type: srcType,
+									},
+								},
+							},
+							"/ref": {
+								Schema: &sdcpb.SchemaElem_Container{
+									Container: &sdcpb.ContainerSchema{
+										Name: "ref",
+									},
+								},
+							},
+							"/ref/item": {
+								Schema: &sdcpb.SchemaElem_Field{
+									Field: &sdcpb.LeafSchema{
+										Name: "item",
+										Type: &sdcpb.SchemaLeafType{
+											Type:              "leafref",
+											Leafref:           "/src/item",
+											LeafrefTargetType: srcType,
+										},
+									},
+								},
+							},
 						}
-						// check for the right input
-						if rp := utils.ToXPath(path, false); rp != expectedPath {
-							t.Errorf("getSchema expected path %s but got %s", expectedPath, rp)
-						}
+						path.IsRootBased = true
 
-						counter++
 						return &sdcpb.GetSchemaResponse{
-							Schema: selem,
+							Schema: resp[path.ToXPath(false)],
 						}, nil
 					},
 				)
@@ -482,60 +475,54 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 			},
 			getXML2sdcpbConfigAdapter: func(ctrl *gomock.Controller, t *testing.T) *XML2sdcpbConfigAdapter {
 
-				var expectedPath string
-
 				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
-				counter := 0
+
 				schemaClientMock.EXPECT().GetSchemaSdcpbPath(context.TODO(), gomock.Any()).AnyTimes().DoAndReturn(
 					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 						srcType := &sdcpb.SchemaLeafType{
 							Type: "int32",
 						}
-						selem := &sdcpb.SchemaElem{}
-						switch counter {
-						case 0:
-							selem.Schema = &sdcpb.SchemaElem_Container{
-								Container: &sdcpb.ContainerSchema{
-									Name: "src",
-								},
-							}
-							expectedPath = "src"
-						case 1, 4:
-							selem.Schema = &sdcpb.SchemaElem_Field{
-								Field: &sdcpb.LeafSchema{
-									Name: "item",
-									Type: srcType,
-								},
-							}
-							expectedPath = "src/item"
-						case 2:
-							selem.Schema = &sdcpb.SchemaElem_Container{
-								Container: &sdcpb.ContainerSchema{
-									Name: "ref",
-								},
-							}
-							expectedPath = "ref"
-						case 3:
-							selem.Schema = &sdcpb.SchemaElem_Field{
-								Field: &sdcpb.LeafSchema{
-									Name: "item",
-									Type: &sdcpb.SchemaLeafType{
-										Type:              "leafref",
-										Leafref:           "/src/item",
-										LeafrefTargetType: srcType,
+
+						resp := map[string]*sdcpb.SchemaElem{
+							"/src": {
+								Schema: &sdcpb.SchemaElem_Container{
+									Container: &sdcpb.ContainerSchema{
+										Name: "src",
 									},
 								},
-							}
-							expectedPath = "ref/item"
+							},
+							"/src/item": {
+								Schema: &sdcpb.SchemaElem_Field{
+									Field: &sdcpb.LeafSchema{
+										Name: "item",
+										Type: srcType,
+									},
+								},
+							},
+							"/ref": {
+								Schema: &sdcpb.SchemaElem_Container{
+									Container: &sdcpb.ContainerSchema{
+										Name: "ref",
+									},
+								},
+							},
+							"/ref/item": {
+								Schema: &sdcpb.SchemaElem_Field{
+									Field: &sdcpb.LeafSchema{
+										Name: "item",
+										Type: &sdcpb.SchemaLeafType{
+											Type:              "leafref",
+											Leafref:           "/src/item",
+											LeafrefTargetType: srcType,
+										},
+									},
+								},
+							},
 						}
-						// check for the right input
-						if rp := utils.ToXPath(path, false); rp != expectedPath {
-							t.Errorf("getSchema expected path %s but got %s", expectedPath, rp)
-						}
+						path.IsRootBased = true
 
-						counter++
 						return &sdcpb.GetSchemaResponse{
-							Schema: selem,
+							Schema: resp[path.ToXPath(false)],
 						}, nil
 					},
 				)
@@ -603,60 +590,55 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 			},
 			getXML2sdcpbConfigAdapter: func(ctrl *gomock.Controller, t *testing.T) *XML2sdcpbConfigAdapter {
 
-				var expectedPath string
-
 				schemaClientMock := mockschemaclientbound.NewMockSchemaClientBound(ctrl)
-				counter := 0
+
 				schemaClientMock.EXPECT().GetSchemaSdcpbPath(context.TODO(), gomock.Any()).AnyTimes().DoAndReturn(
 					func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 						srcType := &sdcpb.SchemaLeafType{
 							Type: "string",
 						}
-						selem := &sdcpb.SchemaElem{}
-						switch counter {
-						case 0:
-							selem.Schema = &sdcpb.SchemaElem_Container{
-								Container: &sdcpb.ContainerSchema{
-									Name: "src",
-								},
-							}
-							expectedPath = "src"
-						case 1, 4:
-							selem.Schema = &sdcpb.SchemaElem_Leaflist{
-								Leaflist: &sdcpb.LeafListSchema{
-									Name: "item",
-									Type: srcType,
-								},
-							}
-							expectedPath = "src/item"
-						case 2:
-							selem.Schema = &sdcpb.SchemaElem_Container{
-								Container: &sdcpb.ContainerSchema{
-									Name: "ref",
-								},
-							}
-							expectedPath = "ref"
-						case 3:
-							selem.Schema = &sdcpb.SchemaElem_Leaflist{
-								Leaflist: &sdcpb.LeafListSchema{
-									Name: "item",
-									Type: &sdcpb.SchemaLeafType{
-										Type:              "leafref",
-										Leafref:           "/src/item",
-										LeafrefTargetType: srcType,
+
+						resp := map[string]*sdcpb.SchemaElem{
+							"/src": {
+								Schema: &sdcpb.SchemaElem_Container{
+									Container: &sdcpb.ContainerSchema{
+										Name: "src",
 									},
 								},
-							}
-							expectedPath = "ref/item"
-						}
-						// check for the right input
-						if rp := utils.ToXPath(path, false); rp != expectedPath {
-							t.Errorf("getSchema expected path %s but got %s", expectedPath, rp)
+							},
+							"/src/item": {
+								Schema: &sdcpb.SchemaElem_Leaflist{
+									Leaflist: &sdcpb.LeafListSchema{
+										Name: "item",
+										Type: srcType,
+									},
+								},
+							},
+							"/ref": {
+								Schema: &sdcpb.SchemaElem_Container{
+									Container: &sdcpb.ContainerSchema{
+										Name: "ref",
+									},
+								},
+							},
+							"/ref/item": {
+								Schema: &sdcpb.SchemaElem_Leaflist{
+									Leaflist: &sdcpb.LeafListSchema{
+										Name: "item",
+										Type: &sdcpb.SchemaLeafType{
+											Type:              "leafref",
+											Leafref:           "/src/item",
+											LeafrefTargetType: srcType,
+										},
+									},
+								},
+							},
 						}
 
-						counter++
+						path.IsRootBased = true
+
 						return &sdcpb.GetSchemaResponse{
-							Schema: selem,
+							Schema: resp[path.ToXPath(false)],
 						}, nil
 					},
 				)
@@ -735,6 +717,11 @@ func TestXML2sdcpbConfigAdapter_Transform(t *testing.T) {
 				t.Errorf("XML2sdcpbConfigAdapter.Transform() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			fmt.Println("want")
+			fmt.Println(tt.want[0].String())
+			fmt.Println("got")
+			fmt.Println(got[0].String())
+
 			if len(got) != len(tt.want) {
 				t.Errorf("XML2sdcpbConfigAdapter.Transform() = %v, want %v", got, tt.want)
 			}

@@ -158,73 +158,6 @@ func ToGNMIPath(p *sdcpb.Path) *gnmi.Path {
 	return r
 }
 
-// func toGNMITypedValue(v *sdcpb.TypedValue) *gnmi.TypedValue {
-// 	if v == nil {
-// 		return nil
-// 	}
-// 	switch v.GetValue().(type) {
-// 	case *sdcpb.TypedValue_AnyVal:
-// 		return &gnmi.TypedValue{
-// 			Value: &gnmi.TypedValue_AnyVal{AnyVal: v.GetAnyVal()},
-// 		}
-// 	case *sdcpb.TypedValue_AsciiVal:
-// 		return &gnmi.TypedValue{
-// 			Value: &gnmi.TypedValue_AsciiVal{AsciiVal: v.GetAsciiVal()},
-// 		}
-// 	case *sdcpb.TypedValue_BoolVal:
-// 		return &gnmi.TypedValue{
-// 			Value: &gnmi.TypedValue_BoolVal{BoolVal: v.GetBoolVal()},
-// 		}
-// 	case *sdcpb.TypedValue_BytesVal:
-// 		return &gnmi.TypedValue{
-// 			Value: &gnmi.TypedValue_BytesVal{BytesVal: v.GetBytesVal()},
-// 		}
-// 	// case *sdcpb.TypedValue_DecimalVal:
-// 	// 	return &gnmi.TypedValue{
-// 	// 		Value: &gnmi.TypedValue_DecimalVal{DecimalVal: v.GetDecimalVal()},
-// 	// 	}
-// 	// case *sdcpb.TypedValue_FloatVal:
-// 	// 	return &gnmi.TypedValue{
-// 	// 		Value: &gnmi.TypedValue_FloatVal{FloatVal: v.GetFloatVal()},
-// 	// 	}
-// 	case *sdcpb.TypedValue_IntVal:
-// 		return &gnmi.TypedValue{
-// 			Value: &gnmi.TypedValue_IntVal{IntVal: v.GetIntVal()},
-// 		}
-// 	case *sdcpb.TypedValue_JsonIetfVal:
-// 		return &gnmi.TypedValue{
-// 			Value: &gnmi.TypedValue_JsonIetfVal{JsonIetfVal: v.GetJsonIetfVal()},
-// 		}
-// 	case *sdcpb.TypedValue_JsonVal:
-// 		return &gnmi.TypedValue{
-// 			Value: &gnmi.TypedValue_JsonVal{JsonVal: v.GetJsonVal()},
-// 		}
-// 	case *sdcpb.TypedValue_LeaflistVal:
-// 		gnmilf := &gnmi.ScalarArray{
-// 			Element: make([]*gnmi.TypedValue, 0, len(v.GetLeaflistVal().GetElement())),
-// 		}
-// 		for _, e := range v.GetLeaflistVal().GetElement() {
-// 			gnmilf.Element = append(gnmilf.Element, toGNMITypedValue(e))
-// 		}
-// 		return &gnmi.TypedValue{
-// 			Value: &gnmi.TypedValue_LeaflistVal{LeaflistVal: gnmilf},
-// 		}
-// 	case *sdcpb.TypedValue_ProtoBytes:
-// 		return &gnmi.TypedValue{
-// 			Value: &gnmi.TypedValue_ProtoBytes{ProtoBytes: v.GetProtoBytes()},
-// 		}
-// 	case *sdcpb.TypedValue_StringVal:
-// 		return &gnmi.TypedValue{
-// 			Value: &gnmi.TypedValue_StringVal{StringVal: v.GetStringVal()},
-// 		}
-// 	case *sdcpb.TypedValue_UintVal:
-// 		return &gnmi.TypedValue{
-// 			Value: &gnmi.TypedValue_UintVal{UintVal: v.GetUintVal()},
-// 		}
-// 	}
-// 	return nil
-// }
-
 func NotificationsEqual(n1, n2 *sdcpb.Notification) bool {
 	if n1 == nil && n2 == nil {
 		return true
@@ -236,7 +169,7 @@ func NotificationsEqual(n1, n2 *sdcpb.Notification) bool {
 		return false
 	}
 	for i, dp := range n1.GetDelete() {
-		if !PathsEqual(dp, n2.GetDelete()[i]) {
+		if !dp.PathsEqual(n2.GetDelete()[i]) {
 			return false
 		}
 	}
@@ -244,7 +177,7 @@ func NotificationsEqual(n1, n2 *sdcpb.Notification) bool {
 		return false
 	}
 	for i, upd := range n1.GetUpdate() {
-		if !PathsEqual(upd.GetPath(), n2.GetUpdate()[i].GetPath()) {
+		if !upd.GetPath().PathsEqual(n2.GetUpdate()[i].GetPath()) {
 			return false
 		}
 		if !upd.GetValue().Equal(n2.GetUpdate()[i].GetValue()) {
