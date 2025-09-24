@@ -63,7 +63,7 @@ func (mr *MockEntryMockRecorder) AddUpdateRecursive(ctx, relativePath, u, flags 
 }
 
 // BreadthSearch mocks base method.
-func (m *MockEntry) BreadthSearch(ctx context.Context, path string) ([]tree.Entry, error) {
+func (m *MockEntry) BreadthSearch(ctx context.Context, path *schema_server.Path) ([]tree.Entry, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BreadthSearch", ctx, path)
 	ret0, _ := ret[0].([]tree.Entry)

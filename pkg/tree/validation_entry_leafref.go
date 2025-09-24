@@ -10,15 +10,10 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, path string) ([]Entry, error) {
+func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, sdcpbPath *sdcpb.Path) ([]Entry, error) {
 	var err error
 	var resultEntries []Entry
 	var processEntries []Entry
-
-	sdcpbPath, err := sdcpb.ParsePath(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed parsing leafref path %s: %w", path, err)
-	}
 
 	sdcpbPath.StripPathElemPrefixPath()
 
@@ -129,7 +124,12 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 	// value of node with type leafref
 	tv := lv.Value()
 
-	foundEntries, err := s.BreadthSearch(ctx, lref)
+	lrefPath, err := sdcpb.ParsePath(lref)
+	if err != nil {
+		return nil, err
+	}
+
+	foundEntries, err := s.BreadthSearch(ctx, lrefPath)
 	if err != nil {
 		return nil, err
 	}

@@ -137,7 +137,7 @@ type Entry interface {
 	// GetListChilds collects all the childs of the list. In the tree we store them seperated into their key branches.
 	// this is collecting all the last level key entries.
 	GetListChilds() ([]Entry, error)
-	BreadthSearch(ctx context.Context, path string) ([]Entry, error)
+	BreadthSearch(ctx context.Context, path *sdcpb.Path) ([]Entry, error)
 	DeepCopy(tc *TreeContext, parent Entry) (Entry, error)
 	GetLeafVariantEntries() LeafVariantEntries
 

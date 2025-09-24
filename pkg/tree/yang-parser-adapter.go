@@ -80,7 +80,7 @@ func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
 	return y.valueToDatum(lv.Value()), nil
 }
 
-func (y *yangParserEntryAdapter) BreadthSearch(ctx context.Context, path string) ([]xpath.Entry, error) {
+func (y *yangParserEntryAdapter) BreadthSearch(ctx context.Context, path *sdcpb.Path) ([]xpath.Entry, error) {
 	entries, err := y.e.BreadthSearch(ctx, path)
 	if err != nil {
 		return nil, err
@@ -157,6 +157,6 @@ func (y *yangParserValueEntry) GetSdcpbPath() *sdcpb.Path {
 	return nil
 }
 
-func (y *yangParserValueEntry) BreadthSearch(ctx context.Context, path string) ([]xpath.Entry, error) {
+func (y *yangParserValueEntry) BreadthSearch(ctx context.Context, path *sdcpb.Path) ([]xpath.Entry, error) {
 	return nil, nil
 }
