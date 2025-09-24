@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/sdcio/data-server/pkg/tree/importer"
-	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
 	"google.golang.org/protobuf/proto"
@@ -66,7 +65,7 @@ func (p *ProtoTreeImporterElement) GetKeyValue() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed GetTVValue for %s", p.data.Name)
 	}
-	return utils.TypedValueToString(tv), nil
+	return tv.ToString(), nil
 }
 
 func (p *ProtoTreeImporterElement) GetTVValue(slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {

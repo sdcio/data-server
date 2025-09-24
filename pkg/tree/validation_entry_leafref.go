@@ -162,7 +162,7 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 		}
 		// loop through possible values of found reference (leaf -> 1 value, leaf-list -> 1+ values)
 		for _, val := range vals {
-			if utils.EqualTypedValues(val, tv) {
+			if val.Equal(tv) {
 				resultEntries = append(resultEntries, e)
 				break
 			}
@@ -261,5 +261,5 @@ func generateOptionalWarning(ctx context.Context, s Entry, lref string, resultCh
 		return
 	}
 	tvVal := lrefval.Value()
-	resultChan <- types.NewValidationResultEntry(lrefval.Owner(), fmt.Errorf("leafref %s value %s unable to resolve non-mandatory reference %s", s.Path().String(), utils.TypedValueToString(tvVal), lref), types.ValidationResultEntryTypeWarning)
+	resultChan <- types.NewValidationResultEntry(lrefval.Owner(), fmt.Errorf("leafref %s value %s unable to resolve non-mandatory reference %s", s.Path().String(), tvVal.ToString(), lref), types.ValidationResultEntryTypeWarning)
 }

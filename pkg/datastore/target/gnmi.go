@@ -494,7 +494,7 @@ func (t *gnmiTarget) convertKeyUpdates(upd *sdcpb.Update) *gnmi.Update {
 	numPElem := len(upd.GetPath().GetElem())
 	key := upd.GetPath().GetElem()[numPElem-1].GetName()
 	valm := map[string]string{
-		key: utils.TypedValueToString(upd.GetValue()),
+		key: upd.GetValue().ToString(),
 	}
 	b, _ := json.Marshal(valm)
 	var val *sdcpb.TypedValue

@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/beevik/etree"
-	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -52,7 +51,7 @@ func valueAsString(v *sdcpb.TypedValue) (string, error) {
 	case *sdcpb.TypedValue_FloatVal:
 		return string(strconv.FormatFloat(float64(v.GetFloatVal()), 'b', -1, 32)), nil
 	case *sdcpb.TypedValue_DecimalVal:
-		return utils.TypedValueToString(v), nil // could we use this in general?
+		return v.ToString(), nil // could we use this in general?
 	case *sdcpb.TypedValue_AsciiVal:
 		return v.GetAsciiVal(), nil
 	case *sdcpb.TypedValue_LeaflistVal:
@@ -78,10 +77,6 @@ func valueAsString(v *sdcpb.TypedValue) (string, error) {
 		return "", nil
 	}
 	return "", fmt.Errorf("TypedValue to String failed")
-}
-
-func StringElementToTypedValue(s string, ls *sdcpb.LeafSchema) (*sdcpb.TypedValue, error) {
-	return utils.Convert(s, ls.Type)
 }
 
 // pathElem2EtreePath takes the given pathElem and creates an xpath expression out of it,

@@ -119,11 +119,11 @@ func TestEqualTypedValues(t *testing.T) {
 		{
 			"ascii equal",
 			&sdcpb.TypedValue{
-				Value:     &sdcpb.TypedValue_AsciiVal{AsciiVal: "foo"},
+				Value: &sdcpb.TypedValue_AsciiVal{AsciiVal: "foo"},
 			},
 			&sdcpb.TypedValue{
-				Value:     &sdcpb.TypedValue_AsciiVal{AsciiVal: "foo"},
-			}, 
+				Value: &sdcpb.TypedValue_AsciiVal{AsciiVal: "foo"},
+			},
 			true,
 		},
 		{
@@ -142,7 +142,7 @@ func TestEqualTypedValues(t *testing.T) {
 		},
 		{
 			"ident diff value",
-			identVal("v1", "m", "p"), 
+			identVal("v1", "m", "p"),
 			identVal("v2", "m", "p"),
 			false,
 		},
@@ -180,7 +180,7 @@ func TestEqualTypedValues(t *testing.T) {
 			"decimal equal",
 			decVal(123, 2),
 			decVal(123, 2),
-			true, 
+			true,
 		},
 		{
 			"decimal precision diff",
@@ -323,8 +323,8 @@ func TestEqualTypedValues(t *testing.T) {
 		// --- ProtoBytes ---
 		{
 			"proto bytes equal",
-			&sdcpb.TypedValue{Value: &sdcpb.TypedValue_ProtoBytes{ProtoBytes: []byte{1,2}}},
-			&sdcpb.TypedValue{Value: &sdcpb.TypedValue_ProtoBytes{ProtoBytes: []byte{1,2}}},
+			&sdcpb.TypedValue{Value: &sdcpb.TypedValue_ProtoBytes{ProtoBytes: []byte{1, 2}}},
+			&sdcpb.TypedValue{Value: &sdcpb.TypedValue_ProtoBytes{ProtoBytes: []byte{1, 2}}},
 			true,
 		},
 		{
@@ -363,7 +363,7 @@ func TestEqualTypedValues(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := EqualTypedValues(tt.t1, tt.t2)
+			got := tt.t1.Equal(tt.t2)
 			if got != tt.want {
 				t.Errorf("EqualTypedValues(%v, %v) = %v, want %v", tt.t1, tt.t2, got, tt.want)
 			}

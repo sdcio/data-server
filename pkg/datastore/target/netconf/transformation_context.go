@@ -65,11 +65,7 @@ func (tc *TransformationContext) String() (result string, err error) {
 	for k, v := range tc.leafLists {
 		vals := []string{}
 		for _, val := range v {
-			sval, err := valueAsString(val)
-			if err != nil {
-				return "", err
-			}
-			vals = append(vals, sval)
+			vals = append(vals, val.ToString())
 		}
 		result += fmt.Sprintf("k: %s [%s]\n", k, strings.Join(vals, ", "))
 	}
