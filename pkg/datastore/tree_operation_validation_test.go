@@ -27,9 +27,9 @@ import (
 	"github.com/sdcio/data-server/pkg/tree"
 	json_importer "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
-	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 func TestDatastore_validateTree(t *testing.T) {
@@ -131,7 +131,7 @@ func TestDatastore_validateTree(t *testing.T) {
 			},
 			intentName:       owner1,
 			intentPrio:       prio10,
-			expectedWarnings: []string{"leafref leafref-optional value mgmt0 unable to resolve non-mandatory reference /interface/name"},
+			expectedWarnings: []string{"leafref /leafref-optional value mgmt0 unable to resolve non-mandatory reference /interface/name"},
 		},
 		{
 			name:          "leafref-optional (require-instance == false) exists",
@@ -179,7 +179,7 @@ func TestDatastore_validateTree(t *testing.T) {
 			}
 
 			// parse the path under which the intent value is to be put
-			path, err := utils.ParsePath(tt.intentReqPath)
+			path, err := sdcpb.ParsePath(tt.intentReqPath)
 			if err != nil {
 				t.Error(err)
 			}
@@ -195,7 +195,7 @@ func TestDatastore_validateTree(t *testing.T) {
 
 			importer := json_importer.NewJsonTreeImporter(jsonConf)
 
-			err = root.ImportConfig(ctx, utils.ToStrings(path, false, false), importer, tt.intentName, tt.intentPrio, flagsNew)
+			err = root.ImportConfig(ctx, path, importer, tt.intentName, tt.intentPrio, flagsNew)
 			if err != nil {
 				t.Error(err)
 			}

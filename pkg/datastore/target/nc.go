@@ -30,7 +30,6 @@ import (
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/datastore/target/netconf"
 	"github.com/sdcio/data-server/pkg/datastore/target/netconf/driver/scrapligo"
-	"github.com/sdcio/data-server/pkg/utils"
 )
 
 type ncTarget struct {
@@ -184,7 +183,7 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, fo
 	paths := make([]*sdcpb.Path, 0, len(sc.Paths))
 	// iterate referenced paths
 	for _, p := range sc.Paths {
-		path, err := utils.ParsePath(p)
+		path, err := sdcpb.ParsePath(p)
 		if err != nil {
 			log.Errorf("failed Parsing Path %q, %v", p, err)
 			return

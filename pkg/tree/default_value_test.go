@@ -28,7 +28,7 @@ func TestDefaultValueExists(t *testing.T) {
 				ctx := context.Background()
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
 
-				rsp, err := scb.GetSchemaSlicePath(ctx, []string{})
+				rsp, err := scb.GetSchemaSdcpbPath(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{}})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -47,9 +47,15 @@ func TestDefaultValueExists(t *testing.T) {
 				ctx := context.Background()
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
 
-				rsp, err := scb.GetSchemaSlicePath(ctx, []string{"choices", "case1", "log"})
+				rsp, err := scb.GetSchemaSdcpbPath(ctx, &sdcpb.Path{
+					Elem: []*sdcpb.PathElem{
+						sdcpb.NewPathElem("choices", nil),
+						sdcpb.NewPathElem("case1", nil),
+						sdcpb.NewPathElem("log", nil),
+					},
+				})
 				if err != nil {
-					t.Fatal(err)
+					t.Error(err)
 				}
 				return rsp.GetSchema()
 			},
@@ -66,7 +72,12 @@ func TestDefaultValueExists(t *testing.T) {
 				ctx := context.Background()
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
 
-				rsp, err := scb.GetSchemaSlicePath(ctx, []string{"leaflist", "with-default"})
+				rsp, err := scb.GetSchemaSdcpbPath(ctx, &sdcpb.Path{
+					Elem: []*sdcpb.PathElem{
+						sdcpb.NewPathElem("leaflist", nil),
+						sdcpb.NewPathElem("with-default", nil),
+					},
+				})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -102,7 +113,7 @@ func TestDefaultValueRetrieve(t *testing.T) {
 				ctx := context.Background()
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
 
-				rsp, err := scb.GetSchemaSlicePath(ctx, []string{})
+				rsp, err := scb.GetSchemaSdcpbPath(ctx, &sdcpb.Path{})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -122,14 +133,20 @@ func TestDefaultValueRetrieve(t *testing.T) {
 				ctx := context.Background()
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
 
-				rsp, err := scb.GetSchemaSlicePath(ctx, []string{"choices", "case1", "log"})
+				rsp, err := scb.GetSchemaSdcpbPath(ctx, &sdcpb.Path{
+					Elem: []*sdcpb.PathElem{
+						sdcpb.NewPathElem("choices", nil),
+						sdcpb.NewPathElem("case1", nil),
+						sdcpb.NewPathElem("log", nil),
+					},
+				})
 				if err != nil {
 					t.Fatal(err)
 				}
 				return rsp.GetSchema()
 			},
 			wanterr: false,
-			want:    types.NewUpdate(types.PathSlice{}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: false}}, 5, "owner1", 0),
+			want:    types.NewUpdate(&sdcpb.Path{}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: false}}, DefaultValuesPrio, DefaultsIntentName, 0),
 		},
 		{
 			name: "leaflist default",
@@ -142,19 +159,22 @@ func TestDefaultValueRetrieve(t *testing.T) {
 				ctx := context.Background()
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
 
-				rsp, err := scb.GetSchemaSlicePath(ctx, []string{"leaflist", "with-default"})
+				rsp, err := scb.GetSchemaSdcpbPath(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("leaflist", nil),
+					sdcpb.NewPathElem("with-default", nil),
+				}})
 				if err != nil {
 					t.Fatal(err)
 				}
 				return rsp.GetSchema()
 			},
 			wanterr: false,
-			want:    types.NewUpdate(types.PathSlice{}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{{Value: &sdcpb.TypedValue_StringVal{StringVal: "foo"}}, {Value: &sdcpb.TypedValue_StringVal{StringVal: "bar"}}}}}}, 5, "owner1", 0),
+			want:    types.NewUpdate(&sdcpb.Path{}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{{Value: &sdcpb.TypedValue_StringVal{StringVal: "foo"}}, {Value: &sdcpb.TypedValue_StringVal{StringVal: "bar"}}}}}}, DefaultValuesPrio, DefaultsIntentName, 0),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			val, err := DefaultValueRetrieve(tt.schemaElem(t), []string{}, 5, "owner1")
+			val, err := DefaultValueRetrieve(tt.schemaElem(t), &sdcpb.Path{})
 			if tt.wanterr {
 				if err == nil {
 					t.Fatalf("expected err, got non")

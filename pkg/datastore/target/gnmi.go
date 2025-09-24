@@ -357,7 +357,7 @@ func (t *gnmiTarget) getSync(ctx context.Context, gnmiSync *config.SyncProtocol,
 	paths := make([]*sdcpb.Path, 0, len(gnmiSync.Paths))
 	// iterate referenced paths
 	for _, p := range gnmiSync.Paths {
-		path, err := utils.ParsePath(p)
+		path, err := sdcpb.ParsePath(p)
 		if err != nil {
 			return err
 		}
@@ -494,7 +494,7 @@ func (t *gnmiTarget) convertKeyUpdates(upd *sdcpb.Update) *gnmi.Update {
 	numPElem := len(upd.GetPath().GetElem())
 	key := upd.GetPath().GetElem()[numPElem-1].GetName()
 	valm := map[string]string{
-		key: utils.TypedValueToString(upd.GetValue()),
+		key: upd.GetValue().ToString(),
 	}
 	b, _ := json.Marshal(valm)
 	var val *sdcpb.TypedValue

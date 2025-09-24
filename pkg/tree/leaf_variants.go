@@ -6,9 +6,7 @@ import (
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/tree/types"
-	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 )
 
 type LeafVariants struct {
@@ -162,10 +160,7 @@ func (lv *LeafVariants) shouldDelete() bool {
 			return false
 		}
 	}
-	if !foundOtherThenRunningAndDefault {
-		return false
-	}
-	return true
+	return foundOtherThenRunningAndDefault
 }
 
 func (lv *LeafVariants) remainsToExist() bool {
@@ -332,8 +327,7 @@ func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
 	// ignore errors, they should not happen :-P I know... should...
 	rval := runVal.Value()
 	hval := highest.Value()
-
-	return !utils.EqualTypedValues(rval, hval)
+	return !rval.Equal(hval)
 }
 
 // GetByOwner returns the entry that is owned by the given owner,
@@ -384,10 +378,7 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 
 	// get the path via the first LeafEntry
 	// is valid for all entries
-	sdcpbPath, err := lv.parentEntry.SdcpbPath()
-	if err != nil {
-		log.Error(err)
-	}
+	sdcpbPath := lv.parentEntry.SdcpbPath()
 
 	// we are part of an inactive case of a choice
 	if !isActiveCase {
@@ -432,6 +423,10 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 
 	// send all the overruleds
 	for _, de := range overruled {
+		if de.ExpectedValue().Equal(highest.Value()) {
+			// skip if higher prio equals the overruled
+			continue
+		}
 		ch <- de.SetCurrentValue(highest.Value())
 	}
 
@@ -447,7 +442,7 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 	}
 
 	// if highest exists but not running  OR   running != highest
-	if (running == nil && highest != nil) || !utils.EqualTypedValues(running.Value(), highest.Value()) {
+	if (running == nil && highest != nil) || !running.Value().Equal(highest.Value()) {
 		de := types.NewDeviationEntry(highest.Owner(), types.DeviationReasonNotApplied, sdcpbPath).SetExpectedValue(highest.Value())
 		if running != nil {
 			de.SetCurrentValue(running.Value())
@@ -458,7 +453,7 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 }
 
 func (lv *LeafVariants) AddExplicitDeleteEntry(intentName string, priority int32) *LeafEntry {
-	le := NewLeafEntry(types.NewUpdate(lv.parentEntry.Path(), &sdcpb.TypedValue{}, priority, intentName, 0), types.NewUpdateInsertFlags().SetExplicitDeleteFlag(), lv.parentEntry)
+	le := NewLeafEntry(types.NewUpdate(lv.parentEntry.SdcpbPath(), &sdcpb.TypedValue{}, priority, intentName, 0), types.NewUpdateInsertFlags().SetExplicitDeleteFlag(), lv.parentEntry)
 	lv.Add(le)
 	return le
 }

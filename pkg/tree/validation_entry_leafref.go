@@ -6,34 +6,19 @@ import (
 	"strings"
 
 	"github.com/sdcio/data-server/pkg/tree/types"
-	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, path string) ([]Entry, error) {
+func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, sdcpbPath *sdcpb.Path) ([]Entry, error) {
 	var err error
 	var resultEntries []Entry
 	var processEntries []Entry
 
-	lref, err := utils.StripPathElemPrefix(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed stripping namespaces from leafref %s: %w", s.Path(), err)
-	}
-
-	sdcpbPath, err := utils.ParsePath(lref)
-	if err != nil {
-		return nil, fmt.Errorf("failed parsing leafref path %s: %w", s.Path(), err)
-	}
+	sdcpbPath.StripPathElemPrefixPath()
 
 	lrefPath := types.NewLrefPath(sdcpbPath)
 
-	// if the lrefs first character is "/" then it is a root based path
-	isRootBasedPath := false
-	if string(lref[0]) == "/" {
-		isRootBasedPath = true
-	}
-
-	if isRootBasedPath {
+	if sdcpbPath.GetIsRootBased() {
 		processEntries = []Entry{s.GetRoot()}
 	} else {
 		var entry Entry = s
@@ -50,7 +35,7 @@ func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, path string) 
 			dotdotcount++
 		}
 		// else navigate (basically up)
-		entry, err = entry.NavigateSdcpbPath(ctx, sdcpbUp, false)
+		entry, err = entry.NavigateSdcpbPath(ctx, &sdcpb.Path{Elem: sdcpbUp})
 		if err != nil {
 			return nil, err
 		}
@@ -70,7 +55,7 @@ func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, path string) 
 
 		// we need to do the forwarding for all the already lookedup paths
 		for _, entry := range processEntries {
-			entry, err = entry.Navigate(ctx, []string{elem.Name}, false, false)
+			entry, err = entry.NavigateSdcpbPath(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(elem.Name, nil)}})
 			if err != nil {
 				return nil, err
 			}
@@ -128,7 +113,7 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 	case s.GetSchema().GetLeaflist().GetType().GetLeafref() != "":
 		lref = s.GetSchema().GetLeaflist().GetType().GetLeafref()
 	default:
-		return nil, fmt.Errorf("error not a leafref %s", s.Path().String())
+		return nil, fmt.Errorf("error not a leafref %s", s.SdcpbPath())
 	}
 
 	lv := s.leafVariants.GetHighestPrecedence(false, true, false)
@@ -138,7 +123,12 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 	// value of node with type leafref
 	tv := lv.Value()
 
-	foundEntries, err := s.BreadthSearch(ctx, lref)
+	lrefPath, err := sdcpb.ParsePath(lref)
+	if err != nil {
+		return nil, err
+	}
+
+	foundEntries, err := s.BreadthSearch(ctx, lrefPath)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +152,7 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 		}
 		// loop through possible values of found reference (leaf -> 1 value, leaf-list -> 1+ values)
 		for _, val := range vals {
-			if utils.EqualTypedValues(val, tv) {
+			if val.Equal(tv) {
 				resultEntries = append(resultEntries, e)
 				break
 			}
@@ -181,7 +171,7 @@ func (s *sharedEntryAttributes) resolve_leafref_key_path(ctx context.Context, ke
 		isRootPath := true
 
 		var keyp *sdcpb.Path
-		keyp, err := utils.ParsePath(v.Value)
+		keyp, err := sdcpb.ParsePath(v.Value)
 		if err != nil {
 			return err
 		}
@@ -192,7 +182,8 @@ func (s *sharedEntryAttributes) resolve_leafref_key_path(ctx context.Context, ke
 			isRootPath = false
 		}
 
-		keyValue, err := s.NavigateSdcpbPath(ctx, keyp.Elem, isRootPath)
+		keyp.SetIsRootBased(isRootPath)
+		keyValue, err := s.NavigateSdcpbPath(ctx, keyp)
 		if err != nil {
 			return err
 		}
@@ -231,7 +222,7 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan
 			owner = highest.Owner()
 		}
 		// if required, issue error
-		resultChan <- types.NewValidationResultEntry(owner, fmt.Errorf("missing leaf reference: failed resolving leafref %s for %s: %v", lref, s.Path().String(), err), types.ValidationResultEntryTypeError)
+		resultChan <- types.NewValidationResultEntry(owner, fmt.Errorf("missing leaf reference: failed resolving leafref %s for %s: %v", lref, s.SdcpbPath().ToXPath(false), err), types.ValidationResultEntryTypeError)
 		return
 	}
 
@@ -241,7 +232,6 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan
 		if lv == nil {
 			return
 		}
-		EntryPath, _ := s.SdcpbPath()
 
 		// check if the OptionalInstance (!require-instances [https://datatracker.ietf.org/doc/html/rfc7950#section-9.9.3])
 		if s.schema.GetField().GetType().GetOptionalInstance() {
@@ -249,7 +239,7 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan
 			return
 		}
 		// if required, issue error
-		resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("missing leaf reference: failed resolving leafref %s for %s to path %s LeafVariant %v", lref, utils.ToXPath(EntryPath, false), s.Path().String(), lv), types.ValidationResultEntryTypeError)
+		resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("missing leaf reference: failed resolving leafref %s for %s to path %s LeafVariant %v", lref, s.SdcpbPath().ToXPath(false), s.SdcpbPath().ToXPath(false), lv), types.ValidationResultEntryTypeError)
 		return
 	}
 }
@@ -261,5 +251,5 @@ func generateOptionalWarning(ctx context.Context, s Entry, lref string, resultCh
 		return
 	}
 	tvVal := lrefval.Value()
-	resultChan <- types.NewValidationResultEntry(lrefval.Owner(), fmt.Errorf("leafref %s value %s unable to resolve non-mandatory reference %s", s.Path().String(), utils.TypedValueToString(tvVal), lref), types.ValidationResultEntryTypeWarning)
+	resultChan <- types.NewValidationResultEntry(lrefval.Owner(), fmt.Errorf("leafref %s value %s unable to resolve non-mandatory reference %s", s.SdcpbPath().ToXPath(false), tvVal.ToString(), lref), types.ValidationResultEntryTypeWarning)
 }

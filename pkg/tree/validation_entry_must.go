@@ -62,10 +62,10 @@ func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, resu
 		result, err := res1.GetBoolResult()
 		if !result || err != nil {
 			if err == nil {
-				err = fmt.Errorf("error path: %s, must-statement [%s] %s", s.Path(), must.Statement, must.Error)
+				err = fmt.Errorf("error path: %s, must-statement [%s] %s", s.SdcpbPath().ToXPath(false), must.Statement, must.Error)
 			}
 			if strings.Contains(err.Error(), "Stack underflow") {
-				log.Debugf("stack underflow error: path=%v, mustExpr=%s", s.Path().String(), exprStr)
+				log.Debugf("stack underflow error: path=%v, mustExpr=%s", s.SdcpbPath().ToXPath(false), exprStr)
 				continue
 			}
 			owner := "unknown"

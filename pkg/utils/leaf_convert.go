@@ -117,16 +117,10 @@ func ConvertEnumeration(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedVa
 }
 
 func ConvertBoolean(value string, _ *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	var bval bool
-	// check for true or false in string representation
-	switch value {
-	case "true":
-		bval = true
-	case "false":
-		bval = false
-	default:
+	bval, err := strconv.ParseBool(value)
+	if err != nil {
 		// if it is any other value, return error
-		return nil, fmt.Errorf("illegal value %q for boolean type", value)
+		return nil, err
 	}
 	// otherwise return the BoolVal TypedValue
 	return &sdcpb.TypedValue{
@@ -446,11 +440,11 @@ func ConvertJsonValueToTv(d any, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, 
 		}, nil
 	case "boolean":
 		var b bool
-		switch d.(type) {
+		switch d := d.(type) {
 		case bool:
-			b = d.(bool)
+			b = d
 		case string:
-			b, err = strconv.ParseBool(d.(string))
+			b, err = strconv.ParseBool(d)
 			if err != nil {
 				return nil, err
 			}

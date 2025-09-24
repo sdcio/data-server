@@ -3,7 +3,7 @@ package config
 func NewValidationConfig() *Validation {
 	return &Validation{
 		DisabledValidators: &Validators{},
-		DisableConcurrency: bool(false),
+		DisableConcurrency: false,
 	}
 }
 
@@ -42,7 +42,7 @@ type Validators struct {
 	MaxElements             bool `yaml:"max-elements,omitempty" json:"max-elements,omitempty"`
 }
 
-func (v *Validators) DisableAll() {
+func (v *Validators) DisableAll() *Validators {
 	v.Leafref = true
 	v.LeafrefMinMaxAttributes = true
 	v.Length = true
@@ -51,6 +51,7 @@ func (v *Validators) DisableAll() {
 	v.MustStatement = true
 	v.Pattern = true
 	v.Range = true
+	return v
 }
 
 func (v *Validators) DeepCopy() *Validators {

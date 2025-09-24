@@ -552,9 +552,9 @@ func expandUpdateFromConfig(ctx context.Context, conf *sdcio_schema.Device, conv
 
 func addToRoot(ctx context.Context, root *RootEntry, updates []*sdcpb.Update, flags *types.UpdateInsertFlags, owner string, prio int32) error {
 	for _, upd := range updates {
-		cacheUpd := types.NewUpdate(utils.ToStrings(upd.GetPath(), false, false), upd.Value, prio, owner, 0)
+		cacheUpd := types.NewUpdate(upd.GetPath(), upd.Value, prio, owner, 0)
 
-		_, err := root.AddUpdateRecursive(ctx, cacheUpd, flags)
+		_, err := root.AddUpdateRecursive(ctx, cacheUpd.Path(), cacheUpd, flags)
 		if err != nil {
 			return err
 		}

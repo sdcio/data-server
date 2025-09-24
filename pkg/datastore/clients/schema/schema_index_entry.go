@@ -6,15 +6,15 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-type schemaIndexEntry struct {
+type SchemaIndexEntry struct {
 	schemaRsp *sdcpb.GetSchemaResponse
 	err       error
 	mu        sync.Mutex
 	ready     bool
 }
 
-func NewSchemaIndexEntry(schemaRsp *sdcpb.GetSchemaResponse, err error) *schemaIndexEntry {
-	sie := &schemaIndexEntry{
+func NewSchemaIndexEntry(schemaRsp *sdcpb.GetSchemaResponse, err error) *SchemaIndexEntry {
+	sie := &SchemaIndexEntry{
 		schemaRsp: schemaRsp,
 		err:       err,
 		mu:        sync.Mutex{},
@@ -22,6 +22,32 @@ func NewSchemaIndexEntry(schemaRsp *sdcpb.GetSchemaResponse, err error) *schemaI
 	return sie
 }
 
-func (s *schemaIndexEntry) Get() (*sdcpb.GetSchemaResponse, error) {
+func (s *SchemaIndexEntry) Lock() {
+	s.mu.Lock()
+}
+
+func (s *SchemaIndexEntry) Unlock() {
+	s.mu.Unlock()
+}
+
+func (s *SchemaIndexEntry) Get() (*sdcpb.GetSchemaResponse, error) {
 	return s.schemaRsp, s.err
+}
+
+func (s *SchemaIndexEntry) SetSchemaResponseAndError(r *sdcpb.GetSchemaResponse, err error) {
+	s.err = err
+	s.schemaRsp = r
+	s.ready = true
+}
+
+func (s *SchemaIndexEntry) GetError() error {
+	return s.err
+}
+
+func (s *SchemaIndexEntry) GetSchemaResponse() *sdcpb.GetSchemaResponse {
+	return s.schemaRsp
+}
+
+func (s *SchemaIndexEntry) GetReady() bool {
+	return s.ready
 }
