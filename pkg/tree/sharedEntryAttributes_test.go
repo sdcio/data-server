@@ -567,6 +567,237 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 	}
 }
 
+func Test_sharedEntryAttributes_MustCount(t *testing.T) {
+	tests := []struct {
+		name           string
+		ygotDevice     func() ygot.GoStruct
+		expectedErrors int
+	}{
+		{
+			name: "Pass - Count == 2",
+			ygotDevice: func() ygot.GoStruct {
+				d := &sdcio_schema.Device{
+					Count: &sdcio_schema.SdcioModel_Count{
+						Server: map[string]*sdcio_schema.SdcioModel_Count_Server{
+							"one": {
+								KeyAttr: ygot.String("one"),
+								Attr:    ygot.String("foo"),
+							},
+							"two": {
+								KeyAttr: ygot.String("two"),
+								Attr:    ygot.String("bar"),
+							},
+						},
+					},
+				}
+				return d
+			},
+			expectedErrors: 0,
+		},
+		{
+			name: "Fail - Count != 2",
+			ygotDevice: func() ygot.GoStruct {
+				d := &sdcio_schema.Device{
+					Count: &sdcio_schema.SdcioModel_Count{
+						Server: map[string]*sdcio_schema.SdcioModel_Count_Server{
+							"one": {
+								KeyAttr: ygot.String("one"),
+								Attr:    ygot.String("foo"),
+							},
+						},
+					},
+				}
+				return d
+			},
+			expectedErrors: 2,
+		},
+	}
+	for _, tt := range tests {
+
+		owner1 := "owner1"
+
+		t.Run(tt.name, func(t *testing.T) {
+			// create a gomock controller
+			controller := gomock.NewController(t)
+			defer controller.Finish()
+
+			ctx := context.Background()
+
+			sc, schema, err := testhelper.InitSDCIOSchema()
+			if err != nil {
+				t.Fatal(err)
+			}
+			scb := schemaClient.NewSchemaClientBound(schema, sc)
+			tc := NewTreeContext(scb, owner1)
+
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			jconfStr, err := ygot.EmitJSON(tt.ygotDevice(), &ygot.EmitJSONConfig{
+				Format:         ygot.RFC7951,
+				SkipValidation: true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var jsonConfAny any
+			err = json.Unmarshal([]byte(jconfStr), &jsonConfAny)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			newFlag := types.NewUpdateInsertFlags()
+
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			fmt.Println(root.String())
+
+			valConfig := validationConfig.DeepCopy()
+			valConfig.DisabledValidators.DisableAll()
+			valConfig.DisabledValidators.MustStatement = false
+
+			result, _ := root.Validate(ctx, valConfig)
+
+			t.Log(strings.Join(result.ErrorsStr(), "\n"))
+
+			if len(result.ErrorsStr()) != tt.expectedErrors {
+				t.Fatalf("expected %d, got %d errors on Must-Count check", tt.expectedErrors, len(result.ErrorsStr()))
+			}
+		})
+	}
+}
+
+func Test_sharedEntryAttributes_MustCountDoubleKey(t *testing.T) {
+	tests := []struct {
+		name           string
+		ygotDevice     func() ygot.GoStruct
+		expectedErrors int
+	}{
+		{
+			name: "Pass - Count == 2",
+			ygotDevice: func() ygot.GoStruct {
+				d := &sdcio_schema.Device{
+					CountDoublekey: &sdcio_schema.SdcioModel_CountDoublekey{
+						Server: map[sdcio_schema.SdcioModel_CountDoublekey_Server_Key]*sdcio_schema.SdcioModel_CountDoublekey_Server{
+							{
+								KeyAttr1: "one", KeyAttr2: "two",
+							}: {
+								KeyAttr1: ygot.String("one"),
+								KeyAttr2: ygot.String("two"),
+								Attr:     ygot.String("foo"),
+							},
+							{
+								KeyAttr1: "two", KeyAttr2: "three",
+							}: {
+								KeyAttr1: ygot.String("two"),
+								KeyAttr2: ygot.String("three"),
+								Attr:     ygot.String("bar"),
+							},
+						},
+					},
+				}
+				return d
+			},
+			expectedErrors: 0,
+		},
+		{
+			name: "Fail - Count != 2",
+			ygotDevice: func() ygot.GoStruct {
+				d := &sdcio_schema.Device{
+					CountDoublekey: &sdcio_schema.SdcioModel_CountDoublekey{
+						Server: map[sdcio_schema.SdcioModel_CountDoublekey_Server_Key]*sdcio_schema.SdcioModel_CountDoublekey_Server{
+							{
+								KeyAttr1: "one", KeyAttr2: "two",
+							}: {
+								KeyAttr1: ygot.String("one"),
+								KeyAttr2: ygot.String("two"),
+								Attr:     ygot.String("foo"),
+							},
+						},
+					},
+				}
+				return d
+			},
+			expectedErrors: 2,
+		},
+	}
+	for _, tt := range tests {
+
+		owner1 := "owner1"
+
+		t.Run(tt.name, func(t *testing.T) {
+			// create a gomock controller
+			controller := gomock.NewController(t)
+			defer controller.Finish()
+
+			ctx := context.Background()
+
+			sc, schema, err := testhelper.InitSDCIOSchema()
+			if err != nil {
+				t.Fatal(err)
+			}
+			scb := schemaClient.NewSchemaClientBound(schema, sc)
+			tc := NewTreeContext(scb, owner1)
+
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			jconfStr, err := ygot.EmitJSON(tt.ygotDevice(), &ygot.EmitJSONConfig{
+				Format:         ygot.RFC7951,
+				SkipValidation: true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var jsonConfAny any
+			err = json.Unmarshal([]byte(jconfStr), &jsonConfAny)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			newFlag := types.NewUpdateInsertFlags()
+
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			fmt.Println(root.String())
+
+			valConfig := validationConfig.DeepCopy()
+			valConfig.DisabledValidators.DisableAll()
+			valConfig.DisabledValidators.MustStatement = false
+
+			result, _ := root.Validate(ctx, valConfig)
+
+			t.Log(strings.Join(result.ErrorsStr(), "\n"))
+
+			if len(result.ErrorsStr()) != tt.expectedErrors {
+				t.Fatalf("expected %d, got %d errors on Must-Count DoubleKey check", tt.expectedErrors, len(result.ErrorsStr()))
+			}
+		})
+	}
+}
+
 func Test_sharedEntryAttributes_getOrCreateChilds(t *testing.T) {
 	ctx := context.TODO()
 	owner1 := "owner1"

@@ -16,6 +16,5 @@ module sdcio_model_leaflist {
         default "bar";
       }
     }
-    
   }
 }
