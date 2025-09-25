@@ -76,7 +76,6 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 	}
 
 	valConf := validationConfig.DeepCopy()
-
 	validationResult, _ := root.Validate(ctx, valConf)
 
 	t.Logf("Validation Errors:\n%s", strings.Join(validationResult.ErrorsStr(), "\n"))

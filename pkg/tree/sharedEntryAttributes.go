@@ -985,9 +985,9 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 		if !vCfg.DisabledValidators.Range {
 			s.validateRange(resultChan, statChan)
 		}
-		//if !vCfg.DisabledValidators.MaxElements {
-		//	s.validateMaxElements(resultChan, statChan)
-		//}
+		if !vCfg.DisabledValidators.MaxElements {
+			s.validateMinMaxElements(resultChan, statChan)
+		}
 
 		// recurse the call to the child elements
 		wg := sync.WaitGroup{}
@@ -1093,6 +1093,59 @@ func (s *sharedEntryAttributes) validateRange(resultChan chan<- *types.Validatio
 	statChan <- stat
 }
 
+func (s *sharedEntryAttributes) validateMinMaxElements(resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat) {
+	var contSchema *sdcpb.ContainerSchema
+	if contSchema = s.GetSchema().GetContainer(); contSchema == nil {
+		// if it is not a container, return
+		return
+	}
+	if len(contSchema.GetKeys()) == 0 {
+		// if it is not a list, return
+		return
+	}
+
+	// get all the childs, skipping the key levels
+	childs, err := s.GetListChilds()
+	if err != nil {
+		resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error getting childs for min,max-elements check %v", err), types.ValidationResultEntryTypeError)
+	}
+
+	intMin := int(contSchema.GetMinElements())
+	intMax := int(contSchema.GetMaxElements())
+
+	// early exit if no specific min/max defined
+	if intMin <= 0 && intMax <= 0 {
+		return
+	}
+
+	// define function to figure out associated owners / intents
+
+	ownersSet := map[string]struct{}{}
+	for _, child := range childs {
+		childAttributes := child.GetChilds(DescendMethodActiveChilds)
+		owner := childAttributes[contSchema.GetKeys()[0].GetName()].GetHighestPrecedence(nil, false, false, false)[0].Update.Owner()
+		ownersSet[owner] = struct{}{}
+	}
+	// dedup the owners
+	owners := []string{}
+	for k := range ownersSet {
+		owners = append(owners, k)
+	}
+
+	if len(childs) < intMin {
+		for _, owner := range owners {
+			resultChan <- types.NewValidationResultEntry(owner, fmt.Errorf("Min-Elements violation on %s expected %d actual %d", s.SdcpbPath().ToXPath(false), intMin, len(childs)), types.ValidationResultEntryTypeError)
+		}
+	}
+	if intMax > 0 && len(childs) > intMax {
+		for _, owner := range owners {
+			resultChan <- types.NewValidationResultEntry(owner, fmt.Errorf("Max-Elements violation on %s expected %d actual %d", s.SdcpbPath().ToXPath(false), intMax, len(childs)), types.ValidationResultEntryTypeError)
+		}
+	}
+
+	statChan <- types.NewValidationStat(types.StatTypeMinMaxElementsList).PlusOne()
+}
+
 // validateLeafListMinMaxAttributes validates the Min-, and Max-Elements attribute of the Entry if it is a Leaflists.
 func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat) {
 	if schema := s.schema.GetLeaflist(); schema != nil {
@@ -1110,7 +1163,7 @@ func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(resultChan chan
 						resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("leaflist %s defines %d max-elements but %d elements are present", s.SdcpbPath().ToXPath(false), schema.GetMaxElements(), len(val.GetElement())), types.ValidationResultEntryTypeError)
 					}
 				}
-				statChan <- types.NewValidationStat(types.StatTypeMinMax).PlusOne()
+				statChan <- types.NewValidationStat(types.StatTypeMinMaxElementsLeaflist).PlusOne()
 			}
 		}
 	}

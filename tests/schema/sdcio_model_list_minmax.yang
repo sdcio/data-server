@@ -1,0 +1,40 @@
+module sdcio_model_list_minmax {
+  yang-version 1.1;
+  namespace "urn:sdcio/model_list_minmax";
+  prefix sdcio_model_list_minmax;
+
+  grouping list-minmax-top {
+    container list-minmax {
+      list entries {
+        key "keyAttr";
+        max-elements 3;
+        min-elements 2;
+        leaf keyAttr {
+          type string;
+        }
+        leaf attr1 {
+          type string;
+        }
+        leaf attr2 {
+          type string;
+        }
+      }
+    }
+    container list-minmax-double-key {
+      list entries {
+        key "keyAttr1 keyAttr2";
+        max-elements 3;
+        min-elements 2;
+        leaf keyAttr1 {
+          type string;
+        }
+        leaf keyAttr2 {
+          type string;
+        }
+        leaf attr {
+          type string;
+        }
+      }
+    }
+  }
+}

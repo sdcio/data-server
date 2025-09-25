@@ -10,12 +10,13 @@ type StatType int
 const (
 	StatTypeMandatory StatType = iota
 	StatTypeMustStatement
-	StatTypeMinMax
+	StatTypeMinMaxElementsLeaflist
 	StatTypeRange
 	StatTypePattern
 	StatTypeLength
 	StatTypeLeafRef
-	StatTypeMaxElements
+	StatTypeMinMaxElementsList
+	StatTypeMinElements
 	StatTypeEnums
 )
 
@@ -25,8 +26,8 @@ func (s StatType) String() string {
 		return "mandatory"
 	case StatTypeMustStatement:
 		return "must-statement"
-	case StatTypeMinMax:
-		return "min/max"
+	case StatTypeMinMaxElementsLeaflist:
+		return "min/max elements leaflist"
 	case StatTypeRange:
 		return "range"
 	case StatTypePattern:
@@ -35,8 +36,8 @@ func (s StatType) String() string {
 		return "length"
 	case StatTypeLeafRef:
 		return "leafref"
-	case StatTypeMaxElements:
-		return "max-elements"
+	case StatTypeMinMaxElementsList:
+		return "min/max elements list"
 	case StatTypeEnums:
 		return "enums"
 	}
