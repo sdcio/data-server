@@ -330,7 +330,7 @@ func (d *Datastore) StopDeviationsWatch(peer string) {
 
 func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig) {
 	log.Infof("%s: starting deviationMgr...", d.Name())
-	ticker := time.NewTicker(c.Frequency)
+	ticker := time.NewTicker(c.Interval)
 	defer func() {
 		ticker.Stop()
 	}()

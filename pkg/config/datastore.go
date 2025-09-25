@@ -40,19 +40,19 @@ type DatastoreConfig struct {
 }
 
 type DeviationConfig struct {
-	Frequency time.Duration `yaml:"frequency,omitempty" json:"frequency,omitempty"`
+	Interval time.Duration `yaml:"interval,omitempty" json:"interval,omitempty"`
 }
 
 func (d *DeviationConfig) validateSetDefaults() error {
-	if d.Frequency == 0 {
-		d.Frequency = 30 * time.Second
+	if d.Interval == 0 {
+		d.Interval = 30 * time.Second
 	}
 	return nil
 }
 
 func (d *DeviationConfig) DeepCopy() *DeviationConfig {
 	result := &DeviationConfig{
-		Frequency: d.Frequency,
+		Interval: d.Interval,
 	}
 	return result
 }
