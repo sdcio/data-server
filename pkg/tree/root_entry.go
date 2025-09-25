@@ -104,22 +104,20 @@ func (r *RootEntry) AddExplicitDeletes(intentName string, priority int32, pathse
 	r.explicitDeletes.Add(intentName, priority, pathset)
 }
 
-func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation) (types.ValidationResults, *types.ValidationStatOverall) {
+func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation) (types.ValidationResults, *types.ValidationStats) {
 	// perform validation
 	// we use a channel and cumulate all the errors
 	validationResultEntryChan := make(chan *types.ValidationResultEntry, 10)
-	validationStatChan := make(chan *types.ValidationStat, 10)
+	validationStats := types.NewValidationStats()
 
 	// start validation in a seperate goroutine
 	go func() {
-		r.sharedEntryAttributes.Validate(ctx, validationResultEntryChan, validationStatChan, vCfg)
+		r.sharedEntryAttributes.Validate(ctx, validationResultEntryChan, validationStats, vCfg)
 		close(validationResultEntryChan)
-		close(validationStatChan)
 	}()
 
 	// create a ValidationResult struct
 	validationResult := types.ValidationResults{}
-	validationStatOverall := types.NewValidationStatOverall()
 
 	syncWait := &sync.WaitGroup{}
 	syncWait.Add(1)
@@ -131,17 +129,8 @@ func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation) (type
 		syncWait.Done()
 	}()
 
-	syncWait.Add(1)
-	go func() {
-		// read from the validationResult channel
-		for e := range validationStatChan {
-			validationStatOverall.MergeStat(e)
-		}
-		syncWait.Done()
-	}()
-
 	syncWait.Wait()
-	return validationResult, validationStatOverall
+	return validationResult, validationStats
 }
 
 // String returns the string representation of the Tree.

@@ -199,7 +199,7 @@ func (s *sharedEntryAttributes) resolve_leafref_key_path(ctx context.Context, ke
 	return nil
 }
 
-func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat) {
+func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats) {
 	if s.shouldDelete() {
 		return
 	}
@@ -208,7 +208,7 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan
 	if s.schema == nil || lref == "" {
 		return
 	}
-	statChan <- types.NewValidationStat(types.StatTypeLeafRef).PlusOne()
+
 	entry, err := s.NavigateLeafRef(ctx)
 	if err != nil || len(entry) == 0 {
 		// check if the OptionalInstance (!require-instances [https://datatracker.ietf.org/doc/html/rfc7950#section-9.9.3])
@@ -242,6 +242,7 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan
 		resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("missing leaf reference: failed resolving leafref %s for %s to path %s LeafVariant %v", lref, s.SdcpbPath().ToXPath(false), s.SdcpbPath().ToXPath(false), lv), types.ValidationResultEntryTypeError)
 		return
 	}
+	stats.Add(types.StatTypeLeafRef, 1)
 }
 
 func generateOptionalWarning(ctx context.Context, s Entry, lref string, resultChan chan<- *types.ValidationResultEntry) {

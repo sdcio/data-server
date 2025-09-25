@@ -3,6 +3,7 @@ package types
 import (
 	"fmt"
 	"strings"
+	"sync/atomic"
 )
 
 type StatType int
@@ -19,6 +20,19 @@ const (
 	StatTypeMinElements
 	StatTypeEnums
 )
+
+var AllStatTypes = []StatType{
+	StatTypeMandatory,
+	StatTypeMustStatement,
+	StatTypeMinMaxElementsLeaflist,
+	StatTypeRange,
+	StatTypePattern,
+	StatTypeLength,
+	StatTypeLeafRef,
+	StatTypeMinMaxElementsList,
+	StatTypeMinElements,
+	StatTypeEnums,
+}
 
 func (s StatType) String() string {
 	switch s {
@@ -44,49 +58,41 @@ func (s StatType) String() string {
 	return ""
 }
 
-type ValidationStat struct {
-	statType StatType
-	count    uint
+type ValidationStats struct {
+	Counter map[StatType]*uint32 `json:"counters"`
 }
 
-func NewValidationStat(statType StatType) *ValidationStat {
-	return &ValidationStat{
-		statType: statType,
+func NewValidationStats() *ValidationStats {
+	result := &ValidationStats{
+		Counter: map[StatType]*uint32{},
+	}
+	for _, t := range AllStatTypes {
+		result.Counter[t] = new(uint32)
+	}
+	return result
+}
+
+func (v *ValidationStats) Add(t StatType, i uint32) {
+	if counter, ok := v.Counter[t]; ok {
+		atomic.AddUint32(counter, i)
 	}
 }
 
-func (v *ValidationStat) PlusOne() *ValidationStat {
-	v.count++
-	return v
-}
-
-func (v *ValidationStat) Set(count uint) *ValidationStat {
-	v.count = count
-	return v
-}
-
-type ValidationStatOverall struct {
-	Counter map[string]uint `json:"counters"`
-}
-
-func NewValidationStatOverall() *ValidationStatOverall {
-	return &ValidationStatOverall{
-		Counter: map[string]uint{},
-	}
-}
-
-func (v *ValidationStatOverall) String() string {
+// String returns a string representation of all counters
+func (v *ValidationStats) String() string {
 	result := make([]string, 0, len(v.Counter))
 	for typ, count := range v.Counter {
-		result = append(result, fmt.Sprintf("%s: %d", typ, count))
+		val := atomic.LoadUint32(count)
+		result = append(result, fmt.Sprintf("%s: %d", typ, val))
 	}
 	return strings.Join(result, ", ")
 }
 
-func (v *ValidationStatOverall) MergeStat(vs *ValidationStat) {
-	v.Counter[vs.statType.String()] = v.Counter[vs.statType.String()] + vs.count
-}
-
-func (v *ValidationStatOverall) GetCounter() map[string]uint {
-	return v.Counter
+// GetCounter returns a snapshot of the counters as a plain map
+func (v *ValidationStats) GetCounter() map[StatType]uint32 {
+	snapshot := make(map[StatType]uint32, len(v.Counter))
+	for typ, count := range v.Counter {
+		snapshot[typ] = atomic.LoadUint32(count)
+	}
+	return snapshot
 }

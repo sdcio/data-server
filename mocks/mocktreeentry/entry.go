@@ -507,15 +507,15 @@ func (mr *MockEntryMockRecorder) TreeExport(owner any) *gomock.Call {
 }
 
 // Validate mocks base method.
-func (m *MockEntry) Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat, vCfg *config.Validation) {
+func (m *MockEntry) Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, vCfg *config.Validation) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Validate", ctx, resultChan, statChan, vCfg)
+	m.ctrl.Call(m, "Validate", ctx, resultChan, stats, vCfg)
 }
 
 // Validate indicates an expected call of Validate.
-func (mr *MockEntryMockRecorder) Validate(ctx, resultChan, statChan, vCfg any) *gomock.Call {
+func (mr *MockEntryMockRecorder) Validate(ctx, resultChan, stats, vCfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MockEntry)(nil).Validate), ctx, resultChan, statChan, vCfg)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MockEntry)(nil).Validate), ctx, resultChan, stats, vCfg)
 }
 
 // Walk mocks base method.
@@ -689,15 +689,15 @@ func (mr *MockEntryMockRecorder) toXmlInternal(parent, onlyNewOrUpdated, honorNa
 }
 
 // validateMandatory mocks base method.
-func (m *MockEntry) validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat) {
+func (m *MockEntry) validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "validateMandatory", ctx, resultChan, statChan)
+	m.ctrl.Call(m, "validateMandatory", ctx, resultChan, stats)
 }
 
 // validateMandatory indicates an expected call of validateMandatory.
-func (mr *MockEntryMockRecorder) validateMandatory(ctx, resultChan, statChan any) *gomock.Call {
+func (mr *MockEntryMockRecorder) validateMandatory(ctx, resultChan, stats any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "validateMandatory", reflect.TypeOf((*MockEntry)(nil).validateMandatory), ctx, resultChan, statChan)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "validateMandatory", reflect.TypeOf((*MockEntry)(nil).validateMandatory), ctx, resultChan, stats)
 }
 
 // validateMandatoryWithKeys mocks base method.
