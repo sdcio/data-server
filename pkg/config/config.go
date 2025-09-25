@@ -40,6 +40,7 @@ type Config struct {
 	Prometheus                *PromConfig                     `yaml:"prometheus,omitempty" json:"prometheus,omitempty"`
 	DefaultTransactionTimeout time.Duration                   `yaml:"transaction-timeout,omitempty" json:"transaction-timeout,omitempty"`
 	Validation                *Validation                     `yaml:"validation-defaults,omitempty" json:"validation-defaults,omitempty"`
+	Deviation                 *DeviationConfig                `yaml:"deviation-defaults,omitempty" json:"deviation-defaults,omitempty"`
 }
 
 type TLS struct {
@@ -138,6 +139,13 @@ func (c *Config) validateSetDefaults() error {
 		c.Validation = &Validation{}
 	}
 	if err = c.Validation.validateSetDefaults(); err != nil {
+		return err
+	}
+
+	if c.Deviation == nil {
+		c.Deviation = &DeviationConfig{}
+	}
+	if err = c.Deviation.validateSetDefaults(); err != nil {
 		return err
 	}
 

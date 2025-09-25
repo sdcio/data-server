@@ -31,11 +31,30 @@ const (
 )
 
 type DatastoreConfig struct {
-	Name       string        `yaml:"name,omitempty" json:"name,omitempty"`
-	Schema     *SchemaConfig `yaml:"schema,omitempty" json:"schema,omitempty"`
-	SBI        *SBI          `yaml:"sbi,omitempty" json:"sbi,omitempty"`
-	Sync       *Sync         `yaml:"sync,omitempty" json:"sync,omitempty"`
-	Validation *Validation   `yaml:"validation,omitempty" json:"validation,omitempty"`
+	Name       string           `yaml:"name,omitempty" json:"name,omitempty"`
+	Schema     *SchemaConfig    `yaml:"schema,omitempty" json:"schema,omitempty"`
+	SBI        *SBI             `yaml:"sbi,omitempty" json:"sbi,omitempty"`
+	Sync       *Sync            `yaml:"sync,omitempty" json:"sync,omitempty"`
+	Validation *Validation      `yaml:"validation,omitempty" json:"validation,omitempty"`
+	Deviation  *DeviationConfig `yaml:"deviation,omitempty" json:"deviation,omitempty"`
+}
+
+type DeviationConfig struct {
+	Frequency time.Duration `yaml:"frequency,omitempty" json:"frequency,omitempty"`
+}
+
+func (d *DeviationConfig) validateSetDefaults() error {
+	if d.Frequency == 0 {
+		d.Frequency = 30 * time.Second
+	}
+	return nil
+}
+
+func (d *DeviationConfig) DeepCopy() *DeviationConfig {
+	result := &DeviationConfig{
+		Frequency: d.Frequency,
+	}
+	return result
 }
 
 type SBI struct {
@@ -122,7 +141,12 @@ func (ds *DatastoreConfig) ValidateSetDefaults() error {
 	if err := ds.Validation.validateSetDefaults(); err != nil {
 		return err
 	}
-
+	if ds.Deviation == nil {
+		ds.Deviation = &DeviationConfig{}
+	}
+	if err = ds.Deviation.validateSetDefaults(); err != nil {
+		return err
+	}
 	return nil
 }
 
