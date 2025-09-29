@@ -10,9 +10,9 @@ import (
 
 const (
 	VTrace = -8
-	VDebug = slog.LevelDebug
-	VWarn  = slog.LevelWarn
-	VError = slog.LevelError
+	VDebug = int(slog.LevelDebug)
+	VWarn  = int(slog.LevelWarn)
+	VError = int(slog.LevelError)
 )
 
 var FallbackLogger logr.Logger

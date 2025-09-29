@@ -35,7 +35,6 @@ var configFile string
 var debug bool
 var trace bool
 var stop bool
-var devZapConfig bool
 
 var versionFlag bool
 var version = "dev"
@@ -46,7 +45,6 @@ func main() {
 	pflag.BoolVarP(&debug, "debug", "d", false, "set log level to DEBUG")
 	pflag.BoolVarP(&trace, "trace", "t", false, "set log level to TRACE")
 	pflag.BoolVarP(&versionFlag, "version", "v", false, "print version")
-	pflag.BoolVarP(&devZapConfig, "dev-zap-config", "", false, "use zap development config")
 	pflag.Parse()
 
 	if versionFlag {
