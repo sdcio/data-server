@@ -18,20 +18,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/go-logr/zapr"
-	logf "github.com/sdcio/data-server/pkg/log"
-	"github.com/spf13/pflag"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-
+	"github.com/go-logr/logr"
 	"github.com/sdcio/data-server/pkg/config"
-	"github.com/sdcio/data-server/pkg/dslog"
+	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/sdcio/data-server/pkg/server"
+	"github.com/spf13/pflag"
 )
 
 var configFile string
@@ -56,29 +53,8 @@ func main() {
 		fmt.Println(version + "-" + commit)
 		return
 	}
-	zapConfig := zap.NewProductionConfig()
-	if devZapConfig {
-		zapConfig = zap.NewDevelopmentConfig()
-	}
 
-	// TODO define these
-	zapConfig.DisableCaller = true
-	zapConfig.DisableStacktrace = true
-	zapConfig.EncoderConfig.EncodeTime = zapcore.RFC3339TimeEncoder
-
-	if debug {
-		zapConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
-	}
-	if trace {
-		zapConfig.Level = zap.NewAtomicLevelAt(dslog.TraceLevel)
-	}
-
-	zLogger, err := zapConfig.Build()
-	if err != nil {
-		panic(err)
-	}
-	defer zLogger.Sync()
-	log := zapr.NewLogger(zLogger)
+	log := logr.FromSlogHandler(slog.NewJSONHandler(os.Stdout, nil))
 	logf.SetDefaultLogger(log)
 
 	log.Info("data-server bootstrap", "version", version, "commit", commit)

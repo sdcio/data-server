@@ -2,30 +2,24 @@ package log
 
 import (
 	"context"
+	"log/slog"
+	"os"
 
 	"github.com/go-logr/logr"
-	"github.com/go-logr/zapr"
-	"github.com/sdcio/data-server/pkg/dslog"
-	"go.uber.org/zap"
 )
 
 const (
-	VDebug = 1
-	VWarn  = 2
-	VTrace = 8
+	VTrace = -8
+	VDebug = slog.LevelDebug
+	VWarn  = slog.LevelWarn
+	VError = slog.LevelError
 )
 
 var FallbackLogger logr.Logger
 var DefaultLogger logr.Logger
 
 func init() {
-	config := zap.NewDevelopmentConfig()
-	config.Level = zap.NewAtomicLevelAt(dslog.TraceLevel)
-	zlog, err := config.Build()
-	if err != nil {
-		panic(err)
-	}
-	DefaultLogger = zapr.NewLogger(zlog)
+	DefaultLogger = logr.FromSlogHandler(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(VTrace)}))
 	FallbackLogger = DefaultLogger.WithName("fallback-logger")
 }
 
