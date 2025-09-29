@@ -244,12 +244,15 @@ func (x *XML2sdcpbConfigAdapter) transformLeafList(ctx context.Context, e *etree
 	// process terminal values
 	data := strings.TrimSpace(e.Text())
 
-	tv, err := utils.Convert(data, slt)
+	tv, err := utils.Convert(ctx, data, slt)
 	if err != nil {
 		return fmt.Errorf("failed to convert value %s to type %s: %w", data, slt.Type, err)
 	}
 
 	name := pelems[len(pelems)-1].Name
-	tc.AddLeafListEntry(name, tv)
+	err = tc.AddLeafListEntry(name, tv)
+	if err != nil {
+		return fmt.Errorf("failed to add leaf list entry %s: %w", name, err)
+	}
 	return nil
 }
