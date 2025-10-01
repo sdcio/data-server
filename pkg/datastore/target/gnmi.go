@@ -290,7 +290,6 @@ START:
 	}
 
 	defer t.target.StopSubscriptions()
-
 	rspch, errCh := t.target.ReadSubscriptions()
 	for {
 		select {
@@ -319,10 +318,7 @@ START:
 }
 
 func (t *gnmiTarget) Close() error {
-	if t == nil {
-		return nil
-	}
-	if t.target == nil {
+	if t == nil || t.target == nil {
 		return nil
 	}
 	return t.target.Close()
