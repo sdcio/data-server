@@ -26,8 +26,8 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/sdcio/data-server/pkg/config"
-	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/sdcio/data-server/pkg/server"
+	logf "github.com/sdcio/logger"
 	"github.com/spf13/pflag"
 )
 
@@ -54,6 +54,7 @@ func main() {
 
 	log := logr.FromSlogHandler(slog.NewJSONHandler(os.Stdout, nil))
 	logf.SetDefaultLogger(log)
+	ctx := logf.IntoContext(context.Background(), log)
 
 	log.Info("data-server bootstrap", "version", version, "commit", commit)
 
@@ -75,7 +76,6 @@ START:
 	log.Info("read config", "config", string(b))
 
 	// add logger to context
-	ctx := logf.IntoContext(context.Background(), log)
 	ctx, cancel := context.WithCancel(ctx)
 	setupCloseHandler(cancel)
 	s, err = server.New(ctx, cfg)

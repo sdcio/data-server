@@ -21,8 +21,8 @@ import (
 	"sync"
 	"time"
 
-	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/sdcio/data-server/pkg/schema"
+	logf "github.com/sdcio/logger"
 	schemaConfig "github.com/sdcio/schema-server/pkg/config"
 	schemaServerSchema "github.com/sdcio/schema-server/pkg/schema"
 	schemaStore "github.com/sdcio/schema-server/pkg/store"

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	logf "github.com/sdcio/data-server/pkg/log"
+	logf "github.com/sdcio/logger"
 )
 
 type TransactionCancelTimer struct {

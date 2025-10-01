@@ -21,10 +21,10 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/datastore/target"
-	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/types"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/encoding/prototext"
 )

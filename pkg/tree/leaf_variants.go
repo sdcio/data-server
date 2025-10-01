@@ -6,8 +6,8 @@ import (
 	"math"
 	"sync"
 
-	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/sdcio/data-server/pkg/tree/types"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 

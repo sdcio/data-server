@@ -14,10 +14,10 @@ import (
 	"unicode/utf8"
 
 	"github.com/sdcio/data-server/pkg/config"
-	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
 	"google.golang.org/protobuf/types/known/emptypb"

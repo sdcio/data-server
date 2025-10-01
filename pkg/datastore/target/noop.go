@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/sdcio/data-server/pkg/config"
-	logf "github.com/sdcio/data-server/pkg/log"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 

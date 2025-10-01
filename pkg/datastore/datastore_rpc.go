@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	logf "github.com/sdcio/data-server/pkg/log"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

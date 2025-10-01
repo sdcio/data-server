@@ -21,8 +21,8 @@ import (
 
 	"github.com/beevik/etree"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
-	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/sdcio/data-server/pkg/utils"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 

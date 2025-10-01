@@ -28,7 +28,7 @@ import (
 	gapi "github.com/openconfig/gnmic/pkg/api"
 	gtarget "github.com/openconfig/gnmic/pkg/api/target"
 	"github.com/openconfig/gnmic/pkg/api/types"
-	logf "github.com/sdcio/data-server/pkg/log"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"

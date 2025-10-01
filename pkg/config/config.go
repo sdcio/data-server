@@ -23,7 +23,7 @@ import (
 	"os"
 	"time"
 
-	logf "github.com/sdcio/data-server/pkg/log"
+	logf "github.com/sdcio/logger"
 	schemaConfig "github.com/sdcio/schema-server/pkg/config"
 	"gopkg.in/yaml.v2"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"

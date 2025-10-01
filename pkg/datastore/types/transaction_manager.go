@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	logf "github.com/sdcio/data-server/pkg/log"
+	logf "github.com/sdcio/logger"
 )
 
 var (

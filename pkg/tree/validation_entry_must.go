@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	logf "github.com/sdcio/data-server/pkg/log"
 	"github.com/sdcio/data-server/pkg/tree/types"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/yang-parser/xpath"
 	"github.com/sdcio/yang-parser/xpath/grammars/expr"

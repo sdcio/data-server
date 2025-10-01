@@ -22,7 +22,7 @@ import (
 
 	cconfig "github.com/sdcio/cache/pkg/config"
 	"github.com/sdcio/data-server/pkg/cache"
-	logf "github.com/sdcio/data-server/pkg/log"
+	logf "github.com/sdcio/logger"
 )
 
 func (s *Server) createCacheClient(ctx context.Context) {

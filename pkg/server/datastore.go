@@ -24,7 +24,7 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore"
 	"github.com/sdcio/data-server/pkg/datastore/target"
-	logf "github.com/sdcio/data-server/pkg/log"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
