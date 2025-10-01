@@ -10,3 +10,12 @@ func (b *BaseVisitor) Up() {
 func (b *BaseVisitor) DescendMethod() DescendMethod {
 	return DescendMethodAll
 }
+
+type BaseParallelVisitor[T any] struct {
+}
+
+func (v *BaseParallelVisitor[T]) Attach(parent *T, child *T) {}
+func (v *BaseParallelVisitor[T]) Detach(parent *T, child *T) {}
+func (v *BaseParallelVisitor[T]) Init() error                { return nil }
+func (v *BaseParallelVisitor[T]) End() error                 { return nil }
+func (v *BaseParallelVisitor[T]) NewNode(e Entry) *T         { return nil }

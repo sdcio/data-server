@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"unicode/utf8"
 
 	"github.com/sdcio/data-server/pkg/config"
@@ -429,6 +430,182 @@ func (s *sharedEntryAttributes) GetLevel() int {
 	s.level = &l
 	return l
 }
+
+type ParallelVisitor[T any] interface {
+	DescendMethod() DescendMethod // same as before
+	NewNode(e Entry) *T           // create node for this entry
+	// Compute returns bool if the node should be kept or removed from the result Tree
+	Compute(ctx context.Context, e Entry, n *T) (bool, error) // compute/fill node values
+	Attach(parent *T, child *T)
+	Detach(parent *T, child *T)
+	Init() error
+	End() error
+}
+
+type parentLocker[T any] struct {
+	mu    sync.Mutex
+	locks map[*T]*sync.Mutex
+}
+
+func newParentLocker[T any]() *parentLocker[T] {
+	return &parentLocker[T]{locks: make(map[*T]*sync.Mutex)}
+}
+
+// getLock returns the mutex for a given parent, creating it if needed.
+func (pl *parentLocker[T]) getLock(parent *T) *sync.Mutex {
+	pl.mu.Lock()
+	defer pl.mu.Unlock()
+	m, ok := pl.locks[parent]
+	if !ok {
+		m = &sync.Mutex{}
+		pl.locks[parent] = m
+	}
+	return m
+}
+
+// Attach safely appends child to parent using the per-parent lock
+func (pl *parentLocker[T]) DetachChild(parent *T, child *T, detachFunc func(parent, child *T)) {
+	lock := pl.getLock(parent)
+	lock.Lock()
+	defer lock.Unlock()
+	detachFunc(parent, child)
+}
+
+func ParallelWalk[T any](ctx context.Context, root Entry, visitor ParallelVisitor[T], workers int) (*T, error) {
+
+	type job struct {
+		entry      Entry
+		node       *T
+		parentNode *T
+	}
+
+	err := visitor.Init()
+	if err != nil {
+		return nil, err
+	}
+
+	jobs := make(chan job, 128)
+
+	// context with cancel on error
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var firstErr atomic.Pointer[error]
+	setErr := func(err error) {
+		if err == nil {
+			return
+		}
+		// store first error
+		if firstErr.Load() == nil {
+			firstErr.Store(&err)
+			cancel()
+		}
+	}
+
+	rootNode := visitor.NewNode(root)
+
+	// Producer: create child nodes and attach them synchronously,
+	// then enqueue each node for worker compute.
+	go func() {
+		defer close(jobs)
+		// enqueue root first
+		select {
+		case jobs <- job{entry: root, node: rootNode}:
+		case <-ctx.Done():
+			return
+		}
+
+		var produce func(e Entry, parentNode *T)
+		produce = func(e Entry, parentNode *T) {
+			for _, child := range e.GetChilds(visitor.DescendMethod()).SortedSlice() {
+				childNode := visitor.NewNode(child)
+				visitor.Attach(parentNode, childNode) // attach sequentially
+				select {
+				case <-ctx.Done():
+					return
+				case jobs <- job{entry: child, node: childNode, parentNode: parentNode}:
+				}
+				produce(child, childNode)
+			}
+		}
+		produce(root, rootNode)
+	}()
+
+	parentLocker := newParentLocker[T]()
+
+	var wg sync.WaitGroup
+	// Worker pool
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for job := range jobs {
+				include, err := visitor.Compute(ctx, job.entry, job.node)
+				if err != nil {
+					setErr(err)
+					return
+				}
+				if !include {
+					if job.parentNode == nil {
+						// root node: nothing to detach
+						return
+					}
+
+					// safely remove child
+					parentLocker.DetachChild(job.parentNode, job.node, visitor.Detach)
+				}
+			}
+		}()
+	}
+
+	// wait for all workers to finish
+	wg.Wait()
+
+	err = visitor.End()
+	if err != nil {
+		return nil, err
+	}
+
+	// if error happened, return it
+	if atomErr := firstErr.Load(); atomErr != nil {
+		return rootNode, *atomErr
+	}
+	if ctx.Err() != nil {
+		return rootNode, ctx.Err()
+	}
+
+	return rootNode, nil
+}
+
+type EnqueueVisitor struct {
+	ctx           context.Context
+	entryChan     chan<- Entry
+	descendMethod DescendMethod
+}
+
+func NewEnqueueVisitor(ctx context.Context, entryChan chan<- Entry, descendMethod DescendMethod) *EnqueueVisitor {
+	return &EnqueueVisitor{
+		ctx:           ctx,
+		entryChan:     entryChan,
+		descendMethod: descendMethod,
+	}
+}
+
+func (v *EnqueueVisitor) DescendMethod() DescendMethod {
+	return v.descendMethod
+}
+
+func (v *EnqueueVisitor) Visit(ctx context.Context, e Entry) error {
+	select {
+	case <-v.ctx.Done():
+		// context was cancelled
+		return v.ctx.Err()
+	case v.entryChan <- e:
+		// sent successfully
+		return nil
+	}
+}
+
+func (v *EnqueueVisitor) Up() {}
 
 // Walk takes the EntryVisitor and applies it to every Entry in the tree
 func (s *sharedEntryAttributes) Walk(ctx context.Context, v EntryVisitor) error {
