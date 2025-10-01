@@ -11,9 +11,9 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
-	log "github.com/sirupsen/logrus"
 )
 
 // RootEntry the root of the cache.Update tree
@@ -181,8 +181,8 @@ func (r *RootEntry) GetAncestorSchema() (*sdcpb.SchemaElem, int) {
 	return nil, 0
 }
 
-func (r *RootEntry) GetDeviations(ch chan<- *types.DeviationEntry) {
-	r.sharedEntryAttributes.GetDeviations(ch, true)
+func (r *RootEntry) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry) {
+	r.sharedEntryAttributes.GetDeviations(ctx, ch, true)
 }
 
 func (r *RootEntry) TreeExport(owner string, priority int32, deviation bool) (*tree_persist.Intent, error) {
@@ -243,6 +243,7 @@ func (r *RootEntry) DeleteBranchPaths(ctx context.Context, deletes types.DeleteE
 }
 
 func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
+	log := logf.FromContext(ctx)
 	edvs := ExplicitDeleteVisitors{}
 
 	// apply the explicit deletes
@@ -254,7 +255,7 @@ func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 			// navigate to the stated path
 			entry, err := r.NavigateSdcpbPath(ctx, path)
 			if err != nil {
-				log.Warnf("Applying explicit delete: path %s not found, skipping", path.ToXPath(false))
+				log.V(logf.VWarn).Info("Applying explicit delete - path not found, skipping", "path", path.ToXPath(false))
 			}
 
 			// walk the whole branch adding the explicit delete leafvariant
@@ -265,7 +266,7 @@ func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 			edvs[deletePathPrio.GetOwner()] = edv
 		}
 	}
-	log.Debugf("ExplicitDeletes added: %s", utils.MapToString(edvs.Stats(), ", ", func(k string, v int) string {
+	log.V(logf.VDebug).Info("ExplicitDeletes added", "explicit-deletes", utils.MapToString(edvs.Stats(), ", ", func(k string, v int) string {
 		return fmt.Sprintf("%s=%d", k, v)
 	}))
 

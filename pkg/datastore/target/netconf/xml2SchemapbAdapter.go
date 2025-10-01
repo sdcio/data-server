@@ -20,11 +20,10 @@ import (
 	"strings"
 
 	"github.com/beevik/etree"
-	"github.com/sdcio/data-server/pkg/utils"
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
-
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/utils"
+	logf "github.com/sdcio/logger"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 // XML2sdcpbConfigAdapter is used to transform the provided XML configuration data into the gnmi-like sdcpb.Notifications.
@@ -60,6 +59,7 @@ func (x *XML2sdcpbConfigAdapter) Transform(ctx context.Context, doc *etree.Docum
 }
 
 func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etree.Element, pelems []*sdcpb.PathElem, result *sdcpb.Notification, tc *TransformationContext) error {
+	log := logf.FromContext(ctx)
 	// add the current tag to the array of path elements that make up the actual abs path
 	pelems = append(pelems, &sdcpb.PathElem{Name: e.Tag})
 
@@ -76,7 +76,7 @@ func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etre
 	switch schema := sr.GetSchema().Schema.(type) {
 	case *sdcpb.SchemaElem_Container:
 		// retrieved schema describes a yang container
-		log.Tracef("transforming container %q", e.Tag)
+		log.V(logf.VTrace).Info("transforming container", "name", e.Tag)
 		err = x.transformContainer(ctx, e, sr, pelems, result)
 		if err != nil {
 			return err
@@ -84,7 +84,7 @@ func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etre
 
 	case *sdcpb.SchemaElem_Field:
 		// retrieved schema describes a yang Field
-		log.Tracef("transforming field %q", e.Tag)
+		log.V(logf.VTrace).Info("transforming field", "name", e.Tag)
 		err = x.transformField(ctx, e, &sdcpb.Path{Elem: pelems}, schema.Field, result)
 		if err != nil {
 			return err
@@ -92,7 +92,7 @@ func (x *XML2sdcpbConfigAdapter) transformRecursive(ctx context.Context, e *etre
 
 	case *sdcpb.SchemaElem_Leaflist:
 		// retrieved schema describes a yang LeafList
-		log.Tracef("transforming leaflist %q", e.Tag)
+		log.V(logf.VTrace).Info("transforming leaflist", "name", e.Tag)
 		err = x.transformLeafList(ctx, e, pelems, schema.Leaflist, tc)
 		if err != nil {
 			return err
@@ -123,7 +123,7 @@ func (x *XML2sdcpbConfigAdapter) transformContainer(ctx context.Context, e *etre
 		if cPElem[len(cPElem)-1].Key == nil {
 			cPElem[len(cPElem)-1].Key = map[string]string{}
 		}
-		tv, err := utils.Convert(e.FindElement("./"+ls.Name).Text(), ls.Type)
+		tv, err := utils.Convert(ctx, e.FindElement("./"+ls.Name).Text(), ls.Type)
 		if err != nil {
 			return err
 		}
@@ -209,7 +209,7 @@ func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.El
 	}
 
 	// process terminal values
-	tv, err := utils.Convert(e.Text(), schemaLeafType)
+	tv, err := utils.Convert(ctx, e.Text(), schemaLeafType)
 	if err != nil {
 		return fmt.Errorf("unable to convert value [%s] at path [%s] according to SchemaLeafType [%+v]: %w", e.Text(), e.GetPath(), schemaLeafType, err)
 	}
@@ -244,12 +244,15 @@ func (x *XML2sdcpbConfigAdapter) transformLeafList(ctx context.Context, e *etree
 	// process terminal values
 	data := strings.TrimSpace(e.Text())
 
-	tv, err := utils.Convert(data, slt)
+	tv, err := utils.Convert(ctx, data, slt)
 	if err != nil {
 		return fmt.Errorf("failed to convert value %s to type %s: %w", data, slt.Type, err)
 	}
 
 	name := pelems[len(pelems)-1].Name
-	tc.AddLeafListEntry(name, tv)
+	err = tc.AddLeafListEntry(name, tv)
+	if err != nil {
+		return fmt.Errorf("failed to add leaf list entry %s: %w", name, err)
+	}
 	return nil
 }
