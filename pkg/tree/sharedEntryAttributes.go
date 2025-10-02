@@ -13,13 +13,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/sdcio/data-server/pkg/config"
-	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // sharedEntryAttributes contains the attributes shared by Entry and RootEntry
@@ -1223,118 +1221,118 @@ func (s *sharedEntryAttributes) validatePattern(resultChan chan<- *types.Validat
 	}
 }
 
-func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.ImportConfigAdapterElement, intentName string, intentPrio int32, insertFlags *types.UpdateInsertFlags) error {
-	var err error
+// func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.ImportConfigAdapterElement, intentName string, intentPrio int32, insertFlags *types.UpdateInsertFlags) error {
+// 	var err error
 
-	switch x := s.schema.GetSchema().(type) {
-	case *sdcpb.SchemaElem_Container, nil:
-		switch {
-		case len(s.schema.GetContainer().GetKeys()) > 0:
+// 	switch x := s.schema.GetSchema().(type) {
+// 	case *sdcpb.SchemaElem_Container, nil:
+// 		switch {
+// 		case len(s.schema.GetContainer().GetKeys()) > 0:
 
-			var exists bool
-			var actualEntry Entry = s
-			var keyChild Entry
-			schemaKeys := s.GetSchemaKeys()
-			slices.Sort(schemaKeys)
-			for _, schemaKey := range schemaKeys {
+// 			var exists bool
+// 			var actualEntry Entry = s
+// 			var keyChild Entry
+// 			schemaKeys := s.GetSchemaKeys()
+// 			slices.Sort(schemaKeys)
+// 			for _, schemaKey := range schemaKeys {
 
-				keyTransf := t.GetElement(schemaKey)
-				if keyTransf == nil {
-					return fmt.Errorf("unable to find key attribute %s under %s", schemaKey, s.SdcpbPath().ToXPath(false))
-				}
-				keyElemValue, err := keyTransf.GetKeyValue()
-				if err != nil {
-					return err
-				}
-				// if the child does not exist, create it
-				if keyChild, exists = actualEntry.GetChilds(DescendMethodAll)[keyElemValue]; !exists {
-					keyChild, err = newEntry(ctx, actualEntry, keyElemValue, s.treeContext)
-					if err != nil {
-						return err
-					}
-				}
-				actualEntry = keyChild
-			}
-			err = actualEntry.ImportConfig(ctx, t, intentName, intentPrio, insertFlags)
-			if err != nil {
-				return err
-			}
-		default:
-			if len(t.GetElements()) == 0 {
-				// it might be a presence container
-				schem := s.schema.GetContainer()
-				if schem == nil {
-					return nil
-				}
-				if schem.IsPresence {
-					tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}
-					upd := types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
-					s.leafVariants.Add(NewLeafEntry(upd, insertFlags, s))
-				}
-			}
+// 				keyTransf := t.GetElement(schemaKey)
+// 				if keyTransf == nil {
+// 					return fmt.Errorf("unable to find key attribute %s under %s", schemaKey, s.SdcpbPath().ToXPath(false))
+// 				}
+// 				keyElemValue, err := keyTransf.GetKeyValue()
+// 				if err != nil {
+// 					return err
+// 				}
+// 				// if the child does not exist, create it
+// 				if keyChild, exists = actualEntry.GetChilds(DescendMethodAll)[keyElemValue]; !exists {
+// 					keyChild, err = newEntry(ctx, actualEntry, keyElemValue, s.treeContext)
+// 					if err != nil {
+// 						return err
+// 					}
+// 				}
+// 				actualEntry = keyChild
+// 			}
+// 			err = actualEntry.ImportConfig(ctx, t, intentName, intentPrio, insertFlags)
+// 			if err != nil {
+// 				return err
+// 			}
+// 		default:
+// 			if len(t.GetElements()) == 0 {
+// 				// it might be a presence container
+// 				schem := s.schema.GetContainer()
+// 				if schem == nil {
+// 					return nil
+// 				}
+// 				if schem.IsPresence {
+// 					tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}
+// 					upd := types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
+// 					s.leafVariants.Add(NewLeafEntry(upd, insertFlags, s))
+// 				}
+// 			}
 
-			for _, elem := range t.GetElements() {
-				var child Entry
-				var exists bool
+// 			for _, elem := range t.GetElements() {
+// 				var child Entry
+// 				var exists bool
 
-				// if the child does not exist, create it
-				if child, exists = s.getChildren()[elem.GetName()]; !exists {
-					child, err = newEntry(ctx, s, elem.GetName(), s.treeContext)
-					if err != nil {
-						return fmt.Errorf("error trying to insert %s at path %s: %w", elem.GetName(), s.SdcpbPath().ToXPath(false), err)
-					}
-				}
-				err = child.ImportConfig(ctx, elem, intentName, intentPrio, insertFlags)
-				if err != nil {
-					return err
-				}
-			}
-		}
-	case *sdcpb.SchemaElem_Field:
-		// // if it is as leafref we need to figure out the type of the references field.
-		fieldType := x.Field.GetType()
-		// if x.Field.GetType().Type == "leafref" {
-		// 	s.treeContext.treeSchemaCacheClient.GetSchema(ctx,)
-		// }
+// 				// if the child does not exist, create it
+// 				if child, exists = s.getChildren()[elem.GetName()]; !exists {
+// 					child, err = newEntry(ctx, s, elem.GetName(), s.treeContext)
+// 					if err != nil {
+// 						return fmt.Errorf("error trying to insert %s at path %s: %w", elem.GetName(), s.SdcpbPath().ToXPath(false), err)
+// 					}
+// 				}
+// 				err = child.ImportConfig(ctx, elem, intentName, intentPrio, insertFlags)
+// 				if err != nil {
+// 					return err
+// 				}
+// 			}
+// 		}
+// 	case *sdcpb.SchemaElem_Field:
+// 		// // if it is as leafref we need to figure out the type of the references field.
+// 		fieldType := x.Field.GetType()
+// 		// if x.Field.GetType().Type == "leafref" {
+// 		// 	s.treeContext.treeSchemaCacheClient.GetSchema(ctx,)
+// 		// }
 
-		tv, err := t.GetTVValue(fieldType)
-		if err != nil {
-			return err
-		}
-		upd := types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
+// 		tv, err := t.GetTVValue(fieldType)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		upd := types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
 
-		s.leafVariants.Add(NewLeafEntry(upd, insertFlags, s))
+// 		s.leafVariants.Add(NewLeafEntry(upd, insertFlags, s))
 
-	case *sdcpb.SchemaElem_Leaflist:
-		var scalarArr *sdcpb.ScalarArray
-		mustAdd := false
-		le := s.leafVariants.GetByOwner(intentName)
-		if le != nil {
-			scalarArr = le.Value().GetLeaflistVal()
-		} else {
-			le = NewLeafEntry(nil, insertFlags, s)
-			mustAdd = true
-			scalarArr = &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{}}
-		}
+// 	case *sdcpb.SchemaElem_Leaflist:
+// 		var scalarArr *sdcpb.ScalarArray
+// 		mustAdd := false
+// 		le := s.leafVariants.GetByOwner(intentName)
+// 		if le != nil {
+// 			scalarArr = le.Value().GetLeaflistVal()
+// 		} else {
+// 			le = NewLeafEntry(nil, insertFlags, s)
+// 			mustAdd = true
+// 			scalarArr = &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{}}
+// 		}
 
-		tv, err := t.GetTVValue(x.Leaflist.GetType())
-		if err != nil {
-			return err
-		}
+// 		tv, err := t.GetTVValue(x.Leaflist.GetType())
+// 		if err != nil {
+// 			return err
+// 		}
 
-		// the proto implementation will return leaflist tvs
-		if tv.GetLeaflistVal() == nil {
-			scalarArr.Element = append(scalarArr.Element, tv)
-			tv = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: scalarArr}}
-		}
+// 		// the proto implementation will return leaflist tvs
+// 		if tv.GetLeaflistVal() == nil {
+// 			scalarArr.Element = append(scalarArr.Element, tv)
+// 			tv = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: scalarArr}}
+// 		}
 
-		le.Update = types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
-		if mustAdd {
-			s.leafVariants.Add(le)
-		}
-	}
-	return nil
-}
+// 		le.Update = types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
+// 		if mustAdd {
+// 			s.leafVariants.Add(le)
+// 		}
+// 	}
+// 	return nil
+// }
 
 // validateMandatory validates that all the mandatory attributes,
 // defined by the schema are present either in the tree or in the index.
@@ -1530,6 +1528,10 @@ func (s *sharedEntryAttributes) populateChoiceCaseResolvers(_ context.Context) e
 		}
 	}
 	return nil
+}
+
+func (s *sharedEntryAttributes) GetChild(name string) (Entry, bool) {
+	return s.childs.GetEntry(name)
 }
 
 func (s *sharedEntryAttributes) GetChilds(d DescendMethod) EntryMap {
