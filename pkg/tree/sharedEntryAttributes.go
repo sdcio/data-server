@@ -1607,6 +1607,8 @@ func (s *sharedEntryAttributes) StringIndent(result []string) []string {
 
 // SdcpbPath returns the sdcpb.Path, with its elements and keys based on the local schema
 func (s *sharedEntryAttributes) SdcpbPath() *sdcpb.Path {
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
 	if s.pathCache != nil {
 		return s.pathCache
 	}

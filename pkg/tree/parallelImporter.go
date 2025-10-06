@@ -29,13 +29,12 @@ func (s *sharedEntryAttributes) ImportConfig(
 	intentPrio int32,
 	insertFlags *types.UpdateInsertFlags,
 ) error {
-	p := utils.NewWorkerPool[importTask](ctx, runtime.NumCPU(), 900000)
+	p := utils.NewWorkerPool[importTask](ctx, runtime.NumCPU())
 
 	p.Start(importHandler)
 
 	// seed root
 	if err := p.Submit(importTask{entry: s, importerElement: importerElement, intentName: intentName, intentPrio: intentPrio, insertFlags: insertFlags, treeContext: s.treeContext}); err != nil {
-		p.Close()
 		return err
 	}
 
@@ -75,6 +74,7 @@ func importHandler(ctx context.Context, task importTask, submit func(importTask)
 				actual = keyChild
 			}
 			// submit resolved entry with same adapter element
+			// return importHandler(ctx, importTask{entry: actual, importerElement: task.importerElement, intentName: task.intentName, intentPrio: task.intentPrio, insertFlags: task.insertFlags, treeContext: task.treeContext}, submit)
 			return submit(importTask{entry: actual, importerElement: task.importerElement, intentName: task.intentName, intentPrio: task.intentPrio, insertFlags: task.insertFlags, treeContext: task.treeContext})
 		}
 
