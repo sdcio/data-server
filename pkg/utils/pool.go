@@ -220,141 +220,93 @@ func (p *Pool[T]) forceClose() {
 
 var ErrClosed = errors.New("queue closed")
 
+// noCopy may be embedded into structs which must not be copied after first use.
+// go vet will warn on accidental copies (it looks for Lock methods).
+type noCopy struct{}
+
+func (*noCopy) Lock() {}
+
+// node for single-lock queue (plain pointer; protected by mu)
 type node[T any] struct {
 	val  T
-	next atomic.Pointer[node[T]]
+	next *node[T]
 }
 
-// WorkerPoolQueue is a dual-lock MPMC linked-list queue.
-// Node.next is an atomic.Pointer to avoid races between producers (writing next)
-// and consumers (reading next) when they hold different locks.
+// WorkerPoolQueue is a simple, single-mutex MPMC queue.
+// This is easier to reason about than a two-lock variant and avoids lost-wakeup races.
 type WorkerPoolQueue[T any] struct {
-	head   *node[T]    // sentinel
-	tail   *node[T]    // last node
-	headMu sync.Mutex  // protects head and cond / waiting
-	tailMu sync.Mutex  // protects tail pointer
-	cond   *sync.Cond  // tied to headMu
-	closed atomic.Bool // closed flag (atomic)
-	size   int64       // approximate size
+	noCopy noCopy
+
+	mu     sync.Mutex
+	cond   *sync.Cond
+	head   *node[T] // sentinel
+	tail   *node[T]
+	closed bool
+	size   int64 // track queued count (atomic operations used for Len to avoid taking mu)
 }
 
+// NewWorkerPoolQueue constructs a new queue.
 func NewWorkerPoolQueue[T any]() *WorkerPoolQueue[T] {
 	s := &node[T]{}
 	q := &WorkerPoolQueue[T]{head: s, tail: s}
-	q.cond = sync.NewCond(&q.headMu)
+	q.cond = sync.NewCond(&q.mu)
 	return q
 }
 
 func (q *WorkerPoolQueue[T]) Put(v T) error {
-	// Quick closed check
-	if q.closed.Load() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.closed {
 		return ErrClosed
 	}
-
-	n := &node[T]{}
-	n.val = v
-
-	for {
-		// Fast path: append under tailMu if queue is non-empty.
-		q.tailMu.Lock()
-		if q.closed.Load() {
-			q.tailMu.Unlock()
-			return ErrClosed
-		}
-		if q.tail != q.head { // non-empty
-			// use atomic store for tail.next
-			q.tail.next.Store(n)
-			q.tail = n
-			atomic.AddInt64(&q.size, 1)
-			q.tailMu.Unlock()
-			// wake a waiter (ok to call Signal without headMu)
-			q.cond.Signal()
-			return nil
-		}
-		// maybe empty: release tailMu and take both locks in canonical order
-		q.tailMu.Unlock()
-
-		q.headMu.Lock()
-		q.tailMu.Lock()
-
-		// re-check closed & emptiness
-		if q.closed.Load() {
-			q.tailMu.Unlock()
-			q.headMu.Unlock()
-			return ErrClosed
-		}
-		if q.tail != q.head {
-			// someone appended in the meantime: release and retry
-			q.tailMu.Unlock()
-			q.headMu.Unlock()
-			continue
-		}
-
-		// safe to append: we hold headMu+tailMu and queue is empty
-		q.tail.next.Store(n)
-		q.tail = n
-		atomic.AddInt64(&q.size, 1)
-		// signal while holding headMu (canonical)
-		q.cond.Signal()
-		q.tailMu.Unlock()
-		q.headMu.Unlock()
-		return nil
-	}
+	n := &node[T]{val: v}
+	q.tail.next = n
+	q.tail = n
+	atomic.AddInt64(&q.size, 1)
+	// signal one waiter (consumer checks under mu)
+	q.cond.Signal()
+	return nil
 }
 
 func (q *WorkerPoolQueue[T]) Get() (T, bool) {
-	q.headMu.Lock()
+	q.mu.Lock()
 	// wait while empty and not closed
-	for q.head.next.Load() == nil && !q.closed.Load() {
+	for q.head.next == nil && !q.closed {
 		q.cond.Wait()
 	}
 
 	// empty + closed => done
-	if q.head.next.Load() == nil {
-		q.headMu.Unlock()
+	if q.head.next == nil {
+		q.mu.Unlock()
 		var zero T
 		return zero, false
 	}
 
-	// pop head.next (atomic load)
-	n := q.head.next.Load()
-	// set head.next = n.next (atomic load of next)
-	next := n.next.Load()
-	q.head.next.Store(next)
-
-	// If queue became empty after pop, reset tail -> head sentinel if safe.
-	if q.head.next.Load() == nil {
-		q.tailMu.Lock()
-		// compare pointer identity under tailMu
-		if q.tail == n {
-			q.tail = q.head
-		}
-		q.tailMu.Unlock()
+	// pop head.next
+	n := q.head.next
+	q.head.next = n.next
+	if q.head.next == nil {
+		q.tail = q.head
 	}
+	q.mu.Unlock()
 
-	q.headMu.Unlock()
 	atomic.AddInt64(&q.size, -1)
 	return n.val, true
 }
 
 func (q *WorkerPoolQueue[T]) TryGet() (T, bool) {
-	q.headMu.Lock()
-	if q.head.next.Load() == nil {
-		q.headMu.Unlock()
+	q.mu.Lock()
+	if q.head.next == nil {
+		q.mu.Unlock()
 		var zero T
 		return zero, false
 	}
-	n := q.head.next.Load()
-	next := n.next.Load()
-	q.head.next.Store(next)
-	if q.head.next.Load() == nil {
-		q.tailMu.Lock()
-		if q.tail == n {
-			q.tail = q.head
-		}
-		q.tailMu.Unlock()
+	n := q.head.next
+	q.head.next = n.next
+	if q.head.next == nil {
+		q.tail = q.head
 	}
-	q.headMu.Unlock()
+	q.mu.Unlock()
 	atomic.AddInt64(&q.size, -1)
 	return n.val, true
 }
@@ -364,8 +316,8 @@ func (q *WorkerPoolQueue[T]) Len() int {
 }
 
 func (q *WorkerPoolQueue[T]) Close() {
-	q.closed.Store(true)
-	q.headMu.Lock()
+	q.mu.Lock()
+	q.closed = true
 	q.cond.Broadcast()
-	q.headMu.Unlock()
+	q.mu.Unlock()
 }
