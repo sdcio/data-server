@@ -13,9 +13,8 @@ import (
 	context "context"
 	reflect "reflect"
 
-	etree "github.com/beevik/etree"
 	config "github.com/sdcio/data-server/pkg/config"
-	target "github.com/sdcio/data-server/pkg/datastore/target"
+	types "github.com/sdcio/data-server/pkg/datastore/target/types"
 	schema_server "github.com/sdcio/sdc-protos/sdcpb"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -42,6 +41,25 @@ func NewMockTarget(ctrl *gomock.Controller) *MockTarget {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockTarget) EXPECT() *MockTargetMockRecorder {
 	return m.recorder
+}
+
+// AddSyncs mocks base method.
+func (m *MockTarget) AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx}
+	for _, a := range sps {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "AddSyncs", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddSyncs indicates an expected call of AddSyncs.
+func (mr *MockTargetMockRecorder) AddSyncs(ctx any, sps ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx}, sps...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSyncs", reflect.TypeOf((*MockTarget)(nil).AddSyncs), varargs...)
 }
 
 // Close mocks base method.
@@ -74,7 +92,7 @@ func (mr *MockTargetMockRecorder) Get(ctx, req any) *gomock.Call {
 }
 
 // Set mocks base method.
-func (m *MockTarget) Set(ctx context.Context, source target.TargetSource) (*schema_server.SetDataResponse, error) {
+func (m *MockTarget) Set(ctx context.Context, source types.TargetSource) (*schema_server.SetDataResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Set", ctx, source)
 	ret0, _ := ret[0].(*schema_server.SetDataResponse)
@@ -89,10 +107,10 @@ func (mr *MockTargetMockRecorder) Set(ctx, source any) *gomock.Call {
 }
 
 // Status mocks base method.
-func (m *MockTarget) Status() *target.TargetStatus {
+func (m *MockTarget) Status() *types.TargetStatus {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Status")
-	ret0, _ := ret[0].(*target.TargetStatus)
+	ret0, _ := ret[0].(*types.TargetStatus)
 	return ret0
 }
 
@@ -100,115 +118,4 @@ func (m *MockTarget) Status() *target.TargetStatus {
 func (mr *MockTargetMockRecorder) Status() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Status", reflect.TypeOf((*MockTarget)(nil).Status))
-}
-
-// Sync mocks base method.
-func (m *MockTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *target.SyncUpdate) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Sync", ctx, syncConfig, syncCh)
-}
-
-// Sync indicates an expected call of Sync.
-func (mr *MockTargetMockRecorder) Sync(ctx, syncConfig, syncCh any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sync", reflect.TypeOf((*MockTarget)(nil).Sync), ctx, syncConfig, syncCh)
-}
-
-// MockTargetSource is a mock of TargetSource interface.
-type MockTargetSource struct {
-	ctrl     *gomock.Controller
-	recorder *MockTargetSourceMockRecorder
-	isgomock struct{}
-}
-
-// MockTargetSourceMockRecorder is the mock recorder for MockTargetSource.
-type MockTargetSourceMockRecorder struct {
-	mock *MockTargetSource
-}
-
-// NewMockTargetSource creates a new mock instance.
-func NewMockTargetSource(ctrl *gomock.Controller) *MockTargetSource {
-	mock := &MockTargetSource{ctrl: ctrl}
-	mock.recorder = &MockTargetSourceMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockTargetSource) EXPECT() *MockTargetSourceMockRecorder {
-	return m.recorder
-}
-
-// ToJson mocks base method.
-func (m *MockTargetSource) ToJson(onlyNewOrUpdated bool) (any, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ToJson", onlyNewOrUpdated)
-	ret0, _ := ret[0].(any)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ToJson indicates an expected call of ToJson.
-func (mr *MockTargetSourceMockRecorder) ToJson(onlyNewOrUpdated any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ToJson", reflect.TypeOf((*MockTargetSource)(nil).ToJson), onlyNewOrUpdated)
-}
-
-// ToJsonIETF mocks base method.
-func (m *MockTargetSource) ToJsonIETF(onlyNewOrUpdated bool) (any, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ToJsonIETF", onlyNewOrUpdated)
-	ret0, _ := ret[0].(any)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ToJsonIETF indicates an expected call of ToJsonIETF.
-func (mr *MockTargetSourceMockRecorder) ToJsonIETF(onlyNewOrUpdated any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ToJsonIETF", reflect.TypeOf((*MockTargetSource)(nil).ToJsonIETF), onlyNewOrUpdated)
-}
-
-// ToProtoDeletes mocks base method.
-func (m *MockTargetSource) ToProtoDeletes(ctx context.Context) ([]*schema_server.Path, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ToProtoDeletes", ctx)
-	ret0, _ := ret[0].([]*schema_server.Path)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ToProtoDeletes indicates an expected call of ToProtoDeletes.
-func (mr *MockTargetSourceMockRecorder) ToProtoDeletes(ctx any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ToProtoDeletes", reflect.TypeOf((*MockTargetSource)(nil).ToProtoDeletes), ctx)
-}
-
-// ToProtoUpdates mocks base method.
-func (m *MockTargetSource) ToProtoUpdates(ctx context.Context, onlyNewOrUpdated bool) ([]*schema_server.Update, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ToProtoUpdates", ctx, onlyNewOrUpdated)
-	ret0, _ := ret[0].([]*schema_server.Update)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ToProtoUpdates indicates an expected call of ToProtoUpdates.
-func (mr *MockTargetSourceMockRecorder) ToProtoUpdates(ctx, onlyNewOrUpdated any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ToProtoUpdates", reflect.TypeOf((*MockTargetSource)(nil).ToProtoUpdates), ctx, onlyNewOrUpdated)
-}
-
-// ToXML mocks base method.
-func (m *MockTargetSource) ToXML(onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove bool) (*etree.Document, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ToXML", onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
-	ret0, _ := ret[0].(*etree.Document)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ToXML indicates an expected call of ToXML.
-func (mr *MockTargetSourceMockRecorder) ToXML(onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ToXML", reflect.TypeOf((*MockTargetSource)(nil).ToXML), onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
 }

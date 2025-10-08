@@ -30,6 +30,7 @@ import (
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/datastore/target/netconf"
 	"github.com/sdcio/data-server/pkg/datastore/target/netconf/driver/scrapligo"
+	"github.com/sdcio/data-server/pkg/datastore/target/types"
 )
 
 type ncTarget struct {
@@ -62,7 +63,7 @@ func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient s
 
 func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
 	if !t.Status().IsConnected() {
-		return nil, fmt.Errorf("%s", TargetStatusNotConnected)
+		return nil, fmt.Errorf("%s", types.TargetStatusNotConnected)
 	}
 	source := "running"
 
@@ -121,9 +122,9 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	return result, nil
 }
 
-func (t *ncTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDataResponse, error) {
+func (t *ncTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
 	if !t.Status().IsConnected() {
-		return nil, fmt.Errorf("%s", TargetStatusNotConnected)
+		return nil, fmt.Errorf("%s", types.TargetStatusNotConnected)
 	}
 
 	switch t.sbiConfig.NetconfOptions.CommitDatastore {
@@ -136,26 +137,26 @@ func (t *ncTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetData
 	return nil, fmt.Errorf("unknown commit-datastore: %s", t.sbiConfig.NetconfOptions.CommitDatastore)
 }
 
-func (t *ncTarget) Status() *TargetStatus {
-	result := NewTargetStatus(TargetStatusNotConnected)
+func (t *ncTarget) Status() *types.TargetStatus {
+	result := types.NewTargetStatus(types.TargetStatusNotConnected)
 	if t == nil || t.driver == nil {
 		result.Details = "connection not initialized"
 		return result
 	}
 	if t.driver.IsAlive() {
-		result.Status = TargetStatusConnected
+		result.Status = types.TargetStatusConnected
 	}
 	return result
 }
 
-func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
+func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync) {
 	log.Infof("starting target %s [%s] sync", t.name, t.sbiConfig.Address)
 
 	for _, ncc := range syncConfig.Config {
 		// periodic get
 		log.Debugf("target %s, starting sync: %s, Interval: %s, Paths: [ \"%s\" ]", t.name, ncc.Name, ncc.Interval.String(), strings.Join(ncc.Paths, "\", \""))
 		go func(ncSync *config.SyncProtocol) {
-			t.internalSync(ctx, ncSync, true, syncCh)
+			t.internalSync(ctx, ncSync, true)
 			ticker := time.NewTicker(ncSync.Interval)
 			defer ticker.Stop()
 			for {
@@ -163,7 +164,7 @@ func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh cha
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
-					t.internalSync(ctx, ncSync, false, syncCh)
+					t.internalSync(ctx, ncSync, false)
 				}
 			}
 		}(ncc)
@@ -175,7 +176,7 @@ func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh cha
 	}
 }
 
-func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, force bool, syncCh chan *SyncUpdate) {
+func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, force bool) {
 	if !t.Status().IsConnected() {
 		return
 	}
@@ -209,22 +210,23 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, fo
 		}
 		return
 	}
-	// push notifications into syncCh
-	syncCh <- &SyncUpdate{
-		Start: true,
-		Force: force,
-	}
-	notificationsCount := 0
-	for _, n := range resp.GetNotification() {
-		syncCh <- &SyncUpdate{
-			Update: n,
-		}
-		notificationsCount++
-	}
-	log.Debugf("%s: sync-ed %d notifications", t.name, notificationsCount)
-	syncCh <- &SyncUpdate{
-		End: true,
-	}
+	_ = resp
+	// // push notifications into syncCh
+	// syncCh <- &SyncUpdate{
+	// 	Start: true,
+	// 	Force: force,
+	// }
+	// notificationsCount := 0
+	// for _, n := range resp.GetNotification() {
+	// 	syncCh <- &SyncUpdate{
+	// 		Update: n,
+	// 	}
+	// 	notificationsCount++
+	// }
+	// log.Debugf("%s: sync-ed %d notifications", t.name, notificationsCount)
+	// syncCh <- &SyncUpdate{
+	// 	End: true,
+	// }
 }
 
 func (t *ncTarget) Close() error {
@@ -259,7 +261,7 @@ func (t *ncTarget) reconnect() {
 	}
 }
 
-func (t *ncTarget) setRunning(source TargetSource) (*sdcpb.SetDataResponse, error) {
+func (t *ncTarget) setRunning(source types.TargetSource) (*sdcpb.SetDataResponse, error) {
 
 	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
 	if err != nil {
@@ -319,7 +321,7 @@ func filterRPCErrors(xml *etree.Document, severity string) ([]string, error) {
 	return result, nil
 }
 
-func (t *ncTarget) setCandidate(source TargetSource) (*sdcpb.SetDataResponse, error) {
+func (t *ncTarget) setCandidate(source types.TargetSource) (*sdcpb.SetDataResponse, error) {
 	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
 	if err != nil {
 		return nil, err
