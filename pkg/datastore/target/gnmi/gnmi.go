@@ -109,7 +109,7 @@ func NewTarget(ctx context.Context, name string, cfg *config.SBI, runningStore t
 }
 
 func (t *gnmiTarget) Subscribe(ctx context.Context, req *gnmi.SubscribeRequest, subscriptionName string) {
-	t.Subscribe(ctx, req, subscriptionName)
+	t.target.Subscribe(ctx, req, subscriptionName)
 }
 
 func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
