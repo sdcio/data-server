@@ -87,6 +87,10 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 	log := logf.FromContext(ctx)
 	log = log.WithName("datastore").WithValues(
 		"datastore-name", c.Name,
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.Info("new datastore",
 		"target-name", c.Name,
 		"schema-vendor", c.Schema.Vendor,
 		"schema-version", c.Schema.Version,
@@ -94,7 +98,6 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 		"sbi-address", c.SBI.Address,
 		"sbi-port", c.SBI.Port,
 	)
-	ctx = logf.IntoContext(ctx, log)
 
 	scb := schemaClient.NewSchemaClientBound(c.Schema, sc)
 	tc := tree.NewTreeContext(scb, tree.RunningIntentName)

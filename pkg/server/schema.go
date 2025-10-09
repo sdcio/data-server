@@ -123,6 +123,7 @@ SCHEMA_CONNECT:
 
 	log = log.WithValues("schema-server-address", s.config.SchemaServer.Address)
 	ctx = logf.IntoContext(ctx, log)
+
 	dialCtx, cancel := context.WithTimeout(ctx, schemaServerConnectRetry)
 	defer cancel()
 	cc, err := grpc.DialContext(dialCtx, s.config.SchemaServer.Address, opts...)
@@ -139,13 +140,16 @@ func (s *Server) GetSchema(ctx context.Context, req *sdcpb.GetSchemaRequest) (*s
 	log := logf.FromContext(ctx).WithName("GetSchema")
 	log = log.WithValues(
 		"schema-name", req.GetSchema().GetName(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.Info("GetSchema",
 		"schema-vendor", req.GetSchema().GetVendor(),
 		"schema-version", req.GetSchema().GetVersion(),
 		"schema-path", req.GetPath().String(),
 		"schema-validate-keys", req.GetValidateKeys(),
 		"schema-with-description", req.GetWithDescription(),
 	)
-	ctx = logf.IntoContext(ctx, log)
 	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
 	return s.schemaClient.GetSchema(ctx, req)
 }
@@ -153,6 +157,7 @@ func (s *Server) GetSchema(ctx context.Context, req *sdcpb.GetSchemaRequest) (*s
 func (s *Server) ListSchema(ctx context.Context, req *sdcpb.ListSchemaRequest) (*sdcpb.ListSchemaResponse, error) {
 	log := logf.FromContext(ctx).WithName("ListSchema")
 	ctx = logf.IntoContext(ctx, log)
+
 	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
 	return s.schemaClient.ListSchema(ctx, req)
 }
@@ -161,10 +166,13 @@ func (s *Server) GetSchemaDetails(ctx context.Context, req *sdcpb.GetSchemaDetai
 	log := logf.FromContext(ctx).WithName("GetSchemaDetails")
 	log = log.WithValues(
 		"schema-name", req.GetSchema().GetName(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.Info("GetSchemaDetails",
 		"schema-vendor", req.GetSchema().GetVendor(),
 		"schema-version", req.GetSchema().GetVersion(),
 	)
-	ctx = logf.IntoContext(ctx, log)
 	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
 	return s.schemaClient.GetSchemaDetails(ctx, req)
 }
@@ -172,11 +180,14 @@ func (s *Server) GetSchemaDetails(ctx context.Context, req *sdcpb.GetSchemaDetai
 func (s *Server) CreateSchema(ctx context.Context, req *sdcpb.CreateSchemaRequest) (*sdcpb.CreateSchemaResponse, error) {
 	log := logf.FromContext(ctx).WithName("CreateSchema")
 	log = log.WithValues(
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.Info("CreateSchema",
 		"schema-name", req.GetSchema().GetName(),
 		"schema-vendor", req.GetSchema().GetVendor(),
 		"schema-version", req.GetSchema().GetVersion(),
 	)
-	ctx = logf.IntoContext(ctx, log)
 	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
 	return s.schemaClient.CreateSchema(ctx, req)
 }
@@ -185,10 +196,13 @@ func (s *Server) ReloadSchema(ctx context.Context, req *sdcpb.ReloadSchemaReques
 	log := logf.FromContext(ctx).WithName("ReloadSchema")
 	log = log.WithValues(
 		"schema-name", req.GetSchema().GetName(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.Info("ReloadSchema",
 		"schema-vendor", req.GetSchema().GetVendor(),
 		"schema-version", req.GetSchema().GetVersion(),
 	)
-	ctx = logf.IntoContext(ctx, log)
 	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
 	return s.schemaClient.ReloadSchema(ctx, req)
 }
@@ -197,10 +211,13 @@ func (s *Server) DeleteSchema(ctx context.Context, req *sdcpb.DeleteSchemaReques
 	log := logf.FromContext(ctx).WithName("DeleteSchema")
 	log = log.WithValues(
 		"schema-name", req.GetSchema().GetName(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.Info("DeleteSchema",
 		"schema-vendor", req.GetSchema().GetVendor(),
 		"schema-version", req.GetSchema().GetVersion(),
 	)
-	ctx = logf.IntoContext(ctx, log)
 	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
 	return s.schemaClient.DeleteSchema(ctx, req)
 }
@@ -209,11 +226,14 @@ func (s *Server) ToPath(ctx context.Context, req *sdcpb.ToPathRequest) (*sdcpb.T
 	log := logf.FromContext(ctx).WithName("ToPath")
 	log = log.WithValues(
 		"schema-name", req.GetSchema().GetName(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.Info("ToPath",
 		"schema-vendor", req.GetSchema().GetVendor(),
 		"schema-version", req.GetSchema().GetVersion(),
 		"path-elements", strings.Join(req.GetPathElement(), ","),
 	)
-	ctx = logf.IntoContext(ctx, log)
 	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
 	return s.schemaClient.ToPath(ctx, req)
 }
@@ -222,13 +242,16 @@ func (s *Server) ExpandPath(ctx context.Context, req *sdcpb.ExpandPathRequest) (
 	log := logf.FromContext(ctx).WithName("ExpandPath")
 	log = log.WithValues(
 		"schema-name", req.GetSchema().GetName(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.Info("ExpandPath",
 		"schema-vendor", req.GetSchema().GetVendor(),
 		"schema-version", req.GetSchema().GetVersion(),
 		"schema-path", req.GetPath().String(),
 		"schema-datatype", req.GetDataType().String(),
 		"schema-is-xpath", req.GetXpath(),
 	)
-	ctx = logf.IntoContext(ctx, log)
 	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
 	return s.schemaClient.ExpandPath(ctx, req)
 }
@@ -254,16 +277,19 @@ func (s *Server) UploadSchema(stream sdcpb.SchemaServer_UploadSchemaServer) erro
 
 func (s *Server) GetSchemaElements(req *sdcpb.GetSchemaRequest, stream sdcpb.SchemaServer_GetSchemaElementsServer) error {
 	ctx := stream.Context()
-	log := logf.FromContext(ctx)
+	log := logf.FromContext(ctx).WithName("GetSchemaElements")
 	log = log.WithValues(
 		"schema-name", req.GetSchema().GetName(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+	
+	log.Info("GetSchemaElements",
 		"schema-vendor", req.GetSchema().GetVendor(),
 		"schema-version", req.GetSchema().GetVersion(),
 		"schema-path", req.GetPath().String(),
 		"schema-validate-keys", req.GetValidateKeys(),
 		"schema-with-description", req.GetWithDescription(),
 	)
-	ctx = logf.IntoContext(ctx, log)
 	ch, err := s.schemaClient.GetSchemaElements(ctx, req)
 	if err != nil {
 		return err

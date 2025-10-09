@@ -102,7 +102,7 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 		return nil, err
 	}
 
-	log.V(logf.VTrace).Info("received netconf response", "response", ncResponse.DocAsString())
+	log.V(logf.VTrace).Info("received netconf response", "response", ncResponse.DocAsString(false))
 
 	// cmlImport := xml.NewXmlTreeImporter(ncResponse.Doc.Root())
 

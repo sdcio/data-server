@@ -22,12 +22,15 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 	log := logf.FromContext(ctx).WithName("TransactionSet")
 	log = log.WithName("transaction").WithValues(
 		"transaction-id", req.GetTransactionId(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.Info("TransactionSet",
 		"transaction-datastore-name", req.GetDatastoreName(),
 		"transaction-dry-run", req.GetDryRun(),
 		"transaction-timeout", req.GetTimeout(),
 		"transaction-peer", pr.String(),
 	)
-	ctx = logf.IntoContext(ctx, log)
 
 	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
 
@@ -86,10 +89,13 @@ func (s *Server) TransactionConfirm(ctx context.Context, req *sdcpb.TransactionC
 	log := logf.FromContext(ctx).WithName("TransactionConfirm")
 	log = log.WithName("transaction").WithValues(
 		"transaction-id", req.GetTransactionId(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.Info("TransactionConfirm",
 		"transaction-datastore-name", req.GetDatastoreName(),
 		"transaction-peer", pr.String(),
 	)
-	ctx = logf.IntoContext(ctx, log)
 
 	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
 
@@ -112,10 +118,13 @@ func (s *Server) TransactionCancel(ctx context.Context, req *sdcpb.TransactionCa
 	log := logf.FromContext(ctx).WithName("TransactionCancel")
 	log = log.WithName("transaction").WithValues(
 		"transaction-id", req.GetTransactionId(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.Info("TransactionCancel",
 		"transaction-datastore-name", req.GetDatastoreName(),
 		"transaction-peer", pr.String(),
 	)
-	ctx = logf.IntoContext(ctx, log)
 
 	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
 

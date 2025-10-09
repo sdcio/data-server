@@ -76,10 +76,13 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 	log := logf.FromContext(ctx).WithName("CreateDataStore")
 	log = log.WithValues(
 		"datastore-name", req.GetDatastoreName(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.Info("creating datastore",
 		"datastore-schema", req.GetSchema(),
 		"datastore-target", req.GetTarget(),
 	)
-	ctx = logf.IntoContext(ctx, log)
 	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
 
 	name := req.GetDatastoreName()
@@ -225,7 +228,6 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 
 	err = ds.Stop()
 	if err != nil {
-		//TODO: Should we return error here and stop execution?
 		log.Error(err, "failed to stop datastore")
 	}
 	err = s.datastores.DeleteDatastore(ctx, name)

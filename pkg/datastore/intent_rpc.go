@@ -26,7 +26,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/types"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var ErrIntentNotFound = errors.New("intent not found")
@@ -46,7 +46,7 @@ func (d *Datastore) applyIntent(ctx context.Context, source target.TargetSource)
 	if err != nil {
 		return nil, err
 	}
-	log.V(logf.VDebug).Info("got SetResponse from SBI", "raw-response", prototext.Format(rsp))
+	log.V(logf.VDebug).Info("got SetResponse from SBI", "raw-response", protojson.Format(rsp))
 
 	return rsp, nil
 }
