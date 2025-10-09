@@ -8,12 +8,12 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore"
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRequest) (*sdcpb.TransactionSetResponse, error) {
@@ -32,7 +32,7 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 		"transaction-peer", pr.String(),
 	)
 
-	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
@@ -97,7 +97,7 @@ func (s *Server) TransactionConfirm(ctx context.Context, req *sdcpb.TransactionC
 		"transaction-peer", pr.String(),
 	)
 
-	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
@@ -126,7 +126,7 @@ func (s *Server) TransactionCancel(ctx context.Context, req *sdcpb.TransactionCa
 		"transaction-peer", pr.String(),
 	)
 
-	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")

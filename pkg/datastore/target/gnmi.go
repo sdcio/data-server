@@ -32,7 +32,6 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/sdcio/data-server/pkg/config"
@@ -224,7 +223,7 @@ func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDa
 		setReq.Update = append(setReq.Update, gupd)
 	}
 
-	log.V(logf.VDebug).Info("created gnmi request", "raw-request", protojson.Format(setReq))
+	log.V(logf.VDebug).Info("created gnmi request", "raw-request", utils.FormatProtoJSON(setReq))
 
 	rsp, err := t.target.Set(ctx, setReq)
 	if err != nil {
@@ -486,8 +485,7 @@ func (t *gnmiTarget) streamSync(ctx context.Context, gnmiSync *config.SyncProtoc
 		return err
 
 	}
-	//TODO: don't use multiline prototext.Format()
-	log.Info("sync", "subRequest", protojson.Format(subReq))
+	log.Info("sync", "subRequest", utils.FormatProtoJSON(subReq))
 	go t.target.Subscribe(ctx, subReq, gnmiSync.Name)
 	return nil
 }

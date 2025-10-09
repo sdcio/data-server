@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/sdcio/data-server/pkg/schema"
+	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	schemaConfig "github.com/sdcio/schema-server/pkg/config"
 	schemaServerSchema "github.com/sdcio/schema-server/pkg/schema"
@@ -32,7 +33,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func (s *Server) createSchemaClient(ctx context.Context) {
@@ -150,7 +150,7 @@ func (s *Server) GetSchema(ctx context.Context, req *sdcpb.GetSchemaRequest) (*s
 		"schema-validate-keys", req.GetValidateKeys(),
 		"schema-with-description", req.GetWithDescription(),
 	)
-	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 	return s.schemaClient.GetSchema(ctx, req)
 }
 
@@ -158,7 +158,7 @@ func (s *Server) ListSchema(ctx context.Context, req *sdcpb.ListSchemaRequest) (
 	log := logf.FromContext(ctx).WithName("ListSchema")
 	ctx = logf.IntoContext(ctx, log)
 
-	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 	return s.schemaClient.ListSchema(ctx, req)
 }
 
@@ -173,14 +173,13 @@ func (s *Server) GetSchemaDetails(ctx context.Context, req *sdcpb.GetSchemaDetai
 		"schema-vendor", req.GetSchema().GetVendor(),
 		"schema-version", req.GetSchema().GetVersion(),
 	)
-	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 	return s.schemaClient.GetSchemaDetails(ctx, req)
 }
 
 func (s *Server) CreateSchema(ctx context.Context, req *sdcpb.CreateSchemaRequest) (*sdcpb.CreateSchemaResponse, error) {
 	log := logf.FromContext(ctx).WithName("CreateSchema")
-	log = log.WithValues(
-	)
+	log = log.WithValues()
 	ctx = logf.IntoContext(ctx, log)
 
 	log.Info("CreateSchema",
@@ -188,7 +187,7 @@ func (s *Server) CreateSchema(ctx context.Context, req *sdcpb.CreateSchemaReques
 		"schema-vendor", req.GetSchema().GetVendor(),
 		"schema-version", req.GetSchema().GetVersion(),
 	)
-	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 	return s.schemaClient.CreateSchema(ctx, req)
 }
 
@@ -203,7 +202,7 @@ func (s *Server) ReloadSchema(ctx context.Context, req *sdcpb.ReloadSchemaReques
 		"schema-vendor", req.GetSchema().GetVendor(),
 		"schema-version", req.GetSchema().GetVersion(),
 	)
-	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 	return s.schemaClient.ReloadSchema(ctx, req)
 }
 
@@ -218,7 +217,7 @@ func (s *Server) DeleteSchema(ctx context.Context, req *sdcpb.DeleteSchemaReques
 		"schema-vendor", req.GetSchema().GetVendor(),
 		"schema-version", req.GetSchema().GetVersion(),
 	)
-	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 	return s.schemaClient.DeleteSchema(ctx, req)
 }
 
@@ -234,7 +233,7 @@ func (s *Server) ToPath(ctx context.Context, req *sdcpb.ToPathRequest) (*sdcpb.T
 		"schema-version", req.GetSchema().GetVersion(),
 		"path-elements", strings.Join(req.GetPathElement(), ","),
 	)
-	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 	return s.schemaClient.ToPath(ctx, req)
 }
 
@@ -252,7 +251,7 @@ func (s *Server) ExpandPath(ctx context.Context, req *sdcpb.ExpandPathRequest) (
 		"schema-datatype", req.GetDataType().String(),
 		"schema-is-xpath", req.GetXpath(),
 	)
-	log.V(logf.VDebug).Info("received request", "raw-request", protojson.Format(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 	return s.schemaClient.ExpandPath(ctx, req)
 }
 
@@ -282,7 +281,7 @@ func (s *Server) GetSchemaElements(req *sdcpb.GetSchemaRequest, stream sdcpb.Sch
 		"schema-name", req.GetSchema().GetName(),
 	)
 	ctx = logf.IntoContext(ctx, log)
-	
+
 	log.Info("GetSchemaElements",
 		"schema-vendor", req.GetSchema().GetVendor(),
 		"schema-version", req.GetSchema().GetVersion(),
