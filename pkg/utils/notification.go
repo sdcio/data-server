@@ -48,9 +48,10 @@ func FromGNMIPath(pre, p *gnmi.Path) *sdcpb.Path {
 		return nil
 	}
 	r := &sdcpb.Path{
-		Origin: pre.GetOrigin(),
-		Elem:   make([]*sdcpb.PathElem, 0, len(pre.GetElem())+len(p.GetElem())),
-		Target: pre.GetTarget(),
+		Origin:      pre.GetOrigin(),
+		Elem:        make([]*sdcpb.PathElem, 0, len(pre.GetElem())+len(p.GetElem())),
+		Target:      pre.GetTarget(),
+		IsRootBased: true,
 	}
 	for _, pe := range pre.GetElem() {
 		r.Elem = append(r.Elem, &sdcpb.PathElem{

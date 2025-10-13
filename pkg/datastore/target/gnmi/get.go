@@ -100,31 +100,12 @@ func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
 		log.Errorf("sync newemptytree error: %v", err)
 		return
 	}
-	deletes := []*sdcpb.Path{}
-
-	ts := time.Now()
-	uif := treetypes.NewUpdateInsertFlags()
 
 	// process Noifications
-	for _, noti := range resp.Notification {
-		// updates
-		upds, err := treetypes.ExpandAndConvertIntent(s.ctx, s.schemaClient, tree.RunningIntentName, tree.RunningValuesPrio, noti.Update, ts.Unix())
-		if err != nil {
-			log.Errorf("sync expanding error: %v", err)
-			return
-		}
-
-		for idx2, upd := range upds {
-			_ = idx2
-			_, err = syncTree.AddUpdateRecursive(s.ctx, upd.Path(), upd, uif)
-			if err != nil {
-				log.Errorf("sync process notifications error: %v", err)
-				return
-			}
-
-		}
-		// deletes
-		deletes = append(deletes, noti.GetDelete()...)
+	deletes, err := processNotifications(s.ctx, resp.GetNotification(), s.schemaClient, syncTree)
+	if err != nil {
+		log.Errorf("sync process notifications error: %v", err)
+		return
 	}
 
 	result, err := syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
@@ -144,4 +125,34 @@ func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
 
 type GetTarget interface {
 	Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error)
+}
+
+func processNotifications(ctx context.Context, n []*sdcpb.Notification, schemaClient dsutils.SchemaClientBound, syncTree *tree.RootEntry) ([]*sdcpb.Path, error) {
+
+	ts := time.Now().Unix()
+	uif := treetypes.NewUpdateInsertFlags()
+
+	deletes := []*sdcpb.Path{}
+
+	for _, noti := range n {
+		// updates
+		upds, err := treetypes.ExpandAndConvertIntent(ctx, schemaClient, tree.RunningIntentName, tree.RunningValuesPrio, noti.Update, ts)
+		if err != nil {
+			log.Errorf("sync expanding error: %v", err)
+			return nil, err
+		}
+
+		for idx2, upd := range upds {
+			_ = idx2
+			_, err = syncTree.AddUpdateRecursive(ctx, upd.Path(), upd, uif)
+			if err != nil {
+				log.Errorf("sync process notifications error: %v", err)
+				return nil, err
+			}
+
+		}
+		// deletes
+		deletes = append(deletes, noti.GetDelete()...)
+	}
+	return deletes, nil
 }

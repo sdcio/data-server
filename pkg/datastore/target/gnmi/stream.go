@@ -8,18 +8,22 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/utils"
 	"github.com/sdcio/data-server/pkg/datastore/target/types"
+	"github.com/sdcio/data-server/pkg/tree"
+	dsutils "github.com/sdcio/data-server/pkg/utils"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
 
 type StreamSync struct {
+	ctx          context.Context
 	config       *config.SyncProtocol
 	target       SyncTarget
 	cancel       context.CancelFunc
 	runningStore types.RunningStore
-	ctx          context.Context
+	schemaClient dsutils.SchemaClientBound
 }
 
-func NewStreamSync(ctx context.Context, target SyncTarget, c *config.SyncProtocol, runningStore types.RunningStore) *StreamSync {
+func NewStreamSync(ctx context.Context, target SyncTarget, c *config.SyncProtocol, runningStore types.RunningStore, schemaClient dsutils.SchemaClientBound) *StreamSync {
 	ctx, cancel := context.WithCancel(ctx)
 
 	return &StreamSync{
@@ -27,6 +31,8 @@ func NewStreamSync(ctx context.Context, target SyncTarget, c *config.SyncProtoco
 		target:       target,
 		cancel:       cancel,
 		runningStore: runningStore,
+		schemaClient: schemaClient,
+		ctx:          ctx,
 	}
 }
 
@@ -51,7 +57,6 @@ func (s *StreamSync) syncConfig() (*gnmi.SubscribeRequest, error) {
 		gapi.EncodingCustom(utils.ParseGnmiEncoding(s.config.Encoding)),
 		gapi.SubscriptionListModeSTREAM(),
 		gapi.Subscription(subscriptionOpts...),
-		gapi.DataTypeCONFIG(),
 	)
 	subReq, err := gapi.NewSubscribeRequest(opts...)
 	if err != nil {
@@ -73,10 +78,61 @@ func (s *StreamSync) Start() error {
 	}
 
 	log.Infof("sync %q: subRequest: %v", s.config.Name, subReq)
-	go s.target.Subscribe(s.ctx, subReq, s.config.Name)
+
+	respChan, errChan := s.target.Subscribe(s.ctx, subReq, s.config.Name)
+
+	go func() {
+		syncTree, err := s.runningStore.NewEmptyTree(s.ctx)
+		if err != nil {
+			log.Errorf("sync newemptytree error: %v", err)
+			return
+		}
+		for {
+			select {
+			case <-s.ctx.Done():
+				return
+			case err = <-errChan:
+				if err != nil {
+					log.Errorf("Error stream sync: %s", err)
+					return
+				}
+			case resp, ok := <-respChan:
+				if !ok {
+					return
+				}
+				_ = resp
+				switch r := resp.GetResponse().(type) {
+				case *gnmi.SubscribeResponse_Update:
+					sn := dsutils.ToSchemaNotification(r.Update)
+					processNotifications(s.ctx, []*sdcpb.Notification{sn}, s.schemaClient, syncTree)
+				case *gnmi.SubscribeResponse_SyncResponse:
+					log.Info("SyncResponse flag received")
+					result, err := syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
+					if err != nil {
+						log.Errorf("sync tree export error: %v", err)
+						return
+					}
+
+					err = s.runningStore.ApplyToRunning(s.ctx, result)
+					if err != nil {
+						log.Errorf("sync import to running error: %v", err)
+						return
+					}
+					syncTree, err = s.runningStore.NewEmptyTree(s.ctx)
+					if err != nil {
+						log.Errorf("sync newemptytree error: %v", err)
+						return
+					}
+				case *gnmi.SubscribeResponse_Error:
+					log.Error(r.Error.Message)
+				}
+			}
+		}
+	}()
+
 	return nil
 }
 
 type SyncTarget interface {
-	Subscribe(ctx context.Context, req *gnmi.SubscribeRequest, subscriptionName string)
+	Subscribe(ctx context.Context, req *gnmi.SubscribeRequest, subscriptionName string) (chan *gnmi.SubscribeResponse, chan error)
 }

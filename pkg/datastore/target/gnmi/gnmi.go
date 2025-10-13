@@ -108,8 +108,8 @@ func NewTarget(ctx context.Context, name string, cfg *config.SBI, runningStore t
 	return gt, nil
 }
 
-func (t *gnmiTarget) Subscribe(ctx context.Context, req *gnmi.SubscribeRequest, subscriptionName string) {
-	t.target.Subscribe(ctx, req, subscriptionName)
+func (t *gnmiTarget) Subscribe(ctx context.Context, req *gnmi.SubscribeRequest, subscriptionName string) (chan *gnmi.SubscribeResponse, chan error) {
+	return t.target.SubscribeStreamChan(ctx, req, subscriptionName)
 }
 
 func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
@@ -257,7 +257,7 @@ func (t *gnmiTarget) AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) 
 		case "get":
 			g = NewGetSync(ctx, t, sp, t.runningStore, t.schemaClient)
 		default:
-			g = NewStreamSync(ctx, t, sp, t.runningStore)
+			g = NewStreamSync(ctx, t, sp, t.runningStore, t.schemaClient)
 		}
 		t.syncs[sp.Name] = g
 		err := g.Start()
