@@ -288,7 +288,7 @@ func (s *Server) createInitialDatastores(ctx context.Context) {
 	wg.Add(numConfiguredDS)
 
 	for _, dsCfg := range s.config.Datastores {
-		log.V(logf.VDebug).Info("creating datastore", "data-store-name", dsCfg.Name)
+		log.V(logf.VDebug).Info("creating datastore", "datastore-name", dsCfg.Name)
 		dsCfg.Validation = s.config.Validation.DeepCopy()
 		go func(dsCfg *config.DatastoreConfig) {
 			defer wg.Done()
@@ -332,7 +332,8 @@ func contextLoggingInterceptor(logCtx context.Context) func(context.Context, int
 
 func contextLoggingServerStreamInterceptor(ctx context.Context) func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		log := logf.FromContext(ctx).WithName("grpc")
+		uuidString := uuid.New().String()
+		log := logf.FromContext(ctx).WithName("grpc").WithValues("grpc-request-uuid", uuidString)
 		wss := grpc_middleware.WrapServerStream(ss)
 		wss.WrappedContext = logf.IntoContext(wss.WrappedContext, log)
 

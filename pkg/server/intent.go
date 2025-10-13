@@ -46,9 +46,11 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 	log = log.WithValues(
 		"intent-datastore", req.GetDatastoreName(),
 		"intent-name", req.GetIntent(),
-		"intent-format", req.GetFormat(),
 	)
 	ctx = logf.IntoContext(ctx, log)
+	log.Info("GetIntent",
+		"intent-format", req.GetFormat(),
+	)
 	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 
 	if req.GetDatastoreName() == "" {

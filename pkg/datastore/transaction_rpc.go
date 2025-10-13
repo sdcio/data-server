@@ -334,10 +334,10 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 		// logging
 		strSl := treetypes.Map(updatesOwner, func(u *treetypes.Update) string { return u.String() })
-		log.V(logf.VTrace).Info("updates owner", "updates-owner", strings.Join(strSl, "\n"))
+		log.V(logf.VTrace).Info("updates owner", "updates-owner", strSl, "\n")
 
 		delSl := deletesOwner.ToXPathSlice()
-		log.V(logf.VTrace).Info("deletes owner", "deletes-owner", strings.Join(delSl, "\n"))
+		log.V(logf.VTrace).Info("deletes owner", "deletes-owner", delSl, "\n")
 
 		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority(), intent.Deviation())
 		switch {
