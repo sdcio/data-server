@@ -167,6 +167,7 @@ type LeafVariantEntries interface {
 	DeleteByOwner(owner string) *LeafEntry
 	AddExplicitDeleteEntry(owner string, priority int32) *LeafEntry
 	GetByOwner(owner string) *LeafEntry
+	Add(l *LeafEntry)
 }
 
 type DescendMethod int
