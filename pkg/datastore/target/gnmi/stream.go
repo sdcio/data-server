@@ -2,6 +2,9 @@ package gnmi
 
 import (
 	"context"
+	"errors"
+	"sync"
+	"time"
 
 	"github.com/openconfig/gnmi/proto/gnmi"
 	gapi "github.com/openconfig/gnmic/pkg/api"
@@ -81,8 +84,48 @@ func (s *StreamSync) Start() error {
 
 	respChan, errChan := s.target.Subscribe(s.ctx, subReq, s.config.Name)
 
+	syncStartTime := time.Now()
+
+	syncToRunning := func(syncTree *tree.RootEntry, m *sync.Mutex, logCount bool) (*tree.RootEntry, error) {
+		m.Lock()
+		defer m.Unlock()
+
+		startTime := time.Now()
+		result, err := syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
+		if err != nil {
+			if errors.Is(err, tree.ErrorIntentNotPresent) {
+				log.Info("sync no config chnages.")
+				// all good no data present
+				return syncTree, nil
+			}
+			log.Errorf("sync tree export error: %v", err)
+			return s.runningStore.NewEmptyTree(s.ctx)
+		}
+
+		if logCount {
+			log.Infof("Syncing %d elements", result.Root.CountTerminals())
+		}
+
+		log.Infof("TreeExport to proto took: %s", time.Since(startTime))
+		startTime = time.Now()
+
+		err = s.runningStore.ApplyToRunning(s.ctx, result)
+		if err != nil {
+			log.Errorf("sync import to running error: %v", err)
+			return s.runningStore.NewEmptyTree(s.ctx)
+		}
+		log.Infof("Import to SyncTree took: %s", time.Since(startTime))
+		return s.runningStore.NewEmptyTree(s.ctx)
+	}
+
 	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		// disable ticker until after the initial full sync is done
+		tickerActive := false
 		syncTree, err := s.runningStore.NewEmptyTree(s.ctx)
+		syncTreeMutex := &sync.Mutex{}
+
 		if err != nil {
 			log.Errorf("sync newemptytree error: %v", err)
 			return
@@ -91,38 +134,49 @@ func (s *StreamSync) Start() error {
 			select {
 			case <-s.ctx.Done():
 				return
-			case err = <-errChan:
+			case err, ok := <-errChan:
+				if !ok {
+					return
+				}
 				if err != nil {
 					log.Errorf("Error stream sync: %s", err)
 					return
+				}
+
+			case <-ticker.C:
+				if !tickerActive {
+					log.Info("Skipping a sync tick - initial sync not finished yet")
+					continue
+				}
+				log.Info("SyncRunning due to ticker")
+				syncTree, err = syncToRunning(syncTree, syncTreeMutex, true)
+				if err != nil {
+					// TODO
+					log.Errorf("syncToRunning Error %v", err)
 				}
 			case resp, ok := <-respChan:
 				if !ok {
 					return
 				}
-				_ = resp
 				switch r := resp.GetResponse().(type) {
 				case *gnmi.SubscribeResponse_Update:
 					sn := dsutils.ToSchemaNotification(r.Update)
-					processNotifications(s.ctx, []*sdcpb.Notification{sn}, s.schemaClient, syncTree)
+
+					_, err = processNotifications(s.ctx, []*sdcpb.Notification{sn}, s.schemaClient, syncTree, syncTreeMutex)
+					if err != nil {
+						log.Errorf("error processing Notifications: %s", err)
+						continue
+					}
 				case *gnmi.SubscribeResponse_SyncResponse:
 					log.Info("SyncResponse flag received")
-					result, err := syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
+					log.Infof("Duration since sync Start: %s", time.Since(syncStartTime))
+					syncTree, err = syncToRunning(syncTree, syncTreeMutex, false)
 					if err != nil {
-						log.Errorf("sync tree export error: %v", err)
-						return
+						// TODO
+						log.Errorf("syncToRunning Error %v", err)
 					}
-
-					err = s.runningStore.ApplyToRunning(s.ctx, result)
-					if err != nil {
-						log.Errorf("sync import to running error: %v", err)
-						return
-					}
-					syncTree, err = s.runningStore.NewEmptyTree(s.ctx)
-					if err != nil {
-						log.Errorf("sync newemptytree error: %v", err)
-						return
-					}
+					// activate ticker processing
+					tickerActive = true
 				case *gnmi.SubscribeResponse_Error:
 					log.Error(r.Error.Message)
 				}

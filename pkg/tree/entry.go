@@ -115,6 +115,7 @@ type Entry interface {
 	//    - shouldDelete() returns false, because no explicit delete should be issued for them.
 	canDelete() bool
 	GetChilds(DescendMethod) EntryMap
+	GetChild(name string) (Entry, bool) // entry, exists
 	FilterChilds(keys map[string]string) ([]Entry, error)
 	// ToJson returns the Tree contained structure as JSON
 	// use e.g. json.MarshalIndent() on the returned struct

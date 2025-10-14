@@ -134,6 +134,10 @@ func FromGNMITypedValue(v *gnmi.TypedValue) *sdcpb.TypedValue {
 		return &sdcpb.TypedValue{
 			Value: &sdcpb.TypedValue_DoubleVal{DoubleVal: float64(v.GetFloatVal())},
 		}
+	case *gnmi.TypedValue_DoubleVal:
+		return &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_DoubleVal{DoubleVal: v.GetDoubleVal()},
+		}
 	default:
 		log.Errorf("FromGNMITypedValue unhandled type: %T: %v", v, v)
 		return nil

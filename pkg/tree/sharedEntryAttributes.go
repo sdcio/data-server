@@ -1247,7 +1247,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 					return err
 				}
 				// if the child does not exist, create it
-				if keyChild, exists = actualEntry.GetChilds(DescendMethodAll)[keyElemValue]; !exists {
+				if keyChild, exists = actualEntry.GetChild(keyElemValue); !exists {
 					keyChild, err = newEntry(ctx, actualEntry, keyElemValue, s.treeContext)
 					if err != nil {
 						return err
@@ -1278,7 +1278,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 				var exists bool
 
 				// if the child does not exist, create it
-				if child, exists = s.getChildren()[elem.GetName()]; !exists {
+				if child, exists = s.GetChild(elem.GetName()); !exists {
 					child, err = newEntry(ctx, s, elem.GetName(), s.treeContext)
 					if err != nil {
 						return fmt.Errorf("error trying to insert %s at path %s: %w", elem.GetName(), s.SdcpbPath().ToXPath(false), err)
@@ -1532,6 +1532,10 @@ func (s *sharedEntryAttributes) populateChoiceCaseResolvers(_ context.Context) e
 	return nil
 }
 
+func (s *sharedEntryAttributes) GetChild(name string) (Entry, bool) {
+	return s.childs.GetEntry(name)
+}
+
 func (s *sharedEntryAttributes) GetChilds(d DescendMethod) EntryMap {
 	if s.schema == nil {
 		return s.childs.GetAll()
@@ -1781,7 +1785,7 @@ func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, path *sd
 	var x Entry = s
 	var exists bool
 	for name := range relPath.GetElem()[0].PathElemNames() {
-		if e, exists = x.GetChilds(DescendMethodAll)[name]; !exists {
+		if e, exists = x.GetChild(name); !exists {
 			newE, err := newEntry(ctx, x, name, s.treeContext)
 			if err != nil {
 				return nil, err

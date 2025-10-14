@@ -2,6 +2,7 @@ package gnmi
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/sdcio/data-server/pkg/config"
@@ -101,8 +102,10 @@ func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
 		return
 	}
 
+	syncTreeMutex := &sync.Mutex{}
+
 	// process Noifications
-	deletes, err := processNotifications(s.ctx, resp.GetNotification(), s.schemaClient, syncTree)
+	deletes, err := processNotifications(s.ctx, resp.GetNotification(), s.schemaClient, syncTree, syncTreeMutex)
 	if err != nil {
 		log.Errorf("sync process notifications error: %v", err)
 		return
@@ -127,32 +130,34 @@ type GetTarget interface {
 	Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error)
 }
 
-func processNotifications(ctx context.Context, n []*sdcpb.Notification, schemaClient dsutils.SchemaClientBound, syncTree *tree.RootEntry) ([]*sdcpb.Path, error) {
+func processNotifications(ctx context.Context, n []*sdcpb.Notification, schemaClient dsutils.SchemaClientBound, syncTree *tree.RootEntry, m *sync.Mutex) ([]*sdcpb.Path, error) {
 
 	ts := time.Now().Unix()
 	uif := treetypes.NewUpdateInsertFlags()
 
 	deletes := []*sdcpb.Path{}
 
+	m.Lock()
+	defer m.Unlock()
+
 	for _, noti := range n {
 		// updates
 		upds, err := treetypes.ExpandAndConvertIntent(ctx, schemaClient, tree.RunningIntentName, tree.RunningValuesPrio, noti.Update, ts)
 		if err != nil {
 			log.Errorf("sync expanding error: %v", err)
-			return nil, err
+			continue
 		}
+
+		// deletes
+		deletes = append(deletes, noti.GetDelete()...)
 
 		for idx2, upd := range upds {
 			_ = idx2
 			_, err = syncTree.AddUpdateRecursive(ctx, upd.Path(), upd, uif)
 			if err != nil {
-				log.Errorf("sync process notifications error: %v", err)
-				return nil, err
+				log.Errorf("sync process notifications error: %v, continuing", err)
 			}
-
 		}
-		// deletes
-		deletes = append(deletes, noti.GetDelete()...)
 	}
 	return deletes, nil
 }
