@@ -12,6 +12,7 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/utils"
 	"github.com/sdcio/data-server/pkg/datastore/target/types"
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	dsutils "github.com/sdcio/data-server/pkg/utils"
@@ -88,7 +89,7 @@ func (s *StreamSync) Start() error {
 
 	syncStartTime := time.Now()
 
-	wpool := dsutils.NewWorkerPool[*gnmi.Notification](s.ctx, runtime.NumCPU())
+	wpool := pool.NewWorkerPool[*gnmi.Notification](s.ctx, runtime.NumCPU())
 
 	updChan := make(chan *NotificationData, 20)
 

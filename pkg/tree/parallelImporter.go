@@ -6,9 +6,9 @@ import (
 	"runtime"
 	"slices"
 
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/types"
-	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -29,7 +29,7 @@ func (s *sharedEntryAttributes) ImportConfig(
 	intentPrio int32,
 	insertFlags *types.UpdateInsertFlags,
 ) error {
-	p := utils.NewWorkerPool[importTask](ctx, runtime.NumCPU())
+	p := pool.NewWorkerPool[importTask](ctx, runtime.NumCPU())
 
 	p.Start(importHandler)
 
