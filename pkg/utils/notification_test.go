@@ -46,6 +46,7 @@ func TestFromGNMIPath(t *testing.T) {
 				Elem: []*sdcpb.PathElem{
 					{Name: "foo"},
 				},
+				IsRootBased: true,
 			},
 		},
 		{
@@ -64,6 +65,7 @@ func TestFromGNMIPath(t *testing.T) {
 					{Name: "foo"},
 					{Name: "bar"},
 				},
+				IsRootBased: true,
 			},
 		},
 		{
@@ -82,6 +84,7 @@ func TestFromGNMIPath(t *testing.T) {
 					{Name: "foo", Key: map[string]string{"k": "v"}},
 					{Name: "bar"},
 				},
+				IsRootBased: true,
 			},
 		},
 		{
@@ -100,6 +103,7 @@ func TestFromGNMIPath(t *testing.T) {
 					{Name: "foo", Key: map[string]string{"k1": "v1", "k2": "v2"}},
 					{Name: "bar"},
 				},
+				IsRootBased: true,
 			},
 		},
 	}
