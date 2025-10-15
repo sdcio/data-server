@@ -130,33 +130,31 @@ func (p *Pool[T]) Start(handler func(ctx context.Context, item T, submit func(T)
 	// monitor goroutine: when CloseForSubmit has been called, wait until both inflight==0 and queue empty,
 	// then close the queue so workers exit. Also handle ctx cancellation (force-close).
 	go func() {
+		// We'll wait on the condition variable instead of busy looping.
+		p.inflightMu.Lock()
+		defer p.inflightMu.Unlock()
 		for {
-			// graceful path: wait for CloseForSubmit flag then wait for work to drain
+			// If CloseForSubmit was called, wait for inflight==0 and queue empty then close queue.
 			if p.closedForSubmit.Load() {
-				// wait until inflight==0 AND tasks.Len()==0
-				p.inflightMu.Lock()
-				for {
-					if atomic.LoadInt64(&p.inflight) == 0 && p.tasks.Len() == 0 {
-						break
-					}
+				for atomic.LoadInt64(&p.inflight) != 0 || p.tasks.Len() != 0 {
 					p.inflightC.Wait()
-					// loop and re-check
 				}
-				p.inflightMu.Unlock()
-
 				// Now safe to close queue: there is no inflight and no queued items
 				p.closeOnce.Do(func() { p.tasks.Close() })
 				return
 			}
 
-			// if ctx canceled -> force-close path
+			// If ctx canceled -> force-close path.
 			if p.ctx.Err() != nil {
+				// we hold inflightMu; unlock before calling forceClose (which may broadcast/use locks).
+				p.inflightMu.Unlock()
 				p.forceClose()
 				return
 			}
 
-			// avoid busy spin
-			runtime.Gosched()
+			// Wait to be signalled when either inflight changes or CloseForSubmit is called.
+			p.inflightC.Wait()
+			// loop and recheck conditions
 		}
 	}()
 }
