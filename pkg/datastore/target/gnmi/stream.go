@@ -3,6 +3,7 @@ package gnmi
 import (
 	"context"
 	"errors"
+	"runtime"
 	"sync"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/utils"
 	"github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/tree"
+	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	dsutils "github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
@@ -86,6 +88,35 @@ func (s *StreamSync) Start() error {
 
 	syncStartTime := time.Now()
 
+	wpool := dsutils.NewWorkerPool[*gnmi.Notification](s.ctx, runtime.NumCPU())
+
+	updChan := make(chan *NotificationData, 20)
+
+	wpoolHandler := func(ctx context.Context, item *gnmi.Notification, submit func(*gnmi.Notification) error) error {
+		sn := dsutils.ToSchemaNotification(item)
+		// updates
+		upds, err := treetypes.ExpandAndConvertIntent(s.ctx, s.schemaClient, tree.RunningIntentName, tree.RunningValuesPrio, sn.GetUpdate(), item.GetTimestamp())
+		if err != nil {
+			log.Errorf("sync expanding error: %v", err)
+		}
+
+		deletes := sdcpb.NewPathSet()
+		if len(item.GetDelete()) > 0 {
+			for _, del := range item.GetDelete() {
+				deletes.AddPath(dsutils.FromGNMIPath(item.GetPrefix(), del))
+			}
+		}
+
+		updChan <- &NotificationData{
+			updates: upds,
+			deletes: deletes,
+		}
+
+		return nil
+	}
+
+	wpool.Start(wpoolHandler)
+
 	syncToRunning := func(syncTree *tree.RootEntry, m *sync.Mutex, logCount bool) (*tree.RootEntry, error) {
 		m.Lock()
 		defer m.Unlock()
@@ -94,7 +125,7 @@ func (s *StreamSync) Start() error {
 		result, err := syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
 		if err != nil {
 			if errors.Is(err, tree.ErrorIntentNotPresent) {
-				log.Info("sync no config chnages.")
+				log.Info("sync no config changes")
 				// all good no data present
 				return syncTree, nil
 			}
@@ -103,7 +134,7 @@ func (s *StreamSync) Start() error {
 		}
 
 		if logCount {
-			log.Infof("Syncing %d elements", result.Root.CountTerminals())
+			log.Infof("Syncing: %d elements, %d deletes ", result.GetRoot().CountTerminals(), len(result.GetExplicitDeletes()))
 		}
 
 		log.Infof("TreeExport to proto took: %s", time.Since(startTime))
@@ -118,18 +149,14 @@ func (s *StreamSync) Start() error {
 		return s.runningStore.NewEmptyTree(s.ctx)
 	}
 
-	go func() {
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-		// disable ticker until after the initial full sync is done
-		tickerActive := false
-		syncTree, err := s.runningStore.NewEmptyTree(s.ctx)
-		syncTreeMutex := &sync.Mutex{}
+	syncResponse := make(chan struct{})
 
+	go func() {
 		if err != nil {
 			log.Errorf("sync newemptytree error: %v", err)
 			return
 		}
+		defer wpool.CloseForSubmit()
 		for {
 			select {
 			case <-s.ctx.Done():
@@ -142,7 +169,65 @@ func (s *StreamSync) Start() error {
 					log.Errorf("Error stream sync: %s", err)
 					return
 				}
+			case resp, ok := <-respChan:
+				if !ok {
+					return
+				}
+				switch r := resp.GetResponse().(type) {
+				case *gnmi.SubscribeResponse_Update:
+					err := wpool.Submit(resp.GetUpdate())
+					if err != nil {
+						log.Errorf("error processing Notifications: %s", err)
+						continue
+					}
+				case *gnmi.SubscribeResponse_SyncResponse:
+					log.Info("SyncResponse flag received")
+					log.Infof("Duration since sync Start: %s", time.Since(syncStartTime))
+					syncResponse <- struct{}{}
 
+				case *gnmi.SubscribeResponse_Error:
+					log.Error(r.Error.Message)
+				}
+			}
+		}
+	}()
+
+	go func(cUS <-chan *NotificationData, syncResponse <-chan struct{}) {
+
+		syncTree, err := s.runningStore.NewEmptyTree(s.ctx)
+		if err != nil {
+			log.Errorf("error creating new sync tree: %v", err)
+			return
+		}
+		syncTreeMutex := &sync.Mutex{}
+
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		// disable ticker until after the initial full sync is done
+		tickerActive := false
+
+		uif := treetypes.NewUpdateInsertFlags()
+
+		for {
+			select {
+			case <-s.ctx.Done():
+				return
+			case noti, ok := <-cUS:
+				if !ok {
+					return
+				}
+				err := syncTree.AddUpdatesRecursive(s.ctx, noti.updates, uif)
+				if err != nil {
+					log.Errorf("error adding to sync tree: %v", err)
+				}
+				syncTree.AddExplicitDeletes(tree.RunningIntentName, tree.RunningValuesPrio, noti.deletes)
+			case <-syncResponse:
+				syncTree, err = syncToRunning(syncTree, syncTreeMutex, true)
+				if err != nil {
+					// TODO
+					log.Errorf("syncToRunning Error %v", err)
+				}
+				tickerActive = true
 			case <-ticker.C:
 				if !tickerActive {
 					log.Info("Skipping a sync tick - initial sync not finished yet")
@@ -154,39 +239,18 @@ func (s *StreamSync) Start() error {
 					// TODO
 					log.Errorf("syncToRunning Error %v", err)
 				}
-			case resp, ok := <-respChan:
-				if !ok {
-					return
-				}
-				switch r := resp.GetResponse().(type) {
-				case *gnmi.SubscribeResponse_Update:
-					sn := dsutils.ToSchemaNotification(r.Update)
-
-					_, err = processNotifications(s.ctx, []*sdcpb.Notification{sn}, s.schemaClient, syncTree, syncTreeMutex)
-					if err != nil {
-						log.Errorf("error processing Notifications: %s", err)
-						continue
-					}
-				case *gnmi.SubscribeResponse_SyncResponse:
-					log.Info("SyncResponse flag received")
-					log.Infof("Duration since sync Start: %s", time.Since(syncStartTime))
-					syncTree, err = syncToRunning(syncTree, syncTreeMutex, false)
-					if err != nil {
-						// TODO
-						log.Errorf("syncToRunning Error %v", err)
-					}
-					// activate ticker processing
-					tickerActive = true
-				case *gnmi.SubscribeResponse_Error:
-					log.Error(r.Error.Message)
-				}
 			}
 		}
-	}()
+	}(updChan, syncResponse)
 
 	return nil
 }
 
 type SyncTarget interface {
 	Subscribe(ctx context.Context, req *gnmi.SubscribeRequest, subscriptionName string) (chan *gnmi.SubscribeResponse, chan error)
+}
+
+type NotificationData struct {
+	updates treetypes.UpdateSlice
+	deletes *sdcpb.PathSet
 }

@@ -70,21 +70,21 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 					log.Errorf("error sending deviation to %s: %v", clientIdentifier, err)
 				}
 			}
-			deviationChan, err := d.calculateDeviations(ctx)
-			if err != nil {
-				log.Error(err)
-				continue
-			}
-			d.SendDeviations(deviationChan, deviationClients)
-			for clientIdentifier, dc := range deviationClients {
-				err := dc.Send(&sdcpb.WatchDeviationResponse{
-					Name:  d.config.Name,
-					Event: sdcpb.DeviationEvent_END,
-				})
-				if err != nil {
-					log.Errorf("error sending deviation to %s: %v", clientIdentifier, err)
-				}
-			}
+			// deviationChan, err := d.calculateDeviations(ctx)
+			// if err != nil {
+			// 	log.Error(err)
+			// 	continue
+			// }
+			// d.SendDeviations(deviationChan, deviationClients)
+			// for clientIdentifier, dc := range deviationClients {
+			// 	err := dc.Send(&sdcpb.WatchDeviationResponse{
+			// 		Name:  d.config.Name,
+			// 		Event: sdcpb.DeviationEvent_END,
+			// 	})
+			// 	if err != nil {
+			// 		log.Errorf("error sending deviation to %s: %v", clientIdentifier, err)
+			// 	}
+			// }
 		}
 	}
 }

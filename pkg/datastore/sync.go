@@ -8,6 +8,7 @@ import (
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
+	log "github.com/sirupsen/logrus"
 )
 
 func (d *Datastore) ApplyToRunning(ctx context.Context, i *tree_persist.Intent) error {
@@ -16,23 +17,29 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, i *tree_persist.Intent) 
 	i.Priority = tree.RunningValuesPrio
 	i.Deviation = false
 
-	importer := proto.NewProtoTreeImporter(i)
-
-	// need to reset the explicit deletes, they carry the actual deletes that we need to delete.
-	// the imported would otherwise add explicit deletes for these.
-	deletes := i.ExplicitDeletes
-	i.ExplicitDeletes = nil
-
 	d.syncTreeMutex.Lock()
 	defer d.syncTreeMutex.Unlock()
-	for _, delete := range deletes {
+	for _, delete := range i.ExplicitDeletes {
+		//TODO this will most likely give us errors in case optimisticWriteback already deleted the entries.
 		err := d.syncTree.DeleteBranch(ctx, delete, i.IntentName)
 		if err != nil {
+			log.Errorf("error deleting paths from datastore sync tree: %v", err)
 			return err
 		}
 	}
 
-	return d.syncTree.ImportConfig(ctx, &sdcpb.Path{}, importer, i.GetIntentName(), i.GetPriority(), treetypes.NewUpdateInsertFlags())
+	// need to reset the explicit deletes, they carry the actual deletes that we need to delete.
+	// the imported would otherwise add explicit deletes for these.
+	i.ExplicitDeletes = nil
+
+	if i.GetRoot() != nil {
+		importer := proto.NewProtoTreeImporter(i)
+		err := d.syncTree.ImportConfig(ctx, &sdcpb.Path{}, importer, i.GetIntentName(), i.GetPriority(), treetypes.NewUpdateInsertFlags())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (d *Datastore) NewEmptyTree(ctx context.Context) (*tree.RootEntry, error) {
