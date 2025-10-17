@@ -91,33 +91,34 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 
 func (d *Datastore) SendDeviations(ch <-chan *treetypes.DeviationEntry, deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer) {
 	wg := &sync.WaitGroup{}
-	for {
-		select {
-		case de, ok := <-ch:
-			if !ok {
-				wg.Wait()
-				return
-			}
-			wg.Add(1)
-			go func(de DeviationEntry, dcs map[string]sdcpb.DataServer_WatchDeviationsServer) {
-				for clientIdentifier, dc := range dcs {
-					err := dc.Send(&sdcpb.WatchDeviationResponse{
-						Name:          d.config.Name,
-						Intent:        de.IntentName(),
-						Event:         sdcpb.DeviationEvent_UPDATE,
-						Reason:        sdcpb.DeviationReason(de.Reason()),
-						Path:          de.Path(),
-						ExpectedValue: de.ExpectedValue(),
-						CurrentValue:  de.CurrentValue(),
-					})
-					if err != nil {
-						log.Errorf("error sending deviation to %s: %v", clientIdentifier, err)
-					}
+	for de := range ch {
+		wg.Add(1)
+		go func(de DeviationEntry, dcs map[string]sdcpb.DataServer_WatchDeviationsServer) {
+			for clientIdentifier, dc := range dcs {
+				select {
+				// skip deviation clients with closed context
+				case <-dc.Context().Done():
+					continue
+				default:
 				}
-				wg.Done()
-			}(de, deviationClients)
-		}
+
+				err := dc.Send(&sdcpb.WatchDeviationResponse{
+					Name:          d.config.Name,
+					Intent:        de.IntentName(),
+					Event:         sdcpb.DeviationEvent_UPDATE,
+					Reason:        sdcpb.DeviationReason(de.Reason()),
+					Path:          de.Path(),
+					ExpectedValue: de.ExpectedValue(),
+					CurrentValue:  de.CurrentValue(),
+				})
+				if err != nil {
+					log.Errorf("error sending deviation to %s: %v", clientIdentifier, err)
+				}
+			}
+			wg.Done()
+		}(de, deviationClients)
 	}
+	wg.Wait()
 }
 
 type DeviationEntry interface {
