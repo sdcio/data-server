@@ -33,8 +33,6 @@ dockers:
     image_templates:
       - "ghcr.io/sdcio/data-server:latest"
       - "ghcr.io/sdcio/data-server:v{{ .Version }}"
-      - "registry.k8s.sdcio.dev/sdcio/data-server:latest"
-      - "registry.k8s.sdcio.dev/sdcio/data-server:v{{ .Version }}"
     dockerfile: goreleaser.dockerfile
     skip_push: false
     build_flag_templates:
