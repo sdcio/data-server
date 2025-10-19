@@ -19,8 +19,8 @@ on:
     - cron: "5 20 * * *"
   workflow_dispatch:
 
-env:
-    GOVER: 1.23.9
+permissions:
+  packages: write
 
 jobs:
   dev-release:
@@ -44,7 +44,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: ${{ env.GOVER }}
+          go-version-file: 'go.mod'
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
