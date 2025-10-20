@@ -1479,9 +1479,13 @@ func Test_sharedEntryAttributes_SdcpbPath(t *testing.T) {
 						},
 					},
 				},
+				IsRootBased: true,
 			}
 
-			cmp.Diff(e00.SdcpbPath().ToXPath(false), cmpPath.ToXPath(false))
+			if diff := cmp.Diff(e00.SdcpbPath().ToXPath(false), cmpPath.ToXPath(false)); diff != "" {
+				t.Errorf("sharedEntryAttributes.SdcpbPath() mismatch (-want +got):\n%s", diff)
+				return
+			}
 		},
 	)
 
@@ -1499,9 +1503,13 @@ func Test_sharedEntryAttributes_SdcpbPath(t *testing.T) {
 						Name: "description",
 					},
 				},
+				IsRootBased: true,
 			}
 
-			cmp.Diff(e00desc.SdcpbPath().ToXPath(false), cmpPath.ToXPath(false))
+			if diff := cmp.Diff(e00desc.SdcpbPath().ToXPath(false), cmpPath.ToXPath(false)); diff != "" {
+				t.Errorf("sharedEntryAttributes.SdcpbPath() mismatch (-want +got):\n%s", diff)
+				return
+			}
 		},
 	)
 
@@ -1512,17 +1520,21 @@ func Test_sharedEntryAttributes_SdcpbPath(t *testing.T) {
 					{
 						Name: "doublekey",
 						Key: map[string]string{
-							"key1": "key1",
 							"key2": "key2",
+							"key1": "key1",
 						},
 					},
 					{
 						Name: "mandato",
 					},
 				},
+				IsRootBased: true,
 			}
 
-			cmp.Diff(dkkv.SdcpbPath().ToXPath(false), cmpPath.ToXPath(false))
+			if diff := cmp.Diff(dkkv.SdcpbPath().ToXPath(false), cmpPath.ToXPath(false)); diff != "" {
+				t.Errorf("sharedEntryAttributes.SdcpbPath() mismatch (-want +got):\n%s", diff)
+				return
+			}
 		},
 	)
 

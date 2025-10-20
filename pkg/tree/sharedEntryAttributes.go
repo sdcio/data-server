@@ -1621,7 +1621,9 @@ func (s *sharedEntryAttributes) SdcpbPath() *sdcpb.Path {
 	if s.schema == nil {
 		path = s.parent.SdcpbPath().DeepCopy()
 		parentSchema, levelsUp := s.GetFirstAncestorWithSchema()
-		keyName := parentSchema.GetSchemaKeys()[levelsUp-1]
+		schemaKeys := parentSchema.GetSchemaKeys()
+		slices.Sort(schemaKeys)
+		keyName := schemaKeys[levelsUp-1]
 		path.GetElem()[len(path.GetElem())-1].Key[keyName] = s.pathElemName
 	} else {
 		path = s.parent.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(s.pathElemName, map[string]string{}))
