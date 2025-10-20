@@ -55,5 +55,5 @@ func DefaultValueRetrieve(schema *sdcpb.SchemaElem, path *sdcpb.Path) (*types.Up
 		return nil, fmt.Errorf("no defaults defined for schema path: %s", path.ToXPath(false))
 	}
 
-	return types.NewUpdate(path, tv, DefaultValuesPrio, DefaultsIntentName, 0), nil
+	return types.NewUpdate(nil, tv, DefaultValuesPrio, DefaultsIntentName, 0), nil
 }

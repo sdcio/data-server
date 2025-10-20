@@ -103,13 +103,13 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					},
 				),
 			expectedLeafVariants: LeafVariantSlice{
-				NewLeafEntry(types.NewUpdate(&sdcpb.Path{
+				NewLeafEntry(types.NewUpdate(testhelper.NewUpdateParentMock(&sdcpb.Path{
 					IsRootBased: true,
 					Elem: []*sdcpb.PathElem{
 						sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 						sdcpb.NewPathElem("description", nil),
 					},
-				}, &sdcpb.TypedValue{}, owner2Prio, owner2, 0), explicitDeleteFlag, nil),
+				}), &sdcpb.TypedValue{}, owner2Prio, owner2, 0), explicitDeleteFlag, nil),
 			},
 		},
 		{
@@ -163,13 +163,13 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 			expectedLeafVariants: LeafVariantSlice{
 				NewLeafEntry(
 					types.NewUpdate(
-						&sdcpb.Path{
+						testhelper.NewUpdateParentMock(&sdcpb.Path{
 							IsRootBased: true,
 							Elem: []*sdcpb.PathElem{
 								sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 								sdcpb.NewPathElem("description", nil),
 							},
-						},
+						}),
 						&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "mydesc"}},
 						owner2Prio, owner2, 0,
 					),
@@ -178,13 +178,13 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 				),
 				NewLeafEntry(
 					types.NewUpdate(
-						&sdcpb.Path{
+						testhelper.NewUpdateParentMock(&sdcpb.Path{
 							IsRootBased: true,
 							Elem: []*sdcpb.PathElem{
 								sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 								sdcpb.NewPathElem("admin-state", nil),
 							},
-						},
+						}),
 						&sdcpb.TypedValue{},
 						owner2Prio, owner2, 0,
 					),
@@ -193,13 +193,13 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 				),
 				NewLeafEntry(
 					types.NewUpdate(
-						&sdcpb.Path{
+						testhelper.NewUpdateParentMock(&sdcpb.Path{
 							IsRootBased: true,
 							Elem: []*sdcpb.PathElem{
 								sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 								sdcpb.NewPathElem("name", nil),
 							},
-						},
+						}),
 						&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "ethernet-1/1"}},
 						owner2Prio, owner2, 0,
 					),
@@ -208,14 +208,14 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 				),
 				NewLeafEntry(
 					types.NewUpdate(
-						&sdcpb.Path{
+						testhelper.NewUpdateParentMock(&sdcpb.Path{
 							IsRootBased: true,
 							Elem: []*sdcpb.PathElem{
 								sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 								sdcpb.NewPathElem("subinterface", map[string]string{"index": "0"}),
 								sdcpb.NewPathElem("index", nil),
 							},
-						},
+						}),
 						&sdcpb.TypedValue{},
 						owner2Prio, owner2, 0,
 					),
@@ -224,14 +224,14 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 				),
 				NewLeafEntry(
 					types.NewUpdate(
-						&sdcpb.Path{
+						testhelper.NewUpdateParentMock(&sdcpb.Path{
 							IsRootBased: true,
 							Elem: []*sdcpb.PathElem{
 								sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 								sdcpb.NewPathElem("subinterface", map[string]string{"index": "0"}),
 								sdcpb.NewPathElem("type", nil),
 							},
-						},
+						}),
 						&sdcpb.TypedValue{},
 						owner2Prio, owner2, 0,
 					),
@@ -240,14 +240,14 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 				),
 				NewLeafEntry(
 					types.NewUpdate(
-						&sdcpb.Path{
+						testhelper.NewUpdateParentMock(&sdcpb.Path{
 							IsRootBased: true,
 							Elem: []*sdcpb.PathElem{
 								sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 								sdcpb.NewPathElem("subinterface", map[string]string{"index": "0"}),
 								sdcpb.NewPathElem("description", nil),
 							},
-						},
+						}),
 						&sdcpb.TypedValue{},
 						owner2Prio, owner2, 0,
 					),
@@ -256,14 +256,14 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 				),
 				NewLeafEntry(
 					types.NewUpdate(
-						&sdcpb.Path{
+						testhelper.NewUpdateParentMock(&sdcpb.Path{
 							IsRootBased: true,
 							Elem: []*sdcpb.PathElem{
 								sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 								sdcpb.NewPathElem("subinterface", map[string]string{"index": "0"}),
 								sdcpb.NewPathElem("admin-state", nil),
 							},
-						},
+						}),
 						&sdcpb.TypedValue{},
 						owner2Prio, owner2, 0,
 					),
