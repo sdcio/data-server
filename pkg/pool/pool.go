@@ -50,6 +50,19 @@ func NewWorkerPool[T any](parent context.Context, workerCount int) *Pool[T] {
 	return p
 }
 
+// workerIndexKey is used to store the worker index in the worker context.
+type workerIndexKey struct{}
+
+// WorkerIndexFromContext returns the worker index stored in ctx, if present.
+func WorkerIndexFromContext(ctx context.Context) (int, bool) {
+	if v := ctx.Value(workerIndexKey{}); v != nil {
+		if idx, ok := v.(int); ok {
+			return idx, true
+		}
+	}
+	return 0, false
+}
+
 // addInflight increments inflight and must be called when a task is known submitted.
 func (p *Pool[T]) addInflight(delta int64) {
 	atomic.AddInt64(&p.inflight, delta)
@@ -88,8 +101,13 @@ func (p *Pool[T]) Start(handler func(ctx context.Context, item T, submit func(T)
 	// spawn workers
 	p.workersWg.Add(p.workerCount)
 	for i := 0; i < p.workerCount; i++ {
+		idx := i
 		go func() {
 			defer p.workersWg.Done()
+
+			// attach worker index to this worker's context so handlers/tasks can discover it
+			workerCtx := context.WithValue(p.ctx, workerIndexKey{}, idx)
+
 			for {
 				item, ok := p.tasks.Get()
 				if !ok {
@@ -104,7 +122,7 @@ func (p *Pool[T]) Start(handler func(ctx context.Context, item T, submit func(T)
 				}
 
 				// run handler (handler may call p.Submit)
-				if err := handler(p.ctx, item, func(it T) error { return p.Submit(it) }); err != nil {
+				if err := handler(workerCtx, item, func(it T) error { return p.Submit(it) }); err != nil {
 					// store first error safely (allocate on heap)
 					ep := new(error)
 					*ep = err
