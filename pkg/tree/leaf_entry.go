@@ -26,8 +26,10 @@ type LeafEntry struct {
 }
 
 func (l *LeafEntry) DeepCopy(parentEntry Entry) *LeafEntry {
+	upd := l.Update.DeepCopy()
+	upd.SetParent(parentEntry)
 	return &LeafEntry{
-		Update:             l.Update.DeepCopy(),
+		Update:             upd,
 		parentEntry:        parentEntry,
 		IsNew:              l.IsNew,
 		Delete:             l.Delete,
