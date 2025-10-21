@@ -1723,3 +1723,184 @@ func Test_Validation_Deref(t *testing.T) {
 		},
 	)
 }
+
+// Test_Validation_MultiKey_Pattern validates that each key in a multi-key list
+// has its own pattern applied correctly, rather than all keys being validated
+// against the same pattern. This test covers the bug fix in checkAndCreateKeysAsLeafs
+// where keys were being sorted, causing the key-to-value mapping to break.
+func Test_Validation_MultiKey_Pattern(t *testing.T) {
+	prio50 := int32(50)
+	owner1 := "OwnerOne"
+	ts1 := int64(9999999)
+
+	ctx := context.TODO()
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("MultiKey_Pattern_Valid",
+		func(t *testing.T) {
+			tc := NewTreeContext(scb, owner1)
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Create a static-route list entry with 3 keys with mutually exclusive patterns:
+			// - owner: must match pattern 'owner-.*'
+			// - ipv6-prefix: must match pattern 'prefix-.*'
+			// - next-hop: must match pattern 'nexthop-.*'
+			// The keys are defined in schema as: key "owner ipv6-prefix next-hop"
+
+			bfdEnabledVal := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: true}}
+
+			// First static route: /ipv6/static-route[owner=owner-up][ipv6-prefix=prefix-default][next-hop=nexthop-gateway]/bfd-enabled
+			u1 := types.NewUpdate(
+				&sdcpb.Path{Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("ipv6", nil),
+					sdcpb.NewPathElem("static-route", map[string]string{
+						"owner":       "owner-up",        // Should match owner pattern 'owner-.*'
+						"ipv6-prefix": "prefix-default",  // Should match ipv6-prefix pattern 'prefix-.*'
+						"next-hop":    "nexthop-gateway", // Should match next-hop pattern 'nexthop-.*'
+					}),
+					sdcpb.NewPathElem("bfd-enabled", nil),
+				}},
+				bfdEnabledVal,
+				prio50,
+				owner1,
+				ts1,
+			)
+
+			_, err = root.AddUpdateRecursive(ctx, u1.Path(), u1, flagsNew)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Second static route: /ipv6/static-route[owner=owner-up][ipv6-prefix=prefix-default][next-hop=nexthop-backup]/bfd-enabled
+			u2 := types.NewUpdate(
+				&sdcpb.Path{Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("ipv6", nil),
+					sdcpb.NewPathElem("static-route", map[string]string{
+						"owner":       "owner-up", // Same owner and prefix
+						"ipv6-prefix": "prefix-default",
+						"next-hop":    "nexthop-backup", // Different next-hop
+					}),
+					sdcpb.NewPathElem("bfd-enabled", nil),
+				}},
+				bfdEnabledVal,
+				prio50,
+				owner1,
+				ts1,
+			)
+
+			_, err = root.AddUpdateRecursive(ctx, u2.Path(), u2, flagsNew)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Error(err)
+			}
+
+			validationResult, _ := root.Validate(context.TODO(), validationConfig)
+
+			// Should have no errors - all keys match their respective patterns
+			if validationResult.HasErrors() {
+				errs := validationResult.ErrorsStr()
+				t.Errorf("expected 0 errors but got %d: %v", len(errs), errs)
+			}
+		},
+	)
+
+	t.Run("MultiKey_Pattern_Invalid_Owner",
+		func(t *testing.T) {
+			tc := NewTreeContext(scb, owner1)
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Create a static-route list entry with invalid owner (doesn't match pattern)
+			bfdEnabledVal := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: true}}
+
+			// Path: /ipv6/static-route[owner=invalid][ipv6-prefix=prefix-default][next-hop=nexthop-gateway]/bfd-enabled
+			// owner="invalid" should FAIL 'owner-.*' pattern (doesn't start with 'owner-')
+			u1 := types.NewUpdate(
+				&sdcpb.Path{Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("ipv6", nil),
+					sdcpb.NewPathElem("static-route", map[string]string{
+						"owner":       "invalid",         // Should FAIL 'owner-.*' pattern
+						"ipv6-prefix": "prefix-default",  // Should match 'prefix-.*' pattern
+						"next-hop":    "nexthop-gateway", // Should match 'nexthop-.*' pattern
+					}),
+					sdcpb.NewPathElem("bfd-enabled", nil),
+				}},
+				bfdEnabledVal,
+				prio50,
+				owner1,
+				ts1,
+			)
+
+			// Pattern validation happens during AddUpdateRecursive (in checkAndCreateKeysAsLeafs)
+			// so we expect an error here
+			_, err = root.AddUpdateRecursive(ctx, u1.Path(), u1, flagsNew)
+			if err == nil {
+				t.Fatal("expected error for owner pattern mismatch, but got none")
+			}
+
+			// Verify the error message mentions the pattern
+			if !strings.Contains(err.Error(), "does not match patterns") {
+				t.Errorf("expected pattern mismatch error, got: %v", err)
+			}
+		},
+	)
+
+	t.Run("MultiKey_Pattern_Invalid_NextHop",
+		func(t *testing.T) {
+			tc := NewTreeContext(scb, owner1)
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Create a static-route list entry with invalid next-hop (doesn't match pattern)
+			bfdEnabledVal := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: true}}
+
+			// Path: /ipv6/static-route[owner=owner-up][ipv6-prefix=prefix-default][next-hop=invalid]/bfd-enabled
+			// next-hop="invalid" should FAIL 'nexthop-.*' pattern (doesn't start with 'nexthop-')
+			u1 := types.NewUpdate(
+				&sdcpb.Path{Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("ipv6", nil),
+					sdcpb.NewPathElem("static-route", map[string]string{
+						"owner":       "owner-up",       // Should match 'owner-.*' pattern
+						"ipv6-prefix": "prefix-default", // Should match 'prefix-.*' pattern
+						"next-hop":    "invalid",        // Should FAIL 'nexthop-.*' pattern
+					}),
+					sdcpb.NewPathElem("bfd-enabled", nil),
+				}},
+				bfdEnabledVal,
+				prio50,
+				owner1,
+				ts1,
+			)
+
+			// Pattern validation happens during AddUpdateRecursive (in checkAndCreateKeysAsLeafs)
+			// so we expect an error here
+			_, err = root.AddUpdateRecursive(ctx, u1.Path(), u1, flagsNew)
+			if err == nil {
+				t.Fatal("expected error for next-hop pattern mismatch, but got none")
+			}
+
+			// Verify the error message mentions the pattern
+			if !strings.Contains(err.Error(), "does not match patterns") {
+				t.Errorf("expected pattern mismatch error, got: %v", err)
+			}
+		},
+	)
+}
