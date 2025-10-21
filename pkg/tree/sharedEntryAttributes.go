@@ -232,6 +232,8 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 				lvs := child.GetByOwner(intentName, result)
 				if len(lvs) > 0 {
 					lvs[0].RemoveDeleteFlag()
+					// continue with parent Entry BEFORE continuing the loop
+					item = item.GetParent()
 					continue
 				}
 			}
@@ -264,7 +266,7 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 			}
 
 			// continue with parent Entry
-			item = s.parent
+			item = item.GetParent()
 		}
 	}
 	return nil
