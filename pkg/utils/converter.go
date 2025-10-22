@@ -484,9 +484,13 @@ func convertStringToTv(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*
 		if err != nil {
 			return nil, err
 		}
-		precision64, err := strconv.ParseUint(arr[1], 10, 32)
-		if err != nil {
-			return nil, err
+		var precision64 uint64
+		if len(arr) == 2 {
+			err = nil
+			precision64, err = strconv.ParseUint(arr[1], 10, 32)
+			if err != nil {
+				return nil, err
+			}
 		}
 		precision := uint32(precision64)
 		return &sdcpb.TypedValue{
