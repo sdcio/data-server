@@ -479,22 +479,52 @@ func convertStringToTv(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*
 			Value:     &sdcpb.TypedValue_BoolVal{BoolVal: b},
 		}, nil
 	case "decimal64":
-		arr := strings.SplitN(v, ".", 2)
-		digits, err := strconv.ParseInt(arr[0], 10, 64)
+		v = strings.TrimSpace(v)
+		neg := false
+		if strings.HasPrefix(v, "-") {
+			neg = true
+			v = v[1:]
+		} else if strings.HasPrefix(v, "+") {
+			v = v[1:]
+		}
+
+		parts := strings.SplitN(v, ".", 2)
+		intPart := parts[0]
+		fracPart := ""
+		if len(parts) == 2 {
+			fracPart = parts[1]
+		}
+
+		// Define your YANG fraction-digits (precision)
+		// This should ideally come from the schema.
+		fractionDigits := uint32(2)
+
+		// Normalize fractional part
+		if len(fracPart) > int(fractionDigits) {
+			return nil, fmt.Errorf("too many fractional digits: got %d, want ≤ %d", len(fracPart), fractionDigits)
+		}
+		fracPart = fracPart + strings.Repeat("0", int(fractionDigits)-len(fracPart))
+
+		combined := intPart + fracPart
+		if combined == "" {
+			combined = "0"
+		}
+
+		digits, err := strconv.ParseInt(combined, 10, 64)
 		if err != nil {
 			return nil, err
 		}
-		var precision64 uint64
-		if len(arr) == 2 {
-			err = nil
-			precision64, err = strconv.ParseUint(arr[1], 10, 32)
-			if err != nil {
-				return nil, err
-			}
+		if neg {
+			digits = -digits
 		}
-		precision := uint32(precision64)
+
 		return &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_DecimalVal{DecimalVal: &sdcpb.Decimal64{Digits: digits, Precision: precision}},
+			Value: &sdcpb.TypedValue_DecimalVal{
+				DecimalVal: &sdcpb.Decimal64{
+					Digits:    digits,
+					Precision: fractionDigits,
+				},
+			},
 		}, nil
 	case "identityref":
 		before, name, found := strings.Cut(v, ":")
