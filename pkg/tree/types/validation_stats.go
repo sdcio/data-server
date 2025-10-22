@@ -17,7 +17,6 @@ const (
 	StatTypeLength
 	StatTypeLeafRef
 	StatTypeMinMaxElementsList
-	StatTypeMinElements
 	StatTypeEnums
 )
 
@@ -30,7 +29,6 @@ var AllStatTypes = []StatType{
 	StatTypeLength,
 	StatTypeLeafRef,
 	StatTypeMinMaxElementsList,
-	StatTypeMinElements,
 	StatTypeEnums,
 }
 
