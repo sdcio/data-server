@@ -22,6 +22,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/datastore/target/types"
 )
 
 type noopTarget struct {
@@ -53,7 +54,7 @@ func (t *noopTarget) Get(_ context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	return result, nil
 }
 
-func (t *noopTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDataResponse, error) {
+func (t *noopTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
 
 	upds, err := source.ToProtoUpdates(ctx, true)
 	if err != nil {
@@ -86,13 +87,13 @@ func (t *noopTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDa
 	return result, nil
 }
 
-func (t *noopTarget) Status() *TargetStatus {
-	return &TargetStatus{
-		Status: TargetStatusConnected,
+func (t *noopTarget) Status() *types.TargetStatus {
+	return &types.TargetStatus{
+		Status: types.TargetStatusConnected,
 	}
 }
 
-func (t *noopTarget) Sync(ctx context.Context, _ *config.Sync, syncCh chan *SyncUpdate) {
+func (t *noopTarget) Sync(ctx context.Context, _ *config.Sync) {
 	log.Infof("starting target %s sync", t.name)
 }
 

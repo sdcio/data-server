@@ -54,6 +54,11 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 		return nil, err
 	}
 
+	// skip state
+	if rsp.GetSchema().IsState() {
+		return nil, nil
+	}
+
 	switch rsp := rsp.GetSchema().Schema.(type) {
 	case *sdcpb.SchemaElem_Container:
 		if upd.Value == nil {
@@ -120,6 +125,10 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 		var err error
 
 		var jsonValue []byte
+		if upd.GetValue() == nil {
+			log.Errorf("Error - Path: %s - TypedValue == nil", upd.Path.ToXPath(false))
+			return nil, nil
+		}
 		switch upd.GetValue().Value.(type) {
 		case *sdcpb.TypedValue_JsonVal:
 			jsonValue = upd.GetValue().GetJsonVal()

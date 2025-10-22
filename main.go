@@ -27,6 +27,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
+	"net/http"
+	_ "net/http/pprof"
+
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/dslog"
 	"github.com/sdcio/data-server/pkg/server"
@@ -52,6 +55,10 @@ func main() {
 		fmt.Println(version + "-" + commit)
 		return
 	}
+
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	log.SetLevel(log.InfoLevel)

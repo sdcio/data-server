@@ -48,9 +48,10 @@ func FromGNMIPath(pre, p *gnmi.Path) *sdcpb.Path {
 		return nil
 	}
 	r := &sdcpb.Path{
-		Origin: pre.GetOrigin(),
-		Elem:   make([]*sdcpb.PathElem, 0, len(pre.GetElem())+len(p.GetElem())),
-		Target: pre.GetTarget(),
+		Origin:      pre.GetOrigin(),
+		Elem:        make([]*sdcpb.PathElem, 0, len(pre.GetElem())+len(p.GetElem())),
+		Target:      pre.GetTarget(),
+		IsRootBased: true,
 	}
 	for _, pe := range pre.GetElem() {
 		r.Elem = append(r.Elem, &sdcpb.PathElem{
@@ -132,6 +133,10 @@ func FromGNMITypedValue(v *gnmi.TypedValue) *sdcpb.TypedValue {
 	case *gnmi.TypedValue_FloatVal:
 		return &sdcpb.TypedValue{
 			Value: &sdcpb.TypedValue_DoubleVal{DoubleVal: float64(v.GetFloatVal())},
+		}
+	case *gnmi.TypedValue_DoubleVal:
+		return &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_DoubleVal{DoubleVal: v.GetDoubleVal()},
 		}
 	default:
 		log.Errorf("FromGNMITypedValue unhandled type: %T: %v", v, v)

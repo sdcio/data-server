@@ -62,6 +62,7 @@ func createDataClient(ctx context.Context, addr string) (sdcpb.DataServerClient,
 		grpc.WithTransportCredentials(
 			insecure.NewCredentials(),
 		),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(200*1024*1024)),
 	)
 	if err != nil {
 		return nil, err
