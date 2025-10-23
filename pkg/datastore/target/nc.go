@@ -23,8 +23,8 @@ import (
 	"time"
 
 	"github.com/beevik/etree"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
@@ -61,6 +61,9 @@ func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient s
 }
 
 func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+	log := logf.FromContext(ctx).WithName("Get")
+	ctx = logf.IntoContext(ctx, log)
+
 	if !t.Status().IsConnected() {
 		return nil, fmt.Errorf("%s", TargetStatusNotConnected)
 	}
@@ -87,19 +90,19 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("netconf filter:\n%s", filterDoc)
+	log.V(logf.VDebug).Info("using netconf filter", "filter", filterDoc)
 
 	// execute the GetConfig rpc
 	ncResponse, err := t.driver.GetConfig(source, filterDoc)
 	if err != nil {
 		if strings.Contains(err.Error(), "EOF") {
 			t.Close()
-			go t.reconnect()
+			go t.reconnect(ctx)
 		}
 		return nil, err
 	}
 
-	log.Debugf("%s: netconf response:\n%s", t.name, ncResponse.DocAsString())
+	log.V(logf.VTrace).Info("received netconf response", "response", ncResponse.DocAsString(false))
 
 	// cmlImport := xml.NewXmlTreeImporter(ncResponse.Doc.Root())
 
@@ -122,15 +125,16 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 }
 
 func (t *ncTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDataResponse, error) {
+	log := logf.FromContext(ctx).WithName("Set")
+	ctx = logf.IntoContext(ctx, log)
+
 	if !t.Status().IsConnected() {
 		return nil, fmt.Errorf("%s", TargetStatusNotConnected)
 	}
 
 	switch t.sbiConfig.NetconfOptions.CommitDatastore {
-	case "running":
-		return t.setRunning(source)
-	case "candidate":
-		return t.setCandidate(source)
+	case "running", "candidate":
+		return t.setToDevice(ctx, t.sbiConfig.NetconfOptions.CommitDatastore, source)
 	}
 	// should not get here if the config validation happened.
 	return nil, fmt.Errorf("unknown commit-datastore: %s", t.sbiConfig.NetconfOptions.CommitDatastore)
@@ -149,11 +153,16 @@ func (t *ncTarget) Status() *TargetStatus {
 }
 
 func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
-	log.Infof("starting target %s [%s] sync", t.name, t.sbiConfig.Address)
+	log := logf.FromContext(ctx).WithName("Sync")
+	ctx = logf.IntoContext(ctx, log)
+
+	log.Info("starting target sync")
 
 	for _, ncc := range syncConfig.Config {
 		// periodic get
-		log.Debugf("target %s, starting sync: %s, Interval: %s, Paths: [ \"%s\" ]", t.name, ncc.Name, ncc.Interval.String(), strings.Join(ncc.Paths, "\", \""))
+		log = log.WithValues("sync-name", ncc.Name, "sync-interval", ncc.Interval.String(), "sync-paths", strings.Join(ncc.Paths, "\", \""))
+		ctx = logf.IntoContext(ctx, log)
+		log.V(logf.VDebug).Info("target starting sync")
 		go func(ncSync *config.SyncProtocol) {
 			t.internalSync(ctx, ncSync, true, syncCh)
 			ticker := time.NewTicker(ncSync.Interval)
@@ -171,11 +180,12 @@ func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync, syncCh cha
 
 	<-ctx.Done()
 	if !errors.Is(ctx.Err(), context.Canceled) {
-		log.Errorf("datastore %s sync stopped: %v", t.name, ctx.Err())
+		log.Error(ctx.Err(), "datastore sync stopped")
 	}
 }
 
 func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, force bool, syncCh chan *SyncUpdate) {
+	log := logf.FromContext(ctx)
 	if !t.Status().IsConnected() {
 		return
 	}
@@ -185,7 +195,7 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, fo
 	for _, p := range sc.Paths {
 		path, err := sdcpb.ParsePath(p)
 		if err != nil {
-			log.Errorf("failed Parsing Path %q, %v", p, err)
+			log.Error(err, "failed parsing path", "path", p)
 			return
 		}
 		// add the parsed path
@@ -202,10 +212,10 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, fo
 	// execute netconf get
 	resp, err := t.Get(ctx, req)
 	if err != nil {
-		log.Errorf("failed getting config from target %v: %T | %v", t.name, err, err)
+		log.Error(err, "failed getting config from target")
 		if strings.Contains(err.Error(), "EOF") {
 			t.Close()
-			go t.reconnect()
+			go t.reconnect(ctx)
 		}
 		return
 	}
@@ -221,7 +231,7 @@ func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, fo
 		}
 		notificationsCount++
 	}
-	log.Debugf("%s: sync-ed %d notifications", t.name, notificationsCount)
+	log.V(logf.VDebug).Info("synced notifications", "notification-count", notificationsCount)
 	syncCh <- &SyncUpdate{
 		End: true,
 	}
@@ -237,70 +247,28 @@ func (t *ncTarget) Close() error {
 	return t.driver.Close()
 }
 
-func (t *ncTarget) reconnect() {
+func (t *ncTarget) reconnect(ctx context.Context) {
 	t.m.Lock()
 	defer t.m.Unlock()
+
+	log := logf.FromContext(ctx)
 
 	if t.Status().IsConnected() {
 		return
 	}
 
 	var err error
-	log.Infof("%s: NETCONF reconnecting...", t.name)
+	log.Info("NETCONF reconnecting")
 	for {
 		t.driver, err = scrapligo.NewScrapligoNetconfTarget(t.sbiConfig)
 		if err != nil {
-			log.Errorf("failed to create NETCONF driver: %v", err)
+			log.Error(err, "failed to create NETCONF driver")
 			time.Sleep(t.sbiConfig.ConnectRetry)
 			continue
 		}
-		log.Infof("%s: NETCONF reconnected...", t.name)
+		log.Info("NETCONF reconnected")
 		return
 	}
-}
-
-func (t *ncTarget) setRunning(source TargetSource) (*sdcpb.SetDataResponse, error) {
-
-	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
-	if err != nil {
-		return nil, err
-	}
-
-	xdoc, err := xtree.WriteToString()
-	if err != nil {
-		return nil, err
-	}
-
-	// if there was no data in the xml document, return
-	if len(xdoc) == 0 {
-		return &sdcpb.SetDataResponse{
-			Timestamp: time.Now().UnixNano(),
-		}, nil
-	}
-
-	log.Debugf("datastore %s XML:\n%s\n", t.name, xdoc)
-
-	// edit the config
-	resp, err := t.driver.EditConfig("running", xdoc)
-	if err != nil {
-		log.Errorf("datastore %s failed edit-config: %v", t.name, err)
-		if strings.Contains(err.Error(), "EOF") {
-			t.Close()
-			go t.reconnect()
-			return nil, err
-		}
-		return nil, err
-	}
-
-	// retrieve netconf rpc-error -> warnings as string array
-	warnings, err := filterRPCErrors(resp.Doc, "warning")
-	if err != nil {
-		return nil, fmt.Errorf("filtering netconf rpc-errors with severity warnings: %w", err)
-	}
-	return &sdcpb.SetDataResponse{
-		Warnings:  warnings,
-		Timestamp: time.Now().UnixNano(),
-	}, nil
 }
 
 // filterRPCErrors takes the given etree.Document, filters the document for rpc-errors with the given severity
@@ -319,7 +287,8 @@ func filterRPCErrors(xml *etree.Document, severity string) ([]string, error) {
 	return result, nil
 }
 
-func (t *ncTarget) setCandidate(source TargetSource) (*sdcpb.SetDataResponse, error) {
+func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, source TargetSource) (*sdcpb.SetDataResponse, error) {
+	log := logf.FromContext(ctx).WithValues("commit-datastore", commitDatastore)
 	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
 	if err != nil {
 		return nil, err
@@ -337,21 +306,25 @@ func (t *ncTarget) setCandidate(source TargetSource) (*sdcpb.SetDataResponse, er
 		}, nil
 	}
 
-	log.Debugf("datastore %s XML:\n%s\n", t.name, xdoc)
+	log.V(logf.VTrace).Info("generated config XML", "xml", xdoc)
 
 	// edit the config
-	resp, err := t.driver.EditConfig("candidate", xdoc)
+	resp, err := t.driver.EditConfig(commitDatastore, xdoc)
 	if err != nil {
-		log.Errorf("datastore %s failed edit-config: %v", t.name, err)
+		log.Error(err, "failed during edit-config")
 		if strings.Contains(err.Error(), "EOF") {
 			t.Close()
-			go t.reconnect()
+			go t.reconnect(ctx)
 			return nil, err
 		}
-		err2 := t.driver.Discard()
-		if err2 != nil {
-			// log failed discard
-			log.Errorf("failed with %v while discarding pending changes after error %v", err2, err)
+
+		// candidate should discard on error
+		if commitDatastore == "candidate" {
+			err2 := t.driver.Discard()
+			if err2 != nil {
+				// log failed discard
+				log.Error(err2, "failed while discarding pending changes")
+			}
 		}
 		return nil, err
 	}
@@ -360,15 +333,18 @@ func (t *ncTarget) setCandidate(source TargetSource) (*sdcpb.SetDataResponse, er
 		return nil, fmt.Errorf("filtering netconf rpc-errors with severity warnings: %w", err)
 	}
 
-	log.Infof("datastore %s: committing changes on target", t.name)
-	// commit the config
-	err = t.driver.Commit()
-	if err != nil {
-		if strings.Contains(err.Error(), "EOF") {
-			t.Close()
-			go t.reconnect()
+	// candidate stores need to commit the changes to running
+	if commitDatastore == "candidate" {
+		log.Info("committing changes on target")
+		// commit the config
+		err = t.driver.Commit()
+		if err != nil {
+			if strings.Contains(err.Error(), "EOF") {
+				t.Close()
+				go t.reconnect(ctx)
+			}
+			return nil, err
 		}
-		return nil, err
 	}
 	return &sdcpb.SetDataResponse{
 		Warnings:  rpcWarnings,

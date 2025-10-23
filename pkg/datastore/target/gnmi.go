@@ -28,11 +28,10 @@ import (
 	gapi "github.com/openconfig/gnmic/pkg/api"
 	gtarget "github.com/openconfig/gnmic/pkg/api/target"
 	"github.com/openconfig/gnmic/pkg/api/types"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/sdcio/data-server/pkg/config"
@@ -123,6 +122,8 @@ func sdcpbEncodingToGNMIENcoding(x sdcpb.Encoding) (gnmi.Encoding, error) {
 }
 
 func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+	log := logf.FromContext(ctx).WithName("Get")
+	ctx = logf.IntoContext(ctx, log)
 	var err error
 	gnmiReq := &gnmi.GetRequest{
 		Path: make([]*gnmi.Path, 0, len(req.GetPath())),
@@ -152,13 +153,15 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 		Notification: make([]*sdcpb.Notification, 0, len(gnmiRsp.GetNotification())),
 	}
 	for _, n := range gnmiRsp.GetNotification() {
-		sn := utils.ToSchemaNotification(n)
+		sn := utils.ToSchemaNotification(ctx, n)
 		schemaRsp.Notification = append(schemaRsp.Notification, sn)
 	}
 	return schemaRsp, nil
 }
 
 func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDataResponse, error) {
+	log := logf.FromContext(ctx).WithName("Set")
+	ctx = logf.IntoContext(ctx, log)
 	var upds []*sdcpb.Update
 	var deletes []*sdcpb.Path
 	var err error
@@ -220,7 +223,7 @@ func (t *gnmiTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDa
 		setReq.Update = append(setReq.Update, gupd)
 	}
 
-	log.Debugf("gnmi set request:\n%s", prototext.Format(setReq))
+	log.V(logf.VDebug).Info("created gnmi request", "raw-request", utils.FormatProtoJSON(setReq))
 
 	rsp, err := t.target.Set(ctx, setReq)
 	if err != nil {
@@ -259,8 +262,10 @@ func (t *gnmiTarget) Status() *TargetStatus {
 }
 
 func (t *gnmiTarget) Sync(octx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate) {
+	log := logf.FromContext(octx).WithName("Sync")
+	octx = logf.IntoContext(octx, log)
 	if t != nil && t.target != nil && t.target.Config != nil {
-		log.Infof("starting target %s sync", t.target.Config.Name)
+		log.Info("starting target sync")
 	}
 	var cancel context.CancelFunc
 	var ctx context.Context
@@ -283,7 +288,7 @@ START:
 			err = t.streamSync(ctx, gnmiSync)
 		}
 		if err != nil {
-			log.Errorf("target=%s: failed to sync: %v", t.target.Config.Name, err)
+			log.Error(err, "failed to sync target", "mode", gnmiSync.Mode)
 			time.Sleep(syncRetryWaitTime)
 			goto START
 		}
@@ -295,7 +300,7 @@ START:
 		select {
 		case <-ctx.Done():
 			if !errors.Is(ctx.Err(), context.Canceled) {
-				log.Errorf("datastore %s sync stopped: %v", t.target.Config.Name, ctx.Err())
+				log.Error(ctx.Err(), "datastore sync stopped")
 			}
 			return
 		case rsp := <-rspch:
@@ -303,13 +308,13 @@ START:
 			case *gnmi.SubscribeResponse_Update:
 				syncCh <- &SyncUpdate{
 					Store:  rsp.SubscriptionName,
-					Update: utils.ToSchemaNotification(r.Update),
+					Update: utils.ToSchemaNotification(ctx, r.Update),
 				}
 			}
 		case err := <-errCh:
 			if err.Err != nil {
 				t.target.StopSubscriptions()
-				log.Errorf("%s: sync subscription failed: %v", t.target.Config.Name, err)
+				log.Error(err.Err, "sync subscription failed", "subscription-name", err.SubscriptionName)
 				time.Sleep(time.Second)
 				goto START
 			}
@@ -387,10 +392,11 @@ func (t *gnmiTarget) getSync(ctx context.Context, gnmiSync *config.SyncProtocol,
 }
 
 func (t *gnmiTarget) internalGetSync(ctx context.Context, req *sdcpb.GetDataRequest, syncCh chan *SyncUpdate) {
+	log := logf.FromContext(ctx)
 	// execute gnmi get
 	resp, err := t.Get(ctx, req)
 	if err != nil {
-		log.Errorf("sync error: %v", err)
+		log.Error(err, "sync error")
 		return
 	}
 
@@ -407,7 +413,7 @@ func (t *gnmiTarget) internalGetSync(ctx context.Context, req *sdcpb.GetDataRequ
 		}
 		notificationsCount++
 	}
-	log.Debugf("%s: synced %d notifications", t.target.Config.Name, notificationsCount)
+	log.V(logf.VDebug).Info("synced notifications", "notification-count", notificationsCount)
 	syncCh <- &SyncUpdate{
 		End: true,
 	}
@@ -448,6 +454,7 @@ func (t *gnmiTarget) periodicSync(ctx context.Context, gnmiSync *config.SyncProt
 }
 
 func (t *gnmiTarget) streamSync(ctx context.Context, gnmiSync *config.SyncProtocol) error {
+	log := logf.FromContext(ctx).WithName("streamSync")
 	opts := make([]gapi.GNMIOption, 0)
 	subscriptionOpts := make([]gapi.GNMIOption, 0)
 	for _, p := range gnmiSync.Paths {
@@ -474,7 +481,7 @@ func (t *gnmiTarget) streamSync(ctx context.Context, gnmiSync *config.SyncProtoc
 		return err
 
 	}
-	log.Infof("sync %q: subRequest: %v", gnmiSync.Name, subReq)
+	log.Info("sync", "subRequest", utils.FormatProtoJSON(subReq))
 	go t.target.Subscribe(ctx, subReq, gnmiSync.Name)
 	return nil
 }

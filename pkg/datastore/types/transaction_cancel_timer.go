@@ -1,11 +1,12 @@
 package types
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	logf "github.com/sdcio/logger"
 )
 
 type TransactionCancelTimer struct {
@@ -23,9 +24,10 @@ func NewTransactionCancelTimer(delay time.Duration, f func()) *TransactionCancel
 	}
 }
 
-func (t *TransactionCancelTimer) Start() error {
+func (t *TransactionCancelTimer) Start(ctx context.Context) error {
 	t.doneMutex.Lock()
 	defer t.doneMutex.Unlock()
+	log := logf.FromContext(ctx)
 	if t.done != nil {
 		return fmt.Errorf("TransactionCancelTimer already started")
 	}
@@ -33,19 +35,19 @@ func (t *TransactionCancelTimer) Start() error {
 
 	go func() {
 		timer := time.NewTimer(t.delay)
-		log.Infof("TransactionCancelTimer started (%s)", t.delay.String())
+		log.Info("TransactionCancelTimer started", "delay", t.delay.String())
 		defer timer.Stop() // Ensure the timer is cleaned up
 
 		select {
 		case <-timer.C:
 			// Timer fired, process TransactionCancel action
-			log.Infof("TransactionCancelTimer triggered")
+			log.Info("TransactionCancelTimer triggered")
 			if t.fnc != nil {
 				t.fnc()
 			}
 		case <-t.done:
 			// Stop the timer
-			log.Infof("TransactionCancelTimer stopped")
+			log.Info("TransactionCancelTimer stopped")
 			t.done = nil
 		}
 	}()

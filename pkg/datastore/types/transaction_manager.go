@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
+	logf "github.com/sdcio/logger"
 )
 
 var (
@@ -29,6 +29,7 @@ func NewTransactionManager(r RollbackInterface) *TransactionManager {
 func (t *TransactionManager) RegisterTransaction(ctx context.Context, trans *Transaction) (*TransactionGuard, error) {
 	t.tmMutex.Lock()
 	defer t.tmMutex.Unlock()
+	log := logf.FromContext(ctx)
 	if t.transactionOngoing() {
 		return nil, ErrTransactionOngoing
 	}
@@ -36,8 +37,11 @@ func (t *TransactionManager) RegisterTransaction(ctx context.Context, trans *Tra
 	t.transaction = trans
 
 	return NewTransactionGuard(func() {
-		log.Infof("Transaction: %s - canceling due to error", trans.transactionId)
-		t.CleanupTransaction(trans.transactionId)
+		log.Info("transaction canceling due to error")
+		err := t.CleanupTransaction(trans.transactionId)
+		if err != nil {
+			log.Error(err, "error cleaning up transaction")
+		}
 	}), nil
 }
 

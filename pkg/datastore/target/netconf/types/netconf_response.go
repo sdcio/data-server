@@ -26,10 +26,15 @@ func NewNetconfResponse(doc *etree.Document) *NetconfResponse {
 	}
 }
 
-func (nr *NetconfResponse) DocAsString() string {
+func (nr *NetconfResponse) DocAsString(indented bool) string {
 	if nr.Doc == nil {
 		return ""
 	}
-	s, _ := nr.Doc.WriteToString()
+	doc := nr.Doc
+	if !indented {
+		doc = doc.Copy()
+		doc.Unindent()
+	}
+	s, _ := doc.WriteToString()
 	return s
 }
