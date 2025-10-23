@@ -323,7 +323,7 @@ func (s *Server) readyInterceptor(ctx context.Context, req interface{}, info *gr
 func contextLoggingInterceptor(logCtx context.Context) func(context.Context, interface{}, *grpc.UnaryServerInfo, grpc.UnaryHandler) (resp interface{}, err error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 		uuidString := uuid.New().String()
-		log := logf.FromContext(logCtx).WithName("grpc").WithValues("grpc-request-uuid", uuidString)
+		log := logf.FromContext(logCtx).WithValues("grpc-request-uuid", uuidString)
 		ctx = logf.IntoContext(ctx, log)
 
 		return handler(ctx, req)
@@ -333,7 +333,7 @@ func contextLoggingInterceptor(logCtx context.Context) func(context.Context, int
 func contextLoggingServerStreamInterceptor(ctx context.Context) func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		uuidString := uuid.New().String()
-		log := logf.FromContext(ctx).WithName("grpc").WithValues("grpc-request-uuid", uuidString)
+		log := logf.FromContext(ctx).WithValues("grpc-request-uuid", uuidString)
 		wss := grpc_middleware.WrapServerStream(ss)
 		wss.WrappedContext = logf.IntoContext(wss.WrappedContext, log)
 
