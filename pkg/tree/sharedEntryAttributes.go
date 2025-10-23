@@ -223,6 +223,13 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 
 		// iterate through the keys
 		var item Entry = s
+
+		// construct the key path
+		// doing so outside the loop to reuse
+		path := &sdcpb.Path{
+			IsRootBased: false,
+		}
+
 		for _, k := range keySorted {
 			child, entryExists := s.childs.GetEntry(k.Name)
 			// if the key Leaf exists continue with next key
@@ -235,8 +242,6 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 					continue
 				}
 			}
-			// construct the key path
-			path := s.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(k.Name, nil))
 
 			// convert the key value to the schema defined Typed_Value
 			tv, err := utils.Convert(item.PathName(), k.GetType())
