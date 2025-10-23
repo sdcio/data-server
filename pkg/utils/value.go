@@ -16,6 +16,7 @@ package utils
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -174,34 +175,54 @@ func ToGNMITypedValue(v *sdcpb.TypedValue) *gnmi.TypedValue {
 }
 
 func ParseDecimal64(v string) (*sdcpb.Decimal64, error) {
-	// Remove any leading or trailing spaces.
-	trimmed := strings.TrimSpace(v)
-
-	if len(trimmed) == 0 {
-		return nil, nil
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return nil, fmt.Errorf("empty decimal64 string")
 	}
 
-	// Split the string into integer and fractional parts.
-	parts := strings.SplitN(trimmed, ".", 2)
+	neg := false
+	if strings.HasPrefix(v, "-") {
+		neg = true
+		v = v[1:]
+	} else if strings.HasPrefix(v, "+") {
+		v = v[1:]
+	}
+
+	if v == "" {
+		return nil, fmt.Errorf("no digits after sign")
+	}
+
+	parts := strings.SplitN(v, ".", 2)
 	intPart := parts[0]
-	var fracPart string
-	if len(parts) > 1 {
+	fracPart := ""
+	if len(parts) == 2 {
 		fracPart = parts[1]
 	}
 
-	// Combine integer and fractional parts into one number.
-	combined := intPart + fracPart
+	// Require at least one digit total (either int or frac)
+	if intPart == "" && fracPart == "" {
+		return nil, fmt.Errorf("no digits in decimal64 value")
+	}
 
-	// Parse combined parts into a uint64.
+	if intPart == "" {
+		intPart = "0"
+	}
+
+	combined := intPart + fracPart
+	if combined == "" {
+		return nil, fmt.Errorf("no digits to parse")
+	}
+
 	digits, err := strconv.ParseInt(combined, 10, 64)
 	if err != nil {
 		return nil, err
 	}
+	if neg {
+		digits = -digits
+	}
 
-	// Calculate precision as the length of the fractional part.
 	precision := uint32(len(fracPart))
 
-	// Return the Decimal64 representation.
 	return &sdcpb.Decimal64{
 		Digits:    digits,
 		Precision: precision,

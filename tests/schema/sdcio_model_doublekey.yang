@@ -17,10 +17,14 @@ module sdcio_model_doublekey {
         "here we have a container with two keys";
       key "key2 key1";
       leaf key2 {
-        type string;
+        type string {
+          pattern '[0-9]+';
+        }
       }
       leaf key1 {
-        type string;
+        type string {
+          pattern '[a-z]+';
+        }
       }
       leaf mandato {
         type string;
