@@ -2,6 +2,7 @@ package tree
 
 import (
 	"context"
+	"sync"
 
 	"github.com/sdcio/data-server/pkg/utils"
 )
@@ -13,6 +14,7 @@ type ExplicitDeleteVisitor struct {
 
 	// created entries for further stat calculation
 	relatedLeafVariants LeafVariantSlice
+	rlvMutex            *sync.Mutex
 }
 
 var _ EntryVisitor = (*ExplicitDeleteVisitor)(nil)
@@ -22,6 +24,7 @@ func NewExplicitDeleteVisitor(owner string, priority int32) *ExplicitDeleteVisit
 		priority:            priority,
 		owner:               owner,
 		relatedLeafVariants: []*LeafEntry{},
+		rlvMutex:            &sync.Mutex{},
 	}
 }
 
@@ -35,7 +38,9 @@ func (edv *ExplicitDeleteVisitor) Visit(ctx context.Context, e Entry) error {
 	} else {
 		le = e.GetLeafVariantEntries().AddExplicitDeleteEntry(edv.owner, edv.priority)
 	}
+	edv.rlvMutex.Lock()
 	edv.relatedLeafVariants = append(edv.relatedLeafVariants, le)
+	edv.rlvMutex.Unlock()
 	return nil
 }
 

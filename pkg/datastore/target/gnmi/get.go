@@ -9,6 +9,7 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/utils"
 	"github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/importer/proto"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	dsutils "github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -22,26 +23,15 @@ type GetSync struct {
 	runningStore types.RunningStore
 	ctx          context.Context
 	schemaClient dsutils.SchemaClientBound
+	paths        []*sdcpb.Path
 }
 
-func NewGetSync(ctx context.Context, target GetTarget, c *config.SyncProtocol, runningStore types.RunningStore, schemaClient dsutils.SchemaClientBound) *GetSync {
+func NewGetSync(ctx context.Context, target GetTarget, c *config.SyncProtocol, runningStore types.RunningStore, schemaClient dsutils.SchemaClientBound) (*GetSync, error) {
 	ctx, cancel := context.WithCancel(ctx)
 
-	return &GetSync{
-		config:       c,
-		target:       target,
-		cancel:       cancel,
-		runningStore: runningStore,
-		ctx:          ctx,
-		schemaClient: schemaClient,
-	}
-}
-
-func (s *GetSync) syncConfig() (*sdcpb.GetDataRequest, error) {
-	// iterate syncConfig
-	paths := make([]*sdcpb.Path, 0, len(s.config.Paths))
+	paths := make([]*sdcpb.Path, 0, len(c.Paths))
 	// iterate referenced paths
-	for _, p := range s.config.Paths {
+	for _, p := range c.Paths {
 		path, err := sdcpb.ParsePath(p)
 		if err != nil {
 			return nil, err
@@ -50,9 +40,23 @@ func (s *GetSync) syncConfig() (*sdcpb.GetDataRequest, error) {
 		paths = append(paths, path)
 	}
 
+	return &GetSync{
+		config:       c,
+		target:       target,
+		cancel:       cancel,
+		runningStore: runningStore,
+		ctx:          ctx,
+		schemaClient: schemaClient,
+		paths:        paths,
+	}, nil
+}
+
+func (s *GetSync) syncConfig() (*sdcpb.GetDataRequest, error) {
+	// iterate syncConfig
+
 	req := &sdcpb.GetDataRequest{
 		Name:     s.config.Name,
-		Path:     paths,
+		Path:     s.paths,
 		DataType: sdcpb.DataType_CONFIG,
 		Encoding: sdcpb.Encoding(utils.ParseSdcpbEncoding(s.config.Encoding)),
 	}
@@ -105,7 +109,7 @@ func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
 	syncTreeMutex := &sync.Mutex{}
 
 	// process Noifications
-	deletes, err := processNotifications(s.ctx, resp.GetNotification(), s.schemaClient, syncTree, syncTreeMutex)
+	_, err = processNotifications(s.ctx, resp.GetNotification(), s.schemaClient, syncTree, syncTreeMutex)
 	if err != nil {
 		log.Errorf("sync process notifications error: %v", err)
 		return
@@ -116,10 +120,8 @@ func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
 		log.Errorf("sync tree export error: %v", err)
 		return
 	}
-	// add also the deletes to the export
-	result.ExplicitDeletes = deletes
 
-	err = s.runningStore.ApplyToRunning(s.ctx, result)
+	err = s.runningStore.ApplyToRunning(s.ctx, s.paths, proto.NewProtoTreeImporter(result))
 	if err != nil {
 		log.Errorf("sync import to running error: %v", err)
 		return

@@ -111,9 +111,9 @@ func TestVirtualPools_TolerantAndFailFast(t *testing.T) {
 		t.Fatalf("timeout waiting for tolerant drain")
 	}
 
-	// tolerant: expect 3 increments (one of them had nested:1 so total 3)
-	if got := atomic.LoadInt64(&cntT); got != 3 {
-		t.Fatalf("tolerant counter expected 3 got %d", got)
+	// tolerant: expect 4 increments (one of the tasks had nested:1 which is now allowed even after CloseForSubmit)
+	if got := atomic.LoadInt64(&cntT); got != 4 {
+		t.Fatalf("tolerant counter expected 4 got %d", got)
 	}
 
 	// tolerant: expect at least one error recorded
@@ -127,5 +127,78 @@ func TestVirtualPools_TolerantAndFailFast(t *testing.T) {
 	}
 	if vf.FirstError() == nil {
 		t.Fatalf("expected fail-fast virtual to record a first error")
+	}
+}
+
+// Test that Wait blocks until the virtual pool is drained (tolerant mode).
+func TestVirtualPool_Wait_Tolerant(t *testing.T) {
+	ctx := context.Background()
+	sp := NewSharedTaskPool(ctx, 2)
+	vt := sp.NewVirtualPool("wait-tolerant", VirtualTolerant, 4)
+
+	var cnt int64
+	// submit a few tasks
+	if err := vt.Submit(&incrTask{counter: &cnt}); err != nil {
+		t.Fatal(err)
+	}
+	if err := vt.Submit(&incrTask{counter: &cnt}); err != nil {
+		t.Fatal(err)
+	}
+
+	// stop accepting submissions
+	vt.CloseForSubmit()
+	// Wait should block until inflight==0 and then return
+	go func() {
+		// close shared when we're done submitting all virtuals
+		sp.CloseForSubmit()
+	}()
+
+	// Wait on virtual specifically
+	vt.Wait()
+
+	// ensure error channel closed (collector closed)
+	select {
+	case _, ok := <-vt.ErrorChan():
+		if ok {
+			t.Fatalf("expected error channel to be closed")
+		}
+	default:
+		// channel may be drained; ensure snapshot is usable
+	}
+
+	if got := atomic.LoadInt64(&cnt); got != 2 {
+		t.Fatalf("expected 2 increments, got %d", got)
+	}
+}
+
+// Test that Wait unblocks for a fail-fast virtual even if some queued tasks are skipped.
+func TestVirtualPool_Wait_FailFast(t *testing.T) {
+	ctx := context.Background()
+	sp := NewSharedTaskPool(ctx, 2)
+	vf := sp.NewVirtualPool("wait-fail", VirtualFailFast, 0)
+
+	var cnt int64
+	// submit a task that will fail and another that would be skipped when run
+	if err := vf.Submit(&incrTask{counter: &cnt}); err != nil {
+		t.Fatal(err)
+	}
+	if err := vf.Submit(&incrTask{counter: &cnt, fail: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := vf.Submit(&incrTask{counter: &cnt}); err != nil {
+		t.Fatal(err)
+	}
+
+	vf.CloseForSubmit()
+	sp.CloseForSubmit()
+
+	// Wait should return once virtual is drained (some tasks may be skipped but inflight reaches 0)
+	vf.Wait()
+
+	if vf.FirstError() == nil {
+		t.Fatalf("expected first error on fail-fast virtual")
+	}
+	if got := atomic.LoadInt64(&cnt); got < 1 {
+		t.Fatalf("expected at least one task executed, got %d", got)
 	}
 }

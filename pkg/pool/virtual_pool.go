@@ -16,6 +16,8 @@ package pool
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -140,19 +142,42 @@ func (s *SharedTaskPool) Wait() error {
 // id is an arbitrary identifier (must be unique per SharedTaskPool).
 // mode controls failure semantics. buf controls error channel buffer for tolerant mode.
 func (s *SharedTaskPool) NewVirtualPool(id string, mode VirtualMode, buf int) *VirtualPool {
+	// ensure unique id in the shared pool's map. If the requested id is already
+	// registered, append a short random hex postfix so multiple callers can
+	// create virtual pools with the same base name without colliding.
+	s.mu.Lock()
+	finalID := id
+	if _, exists := s.vmap[finalID]; exists {
+		// generate short random postfix until unique
+		for {
+			// 4 bytes -> 8 hex chars
+			b := make([]byte, 4)
+			if _, err := rand.Read(b); err != nil {
+				// fallback to using a timestamp-like postfix if crypto fails
+				finalID = finalID + "-r"
+				break
+			}
+			suf := hex.EncodeToString(b)
+			candidate := id + "-" + suf
+			if _, ok := s.vmap[candidate]; !ok {
+				finalID = candidate
+				break
+			}
+		}
+	}
 	v := &VirtualPool{
-		id:       id,
+		id:       finalID,
 		parent:   s,
 		mode:     mode,
 		ec:       nil,
 		closed:   atomic.Bool{},
 		firstErr: atomic.Pointer[error]{},
+		done:     make(chan struct{}),
 	}
 	if mode == VirtualTolerant {
 		v.ec = newErrorCollector(buf)
 	}
-	s.mu.Lock()
-	s.vmap[id] = v
+	s.vmap[v.id] = v
 	s.mu.Unlock()
 	return v
 }
@@ -187,6 +212,10 @@ type VirtualPool struct {
 	inflight int64
 	// ensure collector channel closed only once
 	collectorOnce sync.Once
+	// ensure done channel closed only once (for Wait)
+	waitOnce sync.Once
+	// done is closed when the virtual pool is closed for submit and inflight reaches zero
+	done chan struct{}
 }
 
 // virtualTask wraps a Task with its owning VirtualPool reference.
@@ -198,12 +227,25 @@ type virtualTask struct {
 func (vt *virtualTask) Run(ctx context.Context, submit func(Task) error) error {
 	// If virtual is closed due to fail-fast, skip executing the task.
 	if vt.vp.isFailed() {
+		// decrement inflight for skipped task and possibly close collector/done
+		if remaining := atomic.AddInt64(&vt.vp.inflight, -1); remaining == 0 && vt.vp.closed.Load() {
+			vt.vp.collectorOnce.Do(func() {
+				if vt.vp.ec != nil {
+					vt.vp.ec.close()
+				}
+			})
+			vt.vp.waitOnce.Do(func() {
+				close(vt.vp.done)
+			})
+		}
 		return nil
 	}
 
 	// build a submit wrapper so child tasks submitted by this task remain in the same virtual pool.
+	// Use an internal submit variant so nested submissions from running tasks are allowed
+	// even after CloseForSubmit() has been called externally.
 	submitWrapper := func(t Task) error {
-		return vt.vp.Submit(t)
+		return vt.vp.submitInternal(t)
 	}
 
 	// Execute the actual task.
@@ -231,6 +273,10 @@ func (vt *virtualTask) Run(ctx context.Context, submit func(Task) error) error {
 			if vt.vp.ec != nil {
 				vt.vp.ec.close()
 			}
+		})
+		// signal Wait() callers that virtual is drained
+		vt.vp.waitOnce.Do(func() {
+			close(vt.vp.done)
 		})
 	}
 	return nil
@@ -263,6 +309,27 @@ func (v *VirtualPool) Submit(t Task) error {
 // SubmitFunc convenience to submit a TaskFunc.
 func (v *VirtualPool) SubmitFunc(f TaskFunc) error { return v.Submit(f) }
 
+// submitInternal is used by running tasks to submit child tasks into the same virtual.
+// It bypasses the external CloseForSubmit guard so internal (nested) submissions can
+// continue even after CloseForSubmit() has been called. However, fail-fast semantics
+// still apply: if the virtual has recorded a first error, nested submissions are
+// rejected.
+func (v *VirtualPool) submitInternal(t Task) error {
+	// If already failed (fail-fast), disallow further submissions.
+	if v.isFailed() {
+		return ErrVirtualPoolClosed
+	}
+	// increment per-virtual inflight (will be decremented by worker after run)
+	atomic.AddInt64(&v.inflight, 1)
+	vt := &virtualTask{vp: v, task: t}
+	if err := v.parent.submitWrapped(vt); err != nil {
+		// submission failed: revert inflight
+		atomic.AddInt64(&v.inflight, -1)
+		return err
+	}
+	return nil
+}
+
 // CloseForSubmit marks this virtual pool as no longer accepting top-level submissions.
 // Note: this does not close the shared pool; caller is responsible for closing the shared pool
 // when all virtual pools are done (call SharedTaskPool.CloseForSubmit()).
@@ -275,7 +342,18 @@ func (v *VirtualPool) CloseForSubmit() {
 				v.ec.close()
 			}
 		})
+		// signal Wait() callers that virtual is drained
+		v.waitOnce.Do(func() {
+			close(v.done)
+		})
 	}
+}
+
+// Wait blocks until this virtual pool has been closed for submit and all inflight tasks
+// (including queued tasks) have completed. Call this after CloseForSubmit when you
+// want to wait for the virtual's queue to drain.
+func (v *VirtualPool) Wait() {
+	<-v.done
 }
 
 // isFailed returns true if this virtual pool encountered a fail-fast error.

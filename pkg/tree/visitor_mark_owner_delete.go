@@ -2,6 +2,7 @@ package tree
 
 import (
 	"context"
+	"sync"
 )
 
 type MarkOwnerDeleteVisitor struct {
@@ -9,6 +10,7 @@ type MarkOwnerDeleteVisitor struct {
 	owner               string
 	onlyIntended        bool
 	leafVariantsMatched LeafVariantSlice
+	lvMutex             *sync.Mutex
 }
 
 var _ EntryVisitor = (*MarkOwnerDeleteVisitor)(nil)
@@ -18,13 +20,16 @@ func NewMarkOwnerDeleteVisitor(owner string, onlyIntended bool) *MarkOwnerDelete
 		owner:               owner,
 		onlyIntended:        onlyIntended,
 		leafVariantsMatched: LeafVariantSlice{},
+		lvMutex:             &sync.Mutex{},
 	}
 }
 
 func (o *MarkOwnerDeleteVisitor) Visit(ctx context.Context, e Entry) error {
 	le := e.GetLeafVariantEntries().MarkOwnerForDeletion(o.owner, o.onlyIntended)
 	if le != nil {
+		o.lvMutex.Lock()
 		o.leafVariantsMatched = append(o.leafVariantsMatched, le)
+		o.lvMutex.Unlock()
 	}
 	return nil
 }

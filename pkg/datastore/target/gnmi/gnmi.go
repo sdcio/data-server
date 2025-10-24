@@ -250,12 +250,16 @@ func (t *gnmiTarget) Status() *targetTypes.TargetStatus {
 
 func (t *gnmiTarget) AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) error {
 	var g GnmiSync
+	var err error
 	for _, sp := range sps {
 		switch sp.Mode {
 		case "once":
 			g = NewOnceSync(ctx, t, sp, t.runningStore)
 		case "get":
-			g = NewGetSync(ctx, t, sp, t.runningStore, t.schemaClient)
+			g, err = NewGetSync(ctx, t, sp, t.runningStore, t.schemaClient)
+			if err != nil {
+				return err
+			}
 		default:
 			g = NewStreamSync(ctx, t, sp, t.runningStore, t.schemaClient)
 		}

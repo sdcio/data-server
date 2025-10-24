@@ -14,6 +14,7 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/importer/proto"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	dsutils "github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -133,7 +134,10 @@ func (s *StreamSync) Start() error {
 			log.Errorf("sync tree export error: %v", err)
 			return s.runningStore.NewEmptyTree(s.ctx)
 		}
-
+		// extract the explicit deletes
+		deletes := result.ExplicitDeletes
+		// set them to nil
+		result.ExplicitDeletes = nil
 		if logCount {
 			log.Infof("Syncing: %d elements, %d deletes ", result.GetRoot().CountTerminals(), len(result.GetExplicitDeletes()))
 		}
@@ -141,7 +145,7 @@ func (s *StreamSync) Start() error {
 		log.Infof("TreeExport to proto took: %s", time.Since(startTime))
 		startTime = time.Now()
 
-		err = s.runningStore.ApplyToRunning(s.ctx, result)
+		err = s.runningStore.ApplyToRunning(s.ctx, deletes, proto.NewProtoTreeImporter(result))
 		if err != nil {
 			log.Errorf("sync import to running error: %v", err)
 			return s.runningStore.NewEmptyTree(s.ctx)
