@@ -479,18 +479,14 @@ func convertStringToTv(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*
 			Value:     &sdcpb.TypedValue_BoolVal{BoolVal: b},
 		}, nil
 	case "decimal64":
-		arr := strings.SplitN(v, ".", 2)
-		digits, err := strconv.ParseInt(arr[0], 10, 64)
+		decimalVal, err := ParseDecimal64(v)
 		if err != nil {
 			return nil, err
 		}
-		precision64, err := strconv.ParseUint(arr[1], 10, 32)
-		if err != nil {
-			return nil, err
-		}
-		precision := uint32(precision64)
 		return &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_DecimalVal{DecimalVal: &sdcpb.Decimal64{Digits: digits, Precision: precision}},
+			Value: &sdcpb.TypedValue_DecimalVal{
+				DecimalVal: decimalVal,
+			},
 		}, nil
 	case "identityref":
 		before, name, found := strings.Cut(v, ":")
