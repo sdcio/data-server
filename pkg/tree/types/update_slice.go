@@ -23,7 +23,7 @@ func (u UpdateSlice) CopyWithNewOwnerAndPrio(owner string, prio int32) UpdateSli
 func (u UpdateSlice) String() string {
 	sb := &strings.Builder{}
 	for i, j := range u {
-		sb.WriteString(fmt.Sprintf("%d - %s -> %s\n", i, j.path.String(), j.value.ToString()))
+		sb.WriteString(fmt.Sprintf("%d - %s -> %s\n", i, j.Path().ToXPath(false), j.value.ToString()))
 	}
 	return sb.String()
 }
@@ -58,7 +58,7 @@ func (u UpdateSlice) GetLowestPriorityValue(filters []CacheUpdateFilter) int32 {
 func (u UpdateSlice) ToSdcpbPathSet() *sdcpb.PathSet {
 	result := &sdcpb.PathSet{}
 	for _, upd := range u {
-		result.AddPath(upd.path.DeepCopy())
+		result.AddPath(upd.Path())
 	}
 	return result
 }

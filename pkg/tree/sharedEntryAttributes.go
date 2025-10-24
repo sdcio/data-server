@@ -223,6 +223,13 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 
 		// iterate through the keys
 		var item Entry = s
+
+		// construct the key path
+		// doing so outside the loop to reuse
+		path := &sdcpb.Path{
+			IsRootBased: false,
+		}
+
 		for _, k := range keySorted {
 			child, entryExists := s.childs.GetEntry(k.Name)
 			// if the key Leaf exists continue with next key
@@ -237,8 +244,6 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 					continue
 				}
 			}
-			// construct the key path
-			path := s.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(k.Name, nil))
 
 			// convert the key value to the schema defined Typed_Value
 			tv, err := utils.Convert(item.PathName(), k.GetType())
@@ -260,7 +265,7 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 			}
 
 			// Add the update to the tree
-			_, err = child.AddUpdateRecursive(ctx, path, types.NewUpdate(path, tv, prio, intentName, 0), insertFlag)
+			_, err = child.AddUpdateRecursive(ctx, path, types.NewUpdate(nil, tv, prio, intentName, 0), insertFlag)
 			if err != nil {
 				return err
 			}
@@ -1270,7 +1275,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 				}
 				if schem.IsPresence {
 					tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}
-					upd := types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
+					upd := types.NewUpdate(s, tv, intentPrio, intentName, 0)
 					s.leafVariants.Add(NewLeafEntry(upd, insertFlags, s))
 				}
 			}
@@ -1303,7 +1308,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 		if err != nil {
 			return err
 		}
-		upd := types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
+		upd := types.NewUpdate(s, tv, intentPrio, intentName, 0)
 
 		s.leafVariants.Add(NewLeafEntry(upd, insertFlags, s))
 
@@ -1330,7 +1335,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 			tv = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: scalarArr}}
 		}
 
-		le.Update = types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
+		le.Update = types.NewUpdate(s, tv, intentPrio, intentName, 0)
 		if mustAdd {
 			s.leafVariants.Add(le)
 		}
@@ -1777,6 +1782,7 @@ func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, path *sd
 	// continue with recursive add otherwise
 	if len(relPath.Elem) == 0 || relPath == nil {
 		// delegate update handling to leafVariants
+		u.SetParent(s)
 		s.leafVariants.Add(NewLeafEntry(u, flags, s))
 		return s, nil
 	}

@@ -41,23 +41,23 @@ func Test_Entry(t *testing.T) {
 
 	desc := testhelper.GetStringTvProto("MyDescription")
 
-	p1 := &sdcpb.Path{
+	p1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "9"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: false,
-	}
+	})
 
-	p2 := &sdcpb.Path{
+	p2 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: false,
-	}
+	})
 
 	u1 := types.NewUpdate(p1, desc, int32(100), "me", int64(9999999))
 	u2 := types.NewUpdate(p2, desc, int32(99), "me", int64(444))
@@ -110,57 +110,57 @@ func Test_Entry_One(t *testing.T) {
 
 	ctx := context.TODO()
 
-	p0o1 := &sdcpb.Path{
+	p0o1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("name", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p0o2 := &sdcpb.Path{
+	p0o2 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("name", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p1 := &sdcpb.Path{
+	p1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "9"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p1_1 := &sdcpb.Path{
+	p1_1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "9"}),
 			sdcpb.NewPathElem("index", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p2 := &sdcpb.Path{
+	p2 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p2_1 := &sdcpb.Path{
+	p2_1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
 			sdcpb.NewPathElem("index", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
 	u0o1 := types.NewUpdate(p0o1, testhelper.GetStringTvProto("ethernet-1/1"), prio100, owner1, ts1)
 	u0o2 := types.NewUpdate(p0o2, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner2, ts1)
@@ -242,31 +242,31 @@ func Test_Entry_Two(t *testing.T) {
 
 	ctx := context.TODO()
 
-	p0 := &sdcpb.Path{
+	p0 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("name", nil),
 		},
 		IsRootBased: true, // or true if needed
-	}
+	})
 
-	p1 := &sdcpb.Path{
+	p1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p1_1 := &sdcpb.Path{
+	p1_1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
 			sdcpb.NewPathElem("index", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
 	u0 := types.NewUpdate(p0, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
 	u1 := types.NewUpdate(p1, desc3, prio50, owner1, ts1)
@@ -291,14 +291,14 @@ func Test_Entry_Two(t *testing.T) {
 	overwriteDesc := testhelper.GetStringTvProto("Owerwrite Description")
 
 	// adding a new Update with same owner and priority with different value
-	pn1 := &sdcpb.Path{
+	pn1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: false,
-	}
+	})
 	n1 := types.NewUpdate(pn1, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*types.Update{n1} {
@@ -340,81 +340,81 @@ func Test_Entry_Three(t *testing.T) {
 
 	ctx := context.TODO()
 
-	p0 := &sdcpb.Path{
+	p0 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("name", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p1 := &sdcpb.Path{
+	p1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
-	p1_1 := &sdcpb.Path{
+	})
+	p1_1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
 			sdcpb.NewPathElem("index", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p2 := &sdcpb.Path{
+	p2 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "11"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
-	p2_1 := &sdcpb.Path{
+	})
+	p2_1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "11"}),
 			sdcpb.NewPathElem("index", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p3 := &sdcpb.Path{
+	p3 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "12"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
-	p3_1 := &sdcpb.Path{
+	})
+	p3_1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "12"}),
 			sdcpb.NewPathElem("index", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p4 := &sdcpb.Path{
+	p4 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "13"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
-	p4_1 := &sdcpb.Path{
+	})
+	p4_1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "13"}),
 			sdcpb.NewPathElem("index", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 	u0 := types.NewUpdate(p0, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
 	u1 := types.NewUpdate(p1, desc3, prio50, owner1, ts1)
 	u1_1 := types.NewUpdate(p1_1, testhelper.GetUIntTvProto(10), prio50, owner1, ts1)
@@ -425,38 +425,38 @@ func Test_Entry_Three(t *testing.T) {
 	u4 := types.NewUpdate(p4, desc3, prio50, owner1, ts1)
 	u4_1 := types.NewUpdate(p4_1, testhelper.GetUIntTvProto(13), prio50, owner1, ts1)
 
-	p1r := &sdcpb.Path{
+	p1r := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
-	p2r := &sdcpb.Path{
+	})
+	p2r := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "11"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
-	p3r := &sdcpb.Path{
+	})
+	p3r := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "12"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
-	p4r := &sdcpb.Path{
+	})
+	p4r := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "13"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
 	u1r := types.NewUpdate(p1r, desc3, RunningValuesPrio, RunningIntentName, ts1)
 	u2r := types.NewUpdate(p2r, desc3, RunningValuesPrio, RunningIntentName, ts1)
@@ -529,23 +529,23 @@ func Test_Entry_Three(t *testing.T) {
 	overwriteDesc := testhelper.GetStringTvProto("Owerwrite Description")
 
 	// adding a new Update with same owner and priority with different value
-	pn1 := &sdcpb.Path{
+	pn1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: false,
-	}
+	})
 
-	pn2 := &sdcpb.Path{
+	pn2 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "11"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: false,
-	}
+	})
 
 	n1 := types.NewUpdate(pn1, overwriteDesc, prio50, owner1, ts1)
 	n2 := types.NewUpdate(pn2, overwriteDesc, prio50, owner1, ts1)
@@ -609,103 +609,103 @@ func Test_Entry_Four(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p1o1_0 := &sdcpb.Path{
+	p1o1_0 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("name", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p1o1 := &sdcpb.Path{
+	p1o1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p1o1_1 := &sdcpb.Path{
+	p1o1_1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
 			sdcpb.NewPathElem("index", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p2o1 := &sdcpb.Path{
+	p2o1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "11"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p2o1_1 := &sdcpb.Path{
+	p2o1_1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "11"}),
 			sdcpb.NewPathElem("index", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p3 := &sdcpb.Path{
+	p3 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "12"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p3_1 := &sdcpb.Path{
+	p3_1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "12"}),
 			sdcpb.NewPathElem("index", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p4 := &sdcpb.Path{
+	p4 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "13"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p4_1 := &sdcpb.Path{
+	p4_1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "13"}),
 			sdcpb.NewPathElem("index", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p1o2 := &sdcpb.Path{
+	p1o2 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
-	p2o2 := &sdcpb.Path{
+	p2o2 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "11"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 
 	u1o1_0 := types.NewUpdate(p1o1_0, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
 	u1o1 := types.NewUpdate(p1o1, desc3, prio50, owner1, ts1)
@@ -774,24 +774,24 @@ func Test_Entry_Four(t *testing.T) {
 	// adding a new Update with same owner and priority with different value
 	//n0 := types.NewUpdate([]string{"interface", "ethernet-1/1", "name"}, testhelper.GetStringTvProto(t, "ethernet-1/1"), prio50, owner1, ts1)
 	// n1_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "10", "index"}, testhelper.GetIntTvProto(t, 10), prio50, owner1, ts1)
-	pn1 := &sdcpb.Path{
+	pn1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "10"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 	n1 := types.NewUpdate(pn1, overwriteDesc, prio50, owner1, ts1)
 	// n2_1 := types.NewUpdate([]string{"interface", "ethernet-1/1", "subinterface", "11", "index"}, testhelper.GetIntTvProto(t, 11), prio50, owner1, ts1)
-	pn2 := &sdcpb.Path{
+	pn2 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "11"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 	n2 := types.NewUpdate(pn2, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*types.Update{n1, n2} {
@@ -871,13 +871,13 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				},
 			)
 
-			p1 := &sdcpb.Path{
+			p1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 				Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("leaflist", nil),
 					sdcpb.NewPathElem("entry", nil),
 				},
 				IsRootBased: true,
-			}
+			})
 
 			u1 := types.NewUpdate(p1, leaflistval, prio50, owner1, ts1)
 
@@ -926,13 +926,13 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				},
 			)
 
-			p1 := &sdcpb.Path{
+			p1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 				Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("leaflist", nil),
 					sdcpb.NewPathElem("entry", nil),
 				},
 				IsRootBased: true,
-			}
+			})
 
 			u1 := types.NewUpdate(p1, leaflistval, prio50, owner1, ts1)
 
@@ -980,13 +980,13 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				},
 			)
 
-			p1 := &sdcpb.Path{
+			p1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 				Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("leaflist", nil),
 					sdcpb.NewPathElem("entry", nil),
 				},
 				IsRootBased: true,
-			}
+			})
 
 			u1 := types.NewUpdate(p1, leaflistval, prio50, owner1, ts1)
 
@@ -1025,62 +1025,62 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p1 := &sdcpb.Path{
+	p1 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 	u1 := types.NewUpdate(p1, desc3, prio50, owner1, ts1)
 
-	p2 := &sdcpb.Path{
+	p2 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("name", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 	u2 := types.NewUpdate(p2, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
 
-	p3 := &sdcpb.Path{
+	p3 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "0"}),
 			sdcpb.NewPathElem("index", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 	u3 := types.NewUpdate(p3, testhelper.GetUIntTvProto(0), prio50, owner1, ts1)
 
-	p4 := &sdcpb.Path{
+	p4 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "0"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 	u4 := types.NewUpdate(p4, desc3, prio50, owner1, ts1)
 
-	p5 := &sdcpb.Path{
+	p5 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 			sdcpb.NewPathElem("index", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 	u5 := types.NewUpdate(p5, testhelper.GetUIntTvProto(1), prio50, owner1, ts1)
 
-	p6 := &sdcpb.Path{
+	p6 := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("subinterface", map[string]string{"index": "1"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 	u6 := types.NewUpdate(p6, desc3, prio50, owner1, ts1)
 
 	tc := NewTreeContext(scb, "foo")
@@ -1111,22 +1111,22 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 		return
 	}
 
-	p1n := &sdcpb.Path{
+	p1n := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("description", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 	u1n := types.NewUpdate(p1n, desc3, prio50, owner1, ts1)
 
-	p2n := &sdcpb.Path{
+	p2n := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 			sdcpb.NewPathElem("name", nil),
 		},
 		IsRootBased: true,
-	}
+	})
 	u2n := types.NewUpdate(p2n, testhelper.GetStringTvProto("ethernet-1/1"), prio50, owner1, ts1)
 
 	// start test add "new" / request data
@@ -1176,9 +1176,9 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	owner1 := "owner1"
 	owner2 := "owner2"
 	ts := int64(0)
-	path := &sdcpb.Path{
+	path := testhelper.NewUpdateParentMock(&sdcpb.Path{
 		Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("firstPathElem", nil)},
-	}
+	})
 
 	// test that if highes prio is to be deleted, that the second highes is returned,
 	// because thats an update.
@@ -1565,7 +1565,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 
 			leafval := testhelper.GetStringTvProto("data123")
 
-			u1 := types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("patterntest", nil)}}, leafval, prio50, owner1, ts1)
+			u1 := types.NewUpdate(testhelper.NewUpdateParentMock(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("patterntest", nil)}}), leafval, prio50, owner1, ts1)
 
 			for _, u := range []*types.Update{u1} {
 				_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsNew)
@@ -1602,7 +1602,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 
 			leafval := testhelper.GetStringTvProto("hallo F")
 
-			u1 := types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("patterntest", nil)}}, leafval, prio50, owner1, ts1)
+			u1 := types.NewUpdate(testhelper.NewUpdateParentMock(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("patterntest", nil)}}), leafval, prio50, owner1, ts1)
 
 			for _, u := range []*types.Update{u1} {
 				_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsNew)
@@ -1698,7 +1698,7 @@ func Test_Validation_Deref(t *testing.T) {
 
 			leafval := testhelper.GetStringTvProto("data123")
 
-			u1 := types.NewUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("patterntest", nil)}}, leafval, prio50, owner1, ts1)
+			u1 := types.NewUpdate(testhelper.NewUpdateParentMock(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("patterntest", nil)}}), leafval, prio50, owner1, ts1)
 
 			for _, u := range []*types.Update{u1} {
 				_, err := root.AddUpdateRecursive(ctx, u.Path(), u, flagsNew)
