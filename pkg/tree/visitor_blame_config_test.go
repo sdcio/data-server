@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -150,15 +151,15 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			treeRoot := tt.r(t)
 
-			bcv := NewBlameConfigVisitor(tt.includeDefaults)
+			sharedPool := pool.NewSharedTaskPool(ctx, 10)
 
-			err := treeRoot.Walk(ctx, bcv)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewBlameConfigVisitor error = %v, wantErr %v", err, tt.wantErr)
+			vPool := sharedPool.NewVirtualPool("blame", pool.VirtualFailFast, 1)
+
+			got, err := BlameConfig(ctx, treeRoot.sharedEntryAttributes, tt.includeDefaults, vPool)
+			if err != nil {
+				t.Errorf("BlameConfig() error %s", err)
 				return
 			}
-
-			got := bcv.GetResult()
 
 			t.Log(got.ToString())
 
