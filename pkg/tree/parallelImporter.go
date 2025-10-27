@@ -3,8 +3,8 @@ package tree
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"slices"
+	"sync"
 
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/importer"
@@ -20,6 +20,7 @@ type importTask struct {
 	intentPrio      int32
 	insertFlags     *types.UpdateInsertFlags
 	treeContext     *TreeContext
+	leafListLock    *sync.Map
 }
 
 func (s *sharedEntryAttributes) ImportConfig(
@@ -29,12 +30,12 @@ func (s *sharedEntryAttributes) ImportConfig(
 	intentPrio int32,
 	insertFlags *types.UpdateInsertFlags,
 ) error {
-	p := pool.NewWorkerPool[importTask](ctx, runtime.NumCPU())
+	p := pool.NewWorkerPool[importTask](ctx, 1)
 
 	p.Start(importHandler)
 
 	// seed root
-	if err := p.Submit(importTask{entry: s, importerElement: importerElement, intentName: intentName, intentPrio: intentPrio, insertFlags: insertFlags, treeContext: s.treeContext}); err != nil {
+	if err := p.Submit(importTask{entry: s, importerElement: importerElement, intentName: intentName, intentPrio: intentPrio, insertFlags: insertFlags, treeContext: s.treeContext, leafListLock: &sync.Map{}}); err != nil {
 		return err
 	}
 
@@ -75,7 +76,7 @@ func importHandler(ctx context.Context, task importTask, submit func(importTask)
 			}
 			// submit resolved entry with same adapter element
 			// return importHandler(ctx, importTask{entry: actual, importerElement: task.importerElement, intentName: task.intentName, intentPrio: task.intentPrio, insertFlags: task.insertFlags, treeContext: task.treeContext}, submit)
-			return submit(importTask{entry: actual, importerElement: task.importerElement, intentName: task.intentName, intentPrio: task.intentPrio, insertFlags: task.insertFlags, treeContext: task.treeContext})
+			return submit(importTask{entry: actual, importerElement: task.importerElement, intentName: task.intentName, intentPrio: task.intentPrio, insertFlags: task.insertFlags, treeContext: task.treeContext, leafListLock: task.leafListLock})
 		}
 
 		// presence container or children
@@ -100,7 +101,7 @@ func importHandler(ctx context.Context, task importTask, submit func(importTask)
 					return fmt.Errorf("error inserting %s at %s: %w", childElt.GetName(), task.entry.SdcpbPath().ToXPath(false), err)
 				}
 			}
-			if err := submit(importTask{entry: child, importerElement: childElt, intentName: task.intentName, intentPrio: task.intentPrio, insertFlags: task.insertFlags, treeContext: task.treeContext}); err != nil {
+			if err := submit(importTask{entry: child, importerElement: childElt, intentName: task.intentName, intentPrio: task.intentPrio, insertFlags: task.insertFlags, treeContext: task.treeContext, leafListLock: task.leafListLock}); err != nil {
 				return err
 			}
 		}
@@ -116,6 +117,12 @@ func importHandler(ctx context.Context, task importTask, submit func(importTask)
 		return nil
 
 	case *sdcpb.SchemaElem_Leaflist:
+		llm, loaded := task.leafListLock.LoadOrStore(task.entry.SdcpbPath().ToXPath(false), &sync.Mutex{})
+		_ = loaded
+		llMutex := llm.(*sync.Mutex)
+		llMutex.Lock()
+		defer llMutex.Unlock()
+
 		var scalarArr *sdcpb.ScalarArray
 		mustAdd := false
 		le := task.entry.GetLeafVariantEntries().GetByOwner(task.intentName)
