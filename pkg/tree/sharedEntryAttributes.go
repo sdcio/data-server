@@ -1768,15 +1768,18 @@ func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, path *sd
 			return nil, err
 		}
 	}
+	return s.addUpdateRecursiveInternal(ctx, relPath, 0, u, flags)
+}
+func (s *sharedEntryAttributes) addUpdateRecursiveInternal(ctx context.Context, path *sdcpb.Path, idx int, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error) {
 
 	// make sure all the keys are also present as leafs
-	err = s.checkAndCreateKeysAsLeafs(ctx, u.Owner(), u.Priority(), flags)
+	err := s.checkAndCreateKeysAsLeafs(ctx, u.Owner(), u.Priority(), flags)
 	if err != nil {
 		return nil, err
 	}
 	// end of path reached, add LeafEntry
 	// continue with recursive add otherwise
-	if len(relPath.Elem) == 0 || relPath == nil {
+	if path == nil || len(path.GetElem()) == 0 || idx >= len(path.GetElem()) {
 		// delegate update handling to leafVariants
 		u.SetParent(s)
 		s.leafVariants.Add(NewLeafEntry(u, flags, s))
@@ -1786,7 +1789,7 @@ func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, path *sd
 	var e Entry
 	var x Entry = s
 	var exists bool
-	for name := range relPath.GetElem()[0].PathElemNames() {
+	for name := range path.GetElem()[idx].PathElemNames() {
 		if e, exists = x.GetChilds(DescendMethodAll)[name]; !exists {
 			newE, err := newEntry(ctx, x, name, s.treeContext)
 			if err != nil {
@@ -1801,8 +1804,7 @@ func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, path *sd
 		x = e
 	}
 
-	relPath.Elem = relPath.Elem[1:]
-	return x.AddUpdateRecursive(ctx, relPath, u, flags)
+	return x.addUpdateRecursiveInternal(ctx, path, idx+1, u, flags)
 }
 
 // containsOnlyDefaults checks for presence containers, if only default values are present,

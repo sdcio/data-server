@@ -62,6 +62,9 @@ func (u *Update) SetOwner(owner string) *Update {
 }
 
 func (u *Update) SetParent(up UpdateParent) {
+	if u == nil || up == nil {
+		return
+	}
 	u.parent = up
 }
 
