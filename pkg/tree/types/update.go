@@ -91,7 +91,7 @@ func (u *Update) Path() *sdcpb.Path {
 }
 
 func (u *Update) String() string {
-	path := "non"
+	path := "<nil>"
 	if u.parent != nil {
 		path = u.parent.SdcpbPath().ToXPath(false)
 	}
