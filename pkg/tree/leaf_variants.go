@@ -458,7 +458,7 @@ func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.Devi
 }
 
 func (lv *LeafVariants) AddExplicitDeleteEntry(intentName string, priority int32) *LeafEntry {
-	le := NewLeafEntry(types.NewUpdate(lv.parentEntry.SdcpbPath(), &sdcpb.TypedValue{}, priority, intentName, 0), types.NewUpdateInsertFlags().SetExplicitDeleteFlag(), lv.parentEntry)
+	le := NewLeafEntry(types.NewUpdate(lv.parentEntry, &sdcpb.TypedValue{}, priority, intentName, 0), types.NewUpdateInsertFlags().SetExplicitDeleteFlag(), lv.parentEntry)
 	lv.Add(le)
 	return le
 }

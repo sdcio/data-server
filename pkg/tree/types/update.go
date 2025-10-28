@@ -15,26 +15,26 @@ type Update struct {
 	priority   int32
 	intentName string
 	timestamp  int64
-	path       *sdcpb.Path
+	parent     UpdateParent
 }
 
-func NewUpdateFromSdcpbUpdate(u *sdcpb.Update, prio int32, intent string, ts int64) *Update {
-	return NewUpdate(u.GetPath(), u.GetValue(), prio, intent, ts)
+func NewUpdateFromSdcpbUpdate(parent UpdateParent, u *sdcpb.Update, prio int32, intent string, ts int64) *Update {
+	return NewUpdate(parent, u.GetValue(), prio, intent, ts)
 }
 
-func NewUpdate(path *sdcpb.Path, val *sdcpb.TypedValue, prio int32, intent string, ts int64) *Update {
+func NewUpdate(parent UpdateParent, val *sdcpb.TypedValue, prio int32, intent string, ts int64) *Update {
 	return &Update{
 		value:      val,
 		priority:   prio,
 		intentName: intent,
 		timestamp:  ts,
-		path:       path,
+		parent:     parent,
 	}
 }
 
 func (u *Update) ToSdcpbUpdate() *sdcpb.Update {
 	return &sdcpb.Update{
-		Path:  u.path,
+		Path:  u.parent.SdcpbPath(),
 		Value: u.value,
 	}
 }
@@ -48,7 +48,7 @@ func (u *Update) DeepCopy() *Update {
 		priority:   u.Priority(),
 		intentName: u.intentName,
 		timestamp:  u.timestamp,
-		path:       u.path.DeepCopy(),
+		parent:     u.parent,
 	}
 }
 
@@ -59,6 +59,13 @@ func (u *Update) Owner() string {
 func (u *Update) SetOwner(owner string) *Update {
 	u.intentName = owner
 	return u
+}
+
+func (u *Update) SetParent(up UpdateParent) {
+	if u == nil || up == nil {
+		return
+	}
+	u.parent = up
 }
 
 func (u *Update) Priority() int32 {
@@ -83,14 +90,15 @@ func (u *Update) ValueAsBytes() ([]byte, error) {
 }
 
 func (u *Update) Path() *sdcpb.Path {
-	if u.path == nil {
-		return &sdcpb.Path{}
-	}
-	return u.path
+	return u.parent.SdcpbPath()
 }
 
 func (u *Update) String() string {
-	return fmt.Sprintf("path: %s, owner: %s, priority: %d, value: %s", u.path, u.intentName, u.priority, u.value.String())
+	path := "<nil>"
+	if u.parent != nil {
+		path = u.parent.SdcpbPath().ToXPath(false)
+	}
+	return fmt.Sprintf("path: %s, owner: %s, priority: %d, value: %s", path, u.intentName, u.priority, u.value.String())
 }
 
 // EqualSkipPath checks the equality of two updates.
@@ -121,7 +129,11 @@ func ExpandAndConvertIntent(ctx context.Context, scb utils.SchemaClientBound, in
 
 	for _, u := range expandedReqUpdates {
 		// construct the types.Update
-		newCacheUpdates = append(newCacheUpdates, NewUpdate(u.GetPath(), u.GetValue(), priority, intentName, ts))
+		newCacheUpdates = append(newCacheUpdates, NewUpdate(nil, u.GetValue(), priority, intentName, ts))
 	}
 	return newCacheUpdates, nil
+}
+
+type UpdateParent interface {
+	SdcpbPath() *sdcpb.Path
 }

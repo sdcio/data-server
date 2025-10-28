@@ -52,7 +52,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 
 				result.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(&sdcpb.Path{},
+						types.NewUpdate(testhelper.NewUpdateParentMock(&sdcpb.Path{}),
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 500, owner1, 0,
@@ -114,7 +114,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(&sdcpb.Path{},
+						types.NewUpdate(testhelper.NewUpdateParentMock(&sdcpb.Path{}),
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 500, owner1, 0,
@@ -180,7 +180,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(&sdcpb.Path{},
+						types.NewUpdate(testhelper.NewUpdateParentMock(&sdcpb.Path{}),
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 500, owner1, 0,
@@ -190,7 +190,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(&sdcpb.Path{},
+						types.NewUpdate(testhelper.NewUpdateParentMock(&sdcpb.Path{}),
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "OtherValue"},
 							}, 50, owner2, 0,
@@ -214,7 +214,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(&sdcpb.Path{},
+						types.NewUpdate(testhelper.NewUpdateParentMock(&sdcpb.Path{}),
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 50, owner2, 0,
@@ -280,7 +280,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(&sdcpb.Path{},
+						types.NewUpdate(testhelper.NewUpdateParentMock(&sdcpb.Path{}),
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 500, owner1, 0,
@@ -464,13 +464,13 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 			},
 			args: args{
 				us: types.UpdateSlice{
-					types.NewUpdate(&sdcpb.Path{
+					types.NewUpdate(testhelper.NewUpdateParentMock(&sdcpb.Path{
 						Elem: []*sdcpb.PathElem{
 							sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 							sdcpb.NewPathElem("description", nil),
 						},
-					}, testhelper.GetStringTvProto("test"), *proto.Int32(5), "owner1", 0),
-					types.NewUpdate(&sdcpb.Path{
+					}), testhelper.GetStringTvProto("test"), *proto.Int32(5), "owner1", 0),
+					types.NewUpdate(testhelper.NewUpdateParentMock(&sdcpb.Path{
 						Elem: []*sdcpb.PathElem{
 							sdcpb.NewPathElem("network-instance", map[string]string{
 								"name": "ni1",
@@ -478,7 +478,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 							sdcpb.NewPathElem("protocol", nil),
 							sdcpb.NewPathElem("bgp", nil),
 						},
-					}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}, *proto.Int32(5), "owner1", 0),
+					}), &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}, *proto.Int32(5), "owner1", 0),
 				},
 				flags: types.NewUpdateInsertFlags(),
 			},

@@ -228,6 +228,13 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 
 		// iterate through the keys
 		var item Entry = s
+
+		// construct the key path
+		// doing so outside the loop to reuse
+		path := &sdcpb.Path{
+			IsRootBased: false,
+		}
+
 		for _, k := range keySorted {
 			child, entryExists := s.childs.GetEntry(k.Name)
 			// if the key Leaf exists continue with next key
@@ -242,8 +249,6 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 					continue
 				}
 			}
-			// construct the key path
-			path := s.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(k.Name, nil))
 
 			// convert the key value to the schema defined Typed_Value
 			tv, err := utils.Convert(ctx, item.PathName(), k.GetType())
@@ -265,7 +270,7 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 			}
 
 			// Add the update to the tree
-			_, err = child.AddUpdateRecursive(ctx, path, types.NewUpdate(path, tv, prio, intentName, 0), insertFlag)
+			_, err = child.AddUpdateRecursive(ctx, path, types.NewUpdate(nil, tv, prio, intentName, 0), insertFlag)
 			if err != nil {
 				return err
 			}
@@ -1275,7 +1280,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 				}
 				if schem.IsPresence {
 					tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}
-					upd := types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
+					upd := types.NewUpdate(s, tv, intentPrio, intentName, 0)
 					s.leafVariants.Add(NewLeafEntry(upd, insertFlags, s))
 				}
 			}
@@ -1308,7 +1313,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 		if err != nil {
 			return err
 		}
-		upd := types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
+		upd := types.NewUpdate(s, tv, intentPrio, intentName, 0)
 
 		s.leafVariants.Add(NewLeafEntry(upd, insertFlags, s))
 
@@ -1335,7 +1340,7 @@ func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.Imp
 			tv = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: scalarArr}}
 		}
 
-		le.Update = types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
+		le.Update = types.NewUpdate(s, tv, intentPrio, intentName, 0)
 		if mustAdd {
 			s.leafVariants.Add(le)
 		}
@@ -1773,15 +1778,18 @@ func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, path *sd
 			return nil, err
 		}
 	}
+	return s.addUpdateRecursiveInternal(ctx, relPath, 0, u, flags)
+}
+func (s *sharedEntryAttributes) addUpdateRecursiveInternal(ctx context.Context, path *sdcpb.Path, idx int, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error) {
 
 	// make sure all the keys are also present as leafs
-	err = s.checkAndCreateKeysAsLeafs(ctx, u.Owner(), u.Priority(), flags)
+	err := s.checkAndCreateKeysAsLeafs(ctx, u.Owner(), u.Priority(), flags)
 	if err != nil {
 		return nil, err
 	}
 	// end of path reached, add LeafEntry
 	// continue with recursive add otherwise
-	if len(relPath.Elem) == 0 || relPath == nil {
+	if path == nil || len(path.GetElem()) == 0 || idx >= len(path.GetElem()) {
 		// delegate update handling to leafVariants
 		s.leafVariants.Add(NewLeafEntry(u, flags, s))
 		return s, nil
@@ -1790,7 +1798,7 @@ func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, path *sd
 	var e Entry
 	var x Entry = s
 	var exists bool
-	for name := range relPath.GetElem()[0].PathElemNames() {
+	for name := range path.GetElem()[idx].PathElemNames() {
 		if e, exists = x.GetChilds(DescendMethodAll)[name]; !exists {
 			newE, err := newEntry(ctx, x, name, s.treeContext)
 			if err != nil {
@@ -1805,8 +1813,7 @@ func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, path *sd
 		x = e
 	}
 
-	relPath.Elem = relPath.Elem[1:]
-	return x.AddUpdateRecursive(ctx, relPath, u, flags)
+	return x.addUpdateRecursiveInternal(ctx, path, idx+1, u, flags)
 }
 
 // containsOnlyDefaults checks for presence containers, if only default values are present,

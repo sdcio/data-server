@@ -50,6 +50,7 @@ type Entry interface {
 	getOrCreateChilds(ctx context.Context, path *sdcpb.Path) (Entry, error)
 	// AddUpdateRecursive Add the given cache.Update to the tree
 	AddUpdateRecursive(ctx context.Context, relativePath *sdcpb.Path, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
+	addUpdateRecursiveInternal(ctx context.Context, path *sdcpb.Path, idx int, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
 	// StringIndent debug tree struct as indented string slice
 	StringIndent(result []string) []string
 	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
