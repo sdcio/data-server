@@ -157,6 +157,7 @@ func NewLeafEntry(c *types.Update, flags *types.UpdateInsertFlags, parent Entry)
 		parentEntry: parent,
 		Update:      c,
 	}
+	c.SetParent(parent)
 	flags.Apply(le)
 	return le
 }
