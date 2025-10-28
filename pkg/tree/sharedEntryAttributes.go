@@ -1781,7 +1781,6 @@ func (s *sharedEntryAttributes) addUpdateRecursiveInternal(ctx context.Context, 
 	// continue with recursive add otherwise
 	if path == nil || len(path.GetElem()) == 0 || idx >= len(path.GetElem()) {
 		// delegate update handling to leafVariants
-		u.SetParent(s)
 		s.leafVariants.Add(NewLeafEntry(u, flags, s))
 		return s, nil
 	}
