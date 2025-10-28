@@ -1761,44 +1761,47 @@ func Test_Validation_MultiKey_Pattern(t *testing.T) {
 
 			// First static route: /ipv6/static-route[owner=owner-up][ipv6-prefix=prefix-default][next-hop=nexthop-gateway]/bfd-enabled
 			u1 := types.NewUpdate(
-				&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("ipv6", nil),
-					sdcpb.NewPathElem("static-route", map[string]string{
-						"owner":       "owner-up",        // Should match owner pattern 'owner-.*'
-						"ipv6-prefix": "prefix-default",  // Should match ipv6-prefix pattern 'prefix-.*'
-						"next-hop":    "nexthop-gateway", // Should match next-hop pattern 'nexthop-.*'
-					}),
-					sdcpb.NewPathElem("bfd-enabled", nil),
-				}},
+				nil,
 				bfdEnabledVal,
 				prio50,
 				owner1,
 				ts1,
 			)
 
-			_, err = root.AddUpdateRecursive(ctx, u1.Path(), u1, flagsNew)
+			path := &sdcpb.Path{Elem: []*sdcpb.PathElem{
+				sdcpb.NewPathElem("ipv6", nil),
+				sdcpb.NewPathElem("static-route", map[string]string{
+					"owner":       "owner-up",        // Should match owner pattern 'owner-.*'
+					"ipv6-prefix": "prefix-default",  // Should match ipv6-prefix pattern 'prefix-.*'
+					"next-hop":    "nexthop-gateway", // Should match next-hop pattern 'nexthop-.*'
+				}),
+				sdcpb.NewPathElem("bfd-enabled", nil),
+			}}
+
+			_, err = root.AddUpdateRecursive(ctx, path, u1, flagsNew)
 			if err != nil {
 				t.Fatal(err)
 			}
 
+			path = &sdcpb.Path{Elem: []*sdcpb.PathElem{
+				sdcpb.NewPathElem("ipv6", nil),
+				sdcpb.NewPathElem("static-route", map[string]string{
+					"owner":       "owner-up", // Same owner and prefix
+					"ipv6-prefix": "prefix-default",
+					"next-hop":    "nexthop-backup", // Different next-hop
+				}),
+				sdcpb.NewPathElem("bfd-enabled", nil),
+			}}
 			// Second static route: /ipv6/static-route[owner=owner-up][ipv6-prefix=prefix-default][next-hop=nexthop-backup]/bfd-enabled
 			u2 := types.NewUpdate(
-				&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("ipv6", nil),
-					sdcpb.NewPathElem("static-route", map[string]string{
-						"owner":       "owner-up", // Same owner and prefix
-						"ipv6-prefix": "prefix-default",
-						"next-hop":    "nexthop-backup", // Different next-hop
-					}),
-					sdcpb.NewPathElem("bfd-enabled", nil),
-				}},
+				nil,
 				bfdEnabledVal,
 				prio50,
 				owner1,
 				ts1,
 			)
 
-			_, err = root.AddUpdateRecursive(ctx, u2.Path(), u2, flagsNew)
+			_, err = root.AddUpdateRecursive(ctx, path, u2, flagsNew)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1829,18 +1832,19 @@ func Test_Validation_MultiKey_Pattern(t *testing.T) {
 			// Create a static-route list entry with invalid owner (doesn't match pattern)
 			bfdEnabledVal := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: true}}
 
+			path := &sdcpb.Path{Elem: []*sdcpb.PathElem{
+				sdcpb.NewPathElem("ipv6", nil),
+				sdcpb.NewPathElem("static-route", map[string]string{
+					"owner":       "invalid",         // Should FAIL 'owner-.*' pattern
+					"ipv6-prefix": "prefix-default",  // Should match 'prefix-.*' pattern
+					"next-hop":    "nexthop-gateway", // Should match 'nexthop-.*' pattern
+				}),
+				sdcpb.NewPathElem("bfd-enabled", nil),
+			}}
 			// Path: /ipv6/static-route[owner=invalid][ipv6-prefix=prefix-default][next-hop=nexthop-gateway]/bfd-enabled
 			// owner="invalid" should FAIL 'owner-.*' pattern (doesn't start with 'owner-')
 			u1 := types.NewUpdate(
-				&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("ipv6", nil),
-					sdcpb.NewPathElem("static-route", map[string]string{
-						"owner":       "invalid",         // Should FAIL 'owner-.*' pattern
-						"ipv6-prefix": "prefix-default",  // Should match 'prefix-.*' pattern
-						"next-hop":    "nexthop-gateway", // Should match 'nexthop-.*' pattern
-					}),
-					sdcpb.NewPathElem("bfd-enabled", nil),
-				}},
+				nil,
 				bfdEnabledVal,
 				prio50,
 				owner1,
@@ -1849,7 +1853,7 @@ func Test_Validation_MultiKey_Pattern(t *testing.T) {
 
 			// Pattern validation happens during AddUpdateRecursive (in checkAndCreateKeysAsLeafs)
 			// so we expect an error here
-			_, err = root.AddUpdateRecursive(ctx, u1.Path(), u1, flagsNew)
+			_, err = root.AddUpdateRecursive(ctx, path, u1, flagsNew)
 			if err == nil {
 				t.Fatal("expected error for owner pattern mismatch, but got none")
 			}
@@ -1872,18 +1876,20 @@ func Test_Validation_MultiKey_Pattern(t *testing.T) {
 			// Create a static-route list entry with invalid next-hop (doesn't match pattern)
 			bfdEnabledVal := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: true}}
 
+			path := &sdcpb.Path{Elem: []*sdcpb.PathElem{
+				sdcpb.NewPathElem("ipv6", nil),
+				sdcpb.NewPathElem("static-route", map[string]string{
+					"owner":       "owner-up",       // Should match 'owner-.*' pattern
+					"ipv6-prefix": "prefix-default", // Should match 'prefix-.*' pattern
+					"next-hop":    "invalid",        // Should FAIL 'nexthop-.*' pattern
+				}),
+				sdcpb.NewPathElem("bfd-enabled", nil),
+			}}
+
 			// Path: /ipv6/static-route[owner=owner-up][ipv6-prefix=prefix-default][next-hop=invalid]/bfd-enabled
 			// next-hop="invalid" should FAIL 'nexthop-.*' pattern (doesn't start with 'nexthop-')
 			u1 := types.NewUpdate(
-				&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("ipv6", nil),
-					sdcpb.NewPathElem("static-route", map[string]string{
-						"owner":       "owner-up",       // Should match 'owner-.*' pattern
-						"ipv6-prefix": "prefix-default", // Should match 'prefix-.*' pattern
-						"next-hop":    "invalid",        // Should FAIL 'nexthop-.*' pattern
-					}),
-					sdcpb.NewPathElem("bfd-enabled", nil),
-				}},
+				nil,
 				bfdEnabledVal,
 				prio50,
 				owner1,
@@ -1892,7 +1898,7 @@ func Test_Validation_MultiKey_Pattern(t *testing.T) {
 
 			// Pattern validation happens during AddUpdateRecursive (in checkAndCreateKeysAsLeafs)
 			// so we expect an error here
-			_, err = root.AddUpdateRecursive(ctx, u1.Path(), u1, flagsNew)
+			_, err = root.AddUpdateRecursive(ctx, path, u1, flagsNew)
 			if err == nil {
 				t.Fatal("expected error for next-hop pattern mismatch, but got none")
 			}
