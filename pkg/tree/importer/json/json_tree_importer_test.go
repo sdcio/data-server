@@ -1,6 +1,7 @@
 package json
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -117,6 +118,7 @@ func TestJsonTreeImporter_GetName(t *testing.T) {
 }
 
 func TestJsonTreeImporter_GetTVValue(t *testing.T) {
+	ctx := context.TODO()
 	type fields struct {
 		data any
 		name string
@@ -166,7 +168,7 @@ func TestJsonTreeImporter_GetTVValue(t *testing.T) {
 				data: tt.fields.data,
 				name: tt.fields.name,
 			}
-			got, err := j.GetTVValue(tt.args.slt)
+			got, err := j.GetTVValue(ctx, tt.args.slt)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("JsonTreeImporter.GetTVValue() error = %v, wantErr %v", err, tt.wantErr)
 				return

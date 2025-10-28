@@ -2,14 +2,13 @@ package datastore
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/sdcio/data-server/pkg/config"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	status "google.golang.org/grpc/status"
@@ -34,11 +33,15 @@ func (d *Datastore) StopDeviationsWatch(peer string) {
 	d.m.Lock()
 	defer d.m.Unlock()
 	delete(d.deviationClients, peer)
-	log.Debugf("deviation watcher %s removed", peer)
+	logf.DefaultLogger.V(logf.VDebug).Info("deviation watcher removed", "peer", peer)
 }
 
 func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig) {
-	log.Infof("%s: starting deviationMgr...", d.Name())
+	log := logf.FromContext(ctx)
+	log = log.WithValues("target-name", d.config.Name)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.Info("starting deviation manager")
 	ticker := time.NewTicker(c.Interval)
 	defer func() {
 		ticker.Stop()
@@ -57,39 +60,40 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 			}
 			d.m.RUnlock()
 			if len(deviationClients) == 0 {
-				log.Debugf("no deviation clients present %s", d.config.Name)
+				log.V(logf.VDebug).Info("no deviation clients present")
 				continue
 			}
-			log.Debugf("deviations clients for %s: [ %s ]", d.config.Name, strings.Join(deviationClientNames, ", "))
+			log.V(logf.VDebug).Info("deviation clients", "clients", deviationClientNames)
 			for clientIdentifier, dc := range deviationClients {
 				err := dc.Send(&sdcpb.WatchDeviationResponse{
 					Name:  d.config.Name,
 					Event: sdcpb.DeviationEvent_START,
 				})
 				if err != nil {
-					log.Errorf("error sending deviation to %s: %v", clientIdentifier, err)
+					log.Error(err, "error sending deviation", "client-identifier", clientIdentifier)
 				}
 			}
 			deviationChan, err := d.calculateDeviations(ctx)
 			if err != nil {
-				log.Error(err)
+				log.Error(err, "failed to calculate deviations")
 				continue
 			}
-			d.SendDeviations(deviationChan, deviationClients)
+			d.SendDeviations(ctx, deviationChan, deviationClients)
 			for clientIdentifier, dc := range deviationClients {
 				err := dc.Send(&sdcpb.WatchDeviationResponse{
 					Name:  d.config.Name,
 					Event: sdcpb.DeviationEvent_END,
 				})
 				if err != nil {
-					log.Errorf("error sending deviation to %s: %v", clientIdentifier, err)
+					log.Error(err, "error sending deviation", "client-identifier", clientIdentifier)
 				}
 			}
 		}
 	}
 }
 
-func (d *Datastore) SendDeviations(ch <-chan *treetypes.DeviationEntry, deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer) {
+func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.DeviationEntry, deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer) {
+	log := logf.FromContext(ctx)
 	wg := &sync.WaitGroup{}
 	for de := range ch {
 		wg.Add(1)
@@ -112,10 +116,10 @@ func (d *Datastore) SendDeviations(ch <-chan *treetypes.DeviationEntry, deviatio
 				if err != nil {
 					// ignore client-side cancellation (context closed) as it's expected when a client disconnects
 					if dc.Context().Err() != nil || status.Code(err) == codes.Canceled {
-						// log.Debugf("skipping send to %s: client context closed: %v", clientIdentifier, err)
+						log.V(logf.VDebug).Info("client context closed, skipping send", "client-identifier", clientIdentifier, "err", err)
 						continue
 					}
-					log.Errorf("error sending deviation to %s: %v", clientIdentifier, err)
+					log.Error(err, "error sending deviation", "client-identifier", clientIdentifier)
 				}
 			}
 			wg.Done()
@@ -158,7 +162,7 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 	}
 
 	go func() {
-		deviationTree.GetDeviations(deviationChan)
+		deviationTree.GetDeviations(ctx, deviationChan)
 		close(deviationChan)
 	}()
 

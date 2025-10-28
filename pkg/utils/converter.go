@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -141,7 +141,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 
 		// We expect that all identityrefs are sent by schema-server as a identityref type now, not string
 		if rsp.Field.GetType().Type == "identityref" && upd.GetValue().GetStringVal() != "" {
-			upd.Value, err = Convert(upd.GetValue().GetStringVal(), rsp.Field.GetType())
+			upd.Value, err = Convert(ctx, upd.GetValue().GetStringVal(), rsp.Field.GetType())
 			if err != nil {
 				return nil, err
 			}
@@ -200,6 +200,7 @@ func (c *Converter) ExpandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Updat
 }
 
 func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container) ([]*sdcpb.Update, error) {
+	log := logf.FromContext(ctx)
 	// log.Debugf("expanding jsonVal %T | %v | %v", jv, jv, p)
 	switch jv := jv.(type) {
 	case string:
@@ -388,7 +389,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		}
 		return upds, nil
 	default:
-		log.Warnf("unexpected json type cast %T", jv)
+		log.Error(nil, "unexpected json type cast", "type", reflect.TypeOf(jv).String())
 		return nil, nil
 	}
 }
@@ -592,6 +593,7 @@ func getLeafList(s string, cs *sdcpb.SchemaElem_Container) (*sdcpb.LeafListSchem
 }
 
 func getChild(ctx context.Context, name string, cs *sdcpb.SchemaElem_Container, scb SchemaClientBound) (any, bool) {
+	log := logf.FromContext(ctx)
 
 	searchNames := []string{name}
 	if i := strings.Index(name, ":"); i >= 0 {
@@ -603,7 +605,7 @@ func getChild(ctx context.Context, name string, cs *sdcpb.SchemaElem_Container, 
 			for _, c := range cs.Container.GetChildren() {
 				rsp, err := scb.GetSchemaSdcpbPath(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: c}}})
 				if err != nil {
-					log.Errorf("Failed to get schema object %s: %v", c, err)
+					log.Error(err, "failed to get schema object", "schema-object", c)
 					return "", false
 				}
 				switch rsp := rsp.GetSchema().Schema.(type) {

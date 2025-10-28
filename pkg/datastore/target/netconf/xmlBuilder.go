@@ -162,7 +162,7 @@ func (x *XMLConfigBuilder) AddValue(ctx context.Context, p *sdcpb.Path, v *sdcpb
 				subelem.CreateAttr("xmlns", namespaceUri)
 			}
 
-			value, err := valueAsString(tv)
+			value, err := valueAsString(ctx, tv)
 			if err != nil {
 				return err
 			}
@@ -195,7 +195,7 @@ func (x *XMLConfigBuilder) AddValue(ctx context.Context, p *sdcpb.Path, v *sdcpb
 			elem.CreateAttr("xmlns", namespaceUri)
 		}
 
-		value, err := valueAsString(v)
+		value, err := valueAsString(ctx, v)
 		if err != nil {
 			return err
 		}

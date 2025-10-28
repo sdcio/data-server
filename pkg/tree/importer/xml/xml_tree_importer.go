@@ -1,6 +1,8 @@
 package xml
 
 import (
+	"context"
+
 	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -48,8 +50,8 @@ func (x *XmlTreeImporter) GetKeyValue() (string, error) {
 	return x.elem.Text(), nil
 }
 
-func (x *XmlTreeImporter) GetTVValue(slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	return utils.Convert(x.elem.Text(), slt)
+func (x *XmlTreeImporter) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+	return utils.Convert(ctx, x.elem.Text(), slt)
 }
 
 func (x *XmlTreeImporter) GetName() string {

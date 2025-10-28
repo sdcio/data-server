@@ -20,18 +20,19 @@ import (
 	"fmt"
 
 	"github.com/beevik/etree"
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
-
 	"github.com/sdcio/data-server/pkg/datastore/target"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/data-server/pkg/utils"
+	logf "github.com/sdcio/logger"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 var ErrIntentNotFound = errors.New("intent not found")
 
 func (d *Datastore) applyIntent(ctx context.Context, source target.TargetSource) (*sdcpb.SetDataResponse, error) {
+	log := logf.FromContext(ctx)
 	var err error
 
 	var rsp *sdcpb.SetDataResponse
@@ -45,7 +46,7 @@ func (d *Datastore) applyIntent(ctx context.Context, source target.TargetSource)
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("datastore %s SetResponse from SBI: %v", d.config.Name, rsp)
+	log.V(logf.VDebug).Info("got SetResponse from SBI", "raw-response", utils.FormatProtoJSON(rsp))
 
 	return rsp, nil
 }
@@ -55,7 +56,10 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntent
 	if intentName == tree.RunningIntentName {
 		d.syncTreeMutex.RLock()
 		defer d.syncTreeMutex.RUnlock()
-		d.syncTree.FinishInsertionPhase(ctx)
+		err := d.syncTree.FinishInsertionPhase(ctx)
+		if err != nil {
+			return nil, err
+		}
 
 		return newTreeRootToGetIntentResponse(d.syncTree), nil
 	}

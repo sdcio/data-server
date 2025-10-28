@@ -22,14 +22,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -155,6 +156,11 @@ func New(ctx context.Context, c *config.Config) (*Server, error) {
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		s.readyInterceptor,
 		s.timeoutInterceptor,
+		contextLoggingInterceptor(s.ctx),
+	}
+
+	streamInterceptors := []grpc.StreamServerInterceptor{
+		contextLoggingServerStreamInterceptor(s.ctx),
 	}
 
 	if c.Prometheus != nil {
@@ -168,15 +174,18 @@ func New(ctx context.Context, c *config.Config) (*Server, error) {
 
 		// add gRPC server interceptors for the Schema/Data server
 		grpcMetrics := grpc_prometheus.NewServerMetrics()
-		opts = append(opts,
-			grpc.StreamInterceptor(grpcMetrics.StreamServerInterceptor()),
+		streamInterceptors = append(streamInterceptors,
+			grpcMetrics.StreamServerInterceptor(),
 		)
 
 		unaryInterceptors = append(unaryInterceptors, grpcMetrics.UnaryServerInterceptor())
 		s.reg.MustRegister(grpcMetrics)
 	}
 
-	opts = append(opts, grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)))
+	opts = append(opts,
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)),
+		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(streamInterceptors...)),
+	)
 
 	if c.GRPCServer.TLS != nil {
 		tlsCfg, err := c.GRPCServer.TLS.NewConfig(ctx)
@@ -200,18 +209,20 @@ func New(ctx context.Context, c *config.Config) (*Server, error) {
 }
 
 func (s *Server) Serve(ctx context.Context) error {
+	log := logf.FromContext(ctx).WithValues("grpc-server-address", s.config.GRPCServer.Address)
+	ctx = logf.IntoContext(ctx, log)
 	l, err := net.Listen("tcp", s.config.GRPCServer.Address)
 	if err != nil {
 		return err
 	}
 
 	if s.config.Prometheus != nil {
-		go s.ServeHTTP()
+		go s.ServeHTTP(ctx)
 	}
 
 	go s.startDataServer(ctx)
 
-	log.Infof("starting server on %s", s.config.GRPCServer.Address)
+	log.Info("starting server")
 	err = s.srv.Serve(l)
 	if err != nil {
 		return err
@@ -220,7 +231,8 @@ func (s *Server) Serve(ctx context.Context) error {
 	return nil
 }
 
-func (s *Server) ServeHTTP() {
+func (s *Server) ServeHTTP(ctx context.Context) {
+	log := logf.FromContext(ctx)
 	s.router.Handle("/metrics", promhttp.HandlerFor(s.reg, promhttp.HandlerOpts{}))
 	s.reg.MustRegister(collectors.NewGoCollector())
 	s.reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
@@ -232,7 +244,7 @@ func (s *Server) ServeHTTP() {
 	}
 	err := srv.ListenAndServe()
 	if err != nil {
-		log.Errorf("HTTP server stopped: %v", err)
+		log.Error(err, "HTTP server stopped")
 	}
 }
 
@@ -243,6 +255,7 @@ func (s *Server) Stop() {
 }
 
 func (s *Server) startDataServer(ctx context.Context) {
+	log := logf.FromContext(ctx)
 	wg := new(sync.WaitGroup)
 	wg.Add(2)
 
@@ -262,10 +275,11 @@ func (s *Server) startDataServer(ctx context.Context) {
 	// init datastores
 	s.createInitialDatastores(ctx)
 	s.ready = true
-	log.Infof("ready...")
+	log.Info("data-server ready")
 }
 
 func (s *Server) createInitialDatastores(ctx context.Context) {
+	log := logf.FromContext(ctx)
 	numConfiguredDS := len(s.config.Datastores)
 	if numConfiguredDS == 0 {
 		return
@@ -274,17 +288,23 @@ func (s *Server) createInitialDatastores(ctx context.Context) {
 	wg.Add(numConfiguredDS)
 
 	for _, dsCfg := range s.config.Datastores {
-		log.Debugf("creating datastore %s", dsCfg.Name)
+		log.V(logf.VDebug).Info("creating datastore", "datastore-name", dsCfg.Name)
 		dsCfg.Validation = s.config.Validation.DeepCopy()
 		go func(dsCfg *config.DatastoreConfig) {
 			defer wg.Done()
-			// TODO: handle error
-			ds, _ := datastore.New(ctx, dsCfg, s.schemaClient, s.cacheClient, s.gnmiOpts...)
-			s.datastores.AddDatastore(ds)
+			// TODO: propagate error
+			ds, err := datastore.New(ctx, dsCfg, s.schemaClient, s.cacheClient, s.gnmiOpts...)
+			if err != nil {
+				log.Error(err, "failed to create datastore")
+			}
+			err = s.datastores.AddDatastore(ds)
+			if err != nil {
+				log.Error(err, "failed to create datastore")
+			}
 		}(dsCfg)
 	}
 	wg.Wait()
-	log.Infof("configured datastores initialized")
+	log.Info("configured datastores initialized")
 }
 
 func (s *Server) timeoutInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
@@ -298,4 +318,26 @@ func (s *Server) readyInterceptor(ctx context.Context, req interface{}, info *gr
 		return nil, status.Error(codes.Unavailable, "not ready")
 	}
 	return handler(ctx, req)
+}
+
+func contextLoggingInterceptor(logCtx context.Context) func(context.Context, interface{}, *grpc.UnaryServerInfo, grpc.UnaryHandler) (resp interface{}, err error) {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+		uuidString := uuid.New().String()
+		log := logf.FromContext(logCtx).WithValues("grpc-request-uuid", uuidString)
+		ctx = logf.IntoContext(ctx, log)
+
+		return handler(ctx, req)
+	}
+}
+
+func contextLoggingServerStreamInterceptor(ctx context.Context) func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		uuidString := uuid.New().String()
+		log := logf.FromContext(ctx).WithValues("grpc-request-uuid", uuidString)
+		wss := grpc_middleware.WrapServerStream(ss)
+		wss.WrappedContext = logf.IntoContext(wss.WrappedContext, log)
+
+		return handler(srv, wss)
+	}
+
 }
