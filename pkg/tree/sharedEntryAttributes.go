@@ -1771,7 +1771,7 @@ func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, path *sd
 	var err error
 	relPath := path
 
-	if path.IsRootBased {
+	if path.IsRootBased && !s.IsRoot() {
 		// calculate the relative path for the add
 		relPath, err = path.AbsToRelativePath(s.SdcpbPath())
 		if err != nil {

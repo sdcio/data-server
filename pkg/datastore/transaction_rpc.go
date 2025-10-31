@@ -214,7 +214,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		lvs := tree.LeafVariantSlice{}
 		lvs = root.GetByOwner(intent.GetName(), lvs)
 
-		oldIntentContent := lvs.ToUpdateSlice()
+		oldIntentContent := lvs.ToPathAndUpdateSlice()
 
 		marksOwnerDeleteVisitor := tree.NewMarkOwnerDeleteVisitor(intent.GetName(), intent.GetOnlyIntended())
 		err := root.Walk(ctx, marksOwnerDeleteVisitor)
@@ -225,7 +225,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		oldExplicitDeletes := root.RemoveExplicitDeletes(intent.GetName())
 
 		// store the old intent content in the transaction as the old intent.
-		err = transaction.AddIntentContent(intent.GetName(), types.TransactionIntentOld, oldIntentContent.GetFirstPriorityValue(), oldIntentContent, oldExplicitDeletes)
+		err = transaction.AddIntentContent(intent.GetName(), types.TransactionIntentOld, oldIntentContent[0].GetUpdate().Priority(), oldIntentContent, oldExplicitDeletes)
 		if err != nil {
 			return nil, err
 		}
@@ -245,7 +245,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	les := tree.LeafVariantSlice{}
 	les = root.GetByOwner(tree.RunningIntentName, les)
 
-	transaction.GetOldRunning().AddUpdates(les.ToUpdateSlice())
+	transaction.GetOldRunning().AddUpdates(les.ToPathAndUpdateSlice())
 
 	log.V(logf.VDebug).Info("transaction finish tree insertion phase")
 	// FinishInsertion Phase

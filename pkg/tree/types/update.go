@@ -115,7 +115,7 @@ func (u *Update) Equal(other *Update) bool {
 }
 
 // ExpandAndConvertIntent takes a slice of Updates ([]*sdcpb.Update) and converts it into a tree.UpdateSlice, that contains *treetypes.Updates.
-func ExpandAndConvertIntent(ctx context.Context, scb utils.SchemaClientBound, intentName string, priority int32, upds []*sdcpb.Update, ts int64) (UpdateSlice, error) {
+func ExpandAndConvertIntent(ctx context.Context, scb utils.SchemaClientBound, intentName string, priority int32, upds []*sdcpb.Update, ts int64) ([]*PathAndUpdate, error) {
 	converter := utils.NewConverter(scb)
 
 	// Expands the value, in case of json to single typed value updates
@@ -125,11 +125,12 @@ func ExpandAndConvertIntent(ctx context.Context, scb utils.SchemaClientBound, in
 	}
 
 	// temp storage for types.Update of the req. They are to be added later.
-	newCacheUpdates := make(UpdateSlice, 0, len(expandedReqUpdates))
+	newCacheUpdates := make([]*PathAndUpdate, 0, len(expandedReqUpdates))
 
 	for _, u := range expandedReqUpdates {
+		upd := NewUpdate(nil, u.GetValue(), priority, intentName, ts)
 		// construct the types.Update
-		newCacheUpdates = append(newCacheUpdates, NewUpdate(nil, u.GetValue(), priority, intentName, ts))
+		newCacheUpdates = append(newCacheUpdates, NewPathAndUpdate(u.GetPath(), upd))
 	}
 	return newCacheUpdates, nil
 }

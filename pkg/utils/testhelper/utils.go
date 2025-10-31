@@ -23,8 +23,15 @@ const (
 )
 
 // diffCacheUpdates takes two []*cache.Update and compares the diff
-func DiffUpdates(a, b []*types.Update) string {
-	return cmp.Diff(UpdateSliceToStringSlice(a), UpdateSliceToStringSlice(b))
+func DiffUpdates(a []*types.PathAndUpdate, b []*types.Update) string {
+	aSlice := make([]string, 0, len(a))
+	for _, x := range a {
+		aSlice = append(aSlice, x.String())
+	}
+	slices.Sort(aSlice)
+	bSlice := UpdateSliceToStringSlice(b)
+	slices.Sort(bSlice)
+	return cmp.Diff(aSlice, bSlice)
 }
 
 // UpdateSliceToStringSlice converts a []*Update to []string
