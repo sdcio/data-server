@@ -52,7 +52,19 @@ func main() {
 		return
 	}
 
-	log := logr.FromSlogHandler(slog.NewJSONHandler(os.Stdout, nil))
+	slogOpts := &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+		ReplaceAttr: logf.ReplaceTimeAttr,
+	}
+
+	if debug {
+		slogOpts.Level = slog.Level(logf.VDebug)
+	}
+	if trace {
+		slogOpts.Level = slog.Level(logf.VTrace)
+	}
+
+	log := logr.FromSlogHandler(slog.NewJSONHandler(os.Stdout, slogOpts))
 	logf.SetDefaultLogger(log)
 	ctx := logf.IntoContext(context.Background(), log)
 
