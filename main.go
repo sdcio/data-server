@@ -68,7 +68,7 @@ func main() {
 	logf.SetDefaultLogger(log)
 	ctx := logf.IntoContext(context.Background(), log)
 
-	log.Info("data-server bootstrap", "version", version, "commit", commit)
+	log.Info("data-server bootstrap", "version", version, "commit", commit, "log-level", slogOpts.Level.Level().String())
 
 	var s *server.Server
 START:
