@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -224,8 +225,13 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		// clear the owners existing explicit delete entries, retrieving the old entries for storing in the transaction for possible rollback
 		oldExplicitDeletes := root.RemoveExplicitDeletes(intent.GetName())
 
+		priority := int32(math.MaxInt32)
+		if len(oldIntentContent) > 0 {
+			priority = oldIntentContent[0].GetUpdate().Priority()
+		}
+
 		// store the old intent content in the transaction as the old intent.
-		err = transaction.AddIntentContent(intent.GetName(), types.TransactionIntentOld, oldIntentContent[0].GetUpdate().Priority(), oldIntentContent, oldExplicitDeletes)
+		err = transaction.AddIntentContent(intent.GetName(), types.TransactionIntentOld, priority, oldIntentContent, oldExplicitDeletes)
 		if err != nil {
 			return nil, err
 		}
