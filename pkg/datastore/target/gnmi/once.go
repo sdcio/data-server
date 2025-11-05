@@ -9,6 +9,7 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/utils"
 	"github.com/sdcio/data-server/pkg/datastore/target/types"
+	"github.com/sdcio/data-server/pkg/pool"
 )
 
 type OnceSync struct {
@@ -17,15 +18,17 @@ type OnceSync struct {
 	cancel       context.CancelFunc
 	runningStore types.RunningStore
 	ctx          context.Context
+	vpoolFactory pool.VirtualPoolFactory
 }
 
-func NewOnceSync(ctx context.Context, target SyncTarget, c *config.SyncProtocol, runningStore types.RunningStore) *OnceSync {
+func NewOnceSync(ctx context.Context, target SyncTarget, c *config.SyncProtocol, runningStore types.RunningStore, vpoolFactory pool.VirtualPoolFactory) *OnceSync {
 	ctx, cancel := context.WithCancel(ctx)
 	return &OnceSync{
 		config:       c,
 		target:       target,
 		cancel:       cancel,
 		runningStore: runningStore,
+		vpoolFactory: vpoolFactory,
 	}
 }
 

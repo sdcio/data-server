@@ -907,7 +907,8 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			t.Log(root.String())
 
-			validationResult, _ := root.Validate(context.TODO(), validationConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			validationResult, _ := root.Validate(context.TODO(), validationConfig, sharedPool)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -955,7 +956,8 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				}
 			}
 
-			validationResult, _ := root.Validate(context.TODO(), validationConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			validationResult, _ := root.Validate(context.TODO(), validationConfig, sharedPool)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1009,7 +1011,8 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 				}
 			}
 
-			validationResult, _ := root.Validate(context.TODO(), validationConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			validationResult, _ := root.Validate(context.TODO(), validationConfig, sharedPool)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1581,7 +1584,8 @@ func Test_Validation_String_Pattern(t *testing.T) {
 				t.Error(err)
 			}
 
-			validationResult, _ := root.Validate(context.TODO(), validationConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			validationResult, _ := root.Validate(context.TODO(), validationConfig, sharedPool)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1618,7 +1622,8 @@ func Test_Validation_String_Pattern(t *testing.T) {
 				t.Error(err)
 			}
 
-			validationResult, _ := root.Validate(context.TODO(), validationConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			validationResult, _ := root.Validate(context.TODO(), validationConfig, sharedPool)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1714,7 +1719,8 @@ func Test_Validation_Deref(t *testing.T) {
 				t.Error(err)
 			}
 
-			validationResult, _ := root.Validate(context.TODO(), validationConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			validationResult, _ := root.Validate(context.TODO(), validationConfig, sharedPool)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors

@@ -68,7 +68,7 @@ type Entry interface {
 	// Walk takes the EntryVisitor and applies it to every Entry in the tree
 	Walk(ctx context.Context, v EntryVisitor) error
 	// Validate kicks off validation
-	Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, vCfg *config.Validation)
+	ValidateLevel(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, vCfg *config.Validation)
 	// validateMandatory the Mandatory schema field
 	validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats)
 	// validateMandatoryWithKeys is an internally used function that us called by validateMandatory in case

@@ -28,6 +28,7 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	gnmiutils "github.com/sdcio/data-server/pkg/datastore/target/gnmi/utils"
 	targetTypes "github.com/sdcio/data-server/pkg/datastore/target/types"
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/utils"
 	dsutils "github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -45,15 +46,16 @@ const (
 )
 
 type gnmiTarget struct {
-	target       *gtarget.Target
-	encodings    map[gnmi.Encoding]struct{}
-	cfg          *config.SBI
-	syncs        map[string]GnmiSync
-	runningStore targetTypes.RunningStore
-	schemaClient dsutils.SchemaClientBound
+	target          *gtarget.Target
+	encodings       map[gnmi.Encoding]struct{}
+	cfg             *config.SBI
+	syncs           map[string]GnmiSync
+	runningStore    targetTypes.RunningStore
+	schemaClient    dsutils.SchemaClientBound
+	taskpoolFactory pool.VirtualPoolFactory
 }
 
-func NewTarget(ctx context.Context, name string, cfg *config.SBI, runningStore targetTypes.RunningStore, schemaClient dsutils.SchemaClientBound, opts ...grpc.DialOption) (*gnmiTarget, error) {
+func NewTarget(ctx context.Context, name string, cfg *config.SBI, runningStore targetTypes.RunningStore, schemaClient dsutils.SchemaClientBound, taskpoolFactory pool.VirtualPoolFactory, opts ...grpc.DialOption) (*gnmiTarget, error) {
 	tc := &types.TargetConfig{
 		Name:       name,
 		Address:    fmt.Sprintf("%s:%d", cfg.Address, cfg.Port),
@@ -74,12 +76,13 @@ func NewTarget(ctx context.Context, name string, cfg *config.SBI, runningStore t
 		tc.Insecure = pointer.ToBool(true)
 	}
 	gt := &gnmiTarget{
-		target:       gtarget.NewTarget(tc),
-		encodings:    make(map[gnmi.Encoding]struct{}),
-		cfg:          cfg,
-		syncs:        map[string]GnmiSync{},
-		runningStore: runningStore,
-		schemaClient: schemaClient,
+		target:          gtarget.NewTarget(tc),
+		encodings:       make(map[gnmi.Encoding]struct{}),
+		cfg:             cfg,
+		syncs:           map[string]GnmiSync{},
+		runningStore:    runningStore,
+		schemaClient:    schemaClient,
+		taskpoolFactory: taskpoolFactory,
 	}
 
 	opts = append(opts, grpc.WithKeepaliveParams(keepalive.ClientParameters{
@@ -254,14 +257,14 @@ func (t *gnmiTarget) AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) 
 	for _, sp := range sps {
 		switch sp.Mode {
 		case "once":
-			g = NewOnceSync(ctx, t, sp, t.runningStore)
+			g = NewOnceSync(ctx, t, sp, t.runningStore, t.taskpoolFactory)
 		case "get":
 			g, err = NewGetSync(ctx, t, sp, t.runningStore, t.schemaClient)
 			if err != nil {
 				return err
 			}
 		default:
-			g = NewStreamSync(ctx, t, sp, t.runningStore, t.schemaClient)
+			g = NewStreamSync(ctx, t, sp, t.runningStore, t.schemaClient, t.taskpoolFactory)
 		}
 		t.syncs[sp.Name] = g
 		err := g.Start()

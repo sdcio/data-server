@@ -962,11 +962,9 @@ func (s *sharedEntryAttributes) getHighestPrecedenceValueOfBranch(filter Highest
 
 // Validate is the highlevel function to perform validation.
 // it will multiplex all the different Validations that need to happen
-func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, vCfg *config.Validation) {
-
+func (s *sharedEntryAttributes) ValidateLevel(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, vCfg *config.Validation) {
 	// validate the mandatory statement on this entry
 	if s.remainsToExist() {
-
 		// TODO: Validate Enums
 		if !vCfg.DisabledValidators.Mandatory {
 			s.validateMandatory(ctx, resultChan, stats)
@@ -991,26 +989,6 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 		}
 		if !vCfg.DisabledValidators.MaxElements {
 			s.validateMinMaxElements(resultChan, stats)
-		}
-
-		// recurse the call to the child elements
-		wg := sync.WaitGroup{}
-		defer wg.Wait()
-		for _, c := range s.GetChilds(DescendMethodActiveChilds) {
-			if c.canDeleteBranch(false) {
-				// skip validation of branches that can be deleted
-				continue
-			}
-			wg.Add(1)
-			valFunc := func(x Entry) {
-				x.Validate(ctx, resultChan, stats, vCfg)
-				wg.Done()
-			}
-			if !vCfg.DisableConcurrency {
-				go valFunc(c)
-			} else {
-				valFunc(c)
-			}
 		}
 	}
 }

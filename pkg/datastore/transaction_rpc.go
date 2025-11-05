@@ -105,7 +105,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	log.TraceFn(func() []interface{} { return []interface{}{root.String()} })
 
 	// perform validation
-	validationResult, validationStats := root.Validate(ctx, d.config.Validation)
+	validationResult, validationStats := root.Validate(ctx, d.config.Validation, d.taskPool)
 	validationResult.ErrorsStr()
 	if validationResult.HasErrors() {
 		return nil, validationResult.JoinErrors()
@@ -264,7 +264,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	log.Debug(root.String())
 
 	// perform validation
-	validationResult, validationStats := root.Validate(ctx, d.config.Validation)
+	validationResult, validationStats := root.Validate(ctx, d.config.Validation, d.taskPool)
 
 	log.Debugf("Transaction: %s - Validation Stats: %s", transaction.GetTransactionId(), validationStats.String())
 

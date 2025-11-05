@@ -25,6 +25,7 @@ import (
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/datastore/target/gnmi"
 	"github.com/sdcio/data-server/pkg/datastore/target/types"
+	"github.com/sdcio/data-server/pkg/pool"
 )
 
 const (
@@ -41,7 +42,7 @@ type Target interface {
 	Close() error
 }
 
-func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemaClient.SchemaClientBound, runningStore types.RunningStore, syncConfigs []*config.SyncProtocol, opts ...grpc.DialOption) (Target, error) {
+func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemaClient.SchemaClientBound, runningStore types.RunningStore, syncConfigs []*config.SyncProtocol, taskpoolFactory pool.VirtualPoolFactory, opts ...grpc.DialOption) (Target, error) {
 	var t Target
 	var err error
 
@@ -49,7 +50,7 @@ func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemaC
 
 	switch cfg.Type {
 	case targetTypeGNMI:
-		t, err = gnmi.NewTarget(targetContext, name, cfg, runningStore, schemaClient, opts...)
+		t, err = gnmi.NewTarget(targetContext, name, cfg, runningStore, schemaClient, taskpoolFactory, opts...)
 		if err != nil {
 			return nil, err
 		}

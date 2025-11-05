@@ -1352,7 +1352,8 @@ func TestDatastore_populateTree(t *testing.T) {
 			}
 			fmt.Println(root.String())
 
-			validationResult, _ := root.Validate(ctx, validationConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			validationResult, _ := root.Validate(ctx, validationConfig, sharedPool)
 
 			fmt.Printf("Validation Errors:\n%v\n", strings.Join(validationResult.ErrorsStr(), "\n"))
 			fmt.Printf("Tree:%s\n", root.String())

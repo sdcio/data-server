@@ -137,7 +137,7 @@ func (s *SharedTaskPool) Wait() error {
 // NewVirtualPool creates and registers a virtual pool on top of the shared pool.
 // id is an arbitrary identifier (must be unique per SharedTaskPool).
 // mode controls failure semantics. buf controls error channel buffer for tolerant mode.
-func (s *SharedTaskPool) NewVirtualPool(mode VirtualMode, buf int) *VirtualPool {
+func (s *SharedTaskPool) NewVirtualPool(mode VirtualMode, buf int) VirtualPoolI {
 	// ensure unique id in the shared pool's map. If the requested id is already
 	// registered, append a short random hex postfix so multiple callers can
 	// create virtual pools with the same base name without colliding.

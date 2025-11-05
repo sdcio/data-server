@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/pool"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
@@ -91,17 +92,15 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 
 func (d *Datastore) SendDeviations(ch <-chan *treetypes.DeviationEntry, deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer) {
 	wg := &sync.WaitGroup{}
+	vPool := d.taskPool.NewVirtualPool(pool.VirtualTolerant, 1)
+
 	for de := range ch {
 		wg.Add(1)
-		go func(de DeviationEntry, dcs map[string]sdcpb.DataServer_WatchDeviationsServer) {
-			for clientIdentifier, dc := range dcs {
-				select {
-				// skip deviation clients with closed context
-				case <-dc.Context().Done():
+		vPool.SubmitFunc(func(ctx context.Context, _ func(pool.Task) error) error {
+			for clientIdentifier, dc := range deviationClients {
+				if dc.Context().Err() != nil {
 					continue
-				default:
 				}
-
 				err := dc.Send(&sdcpb.WatchDeviationResponse{
 					Name:          d.config.Name,
 					Intent:        de.IntentName(),
@@ -116,7 +115,8 @@ func (d *Datastore) SendDeviations(ch <-chan *treetypes.DeviationEntry, deviatio
 				}
 			}
 			wg.Done()
-		}(de, deviationClients)
+			return nil
+		})
 	}
 	wg.Wait()
 }

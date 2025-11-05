@@ -669,7 +669,9 @@ func Test_sharedEntryAttributes_MustCount(t *testing.T) {
 			valConfig.DisabledValidators.DisableAll()
 			valConfig.DisabledValidators.MustStatement = false
 
-			result, _ := root.Validate(ctx, valConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+
+			result, _ := root.Validate(ctx, valConfig, sharedPool)
 
 			t.Log(strings.Join(result.ErrorsStr(), "\n"))
 
@@ -788,8 +790,9 @@ func Test_sharedEntryAttributes_MustCountDoubleKey(t *testing.T) {
 			valConfig := validationConfig.DeepCopy()
 			valConfig.DisabledValidators.DisableAll()
 			valConfig.DisabledValidators.MustStatement = false
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
 
-			result, _ := root.Validate(ctx, valConfig)
+			result, _ := root.Validate(ctx, valConfig, sharedPool)
 
 			t.Log(strings.Join(result.ErrorsStr(), "\n"))
 
@@ -998,7 +1001,9 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 			validationConfig.DisabledValidators.DisableAll()
 			validationConfig.DisabledValidators.Mandatory = false
 
-			validationResults, _ := root.Validate(ctx, validationConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+
+			validationResults, _ := root.Validate(ctx, validationConfig, sharedPool)
 
 			results := []string{}
 			for _, e := range validationResults {
@@ -1289,7 +1294,8 @@ func Test_sharedEntryAttributes_validateMinMaxElements(t *testing.T) {
 			valConfig.DisabledValidators.DisableAll()
 			valConfig.DisabledValidators.MaxElements = false
 
-			result, _ := root.Validate(ctx, valConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			result, _ := root.Validate(ctx, valConfig, sharedPool)
 
 			t.Log(strings.Join(result.ErrorsStr(), "\n"))
 
@@ -1457,7 +1463,8 @@ func Test_sharedEntryAttributes_validateMinMaxElementsDoubleKey(t *testing.T) {
 			valConfig.DisabledValidators.DisableAll()
 			valConfig.DisabledValidators.MaxElements = false
 
-			result, _ := root.Validate(ctx, valConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			result, _ := root.Validate(ctx, valConfig, sharedPool)
 
 			t.Log(strings.Join(result.ErrorsStr(), "\n"))
 

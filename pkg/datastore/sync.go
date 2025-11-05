@@ -15,11 +15,10 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	d.syncTreeMutex.Lock()
 	defer d.syncTreeMutex.Unlock()
 	for _, delete := range deletes {
-		//TODO this will most likely give us errors in case optimisticWriteback already deleted the entries.
 		err := d.syncTree.DeleteBranch(ctx, delete, tree.RunningIntentName)
 		if err != nil {
-			log.Errorf("error deleting paths from datastore sync tree: %v", err)
-			return err
+			log.Warnf("failed deleting path (%s) from datastore sync tree: %v", delete.ToXPath(false), err)
+			continue
 		}
 	}
 
