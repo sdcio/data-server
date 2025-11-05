@@ -21,6 +21,8 @@ func NewValidateProcessor(parameters *ValidateProcessorParameters) *ValidateProc
 func (p *ValidateProcessor) Run(taskpoolFactory pool.VirtualPoolFactory, e Entry) {
 	taskpool := taskpoolFactory.NewVirtualPool(pool.VirtualTolerant, 0)
 	taskpool.Submit(newValidateTask(e, p.parameters))
+	taskpool.CloseForSubmit()
+	taskpool.Wait()
 }
 
 type ValidateProcessorParameters struct {
@@ -50,6 +52,9 @@ func newValidateTask(e Entry, parameters *ValidateProcessorParameters) *validate
 }
 
 func (t *validateTask) Run(ctx context.Context, submit func(pool.Task) error) error {
+	if ctx.Err() != nil {
+		return nil
+	}
 	// validate the mandatory statement on this entry
 	if t.e.remainsToExist() {
 		t.e.ValidateLevel(ctx, t.parameters.resultChan, t.parameters.stats, t.parameters.vCfg)
