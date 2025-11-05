@@ -90,6 +90,9 @@ func (u *Update) ValueAsBytes() ([]byte, error) {
 }
 
 func (u *Update) Path() *sdcpb.Path {
+	if u.parent == nil {
+		return nil
+	}
 	return u.parent.SdcpbPath()
 }
 
