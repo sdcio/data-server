@@ -2,6 +2,7 @@ package tree
 
 import (
 	"context"
+	"runtime"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -151,11 +152,11 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			treeRoot := tt.r(t)
 
-			sharedPool := pool.NewSharedTaskPool(ctx, 10)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			vPool := sharedPool.NewVirtualPool(pool.VirtualFailFast, 10)
 
-			vPool := sharedPool.NewVirtualPool("blame", pool.VirtualFailFast, 1)
-
-			got, err := BlameConfig(ctx, treeRoot.sharedEntryAttributes, tt.includeDefaults, vPool)
+			bp := NewBlameConfigProcessor(NewBlameConfigProcessorConfig(tt.includeDefaults))
+			got, err := bp.Run(ctx, treeRoot.sharedEntryAttributes, vPool)
 			if err != nil {
 				t.Errorf("BlameConfig() error %s", err)
 				return

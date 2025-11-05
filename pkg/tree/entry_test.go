@@ -3,12 +3,15 @@ package tree
 import (
 	"context"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/pool"
+
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -519,10 +522,14 @@ func Test_Entry_Three(t *testing.T) {
 
 	// indicate that the intent is receiving an update
 	// therefor invalidate all the present entries of the owner / intent
-	marksOwnerDeleteVisitor := NewMarkOwnerDeleteVisitor(owner1, false)
-	err = root.Walk(ctx, marksOwnerDeleteVisitor)
+	sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+	deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+	ownerDeleteMarker := NewOwnerDeleteMarker(NewOwnerDeleteMarkerTaskConfig(owner1, false))
+
+	err = ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
 	if err != nil {
 		t.Error(err)
+		return
 	}
 
 	// add incomming set intent reques data
@@ -762,10 +769,14 @@ func Test_Entry_Four(t *testing.T) {
 
 	// indicate that the intent is receiving an update
 	// therefor invalidate all the present entries of the owner / intent
-	marksOwnerDeleteVisitor := NewMarkOwnerDeleteVisitor(owner1, false)
-	err = root.Walk(ctx, marksOwnerDeleteVisitor)
+	sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+	deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+	ownerDeleteMarker := NewOwnerDeleteMarker(NewOwnerDeleteMarkerTaskConfig(owner1, false))
+
+	err = ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
 	if err != nil {
 		t.Error(err)
+		return
 	}
 
 	// add incomming set intent reques data
@@ -1104,8 +1115,11 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 		}
 	}
 
-	marksOwnerDeleteVisitor := NewMarkOwnerDeleteVisitor(owner1, false)
-	err = root.Walk(ctx, marksOwnerDeleteVisitor)
+	sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+	deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+	ownerDeleteMarker := NewOwnerDeleteMarker(NewOwnerDeleteMarkerTaskConfig(owner1, false))
+
+	err = ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
 	if err != nil {
 		t.Error(err)
 		return

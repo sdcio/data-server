@@ -50,8 +50,8 @@ func TestVirtualPools_TolerantAndFailFast(t *testing.T) {
 	sp := NewSharedTaskPool(ctx, 4)
 
 	// create virtual pools
-	vt := sp.NewVirtualPool("tolerant", VirtualTolerant, 16)
-	vf := sp.NewVirtualPool("fail", VirtualFailFast, 0)
+	vt := sp.NewVirtualPool(VirtualTolerant, 16)
+	vf := sp.NewVirtualPool(VirtualFailFast, 0)
 
 	// submit tasks: tolerant pool will collect errors, fail pool will stop after first error
 	var cntT int64
@@ -134,7 +134,7 @@ func TestVirtualPools_TolerantAndFailFast(t *testing.T) {
 func TestVirtualPool_Wait_Tolerant(t *testing.T) {
 	ctx := context.Background()
 	sp := NewSharedTaskPool(ctx, 2)
-	vt := sp.NewVirtualPool("wait-tolerant", VirtualTolerant, 4)
+	vt := sp.NewVirtualPool(VirtualTolerant, 4)
 
 	var cnt int64
 	// submit a few tasks
@@ -175,7 +175,7 @@ func TestVirtualPool_Wait_Tolerant(t *testing.T) {
 func TestVirtualPool_Wait_FailFast(t *testing.T) {
 	ctx := context.Background()
 	sp := NewSharedTaskPool(ctx, 2)
-	vf := sp.NewVirtualPool("wait-fail", VirtualFailFast, 0)
+	vf := sp.NewVirtualPool(VirtualFailFast, 0)
 
 	var cnt int64
 	// submit a task that will fail and another that would be skipped when run

@@ -34,6 +34,7 @@ func NewGetSync(ctx context.Context, target GetTarget, c *config.SyncProtocol, r
 	for _, p := range c.Paths {
 		path, err := sdcpb.ParsePath(p)
 		if err != nil {
+			cancel()
 			return nil, err
 		}
 		// add the parsed path

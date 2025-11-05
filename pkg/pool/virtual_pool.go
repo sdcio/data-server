@@ -16,8 +16,6 @@ package pool
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -108,8 +106,7 @@ const (
 type SharedTaskPool struct {
 	inner *Pool[Task]
 
-	mu   sync.RWMutex
-	vmap map[string]*VirtualPool
+	mu sync.RWMutex
 }
 
 // NewSharedTaskPool constructs a shared pool; caller should call Start() to begin workers.
@@ -124,7 +121,6 @@ func NewSharedTaskPool(parent context.Context, workerCount int) *SharedTaskPool 
 
 	return &SharedTaskPool{
 		inner: inner,
-		vmap:  make(map[string]*VirtualPool),
 	}
 }
 
@@ -141,32 +137,12 @@ func (s *SharedTaskPool) Wait() error {
 // NewVirtualPool creates and registers a virtual pool on top of the shared pool.
 // id is an arbitrary identifier (must be unique per SharedTaskPool).
 // mode controls failure semantics. buf controls error channel buffer for tolerant mode.
-func (s *SharedTaskPool) NewVirtualPool(id string, mode VirtualMode, buf int) *VirtualPool {
+func (s *SharedTaskPool) NewVirtualPool(mode VirtualMode, buf int) *VirtualPool {
 	// ensure unique id in the shared pool's map. If the requested id is already
 	// registered, append a short random hex postfix so multiple callers can
 	// create virtual pools with the same base name without colliding.
-	s.mu.Lock()
-	finalID := id
-	if _, exists := s.vmap[finalID]; exists {
-		// generate short random postfix until unique
-		for {
-			// 4 bytes -> 8 hex chars
-			b := make([]byte, 4)
-			if _, err := rand.Read(b); err != nil {
-				// fallback to using a timestamp-like postfix if crypto fails
-				finalID = finalID + "-r"
-				break
-			}
-			suf := hex.EncodeToString(b)
-			candidate := id + "-" + suf
-			if _, ok := s.vmap[candidate]; !ok {
-				finalID = candidate
-				break
-			}
-		}
-	}
+
 	v := &VirtualPool{
-		id:       finalID,
 		parent:   s,
 		mode:     mode,
 		ec:       nil,
@@ -177,16 +153,7 @@ func (s *SharedTaskPool) NewVirtualPool(id string, mode VirtualMode, buf int) *V
 	if mode == VirtualTolerant {
 		v.ec = newErrorCollector(buf)
 	}
-	s.vmap[v.id] = v
-	s.mu.Unlock()
 	return v
-}
-
-// UnregisterVirtualPool removes the virtual pool registration (does not wait or close inner).
-func (s *SharedTaskPool) UnregisterVirtualPool(id string) {
-	s.mu.Lock()
-	delete(s.vmap, id)
-	s.mu.Unlock()
 }
 
 // submitWrapped submits a virtualTask into the shared pool.
@@ -199,7 +166,6 @@ func (s *SharedTaskPool) submitWrapped(vt *virtualTask) error {
 // VirtualPool represents a logical pool view that reuses shared workers.
 // It enforces per-virtual behaviour like fail-fast or tolerant error collection.
 type VirtualPool struct {
-	id     string
 	parent *SharedTaskPool
 	mode   VirtualMode
 

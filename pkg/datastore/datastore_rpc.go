@@ -17,6 +17,7 @@ package datastore
 import (
 	"context"
 	"errors"
+	"runtime"
 	"sync"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/target"
 	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/datastore/types"
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/schema"
 	"github.com/sdcio/data-server/pkg/tree"
 )
@@ -70,6 +72,8 @@ type Datastore struct {
 
 	// owned by sync
 	syncTreeCandidate *tree.RootEntry
+
+	taskPool *pool.SharedTaskPool
 }
 
 // New creates a new datastore, its schema server client and initializes the SBI target
@@ -96,6 +100,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 		currentIntentsDeviations: make(map[string][]*sdcpb.WatchDeviationResponse),
 		syncTree:                 syncTreeRoot,
 		syncTreeMutex:            &sync.RWMutex{},
+		taskPool:                 pool.NewSharedTaskPool(ctx, runtime.NumCPU()),
 	}
 	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
 
@@ -222,13 +227,10 @@ func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdc
 		return nil, err
 	}
 
-	// calculate the Blame
-	bcv := tree.NewBlameConfigVisitor(includeDefaults)
-	err = root.Walk(ctx, bcv)
-	if err != nil {
-		return nil, err
-	}
-	bte := bcv.GetResult()
+	blamePool := d.taskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+	bcp := tree.NewBlameConfigProcessor(tree.NewBlameConfigProcessorConfig(includeDefaults))
+
+	bte, err := bcp.Run(ctx, root.GetRoot(), blamePool)
 
 	// set the root level elements name to the target name
 	bte.Name = d.config.Name

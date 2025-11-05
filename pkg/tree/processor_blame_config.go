@@ -9,7 +9,27 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func BlameConfig(ctx context.Context, e Entry, includeDefaults bool, pool pool.VirtualPoolI) (*sdcpb.BlameTreeElement, error) {
+type BlameConfigProcessor struct {
+	config *BlameConfigProcessorConfig
+}
+
+func NewBlameConfigProcessor(config *BlameConfigProcessorConfig) *BlameConfigProcessor {
+	return &BlameConfigProcessor{
+		config: config,
+	}
+}
+
+type BlameConfigProcessorConfig struct {
+	includeDefaults bool
+}
+
+func NewBlameConfigProcessorConfig(includeDefaults bool) *BlameConfigProcessorConfig {
+	return &BlameConfigProcessorConfig{
+		includeDefaults: includeDefaults,
+	}
+}
+
+func (p *BlameConfigProcessor) Run(ctx context.Context, e Entry, pool pool.VirtualPoolI) (*sdcpb.BlameTreeElement, error) {
 	dropChan := make(chan *DropBlameChild, 10)
 
 	wg := &sync.WaitGroup{}
@@ -22,7 +42,7 @@ func BlameConfig(ctx context.Context, e Entry, includeDefaults bool, pool pool.V
 		wg.Done()
 	}(dropChan)
 
-	blameTask := NewBlameConfigTask(e, dropChan, includeDefaults)
+	blameTask := NewBlameConfigTask(e, dropChan, p.config)
 	err := pool.Submit(blameTask)
 	if err != nil {
 		return nil, err
@@ -39,24 +59,28 @@ func BlameConfig(ctx context.Context, e Entry, includeDefaults bool, pool pool.V
 }
 
 type BlameConfigTask struct {
-	includeDefaults bool
-	parent          *sdcpb.BlameTreeElement
-	self            *sdcpb.BlameTreeElement
-	selfEntry       Entry
-	dropChan        chan<- *DropBlameChild
+	config    *BlameConfigProcessorConfig
+	parent    *sdcpb.BlameTreeElement
+	self      *sdcpb.BlameTreeElement
+	selfEntry Entry
+	dropChan  chan<- *DropBlameChild
 }
 
-func NewBlameConfigTask(e Entry, dropChan chan<- *DropBlameChild, includeDefaults bool) *BlameConfigTask {
+func NewBlameConfigTask(e Entry, dropChan chan<- *DropBlameChild, c *BlameConfigProcessorConfig) *BlameConfigTask {
 	return &BlameConfigTask{
-		includeDefaults: includeDefaults,
-		parent:          nil,
-		self:            &sdcpb.BlameTreeElement{},
-		selfEntry:       e,
-		dropChan:        dropChan,
+		config:    c,
+		parent:    nil,
+		self:      &sdcpb.BlameTreeElement{},
+		selfEntry: e,
+		dropChan:  dropChan,
 	}
 }
 
 func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	t.self.Name = t.selfEntry.PathName()
 	if t.selfEntry.IsRoot() {
 		t.self.Name = "root"
@@ -65,7 +89,7 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 	// process Value
 	highestLe := t.selfEntry.GetLeafVariantEntries().GetHighestPrecedence(false, true, true)
 	if highestLe != nil {
-		if highestLe.Update.Owner() != DefaultsIntentName || t.includeDefaults {
+		if highestLe.Update.Owner() != DefaultsIntentName || t.config.includeDefaults {
 			t.self.SetValue(highestLe.Update.Value()).SetOwner(highestLe.Update.Owner())
 
 			// check if running equals the expected
@@ -87,11 +111,11 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 
 		// create a new task for each child
 		task := &BlameConfigTask{
-			includeDefaults: t.includeDefaults,
-			parent:          t.self,
-			self:            child,
-			selfEntry:       childEntry,
-			dropChan:        t.dropChan,
+			config:    t.config,
+			parent:    t.self,
+			self:      child,
+			selfEntry: childEntry,
+			dropChan:  t.dropChan,
 		}
 		// submit the task
 		if err := submit(task); err != nil {

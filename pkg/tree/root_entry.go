@@ -243,6 +243,7 @@ func (r *RootEntry) DeleteBranchPaths(ctx context.Context, deletes types.DeleteE
 }
 
 func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
+
 	edvs := ExplicitDeleteVisitors{}
 
 	// apply the explicit deletes

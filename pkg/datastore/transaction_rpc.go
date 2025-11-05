@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sdcio/data-server/pkg/datastore/types"
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
@@ -213,11 +214,20 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 		oldIntentContent := lvs.ToUpdateSlice()
 
-		marksOwnerDeleteVisitor := tree.NewMarkOwnerDeleteVisitor(intent.GetName(), intent.GetOnlyIntended())
-		err := root.Walk(ctx, marksOwnerDeleteVisitor)
+		deleteVisitorPool := d.taskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+		ownerDeleteMarker := tree.NewOwnerDeleteMarker(tree.NewOwnerDeleteMarkerTaskConfig(intent.GetName(), intent.GetOnlyIntended()))
+
+		err := ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
 		if err != nil {
 			return nil, err
 		}
+
+		// marksOwnerDeleteVisitor := tree.NewMarkOwnerDeleteVisitor(intent.GetName(), intent.GetOnlyIntended())
+		// err := root.Walk(ctx, marksOwnerDeleteVisitor)
+		// if err != nil {
+		// 	return nil, err
+		// }
+
 		// clear the owners existing explicit delete entries, retrieving the old entries for storing in the transaction for possible rollback
 		oldExplicitDeletes := root.RemoveExplicitDeletes(intent.GetName())
 
