@@ -79,6 +79,11 @@ func (s *GetSync) Start() error {
 		return err
 	}
 
+	if s.ctx.Err() != nil {
+		// stopping sync due to context canceled
+		return nil
+	}
+
 	go s.internalGetSync(req)
 
 	go func() {

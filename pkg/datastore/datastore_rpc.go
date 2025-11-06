@@ -119,6 +119,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 		}
 		if err != nil {
 			log.Errorf("failed to create SBI for target %s: %v", ds.Config().Name, err)
+			cancel()
 			return
 		}
 

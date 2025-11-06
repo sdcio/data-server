@@ -46,11 +46,9 @@ func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemaC
 	var t Target
 	var err error
 
-	targetContext := context.Background()
-
 	switch cfg.Type {
 	case targetTypeGNMI:
-		t, err = gnmi.NewTarget(targetContext, name, cfg, runningStore, schemaClient, taskpoolFactory, opts...)
+		t, err = gnmi.NewTarget(ctx, name, cfg, runningStore, schemaClient, taskpoolFactory, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -62,7 +60,7 @@ func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemaC
 		return nil, fmt.Errorf("unknown DS target type %q", cfg.Type)
 	}
 
-	err = t.AddSyncs(targetContext, syncConfigs...)
+	err = t.AddSyncs(ctx, syncConfigs...)
 	if err != nil {
 		return nil, err
 	}

@@ -115,6 +115,7 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, sy
 	for {
 		select {
 		case <-s.ctx.Done():
+			log.Debugf(">>>>>>>>>>>>>>>>>> Sync %s context done", s.config.Name)
 			return
 		case noti, ok := <-cUS:
 			if !ok {
