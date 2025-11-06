@@ -75,11 +75,11 @@ func (r *RootEntry) RemoveExplicitDeletes(intentName string) *sdcpb.PathSet {
 	return r.explicitDeletes.RemoveIntentDeletes(intentName)
 }
 
-func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us types.UpdateSlice, flags *types.UpdateInsertFlags) error {
+func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us []*types.PathAndUpdate, flags *types.UpdateInsertFlags) error {
 	var err error
 	for idx, u := range us {
 		_ = idx
-		_, err = r.sharedEntryAttributes.AddUpdateRecursive(ctx, u.Path(), u, flags)
+		_, err = r.sharedEntryAttributes.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flags)
 		if err != nil {
 			return err
 		}

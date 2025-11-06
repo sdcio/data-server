@@ -8,7 +8,7 @@ import (
 type TransactionIntent struct {
 	name string
 	// updates is nil if the intent did not exist.
-	updates treetypes.UpdateSlice
+	updates []*treetypes.PathAndUpdate
 	delete  bool
 	// onlyIntended, the orphan flag, delte only from intended store, but keep in device
 	onlyIntended bool
@@ -23,7 +23,7 @@ type TransactionIntent struct {
 func NewTransactionIntent(name string, priority int32) *TransactionIntent {
 	return &TransactionIntent{
 		name:            name,
-		updates:         make(treetypes.UpdateSlice, 0),
+		updates:         make([]*treetypes.PathAndUpdate, 0),
 		priority:        priority,
 		explicitDeletes: sdcpb.NewPathSet(),
 	}
@@ -37,11 +37,11 @@ func (ti *TransactionIntent) GetPriority() int32 {
 	return ti.priority
 }
 
-func (ti *TransactionIntent) AddUpdates(u treetypes.UpdateSlice) {
+func (ti *TransactionIntent) AddUpdates(u []*treetypes.PathAndUpdate) {
 	ti.updates = append(ti.updates, u...)
 }
 
-func (ti *TransactionIntent) GetUpdates() treetypes.UpdateSlice {
+func (ti *TransactionIntent) GetUpdates() []*treetypes.PathAndUpdate {
 	return ti.updates
 }
 
@@ -83,10 +83,14 @@ func (ti *TransactionIntent) SetDeleteOnlyIntendedFlag() {
 }
 
 func (ti *TransactionIntent) GetPathSet() *sdcpb.PathSet {
-	return ti.updates.ToSdcpbPathSet()
+	result := sdcpb.NewPathSet()
+	for _, upd := range ti.updates {
+		result.AddPath(upd.GetPath())
+	}
+	return result
 }
 
-func (ti *TransactionIntent) AddUpdate(u *treetypes.Update) {
+func (ti *TransactionIntent) AddUpdate(u *treetypes.PathAndUpdate) {
 	ti.updates = append(ti.updates, u)
 }
 

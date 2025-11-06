@@ -49,8 +49,8 @@ func Test_sharedEntryAttributes_checkAndCreateKeysAsLeafs(t *testing.T) {
 	intentName := "intent1"
 
 	p := &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}
-	up := testhelper.NewUpdateParentMock(p)
-	_, err = root.AddUpdateRecursive(ctx, p, types.NewUpdate(up, testhelper.GetStringTvProto("MyDescription"), prio, intentName, 0), flags)
+
+	_, err = root.AddUpdateRecursive(ctx, p, types.NewUpdate(nil, testhelper.GetStringTvProto("MyDescription"), prio, intentName, 0), flags)
 	if err != nil {
 		t.Error(err)
 	}
@@ -64,9 +64,8 @@ func Test_sharedEntryAttributes_checkAndCreateKeysAsLeafs(t *testing.T) {
 			sdcpb.NewPathElem("mandato", nil),
 		},
 	}
-	up = testhelper.NewUpdateParentMock(p)
 
-	_, err = root.AddUpdateRecursive(ctx, p, types.NewUpdate(up, testhelper.GetStringTvProto("TheMandatoryValue1"), prio, intentName, 0), flags)
+	_, err = root.AddUpdateRecursive(ctx, p, types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue1"), prio, intentName, 0), flags)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1082,9 +1081,9 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			updSlice := types.UpdateSlice{
-				types.NewUpdate(
-					testhelper.NewUpdateParentMock(&sdcpb.Path{
+			updSlice := []*types.PathAndUpdate{
+				types.NewPathAndUpdate(
+					&sdcpb.Path{
 						Elem: []*sdcpb.PathElem{
 							sdcpb.NewPathElem("doublekey", map[string]string{
 								"key1": "k1.1",
@@ -1092,7 +1091,9 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 							}),
 							sdcpb.NewPathElem("mandato", nil),
 						}, IsRootBased: true,
-					}), testhelper.GetStringTvProto("TheMandatoryValue1"), owner1Prio, owner1, 0),
+					},
+					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue1"), owner1Prio, owner1, 0),
+				),
 			}
 
 			err = root.AddUpdatesRecursive(ctx, updSlice, flagsNew)
