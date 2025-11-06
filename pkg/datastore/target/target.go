@@ -60,7 +60,6 @@ func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemaC
 	// 	return newNoopTarget(ctx, name)
 	default:
 		return nil, fmt.Errorf("unknown DS target type %q", cfg.Type)
-
 	}
 
 	err = t.AddSyncs(targetContext, syncConfigs...)

@@ -17,13 +17,15 @@ import (
 )
 
 type GetSync struct {
-	config       *config.SyncProtocol
-	target       GetTarget
-	cancel       context.CancelFunc
-	runningStore types.RunningStore
-	ctx          context.Context
-	schemaClient dsutils.SchemaClientBound
-	paths        []*sdcpb.Path
+	config        *config.SyncProtocol
+	target        GetTarget
+	cancel        context.CancelFunc
+	runningStore  types.RunningStore
+	ctx           context.Context
+	schemaClient  dsutils.SchemaClientBound
+	paths         []*sdcpb.Path
+	syncTree      *tree.RootEntry
+	syncTreeMutex *sync.Mutex
 }
 
 func NewGetSync(ctx context.Context, target GetTarget, c *config.SyncProtocol, runningStore types.RunningStore, schemaClient dsutils.SchemaClientBound) (*GetSync, error) {
@@ -42,13 +44,14 @@ func NewGetSync(ctx context.Context, target GetTarget, c *config.SyncProtocol, r
 	}
 
 	return &GetSync{
-		config:       c,
-		target:       target,
-		cancel:       cancel,
-		runningStore: runningStore,
-		ctx:          ctx,
-		schemaClient: schemaClient,
-		paths:        paths,
+		config:        c,
+		target:        target,
+		cancel:        cancel,
+		runningStore:  runningStore,
+		ctx:           ctx,
+		schemaClient:  schemaClient,
+		paths:         paths,
+		syncTreeMutex: &sync.Mutex{},
 	}, nil
 }
 
@@ -95,28 +98,30 @@ func (s *GetSync) Start() error {
 }
 
 func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
+	s.syncTreeMutex.Lock()
+	defer s.syncTreeMutex.Unlock()
+
 	// execute gnmi get
 	resp, err := s.target.Get(s.ctx, req)
 	if err != nil {
 		log.Errorf("sync error: %v", err)
 		return
 	}
-	syncTree, err := s.runningStore.NewEmptyTree(s.ctx)
+
+	s.syncTree, err = s.runningStore.NewEmptyTree(s.ctx)
 	if err != nil {
 		log.Errorf("sync newemptytree error: %v", err)
 		return
 	}
 
-	syncTreeMutex := &sync.Mutex{}
-
 	// process Noifications
-	_, err = processNotifications(s.ctx, resp.GetNotification(), s.schemaClient, syncTree, syncTreeMutex)
+	err = s.processNotifications(resp.GetNotification())
 	if err != nil {
 		log.Errorf("sync process notifications error: %v", err)
 		return
 	}
 
-	result, err := syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
+	result, err := s.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
 	if err != nil {
 		log.Errorf("sync tree export error: %v", err)
 		return
@@ -133,34 +138,26 @@ type GetTarget interface {
 	Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error)
 }
 
-func processNotifications(ctx context.Context, n []*sdcpb.Notification, schemaClient dsutils.SchemaClientBound, syncTree *tree.RootEntry, m *sync.Mutex) ([]*sdcpb.Path, error) {
-
+func (s *GetSync) processNotifications(n []*sdcpb.Notification) error {
 	ts := time.Now().Unix()
 	uif := treetypes.NewUpdateInsertFlags()
 
-	deletes := []*sdcpb.Path{}
-
-	m.Lock()
-	defer m.Unlock()
-
 	for _, noti := range n {
 		// updates
-		upds, err := treetypes.ExpandAndConvertIntent(ctx, schemaClient, tree.RunningIntentName, tree.RunningValuesPrio, noti.Update, ts)
+		upds, err := treetypes.ExpandAndConvertIntent(s.ctx, s.schemaClient, tree.RunningIntentName, tree.RunningValuesPrio, noti.Update, ts)
 		if err != nil {
 			log.Errorf("sync expanding error: %v", err)
 			continue
 		}
 
-		// deletes
-		deletes = append(deletes, noti.GetDelete()...)
-
 		for idx2, upd := range upds {
 			_ = idx2
-			_, err = syncTree.AddUpdateRecursive(ctx, upd.Path(), upd, uif)
+			_, err = s.syncTree.AddUpdateRecursive(s.ctx, upd.Path(), upd, uif)
 			if err != nil {
 				log.Errorf("sync process notifications error: %v, continuing", err)
 			}
 		}
 	}
-	return deletes, nil
+
+	return nil
 }
