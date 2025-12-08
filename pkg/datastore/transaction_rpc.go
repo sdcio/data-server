@@ -405,7 +405,7 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVari
 
 	// export the synctree
 	newRunningIntent, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
-	if err != nil {
+	if err != nil && err != tree.ErrorIntentNotPresent {
 		return err
 	}
 	// write the synctree to disk

@@ -856,6 +856,10 @@ func (s *sharedEntryAttributes) DeleteBranch(ctx context.Context, path *sdcpb.Pa
 		// forward the entry pointer to the parent
 		// depending on the remains var the DeleteSubtree is again called on that parent entry
 		entry = entry.GetParent()
+		if entry == nil {
+			// we made it all the way up to the root. So we have to return.
+			return nil
+		}
 		// calling DeleteSubtree with the empty string, because it should not delete the owner from the higher level keys,
 		// but what it will also do is delete possibly dangling key elements in the tree
 		entry.deleteCanDeleteChilds(true)
