@@ -249,7 +249,7 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 			}
 
 			// convert the key value to the schema defined Typed_Value
-			tv, err := utils.Convert(ctx, item.PathName(), k.GetType())
+			tv, err := sdcpb.TVFromString(k.GetType(), item.PathName(), 0)
 			if err != nil {
 				return err
 			}

@@ -61,10 +61,10 @@ func main() {
 		ReplaceAttr: logf.ReplaceTimeAttr,
 	}
 	if debug {
-		slogOpts.Level = slog.Level(-logger.VDebug)
+		slogOpts.Level = slog.Level(-logf.VDebug)
 	}
 	if trace {
-		slogOpts.Level = slog.Level(-logger.VTrace)
+		slogOpts.Level = slog.Level(-logf.VTrace)
 	}
 
 	log := logr.FromSlogHandler(slog.NewJSONHandler(os.Stdout, slogOpts))
