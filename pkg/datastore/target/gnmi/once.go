@@ -11,6 +11,7 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/utils"
 	"github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/logger"
 )
 
 type OnceSync struct {
@@ -91,7 +92,9 @@ func (s *OnceSync) Start() error {
 }
 
 func (s *OnceSync) Stop() error {
-	// TODO
+	log := logger.FromContext(s.ctx)
+	log.Info("Stopping Sync", "sync", s.config.Name)
+
 	s.cancel()
 	return nil
 }

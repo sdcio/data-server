@@ -17,6 +17,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	dsutils "github.com/sdcio/data-server/pkg/utils"
+	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	log "github.com/sirupsen/logrus"
 )
@@ -84,6 +85,8 @@ func (s *StreamSync) syncConfig() (*gnmi.SubscribeRequest, error) {
 }
 
 func (s *StreamSync) Stop() error {
+	log := logger.FromContext(s.ctx)
+	log.Info("Stopping Sync", "sync", s.config.Name)
 	s.cancel()
 	return nil
 }
