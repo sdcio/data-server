@@ -1,6 +1,7 @@
 package tree
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -18,7 +19,7 @@ func DefaultValueExists(schema *sdcpb.SchemaElem) bool {
 	return false
 }
 
-func DefaultValueRetrieve(schema *sdcpb.SchemaElem, path *sdcpb.Path) (*types.Update, error) {
+func DefaultValueRetrieve(ctx context.Context, schema *sdcpb.SchemaElem, path *sdcpb.Path) (*types.Update, error) {
 	var tv *sdcpb.TypedValue
 	var err error
 	switch schem := schema.GetSchema().(type) {
@@ -27,7 +28,7 @@ func DefaultValueRetrieve(schema *sdcpb.SchemaElem, path *sdcpb.Path) (*types.Up
 		if defaultVal == "" {
 			return nil, fmt.Errorf("no defaults defined for schema path: %s", path.ToXPath(false))
 		}
-		tv, err = utils.Convert(defaultVal, schem.Field.GetType())
+		tv, err = utils.Convert(ctx, defaultVal, schem.Field.GetType())
 		if err != nil {
 			return nil, err
 		}
@@ -38,7 +39,7 @@ func DefaultValueRetrieve(schema *sdcpb.SchemaElem, path *sdcpb.Path) (*types.Up
 		}
 		tvlist := make([]*sdcpb.TypedValue, 0, len(listDefaults))
 		for _, dv := range schem.Leaflist.GetDefaults() {
-			tvelem, err := utils.Convert(dv, schem.Leaflist.GetType())
+			tvelem, err := utils.Convert(ctx, dv, schem.Leaflist.GetType())
 			if err != nil {
 				return nil, fmt.Errorf("error converting default to typed value for %s, type: %s ; value: %s; err: %v", path.ToXPath(false), schem.Leaflist.GetType().GetTypeName(), dv, err)
 			}
@@ -55,5 +56,5 @@ func DefaultValueRetrieve(schema *sdcpb.SchemaElem, path *sdcpb.Path) (*types.Up
 		return nil, fmt.Errorf("no defaults defined for schema path: %s", path.ToXPath(false))
 	}
 
-	return types.NewUpdate(path, tv, DefaultValuesPrio, DefaultsIntentName, 0), nil
+	return types.NewUpdate(nil, tv, DefaultValuesPrio, DefaultsIntentName, 0), nil
 }

@@ -96,6 +96,7 @@ func TestDefaultValueExists(t *testing.T) {
 }
 
 func TestDefaultValueRetrieve(t *testing.T) {
+	ctx := context.TODO()
 	tests := []struct {
 		name       string
 		schemaElem func(t *testing.T) *sdcpb.SchemaElem
@@ -146,7 +147,7 @@ func TestDefaultValueRetrieve(t *testing.T) {
 				return rsp.GetSchema()
 			},
 			wanterr: false,
-			want:    types.NewUpdate(&sdcpb.Path{}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: false}}, DefaultValuesPrio, DefaultsIntentName, 0),
+			want:    types.NewUpdate(nil, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: false}}, DefaultValuesPrio, DefaultsIntentName, 0),
 		},
 		{
 			name: "leaflist default",
@@ -169,12 +170,12 @@ func TestDefaultValueRetrieve(t *testing.T) {
 				return rsp.GetSchema()
 			},
 			wanterr: false,
-			want:    types.NewUpdate(&sdcpb.Path{}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{{Value: &sdcpb.TypedValue_StringVal{StringVal: "foo"}}, {Value: &sdcpb.TypedValue_StringVal{StringVal: "bar"}}}}}}, DefaultValuesPrio, DefaultsIntentName, 0),
+			want:    types.NewUpdate(nil, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{{Value: &sdcpb.TypedValue_StringVal{StringVal: "foo"}}, {Value: &sdcpb.TypedValue_StringVal{StringVal: "bar"}}}}}}, DefaultValuesPrio, DefaultsIntentName, 0),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			val, err := DefaultValueRetrieve(tt.schemaElem(t), &sdcpb.Path{})
+			val, err := DefaultValueRetrieve(ctx, tt.schemaElem(t), &sdcpb.Path{})
 			if tt.wanterr {
 				if err == nil {
 					t.Fatalf("expected err, got non")

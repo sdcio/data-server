@@ -3,6 +3,7 @@ package tree
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -15,9 +16,13 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
-	log "github.com/sirupsen/logrus"
+)
+
+var (
+	ValidationError = errors.New("validation error")
 )
 
 // sharedEntryAttributes contains the attributes shared by Entry and RootEntry
@@ -165,7 +170,7 @@ func (s *sharedEntryAttributes) loadDefaults(ctx context.Context) error {
 	return nil
 }
 
-func (s *sharedEntryAttributes) GetDeviations(ch chan<- *types.DeviationEntry, activeCase bool) {
+func (s *sharedEntryAttributes) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, activeCase bool) {
 	evalLeafvariants := true
 	// if s is a presence container but has active childs, it should not be treated as a presence
 	// container, hence the leafvariants should not be processed. For presence container with
@@ -176,7 +181,7 @@ func (s *sharedEntryAttributes) GetDeviations(ch chan<- *types.DeviationEntry, a
 
 	if evalLeafvariants {
 		// calculate Deviation on the LeafVariants
-		s.leafVariants.GetDeviations(ch, activeCase)
+		s.leafVariants.GetDeviations(ctx, ch, activeCase)
 	}
 
 	// get all active childs
@@ -187,7 +192,7 @@ func (s *sharedEntryAttributes) GetDeviations(ch chan<- *types.DeviationEntry, a
 		// check if c is a active child (choice / case)
 		_, isActiveChild := activeChilds[cName]
 		// recurse the call
-		c.GetDeviations(ch, isActiveChild)
+		c.GetDeviations(ctx, ch, isActiveChild)
 	}
 }
 
@@ -221,6 +226,13 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 
 		// iterate through the keys
 		var item Entry = s
+
+		// construct the key path
+		// doing so outside the loop to reuse
+		path := &sdcpb.Path{
+			IsRootBased: false,
+		}
+
 		for _, k := range keySorted {
 			child, entryExists := s.childs.GetEntry(k.Name)
 			// if the key Leaf exists continue with next key
@@ -230,14 +242,14 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 				lvs := child.GetByOwner(intentName, result)
 				if len(lvs) > 0 {
 					lvs[0].RemoveDeleteFlag()
+					// continue with parent Entry BEFORE continuing the loop
+					item = item.GetParent()
 					continue
 				}
 			}
-			// construct the key path
-			path := s.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(k.Name, nil))
 
 			// convert the key value to the schema defined Typed_Value
-			tv, err := utils.Convert(item.PathName(), k.GetType())
+			tv, err := utils.Convert(ctx, item.PathName(), k.GetType())
 			if err != nil {
 				return err
 			}
@@ -256,13 +268,13 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 			}
 
 			// Add the update to the tree
-			_, err = child.AddUpdateRecursive(ctx, path, types.NewUpdate(path, tv, prio, intentName, 0), insertFlag)
+			_, err = child.AddUpdateRecursive(ctx, path, types.NewUpdate(nil, tv, prio, intentName, 0), insertFlag)
 			if err != nil {
 				return err
 			}
 
 			// continue with parent Entry
-			item = s.parent
+			item = item.GetParent()
 		}
 	}
 	return nil
@@ -799,7 +811,7 @@ func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path *sdc
 		return nil, fmt.Errorf("error trying to load defaults for %s: %v", path.ToXPath(false), err)
 	}
 
-	upd, err := DefaultValueRetrieve(schema.GetSchema(), path)
+	upd, err := DefaultValueRetrieve(ctx, schema.GetSchema(), path)
 	if err != nil {
 		return nil, err
 	}
@@ -847,6 +859,7 @@ func (s *sharedEntryAttributes) DeleteBranch(ctx context.Context, path *sdcpb.Pa
 		// depending on the remains var the DeleteSubtree is again called on that parent entry
 		entry = entry.GetParent()
 		if entry == nil {
+			// we made it all the way up to the root. So we have to return.
 			return nil
 		}
 		// calling DeleteSubtree with the empty string, because it should not delete the owner from the higher level keys,
@@ -1206,122 +1219,10 @@ func (s *sharedEntryAttributes) validatePattern(resultChan chan<- *types.Validat
 	}
 }
 
-// func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.ImportConfigAdapterElement, intentName string, intentPrio int32, insertFlags *types.UpdateInsertFlags) error {
-// 	var err error
-
-// 	switch x := s.schema.GetSchema().(type) {
-// 	case *sdcpb.SchemaElem_Container, nil:
-// 		switch {
-// 		case len(s.schema.GetContainer().GetKeys()) > 0:
-
-// 			var exists bool
-// 			var actualEntry Entry = s
-// 			var keyChild Entry
-// 			schemaKeys := s.GetSchemaKeys()
-// 			slices.Sort(schemaKeys)
-// 			for _, schemaKey := range schemaKeys {
-
-// 				keyTransf := t.GetElement(schemaKey)
-// 				if keyTransf == nil {
-// 					return fmt.Errorf("unable to find key attribute %s under %s", schemaKey, s.SdcpbPath().ToXPath(false))
-// 				}
-// 				keyElemValue, err := keyTransf.GetKeyValue()
-// 				if err != nil {
-// 					return err
-// 				}
-// 				// if the child does not exist, create it
-// 				if keyChild, exists = actualEntry.GetChilds(DescendMethodAll)[keyElemValue]; !exists {
-// 					keyChild, err = newEntry(ctx, actualEntry, keyElemValue, s.treeContext)
-// 					if err != nil {
-// 						return err
-// 					}
-// 				}
-// 				actualEntry = keyChild
-// 			}
-// 			err = actualEntry.ImportConfig(ctx, t, intentName, intentPrio, insertFlags)
-// 			if err != nil {
-// 				return err
-// 			}
-// 		default:
-// 			if len(t.GetElements()) == 0 {
-// 				// it might be a presence container
-// 				schem := s.schema.GetContainer()
-// 				if schem == nil {
-// 					return nil
-// 				}
-// 				if schem.IsPresence {
-// 					tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}
-// 					upd := types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
-// 					s.leafVariants.Add(NewLeafEntry(upd, insertFlags, s))
-// 				}
-// 			}
-
-// 			for _, elem := range t.GetElements() {
-// 				var child Entry
-// 				var exists bool
-
-// 				// if the child does not exist, create it
-// 				if child, exists = s.getChildren()[elem.GetName()]; !exists {
-// 					child, err = newEntry(ctx, s, elem.GetName(), s.treeContext)
-// 					if err != nil {
-// 						return fmt.Errorf("error trying to insert %s at path %s: %w", elem.GetName(), s.SdcpbPath().ToXPath(false), err)
-// 					}
-// 				}
-// 				err = child.ImportConfig(ctx, elem, intentName, intentPrio, insertFlags)
-// 				if err != nil {
-// 					return err
-// 				}
-// 			}
-// 		}
-// 	case *sdcpb.SchemaElem_Field:
-// 		// // if it is as leafref we need to figure out the type of the references field.
-// 		fieldType := x.Field.GetType()
-// 		// if x.Field.GetType().Type == "leafref" {
-// 		// 	s.treeContext.treeSchemaCacheClient.GetSchema(ctx,)
-// 		// }
-
-// 		tv, err := t.GetTVValue(fieldType)
-// 		if err != nil {
-// 			return err
-// 		}
-// 		upd := types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
-
-// 		s.leafVariants.Add(NewLeafEntry(upd, insertFlags, s))
-
-// 	case *sdcpb.SchemaElem_Leaflist:
-// 		var scalarArr *sdcpb.ScalarArray
-// 		mustAdd := false
-// 		le := s.leafVariants.GetByOwner(intentName)
-// 		if le != nil {
-// 			scalarArr = le.Value().GetLeaflistVal()
-// 		} else {
-// 			le = NewLeafEntry(nil, insertFlags, s)
-// 			mustAdd = true
-// 			scalarArr = &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{}}
-// 		}
-
-// 		tv, err := t.GetTVValue(x.Leaflist.GetType())
-// 		if err != nil {
-// 			return err
-// 		}
-
-// 		// the proto implementation will return leaflist tvs
-// 		if tv.GetLeaflistVal() == nil {
-// 			scalarArr.Element = append(scalarArr.Element, tv)
-// 			tv = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: scalarArr}}
-// 		}
-
-// 		le.Update = types.NewUpdate(s.SdcpbPath(), tv, intentPrio, intentName, 0)
-// 		if mustAdd {
-// 			s.leafVariants.Add(le)
-// 		}
-// 	}
-// 	return nil
-// }
-
 // validateMandatory validates that all the mandatory attributes,
 // defined by the schema are present either in the tree or in the index.
 func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats) {
+	log := logf.FromContext(ctx)
 	if s.shouldDelete() {
 		return
 	}
@@ -1353,7 +1254,7 @@ func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultCha
 				}
 
 				if len(attributes) == 0 {
-					log.Errorf("error path: %s, validationg mandatory attribute %s could not be found as child, field or choice.", s.SdcpbPath().ToXPath(false), c.Name)
+					log.Error(ValidationError, "mandatory attribute could not be found as child, field or choice", "path", s.SdcpbPath().ToXPath(false), "attribute", c.Name)
 				}
 
 				s.validateMandatoryWithKeys(ctx, len(s.GetSchema().GetContainer().GetKeys()), attributes, choiceName, resultChan)
@@ -1610,7 +1511,9 @@ func (s *sharedEntryAttributes) SdcpbPath() *sdcpb.Path {
 	if s.schema == nil {
 		path = s.parent.SdcpbPath().DeepCopy()
 		parentSchema, levelsUp := s.GetFirstAncestorWithSchema()
-		keyName := parentSchema.GetSchemaKeys()[levelsUp-1]
+		schemaKeys := parentSchema.GetSchemaKeys()
+		slices.Sort(schemaKeys)
+		keyName := schemaKeys[levelsUp-1]
 		path.GetElem()[len(path.GetElem())-1].Key[keyName] = s.pathElemName
 	} else {
 		path = s.parent.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(s.pathElemName, map[string]string{}))
@@ -1745,22 +1648,25 @@ func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, path *sd
 	var err error
 	relPath := path
 
-	if path.IsRootBased {
+	if path.IsRootBased && !s.IsRoot() {
 		// calculate the relative path for the add
 		relPath, err = path.AbsToRelativePath(s.SdcpbPath())
 		if err != nil {
 			return nil, err
 		}
 	}
+	return s.addUpdateRecursiveInternal(ctx, relPath, 0, u, flags)
+}
+func (s *sharedEntryAttributes) addUpdateRecursiveInternal(ctx context.Context, path *sdcpb.Path, idx int, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error) {
 
 	// make sure all the keys are also present as leafs
-	err = s.checkAndCreateKeysAsLeafs(ctx, u.Owner(), u.Priority(), flags)
+	err := s.checkAndCreateKeysAsLeafs(ctx, u.Owner(), u.Priority(), flags)
 	if err != nil {
 		return nil, err
 	}
 	// end of path reached, add LeafEntry
 	// continue with recursive add otherwise
-	if len(relPath.Elem) == 0 || relPath == nil {
+	if path == nil || len(path.GetElem()) == 0 || idx >= len(path.GetElem()) {
 		// delegate update handling to leafVariants
 		s.leafVariants.Add(NewLeafEntry(u, flags, s))
 		return s, nil
@@ -1769,8 +1675,8 @@ func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, path *sd
 	var e Entry
 	var x Entry = s
 	var exists bool
-	for name := range relPath.GetElem()[0].PathElemNames() {
-		if e, exists = x.GetChild(name); !exists {
+	for name := range path.GetElem()[idx].PathElemNames() {
+		if e, exists = x.GetChilds(DescendMethodAll)[name]; !exists {
 			newE, err := newEntry(ctx, x, name, s.treeContext)
 			if err != nil {
 				return nil, err
@@ -1784,8 +1690,7 @@ func (s *sharedEntryAttributes) AddUpdateRecursive(ctx context.Context, path *sd
 		x = e
 	}
 
-	relPath.Elem = relPath.Elem[1:]
-	return x.AddUpdateRecursive(ctx, relPath, u, flags)
+	return x.addUpdateRecursiveInternal(ctx, path, idx+1, u, flags)
 }
 
 // containsOnlyDefaults checks for presence containers, if only default values are present,

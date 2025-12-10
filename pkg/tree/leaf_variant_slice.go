@@ -19,6 +19,14 @@ func (lvs LeafVariantSlice) ToUpdateSlice() types.UpdateSlice {
 	return result
 }
 
+func (lvs LeafVariantSlice) ToPathAndUpdateSlice() []*types.PathAndUpdate {
+	result := make([]*types.PathAndUpdate, 0, len(lvs))
+	for _, x := range lvs {
+		result = append(result, types.NewPathAndUpdate(x.Path(), x.GetUpdate()))
+	}
+	return result
+}
+
 func (lvs LeafVariantSlice) ToSdcpbUpdateSlice() []*sdcpb.Update {
 	result := make([]*sdcpb.Update, 0, len(lvs))
 	for _, x := range lvs {

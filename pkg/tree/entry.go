@@ -50,6 +50,7 @@ type Entry interface {
 	getOrCreateChilds(ctx context.Context, path *sdcpb.Path) (Entry, error)
 	// AddUpdateRecursive Add the given cache.Update to the tree
 	AddUpdateRecursive(ctx context.Context, relativePath *sdcpb.Path, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
+	addUpdateRecursiveInternal(ctx context.Context, path *sdcpb.Path, idx int, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
 	// StringIndent debug tree struct as indented string slice
 	StringIndent(result []string) []string
 	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
@@ -134,7 +135,7 @@ type Entry interface {
 	TreeExport(owner string) ([]*tree_persist.TreeElement, error)
 	// DeleteBranch Deletes from the tree, all elements of the PathSlice defined branch of the given owner
 	DeleteBranch(ctx context.Context, path *sdcpb.Path, owner string) (err error)
-	GetDeviations(ch chan<- *types.DeviationEntry, activeCase bool)
+	GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, activeCase bool)
 	// GetListChilds collects all the childs of the list. In the tree we store them seperated into their key branches.
 	// this is collecting all the last level key entries.
 	GetListChilds() ([]Entry, error)

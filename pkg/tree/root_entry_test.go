@@ -52,7 +52,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 
 				result.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(&sdcpb.Path{},
+						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 500, owner1, 0,
@@ -114,7 +114,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(&sdcpb.Path{},
+						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 500, owner1, 0,
@@ -180,7 +180,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(&sdcpb.Path{},
+						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 500, owner1, 0,
@@ -190,7 +190,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(&sdcpb.Path{},
+						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "OtherValue"},
 							}, 50, owner2, 0,
@@ -214,7 +214,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(&sdcpb.Path{},
+						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 50, owner2, 0,
@@ -280,7 +280,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(&sdcpb.Path{},
+						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 500, owner1, 0,
@@ -435,7 +435,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 		sharedEntryAttributes func(t *testing.T) *sharedEntryAttributes
 	}
 	type args struct {
-		us    types.UpdateSlice
+		pau   []*types.PathAndUpdate
 		flags *types.UpdateInsertFlags
 	}
 	tests := []struct {
@@ -463,22 +463,28 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 				},
 			},
 			args: args{
-				us: types.UpdateSlice{
-					types.NewUpdate(&sdcpb.Path{
-						Elem: []*sdcpb.PathElem{
-							sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
-							sdcpb.NewPathElem("description", nil),
+				pau: []*types.PathAndUpdate{
+					types.NewPathAndUpdate(
+						&sdcpb.Path{
+							Elem: []*sdcpb.PathElem{
+								sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+								sdcpb.NewPathElem("description", nil),
+							},
 						},
-					}, testhelper.GetStringTvProto("test"), *proto.Int32(5), "owner1", 0),
-					types.NewUpdate(&sdcpb.Path{
-						Elem: []*sdcpb.PathElem{
-							sdcpb.NewPathElem("network-instance", map[string]string{
-								"name": "ni1",
-							}),
-							sdcpb.NewPathElem("protocol", nil),
-							sdcpb.NewPathElem("bgp", nil),
+						types.NewUpdate(nil, testhelper.GetStringTvProto("test"), *proto.Int32(5), "owner1", 0),
+					),
+					types.NewPathAndUpdate(
+						&sdcpb.Path{
+							Elem: []*sdcpb.PathElem{
+								sdcpb.NewPathElem("network-instance", map[string]string{
+									"name": "ni1",
+								}),
+								sdcpb.NewPathElem("protocol", nil),
+								sdcpb.NewPathElem("bgp", nil),
+							},
 						},
-					}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}, *proto.Int32(5), "owner1", 0),
+						types.NewUpdate(nil, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}, *proto.Int32(5), "owner1", 0),
+					),
 				},
 				flags: types.NewUpdateInsertFlags(),
 			},
@@ -524,7 +530,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 			r := &RootEntry{
 				sharedEntryAttributes: tt.fields.sharedEntryAttributes(t),
 			}
-			if err := r.AddUpdatesRecursive(ctx, tt.args.us, tt.args.flags); (err != nil) != tt.wantErr {
+			if err := r.AddUpdatesRecursive(ctx, tt.args.pau, tt.args.flags); (err != nil) != tt.wantErr {
 				t.Errorf("RootEntry.AddUpdatesRecursive() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
@@ -596,7 +602,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := tt.rootEntry(t)
-			got := root.GetUpdatesForOwner(tt.owner)
+			got := root.GetUpdatesForOwner(tt.owner).ToPathAndUpdateSlice()
 
 			tc := NewTreeContext(scb, "intent1")
 			resultRoot, err := NewTreeRoot(ctx, tc)

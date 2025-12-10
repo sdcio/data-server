@@ -15,6 +15,7 @@
 package netconf
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strconv"
@@ -36,7 +37,7 @@ func getNamespaceFromGetSchemaResponse(sr *sdcpb.GetSchemaResponse) string {
 	return ""
 }
 
-func valueAsString(v *sdcpb.TypedValue) (string, error) {
+func valueAsString(ctx context.Context, v *sdcpb.TypedValue) (string, error) {
 	switch v.Value.(type) {
 	case *sdcpb.TypedValue_StringVal:
 		return v.GetStringVal(), nil
@@ -58,7 +59,7 @@ func valueAsString(v *sdcpb.TypedValue) (string, error) {
 		sArr := []string{}
 		// iterate through list elements
 		for _, elem := range v.GetLeaflistVal().Element {
-			val, err := valueAsString(elem)
+			val, err := valueAsString(ctx, elem)
 			if err != nil {
 				return "", err
 			}

@@ -51,7 +51,8 @@ func Test_sharedEntryAttributes_checkAndCreateKeysAsLeafs(t *testing.T) {
 	intentName := "intent1"
 
 	p := &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}}
-	_, err = root.AddUpdateRecursive(ctx, p, types.NewUpdate(p, testhelper.GetStringTvProto("MyDescription"), prio, intentName, 0), flags)
+
+	_, err = root.AddUpdateRecursive(ctx, p, types.NewUpdate(nil, testhelper.GetStringTvProto("MyDescription"), prio, intentName, 0), flags)
 	if err != nil {
 		t.Error(err)
 	}
@@ -66,7 +67,7 @@ func Test_sharedEntryAttributes_checkAndCreateKeysAsLeafs(t *testing.T) {
 		},
 	}
 
-	_, err = root.AddUpdateRecursive(ctx, p, types.NewUpdate(p, testhelper.GetStringTvProto("TheMandatoryValue1"), prio, intentName, 0), flags)
+	_, err = root.AddUpdateRecursive(ctx, p, types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue1"), prio, intentName, 0), flags)
 	if err != nil {
 		t.Error(err)
 	}
@@ -539,7 +540,7 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			root := tt.s(t)
 			ch := make(chan *types.DeviationEntry, 100)
-			root.GetDeviations(ch)
+			root.GetDeviations(ctx, ch)
 			close(ch)
 
 			result := []string{}
@@ -1087,16 +1088,19 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			updSlice := types.UpdateSlice{
-				types.NewUpdate(&sdcpb.Path{
-					Elem: []*sdcpb.PathElem{
-						sdcpb.NewPathElem("doublekey", map[string]string{
-							"key1": "k1.1",
-							"key2": "k1.2",
-						}),
-						sdcpb.NewPathElem("mandato", nil),
-					}, IsRootBased: true,
-				}, testhelper.GetStringTvProto("TheMandatoryValue1"), owner1Prio, owner1, 0),
+			updSlice := []*types.PathAndUpdate{
+				types.NewPathAndUpdate(
+					&sdcpb.Path{
+						Elem: []*sdcpb.PathElem{
+							sdcpb.NewPathElem("doublekey", map[string]string{
+								"key1": "k1.1",
+								"key2": "k1.2",
+							}),
+							sdcpb.NewPathElem("mandato", nil),
+						}, IsRootBased: true,
+					},
+					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue1"), owner1Prio, owner1, 0),
+				),
 			}
 
 			err = root.AddUpdatesRecursive(ctx, updSlice, flagsNew)

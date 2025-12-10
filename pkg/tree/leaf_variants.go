@@ -1,6 +1,7 @@
 package tree
 
 import (
+	"context"
 	"iter"
 	"math"
 	"sync"
@@ -368,7 +369,7 @@ func (lv *LeafVariants) DeleteByOwner(owner string) *LeafEntry {
 	return nil
 }
 
-func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveCase bool) {
+func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, isActiveCase bool) {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 
@@ -453,7 +454,7 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 }
 
 func (lv *LeafVariants) AddExplicitDeleteEntry(intentName string, priority int32) *LeafEntry {
-	le := NewLeafEntry(types.NewUpdate(lv.parentEntry.SdcpbPath(), &sdcpb.TypedValue{}, priority, intentName, 0), types.NewUpdateInsertFlags().SetExplicitDeleteFlag(), lv.parentEntry)
+	le := NewLeafEntry(types.NewUpdate(lv.parentEntry, &sdcpb.TypedValue{}, priority, intentName, 0), types.NewUpdateInsertFlags().SetExplicitDeleteFlag(), lv.parentEntry)
 	lv.Add(le)
 	return le
 }

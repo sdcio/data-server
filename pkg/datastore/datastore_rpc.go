@@ -21,8 +21,8 @@ import (
 	"sync"
 	"time"
 
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
 	"github.com/sdcio/data-server/pkg/cache"
@@ -80,6 +80,21 @@ type Datastore struct {
 // func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Datastore {
 func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc cache.Client, opts ...grpc.DialOption) (*Datastore, error) {
 
+	log := logf.FromContext(ctx)
+	log = log.WithName("datastore").WithValues(
+		"datastore-name", c.Name,
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.Info("new datastore",
+		"target-name", c.Name,
+		"schema-vendor", c.Schema.Vendor,
+		"schema-version", c.Schema.Version,
+		"sbi-type", c.SBI.Type,
+		"sbi-address", c.SBI.Address,
+		"sbi-port", c.SBI.Port,
+	)
+
 	scb := schemaClient.NewSchemaClientBound(c.Schema, sc)
 	tc := tree.NewTreeContext(scb, tree.RunningIntentName)
 	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
@@ -118,7 +133,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 			return
 		}
 		if err != nil {
-			log.Errorf("failed to create SBI for target %s: %v", ds.Config().Name, err)
+			log.Error(err, "failed to create SBI")
 			cancel()
 			return
 		}
@@ -134,30 +149,33 @@ func (d *Datastore) IntentsList(ctx context.Context) ([]string, error) {
 }
 
 func (d *Datastore) initCache(ctx context.Context) {
+	log := logf.FromContext(ctx)
 
 	exists := d.cacheClient.InstanceExists(ctx)
 	if exists {
-		log.Debugf("cache %q already exists", d.config.Name)
+		log.V(logf.VDebug).Info("cache already exists")
 		return
 	}
-	log.Infof("cache %s does not exist, creating it", d.config.Name)
+	log.Info("creating cache instance")
 CREATE:
 	err := d.cacheClient.InstanceCreate(ctx)
 	if err != nil {
-		log.Errorf("failed to create cache %s: %v", d.config.Name, err)
+		log.Error(err, "failed to create cache")
 		time.Sleep(time.Second)
 		goto CREATE
 	}
 }
 
 func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) error {
+	log := logf.FromContext(ctx)
+
 	var err error
 	d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, d, d.config.Sync.Config, d.taskPool, opts...)
 	if err == nil {
 		return nil
 	}
 
-	log.Errorf("failed to create DS %s target: %v", d.config.Name, err)
+	log.Error(err, "failed to create DS target")
 	ticker := time.NewTicker(d.config.SBI.ConnectRetry)
 	defer ticker.Stop()
 
@@ -168,7 +186,7 @@ func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) err
 		case <-ticker.C:
 			d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, d, d.config.Sync.Config, d.taskPool, opts...)
 			if err != nil {
-				log.Errorf("failed to create DS %s target: %v", d.config.Name, err)
+				log.Error(err, "failed to create DS target")
 				continue
 			}
 			return nil
@@ -209,7 +227,7 @@ func (d *Datastore) Stop(ctx context.Context) error {
 	}
 	err := d.sbi.Close(ctx)
 	if err != nil {
-		log.Errorf("datastore %s failed to close the target connection: %v", d.Name(), err)
+		logf.DefaultLogger.Error(err, "datastore failed to close the target connection", "datastore-name", d.Name())
 	}
 	return nil
 }

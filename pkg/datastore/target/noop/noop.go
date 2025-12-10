@@ -49,7 +49,10 @@ func (t *noopTarget) AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) 
 	return nil
 }
 
-func (t *noopTarget) Get(_ context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+func (t *noopTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+	log := logf.FromContext(ctx).WithName("Get")
+	ctx = logf.IntoContext(ctx, log)
+
 	result := &sdcpb.GetDataResponse{
 		Notification: make([]*sdcpb.Notification, 0, len(req.GetPath())),
 	}
@@ -68,6 +71,8 @@ func (t *noopTarget) Get(_ context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 }
 
 func (t *noopTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
+	log := logf.FromContext(ctx).WithName("Set")
+	ctx = logf.IntoContext(ctx, log)
 
 	upds, err := source.ToProtoUpdates(ctx, true)
 	if err != nil {
@@ -104,11 +109,6 @@ func (t *noopTarget) Status() *types.TargetStatus {
 	return &types.TargetStatus{
 		Status: types.TargetStatusConnected,
 	}
-}
-
-func (t *noopTarget) Sync(ctx context.Context, _ *config.Sync) {
-	log := logf.FromContext(ctx)
-	log.Info("starting sync", "target", t.name)
 }
 
 func (t *noopTarget) Close(ctx context.Context) error { return nil }

@@ -15,26 +15,28 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"regexp"
 	"strconv"
 	"strings"
 
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-func Convert(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+func Convert(ctx context.Context, value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+	log := logf.FromContext(ctx)
 	if lst == nil {
 		return nil, fmt.Errorf("schemaleaftype cannot be nil")
 	}
 	switch lst.Type {
 	case "string":
-		return ConvertString(value, lst)
+		return ConvertString(ctx, value, lst)
 	case "union":
-		return ConvertUnion(value, lst.UnionTypes)
+		return ConvertUnion(ctx, value, lst.UnionTypes)
 	case "boolean":
 		return ConvertBoolean(value, lst)
 	case "int8":
@@ -63,41 +65,41 @@ func Convert(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error)
 	case "bits":
 		return ConvertBits(value, lst)
 	case "binary": // https://www.rfc-editor.org/rfc/rfc6020.html#section-9.8
-		return ConvertBinary(value, lst)
+		return ConvertBinary(ctx, value, lst)
 	case "leafref": // https://www.rfc-editor.org/rfc/rfc6020.html#section-9.9
 		// leafrefs are being treated as strings.
 		// further validation needs to happen later in the process
-		return ConvertLeafRef(value, lst)
+		return ConvertLeafRef(ctx, value, lst)
 	case "identityref": //TODO: https://www.rfc-editor.org/rfc/rfc6020.html#section-9.10
 		return ConvertIdentityRef(value, lst)
 	case "instance-identifier": //TODO: https://www.rfc-editor.org/rfc/rfc6020.html#section-9.13
-		return ConvertInstanceIdentifier(value, lst)
+		return ConvertInstanceIdentifier(ctx, value, lst)
 	case "decimal64":
 		return ConvertDecimal64(value, lst)
 	}
-	log.Warnf("type %q not implemented", lst.Type)
-	return ConvertString(value, lst)
+	log.V(logf.VDebug).Info("type conversion not implemented", "type", lst.Type)
+	return ConvertString(ctx, value, lst)
 }
 
-func ConvertInstanceIdentifier(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+func ConvertInstanceIdentifier(ctx context.Context, value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// delegate to string, validation is left for a different party at a later stage in processing
-	return ConvertString(value, slt)
+	return ConvertString(ctx, value, slt)
 }
 
 func ConvertIdentityRef(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	return convertStringToTv(slt, value, 0)
 }
 
-func ConvertBinary(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+func ConvertBinary(ctx context.Context, value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// Binary is basically a base64 encoded string that might carry a length restriction
 	// so we should be fine with delegating to string
-	return ConvertString(value, slt)
+	return ConvertString(ctx, value, slt)
 }
 
-func ConvertLeafRef(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+func ConvertLeafRef(ctx context.Context, value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// a leafref should basically be a string value that also exists somewhere else in the config as a value.
 	// we leave the validation of the leafrefs to a different party at a later stage
-	return ConvertString(value, slt)
+	return ConvertString(ctx, value, slt)
 }
 
 func ConvertEnumeration(value string, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
@@ -298,7 +300,8 @@ func XMLRegexConvert(s string) string {
 	return b.String()
 }
 
-func ConvertString(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+func ConvertString(ctx context.Context, value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+	log := logf.FromContext(ctx)
 	// check length of the string if the length property is set
 	// length will contain a range like string definition "5..60" or "7..10|40..45"
 	if len(lst.Length) != 0 {
@@ -323,7 +326,7 @@ func ConvertString(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, 
 		escaped := XMLRegexConvert(sp.Pattern)
 		re, err := regexp.Compile(escaped)
 		if err != nil {
-			log.Errorf("unable to compile regex %q", sp.Pattern)
+			log.Error(err, "unable to compile regex", "pattern", sp.Pattern)
 		}
 		match := re.MatchString(value)
 		// if it is a match and not inverted
@@ -360,10 +363,10 @@ func ConvertDecimal64(value string, lst *sdcpb.SchemaLeafType) (*sdcpb.TypedValu
 	}, nil
 }
 
-func ConvertUnion(value string, slts []*sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+func ConvertUnion(ctx context.Context, value string, slts []*sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	// iterate over the union types try to convert without error
 	for _, slt := range slts {
-		tv, err := Convert(value, slt)
+		tv, err := Convert(ctx, value, slt)
 		// if no error type conversion was fine
 		if err != nil {
 			continue

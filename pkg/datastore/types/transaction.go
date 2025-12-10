@@ -61,20 +61,21 @@ func (t *Transaction) Confirm() error {
 	return nil
 }
 
-func (t *Transaction) rollback() {
-	ctx := context.Background()
-	t.transactionManager.Rollback(ctx, t.GetRollbackTransaction())
+func (t *Transaction) rollback(ctx context.Context) func() {
+	return func() {
+		t.transactionManager.Rollback(ctx, t.GetRollbackTransaction())
+	}
 }
 
-func (t *Transaction) StartRollbackTimer() error {
+func (t *Transaction) StartRollbackTimer(ctx context.Context) error {
 	if t.timer != nil {
-		return t.timer.Start()
+		return t.timer.Start(ctx)
 	}
 	return nil
 }
 
-func (t *Transaction) SetTimeout(d time.Duration) {
-	t.timer = NewTransactionCancelTimer(d, t.rollback)
+func (t *Transaction) SetTimeout(ctx context.Context, d time.Duration) {
+	t.timer = NewTransactionCancelTimer(d, t.rollback(ctx))
 }
 
 func (t *Transaction) GetIntentNames() []string {
@@ -139,7 +140,7 @@ func (t *Transaction) AddTransactionIntent(ti *TransactionIntent, tit Transactio
 }
 
 // AddIntentContent add the content of an intent. If the intent did not exist, add the name of the intent and content == nil.
-func (t *Transaction) AddIntentContent(name string, tit TransactionIntentType, priority int32, content treetypes.UpdateSlice, explicitDeletes *sdcpb.PathSet) error {
+func (t *Transaction) AddIntentContent(name string, tit TransactionIntentType, priority int32, content []*treetypes.PathAndUpdate, explicitDeletes *sdcpb.PathSet) error {
 	dstMap := t.getTransactionIntentTypeMap(tit)
 	_, exists := dstMap[name]
 	if exists {

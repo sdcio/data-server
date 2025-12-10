@@ -23,8 +23,8 @@ import (
 	"os"
 	"time"
 
+	logf "github.com/sdcio/logger"
 	schemaConfig "github.com/sdcio/schema-server/pkg/config"
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 )
@@ -203,6 +203,7 @@ func (g *GRPCServer) validateSetDefaults() error {
 }
 
 func (t *TLS) NewConfig(ctx context.Context) (*tls.Config, error) {
+	log := logf.FromContext(ctx)
 	tlsCfg := &tls.Config{InsecureSkipVerify: t.SkipVerify}
 	if t.CA != "" {
 		ca, err := os.ReadFile(t.CA)
@@ -224,7 +225,7 @@ func (t *TLS) NewConfig(ctx context.Context) (*tls.Config, error) {
 
 		go func() {
 			if err := certWatcher.Start(ctx); err != nil {
-				log.Errorf("certificate watcher error: %v", err)
+				log.Error(err, "certificate watcher error")
 			}
 		}()
 		tlsCfg.GetCertificate = certWatcher.GetCertificate
