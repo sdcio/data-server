@@ -25,6 +25,10 @@ type OnceSync struct {
 
 func NewOnceSync(ctx context.Context, target SyncTarget, c *config.SyncProtocol, runningStore types.RunningStore, vpoolFactory pool.VirtualPoolFactory) *OnceSync {
 	ctx, cancel := context.WithCancel(ctx)
+	// add the sync name to the logger values
+	log := logger.FromContext(ctx).WithValues("sync", c.Name)
+	ctx = logger.IntoContext(ctx, log)
+
 	return &OnceSync{
 		config:       c,
 		target:       target,
@@ -67,6 +71,8 @@ func (s *OnceSync) syncConfig() (*gnmi.SubscribeRequest, error) {
 }
 
 func (s *OnceSync) Start() error {
+	log := logger.FromContext(s.ctx)
+	log.Info("Starting Sync")
 
 	subReq, err := s.syncConfig()
 	if err != nil {

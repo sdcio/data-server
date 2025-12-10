@@ -6,18 +6,20 @@ import (
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 )
 
 func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, importer importer.ImportConfigAdapter) error {
+
+	log := logger.FromContext(ctx)
 
 	d.syncTreeMutex.Lock()
 	defer d.syncTreeMutex.Unlock()
 	for _, delete := range deletes {
 		err := d.syncTree.DeleteBranch(ctx, delete, tree.RunningIntentName)
 		if err != nil {
-			log.Warnf("failed deleting path (%s) from datastore sync tree: %v", delete.ToXPath(false), err)
+			log.V(logger.VWarn).Error(err, "failed deleting path from datastore sync tree", "path", delete.ToXPath(false))
 			continue
 		}
 	}

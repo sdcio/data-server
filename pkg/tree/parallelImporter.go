@@ -89,7 +89,7 @@ func importHandler(ctx context.Context, task importTask, submit func(importTask)
 			schem := task.entry.GetSchema().GetContainer()
 			if schem != nil && schem.IsPresence {
 				tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}
-				upd := types.NewUpdate(task.entry.SdcpbPath(), tv, task.intentPrio, task.intentName, 0)
+				upd := types.NewUpdate(task.entry, tv, task.intentPrio, task.intentName, 0)
 				task.entry.GetLeafVariantEntries().Add(NewLeafEntry(upd, task.insertFlags, task.entry))
 			}
 			return nil
@@ -112,11 +112,11 @@ func importHandler(ctx context.Context, task importTask, submit func(importTask)
 		return nil
 
 	case *sdcpb.SchemaElem_Field:
-		tv, err := task.importerElement.GetTVValue(x.Field.GetType())
+		tv, err := task.importerElement.GetTVValue(ctx, x.Field.GetType())
 		if err != nil {
 			return err
 		}
-		upd := types.NewUpdate(task.entry.SdcpbPath(), tv, task.intentPrio, task.intentName, 0)
+		upd := types.NewUpdate(task.entry, tv, task.intentPrio, task.intentName, 0)
 		task.entry.GetLeafVariantEntries().Add(NewLeafEntry(upd, task.insertFlags, task.entry))
 		return nil
 
@@ -154,7 +154,7 @@ func importHandler(ctx context.Context, task importTask, submit func(importTask)
 			scalarArr = &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{}}
 		}
 
-		tv, err := task.importerElement.GetTVValue(x.Leaflist.GetType())
+		tv, err := task.importerElement.GetTVValue(ctx, x.Leaflist.GetType())
 		if err != nil {
 			return err
 		}
@@ -162,7 +162,7 @@ func importHandler(ctx context.Context, task importTask, submit func(importTask)
 			scalarArr.Element = append(scalarArr.Element, tv)
 			tv = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: scalarArr}}
 		}
-		le.Update = types.NewUpdate(task.entry.SdcpbPath(), tv, task.intentPrio, task.intentName, 0)
+		le.Update = types.NewUpdate(task.entry, tv, task.intentPrio, task.intentName, 0)
 		if mustAdd {
 			task.entry.GetLeafVariantEntries().Add(le)
 		}

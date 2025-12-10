@@ -31,18 +31,14 @@ import (
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/utils"
 	dsutils "github.com/sdcio/data-server/pkg/utils"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/keepalive"
 
-	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
-)
-
-const (
-	syncRetryWaitTime = 10 * time.Second
 )
 
 type gnmiTarget struct {
@@ -116,6 +112,9 @@ func (t *gnmiTarget) Subscribe(ctx context.Context, req *gnmi.SubscribeRequest, 
 }
 
 func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+	log := logf.FromContext(ctx).WithName("Get")
+	ctx = logf.IntoContext(ctx, log)
+
 	var err error
 	gnmiReq := &gnmi.GetRequest{
 		Path: make([]*gnmi.Path, 0, len(req.GetPath())),
@@ -135,6 +134,9 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 	if err != nil {
 		return nil, err
 	}
+
+	log.V(logf.VDebug).Info("gnmi request", "raw-request", utils.FormatProtoJSON(gnmiReq))
+
 	// execute the gnmi get
 	gnmiRsp, err := t.target.Get(ctx, gnmiReq)
 	if err != nil {
@@ -145,13 +147,16 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 		Notification: make([]*sdcpb.Notification, 0, len(gnmiRsp.GetNotification())),
 	}
 	for _, n := range gnmiRsp.GetNotification() {
-		sn := utils.ToSchemaNotification(n)
+		sn := utils.ToSchemaNotification(ctx, n)
 		schemaRsp.Notification = append(schemaRsp.Notification, sn)
 	}
 	return schemaRsp, nil
 }
 
 func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (*sdcpb.SetDataResponse, error) {
+	log := logf.FromContext(ctx).WithName("Set")
+	ctx = logf.IntoContext(ctx, log)
+
 	var upds []*sdcpb.Update
 	var deletes []*sdcpb.Path
 	var err error
@@ -213,7 +218,7 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 		setReq.Update = append(setReq.Update, gupd)
 	}
 
-	log.Debugf("gnmi set request:\n%s", prototext.Format(setReq))
+	log.V(logf.VDebug).Info("gnmi request", "raw-request", utils.FormatProtoJSON(setReq))
 
 	rsp, err := t.target.Set(ctx, setReq)
 	if err != nil {
@@ -275,66 +280,6 @@ func (t *gnmiTarget) AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) 
 	}
 	return nil
 }
-
-// func (t *gnmiTarget) Sync(octx context.Context, syncConfig *config.Sync) {
-// 	if t != nil && t.target != nil && t.target.Config != nil {
-// 		log.Infof("starting target %s sync", t.target.Config.Name)
-// 	}
-// 	var cancel context.CancelFunc
-// 	var ctx context.Context
-// 	var err error
-// START:
-// 	if cancel != nil {
-// 		cancel()
-// 	}
-// 	ctx, cancel = context.WithCancel(octx)
-// 	defer cancel()
-
-// 	// todo: do not run read subscriptions for GET
-// 	for _, gnmiSync := range syncConfig.Config {
-// 		switch gnmiSync.Mode {
-// 		case "once":
-// 			err = t.periodicSync(ctx, gnmiSync)
-// 		case "get":
-// 			err = t.getSync(ctx, gnmiSync)
-// 		default:
-// 			err = t.streamSync(ctx, gnmiSync)
-// 		}
-// 		if err != nil {
-// 			log.Errorf("target=%s: failed to sync: %v", t.target.Config.Name, err)
-// 			time.Sleep(syncRetryWaitTime)
-// 			goto START
-// 		}
-// 	}
-
-// 	defer t.target.StopSubscriptions()
-
-// 	rspch, errCh := t.target.ReadSubscriptions()
-// 	for {
-// 		select {
-// 		case <-ctx.Done():
-// 			if !errors.Is(ctx.Err(), context.Canceled) {
-// 				log.Errorf("datastore %s sync stopped: %v", t.target.Config.Name, ctx.Err())
-// 			}
-// 			return
-// 		case rsp := <-rspch:
-// 			switch r := rsp.Response.Response.(type) {
-// 			case *gnmi.SubscribeResponse_Update:
-// 				syncCh <- &SyncUpdate{
-// 					Store:  rsp.SubscriptionName,
-// 					Update: utils.ToSchemaNotification(r.Update),
-// 				}
-// 			}
-// 		case err := <-errCh:
-// 			if err.Err != nil {
-// 				t.target.StopSubscriptions()
-// 				log.Errorf("%s: sync subscription failed: %v", t.target.Config.Name, err)
-// 				time.Sleep(time.Second)
-// 				goto START
-// 			}
-// 		}
-// 	}
-// }
 
 func (t *gnmiTarget) Close(ctx context.Context) error {
 	if t == nil {

@@ -19,7 +19,6 @@ import (
 	dsutils "github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 )
 
 type StreamSync struct {
@@ -34,6 +33,10 @@ type StreamSync struct {
 
 func NewStreamSync(ctx context.Context, target SyncTarget, c *config.SyncProtocol, runningStore types.RunningStore, schemaClient dsutils.SchemaClientBound, vpoolFactory pool.VirtualPoolFactory) *StreamSync {
 	ctx, cancel := context.WithCancel(ctx)
+
+	// add the sync name to the logger values
+	log := logger.FromContext(ctx).WithValues("sync", c.Name)
+	ctx = logger.IntoContext(ctx, log)
 
 	return &StreamSync{
 		config:       c,
@@ -86,7 +89,7 @@ func (s *StreamSync) syncConfig() (*gnmi.SubscribeRequest, error) {
 
 func (s *StreamSync) Stop() error {
 	log := logger.FromContext(s.ctx)
-	log.Info("Stopping Sync", "sync", s.config.Name)
+	log.Info("Stopping Sync")
 	s.cancel()
 	return nil
 }
@@ -96,6 +99,8 @@ func (s *StreamSync) Name() string {
 }
 
 func (s *StreamSync) Start() error {
+	log := logger.FromContext(s.ctx)
+	log.Info("Starting Sync")
 
 	updChan := make(chan *NotificationData, 20)
 
@@ -115,9 +120,10 @@ func (s *StreamSync) Start() error {
 }
 
 func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, syncResponse <-chan struct{}) {
+	log := logger.FromContext(s.ctx)
 	syncTree, err := s.runningStore.NewEmptyTree(s.ctx)
 	if err != nil {
-		log.Errorf("error creating new sync tree: %v", err)
+		log.Error(err, "failure creating new sync tree")
 		return
 	}
 	syncTreeMutex := &sync.Mutex{}
@@ -132,7 +138,7 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, sy
 	for {
 		select {
 		case <-s.ctx.Done():
-			log.Debugf(">>>>>>>>>>>>>>>>>> Sync %s context done", s.config.Name)
+			log.V(logger.VDebug).Info("stopping sync due to context done")
 			return
 		case noti, ok := <-cUS:
 			if !ok {
@@ -140,15 +146,14 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, sy
 			}
 			err := syncTree.AddUpdatesRecursive(s.ctx, noti.updates, uif)
 			if err != nil {
-				log.Errorf("error adding to sync tree: %v", err)
+				log.Error(err, "failed adding update to synctree")
 			}
 			syncTree.AddExplicitDeletes(tree.RunningIntentName, tree.RunningValuesPrio, noti.deletes)
 		case <-syncResponse:
 			syncTree, err = s.syncToRunning(syncTree, syncTreeMutex, true)
 			tickerActive = true
 			if err != nil {
-				// TODO
-				log.Errorf("syncToRunning Error %v", err)
+				log.Error(err, "failed committing synctree to running")
 			}
 		case <-ticker.C:
 			if !tickerActive {
@@ -158,8 +163,7 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, sy
 			log.Info("SyncRunning due to ticker")
 			syncTree, err = s.syncToRunning(syncTree, syncTreeMutex, true)
 			if err != nil {
-				// TODO
-				log.Errorf("syncToRunning Error %v", err)
+				log.Error(err, "failed committing synctree to running")
 			}
 		}
 	}
@@ -167,7 +171,8 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, sy
 
 func (s *StreamSync) gnmiSubscribe(subReq *gnmi.SubscribeRequest, updChan chan<- *NotificationData, syncResponse chan<- struct{}) {
 	var err error
-	log.Infof("sync %q: subRequest: %v", s.config.Name, subReq)
+	log := logger.FromContext(s.ctx)
+	log.V(logger.VTrace).Info("starting gnmi subscription", "subscripton", subReq)
 
 	respChan, errChan := s.target.Subscribe(s.ctx, subReq, s.config.Name)
 
@@ -185,7 +190,7 @@ func (s *StreamSync) gnmiSubscribe(subReq *gnmi.SubscribeRequest, updChan chan<-
 				return
 			}
 			if err != nil {
-				log.Errorf("Error stream sync: %s", err)
+				log.Error(err, "failed stream sync")
 				return
 			}
 		case resp, ok := <-respChan:
@@ -196,22 +201,22 @@ func (s *StreamSync) gnmiSubscribe(subReq *gnmi.SubscribeRequest, updChan chan<-
 			case *gnmi.SubscribeResponse_Update:
 				err = taskPool.Submit(newNotificationProcessorTask(resp.GetUpdate(), taskParams))
 				if err != nil {
-					log.Errorf("error processing Notifications: %s", err)
+					log.Error(err, "failure processing notifications")
 					continue
 				}
 			case *gnmi.SubscribeResponse_SyncResponse:
-				log.Info("SyncResponse flag received")
-				log.Infof("Duration since sync Start: %s", time.Since(syncStartTime))
+				log.Info("SyncResponse flag received", "initial sync duration", time.Since(syncStartTime))
 				syncResponse <- struct{}{}
 
 			case *gnmi.SubscribeResponse_Error:
-				log.Error(r.Error.Message)
+				log.Error(nil, "gnmi subscription error", "error", r.Error.Message)
 			}
 		}
 	}
 }
 
 func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, m *sync.Mutex, logCount bool) (*tree.RootEntry, error) {
+	log := logger.FromContext(s.ctx)
 	m.Lock()
 	defer m.Unlock()
 
@@ -223,7 +228,7 @@ func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, m *sync.Mutex, logC
 			// all good no data present
 			return syncTree, nil
 		}
-		log.Errorf("sync tree export error: %v", err)
+		log.Error(err, "sync tree export error: %v")
 		return s.runningStore.NewEmptyTree(s.ctx)
 	}
 	// extract the explicit deletes
@@ -231,18 +236,18 @@ func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, m *sync.Mutex, logC
 	// set them to nil
 	result.ExplicitDeletes = nil
 	if logCount {
-		log.Infof("Syncing: %d elements, %d deletes ", result.GetRoot().CountTerminals(), len(result.GetExplicitDeletes()))
+		log.V(logger.VDebug).Info("syncing to running", "elements", result.GetRoot().CountTerminals(), "deletes", len(result.GetExplicitDeletes()))
 	}
 
-	log.Infof("TreeExport to proto took: %s", time.Since(startTime))
+	log.V(logger.VTrace).Info("synctree export done", "duration", time.Since(startTime))
 	startTime = time.Now()
 
 	err = s.runningStore.ApplyToRunning(s.ctx, deletes, proto.NewProtoTreeImporter(result))
 	if err != nil {
-		log.Errorf("sync import to running error: %v", err)
+		log.Error(err, "failed importing sync to running")
 		return s.runningStore.NewEmptyTree(s.ctx)
 	}
-	log.Infof("Import to SyncTree took: %s", time.Since(startTime))
+	log.V(logger.VTrace).Info("import to running tree done", "duration", time.Since(startTime))
 	return s.runningStore.NewEmptyTree(s.ctx)
 }
 
@@ -251,7 +256,7 @@ type SyncTarget interface {
 }
 
 type NotificationData struct {
-	updates treetypes.UpdateSlice
+	updates []*treetypes.PathAndUpdate
 	deletes *sdcpb.PathSet
 }
 
@@ -280,11 +285,12 @@ func newNotificationProcessorTask(item *gnmi.Notification, params *NotificationP
 }
 
 func (t *notificationProcessorTask) Run(ctx context.Context, _ func(pool.Task) error) error {
-	sn := dsutils.ToSchemaNotification(t.item)
+	log := logger.FromContext(ctx)
+	sn := dsutils.ToSchemaNotification(ctx, t.item)
 	// updates
 	upds, err := treetypes.ExpandAndConvertIntent(ctx, t.params.schemaClientBound, tree.RunningIntentName, tree.RunningValuesPrio, sn.GetUpdate(), t.item.GetTimestamp())
 	if err != nil {
-		log.Errorf("sync expanding error: %v", err)
+		log.Error(err, "expansion and conversion failed")
 	}
 
 	deletes := sdcpb.NewPathSet()

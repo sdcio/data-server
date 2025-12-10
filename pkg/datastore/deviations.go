@@ -38,8 +38,7 @@ func (d *Datastore) StopDeviationsWatch(peer string) {
 }
 
 func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig) {
-	log := logf.FromContext(ctx)
-	log = log.WithValues("target-name", d.config.Name)
+	log := logf.FromContext(ctx).WithName("DeviationManager").WithValues("target-name", d.config.Name)
 	ctx = logf.IntoContext(ctx, log)
 
 	log.Info("starting deviation manager")

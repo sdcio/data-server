@@ -209,8 +209,7 @@ func New(ctx context.Context, c *config.Config) (*Server, error) {
 }
 
 func (s *Server) Serve(ctx context.Context) error {
-	log := logf.FromContext(ctx).WithValues("grpc-server-address", s.config.GRPCServer.Address)
-	ctx = logf.IntoContext(ctx, log)
+	log := logf.FromContext(ctx)
 	l, err := net.Listen("tcp", s.config.GRPCServer.Address)
 	if err != nil {
 		return err
@@ -222,7 +221,7 @@ func (s *Server) Serve(ctx context.Context) error {
 
 	go s.startDataServer(ctx)
 
-	log.Info("starting server")
+	log.Info("starting server", "address", s.config.GRPCServer.Address)
 	err = s.srv.Serve(l)
 	if err != nil {
 		return err

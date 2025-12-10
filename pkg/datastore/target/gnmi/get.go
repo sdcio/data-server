@@ -14,7 +14,6 @@ import (
 	dsutils "github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 )
 
 type GetSync struct {
@@ -31,6 +30,10 @@ type GetSync struct {
 
 func NewGetSync(ctx context.Context, target GetTarget, c *config.SyncProtocol, runningStore types.RunningStore, schemaClient dsutils.SchemaClientBound) (*GetSync, error) {
 	ctx, cancel := context.WithCancel(ctx)
+
+	// add the sync name to the logger values
+	log := logger.FromContext(ctx).WithValues("sync", c.Name)
+	ctx = logger.IntoContext(ctx, log)
 
 	paths := make([]*sdcpb.Path, 0, len(c.Paths))
 	// iterate referenced paths
@@ -80,6 +83,9 @@ func (s *GetSync) Name() string {
 }
 
 func (s *GetSync) Start() error {
+	log := logger.FromContext(s.ctx)
+	log.Info("Starting Sync")
+
 	req, err := s.syncConfig()
 	if err != nil {
 		return err
@@ -109,38 +115,40 @@ func (s *GetSync) Start() error {
 }
 
 func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
+	log := logger.FromContext(s.ctx)
+
 	s.syncTreeMutex.Lock()
 	defer s.syncTreeMutex.Unlock()
 
 	// execute gnmi get
 	resp, err := s.target.Get(s.ctx, req)
 	if err != nil {
-		log.Errorf("sync error: %v", err)
+		log.Error(err, "error performing gnmi get from target")
 		return
 	}
 
 	s.syncTree, err = s.runningStore.NewEmptyTree(s.ctx)
 	if err != nil {
-		log.Errorf("sync newemptytree error: %v", err)
+		log.Error(err, "failure creating new synctree")
 		return
 	}
 
 	// process Noifications
 	err = s.processNotifications(resp.GetNotification())
 	if err != nil {
-		log.Errorf("sync process notifications error: %v", err)
+		log.Error(err, "failed processing notifications")
 		return
 	}
 
 	result, err := s.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
 	if err != nil {
-		log.Errorf("sync tree export error: %v", err)
+		log.Error(err, "failure exporting synctree")
 		return
 	}
 
 	err = s.runningStore.ApplyToRunning(s.ctx, s.paths, proto.NewProtoTreeImporter(result))
 	if err != nil {
-		log.Errorf("sync import to running error: %v", err)
+		log.Error(err, "failure importing synctree export into running")
 		return
 	}
 }
@@ -150,6 +158,7 @@ type GetTarget interface {
 }
 
 func (s *GetSync) processNotifications(n []*sdcpb.Notification) error {
+	log := logger.FromContext(s.ctx)
 	ts := time.Now().Unix()
 	uif := treetypes.NewUpdateInsertFlags()
 
@@ -157,15 +166,15 @@ func (s *GetSync) processNotifications(n []*sdcpb.Notification) error {
 		// updates
 		upds, err := treetypes.ExpandAndConvertIntent(s.ctx, s.schemaClient, tree.RunningIntentName, tree.RunningValuesPrio, noti.Update, ts)
 		if err != nil {
-			log.Errorf("sync expanding error: %v", err)
+			log.Error(err, "failure expanding and converting notification")
 			continue
 		}
 
 		for idx2, upd := range upds {
 			_ = idx2
-			_, err = s.syncTree.AddUpdateRecursive(s.ctx, upd.Path(), upd, uif)
+			_, err = s.syncTree.AddUpdateRecursive(s.ctx, upd.GetPath(), upd.GetUpdate(), uif)
 			if err != nil {
-				log.Errorf("sync process notifications error: %v, continuing", err)
+				log.Error(err, "failure adding update to synctree")
 			}
 		}
 	}

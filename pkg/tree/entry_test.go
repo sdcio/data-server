@@ -1926,7 +1926,8 @@ func Test_Validation_MultiKey_Pattern(t *testing.T) {
 				t.Error(err)
 			}
 
-			validationResult, _ := root.Validate(context.TODO(), validationConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			validationResult, _ := root.Validate(context.TODO(), validationConfig, sharedPool)
 
 			// Should have no errors - all keys match their respective patterns
 			if validationResult.HasErrors() {

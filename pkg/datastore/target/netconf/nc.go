@@ -96,6 +96,7 @@ func (t *ncTarget) GetImportAdapter(ctx context.Context, req *sdcpb.GetDataReque
 func (t *ncTarget) internalGet(ctx context.Context, req *sdcpb.GetDataRequest) (*nctypes.NetconfResponse, error) {
 	log := logf.FromContext(ctx).WithName("Get")
 	ctx = logf.IntoContext(ctx, log)
+
 	if !t.Status().IsConnected() {
 		return nil, fmt.Errorf("%s", types.TargetStatusNotConnected)
 	}
@@ -122,7 +123,8 @@ func (t *ncTarget) internalGet(ctx context.Context, req *sdcpb.GetDataRequest) (
 	if err != nil {
 		return nil, err
 	}
-	log.V(logf.VDebug).Info("using netconf filter", "filter", filterDoc)
+
+	log.V(logf.VDebug).Info("netconf get", "filter", filterDoc, "source", source)
 
 	// execute the GetConfig rpc
 	ncResponse, err := t.driver.GetConfig(source, filterDoc)
@@ -138,7 +140,6 @@ func (t *ncTarget) internalGet(ctx context.Context, req *sdcpb.GetDataRequest) (
 }
 
 func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
-
 	ncResponse, err := t.internalGet(ctx, req)
 	if err != nil {
 		return nil, err
