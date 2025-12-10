@@ -29,7 +29,12 @@ func NewOnceSync(ctx context.Context, target SyncTarget, c *config.SyncProtocol,
 		cancel:       cancel,
 		runningStore: runningStore,
 		vpoolFactory: vpoolFactory,
+		ctx:          ctx,
 	}
+}
+
+func (s *OnceSync) Name() string {
+	return s.config.Name
 }
 
 func (s *OnceSync) syncConfig() (*gnmi.SubscribeRequest, error) {

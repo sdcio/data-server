@@ -24,6 +24,8 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/datastore/target/gnmi"
+	"github.com/sdcio/data-server/pkg/datastore/target/netconf"
+	"github.com/sdcio/data-server/pkg/datastore/target/noop"
 	"github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/pool"
 )
@@ -39,7 +41,7 @@ type Target interface {
 	Set(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error)
 	AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) error
 	Status() *types.TargetStatus
-	Close() error
+	Close(ctx context.Context) error
 }
 
 func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemaClient.SchemaClientBound, runningStore types.RunningStore, syncConfigs []*config.SyncProtocol, taskpoolFactory pool.VirtualPoolFactory, opts ...grpc.DialOption) (Target, error) {
@@ -52,10 +54,16 @@ func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemaC
 		if err != nil {
 			return nil, err
 		}
-	// case targetTypeNETCONF:
-	// return newNCTarget(ctx, name, cfg, schemaClient)
-	// case targetTypeNOOP, "":
-	// 	return newNoopTarget(ctx, name)
+	case targetTypeNETCONF:
+		t, err = netconf.NewNCTarget(ctx, name, cfg, runningStore, schemaClient)
+		if err != nil {
+			return nil, err
+		}
+	case targetTypeNOOP, "":
+		t, err = noop.NewNoopTarget(ctx, name)
+		if err != nil {
+			return nil, err
+		}
 	default:
 		return nil, fmt.Errorf("unknown DS target type %q", cfg.Type)
 	}

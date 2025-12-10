@@ -199,7 +199,7 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 		return nil, err
 	}
 
-	err = ds.Stop()
+	err = ds.Stop(s.ctx)
 	if err != nil {
 		log.Errorf("failed to stop datastore %s: %v", name, err)
 	}

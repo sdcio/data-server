@@ -267,17 +267,8 @@ func (t *gnmiTarget) AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) 
 			g = NewStreamSync(ctx, t, sp, t.runningStore, t.schemaClient, t.taskpoolFactory)
 		}
 		t.syncs[sp.Name] = g
-		err := g.Start()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
-func (t *gnmiTarget) Sync() error {
-	for _, v := range t.syncs {
-		err := v.Start()
+		err := g.Start()
 		if err != nil {
 			return err
 		}
@@ -345,7 +336,7 @@ func (t *gnmiTarget) Sync() error {
 // 	}
 // }
 
-func (t *gnmiTarget) Close() error {
+func (t *gnmiTarget) Close(ctx context.Context) error {
 	if t == nil {
 		return nil
 	}

@@ -78,6 +78,10 @@ func (s *StreamSync) Stop() error {
 	return nil
 }
 
+func (s *StreamSync) Name() string {
+	return s.config.Name
+}
+
 func (s *StreamSync) Start() error {
 
 	updChan := make(chan *NotificationData, 20)

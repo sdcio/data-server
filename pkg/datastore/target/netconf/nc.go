@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package target
+package netconf
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -28,29 +27,35 @@ import (
 
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
-	"github.com/sdcio/data-server/pkg/datastore/target/netconf"
 	"github.com/sdcio/data-server/pkg/datastore/target/netconf/driver/scrapligo"
+	nctypes "github.com/sdcio/data-server/pkg/datastore/target/netconf/types"
 	"github.com/sdcio/data-server/pkg/datastore/target/types"
+	"github.com/sdcio/data-server/pkg/tree/importer"
+	"github.com/sdcio/data-server/pkg/tree/importer/xml"
 )
 
 type ncTarget struct {
 	name   string
-	driver netconf.Driver
+	driver Driver
 
 	m *sync.Mutex
 
+	syncs            map[string]NetconfSync
 	schemaClient     schemaClient.SchemaClientBound
 	sbiConfig        *config.SBI
-	xml2sdcpbAdapter *netconf.XML2sdcpbConfigAdapter
+	xml2sdcpbAdapter *XML2sdcpbConfigAdapter
+	runningStore     types.RunningStore
 }
 
-func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient schemaClient.SchemaClientBound) (*ncTarget, error) {
+func NewNCTarget(_ context.Context, name string, cfg *config.SBI, runningStore types.RunningStore, schemaClient schemaClient.SchemaClientBound) (*ncTarget, error) {
 	t := &ncTarget{
 		name:             name,
 		m:                new(sync.Mutex),
 		schemaClient:     schemaClient,
 		sbiConfig:        cfg,
-		xml2sdcpbAdapter: netconf.NewXML2sdcpbConfigAdapter(schemaClient),
+		xml2sdcpbAdapter: NewXML2sdcpbConfigAdapter(schemaClient),
+		syncs:            map[string]NetconfSync{},
+		runningStore:     runningStore,
 	}
 	var err error
 	// create a new NETCONF driver
@@ -61,15 +66,42 @@ func newNCTarget(_ context.Context, name string, cfg *config.SBI, schemaClient s
 	return t, nil
 }
 
-func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+func (t *ncTarget) AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) error {
+	for _, sp := range sps {
+		ncSync, err := NewNetconfSyncImpl(ctx, t.name, t, sp, t.runningStore)
+		if err != nil {
+			return err
+		}
+		t.syncs[sp.Name] = ncSync
+
+		err = ncSync.Start()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *ncTarget) GetImportAdapter(ctx context.Context, req *sdcpb.GetDataRequest) (importer.ImportConfigAdapter, error) {
+	ncResponse, err := t.internalGet(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	cmlImport := xml.NewXmlTreeImporter(ncResponse.Doc.Root())
+
+	return cmlImport, nil
+}
+
+func (t *ncTarget) internalGet(ctx context.Context, req *sdcpb.GetDataRequest) (*nctypes.NetconfResponse, error) {
 	if !t.Status().IsConnected() {
 		return nil, fmt.Errorf("%s", types.TargetStatusNotConnected)
 	}
 	source := "running"
 
 	// init a new XMLConfigBuilder for the pathfilter
-	pathfilterXmlBuilder := netconf.NewXMLConfigBuilder(t.schemaClient,
-		&netconf.XMLConfigBuilderOpts{
+	pathfilterXmlBuilder := NewXMLConfigBuilder(t.schemaClient,
+		&XMLConfigBuilderOpts{
 			HonorNamespace:         t.sbiConfig.NetconfOptions.IncludeNS,
 			OperationWithNamespace: t.sbiConfig.NetconfOptions.OperationWithNamespace,
 			UseOperationRemove:     t.sbiConfig.NetconfOptions.UseOperationRemove,
@@ -94,20 +126,21 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	ncResponse, err := t.driver.GetConfig(source, filterDoc)
 	if err != nil {
 		if strings.Contains(err.Error(), "EOF") {
-			t.Close()
+			t.Close(ctx)
 			go t.reconnect()
 		}
 		return nil, err
 	}
-
 	log.Debugf("%s: netconf response:\n%s", t.name, ncResponse.DocAsString())
+	return ncResponse, err
+}
 
-	// cmlImport := xml.NewXmlTreeImporter(ncResponse.Doc.Root())
+func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
 
-	// treeCacheSchemaClient := tree.NewTreeSchemaCacheClient(t.name, nil, d.getValidationClient())
-	// tc := tree.NewTreeContext(treeCacheSchemaClient, tree.RunningIntentName)
-
-	// NewTreeRoot
+	ncResponse, err := t.internalGet(ctx, req)
+	if err != nil {
+		return nil, err
+	}
 
 	// start transformation, which yields the sdcpb_Notification
 	noti, err := t.xml2sdcpbAdapter.Transform(ctx, ncResponse.Doc)
@@ -129,9 +162,9 @@ func (t *ncTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.S
 
 	switch t.sbiConfig.NetconfOptions.CommitDatastore {
 	case "running":
-		return t.setRunning(source)
+		return t.setRunning(ctx, source)
 	case "candidate":
-		return t.setCandidate(source)
+		return t.setCandidate(ctx, source)
 	}
 	// should not get here if the config validation happened.
 	return nil, fmt.Errorf("unknown commit-datastore: %s", t.sbiConfig.NetconfOptions.CommitDatastore)
@@ -149,87 +182,7 @@ func (t *ncTarget) Status() *types.TargetStatus {
 	return result
 }
 
-func (t *ncTarget) Sync(ctx context.Context, syncConfig *config.Sync) {
-	log.Infof("starting target %s [%s] sync", t.name, t.sbiConfig.Address)
-
-	for _, ncc := range syncConfig.Config {
-		// periodic get
-		log.Debugf("target %s, starting sync: %s, Interval: %s, Paths: [ \"%s\" ]", t.name, ncc.Name, ncc.Interval.String(), strings.Join(ncc.Paths, "\", \""))
-		go func(ncSync *config.SyncProtocol) {
-			t.internalSync(ctx, ncSync, true)
-			ticker := time.NewTicker(ncSync.Interval)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C:
-					t.internalSync(ctx, ncSync, false)
-				}
-			}
-		}(ncc)
-	}
-
-	<-ctx.Done()
-	if !errors.Is(ctx.Err(), context.Canceled) {
-		log.Errorf("datastore %s sync stopped: %v", t.name, ctx.Err())
-	}
-}
-
-func (t *ncTarget) internalSync(ctx context.Context, sc *config.SyncProtocol, force bool) {
-	if !t.Status().IsConnected() {
-		return
-	}
-	// iterate syncConfig
-	paths := make([]*sdcpb.Path, 0, len(sc.Paths))
-	// iterate referenced paths
-	for _, p := range sc.Paths {
-		path, err := sdcpb.ParsePath(p)
-		if err != nil {
-			log.Errorf("failed Parsing Path %q, %v", p, err)
-			return
-		}
-		// add the parsed path
-		paths = append(paths, path)
-	}
-
-	// init a DataRequest
-	req := &sdcpb.GetDataRequest{
-		Name:     sc.Name,
-		Path:     paths,
-		DataType: sdcpb.DataType_CONFIG,
-	}
-
-	// execute netconf get
-	resp, err := t.Get(ctx, req)
-	if err != nil {
-		log.Errorf("failed getting config from target %v: %T | %v", t.name, err, err)
-		if strings.Contains(err.Error(), "EOF") {
-			t.Close()
-			go t.reconnect()
-		}
-		return
-	}
-	_ = resp
-	// // push notifications into syncCh
-	// syncCh <- &SyncUpdate{
-	// 	Start: true,
-	// 	Force: force,
-	// }
-	// notificationsCount := 0
-	// for _, n := range resp.GetNotification() {
-	// 	syncCh <- &SyncUpdate{
-	// 		Update: n,
-	// 	}
-	// 	notificationsCount++
-	// }
-	// log.Debugf("%s: sync-ed %d notifications", t.name, notificationsCount)
-	// syncCh <- &SyncUpdate{
-	// 	End: true,
-	// }
-}
-
-func (t *ncTarget) Close() error {
+func (t *ncTarget) Close(ctx context.Context) error {
 	if t == nil {
 		return nil
 	}
@@ -261,7 +214,7 @@ func (t *ncTarget) reconnect() {
 	}
 }
 
-func (t *ncTarget) setRunning(source types.TargetSource) (*sdcpb.SetDataResponse, error) {
+func (t *ncTarget) setRunning(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
 
 	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
 	if err != nil {
@@ -287,7 +240,7 @@ func (t *ncTarget) setRunning(source types.TargetSource) (*sdcpb.SetDataResponse
 	if err != nil {
 		log.Errorf("datastore %s failed edit-config: %v", t.name, err)
 		if strings.Contains(err.Error(), "EOF") {
-			t.Close()
+			t.Close(ctx)
 			go t.reconnect()
 			return nil, err
 		}
@@ -321,7 +274,7 @@ func filterRPCErrors(xml *etree.Document, severity string) ([]string, error) {
 	return result, nil
 }
 
-func (t *ncTarget) setCandidate(source types.TargetSource) (*sdcpb.SetDataResponse, error) {
+func (t *ncTarget) setCandidate(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
 	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
 	if err != nil {
 		return nil, err
@@ -346,7 +299,7 @@ func (t *ncTarget) setCandidate(source types.TargetSource) (*sdcpb.SetDataRespon
 	if err != nil {
 		log.Errorf("datastore %s failed edit-config: %v", t.name, err)
 		if strings.Contains(err.Error(), "EOF") {
-			t.Close()
+			t.Close(ctx)
 			go t.reconnect()
 			return nil, err
 		}
@@ -367,7 +320,7 @@ func (t *ncTarget) setCandidate(source types.TargetSource) (*sdcpb.SetDataRespon
 	err = t.driver.Commit()
 	if err != nil {
 		if strings.Contains(err.Error(), "EOF") {
-			t.Close()
+			t.Close(ctx)
 			go t.reconnect()
 		}
 		return nil, err

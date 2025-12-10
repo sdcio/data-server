@@ -79,9 +79,9 @@ func NewDatastoreMap() *DatastoreMap {
 		datastores: map[string]*datastore.Datastore{},
 	}
 }
-func (d *DatastoreMap) StopAll() {
+func (d *DatastoreMap) StopAll(ctx context.Context) {
 	for _, ds := range d.datastores {
-		ds.Stop()
+		ds.Stop(ctx)
 	}
 }
 
@@ -238,7 +238,7 @@ func (s *Server) ServeHTTP() {
 
 func (s *Server) Stop() {
 	s.srv.Stop()
-	s.datastores.StopAll()
+	s.datastores.StopAll(s.ctx)
 	s.cfn()
 }
 

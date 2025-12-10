@@ -199,7 +199,7 @@ func (d *Datastore) ConnectionState() *targettypes.TargetStatus {
 	return d.sbi.Status()
 }
 
-func (d *Datastore) Stop() error {
+func (d *Datastore) Stop(ctx context.Context) error {
 	if d == nil {
 		return nil
 	}
@@ -207,7 +207,7 @@ func (d *Datastore) Stop() error {
 	if d.sbi == nil {
 		return nil
 	}
-	err := d.sbi.Close()
+	err := d.sbi.Close(ctx)
 	if err != nil {
 		log.Errorf("datastore %s failed to close the target connection: %v", d.Name(), err)
 	}
