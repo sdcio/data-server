@@ -47,6 +47,10 @@ func (s *sharedEntryAttributes) ImportConfig(
 }
 
 func importHandler(ctx context.Context, task importTask, submit func(importTask) error) error {
+
+	elem := task.entry.PathName()
+	_ = elem
+
 	switch x := task.entry.GetSchema().GetSchema().(type) {
 	case *sdcpb.SchemaElem_Container, nil:
 		// keyed container: handle keys sequentially
@@ -117,16 +121,32 @@ func importHandler(ctx context.Context, task importTask, submit func(importTask)
 		return nil
 
 	case *sdcpb.SchemaElem_Leaflist:
-		llm, loaded := task.leafListLock.LoadOrStore(task.entry.SdcpbPath().ToXPath(false), &sync.Mutex{})
-		_ = loaded
-		llMutex := llm.(*sync.Mutex)
+		// for the leaflist, since in XML the leaf list elements are independet elements, we need to make
+		// sure that the first element is basically resetting the leaflist and all consecutive elemts are then
+		// added to the already resettet leaflist.
+		// strategy here is to create a mutex lock it and try to store it in the leafListLock map.
+		// if the mutex was then stored, we're the first goroutine and need to reset. If we get a different mutex back
+		// and the the loaded var is set to true, we should not reset the list and trxy to lock the returned mutex.
+
+		// create a mutex and lock it
+		llMutex := &sync.Mutex{}
 		llMutex.Lock()
+
+		// try storing it or load it from leafListLock
+		llm, loaded := task.leafListLock.LoadOrStore(task.entry.SdcpbPath().ToXPath(false), llMutex)
+
+		// if it was loaded, we need to lock the loaded mutex
+		if loaded {
+			llMutex = llm.(*sync.Mutex)
+			llMutex.Lock()
+		}
 		defer llMutex.Unlock()
 
 		var scalarArr *sdcpb.ScalarArray
 		mustAdd := false
-		le := task.entry.GetLeafVariantEntries().GetByOwner(task.intentName)
-		if le != nil {
+		var le *LeafEntry
+		if loaded {
+			le = task.entry.GetLeafVariantEntries().GetByOwner(task.intentName)
 			scalarArr = le.Value().GetLeaflistVal()
 		} else {
 			le = NewLeafEntry(nil, task.insertFlags, task.entry)
