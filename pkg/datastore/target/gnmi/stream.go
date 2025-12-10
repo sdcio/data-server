@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/openconfig/gnmi/proto/gnmi_ext"
 	gapi "github.com/openconfig/gnmic/pkg/api"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/utils"
@@ -65,6 +66,15 @@ func (s *StreamSync) syncConfig() (*gnmi.SubscribeRequest, error) {
 		gapi.EncodingCustom(utils.ParseGnmiEncoding(s.config.Encoding)),
 		gapi.SubscriptionListModeSTREAM(),
 		gapi.Subscription(subscriptionOpts...),
+		gapi.Extension(&gnmi_ext.Extension{
+			Ext: &gnmi_ext.Extension_ConfigSubscription{
+				ConfigSubscription: &gnmi_ext.ConfigSubscription{
+					Action: &gnmi_ext.ConfigSubscription_Start{
+						Start: &gnmi_ext.ConfigSubscriptionStart{},
+					},
+				},
+			},
+		}),
 	)
 	subReq, err := gapi.NewSubscribeRequest(opts...)
 	if err != nil {
