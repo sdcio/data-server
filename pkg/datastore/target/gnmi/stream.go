@@ -205,7 +205,7 @@ func (s *StreamSync) gnmiSubscribe(subReq *gnmi.SubscribeRequest, updChan chan<-
 					continue
 				}
 			case *gnmi.SubscribeResponse_SyncResponse:
-				log.Info("SyncResponse flag received", "initial sync duration", time.Since(syncStartTime))
+				log.Info("SyncResponse flag received", "initial sync duration", time.Since(syncStartTime).String())
 				syncResponse <- struct{}{}
 
 			case *gnmi.SubscribeResponse_Error:
@@ -239,7 +239,7 @@ func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, m *sync.Mutex, logC
 		log.V(logger.VDebug).Info("syncing to running", "elements", result.GetRoot().CountTerminals(), "deletes", len(result.GetExplicitDeletes()))
 	}
 
-	log.V(logger.VTrace).Info("synctree export done", "duration", time.Since(startTime))
+	log.V(logger.VTrace).Info("synctree export done", "duration", time.Since(startTime).String())
 	startTime = time.Now()
 
 	err = s.runningStore.ApplyToRunning(s.ctx, deletes, proto.NewProtoTreeImporter(result))
@@ -247,7 +247,7 @@ func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, m *sync.Mutex, logC
 		log.Error(err, "failed importing sync to running")
 		return s.runningStore.NewEmptyTree(s.ctx)
 	}
-	log.V(logger.VTrace).Info("import to running tree done", "duration", time.Since(startTime))
+	log.V(logger.VTrace).Info("import to running tree done", "duration", time.Since(startTime).String())
 	return s.runningStore.NewEmptyTree(s.ctx)
 }
 
