@@ -24,7 +24,7 @@ require (
 	github.com/sdcio/cache v0.0.38
 	github.com/sdcio/logger v0.0.3
 	github.com/sdcio/schema-server v0.0.33
-	github.com/sdcio/sdc-protos v0.0.46
+	github.com/sdcio/sdc-protos v0.0.47-0.20251211154748-3fe70d30c2c1
 	github.com/sdcio/yang-parser v0.0.12
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/pflag v1.0.10
