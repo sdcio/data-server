@@ -4,8 +4,6 @@ go 1.24.0
 
 replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.2-2
 
-replace github.com/sdcio/sdc-protos => /home/mava/projects/sdc-protos
-
 require (
 	github.com/AlekSi/pointer v1.2.0
 	github.com/beevik/etree v1.6.0
@@ -26,7 +24,7 @@ require (
 	github.com/sdcio/cache v0.0.38
 	github.com/sdcio/logger v0.0.2
 	github.com/sdcio/schema-server v0.0.33
-	github.com/sdcio/sdc-protos v0.0.46
+	github.com/sdcio/sdc-protos v0.0.47
 	github.com/sdcio/yang-parser v0.0.12
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/pflag v1.0.10
