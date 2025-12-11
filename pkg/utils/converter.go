@@ -86,7 +86,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 						return nil, err
 					}
 					// convert key string value to real typedvalue
-					newUpd.Value, err = sdcpb.ConvertToTypedValue(rsp.GetSchema(), v, 0)
+					newUpd.Value, err = sdcpb.SchemaElemToTV(rsp.GetSchema(), v, 0)
 					if err != nil {
 						return nil, err
 					}
@@ -202,7 +202,7 @@ func (c *Converter) ExpandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Updat
 				return nil, err
 			}
 
-			intUpd.Value, err = (&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}).ToYANGType(schemaRsp.GetSchema())
+			intUpd.Value, err = sdcpb.SchemaElemToTV(schemaRsp.GetSchema(), v, 0)
 			if err != nil {
 				return nil, err
 			}
@@ -305,7 +305,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 					if err != nil {
 						return nil, err
 					}
-					upd.Value, err = (&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: fmt.Sprintf("%v", v)}}).ToYANGType(schemaRsp.GetSchema())
+					upd.Value, err = sdcpb.SchemaElemToTV(schemaRsp.GetSchema(), fmt.Sprintf("%v", v), 0)
 					if err != nil {
 						return nil, err
 					}
@@ -330,12 +330,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				switch x := v.(type) {
 				case []any:
 					for _, e := range x {
-						tv := &sdcpb.TypedValue{
-							Value: &sdcpb.TypedValue_StringVal{
-								StringVal: fmt.Sprintf("%v", e),
-							},
-						}
-						tvYangType, err := tv.ToYANGType(se)
+						tvYangType, err := sdcpb.SchemaElemToTV(se, fmt.Sprintf("%v", e), 0)
 						if err != nil {
 							return nil, err
 						}
