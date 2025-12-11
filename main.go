@@ -58,10 +58,10 @@ func main() {
 	}
 
 	if debug {
-		slogOpts.Level = slog.Level(logf.VDebug)
+		slogOpts.Level = slog.Level(-logf.VDebug)
 	}
 	if trace {
-		slogOpts.Level = slog.Level(logf.VTrace)
+		slogOpts.Level = slog.Level(-logf.VTrace)
 	}
 
 	log := logr.FromSlogHandler(slog.NewJSONHandler(os.Stdout, slogOpts))
