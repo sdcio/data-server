@@ -151,30 +151,35 @@ func (p *Pool[T]) Start(handler func(ctx context.Context, item T, submit func(T)
 	// then close the queue so workers exit. Also handle ctx cancellation (force-close).
 	go func() {
 		// We'll wait on the condition variable instead of busy looping.
-		p.inflightMu.Lock()
-		defer p.inflightMu.Unlock()
-		for {
-			// If CloseForSubmit was called, wait for inflight==0 and queue empty then close queue.
-			if p.closedForSubmit.Load() {
-				for atomic.LoadInt64(&p.inflight) != 0 || p.tasks.Len() != 0 {
-					p.inflightC.Wait()
+		shouldForceClose := false
+		func() {
+			p.inflightMu.Lock()
+			defer p.inflightMu.Unlock()
+			for {
+				// If CloseForSubmit was called, wait for inflight==0 and queue empty then close queue.
+				if p.closedForSubmit.Load() {
+					for atomic.LoadInt64(&p.inflight) != 0 || p.tasks.Len() != 0 {
+						p.inflightC.Wait()
+					}
+					// Now safe to close queue: there is no inflight and no queued items
+					p.closeOnce.Do(func() { p.tasks.Close() })
+					return
 				}
-				// Now safe to close queue: there is no inflight and no queued items
-				p.closeOnce.Do(func() { p.tasks.Close() })
-				return
-			}
 
-			// If ctx canceled -> force-close path.
-			if p.ctx.Err() != nil {
-				// we hold inflightMu; unlock before calling forceClose (which may broadcast/use locks).
-				p.inflightMu.Unlock()
-				p.forceClose()
-				return
-			}
+				// If ctx canceled -> force-close path.
+				if p.ctx.Err() != nil {
+					shouldForceClose = true
+					return
+				}
 
-			// Wait to be signalled when either inflight changes or CloseForSubmit is called.
-			p.inflightC.Wait()
-			// loop and recheck conditions
+				// Wait to be signalled when either inflight changes or CloseForSubmit is called.
+				p.inflightC.Wait()
+				// loop and recheck conditions
+			}
+		}()
+
+		if shouldForceClose {
+			p.forceClose()
 		}
 	}()
 }
