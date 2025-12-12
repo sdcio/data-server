@@ -222,6 +222,8 @@ func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, m *sync.Mutex, logC
 
 	startTime := time.Now()
 	result, err := syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
+	log.V(logger.VTrace).Info("exported tree", "tree", result.String())
+
 	if err != nil {
 		if errors.Is(err, tree.ErrorIntentNotPresent) {
 			log.Info("sync no config changes")

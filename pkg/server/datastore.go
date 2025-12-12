@@ -88,13 +88,16 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 	name := req.GetDatastoreName()
 	lName := len(name)
 	if lName == 0 {
+		log.V(logf.VError).Info("missing datastore name attribute")
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
 	}
 	if lName > math.MaxUint16 {
-		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
+		log.V(logf.VError).Info("datastore name attribute too long")
+		return nil, status.Error(codes.InvalidArgument, "datastore name attribute too long")
 	}
 
 	if _, err := s.datastores.GetDataStore(name); err == nil {
+		log.V(logf.VError).Info("datastore already exists")
 		return nil, status.Errorf(codes.InvalidArgument, "datastore %s already exists", name)
 	}
 
@@ -112,6 +115,7 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		case sdcpb.CommitCandidate_COMMIT_RUNNING:
 			commitDatastore = "running"
 		default:
+			log.V(logf.VError).Info("unknown commitDatastore", "datastore", req.GetTarget().GetNetconfOpts().GetCommitCandidate())
 			return nil, fmt.Errorf("unknown commitDatastore: %v", req.GetTarget().GetNetconfOpts().GetCommitCandidate())
 		}
 		sbi.NetconfOptions = &config.SBINetconfOptions{
@@ -126,7 +130,8 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 			Encoding: req.GetTarget().GetGnmiOpts().GetEncoding(),
 		}
 	default:
-		return nil, fmt.Errorf("unknowm protocol type %s", req.GetTarget().GetType())
+		log.V(logf.VError).Info("unknowm targetconnection protocol type", "type", req.GetTarget().GetType())
+		return nil, fmt.Errorf("unknowm targetconnection protocol type %s", req.GetTarget().GetType())
 	}
 
 	if req.GetTarget().GetTls() != nil {
@@ -185,13 +190,15 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 				gnSyncConfig.Encoding = pSync.GetTarget().GetGnmiOpts().GetEncoding()
 			case "netconf":
 			default:
-				return nil, status.Errorf(codes.InvalidArgument, "unknown sync protocol: %q", pSync.GetTarget().GetType())
+				log.V(logf.VError).Info("unknown targetsync protocol type", "protocol", pSync.GetTarget().GetType())
+				return nil, status.Errorf(codes.InvalidArgument, "unknown targetsync protocol: %q", pSync.GetTarget().GetType())
 			}
 			dsConfig.Sync.Config = append(dsConfig.Sync.Config, gnSyncConfig)
 		}
 	}
 	err := dsConfig.ValidateSetDefaults()
 	if err != nil {
+		log.Error(err, "invalid datastore config")
 		return nil, status.Errorf(codes.InvalidArgument, "invalid datastore config: %v", err)
 	}
 	ds, err := datastore.New(
@@ -201,12 +208,15 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		s.cacheClient,
 		s.gnmiOpts...)
 	if err != nil {
+		log.Error(err, "failed creating new datastore")
 		return nil, err
 	}
 	err = s.datastores.AddDatastore(ds)
 	if err != nil {
+		log.Error(err, "failed adding new datastore")
 		return nil, err
 	}
+	log.Info("datastore created successfully")
 	return &sdcpb.CreateDataStoreResponse{}, nil
 }
 

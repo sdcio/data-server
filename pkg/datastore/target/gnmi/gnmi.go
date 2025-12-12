@@ -182,7 +182,9 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 			if err != nil {
 				return nil, err
 			}
-			upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: jsonBytes}}}}
+			if len(jsonBytes) > 0 {
+				upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: jsonBytes}}}}
+			}
 		}
 
 	case "json_ietf":
@@ -195,7 +197,9 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 			if err != nil {
 				return nil, err
 			}
-			upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonIetfVal{JsonIetfVal: jsonBytes}}}}
+			if len(jsonBytes) > 0 {
+				upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonIetfVal{JsonIetfVal: jsonBytes}}}}
+			}
 		}
 
 	case "proto":
@@ -203,6 +207,10 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	if len(deletes) == 0 && len(upds) == 0 {
+		return &sdcpb.SetDataResponse{}, nil
 	}
 
 	setReq := &gnmi.SetRequest{

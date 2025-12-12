@@ -56,6 +56,9 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 		return nil, err
 	}
 
+	p := upd.GetPath()
+	_ = p
+
 	// skip state
 	if rsp.GetSchema().IsState() {
 		return nil, nil
@@ -144,9 +147,13 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 			if err != nil {
 				return nil, err
 			}
-			switch v := v.(type) {
-			case string:
-				upd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
+			upd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: string(jsonValue)}}
+		}
+
+		if upd.Value.GetStringVal() != "" && rsp.Field.GetType().GetTypeName() != "string" {
+			upd.Value, err = Convert(ctx, upd.GetValue().GetStringVal(), rsp.Field.GetType())
+			if err != nil {
+				return nil, err
 			}
 		}
 
