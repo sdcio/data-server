@@ -52,6 +52,7 @@ func NewNetconfSyncImpl(ctx context.Context, targetName string, target GetXMLImp
 		targetName:   targetName,
 		runningStore: runningStore,
 		target:       target,
+		paths:        paths,
 	}, nil
 }
 

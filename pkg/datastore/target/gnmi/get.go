@@ -32,7 +32,7 @@ func NewGetSync(ctx context.Context, target GetTarget, c *config.SyncProtocol, r
 	ctx, cancel := context.WithCancel(ctx)
 
 	// add the sync name to the logger values
-	log := logger.FromContext(ctx).WithValues("sync", c.Name)
+	log := logger.FromContext(ctx).WithValues("sync", c.Name).WithValues("type", "GET")
 	ctx = logger.IntoContext(ctx, log)
 
 	paths := make([]*sdcpb.Path, 0, len(c.Paths))
@@ -116,6 +116,7 @@ func (s *GetSync) Start() error {
 
 func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
 	log := logger.FromContext(s.ctx)
+	log.V(logger.VDebug).Info("syncing")
 
 	s.syncTreeMutex.Lock()
 	defer s.syncTreeMutex.Unlock()
@@ -159,12 +160,11 @@ type GetTarget interface {
 
 func (s *GetSync) processNotifications(n []*sdcpb.Notification) error {
 	log := logger.FromContext(s.ctx)
-	ts := time.Now().Unix()
 	uif := treetypes.NewUpdateInsertFlags()
 
 	for _, noti := range n {
 		// updates
-		upds, err := treetypes.ExpandAndConvertIntent(s.ctx, s.schemaClient, tree.RunningIntentName, tree.RunningValuesPrio, noti.Update, ts)
+		upds, err := treetypes.ExpandAndConvertIntent(s.ctx, s.schemaClient, tree.RunningIntentName, tree.RunningValuesPrio, noti.Update, noti.GetTimestamp())
 		if err != nil {
 			log.Error(err, "failure expanding and converting notification")
 			continue
