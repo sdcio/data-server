@@ -14,6 +14,7 @@ import (
 	dsutils "github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type GetSync struct {
@@ -145,6 +146,11 @@ func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
 	if err != nil {
 		log.Error(err, "failure exporting synctree")
 		return
+	}
+
+	if log.V(logger.VTrace).Enabled() {
+		data, _ := protojson.Marshal(result)
+		log.V(logger.VTrace).Info("sync content", "data", string(data))
 	}
 
 	err = s.runningStore.ApplyToRunning(s.ctx, s.paths, proto.NewProtoTreeImporter(result))

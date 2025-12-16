@@ -51,7 +51,9 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			log.Info("starting deviation calc run - pre-lock")
 			d.m.RLock()
+			log.Info("starting deviation calc run - post-lock")
 			deviationClientNames := make([]string, 0, len(d.deviationClients))
 			deviationClients := map[string]sdcpb.DataServer_WatchDeviationsServer{}
 			for clientIdentifier, devStream := range d.deviationClients {
