@@ -397,23 +397,28 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVariantSlice, deletes treetypes.DeleteEntriesList) error {
 	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(tree.RunningIntentName, tree.RunningValuesPrio)
 
-	// lock the syncTree
-	d.syncTreeMutex.Lock()
+	// wrap the lock in an anonymous function to be able to utilize defer for the unlock
+	err := func() error {
+		// lock the syncTree
+		d.syncTreeMutex.Lock()
+		defer d.syncTreeMutex.Unlock()
 
-	// perform deletes
-	err := d.syncTree.DeleteBranchPaths(ctx, deletes, tree.RunningIntentName)
+		// perform deletes
+		err := d.syncTree.DeleteBranchPaths(ctx, deletes, tree.RunningIntentName)
+		if err != nil {
+			return err
+		}
+
+		// add the calculated updates to the tree, as running with adjusted prio and owner
+		err = d.syncTree.AddUpdatesRecursive(ctx, runningUpdates, treetypes.NewUpdateInsertFlags())
+		if err != nil {
+			return err
+		}
+		return nil
+	}()
 	if err != nil {
 		return err
 	}
-
-	// add the calculated updates to the tree, as running with adjusted prio and owner
-	err = d.syncTree.AddUpdatesRecursive(ctx, runningUpdates, treetypes.NewUpdateInsertFlags())
-	if err != nil {
-		return err
-	}
-
-	// release the syncTree lock
-	d.syncTreeMutex.Unlock()
 
 	// export the synctree
 	newRunningIntent, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)

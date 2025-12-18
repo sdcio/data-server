@@ -253,20 +253,20 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.DataServer_WatchDeviationsServer) error {
 	ctx := stream.Context()
 	p, ok := peer.FromContext(ctx)
-	log := logf.FromContext(ctx).WithName("WatchDeviations").WithValues("peer", p.String())
+	var peerName string
+	if ok {
+		peerName = p.Addr.String()
+	}
+	log := logf.FromContext(ctx).WithName("WatchDeviations").WithValues("peer", peerName)
 	ctx = logf.IntoContext(ctx, log)
 
 	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 
-	peerInfo, ok := peer.FromContext(ctx)
 	if !ok {
 		return status.Errorf(codes.InvalidArgument, "missing peer info")
 	}
-	if req.GetName() == nil {
-		return status.Errorf(codes.InvalidArgument, "missing datastore name")
-	}
 
-	if len(req.GetName()) == 0 {
+	if req.GetName() == nil || len(req.GetName()) == 0 {
 		return status.Errorf(codes.InvalidArgument, "missing datastore name")
 	}
 
@@ -279,9 +279,10 @@ func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.
 	err = ds.WatchDeviations(req, stream)
 	if err != nil {
 		log.Error(err, "failed to watch deviations")
+		return err
 	}
 	<-stream.Context().Done()
-	ds.StopDeviationsWatch(peerInfo.Addr.String())
+	ds.StopDeviationsWatch(peerName)
 	return nil
 }
 

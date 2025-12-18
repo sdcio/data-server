@@ -50,16 +50,13 @@ type Datastore struct {
 	// schemaClient sdcpb.SchemaServerClient
 	schemaClient schemaClient.SchemaClientBound
 
+	ctx context.Context
 	// stop cancel func
 	cfn context.CancelFunc
 
 	// keeps track of clients watching deviation updates
 	m                *sync.RWMutex
 	deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer
-
-	// per path intent deviations (no unhandled)
-	md                       *sync.RWMutex
-	currentIntentsDeviations map[string][]*sdcpb.WatchDeviationResponse
 
 	// datastore mutex locks the whole datasore for further set operations
 	dmutex *sync.Mutex
@@ -70,9 +67,6 @@ type Datastore struct {
 	// SyncTree
 	syncTree      *tree.RootEntry
 	syncTreeMutex *sync.RWMutex
-
-	// owned by sync
-	syncTreeCandidate *tree.RootEntry
 
 	taskPool *pool.SharedTaskPool
 }
@@ -105,23 +99,22 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 
 	ccb := cache.NewCacheClientBound(c.Name, cc)
 
+	ctx, cancel := context.WithCancel(ctx)
+
 	ds := &Datastore{
-		config:                   c,
-		schemaClient:             scb,
-		cacheClient:              ccb,
-		m:                        &sync.RWMutex{},
-		md:                       &sync.RWMutex{},
-		dmutex:                   &sync.Mutex{},
-		deviationClients:         make(map[string]sdcpb.DataServer_WatchDeviationsServer),
-		currentIntentsDeviations: make(map[string][]*sdcpb.WatchDeviationResponse),
-		syncTree:                 syncTreeRoot,
-		syncTreeMutex:            &sync.RWMutex{},
-		taskPool:                 pool.NewSharedTaskPool(ctx, runtime.NumCPU()),
+		config:           c,
+		schemaClient:     scb,
+		ctx:              ctx,
+		cfn:              cancel,
+		cacheClient:      ccb,
+		m:                &sync.RWMutex{},
+		dmutex:           &sync.Mutex{},
+		deviationClients: make(map[string]sdcpb.DataServer_WatchDeviationsServer),
+		syncTree:         syncTreeRoot,
+		syncTreeMutex:    &sync.RWMutex{},
+		taskPool:         pool.NewSharedTaskPool(ctx, runtime.NumCPU()),
 	}
 	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
-
-	ctx, cancel := context.WithCancel(ctx)
-	ds.cfn = cancel
 
 	// create cache instance if needed
 	// this is a blocking call

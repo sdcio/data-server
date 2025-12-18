@@ -27,14 +27,18 @@ func (d *Datastore) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdc
 	pName := p.Addr.String()
 
 	d.deviationClients[pName] = stream
+
+	log := logf.FromContext(d.ctx)
+	log.Info("new deviation client", "client", pName)
 	return nil
 }
 
 func (d *Datastore) StopDeviationsWatch(peer string) {
+	log := logf.FromContext(d.ctx)
+	log.Info("deviation client removed", "peer", peer)
 	d.m.Lock()
 	defer d.m.Unlock()
 	delete(d.deviationClients, peer)
-	logf.DefaultLogger.V(logf.VDebug).Info("deviation watcher removed", "peer", peer)
 }
 
 func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig) {
@@ -45,19 +49,25 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 	ticker := time.NewTicker(c.Interval)
 	defer func() {
 		ticker.Stop()
+		log.Info("deviation manager stopped")
 	}()
 	for {
 		select {
 		case <-ctx.Done():
+			log.Info("datastore context done, stopping deviation manager")
 			return
 		case <-ticker.C:
-			log.Info("starting deviation calc run - pre-lock")
+			log.V(logf.VDebug).Info("deviation calc run - start")
 			d.m.RLock()
-			log.Info("starting deviation calc run - post-lock")
 			deviationClientNames := make([]string, 0, len(d.deviationClients))
 			deviationClients := map[string]sdcpb.DataServer_WatchDeviationsServer{}
 			for clientIdentifier, devStream := range d.deviationClients {
 				deviationClients[clientIdentifier] = devStream
+				if devStream.Context().Err() != nil {
+					log.V(logf.VWarn).Error(devStream.Context().Err(), "removing deviation client", "client", clientIdentifier)
+					delete(deviationClients, clientIdentifier)
+					continue
+				}
 				deviationClientNames = append(deviationClientNames, clientIdentifier)
 			}
 			d.m.RUnlock()
@@ -75,11 +85,13 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 					log.Error(err, "error sending deviation", "client-identifier", clientIdentifier)
 				}
 			}
-			deviationChan, err := d.calculateDeviations(ctx)
+			start := time.Now()
+			deviationChan, err := d.calculateDeviations()
 			if err != nil {
 				log.Error(err, "failed to calculate deviations")
 				continue
 			}
+			log.V(logf.VDebug).Info("calculated deviations", "duration", time.Since(start))
 			d.SendDeviations(ctx, deviationChan, deviationClients)
 			for clientIdentifier, dc := range deviationClients {
 				err := dc.Send(&sdcpb.WatchDeviationResponse{
@@ -90,6 +102,7 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 					log.Error(err, "error sending deviation", "client-identifier", clientIdentifier)
 				}
 			}
+			log.V(logf.VDebug).Info("deviation calc run - finished")
 		}
 	}
 }
@@ -139,17 +152,17 @@ type DeviationEntry interface {
 	ExpectedValue() *sdcpb.TypedValue
 }
 
-func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.DeviationEntry, error) {
+func (d *Datastore) calculateDeviations() (<-chan *treetypes.DeviationEntry, error) {
 	deviationChan := make(chan *treetypes.DeviationEntry, 10)
 
 	d.syncTreeMutex.RLock()
-	deviationTree, err := d.syncTree.DeepCopy(ctx)
+	deviationTree, err := d.syncTree.DeepCopy(d.ctx)
+	d.syncTreeMutex.RUnlock()
 	if err != nil {
 		return nil, err
 	}
-	d.syncTreeMutex.RUnlock()
 
-	addedIntentNames, err := d.LoadAllButRunningIntents(ctx, deviationTree, true)
+	addedIntentNames, err := d.LoadAllButRunningIntents(d.ctx, deviationTree, true)
 	if err != nil {
 		return nil, err
 	}
@@ -159,13 +172,13 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 		deviationChan <- treetypes.NewDeviationEntry(n, treetypes.DeviationReasonIntentExists, nil)
 	}
 
-	err = deviationTree.FinishInsertionPhase(ctx)
+	err = deviationTree.FinishInsertionPhase(d.ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	go func() {
-		deviationTree.GetDeviations(ctx, deviationChan)
+		deviationTree.GetDeviations(d.ctx, deviationChan)
 		close(deviationChan)
 	}()
 
