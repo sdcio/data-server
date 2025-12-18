@@ -2,7 +2,6 @@ package datastore
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/sdcio/data-server/pkg/config"
