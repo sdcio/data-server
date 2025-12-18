@@ -115,14 +115,19 @@ func (p *Pool[T]) Start(handler func(ctx context.Context, item T, submit func(T)
 					return
 				}
 
-				// If ctx canceled, we must still decrement inflight for this item and skip handler.
-				if p.ctx.Err() != nil {
-					p.addInflight(-1)
-					continue
-				}
-
 				// run handler (handler may call p.Submit)
-				if err := handler(workerCtx, item, func(it T) error { return p.Submit(it) }); err != nil {
+				var err error
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							p.addInflight(-1)
+							panic(r)
+						}
+					}()
+					err = handler(workerCtx, item, func(it T) error { return p.Submit(it) })
+				}()
+
+				if err != nil {
 					// store first error safely (allocate on heap)
 					ep := new(error)
 					*ep = err
@@ -207,35 +212,12 @@ func (p *Pool[T]) Wait() error {
 	return nil
 }
 
-// forceClose performs a one-time forced shutdown: cancel context, close queue and
-// subtract any queued-but-unprocessed items from inflight so waiters don't block forever.
+// forceClose performs a one-time forced shutdown: cancel context, close queue.
+// We do NOT subtract queued items from inflight; we rely on workers draining the queue
+// (even if closed) and processing items with a canceled context to ensure proper cleanup.
 func (p *Pool[T]) forceClose() {
 	p.cancel()
 	p.closeOnce.Do(func() {
-		// first capture queued items
-		queued := p.tasks.Len()
-		if queued > 0 {
-			// reduce inflight by queued. Use atomic and then broadcast condition.
-			// Ensure we don't go negative.
-			for {
-				cur := atomic.LoadInt64(&p.inflight)
-				// clamp
-				var toSub int64 = int64(queued)
-				if toSub > cur {
-					toSub = cur
-				}
-				if toSub == 0 {
-					break
-				}
-				if atomic.CompareAndSwapInt64(&p.inflight, cur, cur-toSub) {
-					p.inflightMu.Lock()
-					p.inflightC.Broadcast()
-					p.inflightMu.Unlock()
-					break
-				}
-				// retry on CAS failure
-			}
-		}
 		// now close the queue to wake Get() waiters
 		p.tasks.Close()
 	})

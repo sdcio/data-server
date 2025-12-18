@@ -16,6 +16,7 @@ package pool
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -200,5 +201,48 @@ func TestVirtualPool_Wait_FailFast(t *testing.T) {
 	}
 	if got := atomic.LoadInt64(&cnt); got < 1 {
 		t.Fatalf("expected at least one task executed, got %d", got)
+	}
+}
+
+func TestVirtualPool_CancellationHang(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	sp := NewSharedTaskPool(ctx, 1)
+	vp := sp.NewVirtualPool(VirtualFailFast, 0)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Task 1: blocks until cancelled
+	vp.SubmitFunc(func(ctx context.Context, submit func(Task) error) error {
+		defer wg.Done()
+		<-ctx.Done()
+		return nil
+	})
+
+	// Task 2: should run even if cancelled (to decrement inflight)
+	vp.SubmitFunc(func(ctx context.Context, submit func(Task) error) error {
+		defer wg.Done()
+		return nil
+	})
+
+	// Give time for Task 1 to start and Task 2 to be queued
+	time.Sleep(100 * time.Millisecond)
+
+	// Cancel the pool
+	cancel()
+
+	vp.CloseForSubmit()
+
+	done := make(chan struct{})
+	go func() {
+		vp.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Log("Wait returned successfully")
+	case <-time.After(1 * time.Second):
+		t.Fatal("Wait timed out - likely hung due to dropped task or negative inflight")
 	}
 }

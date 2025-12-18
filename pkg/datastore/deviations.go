@@ -94,6 +94,9 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 			log.V(logf.VDebug).Info("calculated deviations", "duration", time.Since(start))
 			d.SendDeviations(ctx, deviationChan, deviationClients)
 			for clientIdentifier, dc := range deviationClients {
+				if dc.Context().Err() != nil {
+					continue
+				}
 				err := dc.Send(&sdcpb.WatchDeviationResponse{
 					Name:  d.config.Name,
 					Event: sdcpb.DeviationEvent_END,
@@ -109,11 +112,8 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 
 func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.DeviationEntry, deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer) {
 	log := logf.FromContext(ctx)
-	wg := &sync.WaitGroup{}
 	vPool := d.taskPool.NewVirtualPool(pool.VirtualTolerant, 1)
-
 	for de := range ch {
-		wg.Add(1)
 		vPool.SubmitFunc(func(ctx context.Context, _ func(pool.Task) error) error {
 			for clientIdentifier, dc := range deviationClients {
 				if dc.Context().Err() != nil {
@@ -137,11 +137,13 @@ func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.Dev
 					log.Error(err, "error sending deviation", "client-identifier", clientIdentifier)
 				}
 			}
-			wg.Done()
 			return nil
 		})
 	}
-	wg.Wait()
+	vPool.CloseForSubmit()
+	log.Info("waiting for tasks in pool to finish")
+	vPool.Wait()
+	log.Info("pool finished")
 }
 
 type DeviationEntry interface {

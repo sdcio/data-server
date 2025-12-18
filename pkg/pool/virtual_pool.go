@@ -194,16 +194,7 @@ func (vt *virtualTask) Run(ctx context.Context, submit func(Task) error) error {
 	// If virtual is closed due to fail-fast, skip executing the task.
 	if vt.vp.isFailed() {
 		// decrement inflight for skipped task and possibly close collector/done
-		if remaining := atomic.AddInt64(&vt.vp.inflight, -1); remaining == 0 && vt.vp.closed.Load() {
-			vt.vp.collectorOnce.Do(func() {
-				if vt.vp.ec != nil {
-					vt.vp.ec.close()
-				}
-			})
-			vt.vp.waitOnce.Do(func() {
-				close(vt.vp.done)
-			})
-		}
+		vt.vp.decrementInflight()
 		return nil
 	}
 
@@ -213,6 +204,11 @@ func (vt *virtualTask) Run(ctx context.Context, submit func(Task) error) error {
 	submitWrapper := func(t Task) error {
 		return vt.vp.submitInternal(t)
 	}
+
+	// Ensure we decrement inflight even if panic occurs
+	defer func() {
+		vt.vp.decrementInflight()
+	}()
 
 	// Execute the actual task.
 	err := vt.task.Run(ctx, submitWrapper)
@@ -232,19 +228,6 @@ func (vt *virtualTask) Run(ctx context.Context, submit func(Task) error) error {
 	}
 
 	// return nil to shared pool so shared pool doesn't abort
-	// decrement inflight and possibly close collector if virtual is closed and no more inflight
-	if remaining := atomic.AddInt64(&vt.vp.inflight, -1); remaining == 0 && vt.vp.closed.Load() {
-		// close collector once
-		vt.vp.collectorOnce.Do(func() {
-			if vt.vp.ec != nil {
-				vt.vp.ec.close()
-			}
-		})
-		// signal Wait() callers that virtual is drained
-		vt.vp.waitOnce.Do(func() {
-			close(vt.vp.done)
-		})
-	}
 	return nil
 }
 
@@ -253,23 +236,41 @@ func (vt *virtualTask) Run(ctx context.Context, submit func(Task) error) error {
 // Submit enqueues a Task into this virtual pool.
 // It wraps the Task into a virtualTask that remembers the virtual identity.
 func (v *VirtualPool) Submit(t Task) error {
+	// Increment inflight BEFORE checking closed to avoid race where CloseForSubmit
+	// sees inflight=0 and closes the pool while we are in the middle of submitting.
+	atomic.AddInt64(&v.inflight, 1)
+
 	// fast-fail if virtual pool closed for submit
 	if v.closed.Load() {
+		v.decrementInflight()
 		return ErrVirtualPoolClosed
 	}
 	// If already failed (fail-fast), disallow further submissions.
 	if v.isFailed() {
+		v.decrementInflight()
 		return ErrVirtualPoolClosed
 	}
-	// increment per-virtual inflight (will be decremented by worker after run)
-	atomic.AddInt64(&v.inflight, 1)
+
 	vt := &virtualTask{vp: v, task: t}
 	if err := v.parent.submitWrapped(vt); err != nil {
 		// submission failed: revert inflight
-		atomic.AddInt64(&v.inflight, -1)
+		v.decrementInflight()
 		return err
 	}
 	return nil
+}
+
+func (v *VirtualPool) decrementInflight() {
+	if remaining := atomic.AddInt64(&v.inflight, -1); remaining == 0 && v.closed.Load() {
+		v.collectorOnce.Do(func() {
+			if v.ec != nil {
+				v.ec.close()
+			}
+		})
+		v.waitOnce.Do(func() {
+			close(v.done)
+		})
+	}
 }
 
 // SubmitFunc convenience to submit a TaskFunc.
@@ -290,7 +291,7 @@ func (v *VirtualPool) submitInternal(t Task) error {
 	vt := &virtualTask{vp: v, task: t}
 	if err := v.parent.submitWrapped(vt); err != nil {
 		// submission failed: revert inflight
-		atomic.AddInt64(&v.inflight, -1)
+		v.decrementInflight()
 		return err
 	}
 	return nil
