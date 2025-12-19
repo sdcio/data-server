@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"github.com/sdcio/data-server/pkg/config"
@@ -90,8 +91,9 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 				log.Error(err, "failed to calculate deviations")
 				continue
 			}
-			log.V(logf.VDebug).Info("calculated deviations", "duration", time.Since(start))
+			log.V(logf.VDebug).Info("calculate deviations", "duration", time.Since(start))
 			d.SendDeviations(ctx, deviationChan, deviationClients)
+			log.Info("Before sending DeviationEvent_END")
 			for clientIdentifier, dc := range deviationClients {
 				if dc.Context().Err() != nil {
 					continue
@@ -111,21 +113,28 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 
 func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.DeviationEntry, deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer) {
 	log := logf.FromContext(ctx)
-	vPool := d.taskPool.NewVirtualPool(pool.VirtualTolerant, 1)
+	vPool := d.taskPool.NewVirtualPool(pool.VirtualTolerant, 100)
+	taskCount := 0
+
+	var started, done atomic.Int32
+
 	for de := range ch {
-		vPool.SubmitFunc(func(ctx context.Context, _ func(pool.Task) error) error {
+		deviation := de // make sure each iteration uses its own var.
+		taskCount++
+		err := vPool.SubmitFunc(func(ctx context.Context, _ func(pool.Task) error) error {
+			started.Add(1)
 			for clientIdentifier, dc := range deviationClients {
 				if dc.Context().Err() != nil {
 					continue
 				}
 				err := dc.Send(&sdcpb.WatchDeviationResponse{
 					Name:          d.config.Name,
-					Intent:        de.IntentName(),
+					Intent:        deviation.IntentName(),
 					Event:         sdcpb.DeviationEvent_UPDATE,
-					Reason:        sdcpb.DeviationReason(de.Reason()),
-					Path:          de.Path(),
-					ExpectedValue: de.ExpectedValue(),
-					CurrentValue:  de.CurrentValue(),
+					Reason:        sdcpb.DeviationReason(deviation.Reason()),
+					Path:          deviation.Path(),
+					ExpectedValue: deviation.ExpectedValue(),
+					CurrentValue:  deviation.CurrentValue(),
 				})
 				if err != nil {
 					// ignore client-side cancellation (context closed) as it's expected when a client disconnects
@@ -136,11 +145,26 @@ func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.Dev
 					log.Error(err, "error sending deviation", "client-identifier", clientIdentifier)
 				}
 			}
+			done.Add(1)
 			return nil
 		})
+		if err != nil {
+			log.Error(err, "failed to submit deviation task to pool")
+		}
 	}
+
+	time.Sleep(1 * time.Second)
+	log.Info("stats", "started", started.Load(), "done", done.Load())
+	for started.Load() != done.Load() {
+		time.Sleep(2 * time.Second)
+		log.Info("stats", "started", started.Load(), "done", done.Load())
+	}
+	log.V(logf.VDebug).Info("deviation channel drained, closing pool for submission", "task-count", taskCount)
 	vPool.CloseForSubmit()
 	log.Info("waiting for tasks in pool to finish")
+	for e := range vPool.ErrorChan() {
+		log.Error(e, "error sending deviation to client")
+	}
 	vPool.Wait()
 	log.Info("pool finished")
 }
@@ -154,7 +178,6 @@ type DeviationEntry interface {
 }
 
 func (d *Datastore) calculateDeviations() (<-chan *treetypes.DeviationEntry, error) {
-	deviationChan := make(chan *treetypes.DeviationEntry, 10)
 
 	d.syncTreeMutex.RLock()
 	deviationTree, err := d.syncTree.DeepCopy(d.ctx)
@@ -168,19 +191,20 @@ func (d *Datastore) calculateDeviations() (<-chan *treetypes.DeviationEntry, err
 		return nil, err
 	}
 
-	// Send IntentExists
-	for _, n := range addedIntentNames {
-		deviationChan <- treetypes.NewDeviationEntry(n, treetypes.DeviationReasonIntentExists, nil)
-	}
-
 	err = deviationTree.FinishInsertionPhase(d.ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	deviationChan := make(chan *treetypes.DeviationEntry, 10)
 	go func() {
+		defer close(deviationChan)
+		// Send IntentExists
+		for _, n := range addedIntentNames {
+			deviationChan <- treetypes.NewDeviationEntry(n, treetypes.DeviationReasonIntentExists, nil)
+		}
+
 		deviationTree.GetDeviations(d.ctx, deviationChan)
-		close(deviationChan)
 	}()
 
 	return deviationChan, nil
