@@ -1115,8 +1115,14 @@ func (s *sharedEntryAttributes) validateMinMaxElements(resultChan chan<- *types.
 	ownersSet := map[string]struct{}{}
 	for _, child := range childs {
 		childAttributes := child.GetChilds(DescendMethodActiveChilds)
-		owner := childAttributes[contSchema.GetKeys()[0].GetName()].GetHighestPrecedence(nil, false, false, false)[0].Update.Owner()
-		ownersSet[owner] = struct{}{}
+		keyName := contSchema.GetKeys()[0].GetName()
+		if keyAttr, ok := childAttributes[keyName]; ok {
+			highestPrec := keyAttr.GetHighestPrecedence(nil, false, false, false)
+			if len(highestPrec) > 0 {
+				owner := highestPrec[0].Update.Owner()
+				ownersSet[owner] = struct{}{}
+			}
+		}
 	}
 	// dedup the owners
 	owners := []string{}
