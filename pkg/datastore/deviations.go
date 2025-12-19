@@ -2,11 +2,9 @@ package datastore
 
 import (
 	"context"
-	"sync/atomic"
 	"time"
 
 	"github.com/sdcio/data-server/pkg/config"
-	"github.com/sdcio/data-server/pkg/pool"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -113,60 +111,30 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 
 func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.DeviationEntry, deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer) {
 	log := logf.FromContext(ctx)
-	vPool := d.taskPool.NewVirtualPool(pool.VirtualTolerant, 100)
-	taskCount := 0
-
-	var started, done atomic.Int32
-
-	for de := range ch {
-		deviation := de // make sure each iteration uses its own var.
-		taskCount++
-		err := vPool.SubmitFunc(func(ctx context.Context, _ func(pool.Task) error) error {
-			started.Add(1)
-			for clientIdentifier, dc := range deviationClients {
-				if dc.Context().Err() != nil {
+	for deviation := range ch {
+		for clientIdentifier, dc := range deviationClients {
+			if dc.Context().Err() != nil {
+				continue
+			}
+			err := dc.Send(&sdcpb.WatchDeviationResponse{
+				Name:          d.config.Name,
+				Intent:        deviation.IntentName(),
+				Event:         sdcpb.DeviationEvent_UPDATE,
+				Reason:        sdcpb.DeviationReason(deviation.Reason()),
+				Path:          deviation.Path(),
+				ExpectedValue: deviation.ExpectedValue(),
+				CurrentValue:  deviation.CurrentValue(),
+			})
+			if err != nil {
+				// ignore client-side cancellation (context closed) as it's expected when a client disconnects
+				if dc.Context().Err() != nil || status.Code(err) == codes.Canceled {
+					log.V(logf.VDebug).Info("client context closed, skipping send", "client-identifier", clientIdentifier, "err", err)
 					continue
 				}
-				err := dc.Send(&sdcpb.WatchDeviationResponse{
-					Name:          d.config.Name,
-					Intent:        deviation.IntentName(),
-					Event:         sdcpb.DeviationEvent_UPDATE,
-					Reason:        sdcpb.DeviationReason(deviation.Reason()),
-					Path:          deviation.Path(),
-					ExpectedValue: deviation.ExpectedValue(),
-					CurrentValue:  deviation.CurrentValue(),
-				})
-				if err != nil {
-					// ignore client-side cancellation (context closed) as it's expected when a client disconnects
-					if dc.Context().Err() != nil || status.Code(err) == codes.Canceled {
-						log.V(logf.VDebug).Info("client context closed, skipping send", "client-identifier", clientIdentifier, "err", err)
-						continue
-					}
-					log.Error(err, "error sending deviation", "client-identifier", clientIdentifier)
-				}
+				log.Error(err, "error sending deviation", "client-identifier", clientIdentifier)
 			}
-			done.Add(1)
-			return nil
-		})
-		if err != nil {
-			log.Error(err, "failed to submit deviation task to pool")
 		}
 	}
-
-	time.Sleep(1 * time.Second)
-	log.Info("stats", "started", started.Load(), "done", done.Load())
-	for started.Load() != done.Load() {
-		time.Sleep(2 * time.Second)
-		log.Info("stats", "started", started.Load(), "done", done.Load())
-	}
-	log.V(logf.VDebug).Info("deviation channel drained, closing pool for submission", "task-count", taskCount)
-	vPool.CloseForSubmit()
-	log.Info("waiting for tasks in pool to finish")
-	for e := range vPool.ErrorChan() {
-		log.Error(e, "error sending deviation to client")
-	}
-	vPool.Wait()
-	log.Info("pool finished")
 }
 
 type DeviationEntry interface {
