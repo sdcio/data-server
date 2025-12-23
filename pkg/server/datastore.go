@@ -269,12 +269,17 @@ func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.
 	if req.GetName() == nil || len(req.GetName()) == 0 {
 		return status.Errorf(codes.InvalidArgument, "missing datastore name")
 	}
+	if len(req.GetName()) > 1 {
+		// although we have a slice in the req we support just a single datastore per request atm.
+		return status.Errorf(codes.InvalidArgument, "only single datastore name allowed per request")
+	}
 
 	ds, err := s.datastores.GetDataStore(req.GetName()[0])
 	if err != nil {
 		log.Error(err, "failed to get datastore")
 		return status.Errorf(codes.NotFound, "unknown datastore")
 	}
+	log.WithValues("datastore-name", req.GetName()[0])
 
 	err = ds.WatchDeviations(req, stream)
 	if err != nil {
@@ -282,6 +287,7 @@ func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.
 		return err
 	}
 	<-stream.Context().Done()
+	log.Info("Stream context done", "errVal", stream.Context().Err())
 	ds.StopDeviationsWatch(peerName)
 	return nil
 }
