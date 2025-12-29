@@ -14,8 +14,7 @@ import (
 )
 
 func (d *Datastore) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.DataServer_WatchDeviationsServer) error {
-	d.m.Lock()
-	defer d.m.Unlock()
+	log := logf.FromContext(d.ctx)
 
 	ctx := stream.Context()
 	p, ok := peer.FromContext(ctx)
@@ -24,19 +23,20 @@ func (d *Datastore) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdc
 	}
 	pName := p.Addr.String()
 
+	d.m.Lock()
+	defer d.m.Unlock()
 	d.deviationClients[pName] = stream
 
-	log := logf.FromContext(d.ctx)
 	log.Info("new deviation client", "client", pName)
 	return nil
 }
 
 func (d *Datastore) StopDeviationsWatch(peer string) {
 	log := logf.FromContext(d.ctx)
-	log.Info("deviation client removed", "peer", peer)
 	d.m.Lock()
 	defer d.m.Unlock()
 	delete(d.deviationClients, peer)
+	log.Info("deviation client removed", "peer", peer)
 }
 
 func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig) {
@@ -56,19 +56,23 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 			return
 		case <-ticker.C:
 			log.V(logf.VDebug).Info("deviation calc run - start")
-			d.m.RLock()
-			deviationClientNames := make([]string, 0, len(d.deviationClients))
+
 			deviationClients := map[string]sdcpb.DataServer_WatchDeviationsServer{}
-			for clientIdentifier, devStream := range d.deviationClients {
-				deviationClients[clientIdentifier] = devStream
-				if devStream.Context().Err() != nil {
-					log.V(logf.VWarn).Error(devStream.Context().Err(), "removing deviation client", "client", clientIdentifier)
-					delete(deviationClients, clientIdentifier)
-					continue
+			deviationClientNames := make([]string, 0, len(d.deviationClients))
+
+			// encap in func to use defer for the lock
+			func() {
+				d.m.RLock()
+				defer d.m.RUnlock()
+				for peerIdentifier, devStream := range d.deviationClients {
+					deviationClients[peerIdentifier] = devStream
+					if devStream.Context().Err() != nil {
+						log.V(logf.VWarn).Error(devStream.Context().Err(), "deviation client context error", "client", peerIdentifier, "error", devStream.Context().Err())
+						continue
+					}
+					deviationClientNames = append(deviationClientNames, peerIdentifier)
 				}
-				deviationClientNames = append(deviationClientNames, clientIdentifier)
-			}
-			d.m.RUnlock()
+			}()
 			if len(deviationClients) == 0 {
 				log.V(logf.VDebug).Info("no deviation clients present")
 				continue

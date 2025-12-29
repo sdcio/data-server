@@ -63,8 +63,8 @@ func (ec *ErrorCollector) add(err error) {
 		return
 	}
 	ec.mu.Lock()
+	defer ec.mu.Unlock()
 	ec.errs = append(ec.errs, err)
-	ec.mu.Unlock()
 
 	select {
 	case ec.Ch <- err:

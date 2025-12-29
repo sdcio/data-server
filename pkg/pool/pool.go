@@ -196,8 +196,8 @@ func (p *Pool[T]) CloseForSubmit() {
 	p.closedForSubmit.Store(true)
 	// kick the monitor by signaling condition in case inflight==0 already
 	p.inflightMu.Lock()
+	defer p.inflightMu.Unlock()
 	p.inflightC.Broadcast()
-	p.inflightMu.Unlock()
 }
 
 // Wait blocks until all workers have exited and returns the first error (if any).

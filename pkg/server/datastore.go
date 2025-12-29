@@ -287,7 +287,7 @@ func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.
 		return err
 	}
 	<-stream.Context().Done()
-	log.Info("Stream context done", "errVal", stream.Context().Err())
+	log.Info("stream context done", "errVal", stream.Context().Err())
 	ds.StopDeviationsWatch(peerName)
 	return nil
 }
