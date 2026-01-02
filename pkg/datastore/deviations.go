@@ -121,6 +121,11 @@ func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.Dev
 			if dc.Context().Err() != nil {
 				continue
 			}
+
+			if log.GetV() <= logger.VTrace && deviation.Reason() == treetypes.DeviationReasonNotApplied {
+				log.V(logger.VTrace).Info("NOT APPLIED", "path", deviation.Path().ToXPath(false), "actual value", deviation.CurrentValue().ToString(), "expected value", deviation.ExpectedValue().ToString(), "intent", deviation.IntentName())
+			}
+
 			err := dc.Send(&sdcpb.WatchDeviationResponse{
 				Name:          d.config.Name,
 				Intent:        deviation.IntentName(),
