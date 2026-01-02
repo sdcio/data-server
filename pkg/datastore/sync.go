@@ -8,6 +8,7 @@ import (
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, importer importer.ImportConfigAdapter) error {
@@ -30,6 +31,19 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 			return err
 		}
 	}
+
+	// conditional trace logging
+	if log.GetV() <= logger.VTrace {
+		treeExport, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
+		if err == nil {
+			json, err := protojson.MarshalOptions{Multiline: false}.Marshal(treeExport)
+			if err == nil {
+				log.V(logger.VTrace).Info("synctree after sync apply", "content", string(json))
+			}
+		}
+
+	}
+
 	return nil
 }
 

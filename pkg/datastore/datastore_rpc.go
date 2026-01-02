@@ -231,9 +231,9 @@ func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdc
 	ctx = logger.IntoContext(ctx, log)
 
 	// create a new TreeRoot by copying the syncTree
-	d.syncTreeMutex.Lock()
+	d.syncTreeMutex.RLock()
 	root, err := d.syncTree.DeepCopy(ctx)
-	d.syncTreeMutex.Unlock()
+	d.syncTreeMutex.RUnlock()
 	if err != nil {
 		return nil, err
 	}

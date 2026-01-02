@@ -6,6 +6,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/config"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/logger"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc/codes"
@@ -88,7 +89,7 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 				}
 			}
 			start := time.Now()
-			deviationChan, err := d.calculateDeviations()
+			deviationChan, err := d.calculateDeviations(ctx)
 			if err != nil {
 				log.Error(err, "failed to calculate deviations")
 				continue
@@ -149,21 +150,21 @@ type DeviationEntry interface {
 	ExpectedValue() *sdcpb.TypedValue
 }
 
-func (d *Datastore) calculateDeviations() (<-chan *treetypes.DeviationEntry, error) {
+func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.DeviationEntry, error) {
 
 	d.syncTreeMutex.RLock()
-	deviationTree, err := d.syncTree.DeepCopy(d.ctx)
+	deviationTree, err := d.syncTree.DeepCopy(ctx)
 	d.syncTreeMutex.RUnlock()
 	if err != nil {
 		return nil, err
 	}
 
-	addedIntentNames, err := d.LoadAllButRunningIntents(d.ctx, deviationTree, true)
+	addedIntentNames, err := d.LoadAllButRunningIntents(ctx, deviationTree, true)
 	if err != nil {
 		return nil, err
 	}
 
-	err = deviationTree.FinishInsertionPhase(d.ctx)
+	err = deviationTree.FinishInsertionPhase(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +177,7 @@ func (d *Datastore) calculateDeviations() (<-chan *treetypes.DeviationEntry, err
 			deviationChan <- treetypes.NewDeviationEntry(n, treetypes.DeviationReasonIntentExists, nil)
 		}
 
-		deviationTree.GetDeviations(d.ctx, deviationChan)
+		deviationTree.GetDeviations(ctx, deviationChan)
 	}()
 
 	return deviationChan, nil

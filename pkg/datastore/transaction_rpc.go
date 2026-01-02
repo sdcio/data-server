@@ -14,9 +14,11 @@ import (
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
+	"github.com/sdcio/logger"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var (
@@ -195,9 +197,9 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *types.Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
 	log := logf.FromContext(ctx)
 	// create a new TreeRoot
-	d.syncTreeMutex.Lock()
+	d.syncTreeMutex.RLock()
 	root, err := d.syncTree.DeepCopy(ctx)
-	d.syncTreeMutex.Unlock()
+	d.syncTreeMutex.RUnlock()
 	if err != nil {
 		return nil, err
 	}
@@ -346,16 +348,17 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	log.V(logf.VTrace).Info("generated deletes", "deletes", strings.Join(deletes.SdcpbPaths().ToXPathSlice(), "\n"))
 
 	for _, intent := range transaction.GetNewIntents() {
+		log := log.WithValues("intent", intent.GetName())
 		// retrieve the data that is meant to be send towards the cache
 		updatesOwner := root.GetUpdatesForOwner(intent.GetName())
 		deletesOwner := root.GetDeletesForOwner(intent.GetName())
 
 		// logging
 		strSl := treetypes.Map(updatesOwner, func(u *treetypes.Update) string { return u.String() })
-		log.V(logf.VTrace).Info("updates owner", "updates-owner", strSl, "\n")
+		log.V(logf.VTrace).Info("updates owner", "updates-owner", strSl)
 
 		delSl := deletesOwner.ToXPathSlice()
-		log.V(logf.VTrace).Info("deletes owner", "deletes-owner", delSl, "\n")
+		log.V(logf.VTrace).Info("deletes owner", "deletes-owner", delSl)
 
 		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority(), intent.Deviation())
 		switch {
@@ -364,6 +367,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 			if err != nil {
 				log.Error(err, "failed deleting intent from store")
 			}
+			log.V(logf.VDebug).Info("delete intent from cache")
 			continue
 		case err != nil:
 			return nil, err
@@ -395,6 +399,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 // writeBackSyncTree applies the provided changes to the syncTree and applies to the running cache intent
 func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVariantSlice, deletes treetypes.DeleteEntriesList) error {
+	log := logger.FromContext(ctx)
 	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(tree.RunningIntentName, tree.RunningValuesPrio)
 
 	// wrap the lock in an anonymous function to be able to utilize defer for the unlock
@@ -425,6 +430,15 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVari
 	if err != nil && err != tree.ErrorIntentNotPresent {
 		return err
 	}
+
+	// conditional trace logging
+	if log.GetV() <= logger.VTrace {
+		json, err := protojson.MarshalOptions{Multiline: false}.Marshal(newRunningIntent)
+		if err != nil {
+			log.V(logger.VTrace).Info("writeback synctree", "content", string(json))
+		}
+	}
+
 	// write the synctree to disk
 	if newRunningIntent != nil {
 		err = d.cacheClient.IntentModify(ctx, newRunningIntent)
