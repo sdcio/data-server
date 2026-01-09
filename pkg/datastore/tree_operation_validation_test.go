@@ -18,12 +18,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"slices"
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/pkg/cache"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	json_importer "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -205,7 +207,8 @@ func TestDatastore_validateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			validationResult, _ := root.Validate(ctx, validationConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			validationResult, _ := root.Validate(ctx, validationConfig, sharedPool)
 
 			t.Log(root.String())
 

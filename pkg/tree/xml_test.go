@@ -3,11 +3,13 @@ package tree
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"slices"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -488,10 +490,14 @@ func TestToXMLTable(t *testing.T) {
 			fmt.Println(root.String())
 
 			if tt.newConfig != nil {
-				marksOwnerDeleteVisitor := NewMarkOwnerDeleteVisitor(owner, false)
-				err = root.Walk(ctx, marksOwnerDeleteVisitor)
+				sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+				deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+				ownerDeleteMarker := NewOwnerDeleteMarker(NewOwnerDeleteMarkerTaskConfig(owner, false))
+
+				err = ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
 				if err != nil {
 					t.Error(err)
+					return
 				}
 
 				newUpds, err := tt.newConfig(ctx, converter)

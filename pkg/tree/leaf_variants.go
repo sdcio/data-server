@@ -174,19 +174,30 @@ func (lv *LeafVariants) remainsToExist() bool {
 
 	highest := lv.GetHighestPrecedence(false, false, true)
 
-	if highest != nil && highest.IsExplicitDelete {
+	if highest == nil || highest.IsExplicitDelete {
 		return false
 	}
 
+	defaultOrRunningExists := false
+	deleteExists := false
 	// go through all variants
 	for _, l := range lv.les {
+		if l.Owner() == RunningIntentName || l.Owner() == DefaultsIntentName {
+			defaultOrRunningExists = true
+			continue
+		}
 		// if an entry exists that does not have the delete flag set,
 		// then a remaining LeafVariant exists.
 		if !l.GetDeleteFlag() {
 			return true
 		}
+		deleteExists = true
 	}
-	return false
+
+	if deleteExists {
+		return false
+	}
+	return defaultOrRunningExists
 }
 
 func (lv *LeafVariants) GetHighestPrecedenceValue(filter HighestPrecedenceFilter) int32 {

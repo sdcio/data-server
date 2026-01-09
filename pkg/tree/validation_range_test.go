@@ -3,10 +3,12 @@ package tree
 import (
 	"context"
 	"encoding/json"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
+	"github.com/sdcio/data-server/pkg/pool"
 	json_importer "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -76,7 +78,9 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 	}
 
 	valConf := validationConfig.DeepCopy()
-	validationResult, _ := root.Validate(ctx, valConf)
+	sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+
+	validationResult, _ := root.Validate(ctx, valConf, sharedPool)
 
 	t.Logf("Validation Errors:\n%s", strings.Join(validationResult.ErrorsStr(), "\n"))
 	t.Log(root.String())
@@ -188,7 +192,8 @@ func TestValidate_RangesSigned(t *testing.T) {
 				t.Error(err)
 			}
 
-			validationResult, _ := root.Validate(ctx, validationConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			validationResult, _ := root.Validate(ctx, validationConfig, sharedPool)
 
 			t.Logf("Validation Errors:\n%s", strings.Join(validationResult.ErrorsStr(), "\n"))
 			t.Log(root.String())
@@ -322,7 +327,8 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 			}
 
 			// run validation
-			validationResults, _ := root.Validate(ctx, validationConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			validationResults, _ := root.Validate(ctx, validationConfig, sharedPool)
 
 			t.Logf("Validation Errors:\n%s", strings.Join(validationResults.ErrorsStr(), "\n"))
 			t.Log(root.String())

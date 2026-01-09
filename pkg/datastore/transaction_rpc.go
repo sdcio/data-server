@@ -9,12 +9,16 @@ import (
 	"time"
 
 	"github.com/sdcio/data-server/pkg/datastore/types"
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/data-server/pkg/utils"
+	"github.com/sdcio/logger"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var (
@@ -107,7 +111,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	log.V(logf.VTrace).Info("populated tree", "tree", root.String())
 
 	// perform validation
-	validationResult, validationStats := root.Validate(ctx, d.config.Validation)
+	validationResult, validationStats := root.Validate(ctx, d.config.Validation, d.taskPool)
 	validationResult.ErrorsStr()
 	if validationResult.HasErrors() {
 		return nil, validationResult.JoinErrors()
@@ -173,10 +177,11 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 			if excludeDeviations && intent.Deviation {
 				continue
 			}
-			intentNames = append(intentNames, intent.GetIntentName())
 			log.V(logf.VDebug).Info("adding intent to tree", "intent", intent.GetIntentName())
+			log.V(logf.VTrace).Info("adding intent to tree", "intent", intent.GetIntentName(), "content", utils.FormatProtoJSON(intent))
+
+			intentNames = append(intentNames, intent.GetIntentName())
 			protoLoader := treeproto.NewProtoTreeImporter(intent)
-			log.V(logf.VTrace).Info("adding intent to tree", "intent", intent.String())
 			err := root.ImportConfig(ctx, nil, protoLoader, intent.GetIntentName(), intent.GetPriority(), treetypes.NewUpdateInsertFlags())
 			if err != nil {
 				return nil, err
@@ -192,9 +197,9 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *types.Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
 	log := logf.FromContext(ctx)
 	// create a new TreeRoot
-	d.syncTreeMutex.Lock()
+	d.syncTreeMutex.RLock()
 	root, err := d.syncTree.DeepCopy(ctx)
-	d.syncTreeMutex.Unlock()
+	d.syncTreeMutex.RUnlock()
 	if err != nil {
 		return nil, err
 	}
@@ -217,11 +222,14 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 		oldIntentContent := lvs.ToPathAndUpdateSlice()
 
-		marksOwnerDeleteVisitor := tree.NewMarkOwnerDeleteVisitor(intent.GetName(), intent.GetOnlyIntended())
-		err := root.Walk(ctx, marksOwnerDeleteVisitor)
+		deleteVisitorPool := d.taskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+		ownerDeleteMarker := tree.NewOwnerDeleteMarker(tree.NewOwnerDeleteMarkerTaskConfig(intent.GetName(), intent.GetOnlyIntended()))
+
+		err := ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
 		if err != nil {
 			return nil, err
 		}
+
 		// clear the owners existing explicit delete entries, retrieving the old entries for storing in the transaction for possible rollback
 		oldExplicitDeletes := root.RemoveExplicitDeletes(intent.GetName())
 
@@ -263,7 +271,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	log.V(logf.VTrace).Info("populated tree", "tree", root.String())
 
 	// perform validation
-	validationResult, validationStats := root.Validate(ctx, d.config.Validation)
+	validationResult, validationStats := root.Validate(ctx, d.config.Validation, d.taskPool)
 
 	log.V(logf.VDebug).Info("transaction validation stats", "transaction-id", transaction.GetTransactionId(), "stats", validationStats.String())
 
@@ -334,16 +342,17 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	log.V(logf.VTrace).Info("generated deletes", "deletes", strings.Join(deletes.SdcpbPaths().ToXPathSlice(), "\n"))
 
 	for _, intent := range transaction.GetNewIntents() {
+		log := log.WithValues("intent", intent.GetName())
 		// retrieve the data that is meant to be send towards the cache
 		updatesOwner := root.GetUpdatesForOwner(intent.GetName())
 		deletesOwner := root.GetDeletesForOwner(intent.GetName())
 
 		// logging
 		strSl := treetypes.Map(updatesOwner, func(u *treetypes.Update) string { return u.String() })
-		log.V(logf.VTrace).Info("updates owner", "updates-owner", strSl, "\n")
+		log.V(logf.VTrace).Info("updates owner", "updates-owner", strSl)
 
 		delSl := deletesOwner.ToXPathSlice()
-		log.V(logf.VTrace).Info("deletes owner", "deletes-owner", delSl, "\n")
+		log.V(logf.VTrace).Info("deletes owner", "deletes-owner", delSl)
 
 		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority(), intent.Deviation())
 		switch {
@@ -352,6 +361,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 			if err != nil {
 				log.Error(err, "failed deleting intent from store")
 			}
+			log.V(logf.VDebug).Info("delete intent from cache")
 			continue
 		case err != nil:
 			return nil, err
@@ -383,31 +393,46 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 // writeBackSyncTree applies the provided changes to the syncTree and applies to the running cache intent
 func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVariantSlice, deletes treetypes.DeleteEntriesList) error {
+	log := logger.FromContext(ctx)
 	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(tree.RunningIntentName, tree.RunningValuesPrio)
 
-	// lock the syncTree
-	d.syncTreeMutex.Lock()
+	// wrap the lock in an anonymous function to be able to utilize defer for the unlock
+	err := func() error {
+		// lock the syncTree
+		d.syncTreeMutex.Lock()
+		defer d.syncTreeMutex.Unlock()
 
-	// perform deletes
-	err := d.syncTree.DeleteBranchPaths(ctx, deletes, tree.RunningIntentName)
+		// perform deletes
+		err := d.syncTree.DeleteBranchPaths(ctx, deletes, tree.RunningIntentName)
+		if err != nil {
+			return err
+		}
+
+		// add the calculated updates to the tree, as running with adjusted prio and owner
+		err = d.syncTree.AddUpdatesRecursive(ctx, runningUpdates, treetypes.NewUpdateInsertFlags())
+		if err != nil {
+			return err
+		}
+		return nil
+	}()
 	if err != nil {
 		return err
 	}
-
-	// add the calculated updates to the tree, as running with adjusted prio and owner
-	err = d.syncTree.AddUpdatesRecursive(ctx, runningUpdates, treetypes.NewUpdateInsertFlags())
-	if err != nil {
-		return err
-	}
-
-	// release the syncTree lock
-	d.syncTreeMutex.Unlock()
 
 	// export the synctree
 	newRunningIntent, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
 	if err != nil && err != tree.ErrorIntentNotPresent {
 		return err
 	}
+
+	// conditional trace logging
+	if log := log.V(logger.VTrace); log.Enabled() {
+		json, err := protojson.MarshalOptions{Multiline: false}.Marshal(newRunningIntent)
+		if err == nil {
+			log.Info("writeback synctree", "content", string(json))
+		}
+	}
+
 	// write the synctree to disk
 	if newRunningIntent != nil {
 		err = d.cacheClient.IntentModify(ctx, newRunningIntent)

@@ -3,6 +3,7 @@ package types
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 )
 
@@ -57,12 +58,14 @@ func (s StatType) String() string {
 }
 
 type ValidationStats struct {
-	Counter map[StatType]*uint32 `json:"counters"`
+	Counter   map[StatType]*uint32 `json:"counters"`
+	muCounter *sync.Mutex
 }
 
 func NewValidationStats() *ValidationStats {
 	result := &ValidationStats{
-		Counter: map[StatType]*uint32{},
+		Counter:   map[StatType]*uint32{},
+		muCounter: &sync.Mutex{},
 	}
 	for _, t := range AllStatTypes {
 		result.Counter[t] = new(uint32)
@@ -71,6 +74,8 @@ func NewValidationStats() *ValidationStats {
 }
 
 func (v *ValidationStats) Add(t StatType, i uint32) {
+	v.muCounter.Lock()
+	defer v.muCounter.Unlock()
 	if counter, ok := v.Counter[t]; ok {
 		atomic.AddUint32(counter, i)
 	}
@@ -78,6 +83,8 @@ func (v *ValidationStats) Add(t StatType, i uint32) {
 
 // String returns a string representation of all counters
 func (v *ValidationStats) String() string {
+	v.muCounter.Lock()
+	defer v.muCounter.Unlock()
 	result := make([]string, 0, len(v.Counter))
 	for typ, count := range v.Counter {
 		val := atomic.LoadUint32(count)
@@ -88,6 +95,8 @@ func (v *ValidationStats) String() string {
 
 // GetCounter returns a snapshot of the counters as a plain map
 func (v *ValidationStats) GetCounter() map[StatType]uint32 {
+	v.muCounter.Lock()
+	defer v.muCounter.Unlock()
 	snapshot := make(map[StatType]uint32, len(v.Counter))
 	for typ, count := range v.Counter {
 		snapshot[typ] = atomic.LoadUint32(count)

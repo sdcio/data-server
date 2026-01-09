@@ -69,7 +69,7 @@ type Entry interface {
 	// Walk takes the EntryVisitor and applies it to every Entry in the tree
 	Walk(ctx context.Context, v EntryVisitor) error
 	// Validate kicks off validation
-	Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, vCfg *config.Validation)
+	ValidateLevel(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, vCfg *config.Validation)
 	// validateMandatory the Mandatory schema field
 	validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats)
 	// validateMandatoryWithKeys is an internally used function that us called by validateMandatory in case
@@ -116,6 +116,7 @@ type Entry interface {
 	//    - shouldDelete() returns false, because no explicit delete should be issued for them.
 	canDelete() bool
 	GetChilds(DescendMethod) EntryMap
+	GetChild(name string) (Entry, bool) // entry, exists
 	FilterChilds(keys map[string]string) ([]Entry, error)
 	// ToJson returns the Tree contained structure as JSON
 	// use e.g. json.MarshalIndent() on the returned struct
@@ -167,6 +168,7 @@ type LeafVariantEntries interface {
 	DeleteByOwner(owner string) *LeafEntry
 	AddExplicitDeleteEntry(owner string, priority int32) *LeafEntry
 	GetByOwner(owner string) *LeafEntry
+	Add(l *LeafEntry)
 }
 
 type DescendMethod int

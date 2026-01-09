@@ -18,12 +18,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -1498,11 +1500,21 @@ func TestDatastore_populateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			marksOwnerDeleteVisitor := tree.NewMarkOwnerDeleteVisitor(tt.intentName, false)
-			err = root.Walk(ctx, marksOwnerDeleteVisitor)
+			sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+			ownerDeleteMarker := tree.NewOwnerDeleteMarker(tree.NewOwnerDeleteMarkerTaskConfig(tt.intentName, false))
+
+			err = ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
 			if err != nil {
 				t.Error(err)
+				return
 			}
+
+			// marksOwnerDeleteVisitor := tree.NewMarkOwnerDeleteVisitor(tt.intentName, false)
+			// err = root.Walk(ctx, marksOwnerDeleteVisitor)
+			// if err != nil {
+			// 	t.Error(err)
+			// }
 
 			newFlag := types.NewUpdateInsertFlags().SetNewFlag()
 
@@ -1518,7 +1530,8 @@ func TestDatastore_populateTree(t *testing.T) {
 			}
 			fmt.Println(root.String())
 
-			validationResult, _ := root.Validate(ctx, validationConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			validationResult, _ := root.Validate(ctx, validationConfig, sharedPool)
 
 			fmt.Printf("Validation Errors:\n%v\n", strings.Join(validationResult.ErrorsStr(), "\n"))
 			fmt.Printf("Tree:%s\n", root.String())

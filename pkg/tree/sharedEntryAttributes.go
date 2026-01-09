@@ -14,13 +14,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/sdcio/data-server/pkg/config"
-	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 var (
@@ -846,6 +844,10 @@ func (s *sharedEntryAttributes) DeleteBranch(ctx context.Context, path *sdcpb.Pa
 		return err
 	}
 
+	if entry == nil {
+		return nil
+	}
+
 	// need to remove the leafvariants down from entry.
 	// however if the path points to a key, which is in fact getting deleted
 	// we also need to remove the key, which is the parent. Thats why we do it in this loop
@@ -973,11 +975,9 @@ func (s *sharedEntryAttributes) getHighestPrecedenceValueOfBranch(filter Highest
 
 // Validate is the highlevel function to perform validation.
 // it will multiplex all the different Validations that need to happen
-func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, vCfg *config.Validation) {
-
+func (s *sharedEntryAttributes) ValidateLevel(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, vCfg *config.Validation) {
 	// validate the mandatory statement on this entry
 	if s.remainsToExist() {
-
 		// TODO: Validate Enums
 		if !vCfg.DisabledValidators.Mandatory {
 			s.validateMandatory(ctx, resultChan, stats)
@@ -1002,26 +1002,6 @@ func (s *sharedEntryAttributes) Validate(ctx context.Context, resultChan chan<- 
 		}
 		if !vCfg.DisabledValidators.MaxElements {
 			s.validateMinMaxElements(resultChan, stats)
-		}
-
-		// recurse the call to the child elements
-		wg := sync.WaitGroup{}
-		defer wg.Wait()
-		for _, c := range s.GetChilds(DescendMethodActiveChilds) {
-			if c.canDeleteBranch(false) {
-				// skip validation of branches that can be deleted
-				continue
-			}
-			wg.Add(1)
-			valFunc := func(x Entry) {
-				x.Validate(ctx, resultChan, stats, vCfg)
-				wg.Done()
-			}
-			if !vCfg.DisableConcurrency {
-				go valFunc(c)
-			} else {
-				valFunc(c)
-			}
 		}
 	}
 }
@@ -1135,8 +1115,14 @@ func (s *sharedEntryAttributes) validateMinMaxElements(resultChan chan<- *types.
 	ownersSet := map[string]struct{}{}
 	for _, child := range childs {
 		childAttributes := child.GetChilds(DescendMethodActiveChilds)
-		owner := childAttributes[contSchema.GetKeys()[0].GetName()].GetHighestPrecedence(nil, false, false, false)[0].Update.Owner()
-		ownersSet[owner] = struct{}{}
+		keyName := contSchema.GetKeys()[0].GetName()
+		if keyAttr, ok := childAttributes[keyName]; ok {
+			highestPrec := keyAttr.GetHighestPrecedence(nil, false, false, false)
+			if len(highestPrec) > 0 {
+				owner := highestPrec[0].Update.Owner()
+				ownersSet[owner] = struct{}{}
+			}
+		}
 	}
 	// dedup the owners
 	owners := []string{}
@@ -1239,124 +1225,11 @@ func (s *sharedEntryAttributes) validatePattern(resultChan chan<- *types.Validat
 	}
 }
 
-func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, t importer.ImportConfigAdapterElement, intentName string, intentPrio int32, insertFlags *types.UpdateInsertFlags) error {
-	var err error
-
-	switch x := s.schema.GetSchema().(type) {
-	case *sdcpb.SchemaElem_Container, nil:
-		switch {
-		case len(s.schema.GetContainer().GetKeys()) > 0:
-
-			var exists bool
-			var actualEntry Entry = s
-			var keyChild Entry
-			schemaKeys := s.GetSchemaKeys()
-			slices.Sort(schemaKeys)
-			for _, schemaKey := range schemaKeys {
-
-				keyTransf := t.GetElement(schemaKey)
-				if keyTransf == nil {
-					return fmt.Errorf("unable to find key attribute %s under %s", schemaKey, s.SdcpbPath().ToXPath(false))
-				}
-				keyElemValue, err := keyTransf.GetKeyValue()
-				if err != nil {
-					return err
-				}
-				// if the child does not exist, create it
-				if keyChild, exists = actualEntry.GetChilds(DescendMethodAll)[keyElemValue]; !exists {
-					keyChild, err = newEntry(ctx, actualEntry, keyElemValue, s.treeContext)
-					if err != nil {
-						return err
-					}
-				}
-				actualEntry = keyChild
-			}
-			err = actualEntry.ImportConfig(ctx, t, intentName, intentPrio, insertFlags)
-			if err != nil {
-				return err
-			}
-		default:
-			if len(t.GetElements()) == 0 {
-				// it might be a presence container
-				schem := s.schema.GetContainer()
-				if schem == nil {
-					return nil
-				}
-				if schem.IsPresence {
-					tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}
-					upd := types.NewUpdate(s, tv, intentPrio, intentName, 0)
-					s.leafVariants.Add(NewLeafEntry(upd, insertFlags, s))
-				}
-			}
-
-			for _, elem := range t.GetElements() {
-				var child Entry
-				var exists bool
-
-				// if the child does not exist, create it
-				if child, exists = s.getChildren()[elem.GetName()]; !exists {
-					child, err = newEntry(ctx, s, elem.GetName(), s.treeContext)
-					if err != nil {
-						return fmt.Errorf("error trying to insert %s at path %s: %w", elem.GetName(), s.SdcpbPath().ToXPath(false), err)
-					}
-				}
-				err = child.ImportConfig(ctx, elem, intentName, intentPrio, insertFlags)
-				if err != nil {
-					return err
-				}
-			}
-		}
-	case *sdcpb.SchemaElem_Field:
-		// // if it is as leafref we need to figure out the type of the references field.
-		fieldType := x.Field.GetType()
-		// if x.Field.GetType().Type == "leafref" {
-		// 	s.treeContext.treeSchemaCacheClient.GetSchema(ctx,)
-		// }
-
-		tv, err := t.GetTVValue(ctx, fieldType)
-		if err != nil {
-			return err
-		}
-		upd := types.NewUpdate(s, tv, intentPrio, intentName, 0)
-
-		s.leafVariants.Add(NewLeafEntry(upd, insertFlags, s))
-
-	case *sdcpb.SchemaElem_Leaflist:
-		var scalarArr *sdcpb.ScalarArray
-		mustAdd := false
-		le := s.leafVariants.GetByOwner(intentName)
-		if le != nil {
-			scalarArr = le.Value().GetLeaflistVal()
-		} else {
-			le = NewLeafEntry(nil, insertFlags, s)
-			mustAdd = true
-			scalarArr = &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{}}
-		}
-
-		tv, err := t.GetTVValue(ctx, x.Leaflist.GetType())
-		if err != nil {
-			return err
-		}
-
-		// the proto implementation will return leaflist tvs
-		if tv.GetLeaflistVal() == nil {
-			scalarArr.Element = append(scalarArr.Element, tv)
-			tv = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: scalarArr}}
-		}
-
-		le.Update = types.NewUpdate(s, tv, intentPrio, intentName, 0)
-		if mustAdd {
-			s.leafVariants.Add(le)
-		}
-	}
-	return nil
-}
-
 // validateMandatory validates that all the mandatory attributes,
 // defined by the schema are present either in the tree or in the index.
 func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats) {
 	log := logf.FromContext(ctx)
-	if s.shouldDelete() {
+	if !s.remainsToExist() {
 		return
 	}
 	if s.schema != nil {
@@ -1549,6 +1422,10 @@ func (s *sharedEntryAttributes) populateChoiceCaseResolvers(_ context.Context) e
 	return nil
 }
 
+func (s *sharedEntryAttributes) GetChild(name string) (Entry, bool) {
+	return s.childs.GetEntry(name)
+}
+
 func (s *sharedEntryAttributes) GetChilds(d DescendMethod) EntryMap {
 	if s.schema == nil {
 		return s.childs.GetAll()
@@ -1622,6 +1499,8 @@ func (s *sharedEntryAttributes) StringIndent(result []string) []string {
 
 // SdcpbPath returns the sdcpb.Path, with its elements and keys based on the local schema
 func (s *sharedEntryAttributes) SdcpbPath() *sdcpb.Path {
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
 	if s.pathCache != nil {
 		return s.pathCache
 	}

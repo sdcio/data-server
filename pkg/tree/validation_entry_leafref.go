@@ -221,8 +221,11 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan
 		if highest != nil {
 			owner = highest.Owner()
 		}
+
+		pathStr := s.SdcpbPath().ToXPath(false)
 		// if required, issue error
-		resultChan <- types.NewValidationResultEntry(owner, fmt.Errorf("missing leaf reference: failed resolving leafref %s for %s: %v", lref, s.SdcpbPath().ToXPath(false), err), types.ValidationResultEntryTypeError)
+		valRes := types.NewValidationResultEntry(owner, fmt.Errorf("missing leaf reference: failed resolving leafref %s for %s: %v", lref, pathStr, err), types.ValidationResultEntryTypeError)
+		resultChan <- valRes
 		return
 	}
 

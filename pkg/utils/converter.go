@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	logf "github.com/sdcio/logger"
+	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/proto"
 )
@@ -48,10 +48,19 @@ func (c *Converter) ExpandUpdates(ctx context.Context, updates []*sdcpb.Update) 
 
 // expandUpdate Expands the value, in case of json to single typed value updates
 func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
+	log := logger.FromContext(ctx)
 	upds := make([]*sdcpb.Update, 0)
 	rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, upd.GetPath())
 	if err != nil {
 		return nil, err
+	}
+
+	p := upd.GetPath()
+	_ = p
+
+	// skip state
+	if rsp.GetSchema().IsState() {
+		return nil, nil
 	}
 
 	switch rsp := rsp.GetSchema().Schema.(type) {
@@ -120,6 +129,10 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 		var err error
 
 		var jsonValue []byte
+		if upd.GetValue() == nil {
+			log.Error(nil, "value is nil", "path", upd.Path.ToXPath(false))
+			return nil, nil
+		}
 		switch upd.GetValue().Value.(type) {
 		case *sdcpb.TypedValue_JsonVal:
 			jsonValue = upd.GetValue().GetJsonVal()
@@ -133,9 +146,13 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 			if err != nil {
 				return nil, err
 			}
-			switch v := v.(type) {
-			case string:
-				upd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
+			upd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: string(jsonValue)}}
+		}
+
+		if upd.Value.GetStringVal() != "" && rsp.Field.GetType().GetTypeName() != "string" {
+			upd.Value, err = Convert(ctx, upd.GetValue().GetStringVal(), rsp.Field.GetType())
+			if err != nil {
+				return nil, err
 			}
 		}
 
@@ -200,7 +217,7 @@ func (c *Converter) ExpandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Updat
 }
 
 func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container) ([]*sdcpb.Update, error) {
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 	// log.Debugf("expanding jsonVal %T | %v | %v", jv, jv, p)
 	switch jv := jv.(type) {
 	case string:
@@ -593,7 +610,7 @@ func getLeafList(s string, cs *sdcpb.SchemaElem_Container) (*sdcpb.LeafListSchem
 }
 
 func getChild(ctx context.Context, name string, cs *sdcpb.SchemaElem_Container, scb SchemaClientBound) (any, bool) {
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 
 	searchNames := []string{name}
 	if i := strings.Index(name, ":"); i >= 0 {
