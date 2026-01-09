@@ -473,7 +473,13 @@ func convertStringToTv(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*
 	case "boolean":
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			return nil, err
+			if strings.Contains(strings.ToLower(v), "true") {
+				b = true
+			} else if strings.Contains(strings.ToLower(v), "false") {
+				b = false
+			} else {
+				return nil, err
+			}
 		}
 		return &sdcpb.TypedValue{
 			Timestamp: ts,
