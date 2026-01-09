@@ -422,6 +422,109 @@ func TestToXMLTable(t *testing.T) {
 			useOperationRemove:     true,
 			newConfig:              nil,
 		},
+		{
+			name:             "XML - delete multi key item (static route)",
+			onlyNewOrUpdated: true,
+			existingConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				// Create initial config with static routes
+				updates := []*sdcpb.Update{
+					{
+						Path: &sdcpb.Path{
+							Elem: []*sdcpb.PathElem{
+								{Name: "ipv6"},
+								{Name: "static-route", Key: map[string]string{
+									"owner":       "owner-service1",
+									"ipv6-prefix": "prefix-2001:db8::/32",
+									"next-hop":    "nexthop-2001:db8::1",
+								}},
+								{Name: "bfd-enabled"},
+							},
+						},
+						Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: true}},
+					},
+					{
+						Path: &sdcpb.Path{
+							Elem: []*sdcpb.PathElem{
+								{Name: "ipv6"},
+								{Name: "static-route", Key: map[string]string{
+									"owner":       "owner-service2",
+									"ipv6-prefix": "prefix-2001:db8:1::/48",
+									"next-hop":    "nexthop-2001:db8::2",
+								}},
+								{Name: "bfd-enabled"},
+							},
+						},
+						Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: false}},
+					},
+				}
+				return updates, nil
+			},
+			runningConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				// Same as existing config for this test
+				updates := []*sdcpb.Update{
+					{
+						Path: &sdcpb.Path{
+							Elem: []*sdcpb.PathElem{
+								{Name: "ipv6"},
+								{Name: "static-route", Key: map[string]string{
+									"owner":       "owner-service1",
+									"ipv6-prefix": "prefix-2001:db8::/32",
+									"next-hop":    "nexthop-2001:db8::1",
+								}},
+								{Name: "bfd-enabled"},
+							},
+						},
+						Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: true}},
+					},
+					{
+						Path: &sdcpb.Path{
+							Elem: []*sdcpb.PathElem{
+								{Name: "ipv6"},
+								{Name: "static-route", Key: map[string]string{
+									"owner":       "owner-service2",
+									"ipv6-prefix": "prefix-2001:db8:1::/48",
+									"next-hop":    "nexthop-2001:db8::2",
+								}},
+								{Name: "bfd-enabled"},
+							},
+						},
+						Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: false}},
+					},
+				}
+				return updates, nil
+			},
+			newConfig: func(ctx context.Context, converter *utils.Converter) ([]*sdcpb.Update, error) {
+				// Only keep one static route, delete the other
+				updates := []*sdcpb.Update{
+					{
+						Path: &sdcpb.Path{
+							Elem: []*sdcpb.PathElem{
+								{Name: "ipv6"},
+								{Name: "static-route", Key: map[string]string{
+									"owner":       "owner-service2",
+									"ipv6-prefix": "prefix-2001:db8:1::/48",
+									"next-hop":    "nexthop-2001:db8::2",
+								}},
+								{Name: "bfd-enabled"},
+							},
+						},
+						Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: false}},
+					},
+				}
+				return updates, nil
+			},
+			expected: `<ipv6>
+  <static-route operation="delete">
+    <ipv6-prefix>prefix-2001:db8::/32</ipv6-prefix>
+    <next-hop>nexthop-2001:db8::1</next-hop>
+    <owner>owner-service1</owner>
+  </static-route>
+</ipv6>
+`,
+			honorNamespace:         false,
+			operationWithNamespace: false,
+			useOperationRemove:     false,
+		},
 	}
 
 	for _, tt := range tests {
