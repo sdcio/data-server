@@ -254,7 +254,7 @@ func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 			// navigate to the stated path
 			entry, err := r.NavigateSdcpbPath(ctx, path)
 			if err != nil {
-				log.V(logf.VWarn).Info("Applying explicit delete - path not found, skipping", "path", path.ToXPath(false))
+				log.Error(nil, "Applying explicit delete - path not found, skipping", "severity", "WARN", "path", path.ToXPath(false))
 			}
 
 			// walk the whole branch adding the explicit delete leafvariant

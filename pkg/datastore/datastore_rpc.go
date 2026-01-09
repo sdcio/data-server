@@ -75,6 +75,8 @@ type Datastore struct {
 // func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Datastore {
 func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc cache.Client, opts ...grpc.DialOption) (*Datastore, error) {
 
+	ctx, cancel := context.WithCancel(ctx)
+
 	log := logf.FromContext(ctx)
 	log = log.WithName("datastore").WithValues(
 		"datastore-name", c.Name,
@@ -94,12 +96,11 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 	tc := tree.NewTreeContext(scb, tree.RunningIntentName)
 	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 
 	ccb := cache.NewCacheClientBound(c.Name, cc)
-
-	ctx, cancel := context.WithCancel(ctx)
 
 	ds := &Datastore{
 		config:           c,

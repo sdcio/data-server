@@ -20,7 +20,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	for _, delete := range deletes {
 		err := d.syncTree.DeleteBranch(ctx, delete, tree.RunningIntentName)
 		if err != nil {
-			log.V(logger.VWarn).Error(err, "failed deleting path from datastore sync tree", "path", delete.ToXPath(false))
+			log.Error(err, "failed deleting path from datastore sync tree", "severity", "WARN", "path", delete.ToXPath(false))
 			continue
 		}
 	}
@@ -33,15 +33,14 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	}
 
 	// conditional trace logging
-	if log.GetV() <= logger.VTrace {
+	if log := log.V(logger.VTrace); log.Enabled() {
 		treeExport, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
 		if err == nil {
 			json, err := protojson.MarshalOptions{Multiline: false}.Marshal(treeExport)
 			if err == nil {
-				log.V(logger.VTrace).Info("synctree after sync apply", "content", string(json))
+				log.Info("synctree after sync apply", "content", string(json))
 			}
 		}
-
 	}
 
 	return nil

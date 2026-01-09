@@ -148,9 +148,9 @@ func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
 		return
 	}
 
-	if log.V(logger.VTrace).Enabled() {
+	if log := log.V(logger.VTrace); log.Enabled() {
 		data, _ := protojson.Marshal(result)
-		log.V(logger.VTrace).Info("sync content", "data", string(data))
+		log.Info("sync content", "data", string(data))
 	}
 
 	err = s.runningStore.ApplyToRunning(s.ctx, s.paths, proto.NewProtoTreeImporter(result))

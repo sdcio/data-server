@@ -68,7 +68,7 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 				for peerIdentifier, devStream := range d.deviationClients {
 					deviationClients[peerIdentifier] = devStream
 					if devStream.Context().Err() != nil {
-						log.V(logf.VWarn).Error(devStream.Context().Err(), "deviation client context error", "client", peerIdentifier, "error", devStream.Context().Err())
+						log.Error(devStream.Context().Err(), "deviation client context error", "severity", "WARN", "client", peerIdentifier, "error", devStream.Context().Err())
 						continue
 					}
 					deviationClientNames = append(deviationClientNames, peerIdentifier)
@@ -122,8 +122,10 @@ func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.Dev
 				continue
 			}
 
-			if log.GetV() <= logger.VTrace && deviation.Reason() == treetypes.DeviationReasonNotApplied {
-				log.V(logger.VTrace).Info("NOT APPLIED", "path", deviation.Path().ToXPath(false), "actual value", deviation.CurrentValue().ToString(), "expected value", deviation.ExpectedValue().ToString(), "intent", deviation.IntentName())
+			if log := log.V(logger.VTrace); log.Enabled() {
+				if deviation.Reason() == treetypes.DeviationReasonNotApplied { // TODO add check for trace level Trace
+					log.Info("NOT APPLIED", "path", deviation.Path().ToXPath(false), "actual value", deviation.CurrentValue().ToString(), "expected value", deviation.ExpectedValue().ToString(), "intent", deviation.IntentName())
+				}
 			}
 
 			err := dc.Send(&sdcpb.WatchDeviationResponse{
@@ -157,6 +159,8 @@ type DeviationEntry interface {
 
 func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.DeviationEntry, error) {
 
+	log := logger.FromContext(ctx)
+
 	d.syncTreeMutex.RLock()
 	deviationTree, err := d.syncTree.DeepCopy(ctx)
 	d.syncTreeMutex.RUnlock()
@@ -172,6 +176,10 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 	err = deviationTree.FinishInsertionPhase(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	if log := log.V(logger.VTrace); log.Enabled() {
+		log.Info("deviation tree", "content", deviationTree.String())
 	}
 
 	deviationChan := make(chan *treetypes.DeviationEntry, 10)

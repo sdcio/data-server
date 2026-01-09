@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc"
 
@@ -68,7 +69,10 @@ func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemaC
 		return nil, fmt.Errorf("unknown DS target type %q", cfg.Type)
 	}
 
-	err = t.AddSyncs(ctx, syncConfigs...)
+	syncLog := logger.FromContext(ctx).WithName("sync")
+	syncCtx := logger.IntoContext(ctx, syncLog)
+
+	err = t.AddSyncs(syncCtx, syncConfigs...)
 	if err != nil {
 		return nil, err
 	}

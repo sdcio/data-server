@@ -30,8 +30,7 @@ func (o *MarkOwnerDeleteProcessor) Run(e Entry, pool pool.VirtualPoolI) error {
 	// wait for the pool to run dry
 	pool.Wait()
 
-	return nil
-
+	return pool.FirstError()
 }
 
 type OwnerDeleteMarkerTaskConfig struct {

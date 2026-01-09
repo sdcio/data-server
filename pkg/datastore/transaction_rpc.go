@@ -230,12 +230,6 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 			return nil, err
 		}
 
-		// marksOwnerDeleteVisitor := tree.NewMarkOwnerDeleteVisitor(intent.GetName(), intent.GetOnlyIntended())
-		// err := root.Walk(ctx, marksOwnerDeleteVisitor)
-		// if err != nil {
-		// 	return nil, err
-		// }
-
 		// clear the owners existing explicit delete entries, retrieving the old entries for storing in the transaction for possible rollback
 		oldExplicitDeletes := root.RemoveExplicitDeletes(intent.GetName())
 
@@ -432,10 +426,10 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVari
 	}
 
 	// conditional trace logging
-	if log.GetV() <= logger.VTrace {
+	if log := log.V(logger.VTrace); log.Enabled() {
 		json, err := protojson.MarshalOptions{Multiline: false}.Marshal(newRunningIntent)
-		if err != nil {
-			log.V(logger.VTrace).Info("writeback synctree", "content", string(json))
+		if err == nil {
+			log.Info("writeback synctree", "content", string(json))
 		}
 	}
 

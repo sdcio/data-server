@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/sdcio/logger"
-	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/proto"
 )
@@ -49,7 +48,7 @@ func (c *Converter) ExpandUpdates(ctx context.Context, updates []*sdcpb.Update) 
 
 // expandUpdate Expands the value, in case of json to single typed value updates
 func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 	upds := make([]*sdcpb.Update, 0)
 	rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, upd.GetPath())
 	if err != nil {
@@ -131,7 +130,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 
 		var jsonValue []byte
 		if upd.GetValue() == nil {
-			log.V(logger.VError).Info("Value is nil", "Path", upd.Path.ToXPath(false))
+			log.Error(nil, "value is nil", "path", upd.Path.ToXPath(false))
 			return nil, nil
 		}
 		switch upd.GetValue().Value.(type) {
@@ -218,7 +217,7 @@ func (c *Converter) ExpandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Updat
 }
 
 func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container) ([]*sdcpb.Update, error) {
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 	// log.Debugf("expanding jsonVal %T | %v | %v", jv, jv, p)
 	switch jv := jv.(type) {
 	case string:
@@ -611,7 +610,7 @@ func getLeafList(s string, cs *sdcpb.SchemaElem_Container) (*sdcpb.LeafListSchem
 }
 
 func getChild(ctx context.Context, name string, cs *sdcpb.SchemaElem_Container, scb SchemaClientBound) (any, bool) {
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 
 	searchNames := []string{name}
 	if i := strings.Index(name, ":"); i >= 0 {
