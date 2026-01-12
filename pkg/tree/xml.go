@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"sort"
 
 	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -274,6 +275,9 @@ func xmlAddKeyElements(s Entry, parent *etree.Element) {
 
 	// from the parent we get the keys as slice
 	schemaKeys := parentSchema.GetSchemaKeys()
+	//issue #364: sort the slice
+	sort.Strings(schemaKeys)
+
 	var treeElem Entry = s
 	// the keys do match the levels up in the tree in reverse order
 	// hence we init i with levelUp and count down

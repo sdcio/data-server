@@ -485,8 +485,6 @@ func (s *sharedEntryAttributes) GetSchemaKeys() []string {
 			for _, k := range contschema.GetKeys() {
 				keys = append(keys, k.Name)
 			}
-			//possible key mismatch on multiple keys when not sorted (issue#363)
-			sort.Strings(keys)
 			return keys
 		}
 	}
