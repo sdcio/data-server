@@ -25,6 +25,7 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore"
 	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/utils"
+	"github.com/sdcio/logger"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc/codes"
@@ -279,7 +280,10 @@ func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.
 		log.Error(err, "failed to get datastore")
 		return status.Errorf(codes.NotFound, "unknown datastore")
 	}
-	log.WithValues("datastore-name", req.GetName()[0])
+
+	// add datastore name to log
+	log = log.WithValues("datastore-name", req.GetName()[0])
+	logger.IntoContext(ctx, log)
 
 	err = ds.WatchDeviations(req, stream)
 	if err != nil {
@@ -287,7 +291,7 @@ func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.
 		return err
 	}
 	<-stream.Context().Done()
-	log.Info("stream context done", "errVal", stream.Context().Err())
+	log.Error(stream.Context().Err(), "stream context done", "severity", "WARN")
 	ds.StopDeviationsWatch(peerName)
 	return nil
 }

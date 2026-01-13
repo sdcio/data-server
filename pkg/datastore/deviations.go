@@ -68,7 +68,7 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 				for peerIdentifier, devStream := range d.deviationClients {
 					deviationClients[peerIdentifier] = devStream
 					if devStream.Context().Err() != nil {
-						log.Error(devStream.Context().Err(), "deviation client context error", "severity", "WARN", "client", peerIdentifier, "error", devStream.Context().Err())
+						log.Error(devStream.Context().Err(), "deviation client context error", "severity", "WARN", "client", peerIdentifier)
 						continue
 					}
 					deviationClientNames = append(deviationClientNames, peerIdentifier)
