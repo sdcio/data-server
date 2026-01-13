@@ -22,21 +22,22 @@ func (d *Datastore) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdc
 	if !ok {
 		return status.Errorf(codes.InvalidArgument, "missing peer info")
 	}
-	pName := p.Addr.String()
+	peerAddr := p.Addr.String()
 
 	d.m.Lock()
 	defer d.m.Unlock()
-	d.deviationClients[pName] = stream
+	d.deviationClients[stream] = peerAddr
 
-	log.Info("new deviation client", "client", pName)
+	log.Info("new deviation client", "client", peerAddr)
 	return nil
 }
 
-func (d *Datastore) StopDeviationsWatch(peer string) {
+func (d *Datastore) StopDeviationsWatch(stream sdcpb.DataServer_WatchDeviationsServer) {
 	log := logf.FromContext(d.ctx)
 	d.m.Lock()
 	defer d.m.Unlock()
-	delete(d.deviationClients, peer)
+	peer := d.deviationClients[stream]
+	delete(d.deviationClients, stream)
 	log.Info("deviation client removed", "peer", peer)
 }
 
@@ -65,7 +66,7 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 			func() {
 				d.m.RLock()
 				defer d.m.RUnlock()
-				for peerIdentifier, devStream := range d.deviationClients {
+				for devStream, peerIdentifier := range d.deviationClients {
 					deviationClients[peerIdentifier] = devStream
 					if devStream.Context().Err() != nil {
 						log.Error(devStream.Context().Err(), "deviation client context error", "severity", "WARN", "client", peerIdentifier)

@@ -56,7 +56,7 @@ type Datastore struct {
 
 	// keeps track of clients watching deviation updates
 	m                *sync.RWMutex
-	deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer
+	deviationClients map[sdcpb.DataServer_WatchDeviationsServer]string
 
 	// datastore mutex locks the whole datasore for further set operations
 	dmutex *sync.Mutex
@@ -110,7 +110,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 		cacheClient:      ccb,
 		m:                &sync.RWMutex{},
 		dmutex:           &sync.Mutex{},
-		deviationClients: make(map[string]sdcpb.DataServer_WatchDeviationsServer),
+		deviationClients: make(map[sdcpb.DataServer_WatchDeviationsServer]string),
 		syncTree:         syncTreeRoot,
 		syncTreeMutex:    &sync.RWMutex{},
 		taskPool:         pool.NewSharedTaskPool(ctx, runtime.NumCPU()),
