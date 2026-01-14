@@ -1,13 +1,14 @@
 package json
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/utils"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 )
 
 type JsonTreeImporter struct {
@@ -29,7 +30,11 @@ func NewJsonTreeImporter(d any) *JsonTreeImporter {
 	}
 }
 
-func (j *JsonTreeImporter) GetElement(key string) importer.ImportConfigAdapter {
+func (j *JsonTreeImporter) GetDeletes() *sdcpb.PathSet {
+	return sdcpb.NewPathSet()
+}
+
+func (j *JsonTreeImporter) GetElement(key string) importer.ImportConfigAdapterElement {
 	switch d := j.data.(type) {
 	case map[string]any:
 
@@ -46,11 +51,11 @@ func (j *JsonTreeImporter) GetElement(key string) importer.ImportConfigAdapter {
 	return nil
 }
 
-func (j *JsonTreeImporter) GetElements() []importer.ImportConfigAdapter {
-	var result []importer.ImportConfigAdapter
+func (j *JsonTreeImporter) GetElements() []importer.ImportConfigAdapterElement {
+	var result []importer.ImportConfigAdapterElement
 	switch d := j.data.(type) {
 	case map[string]any:
-		result = make([]importer.ImportConfigAdapter, 0, len(d))
+		result = make([]importer.ImportConfigAdapterElement, 0, len(d))
 		for k, v := range d {
 			beforeColon, key, found := strings.Cut(k, ":")
 			if !found {
@@ -66,7 +71,7 @@ func (j *JsonTreeImporter) GetElements() []importer.ImportConfigAdapter {
 			}
 		}
 	default:
-		log.Error("error we hit a code path that was not meant to be hit.")
+		logf.DefaultLogger.Error(nil, "hit a code path that was not meant to be hit")
 	}
 	return result
 }
@@ -75,7 +80,7 @@ func (j *JsonTreeImporter) GetKeyValue() (string, error) {
 	return fmt.Sprintf("%v", j.data), nil
 }
 
-func (j *JsonTreeImporter) GetTVValue(slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+func (j *JsonTreeImporter) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	return utils.ConvertJsonValueToTv(j.data, slt)
 }
 

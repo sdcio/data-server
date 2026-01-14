@@ -20,13 +20,12 @@ import (
 	"strings"
 
 	"github.com/jellydator/ttlcache/v3"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/sdcio/data-server/pkg/config"
-	"github.com/sdcio/data-server/pkg/utils"
 )
 
 type cacheKey struct {
@@ -99,7 +98,7 @@ func (c *remoteClient) GetSchema(ctx context.Context, in *sdcpb.GetSchemaRequest
 		Name:    in.GetSchema().GetName(),
 		Vendor:  in.GetSchema().GetVendor(),
 		Version: in.GetSchema().GetVersion(),
-		Path:    utils.ToXPath(in.GetPath(), true),
+		Path:    in.GetPath().ToXPath(true),
 	}
 	// check if the key exists in the cache
 	if item := c.schemaCache.Get(key, c.getOpts...); item != nil {
@@ -240,6 +239,7 @@ func (c *remoteClient) ExpandPath(ctx context.Context, in *sdcpb.ExpandPathReque
 
 // GetSchemaElements returns the schema of each path element
 func (c *remoteClient) GetSchemaElements(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (chan *sdcpb.SchemaElem, error) {
+	log := logf.FromContext(ctx)
 	ch := make(chan *sdcpb.SchemaElem)
 	if c.schemaCache == nil {
 		stream, err := c.c.GetSchemaElements(ctx, in, opts...)
@@ -255,7 +255,7 @@ func (c *remoteClient) GetSchemaElements(ctx context.Context, in *sdcpb.GetSchem
 					if strings.Contains(err.Error(), "EOF") {
 						return
 					}
-					log.Errorf("stream rcv ended: %v", err)
+					log.Error(err, "stream rcv ended")
 					return
 				}
 				ch <- msg.GetSchema()
@@ -277,7 +277,7 @@ func (c *remoteClient) GetSchemaElements(ctx context.Context, in *sdcpb.GetSchem
 				if strings.Contains(err.Error(), "EOF") {
 					return
 				}
-				log.Errorf("GetSchema cache failed: %v", err)
+				log.Error(err, "GetSchema cache failed")
 				return
 			}
 			ch <- r.GetSchema()

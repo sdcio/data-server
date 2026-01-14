@@ -1,0 +1,57 @@
+module sdcio_model_static_route {
+  yang-version 1.1;
+  namespace "urn:sdcio/model_static_route";
+  prefix sdcio_model_static_route;
+
+  description
+    "Test schema for multi-key static route with different patterns";
+
+  revision 2025-10-21 {
+    description
+      "Test schema for static-route multikey pattern validation";
+  }
+
+  grouping static-route-top {
+    container ipv6 {
+      description
+        "IPv6 static route container";
+      
+      list static-route {
+        key "owner ipv6-prefix next-hop";
+        description
+          "IPv6 static route configuration.";
+        
+        leaf owner {
+          type string {
+            pattern 'owner-.*';
+          }
+          description
+            "Specifies the service owner - must start with 'owner-'";
+        }
+        
+        leaf ipv6-prefix {
+          type string {
+            pattern 'prefix-.*';
+          }
+          description
+            "IPv6 prefix - must start with 'prefix-'";
+        }
+        
+        leaf next-hop {
+          type string {
+            pattern 'nexthop-.*';
+          }
+          description
+            "Specifies the next hop - must start with 'nexthop-'";
+        }
+        
+        leaf bfd-enabled {
+          type boolean;
+          default false;
+          description
+            "Enable BFD for this static route";
+        }
+      }
+    }
+  }
+}

@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -21,7 +21,6 @@ type SchemaClientBound interface {
 	GetSchemaSdcpbPath(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error)
 	// GetSchemaElements retrieves the Schema Elements for all levels of the given path
 	GetSchemaElements(ctx context.Context, p *sdcpb.Path, done chan struct{}) (chan *sdcpb.GetSchemaResponse, error)
-	ToPath(ctx context.Context, path []string) (*sdcpb.Path, error)
 }
 
 type Converter struct {
@@ -49,10 +48,19 @@ func (c *Converter) ExpandUpdates(ctx context.Context, updates []*sdcpb.Update) 
 
 // expandUpdate Expands the value, in case of json to single typed value updates
 func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
+	log := logger.FromContext(ctx)
 	upds := make([]*sdcpb.Update, 0)
 	rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, upd.GetPath())
 	if err != nil {
 		return nil, err
+	}
+
+	p := upd.GetPath()
+	_ = p
+
+	// skip state
+	if rsp.GetSchema().IsState() {
+		return nil, nil
 	}
 
 	switch rsp := rsp.GetSchema().Schema.(type) {
@@ -121,6 +129,10 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 		var err error
 
 		var jsonValue []byte
+		if upd.GetValue() == nil {
+			log.Error(nil, "value is nil", "path", upd.Path.ToXPath(false))
+			return nil, nil
+		}
 		switch upd.GetValue().Value.(type) {
 		case *sdcpb.TypedValue_JsonVal:
 			jsonValue = upd.GetValue().GetJsonVal()
@@ -134,15 +146,19 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 			if err != nil {
 				return nil, err
 			}
-			switch v := v.(type) {
-			case string:
-				upd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
+			upd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: string(jsonValue)}}
+		}
+
+		if upd.Value.GetStringVal() != "" && rsp.Field.GetType().GetTypeName() != "string" {
+			upd.Value, err = Convert(ctx, upd.GetValue().GetStringVal(), rsp.Field.GetType())
+			if err != nil {
+				return nil, err
 			}
 		}
 
 		// We expect that all identityrefs are sent by schema-server as a identityref type now, not string
 		if rsp.Field.GetType().Type == "identityref" && upd.GetValue().GetStringVal() != "" {
-			upd.Value, err = Convert(upd.GetValue().GetStringVal(), rsp.Field.GetType())
+			upd.Value, err = Convert(ctx, upd.GetValue().GetStringVal(), rsp.Field.GetType())
 			if err != nil {
 				return nil, err
 			}
@@ -201,6 +217,7 @@ func (c *Converter) ExpandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Updat
 }
 
 func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container) ([]*sdcpb.Update, error) {
+	log := logger.FromContext(ctx)
 	// log.Debugf("expanding jsonVal %T | %v | %v", jv, jv, p)
 	switch jv := jv.(type) {
 	case string:
@@ -389,7 +406,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		}
 		return upds, nil
 	default:
-		log.Warnf("unexpected json type cast %T", jv)
+		log.Error(nil, "unexpected json type cast", "type", reflect.TypeOf(jv).String())
 		return nil, nil
 	}
 }
@@ -480,18 +497,14 @@ func convertStringToTv(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*
 			Value:     &sdcpb.TypedValue_BoolVal{BoolVal: b},
 		}, nil
 	case "decimal64":
-		arr := strings.SplitN(v, ".", 2)
-		digits, err := strconv.ParseInt(arr[0], 10, 64)
+		decimalVal, err := ParseDecimal64(v)
 		if err != nil {
 			return nil, err
 		}
-		precision64, err := strconv.ParseUint(arr[1], 10, 32)
-		if err != nil {
-			return nil, err
-		}
-		precision := uint32(precision64)
 		return &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_DecimalVal{DecimalVal: &sdcpb.Decimal64{Digits: digits, Precision: precision}},
+			Value: &sdcpb.TypedValue_DecimalVal{
+				DecimalVal: decimalVal,
+			},
 		}, nil
 	case "identityref":
 		before, name, found := strings.Cut(v, ":")
@@ -597,6 +610,7 @@ func getLeafList(s string, cs *sdcpb.SchemaElem_Container) (*sdcpb.LeafListSchem
 }
 
 func getChild(ctx context.Context, name string, cs *sdcpb.SchemaElem_Container, scb SchemaClientBound) (any, bool) {
+	log := logger.FromContext(ctx)
 
 	searchNames := []string{name}
 	if i := strings.Index(name, ":"); i >= 0 {
@@ -608,7 +622,7 @@ func getChild(ctx context.Context, name string, cs *sdcpb.SchemaElem_Container, 
 			for _, c := range cs.Container.GetChildren() {
 				rsp, err := scb.GetSchemaSdcpbPath(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: c}}})
 				if err != nil {
-					log.Errorf("Failed to get schema object %s: %v", c, err)
+					log.Error(err, "failed to get schema object", "schema-object", c)
 					return "", false
 				}
 				switch rsp := rsp.GetSchema().Schema.(type) {
@@ -635,213 +649,4 @@ func getChild(ctx context.Context, name string, cs *sdcpb.SchemaElem_Container, 
 		}
 	}
 	return "", false
-}
-
-func (c *Converter) ConvertTypedValueToProto(ctx context.Context, p *sdcpb.Path, tv *sdcpb.TypedValue) (*sdcpb.TypedValue, error) {
-	rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, p)
-	if err != nil {
-		return nil, err
-	}
-	return ConvertTypedValueToYANGType(rsp.GetSchema(), tv)
-}
-
-func ConvertTypedValueToYANGType(schemaElem *sdcpb.SchemaElem, tv *sdcpb.TypedValue) (*sdcpb.TypedValue, error) {
-	switch {
-	case schemaElem.GetContainer() != nil:
-		if schemaElem.GetContainer().IsPresence {
-			return &sdcpb.TypedValue{
-				Timestamp: tv.GetTimestamp(),
-				Value:     &sdcpb.TypedValue_EmptyVal{},
-			}, nil
-		}
-	case schemaElem.GetLeaflist() != nil:
-		switch tv.Value.(type) {
-		case *sdcpb.TypedValue_LeaflistVal:
-			return tv, nil
-		}
-		return &sdcpb.TypedValue{
-			Timestamp: tv.GetTimestamp(),
-			Value: &sdcpb.TypedValue_LeaflistVal{
-				LeaflistVal: &sdcpb.ScalarArray{
-					Element: []*sdcpb.TypedValue{tv},
-				},
-			},
-		}, nil
-	case schemaElem.GetField() != nil:
-		switch schemaElem.GetField().GetType().GetType() {
-		default:
-			return tv, nil
-		case "string", "identityref":
-			return tv, nil
-		case "uint64", "uint32", "uint16", "uint8":
-			i, err := strconv.Atoi(TypedValueToString(tv))
-			if err != nil {
-				return nil, err
-			}
-			ctv := &sdcpb.TypedValue{
-				Timestamp: tv.GetTimestamp(),
-				Value:     &sdcpb.TypedValue_UintVal{UintVal: uint64(i)},
-			}
-			return ctv, nil
-		case "int64", "int32", "int16", "int8":
-			i, err := strconv.Atoi(TypedValueToString(tv))
-			if err != nil {
-				return nil, err
-			}
-			ctv := &sdcpb.TypedValue{
-				Timestamp: tv.GetTimestamp(),
-				Value:     &sdcpb.TypedValue_IntVal{IntVal: int64(i)},
-			}
-			return ctv, nil
-		case "enumeration":
-			return tv, nil
-		case "union":
-			return tv, nil
-		case "boolean":
-			v, err := strconv.ParseBool(TypedValueToString(tv))
-			if err != nil {
-				return nil, err
-			}
-			return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: v}}, nil
-		case "decimal64":
-			d64, err := ParseDecimal64(TypedValueToString(tv))
-			if err != nil {
-				return nil, err
-			}
-			return &sdcpb.TypedValue{
-				Value: &sdcpb.TypedValue_DecimalVal{
-					DecimalVal: d64,
-				},
-			}, nil
-		case "float":
-			v, err := strconv.ParseFloat(TypedValueToString(tv), 32)
-			if err != nil {
-				return nil, err
-			}
-			return &sdcpb.TypedValue{
-				Timestamp: tv.GetTimestamp(),
-				Value:     &sdcpb.TypedValue_FloatVal{FloatVal: float32(v)},
-			}, nil
-		}
-	}
-	return nil, nil
-}
-
-func convertUpdateTypedValue(_ context.Context, upd *sdcpb.Update, scRsp *sdcpb.GetSchemaResponse, leaflists map[string]*leafListNotification) (*sdcpb.Update, error) {
-	switch {
-	case scRsp.GetSchema().GetContainer() != nil:
-		if !scRsp.GetSchema().GetContainer().GetIsPresence() {
-			return nil, nil
-		}
-		return upd, nil
-	case scRsp.GetSchema().GetLeaflist() != nil:
-		// leaf-list received as a key
-		if upd.GetValue() == nil {
-			// clone path
-			p := proto.Clone(upd.GetPath()).(*sdcpb.Path)
-			// grab the key from the last elem, that's the leaf-list value
-			var lftv *sdcpb.TypedValue
-			for _, v := range p.GetElem()[len(p.GetElem())-1].GetKey() {
-				lftv = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}
-				break
-			}
-			if lftv == nil {
-				return nil, fmt.Errorf("malformed leaf-list update: %v", upd)
-			}
-			// delete the key from the last elem (that's the leaf-list value)
-			p.GetElem()[len(p.GetElem())-1].Key = nil
-			// build unique path
-			sp := ToXPath(p, false)
-			if _, ok := leaflists[sp]; !ok {
-				leaflists[sp] = &leafListNotification{
-					path:      p,                               // modified path
-					leaflists: make([]*sdcpb.TypedValue, 0, 1), // at least one elem
-				}
-			}
-			// convert leaf-list to its YANG type
-			clftv, err := TypedValueToYANGType(lftv, scRsp.GetSchema())
-			if err != nil {
-				return nil, err
-			}
-			// append leaf-list
-			leaflists[sp].leaflists = append(leaflists[sp].leaflists, clftv)
-			return nil, nil
-		}
-		// regular leaf list
-		switch upd.GetValue().Value.(type) {
-		case *sdcpb.TypedValue_LeaflistVal:
-			return upd, nil
-		default:
-			return nil, fmt.Errorf("unexpected leaf-list typedValue: %v", upd.GetValue())
-		}
-	case scRsp.GetSchema().GetField() != nil:
-		ctv, err := TypedValueToYANGType(upd.GetValue(), scRsp.GetSchema())
-		if err != nil {
-			return nil, err
-		}
-		return &sdcpb.Update{
-			Path:  upd.GetPath(),
-			Value: ctv,
-		}, nil
-	}
-	return nil, nil
-}
-
-// conversion
-type leafListNotification struct {
-	path      *sdcpb.Path
-	leaflists []*sdcpb.TypedValue
-}
-
-func (c *Converter) ConvertNotificationTypedValues(ctx context.Context, n *sdcpb.Notification) (*sdcpb.Notification, error) {
-	// this map serves as a context to group leaf-lists
-	// sent as keys in separate updates.
-	leaflists := map[string]*leafListNotification{}
-	nn := &sdcpb.Notification{
-		Timestamp: n.GetTimestamp(),
-		Update:    make([]*sdcpb.Update, 0, len(n.GetUpdate())),
-		Delete:    n.GetDelete(),
-	}
-	// convert typed values to their YANG type
-	for _, upd := range n.GetUpdate() {
-		StripPathElemPrefixPath(upd.GetPath())
-		scRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, upd.GetPath())
-		if err != nil {
-			return nil, err
-		}
-		nup, err := convertUpdateTypedValue(ctx, upd, scRsp, leaflists)
-		if err != nil {
-			return nil, err
-		}
-		log.Debugf("converted update from: %v, to: %v", upd, nup)
-		// gNMI get() could return a Notification with a single path element containing a JSON/JSON_IETF blob, we need to expand this into several typed values.
-		if nup == nil && (upd.GetValue().GetJsonVal() != nil || upd.GetValue().GetJsonIetfVal() != nil) {
-			expUpds, err := c.ExpandUpdate(ctx, upd)
-			if err != nil {
-				return nil, err
-			}
-			expNn := &sdcpb.Notification{
-				Timestamp: n.GetTimestamp(),
-				Update:    expUpds,
-				Delete:    n.GetDelete(),
-			}
-			return c.ConvertNotificationTypedValues(ctx, expNn)
-		}
-		if nup == nil { // filters out notification ending in non-presence containers
-			continue
-		}
-		nn.Update = append(nn.Update, nup)
-	}
-	// add accumulated leaf-lists
-	for _, lfnotif := range leaflists {
-		nn.Update = append(nn.Update, &sdcpb.Update{
-			Path: lfnotif.path,
-			Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{
-				LeaflistVal: &sdcpb.ScalarArray{Element: lfnotif.leaflists},
-			},
-			},
-		})
-	}
-
-	return nn, nil
 }

@@ -21,20 +21,24 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/datastore"
+	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
+	"github.com/sdcio/data-server/pkg/utils"
+	"github.com/sdcio/logger"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
-
-	"github.com/sdcio/data-server/pkg/config"
-	"github.com/sdcio/data-server/pkg/datastore"
-	"github.com/sdcio/data-server/pkg/datastore/target"
 )
 
 // datastore
 func (s *Server) ListDataStore(ctx context.Context, req *sdcpb.ListDataStoreRequest) (*sdcpb.ListDataStoreResponse, error) {
-	log.Debug("Received ListDataStoreRequest")
+	log := logf.FromContext(ctx).WithName("ListDataStore")
+	ctx = logf.IntoContext(ctx, log)
+
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 
 	datastores := s.datastores.GetDatastoreAll()
 	rs := make([]*sdcpb.GetDataStoreResponse, 0, len(datastores))
@@ -51,7 +55,13 @@ func (s *Server) ListDataStore(ctx context.Context, req *sdcpb.ListDataStoreRequ
 }
 
 func (s *Server) GetDataStore(ctx context.Context, req *sdcpb.GetDataStoreRequest) (*sdcpb.GetDataStoreResponse, error) {
-	log.Debugf("Received GetDataStoreRequest: %v", req)
+	log := logf.FromContext(ctx).WithName("GetDataStore")
+	log = log.WithValues(
+		"datastore-name", req.GetDatastoreName(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 	name := req.GetDatastoreName()
 	if name == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
@@ -64,17 +74,31 @@ func (s *Server) GetDataStore(ctx context.Context, req *sdcpb.GetDataStoreReques
 }
 
 func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStoreRequest) (*sdcpb.CreateDataStoreResponse, error) {
-	log.Debugf("Received CreateDataStoreRequest: %v", req)
+	log := logf.FromContext(ctx).WithName("CreateDataStore")
+	log = log.WithValues(
+		"datastore-name", req.GetDatastoreName(),
+	)
+	ctx = logf.IntoContext(ctx, log)
+
+	log.Info("creating datastore",
+		"datastore-schema", req.GetSchema(),
+		"datastore-target", req.GetTarget(),
+	)
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
+
 	name := req.GetDatastoreName()
 	lName := len(name)
 	if lName == 0 {
+		log.Error(nil, "missing datastore name attribute")
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
 	}
 	if lName > math.MaxUint16 {
-		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
+		log.Error(nil, "datastore name attribute too long")
+		return nil, status.Error(codes.InvalidArgument, "datastore name attribute too long")
 	}
 
 	if _, err := s.datastores.GetDataStore(name); err == nil {
+		log.Error(nil, "datastore already exists")
 		return nil, status.Errorf(codes.InvalidArgument, "datastore %s already exists", name)
 	}
 
@@ -92,6 +116,7 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		case sdcpb.CommitCandidate_COMMIT_RUNNING:
 			commitDatastore = "running"
 		default:
+			log.Error(nil, "unknown commitDatastore", "datastore", req.GetTarget().GetNetconfOpts().GetCommitCandidate())
 			return nil, fmt.Errorf("unknown commitDatastore: %v", req.GetTarget().GetNetconfOpts().GetCommitCandidate())
 		}
 		sbi.NetconfOptions = &config.SBINetconfOptions{
@@ -106,7 +131,8 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 			Encoding: req.GetTarget().GetGnmiOpts().GetEncoding(),
 		}
 	default:
-		return nil, fmt.Errorf("unknowm protocol type %s", req.GetTarget().GetType())
+		log.Error(nil, "unknowm targetconnection protocol type", "type", req.GetTarget().GetType())
+		return nil, fmt.Errorf("unknowm targetconnection protocol type %s", req.GetTarget().GetType())
 	}
 
 	if req.GetTarget().GetTls() != nil {
@@ -134,6 +160,7 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		},
 		SBI:        sbi,
 		Validation: s.config.Validation.DeepCopy(),
+		Deviation:  s.config.Deviation.DeepCopy(),
 	}
 	if req.GetSync() != nil {
 		dsConfig.Sync = &config.Sync{
@@ -164,13 +191,15 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 				gnSyncConfig.Encoding = pSync.GetTarget().GetGnmiOpts().GetEncoding()
 			case "netconf":
 			default:
-				return nil, status.Errorf(codes.InvalidArgument, "unknown sync protocol: %q", pSync.GetTarget().GetType())
+				log.Error(nil, "unknown targetsync protocol type", "protocol", pSync.GetTarget().GetType())
+				return nil, status.Errorf(codes.InvalidArgument, "unknown targetsync protocol: %q", pSync.GetTarget().GetType())
 			}
 			dsConfig.Sync.Config = append(dsConfig.Sync.Config, gnSyncConfig)
 		}
 	}
 	err := dsConfig.ValidateSetDefaults()
 	if err != nil {
+		log.Error(err, "invalid datastore config")
 		return nil, status.Errorf(codes.InvalidArgument, "invalid datastore config: %v", err)
 	}
 	ds, err := datastore.New(
@@ -180,14 +209,24 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		s.cacheClient,
 		s.gnmiOpts...)
 	if err != nil {
+		log.Error(err, "failed creating new datastore")
 		return nil, err
 	}
-	s.datastores.AddDatastore(ds)
+	err = s.datastores.AddDatastore(ds)
+	if err != nil {
+		log.Error(err, "failed adding new datastore")
+		return nil, err
+	}
+	log.Info("datastore created successfully")
 	return &sdcpb.CreateDataStoreResponse{}, nil
 }
 
 func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStoreRequest) (*sdcpb.DeleteDataStoreResponse, error) {
-	log.Debugf("Received DeleteDataStoreRequest: %v", req)
+	log := logf.FromContext(ctx).WithName("DeleteDataStore")
+	ctx = logf.IntoContext(ctx, log)
+
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
+
 	name := req.GetName()
 	if name == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
@@ -198,12 +237,16 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 		return nil, err
 	}
 
-	err = ds.Stop()
+	err = ds.Stop(s.ctx)
 	if err != nil {
-		log.Errorf("failed to stop datastore %s: %v", name, err)
+		log.Error(err, "failed to stop datastore")
 	}
-	s.datastores.DeleteDatastore(ctx, name)
-	log.Infof("deleted datastore %s", name)
+	err = s.datastores.DeleteDatastore(ctx, name)
+	if err != nil {
+		log.Error(err, "failed to delete datastore")
+		return nil, fmt.Errorf("failed to delete datastore: %w", err)
+	}
+	log.Info("deleted datastore")
 
 	return &sdcpb.DeleteDataStoreResponse{}, nil
 }
@@ -211,28 +254,45 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.DataServer_WatchDeviationsServer) error {
 	ctx := stream.Context()
 	p, ok := peer.FromContext(ctx)
-	log.Debugf("Received WatchDeviationRequest from peer %s: %v", p.Addr.String(), req)
+	var peerName string
+	if ok {
+		peerName = p.Addr.String()
+	}
+	log := logf.FromContext(ctx).WithName("WatchDeviations").WithValues("peer", peerName)
+	ctx = logf.IntoContext(ctx, log)
 
-	peerInfo, ok := peer.FromContext(ctx)
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
+
 	if !ok {
 		return status.Errorf(codes.InvalidArgument, "missing peer info")
 	}
-	if req.GetName() == nil {
+
+	if req.GetName() == nil || len(req.GetName()) == 0 {
 		return status.Errorf(codes.InvalidArgument, "missing datastore name")
+	}
+	if len(req.GetName()) > 1 {
+		// although we have a slice in the req we support just a single datastore per request atm.
+		return status.Errorf(codes.InvalidArgument, "only single datastore name allowed per request")
 	}
 
 	ds, err := s.datastores.GetDataStore(req.GetName()[0])
 	if err != nil {
-		log.Error(err)
+		log.Error(err, "failed to get datastore")
 		return status.Errorf(codes.NotFound, "unknown datastore")
 	}
 
+	// add datastore name to log
+	log = log.WithValues("datastore-name", req.GetName()[0])
+	logger.IntoContext(ctx, log)
+
 	err = ds.WatchDeviations(req, stream)
 	if err != nil {
-		log.Error(err)
+		log.Error(err, "failed to watch deviations")
+		return err
 	}
 	<-stream.Context().Done()
-	ds.StopDeviationsWatch(peerInfo.Addr.String())
+	log.Error(stream.Context().Err(), "stream context done", "severity", "WARN")
+	ds.StopDeviationsWatch(stream)
 	return nil
 }
 
@@ -251,9 +311,9 @@ func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*
 	}
 	// map datastore sbi conn state to sdcpb.TargetStatus
 	switch ds.ConnectionState().Status {
-	case target.TargetStatusConnected:
+	case targettypes.TargetStatusConnected:
 		rsp.Target.Status = sdcpb.TargetStatus_CONNECTED
-	case target.TargetStatusNotConnected:
+	case targettypes.TargetStatusNotConnected:
 		rsp.Target.Status = sdcpb.TargetStatus_NOT_CONNECTED
 	default:
 		rsp.Target.Status = sdcpb.TargetStatus_UNKNOWN
@@ -264,6 +324,10 @@ func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*
 }
 
 func (s *Server) BlameConfig(ctx context.Context, req *sdcpb.BlameConfigRequest) (*sdcpb.BlameConfigResponse, error) {
+	log := logf.FromContext(ctx).WithName("BlameConfig")
+	ctx = logf.IntoContext(ctx, log)
+
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "missing datastore name")

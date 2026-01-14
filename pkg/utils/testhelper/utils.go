@@ -23,8 +23,15 @@ const (
 )
 
 // diffCacheUpdates takes two []*cache.Update and compares the diff
-func DiffUpdates(a, b []*types.Update) string {
-	return cmp.Diff(UpdateSliceToStringSlice(a), UpdateSliceToStringSlice(b))
+func DiffUpdates(a []*types.PathAndUpdate, b []*types.Update) string {
+	aSlice := make([]string, 0, len(a))
+	for _, x := range a {
+		aSlice = append(aSlice, x.String())
+	}
+	slices.Sort(aSlice)
+	bSlice := UpdateSliceToStringSlice(b)
+	slices.Sort(bSlice)
+	return cmp.Diff(aSlice, bSlice)
 }
 
 // UpdateSliceToStringSlice converts a []*Update to []string
@@ -126,40 +133,12 @@ func GetSchemaClientBound(t *testing.T, mockCtrl *gomock.Controller) (*mockschem
 		},
 	)
 
-	// make the mock respond to GetSchema requests
-	mockscb.EXPECT().GetSchemaSlicePath(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-		func(ctx context.Context, path []string) (*sdcpb.GetSchemaResponse, error) {
-			p, err := mockscb.ToPath(ctx, path)
-			if err != nil {
-				return nil, err
-			}
-			return x.GetSchema(ctx, &sdcpb.GetSchemaRequest{
-				Path:   p,
-				Schema: sdcpbSchema,
-			})
-		},
-	)
-
-	// setup the ToPath() responses
-	mockscb.EXPECT().ToPath(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-		func(ctx context.Context, path []string) (*sdcpb.Path, error) {
-			pr, err := x.ToPath(ctx, &sdcpb.ToPathRequest{
-				PathElement: path,
-				Schema:      sdcpbSchema,
-			})
-			if err != nil {
-				return nil, err
-			}
-			return pr.GetPath(), nil
-		},
-	)
-
 	// return the mock
 	return mockscb, nil
 }
 
 type RootTreeImport interface {
-	ImportConfig(ctx context.Context, basePath types.PathSlice, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
+	ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
 }
 
 func LoadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root RootTreeImport, owner string, prio int32, flags *types.UpdateInsertFlags) error {
@@ -177,9 +156,24 @@ func LoadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root Root
 		return err
 	}
 
-	err = root.ImportConfig(ctx, types.PathSlice{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner, prio, flags)
+	err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner, prio, flags)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+// SplitStringSortDiff split the two strings a and b on sep, sort alphabetical and return the diff
+func SplitStringSortDiff(a, b string, sep string) string {
+
+	splits := make([][]string, 0, 2)
+
+	for _, txt := range []string{a, b} {
+		// split
+		split := strings.Split(txt, sep)
+		// sort
+		slices.Sort(split)
+		splits = append(splits, split)
+	}
+	return cmp.Diff(splits[0], splits[1])
 }

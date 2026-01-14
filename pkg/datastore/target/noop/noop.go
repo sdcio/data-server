@@ -12,30 +12,47 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package target
+package noop
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/datastore/target/types"
 )
 
 type noopTarget struct {
 	name string
 }
 
-func newNoopTarget(_ context.Context, name string) (*noopTarget, error) {
+func NewNoopTarget(_ context.Context, name string) (*noopTarget, error) {
 	nt := &noopTarget{
 		name: name,
 	}
 	return nt, nil
 }
 
-func (t *noopTarget) Get(_ context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+func (t *noopTarget) AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) error {
+	log := logf.FromContext(ctx)
+	for _, sp := range sps {
+		jConf, err := json.Marshal(sp)
+		if err != nil {
+			return err
+		}
+		log.Info("Sync added", "Config", jConf)
+	}
+	return nil
+}
+
+func (t *noopTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+	log := logf.FromContext(ctx).WithName("Get")
+	ctx = logf.IntoContext(ctx, log)
+
 	result := &sdcpb.GetDataResponse{
 		Notification: make([]*sdcpb.Notification, 0, len(req.GetPath())),
 	}
@@ -53,7 +70,9 @@ func (t *noopTarget) Get(_ context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	return result, nil
 }
 
-func (t *noopTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDataResponse, error) {
+func (t *noopTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
+	log := logf.FromContext(ctx).WithName("Set")
+	ctx = logf.IntoContext(ctx, log)
 
 	upds, err := source.ToProtoUpdates(ctx, true)
 	if err != nil {
@@ -86,14 +105,10 @@ func (t *noopTarget) Set(ctx context.Context, source TargetSource) (*sdcpb.SetDa
 	return result, nil
 }
 
-func (t *noopTarget) Status() *TargetStatus {
-	return &TargetStatus{
-		Status: TargetStatusConnected,
+func (t *noopTarget) Status() *types.TargetStatus {
+	return &types.TargetStatus{
+		Status: types.TargetStatusConnected,
 	}
 }
 
-func (t *noopTarget) Sync(ctx context.Context, _ *config.Sync, syncCh chan *SyncUpdate) {
-	log.Infof("starting target %s sync", t.name)
-}
-
-func (t *noopTarget) Close() error { return nil }
+func (t *noopTarget) Close(ctx context.Context) error { return nil }

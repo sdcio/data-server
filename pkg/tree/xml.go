@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -42,7 +41,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 		// if the entry remains so exist, we need to add it to the xml doc
 		overallDoAdd := false
 
-		childs := s.filterActiveChoiceCaseChilds()
+		childs := s.GetChilds(DescendMethodActiveChilds)
 
 		keys := make([]string, 0, len(childs))
 		for k := range childs {
@@ -139,14 +138,14 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 			utils.AddXMLOperation(newElem, utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
 			return true, nil
 		case s.GetSchema().GetContainer().IsPresence && s.containsOnlyDefaults():
-			// process presence cotnainers with no childs
+			// process presence containers with no childs
 			if onlyNewOrUpdated {
 				// presence containers have leafvariantes with typedValue_Empty, so check that
 				if s.leafVariants.shouldDelete() {
 					return false, nil
 				}
-				le := s.leafVariants.GetHighestPrecedence(false, false)
-				if onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
+				le := s.leafVariants.GetHighestPrecedence(false, false, false)
+				if le == nil || onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
 					return false, nil
 				}
 			}
@@ -187,7 +186,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 				// recurse the call to all the children
 				child, exists := s.childs.GetEntry(k)
 				if !exists {
-					return false, fmt.Errorf("child %s does not exist for %s", k, strings.Join(s.Path(), "/"))
+					return false, fmt.Errorf("child %s does not exist for %s", k, s.SdcpbPath().ToXPath(false))
 				}
 				// TODO: Do we also need to xmlAddAllChildValues here too?
 				doAdd, err := child.toXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
@@ -220,7 +219,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 		}
 		// if the Field or Leaflist remains to exist
 		// get highes Precedence value
-		le := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, false)
+		le := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, false, false)
 		if le == nil {
 			return false, nil
 		}
@@ -233,7 +232,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 		utils.TypedValueToXML(parent, le.Value(), s.PathName(), ns, onlyNewOrUpdated, operationWithNamespace, useOperationRemove)
 		return true, nil
 	}
-	return false, fmt.Errorf("unable to convert to xml (%s)", s.Path())
+	return false, fmt.Errorf("unable to convert to xml (%s)", s.SdcpbPath().ToXPath(false))
 }
 
 // namespaceIsEqual takes the two given Entries, gets the namespace

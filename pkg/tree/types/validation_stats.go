@@ -3,6 +3,8 @@ package types
 import (
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 type StatType int
@@ -10,14 +12,26 @@ type StatType int
 const (
 	StatTypeMandatory StatType = iota
 	StatTypeMustStatement
-	StatTypeMinMax
+	StatTypeMinMaxElementsLeaflist
 	StatTypeRange
 	StatTypePattern
 	StatTypeLength
 	StatTypeLeafRef
-	StatTypeMaxElements
+	StatTypeMinMaxElementsList
 	StatTypeEnums
 )
+
+var AllStatTypes = []StatType{
+	StatTypeMandatory,
+	StatTypeMustStatement,
+	StatTypeMinMaxElementsLeaflist,
+	StatTypeRange,
+	StatTypePattern,
+	StatTypeLength,
+	StatTypeLeafRef,
+	StatTypeMinMaxElementsList,
+	StatTypeEnums,
+}
 
 func (s StatType) String() string {
 	switch s {
@@ -25,8 +39,8 @@ func (s StatType) String() string {
 		return "mandatory"
 	case StatTypeMustStatement:
 		return "must-statement"
-	case StatTypeMinMax:
-		return "min/max"
+	case StatTypeMinMaxElementsLeaflist:
+		return "min/max elements leaflist"
 	case StatTypeRange:
 		return "range"
 	case StatTypePattern:
@@ -35,57 +49,57 @@ func (s StatType) String() string {
 		return "length"
 	case StatTypeLeafRef:
 		return "leafref"
-	case StatTypeMaxElements:
-		return "max-elements"
+	case StatTypeMinMaxElementsList:
+		return "min/max elements list"
 	case StatTypeEnums:
 		return "enums"
 	}
 	return ""
 }
 
-type ValidationStat struct {
-	statType StatType
-	count    uint
+type ValidationStats struct {
+	Counter   map[StatType]*uint32 `json:"counters"`
+	muCounter *sync.Mutex
 }
 
-func NewValidationStat(statType StatType) *ValidationStat {
-	return &ValidationStat{
-		statType: statType,
+func NewValidationStats() *ValidationStats {
+	result := &ValidationStats{
+		Counter:   map[StatType]*uint32{},
+		muCounter: &sync.Mutex{},
+	}
+	for _, t := range AllStatTypes {
+		result.Counter[t] = new(uint32)
+	}
+	return result
+}
+
+func (v *ValidationStats) Add(t StatType, i uint32) {
+	v.muCounter.Lock()
+	defer v.muCounter.Unlock()
+	if counter, ok := v.Counter[t]; ok {
+		atomic.AddUint32(counter, i)
 	}
 }
 
-func (v *ValidationStat) PlusOne() *ValidationStat {
-	v.count++
-	return v
-}
-
-func (v *ValidationStat) Set(count uint) *ValidationStat {
-	v.count = count
-	return v
-}
-
-type ValidationStatOverall struct {
-	counter map[StatType]uint
-}
-
-func NewValidationStatOverall() *ValidationStatOverall {
-	return &ValidationStatOverall{
-		counter: map[StatType]uint{},
-	}
-}
-
-func (v *ValidationStatOverall) String() string {
-	result := make([]string, 0, len(v.counter))
-	for typ, count := range v.counter {
-		result = append(result, fmt.Sprintf("%s: %d", typ.String(), count))
+// String returns a string representation of all counters
+func (v *ValidationStats) String() string {
+	v.muCounter.Lock()
+	defer v.muCounter.Unlock()
+	result := make([]string, 0, len(v.Counter))
+	for typ, count := range v.Counter {
+		val := atomic.LoadUint32(count)
+		result = append(result, fmt.Sprintf("%s: %d", typ, val))
 	}
 	return strings.Join(result, ", ")
 }
 
-func (v *ValidationStatOverall) MergeStat(vs *ValidationStat) {
-	v.counter[vs.statType] = v.counter[vs.statType] + vs.count
-}
-
-func (v *ValidationStatOverall) GetCounter() map[StatType]uint {
-	return v.counter
+// GetCounter returns a snapshot of the counters as a plain map
+func (v *ValidationStats) GetCounter() map[StatType]uint32 {
+	v.muCounter.Lock()
+	defer v.muCounter.Unlock()
+	snapshot := make(map[StatType]uint32, len(v.Counter))
+	for typ, count := range v.Counter {
+		snapshot[typ] = atomic.LoadUint32(count)
+	}
+	return snapshot
 }

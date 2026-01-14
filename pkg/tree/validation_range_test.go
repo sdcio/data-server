@@ -3,14 +3,17 @@ package tree
 import (
 	"context"
 	"encoding/json"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
+	"github.com/sdcio/data-server/pkg/pool"
 	json_importer "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 )
 
@@ -64,7 +67,7 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 
 	jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
 
-	err = root.ImportConfig(ctx, types.PathSlice{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
+	err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
 	if err != nil {
 		t.Error(err)
 	}
@@ -74,7 +77,10 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 		t.Error(err)
 	}
 
-	validationResult, _ := root.Validate(ctx, validationConfig)
+	valConf := validationConfig.DeepCopy()
+	sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+
+	validationResult, _ := root.Validate(ctx, valConf, sharedPool)
 
 	t.Logf("Validation Errors:\n%s", strings.Join(validationResult.ErrorsStr(), "\n"))
 	t.Log(root.String())
@@ -176,7 +182,7 @@ func TestValidate_RangesSigned(t *testing.T) {
 			jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
 
 			// import via importer
-			err = root.ImportConfig(ctx, types.PathSlice{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Error(err)
 			}
@@ -186,7 +192,8 @@ func TestValidate_RangesSigned(t *testing.T) {
 				t.Error(err)
 			}
 
-			validationResult, _ := root.Validate(ctx, validationConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			validationResult, _ := root.Validate(ctx, validationConfig, sharedPool)
 
 			t.Logf("Validation Errors:\n%s", strings.Join(validationResult.ErrorsStr(), "\n"))
 			t.Log(root.String())
@@ -309,7 +316,7 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 			jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
 
 			// import via importer
-			err = root.ImportConfig(ctx, types.PathSlice{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Error(err)
 			}
@@ -320,7 +327,8 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 			}
 
 			// run validation
-			validationResults, _ := root.Validate(ctx, validationConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			validationResults, _ := root.Validate(ctx, validationConfig, sharedPool)
 
 			t.Logf("Validation Errors:\n%s", strings.Join(validationResults.ErrorsStr(), "\n"))
 			t.Log(root.String())

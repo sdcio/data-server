@@ -15,8 +15,13 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"time"
+	"unsafe"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
@@ -42,16 +47,30 @@ var dataGetIntentCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Println("request:")
-		fmt.Println(prototext.Format(req))
+		fmt.Fprintln(os.Stderr, "request:")
+		fmt.Fprintln(os.Stderr, prototext.Format(req))
+		startTime := time.Now()
 		rsp, err := dataClient.GetIntent(ctx, req)
 		if err != nil {
 			return err
 		}
-		fmt.Println("response:")
-		fmt.Println(prototext.Format(rsp))
+		fmt.Fprintf(os.Stderr, "GetIntent took: %s\n", time.Since(startTime))
+
+		var buf bytes.Buffer
+		if err := json.Indent(&buf, rsp.GetBlob(), "", "  "); err != nil {
+			return err
+		}
+
+		if _, err := os.Stdout.Write(buf.Bytes()); err != nil {
+			return err
+		}
+
 		return nil
 	},
+}
+
+func BytesToString(b []byte) string {
+	return unsafe.String(&b[0], len(b))
 }
 
 func init() {

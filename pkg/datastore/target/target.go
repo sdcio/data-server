@@ -18,12 +18,17 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/beevik/etree"
+	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc"
 
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/datastore/target/gnmi"
+	"github.com/sdcio/data-server/pkg/datastore/target/netconf"
+	"github.com/sdcio/data-server/pkg/datastore/target/noop"
+	"github.com/sdcio/data-server/pkg/datastore/target/types"
+	"github.com/sdcio/data-server/pkg/pool"
 )
 
 const (
@@ -32,70 +37,45 @@ const (
 	targetTypeGNMI    = "gnmi"
 )
 
-type TargetStatus struct {
-	Status  TargetConnectionStatus
-	Details string
-}
-
-func NewTargetStatus(status TargetConnectionStatus) *TargetStatus {
-	return &TargetStatus{
-		Status: status,
-	}
-}
-func (ts *TargetStatus) IsConnected() bool {
-	return ts.Status == TargetStatusConnected
-}
-
-type TargetConnectionStatus string
-
-const (
-	TargetStatusConnected    TargetConnectionStatus = "connected"
-	TargetStatusNotConnected TargetConnectionStatus = "not connected"
-)
-
 type Target interface {
 	Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error)
-	Set(ctx context.Context, source TargetSource) (*sdcpb.SetDataResponse, error)
-	Sync(ctx context.Context, syncConfig *config.Sync, syncCh chan *SyncUpdate)
-	Status() *TargetStatus
-	Close() error
+	Set(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error)
+	AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) error
+	Status() *types.TargetStatus
+	Close(ctx context.Context) error
 }
 
-func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemaClient.SchemaClientBound, opts ...grpc.DialOption) (Target, error) {
+func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemaClient.SchemaClientBound, runningStore types.RunningStore, syncConfigs []*config.SyncProtocol, taskpoolFactory pool.VirtualPoolFactory, opts ...grpc.DialOption) (Target, error) {
+	var t Target
+	var err error
+
 	switch cfg.Type {
 	case targetTypeGNMI:
-		return newGNMITarget(ctx, name, cfg, opts...)
+		t, err = gnmi.NewTarget(ctx, name, cfg, runningStore, schemaClient, taskpoolFactory, opts...)
+		if err != nil {
+			return nil, err
+		}
 	case targetTypeNETCONF:
-		return newNCTarget(ctx, name, cfg, schemaClient)
+		t, err = netconf.NewNCTarget(ctx, name, cfg, runningStore, schemaClient)
+		if err != nil {
+			return nil, err
+		}
 	case targetTypeNOOP, "":
-		return newNoopTarget(ctx, name)
+		t, err = noop.NewNoopTarget(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("unknown DS target type %q", cfg.Type)
 	}
-	return nil, fmt.Errorf("unknown DS target type %q", cfg.Type)
-}
 
-type SyncUpdate struct {
-	// identifies the store this updates needs to be written to if Sync.Validate == false
-	Store string
-	// The received update
-	Update *sdcpb.Notification
-	// if true indicates the start of cache pruning
-	Start bool
-	// if true and start is true indicates first sync iteration,
-	// it overrides any ongoing pruning in the cache.
-	Force bool
-	// if true indicates the end of a sync iteration.
-	// triggers the pruning on the cache side.
-	End bool
-}
+	syncLog := logger.FromContext(ctx).WithName("sync")
+	syncCtx := logger.IntoContext(ctx, syncLog)
 
-type TargetSource interface {
-	// ToJson returns the Tree contained structure as JSON
-	// use e.g. json.MarshalIndent() on the returned struct
-	ToJson(onlyNewOrUpdated bool) (any, error)
-	// ToJsonIETF returns the Tree contained structure as JSON_IETF
-	// use e.g. json.MarshalIndent() on the returned struct
-	ToJsonIETF(onlyNewOrUpdated bool) (any, error)
-	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
-	ToProtoUpdates(ctx context.Context, onlyNewOrUpdated bool) ([]*sdcpb.Update, error)
-	ToProtoDeletes(ctx context.Context) ([]*sdcpb.Path, error)
+	err = t.AddSyncs(syncCtx, syncConfigs...)
+	if err != nil {
+		return nil, err
+	}
+
+	return t, nil
 }

@@ -7,8 +7,8 @@ import (
 	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/importer"
-	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	"github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/sdc-protos/tree_persist"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -23,30 +23,21 @@ const (
 	ReplaceIntentName  = "replace"
 )
 
-type EntryImpl struct {
-	*sharedEntryAttributes
-}
-
 // newEntry constructor for Entries
-func newEntry(ctx context.Context, parent Entry, pathElemName string, tc *TreeContext) (*EntryImpl, error) {
+func newEntry(ctx context.Context, parent Entry, pathElemName string, tc *TreeContext) (*sharedEntryAttributes, error) {
 	// create a new sharedEntryAttributes instance
 	sea, err := newSharedEntryAttributes(ctx, parent, pathElemName, tc)
 	if err != nil {
 		return nil, err
 	}
 
-	newEntry := &EntryImpl{
-		sharedEntryAttributes: sea,
-	}
 	// add the Entry as a child to the parent Entry
-	err = parent.addChild(ctx, newEntry)
-	return newEntry, err
+	err = parent.addChild(ctx, sea)
+	return sea, err
 }
 
 // Entry is the primary Element of the Tree.
 type Entry interface {
-	// Path returns the Path as PathSlice
-	Path() types.PathSlice
 	// PathName returns the last Path element, the name of the Entry
 	PathName() string
 	// GetLevel returns the depth of the Entry in the tree
@@ -56,15 +47,16 @@ type Entry interface {
 	// getOrCreateChilds retrieves the sub-child pointed at by the path.
 	// if the path does not exist in its full extend, the entries will be added along the way
 	// if the path does not point to a schema defined path an error will be raise
-	getOrCreateChilds(ctx context.Context, path types.PathSlice) (Entry, error)
+	getOrCreateChilds(ctx context.Context, path *sdcpb.Path) (Entry, error)
 	// AddUpdateRecursive Add the given cache.Update to the tree
-	AddUpdateRecursive(ctx context.Context, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
+	AddUpdateRecursive(ctx context.Context, relativePath *sdcpb.Path, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
+	addUpdateRecursiveInternal(ctx context.Context, path *sdcpb.Path, idx int, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
 	// StringIndent debug tree struct as indented string slice
 	StringIndent(result []string) []string
 	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
 	// If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
 	// It will append to the given list and provide a new pointer to the slice
-	GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool, includeDefaults bool) LeafVariantSlice
+	GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool, includeDefaults bool, includeExplicitDelete bool) LeafVariantSlice
 	// getHighestPrecedenceLeafValue returns the highest LeafValue of the Entry at hand
 	// will return an error if the Entry is not a Leaf
 	getHighestPrecedenceLeafValue(context.Context) (*LeafEntry, error)
@@ -77,9 +69,9 @@ type Entry interface {
 	// Walk takes the EntryVisitor and applies it to every Entry in the tree
 	Walk(ctx context.Context, v EntryVisitor) error
 	// Validate kicks off validation
-	Validate(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat, vCfg *config.Validation)
+	ValidateLevel(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, vCfg *config.Validation)
 	// validateMandatory the Mandatory schema field
-	validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, statChan chan<- *types.ValidationStat)
+	validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats)
 	// validateMandatoryWithKeys is an internally used function that us called by validateMandatory in case
 	// the container has keys defined that need to be skipped before the mandatory attributes can be checked
 	validateMandatoryWithKeys(ctx context.Context, level int, attributes []string, choiceName string, resultChan chan<- *types.ValidationResultEntry)
@@ -94,9 +86,7 @@ type Entry interface {
 	FinishInsertionPhase(ctx context.Context) error
 	// GetParent returns the parent entry
 	GetParent() Entry
-	// Navigate navigates the tree according to the given path and returns the referenced entry or nil if it does not exist.
-	Navigate(ctx context.Context, path []string, isRootPath bool, dotdotSkipKeys bool) (Entry, error)
-	NavigateSdcpbPath(ctx context.Context, path []*sdcpb.PathElem, isRootPath bool) (Entry, error)
+	NavigateSdcpbPath(ctx context.Context, path *sdcpb.Path) (Entry, error)
 	// NavigateLeafRef follows the leafref and returns the referenced entry
 	NavigateLeafRef(ctx context.Context) ([]Entry, error)
 	// GetFirstAncestorWithSchema returns the first parent node which has a schema set.
@@ -104,9 +94,7 @@ type Entry interface {
 	// the level of recursion is indicated via the levelUp attribute
 	GetFirstAncestorWithSchema() (ancestor Entry, levelUp int)
 	// SdcpbPath returns the sdcpb.Path struct for the Entry
-	SdcpbPath() (*sdcpb.Path, error)
-	// SdcpbPathInternal is the internal function to calculate the SdcpbPath
-	SdcpbPathInternal(spath []string) (*sdcpb.Path, error)
+	SdcpbPath() *sdcpb.Path
 	// GetSchemaKeys checks for the schema of the entry, and returns the defined keys
 	GetSchemaKeys() []string
 	// GetRootBasedEntryChain returns all the entries starting from the root down to the actual Entry.
@@ -127,9 +115,8 @@ type Entry interface {
 	//    - remainsToExists() returns true, because they remain to exist even though implicitly.
 	//    - shouldDelete() returns false, because no explicit delete should be issued for them.
 	canDelete() bool
-	// getChildren returns all the child Entries of the Entry in a map indexed by there name.
-	// FYI: leaf values are not considered children
-	getChildren() map[string]Entry
+	GetChilds(DescendMethod) EntryMap
+	GetChild(name string) (Entry, bool) // entry, exists
 	FilterChilds(keys map[string]string) ([]Entry, error)
 	// ToJson returns the Tree contained structure as JSON
 	// use e.g. json.MarshalIndent() on the returned struct
@@ -144,35 +131,49 @@ type Entry interface {
 	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
 	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error)
 	// ImportConfig allows importing config data received from e.g. the device in different formats (json, xml) to be imported into the tree.
-	ImportConfig(ctx context.Context, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
+	ImportConfig(ctx context.Context, importer importer.ImportConfigAdapterElement, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
 	TreeExport(owner string) ([]*tree_persist.TreeElement, error)
 	// DeleteBranch Deletes from the tree, all elements of the PathSlice defined branch of the given owner
-	DeleteBranch(ctx context.Context, relativePath types.PathSlice, owner string) (err error)
-	GetDeviations(ch chan<- *types.DeviationEntry, activeCase bool)
+	DeleteBranch(ctx context.Context, path *sdcpb.Path, owner string) (err error)
+	GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, activeCase bool)
 	// GetListChilds collects all the childs of the list. In the tree we store them seperated into their key branches.
 	// this is collecting all the last level key entries.
 	GetListChilds() ([]Entry, error)
-	BreadthSearch(ctx context.Context, path string) ([]Entry, error)
+	BreadthSearch(ctx context.Context, path *sdcpb.Path) ([]Entry, error)
 	DeepCopy(tc *TreeContext, parent Entry) (Entry, error)
 	GetLeafVariantEntries() LeafVariantEntries
+
+	// returns true if the Entry contains leafvariants (presence container, field or leaflist)
+	HoldsLeafvariants() bool
 	canDeleteBranch(keepDefault bool) bool
 	deleteCanDeleteChilds(keepDefault bool)
 }
 
 type EntryVisitor interface {
+	DescendMethod() DescendMethod
 	Visit(ctx context.Context, e Entry) error
 	Up()
 }
 
 type LeafVariantEntry interface {
-	MarkDelete(onlyIntended bool)
+	MarkDelete(onlyIntended bool) *LeafEntry
 	GetEntry() Entry
 	String() string
 }
 
 type LeafVariantEntries interface {
 	MarkOwnerForDeletion(owner string, onlyIntended bool) *LeafEntry
-	GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool) *LeafEntry
+	GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool, includeExplicitDeletes bool) *LeafEntry
 	GetRunning() *LeafEntry
-	DeleteByOwner(owner string)
+	DeleteByOwner(owner string) *LeafEntry
+	AddExplicitDeleteEntry(owner string, priority int32) *LeafEntry
+	GetByOwner(owner string) *LeafEntry
+	Add(l *LeafEntry)
 }
+
+type DescendMethod int
+
+const (
+	DescendMethodAll DescendMethod = iota
+	DescendMethodActiveChilds
+)

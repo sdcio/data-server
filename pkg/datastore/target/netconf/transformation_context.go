@@ -15,6 +15,7 @@
 package netconf
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -60,16 +61,12 @@ func (tc *TransformationContext) Close() []*sdcpb.Update {
 	return result
 }
 
-func (tc *TransformationContext) String() (result string, err error) {
+func (tc *TransformationContext) String(ctx context.Context) (result string, err error) {
 	result = "TransformationContext\n"
 	for k, v := range tc.leafLists {
 		vals := []string{}
 		for _, val := range v {
-			sval, err := valueAsString(val)
-			if err != nil {
-				return "", err
-			}
-			vals = append(vals, sval)
+			vals = append(vals, val.ToString())
 		}
 		result += fmt.Sprintf("k: %s [%s]\n", k, strings.Join(vals, ", "))
 	}

@@ -19,6 +19,10 @@ func FilterDeleted(l *LeafEntry) bool {
 	return l.GetDeleteFlag()
 }
 
+func FilterDeletedNotExplicitDelete(l *LeafEntry) bool {
+	return l.GetDeleteFlag() && !l.GetExplicitDeleteFlag()
+}
+
 // FilterNew Accepts New LeafEntries
 func FilterNew(l *LeafEntry) bool {
 	return l.GetNewFlag()

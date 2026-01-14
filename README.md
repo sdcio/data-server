@@ -1,4 +1,12 @@
-# DATA-SERVER
+# SDC data-server
+
+![sdc logo](https://docs.sdcio.dev/assets/logos/SDC-transparent-withname-100x133.png)
+
+This repository is part of Schema Driven Configuration (SDC)
+
+The paradigm of schema-driven API approaches is gaining increasing popularity as it facilitates programmatic interaction with systems by both machines and humans. While OpenAPI schema stands out as a widely embraced system, there are other notable schema approaches like YANG, among others. This project endeavors to empower users with a declarative and idempotent method for seamless interaction with API systems, providing a robust foundation for effective system configuration."
+
+The data-server component serves as a versatile intermediary, connecting the config-server, schema-server, cache, and xNF/Device in a stateless design for scalability. It features a North-bound API for both imperative and declarative interactions and supports various South-bound protocols. With dedicated DataStores per target, flexible synchronization options, candidate-based interactions, and the ability to connect multiple data servers per device, it provides a resilient and adaptable foundation for managing and synchronizing data in dynamic system environments.
 
 ## build
 
@@ -122,3 +130,13 @@ bin/datactl -a clab-distributed-data-server:56000 data set --ds srl1 --candidate
 # commit
 bin/datactl -a clab-distributed-data-server:56000 datastore commit --ds srl1 --candidate default
 ```
+
+## Join us
+
+Have questions, ideas, bug reports or just want to chat? Come join [our discord server](https://discord.com/channels/1240272304294985800/1311031796372344894).
+
+## License and Code of Conduct
+
+Code is under the [Apache License 2.0](LICENSE), documentation is [CC BY 4.0](LICENSE-documentation).
+
+The SDC project is following the [CNCF Code of Conduct](https://github.com/cncf/foundation/blob/main/code-of-conduct.md). More information and links about the CNCF Code of Conduct are [here](code-of-conduct.md).

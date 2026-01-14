@@ -15,13 +15,13 @@
 package netconf
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/beevik/etree"
-	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -37,7 +37,7 @@ func getNamespaceFromGetSchemaResponse(sr *sdcpb.GetSchemaResponse) string {
 	return ""
 }
 
-func valueAsString(v *sdcpb.TypedValue) (string, error) {
+func valueAsString(ctx context.Context, v *sdcpb.TypedValue) (string, error) {
 	switch v.Value.(type) {
 	case *sdcpb.TypedValue_StringVal:
 		return v.GetStringVal(), nil
@@ -52,14 +52,14 @@ func valueAsString(v *sdcpb.TypedValue) (string, error) {
 	case *sdcpb.TypedValue_FloatVal:
 		return string(strconv.FormatFloat(float64(v.GetFloatVal()), 'b', -1, 32)), nil
 	case *sdcpb.TypedValue_DecimalVal:
-		return utils.TypedValueToString(v), nil // could we use this in general?
+		return v.ToString(), nil // could we use this in general?
 	case *sdcpb.TypedValue_AsciiVal:
 		return v.GetAsciiVal(), nil
 	case *sdcpb.TypedValue_LeaflistVal:
 		sArr := []string{}
 		// iterate through list elements
 		for _, elem := range v.GetLeaflistVal().Element {
-			val, err := valueAsString(elem)
+			val, err := valueAsString(ctx, elem)
 			if err != nil {
 				return "", err
 			}
@@ -78,10 +78,6 @@ func valueAsString(v *sdcpb.TypedValue) (string, error) {
 		return "", nil
 	}
 	return "", fmt.Errorf("TypedValue to String failed")
-}
-
-func StringElementToTypedValue(s string, ls *sdcpb.LeafSchema) (*sdcpb.TypedValue, error) {
-	return utils.Convert(s, ls.Type)
 }
 
 // pathElem2EtreePath takes the given pathElem and creates an xpath expression out of it,

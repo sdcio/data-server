@@ -24,12 +24,15 @@ import (
 	"syscall"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/pflag"
+	"net/http"
+	_ "net/http/pprof"
 
+	"github.com/go-logr/logr"
 	"github.com/sdcio/data-server/pkg/config"
-	"github.com/sdcio/data-server/pkg/dslog"
 	"github.com/sdcio/data-server/pkg/server"
+	"github.com/sdcio/logger"
+	logf "github.com/sdcio/logger"
+	"github.com/spf13/pflag"
 )
 
 var configFile string
@@ -53,17 +56,30 @@ func main() {
 		return
 	}
 
-	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
-	log.SetLevel(log.InfoLevel)
+	slogOpts := &slog.HandlerOptions{
+		Level:       slog.LevelInfo,
+		ReplaceAttr: logf.ReplaceTimeAttr,
+	}
 	if debug {
-		log.SetLevel(log.DebugLevel)
-		slog.SetLogLoggerLevel(slog.LevelDebug)
+		slogOpts.Level = slog.Level(-logger.VDebug)
 	}
 	if trace {
-		log.SetLevel(log.TraceLevel)
-		slog.SetLogLoggerLevel(dslog.TraceLevel)
+		slogOpts.Level = slog.Level(-logger.VTrace)
 	}
-	log.Infof("data-server %s-%s", version, commit)
+
+	log := logr.FromSlogHandler(slog.NewJSONHandler(os.Stdout, slogOpts))
+	logf.SetDefaultLogger(log)
+	ctx := logf.IntoContext(context.Background(), log)
+
+	go func() {
+		log.Info("pprof server started", "address", "localhost:6060")
+		err := http.ListenAndServe("localhost:6060", nil)
+		if err != nil {
+			log.Error(err, "pprof server failed")
+		}
+	}()
+
+	log.Info("data-server bootstrap", "version", version, "commit", commit, "log-level", slogOpts.Level.Level().String())
 
 	var s *server.Server
 START:
@@ -72,21 +88,22 @@ START:
 	}
 	cfg, err := config.New(configFile)
 	if err != nil {
-		log.Errorf("failed to read config: %v", err)
+		log.Error(err, "failed to read config")
 		os.Exit(1)
 	}
 	b, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
-		log.Errorf("failed to marshal config: %v", err)
+		log.Error(err, "failed to marshal config")
 		os.Exit(1)
 	}
-	log.Infof("read config:\n%s", string(b))
+	log.Info("read config", "config", string(b))
 
-	ctx, cancel := context.WithCancel(context.Background())
+	// add logger to context
+	ctx, cancel := context.WithCancel(ctx)
 	setupCloseHandler(cancel)
 	s, err = server.New(ctx, cfg)
 	if err != nil {
-		log.Errorf("failed to create server: %v", err)
+		log.Error(err, "failed to create server")
 		os.Exit(1)
 	}
 
@@ -95,7 +112,7 @@ START:
 		if stop {
 			return
 		}
-		log.Errorf("failed to run server: %v", err)
+		log.Error(err, "failed to run server")
 		time.Sleep(time.Second)
 		goto START
 	}

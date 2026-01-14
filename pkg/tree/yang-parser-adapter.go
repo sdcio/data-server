@@ -80,7 +80,7 @@ func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
 	return y.valueToDatum(lv.Value()), nil
 }
 
-func (y *yangParserEntryAdapter) BreadthSearch(ctx context.Context, path string) ([]xpath.Entry, error) {
+func (y *yangParserEntryAdapter) BreadthSearch(ctx context.Context, path *sdcpb.Path) ([]xpath.Entry, error) {
 	entries, err := y.e.BreadthSearch(ctx, path)
 	if err != nil {
 		return nil, err
@@ -101,35 +101,28 @@ func (y *yangParserEntryAdapter) FollowLeafRef() (xpath.Entry, error) {
 	}
 
 	if len(entries) == 0 {
-		return nil, fmt.Errorf("error resolving leafref for %s", y.e.Path())
+		return nil, fmt.Errorf("error resolving leafref for %s", y.e.SdcpbPath().ToXPath(false))
 	}
 
 	return newYangParserEntryAdapter(y.ctx, entries[0]), nil
 }
 
-func (y *yangParserEntryAdapter) GetPath() []string {
-	return y.e.Path()
+func (y *yangParserEntryAdapter) GetSdcpbPath() *sdcpb.Path {
+	return y.e.SdcpbPath()
 }
 
-func (y *yangParserEntryAdapter) Navigate(p []string) (xpath.Entry, error) {
+func (y *yangParserEntryAdapter) Navigate(p *sdcpb.Path) (xpath.Entry, error) {
 	var err error
-	var rootPath = false
 
-	if len(p) == 0 {
+	if len(p.GetElem()) == 0 {
 		return y, nil
 	}
 
-	// if the path slice starts with a / then it is a root based path.
-	if p[0] == "/" {
-		p = p[1:]
-		rootPath = true
-	}
-
-	lookedUpEntry, err := y.e.Navigate(y.ctx, p, rootPath, true)
+	entry, err := y.e.NavigateSdcpbPath(y.ctx, p)
 	if err != nil {
 		return newYangParserValueEntry(xpath.NewNodesetDatum([]xutils.XpathNode{}), err), nil
 	}
-	return newYangParserEntryAdapter(y.ctx, lookedUpEntry), nil
+	return newYangParserEntryAdapter(y.ctx, entry), nil
 }
 
 type yangParserValueEntry struct {
@@ -152,7 +145,7 @@ func (y *yangParserValueEntry) FollowLeafRef() (xpath.Entry, error) {
 	return nil, fmt.Errorf("yangParserValueEntry navigation impossible")
 }
 
-func (y *yangParserValueEntry) Navigate(p []string) (xpath.Entry, error) {
+func (y *yangParserValueEntry) Navigate(p *sdcpb.Path) (xpath.Entry, error) {
 	return nil, fmt.Errorf("yangParserValueEntry navigation impossible")
 }
 
@@ -160,10 +153,10 @@ func (y *yangParserValueEntry) GetValue() (xpath.Datum, error) {
 	return y.d, nil
 }
 
-func (y *yangParserValueEntry) GetPath() []string {
+func (y *yangParserValueEntry) GetSdcpbPath() *sdcpb.Path {
 	return nil
 }
 
-func (y *yangParserValueEntry) BreadthSearch(ctx context.Context, path string) ([]xpath.Entry, error) {
+func (y *yangParserValueEntry) BreadthSearch(ctx context.Context, path *sdcpb.Path) ([]xpath.Entry, error) {
 	return nil, nil
 }

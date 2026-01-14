@@ -45,7 +45,7 @@ func TypedValueToXML(parent *etree.Element, tv *sdcpb.TypedValue, name string, n
 		if namespace != "" {
 			subelem.CreateAttr("xmlns", namespace)
 		}
-		subelem.SetText(TypedValueToString(tv))
+		subelem.SetText(tv.ToString())
 	}
 }
 

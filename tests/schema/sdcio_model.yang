@@ -15,11 +15,17 @@ module sdcio_model {
   import sdcio_model_doublekey {
     prefix sdcio_model_doublekey;
   }
+  import sdcio_model_static_route {
+    prefix sdcio_model_static_route;
+  }
   import sdcio_model_leaflist {
     prefix sdcio_model_leaflist;
   }
   import sdcio_model_list_unique {
     prefix sdcio_model_list_unique;
+  }
+  import sdcio_model_list_minmax {
+    prefix sdcio_model_list_minmax;
   }
   import sdcio_model_deref {
     prefix sdcio_model_deref;
@@ -30,6 +36,9 @@ module sdcio_model {
   import sdcio_model_leafref {
     prefix sdcio_model_leafref;
   }
+  import sdcio_model_count {
+    prefix sdcio_model_count;
+  }
 
   description
     "This is the test schema for sdcio";
@@ -39,12 +48,15 @@ module sdcio_model {
       "Test schema first attempt";
   }
 
+  uses sdcio_model_count:count-top;
   uses sdcio_model_if:interface-top;
   uses sdcio_model_ni:network-instance-top;
   uses sdcio_model_choice:choicecase-top;
   uses sdcio_model_doublekey:doublekey-top;
+  uses sdcio_model_static_route:static-route-top;
   uses sdcio_model_leaflist:leaflist-top;
   uses sdcio_model_list_unique:list-unique-top;
+  uses sdcio_model_list_minmax:list-minmax-top;
   uses sdcio_model_deref:deref-top;
   uses sdcio_model_identity:identityref-top;
   uses sdcio_model_leafref:leafref-top;

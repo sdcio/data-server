@@ -23,8 +23,8 @@ import (
 	"os"
 	"time"
 
+	logf "github.com/sdcio/logger"
 	schemaConfig "github.com/sdcio/schema-server/pkg/config"
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 )
@@ -40,6 +40,7 @@ type Config struct {
 	Prometheus                *PromConfig                     `yaml:"prometheus,omitempty" json:"prometheus,omitempty"`
 	DefaultTransactionTimeout time.Duration                   `yaml:"transaction-timeout,omitempty" json:"transaction-timeout,omitempty"`
 	Validation                *Validation                     `yaml:"validation-defaults,omitempty" json:"validation-defaults,omitempty"`
+	Deviation                 *DeviationConfig                `yaml:"deviation-defaults,omitempty" json:"deviation-defaults,omitempty"`
 }
 
 type TLS struct {
@@ -141,6 +142,13 @@ func (c *Config) validateSetDefaults() error {
 		return err
 	}
 
+	if c.Deviation == nil {
+		c.Deviation = &DeviationConfig{}
+	}
+	if err = c.Deviation.validateSetDefaults(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -195,6 +203,7 @@ func (g *GRPCServer) validateSetDefaults() error {
 }
 
 func (t *TLS) NewConfig(ctx context.Context) (*tls.Config, error) {
+	log := logf.FromContext(ctx)
 	tlsCfg := &tls.Config{InsecureSkipVerify: t.SkipVerify}
 	if t.CA != "" {
 		ca, err := os.ReadFile(t.CA)
@@ -216,7 +225,7 @@ func (t *TLS) NewConfig(ctx context.Context) (*tls.Config, error) {
 
 		go func() {
 			if err := certWatcher.Start(ctx); err != nil {
-				log.Errorf("certificate watcher error: %v", err)
+				log.Error(err, "certificate watcher error")
 			}
 		}()
 		tlsCfg.GetCertificate = certWatcher.GetCertificate

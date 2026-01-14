@@ -21,6 +21,109 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
+func TestParseDecimal64(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    *sdcpb.Decimal64
+		wantErr bool
+	}{
+		// --- basic valid cases ---
+		{
+			name:  "integer only",
+			input: "42",
+			want:  &sdcpb.Decimal64{Digits: 42, Precision: 0},
+		},
+		{
+			name:  "simple decimal",
+			input: "12.34",
+			want:  &sdcpb.Decimal64{Digits: 1234, Precision: 2},
+		},
+		{
+			name:  "negative decimal",
+			input: "-1.23",
+			want:  &sdcpb.Decimal64{Digits: -123, Precision: 2},
+		},
+		{
+			name:  "leading and trailing spaces",
+			input: "   7.5  ",
+			want:  &sdcpb.Decimal64{Digits: 75, Precision: 1},
+		},
+		{
+			name:  "leading zero before decimal",
+			input: "0.5",
+			want:  &sdcpb.Decimal64{Digits: 5, Precision: 1},
+		},
+		{
+			name:  "just decimal point with leading zero",
+			input: ".75",
+			want:  &sdcpb.Decimal64{Digits: 75, Precision: 2},
+		},
+
+		// --- plus sign ---
+		{
+			name:  "explicit plus sign",
+			input: "+9.99",
+			want:  &sdcpb.Decimal64{Digits: 999, Precision: 2},
+		},
+
+		// --- edge and error cases ---
+		{
+			name:    "empty string",
+			input:   "",
+			wantErr: true,
+		},
+		{
+			name:    "just dot",
+			input:   ".",
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric",
+			input:   "abc",
+			wantErr: true,
+		},
+		{
+			name:    "invalid with multiple dots",
+			input:   "1.2.3",
+			wantErr: true,
+		},
+		{
+			name:  "trailing dot",
+			input: "5.",
+			want:  &sdcpb.Decimal64{Digits: 5, Precision: 0},
+		},
+		{
+			name:  "trailing zeros in fraction",
+			input: "3.1400",
+			want:  &sdcpb.Decimal64{Digits: 31400, Precision: 4},
+		},
+		{
+			name:  "leading zeros",
+			input: "00012.34",
+			want:  &sdcpb.Decimal64{Digits: 1234, Precision: 2},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseDecimal64(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("ParseDecimal64(%q) expected error, got nil", tt.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParseDecimal64(%q) unexpected error: %v", tt.input, err)
+			}
+			if got.Digits != tt.want.Digits || got.Precision != tt.want.Precision {
+				t.Errorf("ParseDecimal64(%q) = %+v, want %+v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestEqualTypedValues(t *testing.T) {
 
 	// helper to build an AnyVal
@@ -119,11 +222,11 @@ func TestEqualTypedValues(t *testing.T) {
 		{
 			"ascii equal",
 			&sdcpb.TypedValue{
-				Value:     &sdcpb.TypedValue_AsciiVal{AsciiVal: "foo"},
+				Value: &sdcpb.TypedValue_AsciiVal{AsciiVal: "foo"},
 			},
 			&sdcpb.TypedValue{
-				Value:     &sdcpb.TypedValue_AsciiVal{AsciiVal: "foo"},
-			}, 
+				Value: &sdcpb.TypedValue_AsciiVal{AsciiVal: "foo"},
+			},
 			true,
 		},
 		{
@@ -142,7 +245,7 @@ func TestEqualTypedValues(t *testing.T) {
 		},
 		{
 			"ident diff value",
-			identVal("v1", "m", "p"), 
+			identVal("v1", "m", "p"),
 			identVal("v2", "m", "p"),
 			false,
 		},
@@ -180,7 +283,7 @@ func TestEqualTypedValues(t *testing.T) {
 			"decimal equal",
 			decVal(123, 2),
 			decVal(123, 2),
-			true, 
+			true,
 		},
 		{
 			"decimal precision diff",
@@ -323,8 +426,8 @@ func TestEqualTypedValues(t *testing.T) {
 		// --- ProtoBytes ---
 		{
 			"proto bytes equal",
-			&sdcpb.TypedValue{Value: &sdcpb.TypedValue_ProtoBytes{ProtoBytes: []byte{1,2}}},
-			&sdcpb.TypedValue{Value: &sdcpb.TypedValue_ProtoBytes{ProtoBytes: []byte{1,2}}},
+			&sdcpb.TypedValue{Value: &sdcpb.TypedValue_ProtoBytes{ProtoBytes: []byte{1, 2}}},
+			&sdcpb.TypedValue{Value: &sdcpb.TypedValue_ProtoBytes{ProtoBytes: []byte{1, 2}}},
 			true,
 		},
 		{
@@ -363,7 +466,7 @@ func TestEqualTypedValues(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := EqualTypedValues(tt.t1, tt.t2)
+			got := tt.t1.Equal(tt.t2)
 			if got != tt.want {
 				t.Errorf("EqualTypedValues(%v, %v) = %v, want %v", tt.t1, tt.t2, got, tt.want)
 			}

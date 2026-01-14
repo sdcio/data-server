@@ -11,11 +11,11 @@ import (
 	"github.com/openconfig/ygot/ygot"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
-	"github.com/sdcio/data-server/pkg/tree/tree_persist"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
-	schema_server "github.com/sdcio/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/sdc-protos/tree_persist"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -26,9 +26,6 @@ func TestRootEntry_TreeExport(t *testing.T) {
 	owner2 := "owner2"
 	tc := NewTreeContext(nil, owner1)
 
-	type fields struct {
-		sharedEntryAttributes *sharedEntryAttributes
-	}
 	type args struct {
 		owner    string
 		priority int32
@@ -55,9 +52,9 @@ func TestRootEntry_TreeExport(t *testing.T) {
 
 				result.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(types.PathSlice{},
-							&schema_server.TypedValue{
-								Value: &schema_server.TypedValue_StringVal{StringVal: "Value"},
+						types.NewUpdate(nil,
+							&sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 500, owner1, 0,
 						),
 						types.NewUpdateInsertFlags(), result),
@@ -70,7 +67,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				priority: 500,
 			},
 			want: func(t *testing.T) *tree_persist.Intent {
-				lv, err := proto.Marshal(&schema_server.TypedValue{Value: &schema_server.TypedValue_StringVal{StringVal: "Value"}})
+				lv, err := proto.Marshal(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"}})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -117,9 +114,9 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(types.PathSlice{},
-							&schema_server.TypedValue{
-								Value: &schema_server.TypedValue_StringVal{StringVal: "Value"},
+						types.NewUpdate(nil,
+							&sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 500, owner1, 0,
 						),
 						types.NewUpdateInsertFlags(), result),
@@ -132,7 +129,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				priority: 500,
 			},
 			want: func(t *testing.T) *tree_persist.Intent {
-				lv, err := proto.Marshal(&schema_server.TypedValue{Value: &schema_server.TypedValue_StringVal{StringVal: "Value"}})
+				lv, err := proto.Marshal(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"}})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -183,9 +180,9 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(types.PathSlice{},
-							&schema_server.TypedValue{
-								Value: &schema_server.TypedValue_StringVal{StringVal: "Value"},
+						types.NewUpdate(nil,
+							&sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 500, owner1, 0,
 						),
 						types.NewUpdateInsertFlags(), result),
@@ -193,9 +190,9 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(types.PathSlice{},
-							&schema_server.TypedValue{
-								Value: &schema_server.TypedValue_StringVal{StringVal: "OtherValue"},
+						types.NewUpdate(nil,
+							&sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "OtherValue"},
 							}, 50, owner2, 0,
 						),
 						types.NewUpdateInsertFlags(), result),
@@ -217,9 +214,9 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(types.PathSlice{},
-							&schema_server.TypedValue{
-								Value: &schema_server.TypedValue_StringVal{StringVal: "Value"},
+						types.NewUpdate(nil,
+							&sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 50, owner2, 0,
 						),
 						types.NewUpdateInsertFlags(), result),
@@ -232,7 +229,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				priority: 500,
 			},
 			want: func(t *testing.T) *tree_persist.Intent {
-				lv, err := proto.Marshal(&schema_server.TypedValue{Value: &schema_server.TypedValue_StringVal{StringVal: "Value"}})
+				lv, err := proto.Marshal(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"}})
 				if err != nil {
 					t.Error(err)
 				}
@@ -283,9 +280,9 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// add interface LeafVariant
 				interf.leafVariants.Add(
 					NewLeafEntry(
-						types.NewUpdate(types.PathSlice{},
-							&schema_server.TypedValue{
-								Value: &schema_server.TypedValue_StringVal{StringVal: "Value"},
+						types.NewUpdate(nil,
+							&sdcpb.TypedValue{
+								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
 							}, 500, owner1, 0,
 						),
 						types.NewUpdateInsertFlags(), result),
@@ -304,6 +301,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &RootEntry{
 				sharedEntryAttributes: tt.sharedEntryAttributes(),
+				explicitDeletes:       NewDeletePaths(),
 			}
 			got, err := r.TreeExport(tt.args.owner, tt.args.priority, false)
 			if (err != nil) != tt.wantErr {
@@ -318,28 +316,26 @@ func TestRootEntry_TreeExport(t *testing.T) {
 	}
 }
 
-func TestRootEntry_DeleteBranchPaths(t *testing.T) {
+func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
 	owner1 := "owner1"
-	ctx := context.TODO()
 
 	type args struct {
 		deletes    types.DeleteEntriesList
 		intentName string
 	}
 	tests := []struct {
-		name     string
-		re       func(scb schemaClient.SchemaClientBound) *RootEntry
-		expected func(scb schemaClient.SchemaClientBound) *RootEntry
-		args     args
+		name string
+		re   func() ygot.GoStruct
+		args args
 	}{
 		{
-			name: "Delete none",
+			name: "Delete one",
 			args: args{
 				deletes:    types.DeleteEntriesList{},
 				intentName: owner1,
 			},
-			re: func(scb schemaClient.SchemaClientBound) *RootEntry {
-				d := &sdcio_schema.Device{
+			re: func() ygot.GoStruct {
+				return &sdcio_schema.Device{
 					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
 						{
 							Key1: "k1.1",
@@ -379,386 +375,6 @@ func TestRootEntry_DeleteBranchPaths(t *testing.T) {
 						},
 					},
 				}
-
-				tc := NewTreeContext(scb, owner1)
-
-				root, err := NewTreeRoot(ctx, tc)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, d, root, owner1, 500, flagsNew)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = root.FinishInsertionPhase(ctx)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				return root
-			},
-			expected: func(scb schemaClient.SchemaClientBound) *RootEntry {
-				d := &sdcio_schema.Device{
-					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
-						{
-							Key1: "k1.1",
-							Key2: "k1.2",
-						}: {
-							Key1:    ygot.String("k1.1"),
-							Key2:    ygot.String("k1.2"),
-							Mandato: ygot.String("TheMandatoryValue1"),
-							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
-								Value1: ygot.String("containerval1.1"),
-								Value2: ygot.String("containerval1.2"),
-							},
-						},
-						{
-							Key1: "k2.1",
-							Key2: "k2.2",
-						}: {
-							Key1:    ygot.String("k2.1"),
-							Key2:    ygot.String("k2.2"),
-							Mandato: ygot.String("TheMandatoryValue2"),
-							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
-								Value1: ygot.String("containerval2.1"),
-								Value2: ygot.String("containerval2.2"),
-							},
-						},
-						{
-							Key1: "k1.1",
-							Key2: "k1.3",
-						}: {
-							Key1:    ygot.String("k1.1"),
-							Key2:    ygot.String("k1.3"),
-							Mandato: ygot.String("TheMandatoryValue1"),
-							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
-								Value1: ygot.String("containerval1.1"),
-								Value2: ygot.String("containerval1.2"),
-							},
-						},
-					},
-				}
-
-				tc := NewTreeContext(scb, owner1)
-
-				root, err := NewTreeRoot(ctx, tc)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, d, root, owner1, 500, flagsNew)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = root.FinishInsertionPhase(ctx)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				return root
-			},
-		},
-		{
-			name: "Dublekey Delete one",
-			args: args{
-				deletes: types.DeleteEntriesList{
-					types.NewDeleteEntryImpl(
-						&schema_server.Path{
-							Elem: []*schema_server.PathElem{
-								{
-									Name: "doublekey",
-									Key: map[string]string{
-										"key1": "k1.1",
-										"key2": "k1.2",
-									},
-								},
-							},
-						},
-					),
-				},
-				intentName: owner1,
-			},
-			expected: func(scb schemaClient.SchemaClientBound) *RootEntry {
-				d := &sdcio_schema.Device{
-					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
-						{
-							Key1: "k2.1",
-							Key2: "k2.2",
-						}: {
-							Key1:    ygot.String("k2.1"),
-							Key2:    ygot.String("k2.2"),
-							Mandato: ygot.String("TheMandatoryValue2"),
-							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
-								Value1: ygot.String("containerval2.1"),
-								Value2: ygot.String("containerval2.2"),
-							},
-						},
-						{
-							Key1: "k1.1",
-							Key2: "k1.3",
-						}: {
-							Key1:    ygot.String("k1.1"),
-							Key2:    ygot.String("k1.3"),
-							Mandato: ygot.String("TheMandatoryValue1"),
-							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
-								Value1: ygot.String("containerval1.1"),
-								Value2: ygot.String("containerval1.2"),
-							},
-						},
-					},
-				}
-				tc := NewTreeContext(scb, owner1)
-
-				root, err := NewTreeRoot(ctx, tc)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, d, root, owner1, 500, flagsNew)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = root.FinishInsertionPhase(ctx)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				return root
-			},
-			re: func(scb schemaClient.SchemaClientBound) *RootEntry {
-				d := &sdcio_schema.Device{
-					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
-						{
-							Key1: "k1.1",
-							Key2: "k1.2",
-						}: {
-							Key1:    ygot.String("k1.1"),
-							Key2:    ygot.String("k1.2"),
-							Mandato: ygot.String("TheMandatoryValue1"),
-							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
-								Value1: ygot.String("containerval1.1"),
-								Value2: ygot.String("containerval1.2"),
-							},
-						},
-						{
-							Key1: "k2.1",
-							Key2: "k2.2",
-						}: {
-							Key1:    ygot.String("k2.1"),
-							Key2:    ygot.String("k2.2"),
-							Mandato: ygot.String("TheMandatoryValue2"),
-							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
-								Value1: ygot.String("containerval2.1"),
-								Value2: ygot.String("containerval2.2"),
-							},
-						},
-						{
-							Key1: "k1.1",
-							Key2: "k1.3",
-						}: {
-							Key1:    ygot.String("k1.1"),
-							Key2:    ygot.String("k1.3"),
-							Mandato: ygot.String("TheMandatoryValue1"),
-							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
-								Value1: ygot.String("containerval1.1"),
-								Value2: ygot.String("containerval1.2"),
-							},
-						},
-					},
-				}
-				tc := NewTreeContext(scb, owner1)
-
-				root, err := NewTreeRoot(ctx, tc)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, d, root, owner1, 500, flagsNew)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = root.FinishInsertionPhase(ctx)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				return root
-			},
-		},
-		{
-			name: "Delete single key",
-			args: args{
-				deletes: types.DeleteEntriesList{
-					types.NewDeleteEntryImpl(
-						&schema_server.Path{
-							Elem: []*schema_server.PathElem{
-								{
-									Name: "interface",
-									Key: map[string]string{
-										"name": "ethernet-1/1",
-									},
-								},
-							},
-						},
-					),
-				},
-				intentName: owner1,
-			},
-			re: func(scb schemaClient.SchemaClientBound) *RootEntry {
-				d := &sdcio_schema.Device{
-					Interface: map[string]*sdcio_schema.SdcioModel_Interface{
-						"ethernet-1/1": {
-							Name:        ygot.String("ethernet-1/1"),
-							Description: ygot.String("description-1/1"),
-						},
-						"ethernet-1/2": {
-							Name:        ygot.String("ethernet-1/2"),
-							Description: ygot.String("description-1/2"),
-						},
-					},
-				}
-				tc := NewTreeContext(scb, owner1)
-
-				root, err := NewTreeRoot(ctx, tc)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, d, root, owner1, 500, flagsNew)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = root.FinishInsertionPhase(ctx)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				return root
-			},
-			expected: func(scb schemaClient.SchemaClientBound) *RootEntry {
-				d := &sdcio_schema.Device{
-					Interface: map[string]*sdcio_schema.SdcioModel_Interface{
-						"ethernet-1/2": {
-							Name:        ygot.String("ethernet-1/2"),
-							Description: ygot.String("description-1/2"),
-						},
-					},
-				}
-				tc := NewTreeContext(scb, owner1)
-
-				root, err := NewTreeRoot(ctx, tc)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, d, root, owner1, 500, flagsNew)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = root.FinishInsertionPhase(ctx)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				return root
-			},
-		},
-		{
-			name: "Delete field",
-			args: args{
-				deletes: types.DeleteEntriesList{
-					types.NewDeleteEntryImpl(
-						&schema_server.Path{
-							Elem: []*schema_server.PathElem{
-								{
-									Name: "interface",
-									Key: map[string]string{
-										"name": "ethernet-1/1",
-									},
-								},
-								{
-									Name: "mtu",
-									Key:  nil,
-								},
-							},
-						},
-					),
-				},
-				intentName: owner1,
-			},
-			re: func(scb schemaClient.SchemaClientBound) *RootEntry {
-				d := &sdcio_schema.Device{
-					Interface: map[string]*sdcio_schema.SdcioModel_Interface{
-						"ethernet-1/1": {
-							Name:        ygot.String("ethernet-1/1"),
-							Description: ygot.String("description-1/1"),
-							Mtu:         ygot.Uint16(1500),
-						},
-						"ethernet-1/2": {
-							Name:        ygot.String("ethernet-1/2"),
-							Description: ygot.String("description-1/2"),
-							Mtu:         ygot.Uint16(1500),
-						},
-					},
-				}
-				tc := NewTreeContext(scb, owner1)
-
-				root, err := NewTreeRoot(ctx, tc)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, d, root, owner1, 500, flagsNew)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = root.FinishInsertionPhase(ctx)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				return root
-			},
-			expected: func(scb schemaClient.SchemaClientBound) *RootEntry {
-				d := &sdcio_schema.Device{
-					Interface: map[string]*sdcio_schema.SdcioModel_Interface{
-						"ethernet-1/1": {
-							Name:        ygot.String("ethernet-1/1"),
-							Description: ygot.String("description-1/1"),
-						},
-						"ethernet-1/2": {
-							Name:        ygot.String("ethernet-1/2"),
-							Description: ygot.String("description-1/2"),
-							Mtu:         ygot.Uint16(1500),
-						},
-					},
-				}
-				tc := NewTreeContext(scb, owner1)
-
-				root, err := NewTreeRoot(ctx, tc)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, d, root, owner1, 500, flagsNew)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = root.FinishInsertionPhase(ctx)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				return root
 			},
 		},
 	}
@@ -776,26 +392,36 @@ func TestRootEntry_DeleteBranchPaths(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			root := tt.re(scb)
+			tc := NewTreeContext(scb, owner1)
+
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = testhelper.LoadYgotStructIntoTreeRoot(ctx, tt.re(), root, owner1, 500, flagsNew)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			fmt.Println(root.String())
 
 			err = root.DeleteBranchPaths(ctx, tt.args.deletes, tt.args.intentName)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			expectedRoot := tt.expected(scb)
-
 			fmt.Println(root.String())
-			fmt.Println(expectedRoot.String())
-
-			if diff := cmp.Diff(expectedRoot.String(), root.String()); diff != "" {
-				t.Errorf("mismatch (-want +got)\n%s", diff)
-				return
-			}
 
 		})
 	}
 }
+
 func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 	ctx := context.Background()
 	sc, schema, err := testhelper.InitSDCIOSchema()
@@ -809,7 +435,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 		sharedEntryAttributes func(t *testing.T) *sharedEntryAttributes
 	}
 	type args struct {
-		us    types.UpdateSlice
+		pau   []*types.PathAndUpdate
 		flags *types.UpdateInsertFlags
 	}
 	tests := []struct {
@@ -827,7 +453,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					schema, err := tc.schemaClient.GetSchemaSlicePath(ctx, nil)
+					schema, err := tc.schemaClient.GetSchemaSdcpbPath(ctx, nil)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -837,9 +463,28 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 				},
 			},
 			args: args{
-				us: types.UpdateSlice{
-					types.NewUpdate(types.PathSlice{"interface", "ethernet-1/1", "description"}, testhelper.GetStringTvProto("test"), *proto.Int32(5), "owner1", 0),
-					types.NewUpdate(types.PathSlice{"network-instance", "ni1", "protocol", "bgp"}, &schema_server.TypedValue{Value: &schema_server.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}, *proto.Int32(5), "owner1", 0),
+				pau: []*types.PathAndUpdate{
+					types.NewPathAndUpdate(
+						&sdcpb.Path{
+							Elem: []*sdcpb.PathElem{
+								sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+								sdcpb.NewPathElem("description", nil),
+							},
+						},
+						types.NewUpdate(nil, testhelper.GetStringTvProto("test"), *proto.Int32(5), "owner1", 0),
+					),
+					types.NewPathAndUpdate(
+						&sdcpb.Path{
+							Elem: []*sdcpb.PathElem{
+								sdcpb.NewPathElem("network-instance", map[string]string{
+									"name": "ni1",
+								}),
+								sdcpb.NewPathElem("protocol", nil),
+								sdcpb.NewPathElem("bgp", nil),
+							},
+						},
+						types.NewUpdate(nil, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}, *proto.Int32(5), "owner1", 0),
+					),
 				},
 				flags: types.NewUpdateInsertFlags(),
 			},
@@ -885,7 +530,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 			r := &RootEntry{
 				sharedEntryAttributes: tt.fields.sharedEntryAttributes(t),
 			}
-			if err := r.AddUpdatesRecursive(ctx, tt.args.us, tt.args.flags); (err != nil) != tt.wantErr {
+			if err := r.AddUpdatesRecursive(ctx, tt.args.pau, tt.args.flags); (err != nil) != tt.wantErr {
 				t.Errorf("RootEntry.AddUpdatesRecursive() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
@@ -957,7 +602,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := tt.rootEntry(t)
-			got := root.GetUpdatesForOwner(tt.owner)
+			got := root.GetUpdatesForOwner(tt.owner).ToPathAndUpdateSlice()
 
 			tc := NewTreeContext(scb, "intent1")
 			resultRoot, err := NewTreeRoot(ctx, tc)

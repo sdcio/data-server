@@ -1,13 +1,13 @@
 package tree
 
 import (
+	"context"
 	"iter"
 	"math"
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/tree/types"
-	"github.com/sdcio/data-server/pkg/utils"
-	log "github.com/sirupsen/logrus"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 type LeafVariants struct {
@@ -27,7 +27,7 @@ func newLeafVariants(tc *TreeContext, parentEnty Entry) *LeafVariants {
 
 func (lv *LeafVariants) Add(le *LeafEntry) {
 	if leafVariant := lv.GetByOwner(le.Owner()); leafVariant != nil {
-		if leafVariant.Equal(le.Update) {
+		if leafVariant.Update.Equal(le.Update) {
 			// it seems like the element was not deleted, so drop the delete flag
 			leafVariant.DropDeleteFlag()
 		} else {
@@ -70,6 +70,11 @@ func (lv *LeafVariants) canDeleteBranch(keepDefault bool) bool {
 		return true
 	}
 
+	highest := lv.GetHighestPrecedence(false, false, true)
+	if highest != nil && highest.IsExplicitDelete {
+		return true
+	}
+
 	// go through all variants
 	for _, l := range lv.les {
 		// if the LeafVariant is not owned by running or default
@@ -98,10 +103,16 @@ func (lv *LeafVariants) canDelete() bool {
 		return false
 	}
 
+	// check if highest is explicit delete
+	highest := lv.GetHighestPrecedence(false, false, true)
+	if highest != nil && highest.IsExplicitDelete {
+		return true
+	}
+
 	// go through all variants
 	for _, l := range lv.les {
 		// if the LeafVariant is not owned by running or default
-		if l.Update.Owner() != RunningIntentName && l.Update.Owner() != DefaultsIntentName {
+		if l.Update.Owner() != RunningIntentName && l.Update.Owner() != DefaultsIntentName && !l.IsExplicitDelete {
 			// then we need to check that it remains, so not Delete Flag set or DeleteOnylIntended Flags set [which results in not doing a delete towards the device]
 			if l.GetDeleteOnlyIntendedFlag() || !l.GetDeleteFlag() {
 				// then this entry should not be deleted
@@ -123,6 +134,17 @@ func (lv *LeafVariants) shouldDelete() bool {
 		return false
 	}
 
+	// check if highest is explicit delete
+	highest := lv.GetHighestPrecedence(false, false, true)
+	if highest != nil && highest.IsExplicitDelete && lv.GetRunning() != nil {
+		return true
+	}
+
+	// if there is no running, no need to delete
+	if lv.GetRunning() == nil {
+		return false
+	}
+
 	foundOtherThenRunningAndDefault := false
 	// go through all variants
 	for _, l := range lv.les {
@@ -139,10 +161,7 @@ func (lv *LeafVariants) shouldDelete() bool {
 			return false
 		}
 	}
-	if !foundOtherThenRunningAndDefault {
-		return false
-	}
-	return true
+	return foundOtherThenRunningAndDefault
 }
 
 func (lv *LeafVariants) remainsToExist() bool {
@@ -153,15 +172,32 @@ func (lv *LeafVariants) remainsToExist() bool {
 		return false
 	}
 
+	highest := lv.GetHighestPrecedence(false, false, true)
+
+	if highest == nil || highest.IsExplicitDelete {
+		return false
+	}
+
+	defaultOrRunningExists := false
+	deleteExists := false
 	// go through all variants
 	for _, l := range lv.les {
+		if l.Owner() == RunningIntentName || l.Owner() == DefaultsIntentName {
+			defaultOrRunningExists = true
+			continue
+		}
 		// if an entry exists that does not have the delete flag set,
 		// then a remaining LeafVariant exists.
 		if !l.GetDeleteFlag() {
 			return true
 		}
+		deleteExists = true
 	}
-	return false
+
+	if deleteExists {
+		return false
+	}
+	return defaultOrRunningExists
 }
 
 func (lv *LeafVariants) GetHighestPrecedenceValue(filter HighestPrecedenceFilter) int32 {
@@ -223,13 +259,13 @@ func (lv *LeafVariants) GetRunning() *LeafEntry {
 
 // GetHighesNewUpdated returns the LeafEntry with the highes priority
 // nil if no leaf entry exists.
-func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool) *LeafEntry {
+func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool, includeExplicitDelete bool) *LeafEntry {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 	if len(lv.les) == 0 {
 		return nil
 	}
-	if onlyNewOrUpdated && lv.shouldDelete() {
+	if onlyNewOrUpdated && lv.canDelete() {
 		return nil
 	}
 
@@ -256,6 +292,10 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 		}
 	}
 
+	if highest.IsExplicitDelete && !includeExplicitDelete {
+		return nil
+	}
+
 	// do not include defaults loaded at validation time
 	if checkNotDefaultAllowedButIsDefaultOwner(highest, includeDefaults) {
 		return nil
@@ -275,7 +315,7 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 		return nil
 	}
 	// otherwise if the secondhighest is not marked for deletion return it
-	if !checkExistsAndDeleteFlagSet(secondHighest) && checkNotOwner(secondHighest, RunningIntentName) {
+	if secondHighest != nil && !checkExistsAndDeleteFlagSet(secondHighest) && checkNotOwner(secondHighest, RunningIntentName) {
 		return secondHighest
 	}
 
@@ -299,8 +339,7 @@ func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
 	// ignore errors, they should not happen :-P I know... should...
 	rval := runVal.Value()
 	hval := highest.Value()
-
-	return !utils.EqualTypedValues(rval, hval)
+	return !rval.Equal(hval)
 }
 
 // GetByOwner returns the entry that is owned by the given owner,
@@ -328,19 +367,20 @@ func (lv *LeafVariants) MarkOwnerForDeletion(owner string, onlyIntended bool) *L
 	return nil
 }
 
-func (lv *LeafVariants) DeleteByOwner(owner string) {
+func (lv *LeafVariants) DeleteByOwner(owner string) *LeafEntry {
 	lv.lesMutex.Lock()
 	defer lv.lesMutex.Unlock()
 	for i, l := range lv.les {
 		if l.Owner() == owner {
 			// Remove element from slice
 			lv.les = append(lv.les[:i], lv.les[i+1:]...)
-			break
+			return l
 		}
 	}
+	return nil
 }
 
-func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveCase bool) {
+func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, isActiveCase bool) {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 
@@ -350,10 +390,7 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 
 	// get the path via the first LeafEntry
 	// is valid for all entries
-	sdcpbPath, err := lv.parentEntry.SdcpbPath()
-	if err != nil {
-		log.Error(err)
-	}
+	sdcpbPath := lv.parentEntry.SdcpbPath()
 
 	// we are part of an inactive case of a choice
 	if !isActiveCase {
@@ -398,6 +435,10 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 
 	// send all the overruleds
 	for _, de := range overruled {
+		if de.ExpectedValue().Equal(highest.Value()) {
+			// skip if higher prio equals the overruled
+			continue
+		}
 		ch <- de.SetCurrentValue(highest.Value())
 	}
 
@@ -413,7 +454,7 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 	}
 
 	// if highest exists but not running  OR   running != highest
-	if (running == nil && highest != nil) || running.Value().Cmp(highest.Value()) != 0 {
+	if (running == nil && highest != nil) || !running.Value().Equal(highest.Value()) {
 		de := types.NewDeviationEntry(highest.Owner(), types.DeviationReasonNotApplied, sdcpbPath).SetExpectedValue(highest.Value())
 		if running != nil {
 			de.SetCurrentValue(running.Value())
@@ -421,4 +462,10 @@ func (lv *LeafVariants) GetDeviations(ch chan<- *types.DeviationEntry, isActiveC
 		ch <- de
 	}
 
+}
+
+func (lv *LeafVariants) AddExplicitDeleteEntry(intentName string, priority int32) *LeafEntry {
+	le := NewLeafEntry(types.NewUpdate(lv.parentEntry, &sdcpb.TypedValue{}, priority, intentName, 0), types.NewUpdateInsertFlags().SetExplicitDeleteFlag(), lv.parentEntry)
+	lv.Add(le)
+	return le
 }
