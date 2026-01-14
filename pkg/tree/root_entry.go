@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -104,17 +105,11 @@ func (r *RootEntry) AddExplicitDeletes(intentName string, priority int32, pathse
 	r.explicitDeletes.Add(intentName, priority, pathset)
 }
 
-func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation) (types.ValidationResults, *types.ValidationStats) {
+func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation, taskpoolFactory pool.VirtualPoolFactory) (types.ValidationResults, *types.ValidationStats) {
 	// perform validation
 	// we use a channel and cumulate all the errors
 	validationResultEntryChan := make(chan *types.ValidationResultEntry, 10)
 	validationStats := types.NewValidationStats()
-
-	// start validation in a seperate goroutine
-	go func() {
-		r.sharedEntryAttributes.Validate(ctx, validationResultEntryChan, validationStats, vCfg)
-		close(validationResultEntryChan)
-	}()
 
 	// create a ValidationResult struct
 	validationResult := types.ValidationResults{}
@@ -128,6 +123,10 @@ func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation) (type
 		}
 		syncWait.Done()
 	}()
+
+	validationProcessor := NewValidateProcessor(NewValidateProcessorConfig(validationResultEntryChan, validationStats, vCfg))
+	validationProcessor.Run(taskpoolFactory, r.sharedEntryAttributes)
+	close(validationResultEntryChan)
 
 	syncWait.Wait()
 	return validationResult, validationStats
@@ -255,7 +254,7 @@ func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 			// navigate to the stated path
 			entry, err := r.NavigateSdcpbPath(ctx, path)
 			if err != nil {
-				log.V(logf.VWarn).Info("Applying explicit delete - path not found, skipping", "path", path.ToXPath(false))
+				log.Error(nil, "Applying explicit delete - path not found, skipping", "severity", "WARN", "path", path.ToXPath(false))
 			}
 
 			// walk the whole branch adding the explicit delete leafvariant

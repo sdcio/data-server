@@ -17,9 +17,11 @@ package datastore
 import (
 	"context"
 	"errors"
+	"runtime"
 	"sync"
 	"time"
 
+	"github.com/sdcio/logger"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc"
@@ -28,10 +30,11 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/datastore/target"
+	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/datastore/types"
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/schema"
 	"github.com/sdcio/data-server/pkg/tree"
-	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 )
 
 type Datastore struct {
@@ -47,19 +50,13 @@ type Datastore struct {
 	// schemaClient sdcpb.SchemaServerClient
 	schemaClient schemaClient.SchemaClientBound
 
-	// sync channel, to be passed to the SBI Sync method
-	synCh chan *target.SyncUpdate
-
+	ctx context.Context
 	// stop cancel func
 	cfn context.CancelFunc
 
 	// keeps track of clients watching deviation updates
 	m                *sync.RWMutex
-	deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer
-
-	// per path intent deviations (no unhandled)
-	md                       *sync.RWMutex
-	currentIntentsDeviations map[string][]*sdcpb.WatchDeviationResponse
+	deviationClients map[sdcpb.DataServer_WatchDeviationsServer]string
 
 	// datastore mutex locks the whole datasore for further set operations
 	dmutex *sync.Mutex
@@ -71,13 +68,14 @@ type Datastore struct {
 	syncTree      *tree.RootEntry
 	syncTreeMutex *sync.RWMutex
 
-	// owned by sync
-	syncTreeCandidate *tree.RootEntry
+	taskPool *pool.SharedTaskPool
 }
 
 // New creates a new datastore, its schema server client and initializes the SBI target
 // func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Datastore {
 func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc cache.Client, opts ...grpc.DialOption) (*Datastore, error) {
+
+	ctx, cancel := context.WithCancel(ctx)
 
 	log := logf.FromContext(ctx)
 	log = log.WithName("datastore").WithValues(
@@ -98,31 +96,26 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 	tc := tree.NewTreeContext(scb, tree.RunningIntentName)
 	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 
 	ccb := cache.NewCacheClientBound(c.Name, cc)
 
 	ds := &Datastore{
-		config:                   c,
-		schemaClient:             scb,
-		cacheClient:              ccb,
-		m:                        &sync.RWMutex{},
-		md:                       &sync.RWMutex{},
-		dmutex:                   &sync.Mutex{},
-		deviationClients:         make(map[string]sdcpb.DataServer_WatchDeviationsServer),
-		currentIntentsDeviations: make(map[string][]*sdcpb.WatchDeviationResponse),
-		syncTree:                 syncTreeRoot,
-		syncTreeMutex:            &sync.RWMutex{},
+		config:           c,
+		schemaClient:     scb,
+		ctx:              ctx,
+		cfn:              cancel,
+		cacheClient:      ccb,
+		m:                &sync.RWMutex{},
+		dmutex:           &sync.Mutex{},
+		deviationClients: make(map[sdcpb.DataServer_WatchDeviationsServer]string),
+		syncTree:         syncTreeRoot,
+		syncTreeMutex:    &sync.RWMutex{},
+		taskPool:         pool.NewSharedTaskPool(ctx, runtime.NumCPU()),
 	}
 	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
-
-	if c.Sync != nil {
-		ds.synCh = make(chan *target.SyncUpdate, c.Sync.Buffer)
-	}
-
-	ctx, cancel := context.WithCancel(ctx)
-	ds.cfn = cancel
 
 	// create cache instance if needed
 	// this is a blocking call
@@ -136,12 +129,10 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 		}
 		if err != nil {
 			log.Error(err, "failed to create SBI")
+			cancel()
 			return
 		}
-		// start syncing goroutine
-		if c.Sync != nil {
-			go ds.Sync(ctx)
-		}
+
 		// start deviation goroutine
 		ds.DeviationMgr(ctx, c.Deviation)
 	}()
@@ -174,7 +165,7 @@ func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) err
 	log := logf.FromContext(ctx)
 
 	var err error
-	d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, opts...)
+	d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, d, d.config.Sync.Config, d.taskPool, opts...)
 	if err == nil {
 		return nil
 	}
@@ -188,7 +179,7 @@ func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) err
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, opts...)
+			d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, d, d.config.Sync.Config, d.taskPool, opts...)
 			if err != nil {
 				log.Error(err, "failed to create DS target")
 				continue
@@ -214,14 +205,14 @@ func (d *Datastore) Delete(ctx context.Context) error {
 	return d.cacheClient.InstanceDelete(ctx)
 }
 
-func (d *Datastore) ConnectionState() *target.TargetStatus {
+func (d *Datastore) ConnectionState() *targettypes.TargetStatus {
 	if d.sbi == nil {
-		return target.NewTargetStatus(target.TargetStatusNotConnected)
+		return targettypes.NewTargetStatus(targettypes.TargetStatusNotConnected)
 	}
 	return d.sbi.Status()
 }
 
-func (d *Datastore) Stop() error {
+func (d *Datastore) Stop(ctx context.Context) error {
 	if d == nil {
 		return nil
 	}
@@ -229,107 +220,21 @@ func (d *Datastore) Stop() error {
 	if d.sbi == nil {
 		return nil
 	}
-	err := d.sbi.Close()
+	err := d.sbi.Close(ctx)
 	if err != nil {
 		logf.DefaultLogger.Error(err, "datastore failed to close the target connection", "datastore-name", d.Name())
 	}
 	return nil
 }
 
-func (d *Datastore) Sync(ctx context.Context) {
-	log := logf.FromContext(ctx).WithName("sync")
-	ctx = logf.IntoContext(ctx, log)
-
-	go d.sbi.Sync(ctx,
-		d.config.Sync,
-		d.synCh,
-	)
-
-	var err error
-	var startTs int64
-
-	d.syncTreeCandidate, err = tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, tree.RunningIntentName))
-	if err != nil {
-		log.Error(err, "failed creating a new synctree candidate")
-		return
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			if !errors.Is(ctx.Err(), context.Canceled) {
-				log.Error(ctx.Err(), "datastore sync stopped")
-			}
-			return
-		case syncup := <-d.synCh:
-			switch {
-			case syncup.Start:
-				log.V(logf.VDebug).Info("sync start")
-				startTs = time.Now().Unix()
-
-			case syncup.End:
-				log.V(logf.VDebug).Info("sync end")
-
-				startTs = 0
-
-				d.syncTreeMutex.Lock()
-				d.syncTree = d.syncTreeCandidate
-				d.syncTreeMutex.Unlock()
-
-				// create new syncTreeCandidat
-				d.syncTreeCandidate, err = tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, tree.RunningIntentName))
-				if err != nil {
-					log.Error(err, "failed creating a new synctree candidate")
-					return
-				}
-
-				// export and write to cache
-				runningExport, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
-				if err != nil {
-					log.Error(err, "failed exporting tree")
-					continue
-				}
-				err = d.cacheClient.IntentModify(ctx, runningExport)
-				if err != nil {
-					log.Error(err, "failed modifying running cache content")
-					continue
-				}
-			default:
-				if startTs == 0 {
-					startTs = time.Now().Unix()
-				}
-				err := d.writeToSyncTreeCandidate(ctx, syncup.Update.GetUpdate(), startTs)
-				if err != nil {
-					log.Error(err, "failed to write to sync tree")
-				}
-			}
-		}
-	}
-}
-
-func (d *Datastore) writeToSyncTreeCandidate(ctx context.Context, updates []*sdcpb.Update, ts int64) error {
-	upds, err := treetypes.ExpandAndConvertIntent(ctx, d.schemaClient, tree.RunningIntentName, tree.RunningValuesPrio, updates, ts)
-	if err != nil {
-		return err
-	}
-
-	// fmt.Println(upds.String())
-	for idx, upd := range upds {
-		_ = idx
-
-		_, err := d.syncTreeCandidate.AddUpdateRecursive(ctx, upd.GetPath(), upd.GetUpdate(), treetypes.NewUpdateInsertFlags())
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdcpb.BlameTreeElement, error) {
+	log := logger.FromContext(ctx).WithName("BlameConfig")
+	ctx = logger.IntoContext(ctx, log)
+
 	// create a new TreeRoot by copying the syncTree
-	d.syncTreeMutex.Lock()
+	d.syncTreeMutex.RLock()
 	root, err := d.syncTree.DeepCopy(ctx)
-	d.syncTreeMutex.Unlock()
+	d.syncTreeMutex.RUnlock()
 	if err != nil {
 		return nil, err
 	}
@@ -339,13 +244,10 @@ func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdc
 		return nil, err
 	}
 
-	// calculate the Blame
-	bcv := tree.NewBlameConfigVisitor(includeDefaults)
-	err = root.Walk(ctx, bcv)
-	if err != nil {
-		return nil, err
-	}
-	bte := bcv.GetResult()
+	blamePool := d.taskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+	bcp := tree.NewBlameConfigProcessor(tree.NewBlameConfigProcessorConfig(includeDefaults))
+
+	bte, err := bcp.Run(ctx, root.GetRoot(), blamePool)
 
 	// set the root level elements name to the target name
 	bte.Name = d.config.Name

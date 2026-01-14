@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package target
+package netconf
 
 import (
 	"context"
@@ -26,21 +26,16 @@ import (
 	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
 	"github.com/sdcio/data-server/pkg/config"
 	SchemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
-	"github.com/sdcio/data-server/pkg/datastore/target/netconf"
 	"github.com/sdcio/data-server/pkg/datastore/target/netconf/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 )
 
-var (
-	TestCtx = context.TODO()
-)
-
 func Test_ncTarget_Get(t *testing.T) {
 	type fields struct {
 		name            string
-		getDriver       func(*gomock.Controller, *testing.T) netconf.Driver
+		getDriver       func(*gomock.Controller, *testing.T) Driver
 		getSchemaClient func(*gomock.Controller, *testing.T) SchemaClient.SchemaClientBound
 		sbiConfig       *config.SBI
 	}
@@ -58,7 +53,7 @@ func Test_ncTarget_Get(t *testing.T) {
 		{
 			name: "One",
 			fields: fields{
-				getDriver: func(c *gomock.Controller, t *testing.T) netconf.Driver {
+				getDriver: func(c *gomock.Controller, t *testing.T) Driver {
 					d := mocknetconf.NewMockDriver(c)
 					responseDoc := etree.NewDocument()
 					err := responseDoc.ReadFromString("<data><interface><name>eth0</name><mtu>1500</mtu></interface></data>")
@@ -242,7 +237,7 @@ func Test_ncTarget_Get(t *testing.T) {
 				driver:           tt.fields.getDriver(mockCtrl, t),
 				schemaClient:     sc,
 				sbiConfig:        tt.fields.sbiConfig,
-				xml2sdcpbAdapter: netconf.NewXML2sdcpbConfigAdapter(sc),
+				xml2sdcpbAdapter: NewXML2sdcpbConfigAdapter(sc),
 			}
 			got, err := tr.Get(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
@@ -290,7 +285,7 @@ func TestLeafList(t *testing.T) {
 		},
 	}
 
-	xmlBuilder := netconf.NewXMLConfigBuilder(scb, &netconf.XMLConfigBuilderOpts{
+	xmlBuilder := NewXMLConfigBuilder(scb, &XMLConfigBuilderOpts{
 		UseOperationRemove: true,
 		HonorNamespace:     true,
 	})

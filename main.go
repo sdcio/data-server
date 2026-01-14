@@ -24,9 +24,13 @@ import (
 	"syscall"
 	"time"
 
+	"net/http"
+	_ "net/http/pprof"
+
 	"github.com/go-logr/logr"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/server"
+	"github.com/sdcio/logger"
 	logf "github.com/sdcio/logger"
 	"github.com/spf13/pflag"
 )
@@ -53,20 +57,27 @@ func main() {
 	}
 
 	slogOpts := &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level:       slog.LevelInfo,
 		ReplaceAttr: logf.ReplaceTimeAttr,
 	}
-
 	if debug {
-		slogOpts.Level = slog.Level(logf.VDebug)
+		slogOpts.Level = slog.Level(-logger.VDebug)
 	}
 	if trace {
-		slogOpts.Level = slog.Level(logf.VTrace)
+		slogOpts.Level = slog.Level(-logger.VTrace)
 	}
 
 	log := logr.FromSlogHandler(slog.NewJSONHandler(os.Stdout, slogOpts))
 	logf.SetDefaultLogger(log)
 	ctx := logf.IntoContext(context.Background(), log)
+
+	go func() {
+		log.Info("pprof server started", "address", "localhost:6060")
+		err := http.ListenAndServe("localhost:6060", nil)
+		if err != nil {
+			log.Error(err, "pprof server failed")
+		}
+	}()
 
 	log.Info("data-server bootstrap", "version", version, "commit", commit, "log-level", slogOpts.Level.Level().String())
 

@@ -23,8 +23,9 @@ import (
 
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore"
-	"github.com/sdcio/data-server/pkg/datastore/target"
+	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/utils"
+	"github.com/sdcio/logger"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc/codes"
@@ -88,13 +89,16 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 	name := req.GetDatastoreName()
 	lName := len(name)
 	if lName == 0 {
+		log.Error(nil, "missing datastore name attribute")
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
 	}
 	if lName > math.MaxUint16 {
-		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
+		log.Error(nil, "datastore name attribute too long")
+		return nil, status.Error(codes.InvalidArgument, "datastore name attribute too long")
 	}
 
 	if _, err := s.datastores.GetDataStore(name); err == nil {
+		log.Error(nil, "datastore already exists")
 		return nil, status.Errorf(codes.InvalidArgument, "datastore %s already exists", name)
 	}
 
@@ -112,6 +116,7 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		case sdcpb.CommitCandidate_COMMIT_RUNNING:
 			commitDatastore = "running"
 		default:
+			log.Error(nil, "unknown commitDatastore", "datastore", req.GetTarget().GetNetconfOpts().GetCommitCandidate())
 			return nil, fmt.Errorf("unknown commitDatastore: %v", req.GetTarget().GetNetconfOpts().GetCommitCandidate())
 		}
 		sbi.NetconfOptions = &config.SBINetconfOptions{
@@ -126,7 +131,8 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 			Encoding: req.GetTarget().GetGnmiOpts().GetEncoding(),
 		}
 	default:
-		return nil, fmt.Errorf("unknowm protocol type %s", req.GetTarget().GetType())
+		log.Error(nil, "unknowm targetconnection protocol type", "type", req.GetTarget().GetType())
+		return nil, fmt.Errorf("unknowm targetconnection protocol type %s", req.GetTarget().GetType())
 	}
 
 	if req.GetTarget().GetTls() != nil {
@@ -185,13 +191,15 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 				gnSyncConfig.Encoding = pSync.GetTarget().GetGnmiOpts().GetEncoding()
 			case "netconf":
 			default:
-				return nil, status.Errorf(codes.InvalidArgument, "unknown sync protocol: %q", pSync.GetTarget().GetType())
+				log.Error(nil, "unknown targetsync protocol type", "protocol", pSync.GetTarget().GetType())
+				return nil, status.Errorf(codes.InvalidArgument, "unknown targetsync protocol: %q", pSync.GetTarget().GetType())
 			}
 			dsConfig.Sync.Config = append(dsConfig.Sync.Config, gnSyncConfig)
 		}
 	}
 	err := dsConfig.ValidateSetDefaults()
 	if err != nil {
+		log.Error(err, "invalid datastore config")
 		return nil, status.Errorf(codes.InvalidArgument, "invalid datastore config: %v", err)
 	}
 	ds, err := datastore.New(
@@ -201,12 +209,15 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		s.cacheClient,
 		s.gnmiOpts...)
 	if err != nil {
+		log.Error(err, "failed creating new datastore")
 		return nil, err
 	}
 	err = s.datastores.AddDatastore(ds)
 	if err != nil {
+		log.Error(err, "failed adding new datastore")
 		return nil, err
 	}
+	log.Info("datastore created successfully")
 	return &sdcpb.CreateDataStoreResponse{}, nil
 }
 
@@ -226,7 +237,7 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 		return nil, err
 	}
 
-	err = ds.Stop()
+	err = ds.Stop(s.ctx)
 	if err != nil {
 		log.Error(err, "failed to stop datastore")
 	}
@@ -243,21 +254,25 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.DataServer_WatchDeviationsServer) error {
 	ctx := stream.Context()
 	p, ok := peer.FromContext(ctx)
-	log := logf.FromContext(ctx).WithName("WatchDeviations").WithValues("peer", p.String())
+	var peerName string
+	if ok {
+		peerName = p.Addr.String()
+	}
+	log := logf.FromContext(ctx).WithName("WatchDeviations").WithValues("peer", peerName)
 	ctx = logf.IntoContext(ctx, log)
 
 	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 
-	peerInfo, ok := peer.FromContext(ctx)
 	if !ok {
 		return status.Errorf(codes.InvalidArgument, "missing peer info")
 	}
-	if req.GetName() == nil {
+
+	if req.GetName() == nil || len(req.GetName()) == 0 {
 		return status.Errorf(codes.InvalidArgument, "missing datastore name")
 	}
-
-	if len(req.GetName()) == 0 {
-		return status.Errorf(codes.InvalidArgument, "missing datastore name")
+	if len(req.GetName()) > 1 {
+		// although we have a slice in the req we support just a single datastore per request atm.
+		return status.Errorf(codes.InvalidArgument, "only single datastore name allowed per request")
 	}
 
 	ds, err := s.datastores.GetDataStore(req.GetName()[0])
@@ -266,12 +281,18 @@ func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.
 		return status.Errorf(codes.NotFound, "unknown datastore")
 	}
 
+	// add datastore name to log
+	log = log.WithValues("datastore-name", req.GetName()[0])
+	logger.IntoContext(ctx, log)
+
 	err = ds.WatchDeviations(req, stream)
 	if err != nil {
 		log.Error(err, "failed to watch deviations")
+		return err
 	}
 	<-stream.Context().Done()
-	ds.StopDeviationsWatch(peerInfo.Addr.String())
+	log.Error(stream.Context().Err(), "stream context done", "severity", "WARN")
+	ds.StopDeviationsWatch(stream)
 	return nil
 }
 
@@ -290,9 +311,9 @@ func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*
 	}
 	// map datastore sbi conn state to sdcpb.TargetStatus
 	switch ds.ConnectionState().Status {
-	case target.TargetStatusConnected:
+	case targettypes.TargetStatusConnected:
 		rsp.Target.Status = sdcpb.TargetStatus_CONNECTED
-	case target.TargetStatusNotConnected:
+	case targettypes.TargetStatusNotConnected:
 		rsp.Target.Status = sdcpb.TargetStatus_NOT_CONNECTED
 	default:
 		rsp.Target.Status = sdcpb.TargetStatus_UNKNOWN

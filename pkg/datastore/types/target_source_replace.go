@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/beevik/etree"
-	"github.com/sdcio/data-server/pkg/datastore/target"
+	"github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -16,11 +16,11 @@ import (
 //   - ToXML(...) returns the TargetSource generated etree.Document, but sets the
 //     replace flag on the root element
 type TargetSourceReplace struct {
-	target.TargetSource
+	types.TargetSource
 }
 
 // NewTargetSourceReplace constructor for TargetSourceReplace
-func NewTargetSourceReplace(ts target.TargetSource) *TargetSourceReplace {
+func NewTargetSourceReplace(ts types.TargetSource) *TargetSourceReplace {
 	return &TargetSourceReplace{
 		ts,
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/pool"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -668,7 +670,9 @@ func Test_sharedEntryAttributes_MustCount(t *testing.T) {
 			valConfig.DisabledValidators.DisableAll()
 			valConfig.DisabledValidators.MustStatement = false
 
-			result, _ := root.Validate(ctx, valConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+
+			result, _ := root.Validate(ctx, valConfig, sharedPool)
 
 			t.Log(strings.Join(result.ErrorsStr(), "\n"))
 
@@ -787,8 +791,9 @@ func Test_sharedEntryAttributes_MustCountDoubleKey(t *testing.T) {
 			valConfig := validationConfig.DeepCopy()
 			valConfig.DisabledValidators.DisableAll()
 			valConfig.DisabledValidators.MustStatement = false
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
 
-			result, _ := root.Validate(ctx, valConfig)
+			result, _ := root.Validate(ctx, valConfig, sharedPool)
 
 			t.Log(strings.Join(result.ErrorsStr(), "\n"))
 
@@ -997,7 +1002,9 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 			validationConfig.DisabledValidators.DisableAll()
 			validationConfig.DisabledValidators.Mandatory = false
 
-			validationResults, _ := root.Validate(ctx, validationConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+
+			validationResults, _ := root.Validate(ctx, validationConfig, sharedPool)
 
 			results := []string{}
 			for _, e := range validationResults {
@@ -1130,10 +1137,14 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 			}
 
 			// mark owner delete
-			marksOwnerDeleteVisitor := NewMarkOwnerDeleteVisitor(owner1, false)
-			err = root.Walk(ctx, marksOwnerDeleteVisitor)
+			sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+			ownerDeleteMarker := NewOwnerDeleteMarker(NewOwnerDeleteMarkerTaskConfig(owner1, false))
+
+			err = ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
 			if err != nil {
 				t.Error(err)
+				return
 			}
 
 			err = newRoot.AddUpdatesRecursive(ctx, updSlice, flagsNew)
@@ -1287,7 +1298,8 @@ func Test_sharedEntryAttributes_validateMinMaxElements(t *testing.T) {
 			valConfig.DisabledValidators.DisableAll()
 			valConfig.DisabledValidators.MaxElements = false
 
-			result, _ := root.Validate(ctx, valConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			result, _ := root.Validate(ctx, valConfig, sharedPool)
 
 			t.Log(strings.Join(result.ErrorsStr(), "\n"))
 
@@ -1455,7 +1467,8 @@ func Test_sharedEntryAttributes_validateMinMaxElementsDoubleKey(t *testing.T) {
 			valConfig.DisabledValidators.DisableAll()
 			valConfig.DisabledValidators.MaxElements = false
 
-			result, _ := root.Validate(ctx, valConfig)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			result, _ := root.Validate(ctx, valConfig, sharedPool)
 
 			t.Log(strings.Join(result.ErrorsStr(), "\n"))
 
