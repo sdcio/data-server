@@ -30,7 +30,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/server"
-	"github.com/sdcio/logger"
 	logf "github.com/sdcio/logger"
 	"github.com/spf13/pflag"
 )
