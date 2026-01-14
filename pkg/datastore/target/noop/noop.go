@@ -50,8 +50,8 @@ func (t *noopTarget) AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) 
 }
 
 func (t *noopTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
-	log := logf.FromContext(ctx).WithName("Get")
-	ctx = logf.IntoContext(ctx, log)
+	// log := logf.FromContext(ctx).WithName("Get")
+	// ctx = logf.IntoContext(ctx, log)
 
 	result := &sdcpb.GetDataResponse{
 		Notification: make([]*sdcpb.Notification, 0, len(req.GetPath())),

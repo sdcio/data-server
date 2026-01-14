@@ -3,6 +3,7 @@ package gnmi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -209,7 +210,7 @@ func (s *StreamSync) gnmiSubscribe(subReq *gnmi.SubscribeRequest, updChan chan<-
 				syncResponse <- struct{}{}
 
 			case *gnmi.SubscribeResponse_Error:
-				log.Error(nil, "gnmi subscription error", "error", r.Error.Message)
+				log.Error(fmt.Errorf("%s", r.Error.Message), "gnmi subscription error") //nolint:staticcheck
 			}
 		}
 	}

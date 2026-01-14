@@ -56,8 +56,8 @@ func importHandler(ctx context.Context, task importTask, submit func(importTask)
 		// keyed container: handle keys sequentially
 		if len(task.entry.GetSchema().GetContainer().GetKeys()) > 0 {
 			var exists bool
-			var actual Entry = task.entry
 			var keyChild Entry
+			actual := task.entry
 
 			keys := task.entry.GetSchemaKeys()
 			slices.Sort(keys)

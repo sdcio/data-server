@@ -12,7 +12,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
-	logf "github.com/sdcio/logger"
+	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
 )
@@ -48,14 +48,14 @@ func NewTreeRoot(ctx context.Context, tc *TreeContext) (*RootEntry, error) {
 }
 
 // stringToDisk just for debugging purpose
-func (r *RootEntry) stringToDisk(filename string) error {
+func (r *RootEntry) stringToDisk(filename string) error { // nolint:unused
 	err := os.WriteFile(filename, []byte(r.String()), 0755)
 	return err
 }
 
 func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 	tc := r.treeContext.deepCopy()
-	se, err := r.sharedEntryAttributes.deepCopy(tc, nil)
+	se, err := r.deepCopy(tc, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us []*types.PathAnd
 	var err error
 	for idx, u := range us {
 		_ = idx
-		_, err = r.sharedEntryAttributes.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flags)
+		_, err = r.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flags)
 		if err != nil {
 			return err
 		}
@@ -91,7 +91,7 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us []*types.PathAnd
 func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error {
 	r.treeContext.SetActualOwner(intentName)
 
-	e, err := r.sharedEntryAttributes.getOrCreateChilds(ctx, basePath)
+	e, err := r.getOrCreateChilds(ctx, basePath)
 	if err != nil {
 		return err
 	}
@@ -119,13 +119,17 @@ func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation, taskp
 	go func() {
 		// read from the validationResult channel
 		for e := range validationResultEntryChan {
-			validationResult.AddEntry(e)
+			err := validationResult.AddEntry(e)
+			if err != nil {
+				log := logger.FromContext(ctx)
+				log.Error(err, "adding validation result failed")
+			}
 		}
 		syncWait.Done()
 	}()
 
 	validationProcessor := NewValidateProcessor(NewValidateProcessorConfig(validationResultEntryChan, validationStats, vCfg))
-	validationProcessor.Run(taskpoolFactory, r.sharedEntryAttributes)
+	_ = validationProcessor.Run(taskpoolFactory, r.sharedEntryAttributes)
 	close(validationResultEntryChan)
 
 	syncWait.Wait()
@@ -135,7 +139,7 @@ func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation, taskp
 // String returns the string representation of the Tree.
 func (r *RootEntry) String() string {
 	s := []string{}
-	s = r.sharedEntryAttributes.StringIndent(s)
+	s = r.StringIndent(s)
 	return strings.Join(s, "\n")
 }
 
@@ -214,7 +218,7 @@ func (r *RootEntry) TreeExport(owner string, priority int32, deviation bool) (*t
 func (r *RootEntry) getByOwnerFiltered(owner string, f ...LeafEntryFilter) []*LeafEntry {
 	result := []*LeafEntry{}
 	// retrieve all leafentries for the owner
-	leafEntries := r.sharedEntryAttributes.GetByOwner(owner, result)
+	leafEntries := r.GetByOwner(owner, result)
 	// range through entries
 NEXTELEMENT:
 	for _, e := range leafEntries {
@@ -242,7 +246,7 @@ func (r *RootEntry) DeleteBranchPaths(ctx context.Context, deletes types.DeleteE
 }
 
 func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 	edvs := ExplicitDeleteVisitors{}
 
 	// apply the explicit deletes
@@ -265,7 +269,7 @@ func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 			edvs[deletePathPrio.GetOwner()] = edv
 		}
 	}
-	log.V(logf.VDebug).Info("ExplicitDeletes added", "explicit-deletes", utils.MapToString(edvs.Stats(), ", ", func(k string, v int) string {
+	log.V(logger.VDebug).Info("ExplicitDeletes added", "explicit-deletes", utils.MapToString(edvs.Stats(), ", ", func(k string, v int) string {
 		return fmt.Sprintf("%s=%d", k, v)
 	}))
 

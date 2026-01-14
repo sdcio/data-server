@@ -89,13 +89,13 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 	// process Value
 	highestLe := t.selfEntry.GetLeafVariantEntries().GetHighestPrecedence(false, true, true)
 	if highestLe != nil {
-		if highestLe.Update.Owner() != DefaultsIntentName || t.config.includeDefaults {
-			t.self.SetValue(highestLe.Update.Value()).SetOwner(highestLe.Update.Owner())
+		if highestLe.Owner() != DefaultsIntentName || t.config.includeDefaults {
+			t.self.SetValue(highestLe.Value()).SetOwner(highestLe.Owner())
 
 			// check if running equals the expected
 			runningLe := t.selfEntry.GetLeafVariantEntries().GetRunning()
 			if runningLe != nil {
-				if !proto.Equal(runningLe.Update.Value(), highestLe.Update.Value()) {
+				if !proto.Equal(runningLe.Value(), highestLe.Value()) {
 					t.self.SetDeviationValue(runningLe.Value())
 				}
 			}

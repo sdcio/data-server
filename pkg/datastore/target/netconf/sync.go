@@ -70,7 +70,12 @@ func (s *NetconfSyncImpl) Start() error {
 		return nil
 	}
 
-	go s.internalSync(req)
+	go func() {
+		err := s.internalSync(req)
+		if err != nil {
+			log.Error(err, "failed syncing")
+		}
+	}()
 
 	go func() {
 		ticker := time.NewTicker(s.config.Interval)

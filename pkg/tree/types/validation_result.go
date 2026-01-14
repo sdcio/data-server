@@ -67,7 +67,7 @@ func (v ValidationResults) JoinErrors() error {
 	var result error
 
 	for _, intent := range v {
-		errors.Join(result, errors.Join(intent.errors...))
+		result = errors.Join(result, errors.Join(intent.errors...))
 	}
 	return result
 }
@@ -76,7 +76,7 @@ func (v ValidationResults) JoinWarnings() error {
 	var result error
 
 	for _, intent := range v {
-		errors.Join(result, errors.Join(intent.warnings...))
+		result = errors.Join(result, errors.Join(intent.warnings...))
 	}
 	return result
 }
@@ -110,11 +110,11 @@ func (v *ValidationResultIntent) String() string {
 	sb := &strings.Builder{}
 	newLine := ""
 	for _, e := range v.errors {
-		sb.WriteString(fmt.Sprintf("%s%s: %s - %s", newLine, v.intentName, "error", e.Error()))
+		fmt.Fprintf(sb, "%s%s: %s - %s", newLine, v.intentName, "error", e.Error())
 		newLine = "\n"
 	}
 	for _, e := range v.warnings {
-		sb.WriteString(fmt.Sprintf("%s%s: %s - %s", newLine, v.intentName, "warning", e.Error()))
+		fmt.Fprintf(sb, "%s%s: %s - %s", newLine, v.intentName, "warning", e.Error())
 		newLine = "\n"
 	}
 	return sb.String()

@@ -57,8 +57,8 @@ func init() {
 func createDataClient(ctx context.Context, addr string) (sdcpb.DataServerClient, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	cc, err := grpc.DialContext(ctx, addr,
-		grpc.WithBlock(),
+	cc, err := grpc.DialContext(ctx, addr, //nolint:staticcheck
+		grpc.WithBlock(), //nolint:staticcheck
 		grpc.WithTransportCredentials(
 			insecure.NewCredentials(),
 		),

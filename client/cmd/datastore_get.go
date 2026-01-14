@@ -73,8 +73,8 @@ func printDataStoreTable(rsp *sdcpb.GetDataStoreResponse) {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.Header([]string{"Name", "Schema", "Protocol", "Address", "State"})
 	table.Options(tablewriter.WithAlignment(tw.Alignment{tw.AlignLeft}))
-	table.Bulk(toTableData(rsp))
-	table.Render()
+	_ = table.Bulk(toTableData(rsp))
+	_ = table.Render()
 }
 
 func toTableData(rsp *sdcpb.GetDataStoreResponse) [][]string {

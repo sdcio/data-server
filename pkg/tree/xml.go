@@ -145,7 +145,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 					return false, nil
 				}
 				le := s.leafVariants.GetHighestPrecedence(false, false, false)
-				if le == nil || onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
+				if le == nil || onlyNewOrUpdated && (!le.IsNew && !le.IsUpdated) {
 					return false, nil
 				}
 			}
@@ -274,7 +274,7 @@ func xmlAddKeyElements(s Entry, parent *etree.Element) {
 
 	// from the parent we get the keys as slice
 	schemaKeys := parentSchema.GetSchemaKeys()
-	var treeElem Entry = s
+	treeElem := s
 	// the keys do match the levels up in the tree in reverse order
 	// hence we init i with levelUp and count down
 	for i := levelsUp - 1; i >= 0; i-- {

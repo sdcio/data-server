@@ -213,14 +213,14 @@ func TestVirtualPool_CancellationHang(t *testing.T) {
 	wg.Add(2)
 
 	// Task 1: blocks until cancelled
-	vp.SubmitFunc(func(ctx context.Context, submit func(Task) error) error {
+	_ = vp.SubmitFunc(func(ctx context.Context, submit func(Task) error) error {
 		defer wg.Done()
 		<-ctx.Done()
 		return nil
 	})
 
 	// Task 2: should run even if cancelled (to decrement inflight)
-	vp.SubmitFunc(func(ctx context.Context, submit func(Task) error) error {
+	_ = vp.SubmitFunc(func(ctx context.Context, submit func(Task) error) error {
 		defer wg.Done()
 		return nil
 	})

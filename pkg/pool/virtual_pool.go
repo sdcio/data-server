@@ -105,8 +105,6 @@ const (
 // creation of VirtualPools that submit into the shared pool.
 type SharedTaskPool struct {
 	inner *Pool[Task]
-
-	mu sync.RWMutex
 }
 
 // NewSharedTaskPool constructs a shared pool; caller should call Start() to begin workers.

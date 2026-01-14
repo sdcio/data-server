@@ -68,7 +68,10 @@ func (x ownerDeleteMarkerTask) Run(ctx context.Context, submit func(pool.Task) e
 		x.matches.Append(le)
 	}
 	for _, c := range x.e.GetChilds(DescendMethodAll) {
-		submit(newOwnerDeleteMarkerTask(x.config, c, x.matches))
+		err := submit(newOwnerDeleteMarkerTask(x.config, c, x.matches))
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

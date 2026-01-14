@@ -43,7 +43,7 @@ var dataBlameConfig = &cobra.Command{
 			}
 			b, err := opts.Marshal(rsp.ConfigTree)
 			if err != nil {
-				fmt.Fprintf(os.Stdout, "%v", err)
+				_, _ = fmt.Fprintf(os.Stdout, "%v", err)
 			}
 			fmt.Println(string(b))
 		}

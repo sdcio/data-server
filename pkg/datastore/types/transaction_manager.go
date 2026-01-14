@@ -80,7 +80,7 @@ func (t *TransactionManager) Cancel(ctx context.Context, id string) error {
 	if t.transaction == nil {
 		return fmt.Errorf("no ongoing transaction")
 	}
-	rollbacktransAction := t.transaction.GetRollbackTransaction()
+	rollbacktransAction := t.transaction.GetRollbackTransaction(ctx)
 
 	_, err := t.rollbacker.TransactionRollback(ctx, rollbacktransAction, false)
 	if err != nil {

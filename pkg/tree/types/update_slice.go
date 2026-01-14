@@ -22,7 +22,7 @@ func (u UpdateSlice) CopyWithNewOwnerAndPrio(owner string, prio int32) []*PathAn
 func (u UpdateSlice) String() string {
 	sb := &strings.Builder{}
 	for i, j := range u {
-		sb.WriteString(fmt.Sprintf("%d - %s -> %s\n", i, j.Path().ToXPath(false), j.value.ToString()))
+		fmt.Fprintf(sb, "%d - %s -> %s\n", i, j.Path().ToXPath(false), j.value.ToString())
 	}
 	return sb.String()
 }

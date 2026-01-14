@@ -26,7 +26,6 @@ import (
 	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/logger"
-	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
@@ -35,10 +34,10 @@ import (
 
 // datastore
 func (s *Server) ListDataStore(ctx context.Context, req *sdcpb.ListDataStoreRequest) (*sdcpb.ListDataStoreResponse, error) {
-	log := logf.FromContext(ctx).WithName("ListDataStore")
-	ctx = logf.IntoContext(ctx, log)
+	log := logger.FromContext(ctx).WithName("ListDataStore")
+	ctx = logger.IntoContext(ctx, log)
 
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
+	log.V(logger.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 
 	datastores := s.datastores.GetDatastoreAll()
 	rs := make([]*sdcpb.GetDataStoreResponse, 0, len(datastores))
@@ -55,13 +54,13 @@ func (s *Server) ListDataStore(ctx context.Context, req *sdcpb.ListDataStoreRequ
 }
 
 func (s *Server) GetDataStore(ctx context.Context, req *sdcpb.GetDataStoreRequest) (*sdcpb.GetDataStoreResponse, error) {
-	log := logf.FromContext(ctx).WithName("GetDataStore")
+	log := logger.FromContext(ctx).WithName("GetDataStore")
 	log = log.WithValues(
 		"datastore-name", req.GetDatastoreName(),
 	)
-	ctx = logf.IntoContext(ctx, log)
+	ctx = logger.IntoContext(ctx, log)
 
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
+	log.V(logger.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 	name := req.GetDatastoreName()
 	if name == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
@@ -74,17 +73,17 @@ func (s *Server) GetDataStore(ctx context.Context, req *sdcpb.GetDataStoreReques
 }
 
 func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStoreRequest) (*sdcpb.CreateDataStoreResponse, error) {
-	log := logf.FromContext(ctx).WithName("CreateDataStore")
+	log := logger.FromContext(ctx).WithName("CreateDataStore")
 	log = log.WithValues(
 		"datastore-name", req.GetDatastoreName(),
 	)
-	ctx = logf.IntoContext(ctx, log)
+	// ctx = logger.IntoContext(ctx, log)
 
 	log.Info("creating datastore",
 		"datastore-schema", req.GetSchema(),
 		"datastore-target", req.GetTarget(),
 	)
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
+	log.V(logger.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 
 	name := req.GetDatastoreName()
 	lName := len(name)
@@ -222,10 +221,10 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 }
 
 func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStoreRequest) (*sdcpb.DeleteDataStoreResponse, error) {
-	log := logf.FromContext(ctx).WithName("DeleteDataStore")
-	ctx = logf.IntoContext(ctx, log)
+	log := logger.FromContext(ctx).WithName("DeleteDataStore")
+	ctx = logger.IntoContext(ctx, log)
 
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
+	log.V(logger.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 
 	name := req.GetName()
 	if name == "" {
@@ -258,10 +257,10 @@ func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.
 	if ok {
 		peerName = p.Addr.String()
 	}
-	log := logf.FromContext(ctx).WithName("WatchDeviations").WithValues("peer", peerName)
-	ctx = logf.IntoContext(ctx, log)
+	log := logger.FromContext(ctx).WithName("WatchDeviations").WithValues("peer", peerName)
+	ctx = logger.IntoContext(ctx, log)
 
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
+	log.V(logger.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 
 	if !ok {
 		return status.Errorf(codes.InvalidArgument, "missing peer info")
@@ -324,10 +323,10 @@ func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*
 }
 
 func (s *Server) BlameConfig(ctx context.Context, req *sdcpb.BlameConfigRequest) (*sdcpb.BlameConfigResponse, error) {
-	log := logf.FromContext(ctx).WithName("BlameConfig")
-	ctx = logf.IntoContext(ctx, log)
+	log := logger.FromContext(ctx).WithName("BlameConfig")
+	ctx = logger.IntoContext(ctx, log)
 
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
+	log.V(logger.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "missing datastore name")
