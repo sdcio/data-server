@@ -75,6 +75,7 @@ func TestDatastore_populateTree(t *testing.T) {
 		intendedStoreUpdates []*types.PathAndUpdate
 		runningStoreUpdates  []*types.PathAndUpdate
 		NotOnlyNewOrUpdated  bool // it negated when used in the call, usually we want it to be true
+		nonRevertive         bool
 	}{
 		{
 			name:          "DoubleKey - Delete Single item",
@@ -1518,7 +1519,7 @@ func TestDatastore_populateTree(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags().SetNewFlag()
 
-			err = root.ImportConfig(ctx, tt.intentReqPath, jsonImporter.NewJsonTreeImporter(jsonConfAny), tt.intentName, tt.intentPrio, newFlag)
+			err = root.ImportConfig(ctx, tt.intentReqPath, jsonImporter.NewJsonTreeImporter(jsonConfAny), tt.intentName, tt.intentPrio, tt.nonRevertive, newFlag)
 			if err != nil {
 				t.Error(err)
 			}

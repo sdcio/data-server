@@ -41,8 +41,8 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 	if req.GetOrphan() {
 		ti.SetDeleteOnlyIntendedFlag()
 	}
-	if req.GetDeviation() {
-		ti.SetDeviation()
+	if req.GetNonRevertive() {
+		ti.SetNonRevertive()
 	}
 	if req.GetDeleteIgnoreNoExist() {
 		ti.SetDeleteIgnoreNonExisting()
@@ -86,7 +86,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	if err != nil {
 		return nil, err
 	}
-	err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto), tree.RunningIntentName, tree.RunningValuesPrio, treetypes.NewUpdateInsertFlags())
+	err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto), tree.RunningIntentName, tree.RunningValuesPrio, false, treetypes.NewUpdateInsertFlags())
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +147,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	return warnings, nil
 }
 
-func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.RootEntry, excludeDeviations bool) ([]string, error) {
+func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.RootEntry) ([]string, error) {
 	log := logf.FromContext(ctx)
 
 	intentNames := []string{}
@@ -174,15 +174,12 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 				IntentChan = nil
 				break selectLoop
 			}
-			if excludeDeviations && intent.Deviation {
-				continue
-			}
 			log.V(logf.VDebug).Info("adding intent to tree", "intent", intent.GetIntentName())
 			log.V(logf.VTrace).Info("adding intent to tree", "intent", intent.GetIntentName(), "content", utils.FormatProtoJSON(intent))
 
 			intentNames = append(intentNames, intent.GetIntentName())
 			protoLoader := treeproto.NewProtoTreeImporter(intent)
-			err := root.ImportConfig(ctx, nil, protoLoader, intent.GetIntentName(), intent.GetPriority(), treetypes.NewUpdateInsertFlags())
+			err := root.ImportConfig(ctx, nil, protoLoader, intent.GetIntentName(), intent.GetPriority(), intent.GetNonRevertive(), treetypes.NewUpdateInsertFlags())
 			if err != nil {
 				return nil, err
 			}
@@ -204,7 +201,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		return nil, err
 	}
 
-	_, err = d.LoadAllButRunningIntents(ctx, root, false)
+	_, err = d.LoadAllButRunningIntents(ctx, root)
 	if err != nil {
 		return nil, err
 	}
@@ -354,7 +351,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		delSl := deletesOwner.ToXPathSlice()
 		log.V(logf.VTrace).Info("deletes owner", "deletes-owner", delSl)
 
-		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority(), intent.Deviation())
+		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority(), intent.NonRevertive())
 		switch {
 		case errors.Is(err, tree.ErrorIntentNotPresent):
 			err = d.cacheClient.IntentDelete(ctx, intent.GetName(), intent.GetDeleteIgnoreNonExisting())

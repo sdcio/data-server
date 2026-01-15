@@ -146,7 +146,7 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 
 				newFlag := types.NewUpdateInsertFlags()
 
-				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, false, newFlag)
 				if err != nil {
 					t.Error(err)
 				}
@@ -208,11 +208,11 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, flagsNew)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, flagsNew)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -246,11 +246,11 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, flagsNew)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, flagsNew)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -344,7 +344,7 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = testhelper.LoadYgotStructIntoTreeRoot(ctx, d, root, owner1, 5, flagsNew)
+		err = testhelper.LoadYgotStructIntoTreeRoot(ctx, d, root, owner1, 5, false, flagsNew)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -459,7 +459,7 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 				}
 
 				conf1 := config1()
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, flagsNew)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -474,7 +474,7 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 
 				running.Patterntest = ygot.String("hallo 0")
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, running, root, RunningIntentName, RunningValuesPrio, flagsExisting)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, running, root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -654,7 +654,7 @@ func Test_sharedEntryAttributes_MustCount(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, false, newFlag)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -776,7 +776,7 @@ func Test_sharedEntryAttributes_MustCountDoubleKey(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, false, newFlag)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -917,7 +917,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 				}
 
 				conf1 := config1()
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, flagsNew)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -974,7 +974,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 						},
 					},
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, flagsNew)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1130,7 +1130,7 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = newRoot.ImportConfig(ctx, &sdcpb.Path{}, proto.NewProtoTreeImporter(treepersist), owner1, owner1Prio, flagsExisting)
+			err = newRoot.ImportConfig(ctx, &sdcpb.Path{}, proto.NewProtoTreeImporter(treepersist), owner1, owner1Prio, false, flagsExisting)
 			if err != nil {
 				t.Error(err)
 				return
@@ -1282,7 +1282,7 @@ func Test_sharedEntryAttributes_validateMinMaxElements(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, false, newFlag)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1451,7 +1451,7 @@ func Test_sharedEntryAttributes_validateMinMaxElementsDoubleKey(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, false, newFlag)
 			if err != nil {
 				t.Fatal(err)
 			}

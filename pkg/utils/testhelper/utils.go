@@ -138,10 +138,10 @@ func GetSchemaClientBound(t *testing.T, mockCtrl *gomock.Controller) (*mockschem
 }
 
 type RootTreeImport interface {
-	ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
+	ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, nonRevertive bool, flags *types.UpdateInsertFlags) error
 }
 
-func LoadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root RootTreeImport, owner string, prio int32, flags *types.UpdateInsertFlags) error {
+func LoadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root RootTreeImport, owner string, prio int32, nonRevertive bool, flags *types.UpdateInsertFlags) error {
 	jconfStr, err := ygot.EmitJSON(gs, &ygot.EmitJSONConfig{
 		Format:         ygot.RFC7951,
 		SkipValidation: true,
@@ -156,7 +156,7 @@ func LoadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root Root
 		return err
 	}
 
-	err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner, prio, flags)
+	err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner, prio, nonRevertive, flags)
 	if err != nil {
 		return err
 	}

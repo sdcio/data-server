@@ -236,7 +236,7 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, false, newFlag)
 			if err != nil {
 				t.Fatal(err)
 			}

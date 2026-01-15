@@ -399,7 +399,7 @@ func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = testhelper.LoadYgotStructIntoTreeRoot(ctx, tt.re(), root, owner1, 500, flagsNew)
+			err = testhelper.LoadYgotStructIntoTreeRoot(ctx, tt.re(), root, owner1, 500, false, flagsNew)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -566,11 +566,11 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, flagsNew)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 400, flagsNew)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 400, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -587,7 +587,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, flagsNew)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}

@@ -59,6 +59,7 @@ func TestDatastore_validateTree(t *testing.T) {
 		intendedStoreUpdates []*cache.Update
 		NotOnlyNewOrUpdated  bool // it negated when used in the call, usually we want it to be true
 		expectedWarnings     []string
+		nonRevertive         bool
 	}{
 
 		{
@@ -197,7 +198,7 @@ func TestDatastore_validateTree(t *testing.T) {
 
 			importer := json_importer.NewJsonTreeImporter(jsonConf)
 
-			err = root.ImportConfig(ctx, path, importer, tt.intentName, tt.intentPrio, flagsNew)
+			err = root.ImportConfig(ctx, path, importer, tt.intentName, tt.intentPrio, tt.nonRevertive, flagsNew)
 			if err != nil {
 				t.Error(err)
 			}

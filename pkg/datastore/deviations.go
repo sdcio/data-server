@@ -169,7 +169,7 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 		return nil, err
 	}
 
-	addedIntentNames, err := d.LoadAllButRunningIntents(ctx, deviationTree, true)
+	addedIntentNames, err := d.LoadAllButRunningIntents(ctx, deviationTree)
 	if err != nil {
 		return nil, err
 	}

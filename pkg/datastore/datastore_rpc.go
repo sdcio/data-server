@@ -239,7 +239,7 @@ func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdc
 		return nil, err
 	}
 	// load all intents
-	_, err = d.LoadAllButRunningIntents(ctx, root, true)
+	_, err = d.LoadAllButRunningIntents(ctx, root)
 	if err != nil {
 		return nil, err
 	}

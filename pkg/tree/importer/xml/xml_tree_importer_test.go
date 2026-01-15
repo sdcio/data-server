@@ -92,7 +92,7 @@ func TestXmlTreeImporter(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = root.ImportConfig(ctx, nil, NewXmlTreeImporter(&inputDoc.Element), "owner1", 5, types.NewUpdateInsertFlags())
+			err = root.ImportConfig(ctx, nil, NewXmlTreeImporter(&inputDoc.Element), "owner1", 5, false, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -127,7 +127,7 @@ func TestProtoTreeImporter(t *testing.T) {
 			}
 
 			jti := jimport.NewJsonTreeImporter(j)
-			err = root.ImportConfig(ctx, nil, jti, "owner1", 5, types.NewUpdateInsertFlags())
+			err = root.ImportConfig(ctx, nil, jti, "owner1", 5, false, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -153,7 +153,7 @@ func TestProtoTreeImporter(t *testing.T) {
 
 			protoAdapter := NewProtoTreeImporter(protoIntent)
 
-			err = rootNew.ImportConfig(ctx, nil, protoAdapter, protoIntent.GetIntentName(), protoIntent.GetPriority(), types.NewUpdateInsertFlags())
+			err = rootNew.ImportConfig(ctx, nil, protoAdapter, protoIntent.GetIntentName(), protoIntent.GetPriority(), false, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Error(err)
 			}

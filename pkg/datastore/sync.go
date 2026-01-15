@@ -26,7 +26,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	}
 
 	if importer != nil {
-		err := d.syncTree.ImportConfig(ctx, &sdcpb.Path{}, importer, tree.RunningIntentName, tree.RunningValuesPrio, treetypes.NewUpdateInsertFlags())
+		err := d.syncTree.ImportConfig(ctx, &sdcpb.Path{}, importer, tree.RunningIntentName, tree.RunningValuesPrio, false, treetypes.NewUpdateInsertFlags())
 		if err != nil {
 			return err
 		}

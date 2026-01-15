@@ -53,7 +53,7 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, flagsNew)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsNew)
 				if err != nil {
 					t.Error(err)
 				}
@@ -81,12 +81,12 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, flagsExisting)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, flagsExisting)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
@@ -133,12 +133,12 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, flagsExisting)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, flagsExisting)
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
@@ -148,7 +148,7 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 						Name:        ygot.String("ethernet-1/1"),
 						Description: ygot.String("mydesc"),
 					},
-				}}, root, owner2, owner2Prio, flagsNew)
+				}}, root, owner2, owner2Prio, false, flagsNew)
 
 				return root
 			},

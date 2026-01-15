@@ -88,7 +88,7 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us []*types.PathAnd
 	return nil
 }
 
-func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error {
+func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, nonRevertive bool, flags *types.UpdateInsertFlags) error {
 	r.treeContext.SetActualOwner(intentName)
 
 	e, err := r.sharedEntryAttributes.getOrCreateChilds(ctx, basePath)
@@ -184,7 +184,7 @@ func (r *RootEntry) GetDeviations(ctx context.Context, ch chan<- *types.Deviatio
 	r.sharedEntryAttributes.GetDeviations(ctx, ch, true)
 }
 
-func (r *RootEntry) TreeExport(owner string, priority int32, deviation bool) (*tree_persist.Intent, error) {
+func (r *RootEntry) TreeExport(owner string, priority int32, nonRevertive bool) (*tree_persist.Intent, error) {
 	treeExport, err := r.sharedEntryAttributes.TreeExport(owner)
 	if err != nil {
 		return nil, err
@@ -202,7 +202,7 @@ func (r *RootEntry) TreeExport(owner string, priority int32, deviation bool) (*t
 			IntentName:      owner,
 			Root:            rootExportEntry,
 			Priority:        priority,
-			Deviation:       deviation,
+			NonRevertive:    nonRevertive,
 			ExplicitDeletes: explicitDeletes,
 		}, nil
 	}
