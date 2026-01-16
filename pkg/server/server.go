@@ -29,7 +29,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	logf "github.com/sdcio/logger"
+	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -81,8 +81,10 @@ func NewDatastoreMap() *DatastoreMap {
 	}
 }
 func (d *DatastoreMap) StopAll(ctx context.Context) {
+	log := logger.FromContext(ctx)
 	for _, ds := range d.datastores {
-		ds.Stop(ctx)
+		err := ds.Stop(ctx)
+		log.Error(err, "stopping datastore failed", "datastore-name", ds.Name())
 	}
 }
 
@@ -98,13 +100,17 @@ func (d *DatastoreMap) AddDatastore(ds *datastore.Datastore) error {
 }
 
 func (d *DatastoreMap) DeleteDatastore(ctx context.Context, name string) error {
+	log := logger.FromContext(ctx)
 	d.md.Lock()
 	defer d.md.Unlock()
 	ds, err := d.getDataStore(name)
 	if err != nil {
 		return err
 	}
-	ds.Delete(ctx)
+	err = ds.Delete(ctx)
+	if err != nil {
+		log.Error(err, "delete datastore failed", "datastore-name", ds.Name())
+	}
 	delete(d.datastores, name)
 	return nil
 }
@@ -209,7 +215,7 @@ func New(ctx context.Context, c *config.Config) (*Server, error) {
 }
 
 func (s *Server) Serve(ctx context.Context) error {
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 	l, err := net.Listen("tcp", s.config.GRPCServer.Address)
 	if err != nil {
 		return err
@@ -231,7 +237,7 @@ func (s *Server) Serve(ctx context.Context) error {
 }
 
 func (s *Server) ServeHTTP(ctx context.Context) {
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 	s.router.Handle("/metrics", promhttp.HandlerFor(s.reg, promhttp.HandlerOpts{}))
 	s.reg.MustRegister(collectors.NewGoCollector())
 	s.reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
@@ -254,7 +260,7 @@ func (s *Server) Stop() {
 }
 
 func (s *Server) startDataServer(ctx context.Context) {
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 	wg := new(sync.WaitGroup)
 	wg.Add(2)
 
@@ -278,7 +284,7 @@ func (s *Server) startDataServer(ctx context.Context) {
 }
 
 func (s *Server) createInitialDatastores(ctx context.Context) {
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 	numConfiguredDS := len(s.config.Datastores)
 	if numConfiguredDS == 0 {
 		return
@@ -287,7 +293,7 @@ func (s *Server) createInitialDatastores(ctx context.Context) {
 	wg.Add(numConfiguredDS)
 
 	for _, dsCfg := range s.config.Datastores {
-		log.V(logf.VDebug).Info("creating datastore", "datastore-name", dsCfg.Name)
+		log.V(logger.VDebug).Info("creating datastore", "datastore-name", dsCfg.Name)
 		dsCfg.Validation = s.config.Validation.DeepCopy()
 		go func(dsCfg *config.DatastoreConfig) {
 			defer wg.Done()
@@ -322,8 +328,8 @@ func (s *Server) readyInterceptor(ctx context.Context, req interface{}, info *gr
 func contextLoggingInterceptor(logCtx context.Context) func(context.Context, interface{}, *grpc.UnaryServerInfo, grpc.UnaryHandler) (resp interface{}, err error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 		uuidString := uuid.New().String()
-		log := logf.FromContext(logCtx).WithValues("grpc-request-uuid", uuidString)
-		ctx = logf.IntoContext(ctx, log)
+		log := logger.FromContext(logCtx).WithValues("grpc-request-uuid", uuidString)
+		ctx = logger.IntoContext(ctx, log)
 
 		return handler(ctx, req)
 	}
@@ -332,9 +338,9 @@ func contextLoggingInterceptor(logCtx context.Context) func(context.Context, int
 func contextLoggingServerStreamInterceptor(ctx context.Context) func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		uuidString := uuid.New().String()
-		log := logf.FromContext(ctx).WithValues("grpc-request-uuid", uuidString)
+		log := logger.FromContext(ctx).WithValues("grpc-request-uuid", uuidString)
 		wss := grpc_middleware.WrapServerStream(ss)
-		wss.WrappedContext = logf.IntoContext(wss.WrappedContext, log)
+		wss.WrappedContext = logger.IntoContext(wss.WrappedContext, log)
 
 		return handler(srv, wss)
 	}

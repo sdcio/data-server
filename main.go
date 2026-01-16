@@ -31,7 +31,6 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/server"
 	"github.com/sdcio/logger"
-	logf "github.com/sdcio/logger"
 	"github.com/spf13/pflag"
 )
 
@@ -58,7 +57,7 @@ func main() {
 
 	slogOpts := &slog.HandlerOptions{
 		Level:       slog.LevelInfo,
-		ReplaceAttr: logf.ReplaceTimeAttr,
+		ReplaceAttr: logger.ReplaceTimeAttr,
 	}
 	if debug {
 		slogOpts.Level = slog.Level(-logger.VDebug)
@@ -68,8 +67,8 @@ func main() {
 	}
 
 	log := logr.FromSlogHandler(slog.NewJSONHandler(os.Stdout, slogOpts))
-	logf.SetDefaultLogger(log)
-	ctx := logf.IntoContext(context.Background(), log)
+	logger.SetDefaultLogger(log)
+	ctx := logger.IntoContext(context.Background(), log)
 
 	go func() {
 		log.Info("pprof server started", "address", "localhost:6060")

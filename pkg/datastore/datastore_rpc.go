@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/sdcio/logger"
-	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc"
 
@@ -77,11 +76,11 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 
 	ctx, cancel := context.WithCancel(ctx)
 
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 	log = log.WithName("datastore").WithValues(
 		"datastore-name", c.Name,
 	)
-	ctx = logf.IntoContext(ctx, log)
+	ctx = logger.IntoContext(ctx, log)
 
 	log.Info("new datastore",
 		"target-name", c.Name,
@@ -144,11 +143,11 @@ func (d *Datastore) IntentsList(ctx context.Context) ([]string, error) {
 }
 
 func (d *Datastore) initCache(ctx context.Context) {
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 
 	exists := d.cacheClient.InstanceExists(ctx)
 	if exists {
-		log.V(logf.VDebug).Info("cache already exists")
+		log.V(logger.VDebug).Info("cache already exists")
 		return
 	}
 	log.Info("creating cache instance")
@@ -162,7 +161,7 @@ CREATE:
 }
 
 func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) error {
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 
 	var err error
 	d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, d, d.config.Sync.Config, d.taskPool, opts...)
@@ -222,7 +221,7 @@ func (d *Datastore) Stop(ctx context.Context) error {
 	}
 	err := d.sbi.Close(ctx)
 	if err != nil {
-		logf.DefaultLogger.Error(err, "datastore failed to close the target connection", "datastore-name", d.Name())
+		logger.DefaultLogger.Error(err, "datastore failed to close the target connection", "datastore-name", d.Name())
 	}
 	return nil
 }
@@ -248,6 +247,9 @@ func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdc
 	bcp := tree.NewBlameConfigProcessor(tree.NewBlameConfigProcessorConfig(includeDefaults))
 
 	bte, err := bcp.Run(ctx, root.GetRoot(), blamePool)
+	if err != nil {
+		return nil, err
+	}
 
 	// set the root level elements name to the target name
 	bte.Name = d.config.Name

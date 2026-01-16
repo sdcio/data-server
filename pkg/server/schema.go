@@ -101,7 +101,7 @@ func (s *Server) createRemoteSchemaClient(ctx context.Context) {
 	log := logf.FromContext(ctx)
 SCHEMA_CONNECT:
 	opts := []grpc.DialOption{
-		grpc.WithBlock(),
+		grpc.WithBlock(), //nolint:staticcheck
 	}
 	switch s.config.SchemaServer.TLS {
 	case nil:
@@ -126,7 +126,7 @@ SCHEMA_CONNECT:
 
 	dialCtx, cancel := context.WithTimeout(ctx, schemaServerConnectRetry)
 	defer cancel()
-	cc, err := grpc.DialContext(dialCtx, s.config.SchemaServer.Address, opts...)
+	cc, err := grpc.DialContext(dialCtx, s.config.SchemaServer.Address, opts...) //nolint:staticcheck
 	if err != nil {
 		log.Error(err, "failed to connect to schema server")
 		time.Sleep(time.Second)

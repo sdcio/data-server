@@ -136,7 +136,7 @@ func FromGNMITypedValue(ctx context.Context, v *gnmi.TypedValue) *sdcpb.TypedVal
 		}
 	case *gnmi.TypedValue_FloatVal:
 		return &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_DoubleVal{DoubleVal: float64(v.GetFloatVal())},
+			Value: &sdcpb.TypedValue_DoubleVal{DoubleVal: float64(v.GetFloatVal())}, //nolint:staticcheck
 		}
 	case *gnmi.TypedValue_DoubleVal:
 		return &sdcpb.TypedValue{

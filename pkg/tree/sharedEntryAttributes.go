@@ -22,7 +22,7 @@ import (
 )
 
 var (
-	ValidationError = errors.New("validation error")
+	ErrValidation = errors.New("validation error")
 )
 
 // sharedEntryAttributes contains the attributes shared by Entry and RootEntry
@@ -171,13 +171,10 @@ func (s *sharedEntryAttributes) loadDefaults(ctx context.Context) error {
 }
 
 func (s *sharedEntryAttributes) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, activeCase bool) {
-	evalLeafvariants := true
 	// if s is a presence container but has active childs, it should not be treated as a presence
 	// container, hence the leafvariants should not be processed. For presence container with
 	// childs the TypedValue.empty_val in the presence container is irrelevant.
-	if s.schema.GetContainer().GetIsPresence() && len(s.GetChilds(DescendMethodActiveChilds)) > 0 {
-		evalLeafvariants = false
-	}
+	evalLeafvariants := !s.schema.GetContainer().GetIsPresence() || len(s.GetChilds(DescendMethodActiveChilds)) == 0
 
 	if evalLeafvariants {
 		// calculate Deviation on the LeafVariants
@@ -766,7 +763,7 @@ func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, path *sdc
 
 	switch pathElems[0].Name {
 	case ".":
-		s.NavigateSdcpbPath(ctx, path.CopyAndRemoveFirstPathElem())
+		return s.NavigateSdcpbPath(ctx, path.CopyAndRemoveFirstPathElem())
 	case "..":
 		var entry Entry
 		entry = s.parent
@@ -801,8 +798,6 @@ func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, path *sdc
 
 		return e.NavigateSdcpbPath(ctx, path.CopyAndRemoveFirstPathElem())
 	}
-
-	return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist", s.SdcpbPath().ToXPath(false), pathElems)
 }
 
 func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path *sdcpb.Path) (Entry, error) {
@@ -1020,7 +1015,7 @@ func (s *sharedEntryAttributes) validateRange(resultChan chan<- *types.Validatio
 		return
 	}
 
-	tv := lv.Update.Value()
+	tv := lv.Value()
 
 	var tvs []*sdcpb.TypedValue
 	var typeSchema *sdcpb.SchemaLeafType
@@ -1119,7 +1114,7 @@ func (s *sharedEntryAttributes) validateMinMaxElements(resultChan chan<- *types.
 		if keyAttr, ok := childAttributes[keyName]; ok {
 			highestPrec := keyAttr.GetHighestPrecedence(nil, false, false, false)
 			if len(highestPrec) > 0 {
-				owner := highestPrec[0].Update.Owner()
+				owner := highestPrec[0].Owner()
 				ownersSet[owner] = struct{}{}
 			}
 		}
@@ -1148,7 +1143,7 @@ func (s *sharedEntryAttributes) validateLeafListMinMaxAttributes(resultChan chan
 	if schema := s.schema.GetLeaflist(); schema != nil {
 		if schema.GetMinElements() > 0 || schema.GetMaxElements() < math.MaxUint64 {
 			if lv := s.leafVariants.GetHighestPrecedence(false, true, false); lv != nil {
-				tv := lv.Update.Value()
+				tv := lv.Value()
 
 				if val := tv.GetLeaflistVal(); val != nil {
 					// check minelements if set
@@ -1260,7 +1255,7 @@ func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultCha
 				}
 
 				if len(attributes) == 0 {
-					log.Error(ValidationError, "mandatory attribute could not be found as child, field or choice", "path", s.SdcpbPath().ToXPath(false), "attribute", c.Name)
+					log.Error(ErrValidation, "mandatory attribute could not be found as child, field or choice", "path", s.SdcpbPath().ToXPath(false), "attribute", c.Name)
 				}
 
 				s.validateMandatoryWithKeys(ctx, len(s.GetSchema().GetContainer().GetKeys()), attributes, choiceName, resultChan)

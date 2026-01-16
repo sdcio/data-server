@@ -7,6 +7,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/tree"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -63,7 +64,9 @@ func (t *Transaction) Confirm() error {
 
 func (t *Transaction) rollback(ctx context.Context) func() {
 	return func() {
-		t.transactionManager.Rollback(ctx, t.GetRollbackTransaction())
+		log := logger.FromContext(ctx)
+		err := t.transactionManager.Rollback(ctx, t.GetRollbackTransaction(ctx))
+		log.Error(err, "rollback failed")
 	}
 }
 
@@ -90,11 +93,15 @@ func (t *Transaction) IntentCount() int {
 	return len(t.newIntents)
 }
 
-func (t *Transaction) GetRollbackTransaction() *Transaction {
+func (t *Transaction) GetRollbackTransaction(ctx context.Context) *Transaction {
 	t.timer.Stop()
 	tr := NewTransaction(t.GetTransactionId()+" - Rollback", t.transactionManager)
 	for _, v := range t.oldIntents {
-		tr.AddTransactionIntent(v, TransactionIntentNew)
+		err := tr.AddTransactionIntent(v, TransactionIntentNew)
+		if err != nil {
+			log := logger.FromContext(ctx)
+			log.Error(err, "failed getting rollback transaction", "intent", v.name)
+		}
 	}
 	tr.isRollback = true
 	return tr

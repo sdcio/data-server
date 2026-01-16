@@ -290,7 +290,7 @@ func TestLeafList(t *testing.T) {
 		HonorNamespace:     true,
 	})
 
-	xmlBuilder.AddValue(ctx, &sdcpb.Path{
+	_ = xmlBuilder.AddValue(ctx, &sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			{
 				Name: "leaflist",
@@ -367,7 +367,10 @@ func Test_filterRPCErrors(t *testing.T) {
 	`
 
 	doc := etree.NewDocument()
-	doc.ReadFromString(xml)
+	err := doc.ReadFromString(xml)
+	if err != nil {
+		t.Error(err)
+	}
 
 	type args struct {
 		xml      *etree.Document

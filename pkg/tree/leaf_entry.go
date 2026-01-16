@@ -148,7 +148,7 @@ func (l *LeafEntry) Compare(other *LeafEntry) int {
 	if result != 0 {
 		return result
 	}
-	return strings.Compare(l.Update.Owner(), other.Update.Owner())
+	return strings.Compare(l.Owner(), other.Owner())
 }
 
 // NewLeafEntry constructor for a new LeafEntry

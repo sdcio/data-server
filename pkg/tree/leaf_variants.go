@@ -78,7 +78,7 @@ func (lv *LeafVariants) canDeleteBranch(keepDefault bool) bool {
 	// go through all variants
 	for _, l := range lv.les {
 		// if the LeafVariant is not owned by running or default
-		if l.Update.Owner() != DefaultsIntentName || keepDefault {
+		if l.Owner() != DefaultsIntentName || keepDefault {
 			// then we need to check that it remains, so not Delete Flag set or DeleteOnylIntended Flags set [which results in not doing a delete towards the device]
 			if l.GetDeleteOnlyIntendedFlag() || !l.GetDeleteFlag() {
 				// then this entry should not be deleted
@@ -112,7 +112,7 @@ func (lv *LeafVariants) canDelete() bool {
 	// go through all variants
 	for _, l := range lv.les {
 		// if the LeafVariant is not owned by running or default
-		if l.Update.Owner() != RunningIntentName && l.Update.Owner() != DefaultsIntentName && !l.IsExplicitDelete {
+		if l.Owner() != RunningIntentName && l.Owner() != DefaultsIntentName && !l.IsExplicitDelete {
 			// then we need to check that it remains, so not Delete Flag set or DeleteOnylIntended Flags set [which results in not doing a delete towards the device]
 			if l.GetDeleteOnlyIntendedFlag() || !l.GetDeleteFlag() {
 				// then this entry should not be deleted
@@ -149,7 +149,7 @@ func (lv *LeafVariants) shouldDelete() bool {
 	// go through all variants
 	for _, l := range lv.les {
 		// if an entry exists that is not owned by running or default,
-		if l.Update.Owner() == RunningIntentName || l.Update.Owner() == DefaultsIntentName {
+		if l.Owner() == RunningIntentName || l.Owner() == DefaultsIntentName {
 			continue
 		}
 		foundOtherThenRunningAndDefault = true
@@ -205,8 +205,8 @@ func (lv *LeafVariants) GetHighestPrecedenceValue(filter HighestPrecedenceFilter
 	defer lv.lesMutex.RUnlock()
 	result := int32(math.MaxInt32)
 	for _, e := range lv.les {
-		if filter(e) && e.Owner() != DefaultsIntentName && e.Update.Priority() < result {
-			result = e.Update.Priority()
+		if filter(e) && e.Owner() != DefaultsIntentName && e.Priority() < result {
+			result = e.Priority()
 		}
 	}
 	return result
@@ -231,7 +231,7 @@ func (lv *LeafVariants) DeepCopy(tc *TreeContext, parent Entry) *LeafVariants {
 
 // checkReturnDefault checks if defaults are allowed and if the given LeafEntry is owned by default
 func checkNotDefaultAllowedButIsDefaultOwner(le *LeafEntry, includeDefaults bool) bool {
-	return !includeDefaults && le.Update.Owner() == DefaultsIntentName
+	return !includeDefaults && le.Owner() == DefaultsIntentName
 }
 
 func checkExistsAndDeleteFlagSet(le *LeafEntry) bool {
@@ -250,7 +250,7 @@ func (lv *LeafVariants) GetRunning() *LeafEntry {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 	for _, e := range lv.les {
-		if e.Update.Owner() == RunningIntentName {
+		if e.Owner() == RunningIntentName {
 			return e
 		}
 	}
@@ -327,7 +327,7 @@ func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 	// if highes is already running or even default, return false
-	if highest.Update.Owner() == RunningIntentName {
+	if highest.Owner() == RunningIntentName {
 		return false
 	}
 

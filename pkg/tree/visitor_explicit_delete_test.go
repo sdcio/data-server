@@ -143,7 +143,7 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Error(err)
 				}
 
-				testhelper.LoadYgotStructIntoTreeRoot(ctx, &sdcio_schema.Device{Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+				_ = testhelper.LoadYgotStructIntoTreeRoot(ctx, &sdcio_schema.Device{Interface: map[string]*sdcio_schema.SdcioModel_Interface{
 					"ethernet-1/1": {
 						Name:        ygot.String("ethernet-1/1"),
 						Description: ygot.String("mydesc"),
