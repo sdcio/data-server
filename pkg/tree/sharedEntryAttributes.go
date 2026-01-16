@@ -18,6 +18,7 @@ import (
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	sdcpbutils "github.com/sdcio/sdc-protos/utils"
 	"github.com/sdcio/sdc-protos/tree_persist"
 )
 
@@ -249,7 +250,7 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 			}
 
 			// convert the key value to the schema defined Typed_Value
-			tv, err := utils.Convert(ctx, item.PathName(), k.GetType())
+			tv, err := sdcpb.TVFromString(k.GetType(), item.PathName(), 0)
 			if err != nil {
 				return err
 			}
@@ -1047,7 +1048,7 @@ func (s *sharedEntryAttributes) validateRange(resultChan chan<- *types.Validatio
 		switch typeSchema.TypeName {
 		case "uint8", "uint16", "uint32", "uint64":
 			// procede with the unsigned ints
-			urnges := utils.NewUrnges()
+			urnges := sdcpbutils.NewRnges[uint64]()
 			// add the defined ranges to the ranges struct
 			for _, r := range typeSchema.GetRange() {
 				urnges.AddRange(r.Min.Value, r.Max.Value)
@@ -1061,7 +1062,7 @@ func (s *sharedEntryAttributes) validateRange(resultChan chan<- *types.Validatio
 
 		case "int8", "int16", "int32", "int64":
 			// procede with the signed ints
-			srnges := utils.NewSrnges()
+			srnges := sdcpbutils.NewRnges[int64]()
 			for _, r := range typeSchema.GetRange() {
 				// get the value
 				min := int64(r.GetMin().GetValue())

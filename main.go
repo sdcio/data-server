@@ -30,7 +30,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/server"
-	"github.com/sdcio/logger"
 	logf "github.com/sdcio/logger"
 	"github.com/spf13/pflag"
 )
@@ -61,10 +60,10 @@ func main() {
 		ReplaceAttr: logf.ReplaceTimeAttr,
 	}
 	if debug {
-		slogOpts.Level = slog.Level(-logger.VDebug)
+		slogOpts.Level = slog.Level(-logf.VDebug)
 	}
 	if trace {
-		slogOpts.Level = slog.Level(-logger.VTrace)
+		slogOpts.Level = slog.Level(-logf.VTrace)
 	}
 
 	log := logr.FromSlogHandler(slog.NewJSONHandler(os.Stdout, slogOpts))

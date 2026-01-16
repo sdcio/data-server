@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"reflect"
-	"strconv"
 	"strings"
 
 	"github.com/sdcio/logger"
@@ -88,7 +86,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 						return nil, err
 					}
 					// convert key string value to real typedvalue
-					newUpd.Value, err = ConvertToTypedValue(rsp.GetSchema(), v, 0)
+					newUpd.Value, err = sdcpb.SchemaElemToTV(rsp.GetSchema(), v, 0)
 					if err != nil {
 						return nil, err
 					}
@@ -149,18 +147,16 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 			upd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: string(jsonValue)}}
 		}
 
-		if upd.Value.GetStringVal() != "" && rsp.Field.GetType().GetTypeName() != "string" {
-			upd.Value, err = Convert(ctx, upd.GetValue().GetStringVal(), rsp.Field.GetType())
-			if err != nil {
-				return nil, err
-			}
-		}
-
 		// We expect that all identityrefs are sent by schema-server as a identityref type now, not string
-		if rsp.Field.GetType().Type == "identityref" && upd.GetValue().GetStringVal() != "" {
-			upd.Value, err = Convert(ctx, upd.GetValue().GetStringVal(), rsp.Field.GetType())
-			if err != nil {
-				return nil, err
+		if upd.GetValue().GetStringVal() != "" {
+			switch {
+			case rsp.Field.GetType().GetTypeName() != "string",
+				 rsp.Field.GetType().Type == "identityref":
+
+				upd.Value, err = sdcpb.TVFromString(rsp.Field.GetType(), upd.GetValue().GetStringVal(), 0)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 
@@ -204,7 +200,7 @@ func (c *Converter) ExpandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Updat
 				return nil, err
 			}
 
-			intUpd.Value, err = TypedValueToYANGType(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}}, schemaRsp.GetSchema())
+			intUpd.Value, err = sdcpb.SchemaElemToTV(schemaRsp.GetSchema(), v, 0)
 			if err != nil {
 				return nil, err
 			}
@@ -307,7 +303,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 					if err != nil {
 						return nil, err
 					}
-					upd.Value, err = TypedValueToYANGType(&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: fmt.Sprintf("%v", v)}}, schemaRsp.GetSchema())
+					upd.Value, err = sdcpb.SchemaElemToTV(schemaRsp.GetSchema(), fmt.Sprintf("%v", v), 0)
 					if err != nil {
 						return nil, err
 					}
@@ -332,12 +328,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				switch x := v.(type) {
 				case []any:
 					for _, e := range x {
-						tv := &sdcpb.TypedValue{
-							Value: &sdcpb.TypedValue_StringVal{
-								StringVal: fmt.Sprintf("%v", e),
-							},
-						}
-						tvYangType, err := TypedValueToYANGType(tv, se)
+						tvYangType, err := sdcpb.SchemaElemToTV(se, fmt.Sprintf("%v", e), 0)
 						if err != nil {
 							return nil, err
 						}
@@ -409,148 +400,6 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		log.Error(nil, "unexpected json type cast", "type", reflect.TypeOf(jv).String())
 		return nil, nil
 	}
-}
-
-func TypedValueToYANGType(tv *sdcpb.TypedValue, schemaObject *sdcpb.SchemaElem) (*sdcpb.TypedValue, error) {
-	switch tv.Value.(type) {
-	case *sdcpb.TypedValue_AsciiVal:
-		return ConvertToTypedValue(schemaObject, tv.GetAsciiVal(), tv.GetTimestamp())
-	case *sdcpb.TypedValue_BoolVal:
-		return tv, nil
-	case *sdcpb.TypedValue_BytesVal:
-		return tv, nil
-	case *sdcpb.TypedValue_DecimalVal:
-		return tv, nil
-	case *sdcpb.TypedValue_FloatVal:
-		return tv, nil
-	case *sdcpb.TypedValue_DoubleVal:
-		return tv, nil
-	case *sdcpb.TypedValue_IntVal:
-		return tv, nil
-	case *sdcpb.TypedValue_StringVal:
-		return ConvertToTypedValue(schemaObject, tv.GetStringVal(), tv.GetTimestamp())
-	case *sdcpb.TypedValue_UintVal:
-		return tv, nil
-	case *sdcpb.TypedValue_JsonIetfVal: // TODO:
-	case *sdcpb.TypedValue_JsonVal: // TODO:
-	case *sdcpb.TypedValue_LeaflistVal:
-		return tv, nil
-	case *sdcpb.TypedValue_ProtoBytes:
-		return tv, nil
-	case *sdcpb.TypedValue_AnyVal:
-		return tv, nil
-	case *sdcpb.TypedValue_IdentityrefVal:
-		return ConvertToTypedValue(schemaObject, tv.GetStringVal(), tv.GetTimestamp())
-	}
-	return tv, nil
-}
-
-func ConvertToTypedValue(schemaObject *sdcpb.SchemaElem, v string, ts uint64) (*sdcpb.TypedValue, error) {
-	var schemaType *sdcpb.SchemaLeafType
-	switch {
-	case schemaObject.GetField() != nil:
-		schemaType = schemaObject.GetField().GetType()
-	case schemaObject.GetLeaflist() != nil:
-		schemaType = schemaObject.GetLeaflist().GetType()
-	case schemaObject.GetContainer() != nil:
-		if !schemaObject.GetContainer().IsPresence {
-			return nil, errors.New("non presence container update")
-		}
-		return nil, nil
-	}
-	return convertStringToTv(schemaType, v, ts)
-}
-
-func convertStringToTv(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*sdcpb.TypedValue, error) {
-	// convert field or leaf-list schema elem
-	switch schemaType.GetType() {
-	case "string":
-		return &sdcpb.TypedValue{
-
-			Value: &sdcpb.TypedValue_StringVal{StringVal: v},
-		}, nil
-	case "uint64", "uint32", "uint16", "uint8":
-		i, err := strconv.ParseUint(v, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		return &sdcpb.TypedValue{
-			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_UintVal{UintVal: i},
-		}, nil
-	case "int64", "int32", "int16", "int8":
-		i, err := strconv.ParseInt(v, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		return &sdcpb.TypedValue{
-			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_IntVal{IntVal: i},
-		}, nil
-	case "boolean":
-		b, err := strconv.ParseBool(v)
-		if err != nil {
-			return nil, err
-		}
-		return &sdcpb.TypedValue{
-			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_BoolVal{BoolVal: b},
-		}, nil
-	case "decimal64":
-		decimalVal, err := ParseDecimal64(v)
-		if err != nil {
-			return nil, err
-		}
-		return &sdcpb.TypedValue{
-			Value: &sdcpb.TypedValue_DecimalVal{
-				DecimalVal: decimalVal,
-			},
-		}, nil
-	case "identityref":
-		before, name, found := strings.Cut(v, ":")
-		if !found {
-			name = before
-		}
-		prefix, ok := schemaType.IdentityPrefixesMap[name]
-		if !ok {
-			identities := make([]string, 0, len(schemaType.IdentityPrefixesMap))
-			for k := range schemaType.IdentityPrefixesMap {
-				identities = append(identities, k)
-			}
-			return nil, fmt.Errorf("identity %s not found, possible values are %s", v, strings.Join(identities, ", "))
-		}
-		module, ok := schemaType.ModulePrefixMap[name]
-		if !ok {
-			identities := make([]string, 0, len(schemaType.IdentityPrefixesMap))
-			for k := range schemaType.IdentityPrefixesMap {
-				identities = append(identities, k)
-			}
-			return nil, fmt.Errorf("identity %s not found, possible values are %s", v, strings.Join(identities, ", "))
-		}
-		return &sdcpb.TypedValue{
-			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_IdentityrefVal{IdentityrefVal: &sdcpb.IdentityRef{Value: name, Prefix: prefix, Module: module}},
-		}, nil
-	case "leafref":
-		return convertStringToTv(schemaType.LeafrefTargetType, v, ts)
-	case "union":
-		for _, ut := range schemaType.GetUnionTypes() {
-			tv, err := convertStringToTv(ut, v, ts)
-			if err == nil {
-				return tv, nil
-			}
-		}
-		return nil, fmt.Errorf("invalid value %s for union type: %v", v, schemaType)
-	case "enumeration":
-		// TODO: get correct type, assuming string
-		return &sdcpb.TypedValue{
-			Timestamp: ts,
-			Value:     &sdcpb.TypedValue_StringVal{StringVal: v},
-		}, nil
-	case "": // presence ?
-		return &sdcpb.TypedValue{}, nil
-	}
-	return nil, nil
 }
 
 func getItem(ctx context.Context, s string, cs *sdcpb.SchemaElem_Container, scb SchemaClientBound) (any, bool) {

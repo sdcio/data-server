@@ -64,7 +64,7 @@ func TestToXMLTable(t *testing.T) {
   <name>default</name>
   <type>sdcio_model_ni:default</type>
 </network-instance>
-<patterntest>foo</patterntest>
+<patterntest>hallo 00</patterntest>
 `,
 		},
 		{
@@ -120,7 +120,7 @@ func TestToXMLTable(t *testing.T) {
   <name>other</name>
   <type>sdcio_model_ni:ip-vrf</type>
 </network-instance>
-<patterntest>bar</patterntest>
+<patterntest>hallo 99</patterntest>
 `,
 		},
 		{

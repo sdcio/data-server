@@ -166,7 +166,7 @@ func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {
 								Name: "doublekey",
 								Key: map[string]string{
 									"key1": "foo",
-									"key2": "bar",
+									"key2": "123",
 								},
 							},
 							{
@@ -187,7 +187,7 @@ func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {
 								Name: "doublekey",
 								Key: map[string]string{
 									"key1": "foo",
-									"key2": "bar",
+									"key2": "123",
 								},
 							},
 							{
@@ -206,7 +206,7 @@ func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {
 								Name: "doublekey",
 								Key: map[string]string{
 									"key1": "foo",
-									"key2": "bar",
+									"key2": "123",
 								},
 							},
 							{
@@ -215,7 +215,7 @@ func TestDatastore_expandUpdateLeafAsKeys(t *testing.T) {
 						},
 					},
 					Value: &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_StringVal{StringVal: "bar"},
+						Value: &sdcpb.TypedValue_StringVal{StringVal: "123"},
 					},
 				},
 			},

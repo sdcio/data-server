@@ -21,7 +21,6 @@ import (
 
 	"github.com/beevik/etree"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
-	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -123,7 +122,7 @@ func (x *XML2sdcpbConfigAdapter) transformContainer(ctx context.Context, e *etre
 		if cPElem[len(cPElem)-1].Key == nil {
 			cPElem[len(cPElem)-1].Key = map[string]string{}
 		}
-		tv, err := utils.Convert(ctx, e.FindElement("./"+ls.Name).Text(), ls.Type)
+		tv, err := sdcpb.TVFromString(ls.Type, e.FindElement("./"+ls.Name).Text(), 0)
 		if err != nil {
 			return err
 		}
@@ -209,7 +208,7 @@ func (x *XML2sdcpbConfigAdapter) transformField(ctx context.Context, e *etree.El
 	}
 
 	// process terminal values
-	tv, err := utils.Convert(ctx, e.Text(), schemaLeafType)
+	tv, err := sdcpb.TVFromString(schemaLeafType, e.Text(), 0)
 	if err != nil {
 		return fmt.Errorf("unable to convert value [%s] at path [%s] according to SchemaLeafType [%+v]: %w", e.Text(), e.GetPath(), schemaLeafType, err)
 	}
@@ -244,7 +243,7 @@ func (x *XML2sdcpbConfigAdapter) transformLeafList(ctx context.Context, e *etree
 	// process terminal values
 	data := strings.TrimSpace(e.Text())
 
-	tv, err := utils.Convert(ctx, data, slt)
+	tv, err := sdcpb.TVFromString(slt, data, 0)
 	if err != nil {
 		return fmt.Errorf("failed to convert value %s to type %s: %w", data, slt.Type, err)
 	}
