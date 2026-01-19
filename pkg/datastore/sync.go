@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/tree"
@@ -54,6 +55,23 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 
 	// delete entries that have zero-length leaf variant entries after remove deleted processing
 	for _, e := range delProcessorParams.GetZeroLengthLeafVariantEntries() {
+		err := e.GetParent().DeleteBranch(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(e.PathName(), nil)}}, tree.RunningIntentName)
+		if err != nil {
+			return err
+		}
+	}
+
+	// run remove deleted processor to clean up entries marked as deleted by owner
+	delProcessorParams = tree.NewRemoveDeletedProcessorParameters(tree.RunningIntentName)
+	err = tree.NewRemoveDeletedProcessor(delProcessorParams).Run(d.syncTree.GetRoot(), d.taskPool)
+	if err != nil {
+		return err
+	}
+
+	// delete entries that have zero-length leaf variant entries after remove deleted processing
+	for _, e := range delProcessorParams.GetZeroLengthLeafVariantEntries() {
+		fmt.Println("entry has zero-length leaf variant entries after remove deleted", "entry", e.SdcpbPath().ToXPath(false))
+
 		err := e.GetParent().DeleteBranch(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(e.PathName(), nil)}}, tree.RunningIntentName)
 		if err != nil {
 			return err
