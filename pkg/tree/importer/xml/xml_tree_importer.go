@@ -5,7 +5,6 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/tree/importer"
-	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -51,7 +50,7 @@ func (x *XmlTreeImporter) GetKeyValue() (string, error) {
 }
 
 func (x *XmlTreeImporter) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	return utils.Convert(ctx, x.elem.Text(), slt)
+	return sdcpb.TVFromString(slt, x.elem.Text(), 0)
 }
 
 func (x *XmlTreeImporter) GetName() string {

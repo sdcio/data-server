@@ -508,7 +508,7 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 						},
 						IsRootBased: true,
 					},
-				).SetCurrentValue(testhelper.GetStringTvProto("hallo 0")).SetExpectedValue(testhelper.GetStringTvProto("foo")),
+				).SetCurrentValue(testhelper.GetStringTvProto("hallo 0")).SetExpectedValue(testhelper.GetStringTvProto("hallo 00")),
 				// three
 				types.NewDeviationEntry(
 					RunningIntentName,
