@@ -19,10 +19,9 @@ func NewValidateProcessor(parameters *ValidateProcessorParameters) *ValidateProc
 }
 
 func (p *ValidateProcessor) Run(taskpoolFactory pool.VirtualPoolFactory, e Entry) {
-	taskpool := taskpoolFactory.NewVirtualPool(pool.VirtualTolerant, 0)
+	taskpool := taskpoolFactory.NewVirtualPool(pool.VirtualTolerant)
 	taskpool.Submit(newValidateTask(e, p.parameters))
-	taskpool.CloseForSubmit()
-	taskpool.Wait()
+	taskpool.CloseAndWait()
 }
 
 type ValidateProcessorParameters struct {

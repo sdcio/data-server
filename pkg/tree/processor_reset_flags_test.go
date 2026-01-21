@@ -101,7 +101,7 @@ func TestResetFlagsProcessorRun(t *testing.T) {
 
 			// Create a virtual pool for testing
 			taskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-			virtualPool := taskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+			virtualPool := taskPool.NewVirtualPool(pool.VirtualFailFast)
 
 			root := tt.tree()
 

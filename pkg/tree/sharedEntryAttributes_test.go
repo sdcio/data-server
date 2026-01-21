@@ -1138,7 +1138,7 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 
 			// mark owner delete
 			sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-			deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+			deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast)
 			ownerDeleteMarker := NewOwnerDeleteMarker(NewOwnerDeleteMarkerTaskConfig(owner1, false))
 
 			err = ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)

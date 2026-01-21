@@ -176,7 +176,7 @@ func (s *StreamSync) gnmiSubscribe(subReq *gnmi.SubscribeRequest, updChan chan<-
 
 	respChan, errChan := s.target.Subscribe(s.ctx, subReq, s.config.Name)
 
-	taskPool := s.vpoolFactory.NewVirtualPool(pool.VirtualTolerant, 10)
+	taskPool := s.vpoolFactory.NewVirtualPool(pool.VirtualTolerant)
 	defer taskPool.CloseForSubmit()
 	taskParams := NewNotificationProcessorTaskParameters(updChan, s.schemaClient)
 

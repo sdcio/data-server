@@ -244,7 +244,7 @@ func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdc
 		return nil, err
 	}
 
-	blamePool := d.taskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+	blamePool := d.taskPool.NewVirtualPool(pool.VirtualFailFast)
 	bcp := tree.NewBlameConfigProcessor(tree.NewBlameConfigProcessorConfig(includeDefaults))
 
 	bte, err := bcp.Run(ctx, root.GetRoot(), blamePool)

@@ -2,6 +2,7 @@ package tree
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/pool"
@@ -19,17 +20,23 @@ func NewOwnerDeleteMarker(c *OwnerDeleteMarkerTaskConfig) *MarkOwnerDeleteProces
 	}
 }
 
-func (o *MarkOwnerDeleteProcessor) Run(e Entry, pool pool.VirtualPoolI) error {
-
-	err := pool.Submit(newOwnerDeleteMarkerTask(o.config, e, o.matches))
-	if err != nil {
+// Run processes the entry tree starting from e, marking leaf variant entries for deletion
+// by the specified owner. The pool parameter should be VirtualFailFast to stop on first error.
+// Returns the first error encountered, or nil if successful.
+func (p *MarkOwnerDeleteProcessor) Run(e Entry, pool pool.VirtualPoolI) error {
+	if err := pool.Submit(newOwnerDeleteMarkerTask(p.config, e, p.matches)); err != nil {
+		// Clean up pool even on early error
+		pool.CloseAndWait()
 		return err
 	}
-	// close pool for additional external submission
-	pool.CloseForSubmit()
-	// wait for the pool to run dry
-	pool.Wait()
 
+	// Close pool and wait for all tasks to complete before checking errors
+	pool.CloseAndWait()
+
+	// Return first error for fail-fast mode, or combined errors for tolerant mode
+	if errs := pool.Errors(); len(errs) > 0 {
+		return errors.Join(errs...)
+	}
 	return pool.FirstError()
 }
 
@@ -67,8 +74,12 @@ func (x ownerDeleteMarkerTask) Run(ctx context.Context, submit func(pool.Task) e
 	if le != nil {
 		x.matches.Append(le)
 	}
+	// Process children recursively
 	for _, c := range x.e.GetChilds(DescendMethodAll) {
-		submit(newOwnerDeleteMarkerTask(x.config, c, x.matches))
+		// Submit may fail if pool is closed or fail-fast error occurred
+		if err := submit(newOwnerDeleteMarkerTask(x.config, c, x.matches)); err != nil {
+			return err
+		}
 	}
 	return nil
 }

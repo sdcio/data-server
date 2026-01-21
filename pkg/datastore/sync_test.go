@@ -354,7 +354,7 @@ func TestApplyToRunning(t *testing.T) {
 
 			fmt.Println(syncTree.String())
 
-			vpool := datastore.taskPool.NewVirtualPool(pool.VirtualFailFast, runtime.NumCPU())
+			vpool := datastore.taskPool.NewVirtualPool(pool.VirtualFailFast)
 
 			resetFlagsProcessorParams := tree.NewResetFlagsProcessorParameters(false, true, true)
 			err = tree.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(syncTree.GetRoot(), vpool)
@@ -362,8 +362,7 @@ func TestApplyToRunning(t *testing.T) {
 				t.Fatalf("failed to reset flags: %v", err)
 			}
 
-			vpool.CloseForSubmit()
-			vpool.Wait()
+			vpool.CloseAndWait()
 			err = vpool.FirstError()
 			if err != nil {
 				t.Fatalf("failed to run reset flags processor: %v", err)

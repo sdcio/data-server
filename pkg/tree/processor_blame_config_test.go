@@ -153,7 +153,7 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 			treeRoot := tt.r(t)
 
 			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-			vPool := sharedPool.NewVirtualPool(pool.VirtualFailFast, 10)
+			vPool := sharedPool.NewVirtualPool(pool.VirtualFailFast)
 
 			bp := NewBlameConfigProcessor(NewBlameConfigProcessorConfig(tt.includeDefaults))
 			got, err := bp.Run(ctx, treeRoot.sharedEntryAttributes, vPool)

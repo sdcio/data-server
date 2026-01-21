@@ -2,6 +2,7 @@ package tree
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync/atomic"
 
@@ -38,20 +39,27 @@ func (r *ResetFlagsProcessorParameters) GetAdjustedFlagsCount() int64 {
 	return r.adjustedFlagsCount.Load()
 }
 
-func (o *ResetFlagsProcessor) Run(e Entry, pool pool.VirtualPoolI) error {
+// Run processes the entry tree starting from e, resetting flags on all leaf variant entries
+// according to the processor configuration. The pool parameter can be either VirtualFailFast
+// (stops on first error) or VirtualTolerant (collects all errors).
+// Returns the first error for fail-fast pools, or a combined error for tolerant pools.
+func (p *ResetFlagsProcessor) Run(e Entry, pool pool.VirtualPoolI) error {
 	if e == nil {
 		return fmt.Errorf("entry cannot be nil")
 	}
-	err := pool.Submit(newResetFlagsTask(o.config, e))
-	if err != nil {
+
+	// Submit root task; workers will recursively process children
+	if err := pool.Submit(newResetFlagsTask(p.config, e)); err != nil {
+		// Clean up pool even on early error
+		pool.CloseAndWait()
 		return err
 	}
-	// close pool for additional external submission
-	pool.CloseForSubmit()
-	// wait for the pool to run dry
-	pool.Wait()
 
-	return pool.FirstError()
+	// Close pool and wait for all tasks to complete before checking errors
+	pool.CloseAndWait()
+
+	// Return first error for fail-fast mode, or combined errors for tolerant mode
+	return errors.Join(pool.Errors()...)
 }
 
 type resetFlagsTask struct {
@@ -67,14 +75,14 @@ func newResetFlagsTask(config *ResetFlagsProcessorParameters, e Entry) *resetFla
 }
 
 func (t *resetFlagsTask) Run(ctx context.Context, submit func(pool.Task) error) error {
-	// reset flags as per config
+	// Reset flags as per config
 	count := t.e.GetLeafVariantEntries().ResetFlags(t.config.deleteFlag, t.config.newFlag, t.config.updateFlag)
 	t.config.adjustedFlagsCount.Add(int64(count))
 
-	// process childs
+	// Process children recursively
 	for _, c := range t.e.GetChilds(DescendMethodAll) {
-		err := submit(newResetFlagsTask(t.config, c))
-		if err != nil {
+		// Submit may fail if pool is closed or fail-fast error occurred
+		if err := submit(newResetFlagsTask(t.config, c)); err != nil {
 			return err
 		}
 	}

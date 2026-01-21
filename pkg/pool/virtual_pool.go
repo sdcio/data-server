@@ -42,20 +42,14 @@ func (f TaskFunc) Run(ctx context.Context, submit func(Task) error) error {
 // --- ErrorCollector (per-virtual tolerant mode) ---
 
 // ErrorCollector collects errors for a virtual pool.
-// It stores a snapshotable slice and provides a live channel for streaming.
+// It stores a snapshotable slice of errors.
 type ErrorCollector struct {
 	mu   sync.Mutex
 	errs []error
-	Ch   chan error
 }
 
-func newErrorCollector(buf int) *ErrorCollector {
-	if buf <= 0 {
-		buf = 1024
-	}
-	return &ErrorCollector{
-		Ch: make(chan error, buf),
-	}
+func newErrorCollector() *ErrorCollector {
+	return &ErrorCollector{}
 }
 
 func (ec *ErrorCollector) add(err error) {
@@ -65,12 +59,6 @@ func (ec *ErrorCollector) add(err error) {
 	ec.mu.Lock()
 	defer ec.mu.Unlock()
 	ec.errs = append(ec.errs, err)
-
-	select {
-	case ec.Ch <- err:
-	default:
-		// drop if full
-	}
 }
 
 // Errors returns a snapshot of collected errors.
@@ -80,11 +68,6 @@ func (ec *ErrorCollector) Errors() []error {
 	out := make([]error, len(ec.errs))
 	copy(out, ec.errs)
 	return out
-}
-
-// close channel when done
-func (ec *ErrorCollector) close() {
-	close(ec.Ch)
 }
 
 // --- Virtual pool system ---
@@ -135,13 +118,8 @@ func (s *SharedTaskPool) Wait() error {
 }
 
 // NewVirtualPool creates and registers a virtual pool on top of the shared pool.
-// id is an arbitrary identifier (must be unique per SharedTaskPool).
-// mode controls failure semantics. buf controls error channel buffer for tolerant mode.
-func (s *SharedTaskPool) NewVirtualPool(mode VirtualMode, buf int) VirtualPoolI {
-	// ensure unique id in the shared pool's map. If the requested id is already
-	// registered, append a short random hex postfix so multiple callers can
-	// create virtual pools with the same base name without colliding.
-
+// mode controls failure semantics.
+func (s *SharedTaskPool) NewVirtualPool(mode VirtualMode) VirtualPoolI {
 	v := &VirtualPool{
 		parent:   s,
 		mode:     mode,
@@ -151,7 +129,7 @@ func (s *SharedTaskPool) NewVirtualPool(mode VirtualMode, buf int) VirtualPoolI 
 		done:     make(chan struct{}),
 	}
 	if mode == VirtualTolerant {
-		v.ec = newErrorCollector(buf)
+		v.ec = newErrorCollector()
 	}
 	return v
 }
@@ -176,8 +154,6 @@ type VirtualPool struct {
 	firstErr atomic.Pointer[error]
 	// per-virtual inflight counter (matches lifecycle of tasks submitted by this virtual)
 	inflight int64
-	// ensure collector channel closed only once
-	collectorOnce sync.Once
 	// ensure done channel closed only once (for Wait)
 	waitOnce sync.Once
 	// done is closed when the virtual pool is closed for submit and inflight reaches zero
@@ -262,11 +238,6 @@ func (v *VirtualPool) Submit(t Task) error {
 
 func (v *VirtualPool) decrementInflight() {
 	if remaining := atomic.AddInt64(&v.inflight, -1); remaining == 0 && v.closed.Load() {
-		v.collectorOnce.Do(func() {
-			if v.ec != nil {
-				v.ec.close()
-			}
-		})
 		v.waitOnce.Do(func() {
 			close(v.done)
 		})
@@ -302,14 +273,8 @@ func (v *VirtualPool) submitInternal(t Task) error {
 // when all virtual pools are done (call SharedTaskPool.CloseForSubmit()).
 func (v *VirtualPool) CloseForSubmit() {
 	v.closed.Store(true)
-	// if nothing inflight, close collector now
+	// if nothing inflight, signal Wait() callers that virtual is drained
 	if atomic.LoadInt64(&v.inflight) == 0 {
-		v.collectorOnce.Do(func() {
-			if v.ec != nil {
-				v.ec.close()
-			}
-		})
-		// signal Wait() callers that virtual is drained
 		v.waitOnce.Do(func() {
 			close(v.done)
 		})
@@ -321,6 +286,13 @@ func (v *VirtualPool) CloseForSubmit() {
 // want to wait for the virtual's queue to drain.
 func (v *VirtualPool) Wait() {
 	<-v.done
+}
+
+// CloseAndWait is a convenience method that closes the virtual pool for submission
+// and waits for all inflight tasks to complete.
+func (v *VirtualPool) CloseAndWait() {
+	v.CloseForSubmit()
+	v.Wait()
 }
 
 // isFailed returns true if this virtual pool encountered a fail-fast error.
@@ -352,12 +324,4 @@ func (v *VirtualPool) Errors() []error {
 		return nil
 	}
 	return v.ec.Errors()
-}
-
-// ErrorChan returns the live channel of errors for tolerant mode, or nil for fail-fast mode.
-func (v *VirtualPool) ErrorChan() <-chan error {
-	if v.ec == nil {
-		return nil
-	}
-	return v.ec.Ch
 }

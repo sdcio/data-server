@@ -219,7 +219,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 		oldIntentContent := lvs.ToPathAndUpdateSlice()
 
-		deleteVisitorPool := d.taskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+		deleteVisitorPool := d.taskPool.NewVirtualPool(pool.VirtualFailFast)
 		ownerDeleteMarker := tree.NewOwnerDeleteMarker(tree.NewOwnerDeleteMarkerTaskConfig(intent.GetName(), intent.GetOnlyIntended()))
 
 		err := ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)

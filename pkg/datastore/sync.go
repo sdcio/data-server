@@ -2,7 +2,7 @@ package datastore
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
@@ -21,7 +21,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	defer d.syncTreeMutex.Unlock()
 
 	// create a virtual task pool for delete operations
-	deleteMarkerPool := d.taskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+	deleteMarkerPool := d.taskPool.NewVirtualPool(pool.VirtualFailFast)
 	for _, delete := range deletes {
 		// navigate to delete path
 		deleteRoot, err := d.syncTree.NavigateSdcpbPath(ctx, delete)
@@ -36,9 +36,9 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 			continue
 		}
 	}
-	// close the delete marker pool for submission
-	deleteMarkerPool.CloseForSubmit()
-	deleteMarkerPool.Wait()
+
+	// close the delete marker pool for submission and wait
+	deleteMarkerPool.CloseAndWait()
 	err := deleteMarkerPool.FirstError()
 	if err != nil {
 		return err
@@ -52,8 +52,8 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 		}
 	}
 
-	// create a virtual task pool for remove deleted operations
-	removeDeletedPool := d.taskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+	// create a virtual task pool for removeDeleted operations
+	removeDeletedPool := d.taskPool.NewVirtualPool(pool.VirtualFailFast)
 
 	// run remove deleted processor to clean up entries marked as deleted by owner
 	delProcessorParams := tree.NewRemoveDeletedProcessorParameters(tree.RunningIntentName)
@@ -62,18 +62,15 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 		return err
 	}
 
-	// close the remove deleted pool for submission
-	removeDeletedPool.CloseForSubmit()
-	removeDeletedPool.Wait()
-	err = removeDeletedPool.FirstError()
+	// close the remove deleted pool for submission and wait
+	removeDeletedPool.CloseAndWait()
+	err = errors.Join(removeDeletedPool.Errors()...)
 	if err != nil {
 		return err
 	}
 
 	// delete entries that have zero-length leaf variant entries after remove deleted processing
 	for _, e := range delProcessorParams.GetZeroLengthLeafVariantEntries() {
-		fmt.Println("entry has zero-length leaf variant entries after remove deleted", "entry", e.SdcpbPath().ToXPath(false))
-
 		err := e.GetParent().DeleteBranch(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(e.PathName(), nil)}}, tree.RunningIntentName)
 		if err != nil {
 			return err

@@ -2,6 +2,7 @@ package tree
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/pool"
@@ -29,12 +30,16 @@ func NewBlameConfigProcessorConfig(includeDefaults bool) *BlameConfigProcessorCo
 	}
 }
 
+// Run processes the entry tree starting from e, building a blame tree showing which owner
+// (intent) is responsible for each configuration value. The pool parameter should be
+// VirtualFailFast to stop on first error.
+// Returns the blame tree structure and any error encountered.
 func (p *BlameConfigProcessor) Run(ctx context.Context, e Entry, pool pool.VirtualPoolI) (*sdcpb.BlameTreeElement, error) {
 	dropChan := make(chan *DropBlameChild, 10)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	// execute the deletes in a seperate single channel
+	// Execute the deletes in a separate goroutine
 	go func(dC <-chan *DropBlameChild) {
 		for elem := range dC {
 			elem.Exec()
@@ -43,18 +48,25 @@ func (p *BlameConfigProcessor) Run(ctx context.Context, e Entry, pool pool.Virtu
 	}(dropChan)
 
 	blameTask := NewBlameConfigTask(e, dropChan, p.config)
-	err := pool.Submit(blameTask)
-	if err != nil {
+	if err := pool.Submit(blameTask); err != nil {
+		// Clean up pool and channels even on early error
+		pool.CloseAndWait()
+		close(dropChan)
+		wg.Wait()
 		return nil, err
 	}
-	// close pool for additional external submission
-	pool.CloseForSubmit()
-	// wait for the pool to run dry
-	pool.Wait()
-	// close the dropChan channel
+
+	// Close pool and wait for all tasks to complete before checking errors
+	pool.CloseAndWait()
+
+	// Close the dropChan channel and wait for cleanup goroutine
 	close(dropChan)
 	wg.Wait()
 
+	// Return first error for fail-fast mode, or combined errors for tolerant mode
+	if errs := pool.Errors(); len(errs) > 0 {
+		return blameTask.self, errors.Join(errs...)
+	}
 	return blameTask.self, pool.FirstError()
 }
 
@@ -109,7 +121,7 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 		child := &sdcpb.BlameTreeElement{Name: childEntry.PathName()}
 		t.self.AddChild(child)
 
-		// create a new task for each child
+		// Create a new task for each child
 		task := &BlameConfigTask{
 			config:    t.config,
 			parent:    t.self,
@@ -117,7 +129,7 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 			selfEntry: childEntry,
 			dropChan:  t.dropChan,
 		}
-		// submit the task
+		// Submit may fail if pool is closed or fail-fast error occurred
 		if err := submit(task); err != nil {
 			return err
 		}

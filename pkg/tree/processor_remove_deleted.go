@@ -2,6 +2,7 @@ package tree
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 
@@ -43,16 +44,24 @@ func (r *RemoveDeletedProcessorParameters) GetZeroLengthLeafVariantEntries() []E
 	return r.zeroLeafEntryElements
 }
 
-func (o *RemoveDeletedProcessor) Run(e Entry, pool pool.VirtualPoolI) error {
-	err := pool.Submit(newRemoveDeletedTask(o.config, e, false))
-	if err != nil {
+// Run processes the entry tree starting from e, removing leaf variant entries marked
+// for deletion by the specified owner. The pool parameter should be VirtualFailFast
+// to stop on first error.
+// Returns the first error encountered, or nil if successful.
+func (p *RemoveDeletedProcessor) Run(e Entry, pool pool.VirtualPoolI) error {
+	if err := pool.Submit(newRemoveDeletedTask(p.config, e, false)); err != nil {
+		// Clean up pool even on early error
+		pool.CloseAndWait()
 		return err
 	}
-	// close pool for additional external submission
-	pool.CloseForSubmit()
-	// wait for the pool to run dry
-	pool.Wait()
 
+	// Close pool and wait for all tasks to complete before checking errors
+	pool.CloseAndWait()
+
+	// Return first error for fail-fast mode, or combined errors for tolerant mode
+	if errs := pool.Errors(); len(errs) > 0 {
+		return errors.Join(errs...)
+	}
 	return pool.FirstError()
 }
 
@@ -89,11 +98,11 @@ func (t *removeDeletedTask) Run(ctx context.Context, submit func(pool.Task) erro
 		return nil
 	}
 
-	// process childs
+	// Process children recursively
 	for _, c := range t.e.GetChilds(DescendMethodAll) {
 		childTask := newRemoveDeletedTask(t.config, c, t.e.GetSchema().GetContainer() == nil)
-		err := submit(childTask)
-		if err != nil {
+		// Submit may fail if pool is closed or fail-fast error occurred
+		if err := submit(childTask); err != nil {
 			return err
 		}
 	}

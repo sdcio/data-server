@@ -1502,7 +1502,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			}
 
 			sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-			deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+			deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast)
 			ownerDeleteMarker := tree.NewOwnerDeleteMarker(tree.NewOwnerDeleteMarkerTaskConfig(tt.intentName, false))
 
 			err = ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
