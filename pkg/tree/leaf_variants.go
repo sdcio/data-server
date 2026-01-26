@@ -89,6 +89,32 @@ func (lv *LeafVariants) canDeleteBranch(keepDefault bool) bool {
 	return true
 }
 
+// checkOnlyRunningAndMaybeDefault checks if only running and maybe default LeafVariants exist
+func (lv *LeafVariants) checkOnlyRunningAndMaybeDefault() bool {
+	lv.lesMutex.RLock()
+	defer lv.lesMutex.RUnlock()
+
+	// if we have runnig and only running we should not delete
+	if len(lv.les) == 1 && lv.les[0].Owner() == RunningIntentName {
+		return false
+	}
+
+	// check if only running and default exist
+	hasRunning := false
+	hasDefault := false
+	if len(lv.les) == 2 {
+		for _, l := range lv.les {
+			if l.Owner() == RunningIntentName {
+				hasRunning = true
+			}
+			if l.Owner() == DefaultsIntentName {
+				hasDefault = true
+			}
+		}
+	}
+	return hasRunning && hasDefault
+}
+
 // canDelete returns true if leafValues exist that are not owned by default or running that do not have the DeleteFlag set [or if delete is set, also the DeleteOnlyIntendedFlag set]
 func (lv *LeafVariants) canDelete() bool {
 	lv.lesMutex.RLock()
@@ -98,8 +124,8 @@ func (lv *LeafVariants) canDelete() bool {
 		return true
 	}
 
-	// if we have runnig and only running we should not delete
-	if len(lv.les) == 1 && lv.les[0].Owner() == RunningIntentName {
+	// if we have runnig and only running (or default in addition) we should not delete
+	if lv.checkOnlyRunningAndMaybeDefault() {
 		return false
 	}
 
