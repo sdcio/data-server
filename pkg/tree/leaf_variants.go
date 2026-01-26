@@ -135,20 +135,6 @@ func (lv *LeafVariants) checkOnlyRunningAndMaybeDefault() bool {
 	return hasRunning && hasDefault
 }
 
-// RemoveDeletedByOwner removes and returns the LeafEntry owned by the given owner if it is marked for deletion.
-func (lv *LeafVariants) RemoveDeletedByOwner(owner string) *LeafEntry {
-	lv.lesMutex.Lock()
-	defer lv.lesMutex.Unlock()
-	for i, l := range lv.les {
-		if l.Owner() == owner && l.GetDeleteFlag() {
-			// Remove element from slice
-			lv.les = append(lv.les[:i], lv.les[i+1:]...)
-			return l
-		}
-	}
-	return nil
-}
-
 // canDelete returns true if leafValues exist that are not owned by default or running that do not have the DeleteFlag set [or if delete is set, also the DeleteOnlyIntendedFlag set]
 func (lv *LeafVariants) canDelete() bool {
 	lv.lesMutex.RLock()
