@@ -103,6 +103,32 @@ func (lv *LeafVariants) RemoveDeletedByOwner(owner string) *LeafEntry {
 	return nil
 }
 
+// checkOnlyRunningAndMaybeDefault checks if only running and maybe default LeafVariants exist
+func (lv *LeafVariants) checkOnlyRunningAndMaybeDefault() bool {
+	lv.lesMutex.RLock()
+	defer lv.lesMutex.RUnlock()
+
+	// if we have runnig and only running we should not delete
+	if len(lv.les) == 1 && lv.les[0].Owner() == RunningIntentName {
+		return false
+	}
+
+	// check if only running and default exist
+	hasRunning := false
+	hasDefault := false
+	if len(lv.les) == 2 {
+		for _, l := range lv.les {
+			if l.Owner() == RunningIntentName {
+				hasRunning = true
+			}
+			if l.Owner() == DefaultsIntentName {
+				hasDefault = true
+			}
+		}
+	}
+	return hasRunning && hasDefault
+}
+
 // canDelete returns true if leafValues exist that are not owned by default or running that do not have the DeleteFlag set [or if delete is set, also the DeleteOnlyIntendedFlag set]
 func (lv *LeafVariants) canDelete() bool {
 	lv.lesMutex.RLock()
@@ -112,8 +138,8 @@ func (lv *LeafVariants) canDelete() bool {
 		return true
 	}
 
-	// if we have runnig and only running we should not delete
-	if len(lv.les) == 1 && lv.les[0].Owner() == RunningIntentName {
+	// if we have runnig and only running (or default in addition) we should not delete
+	if lv.checkOnlyRunningAndMaybeDefault() {
 		return false
 	}
 
@@ -283,6 +309,7 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 		return nil
 	}
 
+	// figure out the highest precedence LeafEntry
 	var highest *LeafEntry
 	var secondHighest *LeafEntry
 	for _, e := range lv.les {
@@ -337,11 +364,16 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 	return nil
 }
 
+// highestIsUnequalRunning checks if the highest precedence LeafEntry is unequal to the running LeafEntry
+// Expects the caller to hold the read lock on lesMutex.
 func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
-	lv.lesMutex.RLock()
-	defer lv.lesMutex.RUnlock()
 	// if highes is already running or even default, return false
 	if highest.Update.Owner() == RunningIntentName {
+		return false
+	}
+
+	// if highest is not new or updated and highest is non-revertive
+	if !highest.IsNew && !highest.IsUpdated && lv.tc.nonRevertiveInfo[highest.Update.Owner()] {
 		return false
 	}
 

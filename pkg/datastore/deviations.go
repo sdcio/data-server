@@ -125,7 +125,11 @@ func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.Dev
 
 			if log := log.V(logger.VTrace); log.Enabled() {
 				if deviation.Reason() == treetypes.DeviationReasonNotApplied { // TODO add check for trace level Trace
-					log.Info("NOT APPLIED", "path", deviation.Path().ToXPath(false), "actual value", deviation.CurrentValue().ToString(), "expected value", deviation.ExpectedValue().ToString(), "intent", deviation.IntentName())
+					current := "nil"
+					if deviation.CurrentValue() != nil {
+						current = deviation.CurrentValue().ToString()
+					}
+					log.Info("NOT APPLIED", "path", deviation.Path().ToXPath(false), "actual value", current, "expected value", deviation.ExpectedValue().ToString(), "intent", deviation.IntentName())
 				}
 			}
 

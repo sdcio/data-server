@@ -3,6 +3,7 @@ package datastore
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
@@ -18,7 +19,9 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	log := logger.FromContext(ctx)
 
 	d.syncTreeMutex.Lock()
-	defer d.syncTreeMutex.Unlock()
+	syncTreeUnlock := sync.OnceFunc(d.syncTreeMutex.Unlock)
+
+	defer syncTreeUnlock()
 
 	// create a virtual task pool for delete operations
 	deleteMarkerPool := d.taskPool.NewVirtualPool(pool.VirtualFailFast)
@@ -88,7 +91,37 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 		}
 	}
 
+	// run reset flags processor to reset flags
+	resetFlagsPool := d.taskPool.NewVirtualPool(pool.VirtualTolerant)
+	resetFlagsProcessorParams := tree.NewResetFlagsProcessorParameters(true, true, true)
+	err = tree.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(d.syncTree.GetRoot(), resetFlagsPool)
+	if err != nil {
+		return err
+	}
+
+	// close the resetFlags pool for submission and wait
+	resetFlagsPool.CloseAndWait()
+	if errors.Join(resetFlagsPool.Errors()...) != nil {
+		return err
+	}
+
+	syncTreeCopy, err := d.syncTree.DeepCopy(ctx)
+	if err != nil {
+		return err
+	}
+
+	// release the sync tree lock early, it is no longer needed
+	syncTreeUnlock()
+
+	// perform the revert operation to apply changes to the device
+	// TODO: this should probably be executed in a separate goroutine
+	err = d.performRevert(ctx, syncTreeCopy)
+	if err != nil {
+		return err
+	}
+
 	return nil
+
 }
 
 func (d *Datastore) NewEmptyTree(ctx context.Context) (*tree.RootEntry, error) {
@@ -98,4 +131,47 @@ func (d *Datastore) NewEmptyTree(ctx context.Context) (*tree.RootEntry, error) {
 		return nil, err
 	}
 	return newTree, nil
+}
+
+func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error {
+	log := logger.FromContext(ctx)
+	_, err := d.LoadAllButRunningIntents(ctx, t)
+	if err != nil {
+		return err
+	}
+
+	err = t.FinishInsertionPhase(ctx)
+	if err != nil {
+		return err
+	}
+
+	// TODO: optimize by checking only paths that where covered by the syncconfig
+	del, err := t.GetDeletes(true)
+	if err != nil {
+		return err
+	}
+
+	// if we have deletes, we need to perform an apply
+	performApply := len(del) > 0
+
+	// if no deletes, check if we have updates
+	if !performApply {
+		updList, err := t.ToProtoUpdates(ctx, true)
+		if err != nil {
+			return err
+		}
+		// if the update list is non-empty, we need to perform an apply
+		performApply = len(updList) > 0
+	}
+
+	if performApply {
+		resp, err := d.applyIntent(ctx, t)
+		if err != nil {
+			respJ := protojson.MarshalOptions{Multiline: false}
+			respStr, _ := respJ.Marshal(resp)
+			log.Error(err, "failed applying deviations to running", "response", string(respStr))
+		}
+	}
+
+	return nil
 }
