@@ -80,7 +80,7 @@ func TestApplyToRunning(t *testing.T) {
 				var v any
 				json.Unmarshal([]byte(confStr), &v)
 
-				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v), tree.RunningIntentName, tree.RunningValuesPrio, false, types.NewUpdateInsertFlags())
+				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags())
 				if err != nil {
 					t.Fatalf("failed to import test config: %v", err)
 				}
@@ -108,7 +108,7 @@ func TestApplyToRunning(t *testing.T) {
 				var v any
 				json.Unmarshal([]byte(confStr), &v)
 
-				return jsonImporter.NewJsonTreeImporter(v)
+				return jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false)
 			},
 			resultFunc: func() any {
 				d := &sdcio_schema.Device{
@@ -185,7 +185,7 @@ func TestApplyToRunning(t *testing.T) {
 				var v any
 				json.Unmarshal([]byte(confStr), &v)
 
-				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v), tree.RunningIntentName, tree.RunningValuesPrio, false, types.NewUpdateInsertFlags())
+				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags())
 				if err != nil {
 					t.Fatalf("failed to import test config: %v", err)
 				}
@@ -212,7 +212,7 @@ func TestApplyToRunning(t *testing.T) {
 				var v any
 				json.Unmarshal([]byte(confStr), &v)
 
-				return jsonImporter.NewJsonTreeImporter(v)
+				return jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false)
 			},
 			resultFunc: func() any {
 				d := &sdcio_schema.Device{
@@ -288,7 +288,7 @@ func TestApplyToRunning(t *testing.T) {
 				var v any
 				json.Unmarshal([]byte(confStr), &v)
 
-				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v), tree.RunningIntentName, tree.RunningValuesPrio, false, types.NewUpdateInsertFlags())
+				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags())
 				if err != nil {
 					t.Fatalf("failed to import test config: %v", err)
 				}
@@ -316,7 +316,7 @@ func TestApplyToRunning(t *testing.T) {
 				var v any
 				json.Unmarshal([]byte(confStr), &v)
 
-				return jsonImporter.NewJsonTreeImporter(v)
+				return jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false)
 			},
 			resultFunc: func() any {
 				d := &sdcio_schema.Device{
@@ -396,7 +396,7 @@ func TestApplyToRunning(t *testing.T) {
 
 			d := tt.resultFunc()
 
-			err = resultRoot.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(d), tree.RunningIntentName, tree.RunningValuesPrio, false, types.NewUpdateInsertFlags())
+			err = resultRoot.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(d, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Fatalf("failed to import test config: %v", err)
 			}

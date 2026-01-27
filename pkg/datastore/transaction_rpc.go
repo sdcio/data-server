@@ -86,7 +86,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	if err != nil {
 		return nil, err
 	}
-	err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto), tree.RunningIntentName, tree.RunningValuesPrio, false, treetypes.NewUpdateInsertFlags())
+	err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto), treetypes.NewUpdateInsertFlags())
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +179,7 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 
 			intentNames = append(intentNames, intent.GetIntentName())
 			protoLoader := treeproto.NewProtoTreeImporter(intent)
-			err := root.ImportConfig(ctx, nil, protoLoader, intent.GetIntentName(), intent.GetPriority(), intent.GetNonRevertive(), treetypes.NewUpdateInsertFlags())
+			err := root.ImportConfig(ctx, nil, protoLoader, treetypes.NewUpdateInsertFlags())
 			if err != nil {
 				return nil, err
 			}
@@ -251,6 +251,8 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 			// add the explicit delete entries
 			root.AddExplicitDeletes(intent.GetName(), intent.GetPriority(), intent.GetDeletes())
 		}
+
+		root.SetNonRevertiveIntent(intent.GetName(), intent.NonRevertive())
 	}
 
 	les := tree.LeafVariantSlice{}
@@ -351,7 +353,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		delSl := deletesOwner.ToXPathSlice()
 		log.V(logf.VTrace).Info("deletes owner", "deletes-owner", delSl)
 
-		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority(), intent.NonRevertive())
+		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority())
 		switch {
 		case errors.Is(err, tree.ErrorIntentNotPresent):
 			err = d.cacheClient.IntentDelete(ctx, intent.GetName(), intent.GetDeleteIgnoreNonExisting())
@@ -417,7 +419,7 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVari
 	}
 
 	// export the synctree
-	newRunningIntent, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
+	newRunningIntent, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
 	if err != nil && err != tree.ErrorIntentNotPresent {
 		return err
 	}

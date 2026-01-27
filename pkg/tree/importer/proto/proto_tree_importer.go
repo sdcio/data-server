@@ -12,7 +12,10 @@ import (
 
 type ProtoTreeImporter struct {
 	ProtoTreeImporterElement
-	deletes *sdcpb.PathSet
+	deletes      *sdcpb.PathSet
+	intentName   string
+	priority     int32
+	nonRevertive bool
 }
 
 func NewProtoTreeImporter(data *tree_persist.Intent) *ProtoTreeImporter {
@@ -23,8 +26,27 @@ func NewProtoTreeImporter(data *tree_persist.Intent) *ProtoTreeImporter {
 		ProtoTreeImporterElement: ProtoTreeImporterElement{
 			data: data.GetRoot(),
 		},
-		deletes: pathSet,
+		deletes:      pathSet,
+		intentName:   data.GetIntentName(),
+		priority:     data.GetPriority(),
+		nonRevertive: data.GetNonRevertive(),
 	}
+}
+
+func (p *ProtoTreeImporter) GetPriority() int32 {
+	return p.priority
+}
+
+func (p *ProtoTreeImporter) GetNonRevertive() bool {
+	return p.nonRevertive
+}
+
+func (p *ProtoTreeImporter) GetName() string {
+	return p.intentName
+}
+
+func (p *ProtoTreeImporter) GetDeletes() *sdcpb.PathSet {
+	return p.deletes
 }
 
 type ProtoTreeImporterElement struct {
@@ -35,10 +57,6 @@ func NewProtoTreeImporterElement(data *tree_persist.TreeElement) *ProtoTreeImpor
 	return &ProtoTreeImporterElement{
 		data: data,
 	}
-}
-
-func (p *ProtoTreeImporter) GetDeletes() *sdcpb.PathSet {
-	return p.deletes
 }
 
 func (p *ProtoTreeImporterElement) GetElements() []importer.ImportConfigAdapterElement {
@@ -83,3 +101,4 @@ func (p *ProtoTreeImporterElement) GetName() string {
 
 // Function to ensure ProtoTreeImporter implements ImportConfigAdapter (optional)
 var _ importer.ImportConfigAdapter = (*ProtoTreeImporter)(nil)
+var _ importer.ImportConfigAdapterElement = (*ProtoTreeImporterElement)(nil)

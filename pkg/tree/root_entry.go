@@ -88,21 +88,28 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us []*types.PathAnd
 	return nil
 }
 
-func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, nonRevertive bool, flags *types.UpdateInsertFlags) error {
-	r.treeContext.SetActualOwner(intentName)
+func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, flags *types.UpdateInsertFlags) error {
+	r.treeContext.SetActualOwner(importer.GetName())
 
 	e, err := r.sharedEntryAttributes.getOrCreateChilds(ctx, basePath)
 	if err != nil {
 		return err
 	}
+	// store non revertive info
+	r.treeContext.nonRevertiveInfo[importer.GetName()] = importer.GetNonRevertive()
 
-	r.explicitDeletes.Add(intentName, intentPrio, importer.GetDeletes())
+	// store explicit deletes
+	r.explicitDeletes.Add(importer.GetName(), importer.GetPriority(), importer.GetDeletes())
 
-	return e.ImportConfig(ctx, importer, intentName, intentPrio, flags)
+	return e.ImportConfig(ctx, importer, flags)
 }
 
 func (r *RootEntry) AddExplicitDeletes(intentName string, priority int32, pathset *sdcpb.PathSet) {
 	r.explicitDeletes.Add(intentName, priority, pathset)
+}
+
+func (r *RootEntry) SetNonRevertiveIntent(intentName string, nonRevertive bool) {
+	r.treeContext.nonRevertiveInfo[intentName] = nonRevertive
 }
 
 func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation, taskpoolFactory pool.VirtualPoolFactory) (types.ValidationResults, *types.ValidationStats) {
@@ -184,7 +191,7 @@ func (r *RootEntry) GetDeviations(ctx context.Context, ch chan<- *types.Deviatio
 	r.sharedEntryAttributes.GetDeviations(ctx, ch, true)
 }
 
-func (r *RootEntry) TreeExport(owner string, priority int32, nonRevertive bool) (*tree_persist.Intent, error) {
+func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Intent, error) {
 	treeExport, err := r.sharedEntryAttributes.TreeExport(owner)
 	if err != nil {
 		return nil, err
@@ -202,7 +209,7 @@ func (r *RootEntry) TreeExport(owner string, priority int32, nonRevertive bool) 
 			IntentName:      owner,
 			Root:            rootExportEntry,
 			Priority:        priority,
-			NonRevertive:    nonRevertive,
+			NonRevertive:    r.treeContext.nonRevertiveInfo[owner],
 			ExplicitDeletes: explicitDeletes,
 		}, nil
 	}

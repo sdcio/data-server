@@ -311,6 +311,8 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 
 	// figure out the highest precedence LeafEntry
 	var highest *LeafEntry
+	// the second highests is the backup in case the highest is marked for deletion
+	// so this is not actually the second highest always, but the next candidate
 	var secondHighest *LeafEntry
 	for _, e := range lv.les {
 		// first entry set result to it
@@ -327,13 +329,13 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 			highest = e
 		} else {
 			// check if the update is at least higher prio (lower number) then the secondHighest
-			if secondHighest == nil || secondHighest.Priority() > e.Priority() {
+			if secondHighest == nil || secondHighest.Priority() > e.Priority() && !e.GetDeleteFlag() {
 				secondHighest = e
 			}
 		}
 	}
 
-	if highest.IsExplicitDelete && !includeExplicitDelete {
+	if highest == nil || highest.IsExplicitDelete && !includeExplicitDelete {
 		return nil
 	}
 
@@ -373,7 +375,7 @@ func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
 	}
 
 	// if highest is not new or updated and highest is non-revertive
-	if !highest.IsNew && !highest.IsUpdated && lv.tc.nonRevertiveInfo[highest.Update.Owner()] {
+	if !highest.IsNew && !highest.IsUpdated && lv.tc.IsNonRevertiveIntent(highest.Update.Owner()) {
 		return false
 	}
 

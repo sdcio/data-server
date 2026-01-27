@@ -146,7 +146,7 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 
 				newFlag := types.NewUpdateInsertFlags()
 
-				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, false, newFlag)
+				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag)
 				if err != nil {
 					t.Error(err)
 				}
@@ -654,7 +654,7 @@ func Test_sharedEntryAttributes_MustCount(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, false, newFlag)
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -776,7 +776,7 @@ func Test_sharedEntryAttributes_MustCountDoubleKey(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, false, newFlag)
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1110,7 +1110,7 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 
 			fmt.Println(root.String())
 
-			treepersist, err := root.TreeExport(owner1, owner1Prio, false)
+			treepersist, err := root.TreeExport(owner1, owner1Prio)
 			if err != nil {
 				t.Error(err)
 				return
@@ -1130,7 +1130,7 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = newRoot.ImportConfig(ctx, &sdcpb.Path{}, proto.NewProtoTreeImporter(treepersist), owner1, owner1Prio, false, flagsExisting)
+			err = newRoot.ImportConfig(ctx, &sdcpb.Path{}, proto.NewProtoTreeImporter(treepersist), flagsExisting)
 			if err != nil {
 				t.Error(err)
 				return
@@ -1282,7 +1282,7 @@ func Test_sharedEntryAttributes_validateMinMaxElements(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, false, newFlag)
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1451,7 +1451,7 @@ func Test_sharedEntryAttributes_validateMinMaxElementsDoubleKey(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, false, newFlag)
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag)
 			if err != nil {
 				t.Fatal(err)
 			}

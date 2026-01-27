@@ -126,8 +126,8 @@ func TestProtoTreeImporter(t *testing.T) {
 				t.Fatalf("error parsing json document: %v", err)
 			}
 
-			jti := jimport.NewJsonTreeImporter(j)
-			err = root.ImportConfig(ctx, nil, jti, "owner1", 5, false, types.NewUpdateInsertFlags())
+			jti := jimport.NewJsonTreeImporter(j, "owner1", 5, false)
+			err = root.ImportConfig(ctx, nil, jti, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -138,7 +138,7 @@ func TestProtoTreeImporter(t *testing.T) {
 			}
 			t.Log(root.String())
 
-			protoIntent, err := root.TreeExport("owner1", 5, false)
+			protoIntent, err := root.TreeExport("owner1", 5)
 			if err != nil {
 				t.Error(err)
 			}
@@ -153,7 +153,7 @@ func TestProtoTreeImporter(t *testing.T) {
 
 			protoAdapter := NewProtoTreeImporter(protoIntent)
 
-			err = rootNew.ImportConfig(ctx, nil, protoAdapter, protoIntent.GetIntentName(), protoIntent.GetPriority(), false, types.NewUpdateInsertFlags())
+			err = rootNew.ImportConfig(ctx, nil, protoAdapter, types.NewUpdateInsertFlags())
 			if err != nil {
 				t.Error(err)
 			}

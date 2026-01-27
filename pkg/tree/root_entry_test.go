@@ -303,7 +303,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				sharedEntryAttributes: tt.sharedEntryAttributes(),
 				explicitDeletes:       NewDeletePaths(),
 			}
-			got, err := r.TreeExport(tt.args.owner, tt.args.priority, false)
+			got, err := r.TreeExport(tt.args.owner, tt.args.priority)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("RootEntry.TreeExport() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -516,7 +516,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				err = s.ImportConfig(ctx, jsonImporter.NewJsonTreeImporter(jsonAny), "owner1", 5, types.NewUpdateInsertFlags())
+				err = s.ImportConfig(ctx, jsonImporter.NewJsonTreeImporter(jsonAny, "owner1", 5, false), types.NewUpdateInsertFlags())
 				if err != nil {
 					t.Fatal(err)
 				}

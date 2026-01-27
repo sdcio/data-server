@@ -121,6 +121,10 @@ func (s *sharedEntryAttributes) GetRoot() Entry {
 	return s.parent.GetRoot()
 }
 
+func (s sharedEntryAttributes) getTreeContext() *TreeContext {
+	return s.treeContext
+}
+
 // loadDefaults helper to populate defaults on the initializiation of the sharedEntryAttribute
 func (s *sharedEntryAttributes) loadDefaults(ctx context.Context) error {
 

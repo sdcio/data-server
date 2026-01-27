@@ -25,9 +25,7 @@ type importTask struct {
 
 func (s *sharedEntryAttributes) ImportConfig(
 	ctx context.Context,
-	importerElement importer.ImportConfigAdapterElement,
-	intentName string,
-	intentPrio int32,
+	importer importer.ImportConfigAdapter,
 	insertFlags *types.UpdateInsertFlags,
 ) error {
 	p := pool.NewWorkerPool[importTask](ctx, 1)
@@ -35,7 +33,7 @@ func (s *sharedEntryAttributes) ImportConfig(
 	p.Start(importHandler)
 
 	// seed root
-	if err := p.Submit(importTask{entry: s, importerElement: importerElement, intentName: intentName, intentPrio: intentPrio, insertFlags: insertFlags, treeContext: s.treeContext, leafListLock: &sync.Map{}}); err != nil {
+	if err := p.Submit(importTask{entry: s, importerElement: importer, intentName: importer.GetName(), intentPrio: importer.GetPriority(), insertFlags: insertFlags, treeContext: s.treeContext, leafListLock: &sync.Map{}}); err != nil {
 		return err
 	}
 

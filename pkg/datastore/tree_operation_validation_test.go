@@ -196,9 +196,9 @@ func TestDatastore_validateTree(t *testing.T) {
 			flagsNew := types.NewUpdateInsertFlags()
 			flagsNew.SetNewFlag()
 
-			importer := json_importer.NewJsonTreeImporter(jsonConf)
+			importer := json_importer.NewJsonTreeImporter(jsonConf, tt.intentName, tt.intentPrio, tt.nonRevertive)
 
-			err = root.ImportConfig(ctx, path, importer, tt.intentName, tt.intentPrio, tt.nonRevertive, flagsNew)
+			err = root.ImportConfig(ctx, path, importer, flagsNew)
 			if err != nil {
 				t.Error(err)
 			}

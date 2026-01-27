@@ -20,7 +20,7 @@ func TestJsonTreeImporter_GetElement(t *testing.T) {
 		name   string
 		fields fields
 		args   args
-		want   importer.ImportConfigAdapter
+		want   importer.ImportConfigAdapterElement
 	}{
 		{
 			name: "one",
@@ -32,7 +32,7 @@ func TestJsonTreeImporter_GetElement(t *testing.T) {
 					"foo": "bar",
 				},
 			},
-			want: &JsonTreeImporter{
+			want: &JsonTreeImporterElement{
 				data: "bar",
 				name: "foo",
 			},
@@ -40,7 +40,7 @@ func TestJsonTreeImporter_GetElement(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			j := NewJsonTreeImporter(tt.fields.data)
+			j := NewJsonTreeImporter(tt.fields.data, "owner1", 5, false)
 			if got := j.GetElement(tt.args.key); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("JsonTreeImporter.GetElement() = %v, want %v", got, tt.want)
 			}
@@ -77,7 +77,7 @@ func TestJsonTreeImporter_GetKeyValue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			j := newJsonTreeImporterInternal(tt.fields.name, tt.fields.data)
+			j := newJsonTreeImporterElement(tt.fields.name, tt.fields.data)
 
 			if got, _ := j.GetKeyValue(); got != tt.want {
 				t.Errorf("JsonTreeImporter.GetKeyValue() = %v, want %v", got, tt.want)
@@ -106,7 +106,7 @@ func TestJsonTreeImporter_GetName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			j := &JsonTreeImporter{
+			j := &JsonTreeImporterElement{
 				data: tt.fields.data,
 				name: tt.fields.name,
 			}
@@ -164,7 +164,7 @@ func TestJsonTreeImporter_GetTVValue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			j := &JsonTreeImporter{
+			j := &JsonTreeImporterElement{
 				data: tt.fields.data,
 				name: tt.fields.name,
 			}

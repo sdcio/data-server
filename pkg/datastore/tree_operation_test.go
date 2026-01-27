@@ -1519,7 +1519,7 @@ func TestDatastore_populateTree(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags().SetNewFlag()
 
-			err = root.ImportConfig(ctx, tt.intentReqPath, jsonImporter.NewJsonTreeImporter(jsonConfAny), tt.intentName, tt.intentPrio, tt.nonRevertive, newFlag)
+			err = root.ImportConfig(ctx, tt.intentReqPath, jsonImporter.NewJsonTreeImporter(jsonConfAny, tt.intentName, tt.intentPrio, tt.nonRevertive), newFlag)
 			if err != nil {
 				t.Error(err)
 			}
