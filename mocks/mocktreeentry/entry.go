@@ -601,21 +601,6 @@ func (mr *MockEntryMockRecorder) addUpdateRecursiveInternal(ctx, path, idx, u, f
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "addUpdateRecursiveInternal", reflect.TypeOf((*MockEntry)(nil).addUpdateRecursiveInternal), ctx, path, idx, u, flags)
 }
 
-// addUpdateRecursiveInternal mocks base method.
-func (m *MockEntry) addUpdateRecursiveInternal(ctx context.Context, path *sdcpb.Path, idx int, u *types.Update, flags *types.UpdateInsertFlags) (tree.Entry, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "addUpdateRecursiveInternal", ctx, path, idx, u, flags)
-	ret0, _ := ret[0].(tree.Entry)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// addUpdateRecursiveInternal indicates an expected call of addUpdateRecursiveInternal.
-func (mr *MockEntryMockRecorder) addUpdateRecursiveInternal(ctx, path, idx, u, flags any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "addUpdateRecursiveInternal", reflect.TypeOf((*MockEntry)(nil).addUpdateRecursiveInternal), ctx, path, idx, u, flags)
-}
-
 // canDelete mocks base method.
 func (m *MockEntry) canDelete() bool {
 	m.ctrl.T.Helper()

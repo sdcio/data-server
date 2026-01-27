@@ -1006,7 +1006,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
@@ -1020,7 +1020,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 						},
 					},
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
