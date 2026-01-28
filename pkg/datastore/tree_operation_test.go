@@ -1519,7 +1519,11 @@ func TestDatastore_populateTree(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags().SetNewFlag()
 
-			err = root.ImportConfig(ctx, tt.intentReqPath, jsonImporter.NewJsonTreeImporter(jsonConfAny, tt.intentName, tt.intentPrio, tt.nonRevertive), newFlag)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			importPool := sharedPool.NewVirtualPool(pool.VirtualFailFast)
+
+			err = root.ImportConfig(ctx, tt.intentReqPath, jsonImporter.NewJsonTreeImporter(jsonConfAny, tt.intentName, tt.intentPrio, tt.nonRevertive), newFlag, importPool)
+
 			if err != nil {
 				t.Error(err)
 			}
@@ -1531,7 +1535,6 @@ func TestDatastore_populateTree(t *testing.T) {
 			}
 			fmt.Println(root.String())
 
-			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
 			validationResult, _ := root.Validate(ctx, validationConfig, sharedPool)
 
 			fmt.Printf("Validation Errors:\n%v\n", strings.Join(validationResult.ErrorsStr(), "\n"))

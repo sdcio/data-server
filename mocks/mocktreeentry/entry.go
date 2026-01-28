@@ -15,6 +15,7 @@ import (
 
 	etree "github.com/beevik/etree"
 	config "github.com/sdcio/data-server/pkg/config"
+	pool "github.com/sdcio/data-server/pkg/pool"
 	tree "github.com/sdcio/data-server/pkg/tree"
 	importer "github.com/sdcio/data-server/pkg/tree/importer"
 	types "github.com/sdcio/data-server/pkg/tree/types"
@@ -362,17 +363,17 @@ func (mr *MockEntryMockRecorder) HoldsLeafvariants() *gomock.Call {
 }
 
 // ImportConfig mocks base method.
-func (m *MockEntry) ImportConfig(ctx context.Context, arg1 importer.ImportConfigAdapterElement, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error {
+func (m *MockEntry) ImportConfig(ctx context.Context, arg1 importer.ImportConfigAdapter, flags *types.UpdateInsertFlags, pool pool.VirtualPoolI) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ImportConfig", ctx, arg1, intentName, intentPrio, flags)
+	ret := m.ctrl.Call(m, "ImportConfig", ctx, arg1, flags, pool)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ImportConfig indicates an expected call of ImportConfig.
-func (mr *MockEntryMockRecorder) ImportConfig(ctx, arg1, intentName, intentPrio, flags any) *gomock.Call {
+func (mr *MockEntryMockRecorder) ImportConfig(ctx, arg1, flags, pool any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ImportConfig", reflect.TypeOf((*MockEntry)(nil).ImportConfig), ctx, arg1, intentName, intentPrio, flags)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ImportConfig", reflect.TypeOf((*MockEntry)(nil).ImportConfig), ctx, arg1, flags, pool)
 }
 
 // IsRoot mocks base method.

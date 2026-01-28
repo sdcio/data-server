@@ -318,9 +318,12 @@ func (v *VirtualPool) FirstError() error {
 }
 
 // Errors returns a snapshot of collected errors for tolerant virtual pools.
-// For fail-fast virtual pools this returns nil.
+// For fail-fast virtual pools this returns the first error if any.
 func (v *VirtualPool) Errors() []error {
 	if v.ec == nil {
+		if err := v.FirstError(); err != nil {
+			return []error{err}
+		}
 		return nil
 	}
 	return v.ec.Errors()

@@ -22,6 +22,7 @@ import (
 	"github.com/beevik/etree"
 
 	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -77,7 +78,7 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntent
 	}
 	protoImporter := proto.NewProtoTreeImporter(tp)
 
-	err = root.ImportConfig(ctx, nil, protoImporter, types.NewUpdateInsertFlags())
+	err = root.ImportConfig(ctx, nil, protoImporter, types.NewUpdateInsertFlags(), d.taskPool.NewVirtualPool(pool.VirtualFailFast))
 	if err != nil {
 		return nil, err
 	}

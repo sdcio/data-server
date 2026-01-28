@@ -3,10 +3,12 @@ package xml
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"testing"
 
 	"github.com/beevik/etree"
 	"github.com/google/go-cmp/cmp"
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -92,7 +94,13 @@ func TestXmlTreeImporter(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = root.ImportConfig(ctx, nil, NewXmlTreeImporter(&inputDoc.Element, "owner1", 5, false), types.NewUpdateInsertFlags())
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			importPool := sharedPool.NewVirtualPool(pool.VirtualFailFast)
+
+			err = root.ImportConfig(ctx, nil, NewXmlTreeImporter(&inputDoc.Element, "owner1", 5, false), types.NewUpdateInsertFlags(), importPool)
+			sharedPool.CloseForSubmit()
+			sharedPool.Wait()
+
 			if err != nil {
 				t.Fatal(err)
 			}

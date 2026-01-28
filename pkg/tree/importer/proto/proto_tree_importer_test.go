@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	jimport "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -127,7 +129,9 @@ func TestProtoTreeImporter(t *testing.T) {
 			}
 
 			jti := jimport.NewJsonTreeImporter(j, "owner1", 5, false)
-			err = root.ImportConfig(ctx, nil, jti, types.NewUpdateInsertFlags())
+
+			vp := pool.NewSharedTaskPool(ctx, runtime.NumCPU()).NewVirtualPool(pool.VirtualFailFast)
+			err = root.ImportConfig(ctx, nil, jti, types.NewUpdateInsertFlags(), vp)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -153,7 +157,8 @@ func TestProtoTreeImporter(t *testing.T) {
 
 			protoAdapter := NewProtoTreeImporter(protoIntent)
 
-			err = rootNew.ImportConfig(ctx, nil, protoAdapter, types.NewUpdateInsertFlags())
+			vp2 := pool.NewSharedTaskPool(ctx, runtime.NumCPU()).NewVirtualPool(pool.VirtualFailFast)
+			err = rootNew.ImportConfig(ctx, nil, protoAdapter, types.NewUpdateInsertFlags(), vp2)
 			if err != nil {
 				t.Error(err)
 			}

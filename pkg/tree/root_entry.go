@@ -88,7 +88,7 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us []*types.PathAnd
 	return nil
 }
 
-func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, flags *types.UpdateInsertFlags) error {
+func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, flags *types.UpdateInsertFlags, pool pool.VirtualPoolI) error {
 	r.treeContext.SetActualOwner(importer.GetName())
 
 	e, err := r.sharedEntryAttributes.getOrCreateChilds(ctx, basePath)
@@ -101,7 +101,7 @@ func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, impo
 	// store explicit deletes
 	r.explicitDeletes.Add(importer.GetName(), importer.GetPriority(), importer.GetDeletes())
 
-	return e.ImportConfig(ctx, importer, flags)
+	return e.ImportConfig(ctx, importer, flags, pool)
 }
 
 func (r *RootEntry) AddExplicitDeletes(intentName string, priority int32, pathset *sdcpb.PathSet) {

@@ -59,10 +59,7 @@ func (p *RemoveDeletedProcessor) Run(e Entry, pool pool.VirtualPoolI) error {
 	pool.CloseAndWait()
 
 	// Return first error for fail-fast mode, or combined errors for tolerant mode
-	if errs := pool.Errors(); len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-	return pool.FirstError()
+	return errors.Join(pool.Errors()...)
 }
 
 type removeDeletedTask struct {

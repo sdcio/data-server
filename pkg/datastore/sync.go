@@ -49,7 +49,8 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 
 	// import new config if provided
 	if importer != nil {
-		err := d.syncTree.ImportConfig(ctx, &sdcpb.Path{}, importer, treetypes.NewUpdateInsertFlags())
+		importPool := d.taskPool.NewVirtualPool(pool.VirtualFailFast)
+		err := d.syncTree.ImportConfig(ctx, &sdcpb.Path{}, importer, treetypes.NewUpdateInsertFlags(), importPool)
 		if err != nil {
 			return err
 		}
@@ -165,6 +166,7 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error 
 	}
 
 	if performApply {
+		log.Info("reverting after sync")
 		resp, err := d.applyIntent(ctx, t)
 		if err != nil {
 			respJ := protojson.MarshalOptions{Multiline: false}

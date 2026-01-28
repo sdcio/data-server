@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/importer"
@@ -13,7 +14,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-type importTask struct {
+type importConfigTask struct {
 	entry           Entry
 	importerElement importer.ImportConfigAdapterElement
 	intentName      string
@@ -23,28 +24,57 @@ type importTask struct {
 	leafListLock    *sync.Map
 }
 
+type ImportConfigProcessor struct {
+	importer    importer.ImportConfigAdapter
+	insertFlags *types.UpdateInsertFlags
+}
+
+func NewImportConfigProcessor(importer importer.ImportConfigAdapter, insertFlags *types.UpdateInsertFlags) *ImportConfigProcessor {
+	return &ImportConfigProcessor{
+		importer:    importer,
+		insertFlags: insertFlags,
+	}
+}
+
+func (p *ImportConfigProcessor) Run(ctx context.Context, e Entry, workerPool pool.VirtualPoolI) error {
+
+	t := importConfigTask{
+		entry:           e,
+		importerElement: p.importer,
+		intentName:      p.importer.GetName(),
+		intentPrio:      p.importer.GetPriority(),
+		insertFlags:     p.insertFlags,
+		treeContext:     e.getTreeContext(),
+		leafListLock:    &sync.Map{},
+	}
+
+	if err := workerPool.Submit(t); err != nil {
+		workerPool.CloseAndWait()
+		return err
+	}
+
+	workerPool.CloseAndWait()
+
+	if err := workerPool.FirstError(); err != nil {
+		return err
+	}
+	// TODO: support tolerant mode? Processor usually decides what to return based on pool mode,
+	// but FirstError() works for fail-fast. For tolerant, we might want Errors().
+	// But ImportConfig usually stops on error?
+	return nil
+}
+
 func (s *sharedEntryAttributes) ImportConfig(
 	ctx context.Context,
 	importer importer.ImportConfigAdapter,
 	insertFlags *types.UpdateInsertFlags,
+	workerPool pool.VirtualPoolI,
 ) error {
-	p := pool.NewWorkerPool[importTask](ctx, 1)
-
-	p.Start(importHandler)
-
-	// seed root
-	if err := p.Submit(importTask{entry: s, importerElement: importer, intentName: importer.GetName(), intentPrio: importer.GetPriority(), insertFlags: insertFlags, treeContext: s.treeContext, leafListLock: &sync.Map{}}); err != nil {
-		return err
-	}
-
-	// signal we are done seeding external tasks (workers may still submit)
-	p.CloseForSubmit()
-
-	// wait for the import to finish (or error)
-	return p.Wait()
+	processor := NewImportConfigProcessor(importer, insertFlags)
+	return processor.Run(ctx, s, workerPool)
 }
 
-func importHandler(ctx context.Context, task importTask, submit func(importTask) error) error {
+func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) error) error {
 
 	elem := task.entry.PathName()
 	_ = elem
@@ -78,7 +108,7 @@ func importHandler(ctx context.Context, task importTask, submit func(importTask)
 			}
 			// submit resolved entry with same adapter element
 			// return importHandler(ctx, importTask{entry: actual, importerElement: task.importerElement, intentName: task.intentName, intentPrio: task.intentPrio, insertFlags: task.insertFlags, treeContext: task.treeContext}, submit)
-			return submit(importTask{entry: actual, importerElement: task.importerElement, intentName: task.intentName, intentPrio: task.intentPrio, insertFlags: task.insertFlags, treeContext: task.treeContext, leafListLock: task.leafListLock})
+			return submit(importConfigTask{entry: actual, importerElement: task.importerElement, intentName: task.intentName, intentPrio: task.intentPrio, insertFlags: task.insertFlags, treeContext: task.treeContext, leafListLock: task.leafListLock})
 		}
 
 		// presence container or children
@@ -103,7 +133,7 @@ func importHandler(ctx context.Context, task importTask, submit func(importTask)
 					return fmt.Errorf("error inserting %s at %s: %w", childElt.GetName(), task.entry.SdcpbPath().ToXPath(false), err)
 				}
 			}
-			if err := submit(importTask{entry: child, importerElement: childElt, intentName: task.intentName, intentPrio: task.intentPrio, insertFlags: task.insertFlags, treeContext: task.treeContext, leafListLock: task.leafListLock}); err != nil {
+			if err := submit(importConfigTask{entry: child, importerElement: childElt, intentName: task.intentName, intentPrio: task.intentPrio, insertFlags: task.insertFlags, treeContext: task.treeContext, leafListLock: task.leafListLock}); err != nil {
 				return err
 			}
 		}
@@ -168,4 +198,42 @@ func importHandler(ctx context.Context, task importTask, submit func(importTask)
 	default:
 		return nil
 	}
+}
+
+type ImportStat struct {
+	newEntries     atomic.Int64
+	updatedEntries atomic.Int64
+}
+
+func NewImportStat() *ImportStat {
+	return &ImportStat{}
+}
+
+func (is *ImportStat) String() string {
+	return fmt.Sprintf("NewEntries: %d, UpdatedEntries: %d", is.newEntries.Load(), is.updatedEntries.Load())
+}
+
+func (is *ImportStat) Join(i *ImportStat) {
+	is.newEntries.Add(i.newEntries.Load())
+	is.updatedEntries.Add(i.updatedEntries.Load())
+}
+
+func (is *ImportStat) AddNewEntryStat() {
+	is.newEntries.Add(1)
+}
+
+func (is *ImportStat) AddUpdatedEntryStat() {
+	is.updatedEntries.Add(1)
+}
+
+func (is *ImportStat) GetNewEntries() int64 {
+	return is.newEntries.Load()
+}
+
+func (is *ImportStat) GetUpdatedEntries() int64 {
+	return is.updatedEntries.Load()
+}
+
+func (is *ImportStat) Changed() bool {
+	return is.newEntries.Load() > 0 || is.updatedEntries.Load() > 0
 }

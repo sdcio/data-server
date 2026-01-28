@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/pool"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -47,6 +49,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					childsMutex:  sync.RWMutex{},
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
+					treeContext:  tc,
 				}
 				result.leafVariants = newLeafVariants(tc, result)
 
@@ -95,6 +98,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					childsMutex:  sync.RWMutex{},
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
+					treeContext:  tc,
 				}
 				result.leafVariants = newLeafVariants(tc, result)
 
@@ -161,6 +165,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					childsMutex:  sync.RWMutex{},
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
+					treeContext:  tc,
 				}
 				result.leafVariants = newLeafVariants(tc, result)
 
@@ -261,6 +266,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					childsMutex:  sync.RWMutex{},
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
+					treeContext:  tc,
 				}
 				result.leafVariants = newLeafVariants(tc, result)
 
@@ -516,7 +522,8 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				err = s.ImportConfig(ctx, jsonImporter.NewJsonTreeImporter(jsonAny, "owner1", 5, false), types.NewUpdateInsertFlags())
+				vp := pool.NewSharedTaskPool(ctx, runtime.NumCPU()).NewVirtualPool(pool.VirtualFailFast)
+				err = s.ImportConfig(ctx, jsonImporter.NewJsonTreeImporter(jsonAny, "owner1", 5, false), types.NewUpdateInsertFlags(), vp)
 				if err != nil {
 					t.Fatal(err)
 				}
