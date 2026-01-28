@@ -128,7 +128,8 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 
 	case "gnmi":
 		sbi.GnmiOptions = &config.SBIGnmiOptions{
-			Encoding: req.GetTarget().GetGnmiOpts().GetEncoding(),
+			Encoding:   req.GetTarget().GetGnmiOpts().GetEncoding(),
+			TargetName: req.GetTarget().GetGnmiOpts().GetTargetName(),
 		}
 	default:
 		log.Error(nil, "unknowm targetconnection protocol type", "type", req.GetTarget().GetType())
