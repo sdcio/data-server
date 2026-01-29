@@ -1244,6 +1244,13 @@ func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultCha
 					attributes = append(attributes, c.Name)
 				}
 
+				// check if it is a Key
+				if slices.ContainsFunc(s.schema.GetContainer().GetKeys(), func(x *sdcpb.LeafSchema) bool {
+					return x.Name == c.Name
+				}) {
+					attributes = append(attributes, c.Name)
+				}
+
 				// check if it is a Field
 				if slices.ContainsFunc(s.schema.GetContainer().GetFields(), func(x *sdcpb.LeafSchema) bool {
 					return x.Name == c.Name
@@ -1253,10 +1260,13 @@ func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultCha
 
 				// otherwise it will probably be a choice
 				if len(attributes) == 0 {
-					choice := s.schema.GetContainer().GetChoiceInfo().GetChoiceByName(c.Name)
-					if choice != nil {
-						attributes = append(attributes, choice.GetAllAttributes()...)
-						choiceName = c.Name
+					choice_info := s.schema.GetContainer().GetChoiceInfo()
+					if choice_info != nil {
+						choice := s.schema.GetContainer().GetChoiceInfo().GetChoiceByName(c.Name)
+						if choice != nil {
+							attributes = append(attributes, choice.GetAllAttributes()...)
+							choiceName = c.Name
+						}
 					}
 				}
 
