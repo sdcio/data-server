@@ -216,10 +216,13 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 	setReq := &gnmi.SetRequest{
 		Delete: make([]*gnmi.Path, 0, len(deletes)),
 		Update: make([]*gnmi.Update, 0, len(upds)),
-		Prefix: &gnmi.Path{
-			Target: t.cfg.GnmiOptions.TargetName,
-		},
 	}
+
+	// check if the target name is set, then add the prefix field
+	if t.cfg.GnmiOptions.TargetName != "" {
+		setReq.Prefix = &gnmi.Path{Target: t.cfg.GnmiOptions.TargetName}
+	}
+
 	for _, del := range deletes {
 		gdel := utils.ToGNMIPath(del)
 		setReq.Delete = append(setReq.Delete, gdel)
