@@ -25,7 +25,7 @@ func newLeafVariants(tc *TreeContext, parentEnty Entry) *LeafVariants {
 	}
 }
 
-func (lv *LeafVariants) Add(le *LeafEntry) {
+func (lv *LeafVariants) AddWithStats(le *LeafEntry, stats *ImportStats) {
 	if leafVariant := lv.GetByOwner(le.Owner()); leafVariant != nil {
 		if leafVariant.Update.Equal(le.Update) {
 			// it seems like the element was not deleted, so drop the delete flag
@@ -33,13 +33,20 @@ func (lv *LeafVariants) Add(le *LeafEntry) {
 		} else {
 			// if a leafentry of the same owner exists with different value, mark it for update
 			leafVariant.MarkUpdate(le.Update)
+			stats.IncrementUpdated()
+
 		}
 	} else {
 		lv.lesMutex.Lock()
 		defer lv.lesMutex.Unlock()
 		// if LeafVaraint with same owner does not exist, add the new entry
 		lv.les = append(lv.les, le)
+		stats.IncrementNew()
 	}
+}
+
+func (lv *LeafVariants) Add(le *LeafEntry) {
+	lv.AddWithStats(le, nil)
 }
 
 // Items iterator for the LeafVariants

@@ -522,8 +522,8 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				vp := pool.NewSharedTaskPool(ctx, runtime.NumCPU()).NewVirtualPool(pool.VirtualFailFast)
-				err = s.ImportConfig(ctx, jsonImporter.NewJsonTreeImporter(jsonAny, "owner1", 5, false), types.NewUpdateInsertFlags(), vp)
+				vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+				err = s.ImportConfig(ctx, jsonImporter.NewJsonTreeImporter(jsonAny, "owner1", 5, false), types.NewUpdateInsertFlags(), vpf)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -634,7 +634,6 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 				t.Logf("Want:\n%s", wantStr)
 				t.Logf("Got:\n%s", resultRoot.String())
 			}
-
 		})
 	}
 }

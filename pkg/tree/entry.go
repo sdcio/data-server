@@ -132,7 +132,7 @@ type Entry interface {
 	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
 	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error)
 	// ImportConfig allows importing config data received from e.g. the device in different formats (json, xml) to be imported into the tree.
-	ImportConfig(ctx context.Context, importer importer.ImportConfigAdapter, flags *types.UpdateInsertFlags, pool pool.VirtualPoolI) error
+	ImportConfig(ctx context.Context, importer importer.ImportConfigAdapter, flags *types.UpdateInsertFlags, poolFactory pool.VirtualPoolFactory) error
 	TreeExport(owner string) ([]*tree_persist.TreeElement, error)
 	// DeleteBranch Deletes from the tree, all elements of the PathSlice defined branch of the given owner
 	DeleteBranch(ctx context.Context, path *sdcpb.Path, owner string) (err error)
@@ -173,6 +173,7 @@ type LeafVariantEntries interface {
 	GetByOwner(owner string) *LeafEntry
 	RemoveDeletedByOwner(owner string) *LeafEntry
 	Add(l *LeafEntry)
+	AddWithStats(l *LeafEntry, stats *ImportStats)
 	Length() int
 }
 

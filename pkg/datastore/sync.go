@@ -2,10 +2,8 @@ package datastore
 
 import (
 	"context"
-	"errors"
 	"sync"
 
-	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
@@ -24,7 +22,6 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	defer syncTreeUnlock()
 
 	// create a virtual task pool for delete operations
-	deleteMarkerPool := d.taskPool.NewVirtualPool(pool.VirtualFailFast)
 	for _, delete := range deletes {
 		// navigate to delete path
 		deleteRoot, err := d.syncTree.NavigateSdcpbPath(ctx, delete)
@@ -33,42 +30,24 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 			continue
 		}
 		// apply delete marker, setting owner delete flag on running intent
-		err = tree.NewOwnerDeleteMarker(tree.NewOwnerDeleteMarkerTaskConfig(tree.RunningIntentName, false)).Run(deleteRoot, deleteMarkerPool)
+		err = tree.NewOwnerDeleteMarker(tree.NewOwnerDeleteMarkerTaskConfig(tree.RunningIntentName, false)).Run(deleteRoot, d.taskPool)
 		if err != nil {
 			log.Error(err, "failed applying delete to path", "path", delete.ToXPath(false))
 			continue
 		}
 	}
 
-	// close the delete marker pool for submission and wait
-	deleteMarkerPool.CloseAndWait()
-	err := deleteMarkerPool.FirstError()
-	if err != nil {
-		return err
-	}
-
 	// import new config if provided
 	if importer != nil {
-		importPool := d.taskPool.NewVirtualPool(pool.VirtualFailFast)
-		err := d.syncTree.ImportConfig(ctx, &sdcpb.Path{}, importer, treetypes.NewUpdateInsertFlags(), importPool)
+		err := d.syncTree.ImportConfig(ctx, &sdcpb.Path{}, importer, treetypes.NewUpdateInsertFlags(), d.taskPool)
 		if err != nil {
 			return err
 		}
 	}
 
-	// create a virtual task pool for removeDeleted operations
-	removeDeletedPool := d.taskPool.NewVirtualPool(pool.VirtualFailFast)
-
 	// run remove deleted processor to clean up entries marked as deleted by owner
 	delProcessorParams := tree.NewRemoveDeletedProcessorParameters(tree.RunningIntentName)
-	err = tree.NewRemoveDeletedProcessor(delProcessorParams).Run(d.syncTree.GetRoot(), removeDeletedPool)
-	if err != nil {
-		return err
-	}
-
-	// close the remove deleted pool for submission and wait
-	removeDeletedPool.CloseAndWait()
-	err = errors.Join(removeDeletedPool.Errors()...)
+	err := tree.NewRemoveDeletedProcessor(delProcessorParams).Run(d.syncTree.GetRoot(), d.taskPool)
 	if err != nil {
 		return err
 	}
@@ -93,19 +72,13 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	}
 
 	// run reset flags processor to reset flags
-	resetFlagsPool := d.taskPool.NewVirtualPool(pool.VirtualTolerant)
 	resetFlagsProcessorParams := tree.NewResetFlagsProcessorParameters(true, true, true)
-	err = tree.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(d.syncTree.GetRoot(), resetFlagsPool)
+	err = tree.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(d.syncTree.GetRoot(), d.taskPool)
 	if err != nil {
 		return err
 	}
 
-	// close the resetFlags pool for submission and wait
-	resetFlagsPool.CloseAndWait()
-	if errors.Join(resetFlagsPool.Errors()...) != nil {
-		return err
-	}
-
+	// create a deep copy of the sync tree for revert operation
 	syncTreeCopy, err := d.syncTree.DeepCopy(ctx)
 	if err != nil {
 		return err

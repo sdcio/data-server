@@ -23,7 +23,8 @@ func NewOwnerDeleteMarker(c *OwnerDeleteMarkerTaskConfig) *MarkOwnerDeleteProces
 // Run processes the entry tree starting from e, marking leaf variant entries for deletion
 // by the specified owner. The pool parameter should be VirtualFailFast to stop on first error.
 // Returns the first error encountered, or nil if successful.
-func (p *MarkOwnerDeleteProcessor) Run(e Entry, pool pool.VirtualPoolI) error {
+func (p *MarkOwnerDeleteProcessor) Run(e Entry, poolFactory pool.VirtualPoolFactory) error {
+	pool := poolFactory.NewVirtualPool(pool.VirtualFailFast)
 	if err := pool.Submit(newOwnerDeleteMarkerTask(p.config, e, p.matches)); err != nil {
 		// Clean up pool even on early error
 		pool.CloseAndWait()

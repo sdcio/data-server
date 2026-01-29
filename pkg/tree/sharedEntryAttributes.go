@@ -14,6 +14,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
@@ -121,7 +123,7 @@ func (s *sharedEntryAttributes) GetRoot() Entry {
 	return s.parent.GetRoot()
 }
 
-func (s sharedEntryAttributes) getTreeContext() *TreeContext {
+func (s *sharedEntryAttributes) getTreeContext() *TreeContext {
 	return s.treeContext
 }
 
@@ -1741,4 +1743,9 @@ func (s *sharedEntryAttributes) containsOnlyDefaults() bool {
 
 func (s *sharedEntryAttributes) GetLeafVariantEntries() LeafVariantEntries {
 	return s.leafVariants
+}
+
+func (s *sharedEntryAttributes) ImportConfig(ctx context.Context, importer importer.ImportConfigAdapter, insertFlags *types.UpdateInsertFlags, poolFactory pool.VirtualPoolFactory) error {
+	processor := NewImportConfigProcessor(importer, insertFlags)
+	return processor.Run(ctx, s, poolFactory)
 }

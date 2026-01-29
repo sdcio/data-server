@@ -101,13 +101,12 @@ func TestResetFlagsProcessorRun(t *testing.T) {
 
 			// Create a virtual pool for testing
 			taskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-			virtualPool := taskPool.NewVirtualPool(pool.VirtualFailFast)
 
 			root := tt.tree()
 
 			fmt.Println(root.String())
 
-			processorErr := processor.Run(root.GetRoot(), virtualPool)
+			processorErr := processor.Run(root.GetRoot(), taskPool)
 			if (processorErr != nil) != tt.wantErr {
 				t.Errorf("ResetFlagsProcessor.Run() error = %v, wantErr %v", processorErr, tt.wantErr)
 				return

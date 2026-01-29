@@ -146,8 +146,8 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 
 				newFlag := types.NewUpdateInsertFlags()
 
-				vp := pool.NewSharedTaskPool(ctx, runtime.NumCPU()).NewVirtualPool(pool.VirtualFailFast)
-				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vp)
+				vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vpf)
 				if err != nil {
 					t.Error(err)
 				}
@@ -655,8 +655,8 @@ func Test_sharedEntryAttributes_MustCount(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			vp := pool.NewSharedTaskPool(ctx, runtime.NumCPU()).NewVirtualPool(pool.VirtualFailFast)
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vp)
+			vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vpf)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -778,8 +778,8 @@ func Test_sharedEntryAttributes_MustCountDoubleKey(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			vp := pool.NewSharedTaskPool(ctx, runtime.NumCPU()).NewVirtualPool(pool.VirtualFailFast)
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vp)
+			vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vpf)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1133,8 +1133,8 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			vp := pool.NewSharedTaskPool(ctx, runtime.NumCPU()).NewVirtualPool(pool.VirtualFailFast)
-			err = newRoot.ImportConfig(ctx, &sdcpb.Path{}, proto.NewProtoTreeImporter(treepersist), flagsExisting, vp)
+			vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			err = newRoot.ImportConfig(ctx, &sdcpb.Path{}, proto.NewProtoTreeImporter(treepersist), flagsExisting, vpf)
 			if err != nil {
 				t.Error(err)
 				return
@@ -1142,10 +1142,9 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 
 			// mark owner delete
 			sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-			deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast)
 			ownerDeleteMarker := NewOwnerDeleteMarker(NewOwnerDeleteMarkerTaskConfig(owner1, false))
 
-			err = ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
+			err = ownerDeleteMarker.Run(root.GetRoot(), sharedTaskPool)
 			if err != nil {
 				t.Error(err)
 				return
@@ -1286,8 +1285,8 @@ func Test_sharedEntryAttributes_validateMinMaxElements(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			vp := pool.NewSharedTaskPool(ctx, runtime.NumCPU()).NewVirtualPool(pool.VirtualFailFast)
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vp)
+			vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vpf)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1456,8 +1455,8 @@ func Test_sharedEntryAttributes_validateMinMaxElementsDoubleKey(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			vp := pool.NewSharedTaskPool(ctx, runtime.NumCPU()).NewVirtualPool(pool.VirtualFailFast)
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vp)
+			vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vpf)
 			if err != nil {
 				t.Fatal(err)
 			}

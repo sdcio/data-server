@@ -567,10 +567,9 @@ func Test_Entry_Three(t *testing.T) {
 	// indicate that the intent is receiving an update
 	// therefor invalidate all the present entries of the owner / intent
 	sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-	deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast)
 	ownerDeleteMarker := NewOwnerDeleteMarker(NewOwnerDeleteMarkerTaskConfig(owner1, false))
 
-	err = ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
+	err = ownerDeleteMarker.Run(root.GetRoot(), sharedTaskPool)
 	if err != nil {
 		t.Error(err)
 		return
@@ -842,10 +841,9 @@ func Test_Entry_Four(t *testing.T) {
 	// indicate that the intent is receiving an update
 	// therefor invalidate all the present entries of the owner / intent
 	sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-	deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast)
 	ownerDeleteMarker := NewOwnerDeleteMarker(NewOwnerDeleteMarkerTaskConfig(owner1, false))
 
-	err = ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
+	err = ownerDeleteMarker.Run(root.GetRoot(), sharedTaskPool)
 	if err != nil {
 		t.Error(err)
 		return
@@ -1217,10 +1215,9 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	}
 
 	sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-	deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast)
 	ownerDeleteMarker := NewOwnerDeleteMarker(NewOwnerDeleteMarkerTaskConfig(owner1, false))
 
-	err = ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
+	err = ownerDeleteMarker.Run(root.GetRoot(), sharedTaskPool)
 	if err != nil {
 		t.Error(err)
 		return

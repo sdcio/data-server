@@ -43,10 +43,13 @@ func (r *ResetFlagsProcessorParameters) GetAdjustedFlagsCount() int64 {
 // according to the processor configuration. The pool parameter can be either VirtualFailFast
 // (stops on first error) or VirtualTolerant (collects all errors).
 // Returns the first error for fail-fast pools, or a combined error for tolerant pools.
-func (p *ResetFlagsProcessor) Run(e Entry, pool pool.VirtualPoolI) error {
+func (p *ResetFlagsProcessor) Run(e Entry, poolFactory pool.VirtualPoolFactory) error {
 	if e == nil {
 		return fmt.Errorf("entry cannot be nil")
 	}
+
+	// create a virtual task pool for resetFlags operations
+	pool := poolFactory.NewVirtualPool(pool.VirtualFailFast)
 
 	// Submit root task; workers will recursively process children
 	if err := pool.Submit(newResetFlagsTask(p.config, e)); err != nil {

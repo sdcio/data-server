@@ -594,10 +594,9 @@ func TestToXMLTable(t *testing.T) {
 
 			if tt.newConfig != nil {
 				sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-				deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast)
 				ownerDeleteMarker := NewOwnerDeleteMarker(NewOwnerDeleteMarkerTaskConfig(owner, false))
 
-				err = ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
+				err = ownerDeleteMarker.Run(root.GetRoot(), sharedTaskPool)
 				if err != nil {
 					t.Error(err)
 					return

@@ -17,35 +17,62 @@ import (
 type importConfigTask struct {
 	entry           Entry
 	importerElement importer.ImportConfigAdapterElement
-	intentName      string
-	intentPrio      int32
-	insertFlags     *types.UpdateInsertFlags
-	treeContext     *TreeContext
-	leafListLock    *sync.Map
+	params          *ImportConfigProcessorParams
+}
+
+type ImportConfigProcessorParams struct {
+	intentName   string
+	intentPrio   int32
+	insertFlags  *types.UpdateInsertFlags
+	treeContext  *TreeContext
+	leafListLock *sync.Map
+	stats        *ImportStats
+}
+
+func NewImportConfigProcessorParams(
+	intentName string,
+	intentPrio int32,
+	insertFlags *types.UpdateInsertFlags,
+	treeContext *TreeContext,
+	leafListLock *sync.Map,
+	stats *ImportStats,
+) *ImportConfigProcessorParams {
+	return &ImportConfigProcessorParams{
+		intentName:   intentName,
+		intentPrio:   intentPrio,
+		insertFlags:  insertFlags,
+		treeContext:  treeContext,
+		leafListLock: leafListLock,
+		stats:        stats,
+	}
 }
 
 type ImportConfigProcessor struct {
 	importer    importer.ImportConfigAdapter
 	insertFlags *types.UpdateInsertFlags
+	stats       *ImportStats
 }
 
 func NewImportConfigProcessor(importer importer.ImportConfigAdapter, insertFlags *types.UpdateInsertFlags) *ImportConfigProcessor {
 	return &ImportConfigProcessor{
 		importer:    importer,
 		insertFlags: insertFlags,
+		stats:       NewImportStats(),
 	}
 }
 
-func (p *ImportConfigProcessor) Run(ctx context.Context, e Entry, workerPool pool.VirtualPoolI) error {
+func (p *ImportConfigProcessor) GetStats() *ImportStats {
+	return p.stats
+}
+
+func (p *ImportConfigProcessor) Run(ctx context.Context, e Entry, poolFactory pool.VirtualPoolFactory) error {
+
+	workerPool := poolFactory.NewVirtualPool(pool.VirtualFailFast)
 
 	t := importConfigTask{
 		entry:           e,
 		importerElement: p.importer,
-		intentName:      p.importer.GetName(),
-		intentPrio:      p.importer.GetPriority(),
-		insertFlags:     p.insertFlags,
-		treeContext:     e.getTreeContext(),
-		leafListLock:    &sync.Map{},
+		params:          NewImportConfigProcessorParams(p.importer.GetName(), p.importer.GetPriority(), p.insertFlags, e.getTreeContext(), &sync.Map{}, p.stats),
 	}
 
 	if err := workerPool.Submit(t); err != nil {
@@ -62,16 +89,6 @@ func (p *ImportConfigProcessor) Run(ctx context.Context, e Entry, workerPool poo
 	// but FirstError() works for fail-fast. For tolerant, we might want Errors().
 	// But ImportConfig usually stops on error?
 	return nil
-}
-
-func (s *sharedEntryAttributes) ImportConfig(
-	ctx context.Context,
-	importer importer.ImportConfigAdapter,
-	insertFlags *types.UpdateInsertFlags,
-	workerPool pool.VirtualPoolI,
-) error {
-	processor := NewImportConfigProcessor(importer, insertFlags)
-	return processor.Run(ctx, s, workerPool)
 }
 
 func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) error) error {
@@ -99,7 +116,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 					return err
 				}
 				if keyChild, exists = actual.GetChild(kv); !exists {
-					keyChild, err = newEntry(ctx, actual, kv, task.treeContext)
+					keyChild, err = newEntry(ctx, actual, kv, task.params.treeContext)
 					if err != nil {
 						return err
 					}
@@ -108,7 +125,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			}
 			// submit resolved entry with same adapter element
 			// return importHandler(ctx, importTask{entry: actual, importerElement: task.importerElement, intentName: task.intentName, intentPrio: task.intentPrio, insertFlags: task.insertFlags, treeContext: task.treeContext}, submit)
-			return submit(importConfigTask{entry: actual, importerElement: task.importerElement, intentName: task.intentName, intentPrio: task.intentPrio, insertFlags: task.insertFlags, treeContext: task.treeContext, leafListLock: task.leafListLock})
+			return submit(importConfigTask{entry: actual, importerElement: task.importerElement, params: task.params})
 		}
 
 		// presence container or children
@@ -117,8 +134,8 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			schem := task.entry.GetSchema().GetContainer()
 			if schem != nil && schem.IsPresence {
 				tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}
-				upd := types.NewUpdate(task.entry, tv, task.intentPrio, task.intentName, 0)
-				task.entry.GetLeafVariantEntries().Add(NewLeafEntry(upd, task.insertFlags, task.entry))
+				upd := types.NewUpdate(task.entry, tv, task.params.intentPrio, task.params.intentName, 0)
+				task.entry.GetLeafVariantEntries().Add(NewLeafEntry(upd, task.params.insertFlags, task.entry))
 			}
 			return nil
 		}
@@ -128,12 +145,12 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			child, exists := task.entry.GetChild(childElt.GetName())
 			if !exists {
 				var err error
-				child, err = newEntry(ctx, task.entry, childElt.GetName(), task.treeContext)
+				child, err = newEntry(ctx, task.entry, childElt.GetName(), task.params.treeContext)
 				if err != nil {
 					return fmt.Errorf("error inserting %s at %s: %w", childElt.GetName(), task.entry.SdcpbPath().ToXPath(false), err)
 				}
 			}
-			if err := submit(importConfigTask{entry: child, importerElement: childElt, intentName: task.intentName, intentPrio: task.intentPrio, insertFlags: task.insertFlags, treeContext: task.treeContext, leafListLock: task.leafListLock}); err != nil {
+			if err := submit(importConfigTask{entry: child, importerElement: childElt, params: task.params}); err != nil {
 				return err
 			}
 		}
@@ -144,8 +161,8 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 		if err != nil {
 			return err
 		}
-		upd := types.NewUpdate(task.entry, tv, task.intentPrio, task.intentName, 0)
-		task.entry.GetLeafVariantEntries().Add(NewLeafEntry(upd, task.insertFlags, task.entry))
+		upd := types.NewUpdate(task.entry, tv, task.params.intentPrio, task.params.intentName, 0)
+		task.entry.GetLeafVariantEntries().AddWithStats(NewLeafEntry(upd, task.params.insertFlags, task.entry), task.params.stats)
 		return nil
 
 	case *sdcpb.SchemaElem_Leaflist:
@@ -161,7 +178,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 		llMutex.Lock()
 
 		// try storing it or load it from leafListLock
-		llm, loaded := task.leafListLock.LoadOrStore(task.entry.SdcpbPath().ToXPath(false), llMutex)
+		llm, loaded := task.params.leafListLock.LoadOrStore(task.entry.SdcpbPath().ToXPath(false), llMutex)
 
 		// if it was loaded, we need to lock the loaded mutex
 		if loaded {
@@ -174,10 +191,10 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 		mustAdd := false
 		var le *LeafEntry
 		if loaded {
-			le = task.entry.GetLeafVariantEntries().GetByOwner(task.intentName)
+			le = task.entry.GetLeafVariantEntries().GetByOwner(task.params.intentName)
 			scalarArr = le.Value().GetLeaflistVal()
 		} else {
-			le = NewLeafEntry(nil, task.insertFlags, task.entry)
+			le = NewLeafEntry(nil, task.params.insertFlags, task.entry)
 			mustAdd = true
 			scalarArr = &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{}}
 		}
@@ -190,7 +207,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			scalarArr.Element = append(scalarArr.Element, tv)
 			tv = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: scalarArr}}
 		}
-		le.Update = types.NewUpdate(task.entry, tv, task.intentPrio, task.intentName, 0)
+		le.Update = types.NewUpdate(task.entry, tv, task.params.intentPrio, task.params.intentName, 0)
 		if mustAdd {
 			task.entry.GetLeafVariantEntries().Add(le)
 		}
@@ -200,40 +217,46 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 	}
 }
 
-type ImportStat struct {
+type ImportStats struct {
 	newEntries     atomic.Int64
 	updatedEntries atomic.Int64
 }
 
-func NewImportStat() *ImportStat {
-	return &ImportStat{}
+func NewImportStats() *ImportStats {
+	return &ImportStats{}
 }
 
-func (is *ImportStat) String() string {
+func (is *ImportStats) String() string {
 	return fmt.Sprintf("NewEntries: %d, UpdatedEntries: %d", is.newEntries.Load(), is.updatedEntries.Load())
 }
 
-func (is *ImportStat) Join(i *ImportStat) {
+func (is *ImportStats) Join(i *ImportStats) {
 	is.newEntries.Add(i.newEntries.Load())
 	is.updatedEntries.Add(i.updatedEntries.Load())
 }
 
-func (is *ImportStat) AddNewEntryStat() {
+func (is *ImportStats) IncrementNew() {
+	if is == nil {
+		return
+	}
 	is.newEntries.Add(1)
 }
 
-func (is *ImportStat) AddUpdatedEntryStat() {
+func (is *ImportStats) IncrementUpdated() {
+	if is == nil {
+		return
+	}
 	is.updatedEntries.Add(1)
 }
 
-func (is *ImportStat) GetNewEntries() int64 {
+func (is *ImportStats) GetNewCount() int64 {
 	return is.newEntries.Load()
 }
 
-func (is *ImportStat) GetUpdatedEntries() int64 {
+func (is *ImportStats) GetUpdatedCount() int64 {
 	return is.updatedEntries.Load()
 }
 
-func (is *ImportStat) Changed() bool {
+func (is *ImportStats) Changed() bool {
 	return is.newEntries.Load() > 0 || is.updatedEntries.Load() > 0
 }

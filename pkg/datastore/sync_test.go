@@ -80,8 +80,8 @@ func TestApplyToRunning(t *testing.T) {
 				var v any
 				json.Unmarshal([]byte(confStr), &v)
 
-				vp := pool.NewSharedTaskPool(ctx, runtime.NumCPU()).NewVirtualPool(pool.VirtualFailFast)
-				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vp)
+				vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
 				if err != nil {
 					t.Fatalf("failed to import test config: %v", err)
 				}
@@ -186,8 +186,8 @@ func TestApplyToRunning(t *testing.T) {
 				var v any
 				json.Unmarshal([]byte(confStr), &v)
 
-				vp := pool.NewSharedTaskPool(ctx, runtime.NumCPU()).NewVirtualPool(pool.VirtualFailFast)
-				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vp)
+				vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
 				if err != nil {
 					t.Fatalf("failed to import test config: %v", err)
 				}
@@ -290,8 +290,8 @@ func TestApplyToRunning(t *testing.T) {
 				var v any
 				json.Unmarshal([]byte(confStr), &v)
 
-				vp := pool.NewSharedTaskPool(ctx, runtime.NumCPU()).NewVirtualPool(pool.VirtualFailFast)
-				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vp)
+				vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
 				if err != nil {
 					t.Fatalf("failed to import test config: %v", err)
 				}
@@ -399,8 +399,8 @@ func TestApplyToRunning(t *testing.T) {
 
 			d := tt.resultFunc()
 
-			vp := pool.NewSharedTaskPool(ctx, runtime.NumCPU()).NewVirtualPool(pool.VirtualFailFast)
-			err = resultRoot.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(d, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vp)
+			vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			err = resultRoot.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(d, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
 			if err != nil {
 				t.Fatalf("failed to import test config: %v", err)
 			}
@@ -412,18 +412,10 @@ func TestApplyToRunning(t *testing.T) {
 
 			fmt.Println(syncTree.String())
 
-			vpool := datastore.taskPool.NewVirtualPool(pool.VirtualFailFast)
-
 			resetFlagsProcessorParams := tree.NewResetFlagsProcessorParameters(false, true, true)
-			err = tree.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(syncTree.GetRoot(), vpool)
+			err = tree.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(syncTree.GetRoot(), datastore.taskPool)
 			if err != nil {
 				t.Fatalf("failed to reset flags: %v", err)
-			}
-
-			vpool.CloseAndWait()
-			err = vpool.FirstError()
-			if err != nil {
-				t.Fatalf("failed to run reset flags processor: %v", err)
 			}
 
 			fmt.Println("Adjusted flags count:", resetFlagsProcessorParams.GetAdjustedFlagsCount())

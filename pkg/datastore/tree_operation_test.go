@@ -1502,10 +1502,8 @@ func TestDatastore_populateTree(t *testing.T) {
 			}
 
 			sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-			deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast)
 			ownerDeleteMarker := tree.NewOwnerDeleteMarker(tree.NewOwnerDeleteMarkerTaskConfig(tt.intentName, false))
-
-			err = ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
+			err = ownerDeleteMarker.Run(root.GetRoot(), sharedTaskPool)
 			if err != nil {
 				t.Error(err)
 				return
@@ -1520,9 +1518,8 @@ func TestDatastore_populateTree(t *testing.T) {
 			newFlag := types.NewUpdateInsertFlags().SetNewFlag()
 
 			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-			importPool := sharedPool.NewVirtualPool(pool.VirtualFailFast)
 
-			err = root.ImportConfig(ctx, tt.intentReqPath, jsonImporter.NewJsonTreeImporter(jsonConfAny, tt.intentName, tt.intentPrio, tt.nonRevertive), newFlag, importPool)
+			err = root.ImportConfig(ctx, tt.intentReqPath, jsonImporter.NewJsonTreeImporter(jsonConfAny, tt.intentName, tt.intentPrio, tt.nonRevertive), newFlag, sharedPool)
 
 			if err != nil {
 				t.Error(err)

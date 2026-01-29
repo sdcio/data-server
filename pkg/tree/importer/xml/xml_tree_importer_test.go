@@ -95,9 +95,8 @@ func TestXmlTreeImporter(t *testing.T) {
 			}
 
 			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-			importPool := sharedPool.NewVirtualPool(pool.VirtualFailFast)
 
-			err = root.ImportConfig(ctx, nil, NewXmlTreeImporter(&inputDoc.Element, "owner1", 5, false), types.NewUpdateInsertFlags(), importPool)
+			err = root.ImportConfig(ctx, nil, NewXmlTreeImporter(&inputDoc.Element, "owner1", 5, false), types.NewUpdateInsertFlags(), sharedPool)
 			sharedPool.CloseForSubmit()
 			sharedPool.Wait()
 

@@ -48,7 +48,11 @@ func (r *RemoveDeletedProcessorParameters) GetZeroLengthLeafVariantEntries() []E
 // for deletion by the specified owner. The pool parameter should be VirtualFailFast
 // to stop on first error.
 // Returns the first error encountered, or nil if successful.
-func (p *RemoveDeletedProcessor) Run(e Entry, pool pool.VirtualPoolI) error {
+func (p *RemoveDeletedProcessor) Run(e Entry, poolFactory pool.VirtualPoolFactory) error {
+
+	// create a virtual task pool for removeDeleted operations
+	pool := poolFactory.NewVirtualPool(pool.VirtualFailFast)
+
 	if err := pool.Submit(newRemoveDeletedTask(p.config, e, false)); err != nil {
 		// Clean up pool even on early error
 		pool.CloseAndWait()

@@ -140,7 +140,7 @@ func GetSchemaClientBound(t *testing.T, mockCtrl *gomock.Controller) (*mockschem
 }
 
 type RootTreeImport interface {
-	ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, flags *types.UpdateInsertFlags, pool pool.VirtualPoolI) error
+	ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, flags *types.UpdateInsertFlags, poolFactory pool.VirtualPoolFactory) error
 }
 
 func LoadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root RootTreeImport, owner string, prio int32, nonRevertive bool, flags *types.UpdateInsertFlags) error {
@@ -158,8 +158,8 @@ func LoadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root Root
 		return err
 	}
 
-	vp := pool.NewSharedTaskPool(ctx, runtime.NumCPU()).NewVirtualPool(pool.VirtualFailFast)
-	err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner, prio, nonRevertive), flags, vp)
+	vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+	err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner, prio, nonRevertive), flags, vpf)
 	if err != nil {
 		return err
 	}

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/sdcio/data-server/pkg/datastore/types"
-	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
@@ -86,7 +85,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	if err != nil {
 		return nil, err
 	}
-	err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto), treetypes.NewUpdateInsertFlags(), d.taskPool.NewVirtualPool(pool.VirtualFailFast))
+	err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto), treetypes.NewUpdateInsertFlags(), d.taskPool)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +178,7 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 
 			intentNames = append(intentNames, intent.GetIntentName())
 			protoLoader := treeproto.NewProtoTreeImporter(intent)
-			err := root.ImportConfig(ctx, nil, protoLoader, treetypes.NewUpdateInsertFlags(), d.taskPool.NewVirtualPool(pool.VirtualFailFast))
+			err := root.ImportConfig(ctx, nil, protoLoader, treetypes.NewUpdateInsertFlags(), d.taskPool)
 			if err != nil {
 				return nil, err
 			}
@@ -219,10 +218,9 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 		oldIntentContent := lvs.ToPathAndUpdateSlice()
 
-		deleteVisitorPool := d.taskPool.NewVirtualPool(pool.VirtualFailFast)
 		ownerDeleteMarker := tree.NewOwnerDeleteMarker(tree.NewOwnerDeleteMarkerTaskConfig(intent.GetName(), intent.GetOnlyIntended()))
 
-		err := ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
+		err := ownerDeleteMarker.Run(root.GetRoot(), d.taskPool)
 		if err != nil {
 			return nil, err
 		}
