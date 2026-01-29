@@ -104,10 +104,10 @@ func (lv *LeafVariants) checkOnlyRunningAndMaybeDefault() bool {
 	hasDefault := false
 	if len(lv.les) == 2 {
 		for _, l := range lv.les {
-			if l.Owner() == RunningIntentName {
+			switch l.Owner() {
+			case RunningIntentName:
 				hasRunning = true
-			}
-			if l.Owner() == DefaultsIntentName {
+			case DefaultsIntentName:
 				hasDefault = true
 			}
 		}
