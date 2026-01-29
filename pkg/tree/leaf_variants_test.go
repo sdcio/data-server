@@ -284,3 +284,192 @@ func TestLeafVariants_remainsToExist(t *testing.T) {
 		})
 	}
 }
+
+func TestLeafVariants_canDelete(t *testing.T) {
+	tests := []struct {
+		name     string
+		setup    func() *LeafVariants
+		expected bool
+	}{
+		{
+			name: "Empty LeafVariants",
+			setup: func() *LeafVariants {
+				return &LeafVariants{
+					les: make(LeafVariantSlice, 0),
+				}
+			},
+			expected: true,
+		},
+		{
+			name: "Only Running",
+			setup: func() *LeafVariants {
+				lv := &LeafVariants{
+					les: make(LeafVariantSlice, 0),
+				}
+				lerun := NewLeafEntry(
+					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, RunningValuesPrio, RunningIntentName, 0),
+					types.NewUpdateInsertFlags(),
+					nil,
+				)
+				lv.Add(lerun)
+				return lv
+			},
+			expected: false,
+		},
+		{
+			name: "Only Default",
+			setup: func() *LeafVariants {
+				lv := &LeafVariants{
+					les: make(LeafVariantSlice, 0),
+				}
+				ledef := NewLeafEntry(
+					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, DefaultValuesPrio, DefaultsIntentName, 0),
+					types.NewUpdateInsertFlags(),
+					nil,
+				)
+				lv.Add(ledef)
+				return lv
+			},
+			expected: true,
+		},
+		{
+			name: "Running + Default",
+			setup: func() *LeafVariants {
+				lv := &LeafVariants{
+					les: make(LeafVariantSlice, 0),
+				}
+				lerun := NewLeafEntry(
+					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, RunningValuesPrio, RunningIntentName, 0),
+					types.NewUpdateInsertFlags(),
+					nil,
+				)
+				ledef := NewLeafEntry(
+					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, DefaultValuesPrio, DefaultsIntentName, 0),
+					types.NewUpdateInsertFlags(),
+					nil,
+				)
+				lv.Add(lerun)
+				lv.Add(ledef)
+				return lv
+			},
+			expected: false,
+		},
+		{
+			name: "Highest is Explicit Delete",
+			setup: func() *LeafVariants {
+				lv := &LeafVariants{
+					les: make(LeafVariantSlice, 0),
+				}
+				le1 := NewLeafEntry(
+					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 5, "owner1", 0),
+					types.NewUpdateInsertFlags().SetExplicitDeleteFlag(),
+					nil,
+				)
+				lv.Add(le1)
+				return lv
+			},
+			expected: true,
+		},
+		{
+			name: "Intent not deleted",
+			setup: func() *LeafVariants {
+				lv := &LeafVariants{
+					les: make(LeafVariantSlice, 0),
+				}
+				le1 := NewLeafEntry(
+					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 10, "owner1", 0),
+					types.NewUpdateInsertFlags(),
+					nil,
+				)
+				lv.Add(le1)
+				return lv
+			},
+			expected: false,
+		},
+		{
+			name: "Intent deleted",
+			setup: func() *LeafVariants {
+				lv := &LeafVariants{
+					les: make(LeafVariantSlice, 0),
+				}
+				le1 := NewLeafEntry(
+					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 10, "owner1", 0),
+					types.NewUpdateInsertFlags().SetDeleteFlag(),
+					nil,
+				)
+				lv.Add(le1)
+				return lv
+			},
+			expected: true,
+		},
+		{
+			name: "Intent deleted but DeleteOnlyIntended",
+			setup: func() *LeafVariants {
+				lv := &LeafVariants{
+					les: make(LeafVariantSlice, 0),
+				}
+				le1 := NewLeafEntry(
+					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 10, "owner1", 0),
+					types.NewUpdateInsertFlags().SetDeleteFlag().SetDeleteOnlyUpdatedFlag(),
+					nil,
+				)
+				lv.Add(le1)
+				return lv
+			},
+			expected: false,
+		},
+		{
+			name: "Running and Intent not deleted",
+			setup: func() *LeafVariants {
+				lv := &LeafVariants{
+					les: make(LeafVariantSlice, 0),
+				}
+				lerun := NewLeafEntry(
+					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, RunningValuesPrio, RunningIntentName, 0),
+					types.NewUpdateInsertFlags(),
+					nil,
+				)
+				le1 := NewLeafEntry(
+					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 10, "owner1", 0),
+					types.NewUpdateInsertFlags(),
+					nil,
+				)
+				lv.Add(lerun)
+				lv.Add(le1)
+				return lv
+			},
+			expected: false,
+		},
+		{
+			name: "Running and Intent deleted",
+			setup: func() *LeafVariants {
+				lv := &LeafVariants{
+					les: make(LeafVariantSlice, 0),
+				}
+				lerun := NewLeafEntry(
+					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, RunningValuesPrio, RunningIntentName, 0),
+					types.NewUpdateInsertFlags(),
+					nil,
+				)
+				le1 := NewLeafEntry(
+					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 10, "owner1", 0),
+					types.NewUpdateInsertFlags().SetDeleteFlag(),
+					nil,
+				)
+				lv.Add(lerun)
+				lv.Add(le1)
+				return lv
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lv := tt.setup()
+			if got := lv.canDelete(); got != tt.expected {
+				t.Errorf("LeafVariants.canDelete() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}

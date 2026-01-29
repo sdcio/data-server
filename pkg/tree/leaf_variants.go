@@ -94,9 +94,8 @@ func (lv *LeafVariants) checkOnlyRunningAndMaybeDefault() bool {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 
-	// if we have runnig and only running we should not delete
 	if len(lv.les) == 1 && lv.les[0].Owner() == RunningIntentName {
-		return false
+		return true
 	}
 
 	// check if only running and default exist
