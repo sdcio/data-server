@@ -1253,10 +1253,13 @@ func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultCha
 
 				// otherwise it will probably be a choice
 				if len(attributes) == 0 {
+					choice_info := s.schema.GetContainer().GetChoiceInfo()
+					if choice_info != nil {
 					choice := s.schema.GetContainer().GetChoiceInfo().GetChoiceByName(c.Name)
 					if choice != nil {
 						attributes = append(attributes, choice.GetAllAttributes()...)
 						choiceName = c.Name
+						}
 					}
 				}
 
