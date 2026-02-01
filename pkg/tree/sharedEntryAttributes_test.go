@@ -992,6 +992,45 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 				types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child [router-id] does not exist, path: /network-instance[name=ni1]/protocol/bgp"), types.ValidationResultEntryTypeError),
 			},
 		},
+		{
+			name: "mandatory key present",
+			r: func(t *testing.T) *RootEntry {
+				mockCtrl := gomock.NewController(t)
+				defer mockCtrl.Finish()
+
+				scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				tc := NewTreeContext(scb, owner1)
+				root, err := NewTreeRoot(ctx, tc)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				conf1 := &sdcio_schema.Device{
+					Mandatorykey: map[string]*sdcio_schema.SdcioModel_Mandatorykey{
+						"mk1": {
+							Key1:    ygot.String("k1"),
+							Mandato: ygot.String("asdf"),
+						},
+					},
+				}
+				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, flagsNew)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				err = root.FinishInsertionPhase(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				return root
+			},
+			want: []*types.ValidationResultEntry{},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
