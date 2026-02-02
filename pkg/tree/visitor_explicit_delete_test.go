@@ -53,7 +53,7 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsNew)
+				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsNew)
 				if err != nil {
 					t.Error(err)
 				}
@@ -81,12 +81,12 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsExisting)
+				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
+				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
@@ -133,12 +133,12 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsExisting)
+				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
+				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
@@ -276,7 +276,7 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := tt.root()
-			root.AddExplicitDeletes(owner2, tt.priority, tt.explicitDeletes)
+			root.treeContext.AddExplicitDeletes(owner2, tt.priority, tt.explicitDeletes)
 
 			err := root.FinishInsertionPhase(ctx)
 			if err != nil {

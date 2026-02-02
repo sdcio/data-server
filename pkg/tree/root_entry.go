@@ -20,7 +20,6 @@ import (
 // RootEntry the root of the cache.Update tree
 type RootEntry struct {
 	*sharedEntryAttributes
-	explicitDeletes *DeletePathSet
 }
 
 var (
@@ -36,7 +35,6 @@ func NewTreeRoot(ctx context.Context, tc *TreeContext) (*RootEntry, error) {
 
 	root := &RootEntry{
 		sharedEntryAttributes: sea,
-		explicitDeletes:       NewDeletePaths(),
 	}
 
 	err = tc.SetRoot(sea)
@@ -62,7 +60,6 @@ func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 
 	result := &RootEntry{
 		sharedEntryAttributes: se,
-		explicitDeletes:       r.explicitDeletes.DeepCopy(),
 	}
 
 	err = tc.SetRoot(result.sharedEntryAttributes)
@@ -70,10 +67,6 @@ func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 		return nil, err
 	}
 	return result, nil
-}
-
-func (r *RootEntry) RemoveExplicitDeletes(intentName string) *sdcpb.PathSet {
-	return r.explicitDeletes.RemoveIntentDeletes(intentName)
 }
 
 func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us []*types.PathAndUpdate, flags *types.UpdateInsertFlags) error {
@@ -88,28 +81,21 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us []*types.PathAnd
 	return nil
 }
 
-func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, flags *types.UpdateInsertFlags, poolFactory pool.VirtualPoolFactory) error {
-	r.treeContext.SetActualOwner(importer.GetName())
-
+func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, flags *types.UpdateInsertFlags, poolFactory pool.VirtualPoolFactory) (*types.ImportStats, error) {
 	e, err := r.sharedEntryAttributes.getOrCreateChilds(ctx, basePath)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	// store non revertive info
-	r.treeContext.nonRevertiveInfo[importer.GetName()] = importer.GetNonRevertive()
-
-	// store explicit deletes
-	r.explicitDeletes.Add(importer.GetName(), importer.GetPriority(), importer.GetDeletes())
-
-	return e.ImportConfig(ctx, importer, flags, poolFactory)
-}
-
-func (r *RootEntry) AddExplicitDeletes(intentName string, priority int32, pathset *sdcpb.PathSet) {
-	r.explicitDeletes.Add(intentName, priority, pathset)
+	ImportConfigProcessor := NewImportConfigProcessor(importer, flags)
+	err = ImportConfigProcessor.Run(ctx, e, poolFactory)
+	if err != nil {
+		return nil, err
+	}
+	return ImportConfigProcessor.GetStats(), nil
 }
 
 func (r *RootEntry) SetNonRevertiveIntent(intentName string, nonRevertive bool) {
-	r.treeContext.nonRevertiveInfo[intentName] = nonRevertive
+	r.GetTreeContext().nonRevertiveInfo[intentName] = nonRevertive
 }
 
 func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation, taskpoolFactory pool.VirtualPoolFactory) (types.ValidationResults, *types.ValidationStats) {
@@ -197,7 +183,7 @@ func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Inte
 		return nil, err
 	}
 
-	explicitDeletes := r.explicitDeletes.GetByIntentName(owner).ToPathSlice()
+	explicitDeletes := r.treeContext.explicitDeletes.GetByIntentName(owner).ToPathSlice()
 
 	var rootExportEntry *tree_persist.TreeElement
 	if len(treeExport) != 0 {
@@ -253,7 +239,7 @@ func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 	edvs := ExplicitDeleteVisitors{}
 
 	// apply the explicit deletes
-	for deletePathPrio := range r.explicitDeletes.Items() {
+	for deletePathPrio := range r.treeContext.explicitDeletes.Items() {
 		edv := NewExplicitDeleteVisitor(deletePathPrio.GetOwner(), deletePathPrio.GetPrio())
 
 		for path := range deletePathPrio.PathItems() {

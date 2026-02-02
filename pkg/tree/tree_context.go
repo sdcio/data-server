@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 type TreeContext struct {
@@ -11,6 +12,7 @@ type TreeContext struct {
 	schemaClient     schemaClient.SchemaClientBound
 	actualOwner      string
 	nonRevertiveInfo map[string]bool
+	explicitDeletes  *DeletePathSet
 }
 
 func NewTreeContext(sc schemaClient.SchemaClientBound, actualOwner string) *TreeContext {
@@ -18,6 +20,7 @@ func NewTreeContext(sc schemaClient.SchemaClientBound, actualOwner string) *Tree
 		schemaClient:     sc,
 		actualOwner:      actualOwner,
 		nonRevertiveInfo: map[string]bool{},
+		explicitDeletes:  NewDeletePaths(),
 	}
 }
 
@@ -33,7 +36,16 @@ func (t *TreeContext) deepCopy() *TreeContext {
 		m[k] = v
 	}
 	tc.nonRevertiveInfo = m
+	tc.explicitDeletes = t.explicitDeletes.DeepCopy()
 	return tc
+}
+
+func (t *TreeContext) AddExplicitDeletes(intentName string, priority int32, pathset *sdcpb.PathSet) {
+	t.explicitDeletes.Add(intentName, priority, pathset)
+}
+
+func (t *TreeContext) RemoveExplicitDeletes(intentName string) *sdcpb.PathSet {
+	return t.explicitDeletes.RemoveIntentDeletes(intentName)
 }
 
 func (t *TreeContext) AddNonRevertiveInfo(intent string, nonRevertive bool) {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -41,7 +42,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 		// ancestor is a list with keys.
 		result := map[string]any{}
 
-		for key, c := range s.GetChilds(DescendMethodActiveChilds) {
+		for key, c := range s.GetChilds(types.DescendMethodActiveChilds) {
 			ancest, _ := s.GetFirstAncestorWithSchema()
 			prefixedKey := jsonGetIetfPrefixConditional(key, c, ancest, ietf)
 			// recurse the call
@@ -101,7 +102,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 		default:
 			// otherwise this is a map
 			result := map[string]any{}
-			for key, c := range s.GetChilds(DescendMethodActiveChilds) {
+			for key, c := range s.GetChilds(types.DescendMethodActiveChilds) {
 				prefixedKey := jsonGetIetfPrefixConditional(key, c, s, ietf)
 				js, err := c.toJsonInternal(onlyNewOrUpdated, ietf)
 				if err != nil {

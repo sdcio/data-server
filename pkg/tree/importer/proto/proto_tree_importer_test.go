@@ -131,7 +131,7 @@ func TestProtoTreeImporter(t *testing.T) {
 			jti := jimport.NewJsonTreeImporter(j, "owner1", 5, false)
 
 			vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-			err = root.ImportConfig(ctx, nil, jti, types.NewUpdateInsertFlags(), vpf)
+			_, err = root.ImportConfig(ctx, nil, jti, types.NewUpdateInsertFlags(), vpf)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -158,7 +158,7 @@ func TestProtoTreeImporter(t *testing.T) {
 			protoAdapter := NewProtoTreeImporter(protoIntent)
 
 			vpf2 := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-			err = rootNew.ImportConfig(ctx, nil, protoAdapter, types.NewUpdateInsertFlags(), vpf2)
+			_, err = rootNew.ImportConfig(ctx, nil, protoAdapter, types.NewUpdateInsertFlags(), vpf2)
 			if err != nil {
 				t.Error(err)
 			}

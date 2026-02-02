@@ -1,6 +1,8 @@
 package tree
 
-import "sort"
+import (
+	"sort"
+)
 
 type EntryMap map[string]Entry
 

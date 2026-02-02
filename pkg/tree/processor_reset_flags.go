@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/types"
 )
 
 // ResetFlagsProcessor resets the flags on leaf variant entries
@@ -83,7 +84,7 @@ func (t *resetFlagsTask) Run(ctx context.Context, submit func(pool.Task) error) 
 	t.config.adjustedFlagsCount.Add(int64(count))
 
 	// Process children recursively
-	for _, c := range t.e.GetChilds(DescendMethodAll) {
+	for _, c := range t.e.GetChilds(types.DescendMethodAll) {
 		// Submit may fail if pool is closed or fail-fast error occurred
 		if err := submit(newResetFlagsTask(t.config, c)); err != nil {
 			return err

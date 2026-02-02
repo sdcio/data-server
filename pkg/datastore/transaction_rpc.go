@@ -46,6 +46,9 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 	if req.GetDeleteIgnoreNoExist() {
 		ti.SetDeleteIgnoreNonExisting()
 	}
+	if req.GetPreviouslyApplied() {
+		ti.SetPreviouslyApplied()
+	}
 
 	// convert the sdcpb.updates to tree.UpdateSlice
 	Updates, err := treetypes.ExpandAndConvertIntent(ctx, d.schemaClient, req.GetIntent(), req.GetPriority(), req.GetUpdate(), time.Now().Unix())
@@ -85,7 +88,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	if err != nil {
 		return nil, err
 	}
-	err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto), treetypes.NewUpdateInsertFlags(), d.taskPool)
+	_, err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto), treetypes.NewUpdateInsertFlags(), d.taskPool)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +181,7 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 
 			intentNames = append(intentNames, intent.GetIntentName())
 			protoLoader := treeproto.NewProtoTreeImporter(intent)
-			err := root.ImportConfig(ctx, nil, protoLoader, treetypes.NewUpdateInsertFlags(), d.taskPool)
+			_, err := root.ImportConfig(ctx, nil, protoLoader, treetypes.NewUpdateInsertFlags(), d.taskPool)
 			if err != nil {
 				return nil, err
 			}
@@ -209,6 +212,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	flagNew := treetypes.NewUpdateInsertFlags()
 	// where the New flag is set
 	flagNew.SetNewFlag()
+	flagExisting := treetypes.NewUpdateInsertFlags()
 
 	// iterate through all the intents
 	for _, intent := range transaction.GetNewIntents() {
@@ -226,7 +230,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 
 		// clear the owners existing explicit delete entries, retrieving the old entries for storing in the transaction for possible rollback
-		oldExplicitDeletes := root.RemoveExplicitDeletes(intent.GetName())
+		oldExplicitDeletes := root.GetTreeContext().RemoveExplicitDeletes(intent.GetName())
 
 		priority := int32(math.MaxInt32)
 		if len(oldIntentContent) > 0 {
@@ -240,14 +244,20 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 
 		if !intent.GetDeleteFlag() {
+			flag := flagNew
+			// determine the correct flag to use based on whether the intent is non-revertive and was previously applied
+			if intent.NonRevertive() && intent.GetPreviouslyApplied() {
+				flag = flagExisting
+			}
+
 			// add the content to the Tree
-			err = root.AddUpdatesRecursive(ctx, intent.GetUpdates(), flagNew)
+			err = root.AddUpdatesRecursive(ctx, intent.GetUpdates(), flag)
 			if err != nil {
 				return nil, err
 			}
 
 			// add the explicit delete entries
-			root.AddExplicitDeletes(intent.GetName(), intent.GetPriority(), intent.GetDeletes())
+			root.GetTreeContext().AddExplicitDeletes(intent.GetName(), intent.GetPriority(), intent.GetDeletes())
 		}
 
 		root.SetNonRevertiveIntent(intent.GetName(), intent.NonRevertive())

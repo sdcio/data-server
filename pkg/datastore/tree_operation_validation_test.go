@@ -199,7 +199,7 @@ func TestDatastore_validateTree(t *testing.T) {
 			importer := json_importer.NewJsonTreeImporter(jsonConf, tt.intentName, tt.intentPrio, tt.nonRevertive)
 
 			vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-			err = root.ImportConfig(ctx, path, importer, flagsNew, vpf)
+			_, err = root.ImportConfig(ctx, path, importer, flagsNew, vpf)
 			if err != nil {
 				t.Error(err)
 			}

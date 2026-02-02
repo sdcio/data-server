@@ -307,7 +307,6 @@ func TestRootEntry_TreeExport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &RootEntry{
 				sharedEntryAttributes: tt.sharedEntryAttributes(),
-				explicitDeletes:       NewDeletePaths(),
 			}
 			got, err := r.TreeExport(tt.args.owner, tt.args.priority)
 			if (err != nil) != tt.wantErr {
@@ -405,7 +404,7 @@ func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = testhelper.LoadYgotStructIntoTreeRoot(ctx, tt.re(), root, owner1, 500, false, flagsNew)
+			_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, tt.re(), root, owner1, 500, false, flagsNew)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -523,7 +522,8 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 				}
 
 				vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-				err = s.ImportConfig(ctx, jsonImporter.NewJsonTreeImporter(jsonAny, "owner1", 5, false), types.NewUpdateInsertFlags(), vpf)
+				ImportConfigProcessor := NewImportConfigProcessor(jsonImporter.NewJsonTreeImporter(jsonAny, "owner1", 5, false), types.NewUpdateInsertFlags())
+				err = ImportConfigProcessor.Run(ctx, s, vpf)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -573,11 +573,11 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
+				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 400, false, flagsNew)
+				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 400, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -594,7 +594,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
+				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}

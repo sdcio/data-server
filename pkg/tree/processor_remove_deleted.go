@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/types"
 )
 
 type RemoveDeletedProcessor struct {
@@ -90,7 +91,7 @@ func (t *removeDeletedTask) Run(ctx context.Context, submit func(pool.Task) erro
 		// increment the delete stats count
 		t.config.deleteStatsCount.Add(1)
 	}
-	if t.e.canDeleteBranch(t.keepDefaults) {
+	if t.e.CanDeleteBranch(t.keepDefaults) {
 		func() {
 			t.config.zeroLeafEntryElementsLock.Lock()
 			defer t.config.zeroLeafEntryElementsLock.Unlock()
@@ -100,7 +101,7 @@ func (t *removeDeletedTask) Run(ctx context.Context, submit func(pool.Task) erro
 	}
 
 	// Process children recursively
-	for _, c := range t.e.GetChilds(DescendMethodAll) {
+	for _, c := range t.e.GetChilds(types.DescendMethodAll) {
 		childTask := newRemoveDeletedTask(t.config, c, t.e.GetSchema().GetContainer() == nil)
 		// Submit may fail if pool is closed or fail-fast error occurred
 		if err := submit(childTask); err != nil {

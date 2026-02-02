@@ -140,30 +140,30 @@ func GetSchemaClientBound(t *testing.T, mockCtrl *gomock.Controller) (*mockschem
 }
 
 type RootTreeImport interface {
-	ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, flags *types.UpdateInsertFlags, poolFactory pool.VirtualPoolFactory) error
+	ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, flags *types.UpdateInsertFlags, poolFactory pool.VirtualPoolFactory) (*types.ImportStats, error)
 }
 
-func LoadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root RootTreeImport, owner string, prio int32, nonRevertive bool, flags *types.UpdateInsertFlags) error {
+func LoadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root RootTreeImport, owner string, prio int32, nonRevertive bool, flags *types.UpdateInsertFlags) (*types.ImportStats, error) {
 	jconfStr, err := ygot.EmitJSON(gs, &ygot.EmitJSONConfig{
 		Format:         ygot.RFC7951,
 		SkipValidation: true,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var jsonConfAny any
 	err = json.Unmarshal([]byte(jconfStr), &jsonConfAny)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-	err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner, prio, nonRevertive), flags, vpf)
+	_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner, prio, nonRevertive), flags, vpf)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return nil, nil
 }
 
 // SplitStringSortDiff split the two strings a and b on sep, sort alphabetical and return the diff

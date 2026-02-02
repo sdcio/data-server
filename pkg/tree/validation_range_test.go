@@ -68,7 +68,7 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 	jimporter := json_importer.NewJsonTreeImporter(jsonConfig, "owner1", 5, false)
 
 	sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-	err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, types.NewUpdateInsertFlags(), sharedPool)
+	_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, types.NewUpdateInsertFlags(), sharedPool)
 	if err != nil {
 		t.Error(err)
 	}
@@ -184,7 +184,7 @@ func TestValidate_RangesSigned(t *testing.T) {
 			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
 
 			// import via importer
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, types.NewUpdateInsertFlags(), sharedPool)
+			_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, types.NewUpdateInsertFlags(), sharedPool)
 
 			if err != nil {
 				t.Error(err)
@@ -319,7 +319,7 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 
 			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
 			// import via importer
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, types.NewUpdateInsertFlags(), sharedPool)
+			_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, types.NewUpdateInsertFlags(), sharedPool)
 
 			if err != nil {
 				t.Error(err)

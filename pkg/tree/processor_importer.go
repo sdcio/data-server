@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"slices"
 	"sync"
-	"sync/atomic"
 
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/importer"
@@ -26,7 +25,7 @@ type ImportConfigProcessorParams struct {
 	insertFlags  *types.UpdateInsertFlags
 	treeContext  *TreeContext
 	leafListLock *sync.Map
-	stats        *ImportStats
+	stats        *types.ImportStats
 }
 
 func NewImportConfigProcessorParams(
@@ -35,7 +34,7 @@ func NewImportConfigProcessorParams(
 	insertFlags *types.UpdateInsertFlags,
 	treeContext *TreeContext,
 	leafListLock *sync.Map,
-	stats *ImportStats,
+	stats *types.ImportStats,
 ) *ImportConfigProcessorParams {
 	return &ImportConfigProcessorParams{
 		intentName:   intentName,
@@ -50,29 +49,37 @@ func NewImportConfigProcessorParams(
 type ImportConfigProcessor struct {
 	importer    importer.ImportConfigAdapter
 	insertFlags *types.UpdateInsertFlags
-	stats       *ImportStats
+	stats       *types.ImportStats
 }
 
 func NewImportConfigProcessor(importer importer.ImportConfigAdapter, insertFlags *types.UpdateInsertFlags) *ImportConfigProcessor {
 	return &ImportConfigProcessor{
 		importer:    importer,
 		insertFlags: insertFlags,
-		stats:       NewImportStats(),
+		stats:       types.NewImportStats(),
 	}
 }
 
-func (p *ImportConfigProcessor) GetStats() *ImportStats {
+func (p *ImportConfigProcessor) GetStats() *types.ImportStats {
 	return p.stats
 }
 
 func (p *ImportConfigProcessor) Run(ctx context.Context, e Entry, poolFactory pool.VirtualPoolFactory) error {
+	// set actual owner
+	e.GetTreeContext().SetActualOwner(p.importer.GetName())
+
+	// store non revertive info
+	e.GetTreeContext().nonRevertiveInfo[p.importer.GetName()] = p.importer.GetNonRevertive()
+
+	// store explicit deletes
+	e.GetTreeContext().explicitDeletes.Add(p.importer.GetName(), p.importer.GetPriority(), p.importer.GetDeletes())
 
 	workerPool := poolFactory.NewVirtualPool(pool.VirtualFailFast)
 
 	t := importConfigTask{
 		entry:           e,
 		importerElement: p.importer,
-		params:          NewImportConfigProcessorParams(p.importer.GetName(), p.importer.GetPriority(), p.insertFlags, e.getTreeContext(), &sync.Map{}, p.stats),
+		params:          NewImportConfigProcessorParams(p.importer.GetName(), p.importer.GetPriority(), p.insertFlags, e.GetTreeContext(), &sync.Map{}, p.stats),
 	}
 
 	if err := workerPool.Submit(t); err != nil {
@@ -116,7 +123,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 					return err
 				}
 				if keyChild, exists = actual.GetChild(kv); !exists {
-					keyChild, err = newEntry(ctx, actual, kv, task.params.treeContext)
+					keyChild, err = NewEntry(ctx, actual, kv, task.params.treeContext)
 					if err != nil {
 						return err
 					}
@@ -140,18 +147,27 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			return nil
 		}
 
-		// submit each child (no external locking per your guarantee)
+		// submit each child
 		for _, childElt := range elems {
 			child, exists := task.entry.GetChild(childElt.GetName())
 			if !exists {
 				var err error
-				child, err = newEntry(ctx, task.entry, childElt.GetName(), task.params.treeContext)
+				child, err = NewEntry(ctx, task.entry, childElt.GetName(), task.params.treeContext)
 				if err != nil {
 					return fmt.Errorf("error inserting %s at %s: %w", childElt.GetName(), task.entry.SdcpbPath().ToXPath(false), err)
 				}
 			}
-			if err := submit(importConfigTask{entry: child, importerElement: childElt, params: task.params}); err != nil {
-				return err
+			// need to process Leaflist childs in this goroutine to avois reordering
+			switch child.GetSchema().GetSchema().(type) {
+			case *sdcpb.SchemaElem_Leaflist:
+				err := importConfigTask{entry: child, importerElement: childElt, params: task.params}.Run(ctx, submit)
+				if err != nil {
+					return err
+				}
+			default:
+				if err := submit(importConfigTask{entry: child, importerElement: childElt, params: task.params}); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -215,48 +231,4 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 	default:
 		return nil
 	}
-}
-
-type ImportStats struct {
-	newEntries     atomic.Int64
-	updatedEntries atomic.Int64
-}
-
-func NewImportStats() *ImportStats {
-	return &ImportStats{}
-}
-
-func (is *ImportStats) String() string {
-	return fmt.Sprintf("NewEntries: %d, UpdatedEntries: %d", is.newEntries.Load(), is.updatedEntries.Load())
-}
-
-func (is *ImportStats) Join(i *ImportStats) {
-	is.newEntries.Add(i.newEntries.Load())
-	is.updatedEntries.Add(i.updatedEntries.Load())
-}
-
-func (is *ImportStats) IncrementNew() {
-	if is == nil {
-		return
-	}
-	is.newEntries.Add(1)
-}
-
-func (is *ImportStats) IncrementUpdated() {
-	if is == nil {
-		return
-	}
-	is.updatedEntries.Add(1)
-}
-
-func (is *ImportStats) GetNewCount() int64 {
-	return is.newEntries.Load()
-}
-
-func (is *ImportStats) GetUpdatedCount() int64 {
-	return is.updatedEntries.Load()
-}
-
-func (is *ImportStats) Changed() bool {
-	return is.newEntries.Load() > 0 || is.updatedEntries.Load() > 0
 }

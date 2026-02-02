@@ -146,7 +146,7 @@ func (l *LeafEntry) NonRevertive() bool {
 	if l.parentEntry == nil {
 		return false
 	}
-	return l.parentEntry.getTreeContext().IsNonRevertiveIntent(l.Owner())
+	return l.parentEntry.GetTreeContext().IsNonRevertiveIntent(l.Owner())
 }
 
 // String returns a string representation of the LeafEntry

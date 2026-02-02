@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/proto"
 )
@@ -94,7 +95,7 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 		}
 	}
 
-	childs := t.selfEntry.GetChilds(DescendMethodActiveChilds)
+	childs := t.selfEntry.GetChilds(types.DescendMethodActiveChilds)
 	for _, childKey := range childs.SortedKeys() {
 		childEntry := childs[childKey]
 		childHighestLe := childEntry.GetLeafVariantEntries().GetHighestPrecedence(false, true, true)

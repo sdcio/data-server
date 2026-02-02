@@ -239,7 +239,7 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 			newFlag := types.NewUpdateInsertFlags()
 
 			vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vpf)
+			_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vpf)
 			if err != nil {
 				t.Fatal(err)
 			}

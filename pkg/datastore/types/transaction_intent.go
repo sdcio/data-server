@@ -16,6 +16,7 @@ type TransactionIntent struct {
 	nonRevertive            bool
 	deleteIgnoreNonExisting bool
 	explicitDeletes         *sdcpb.PathSet
+	previouslyApplied       bool
 }
 
 func NewTransactionIntent(name string, priority int32) *TransactionIntent {
@@ -51,6 +52,10 @@ func (ti *TransactionIntent) GetDeletes() *sdcpb.PathSet {
 	return ti.explicitDeletes
 }
 
+func (ti *TransactionIntent) GetPreviouslyApplied() bool {
+	return ti.previouslyApplied
+}
+
 func (ti *TransactionIntent) GetOnlyIntended() bool {
 	return ti.onlyIntended
 }
@@ -73,6 +78,10 @@ func (ti *TransactionIntent) GetDeleteIgnoreNonExisting() bool {
 
 func (ti *TransactionIntent) SetDeleteFlag() {
 	ti.delete = true
+}
+
+func (ti *TransactionIntent) SetPreviouslyApplied() {
+	ti.previouslyApplied = true
 }
 
 func (ti *TransactionIntent) SetDeleteOnlyIntendedFlag() {

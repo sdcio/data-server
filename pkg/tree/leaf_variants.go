@@ -25,7 +25,7 @@ func newLeafVariants(tc *TreeContext, parentEnty Entry) *LeafVariants {
 	}
 }
 
-func (lv *LeafVariants) AddWithStats(le *LeafEntry, stats *ImportStats) {
+func (lv *LeafVariants) AddWithStats(le *LeafEntry, stats *types.ImportStats) {
 	if leafVariant := lv.GetByOwner(le.Owner()); leafVariant != nil {
 		if leafVariant.Update.Equal(le.Update) {
 			// it seems like the element was not deleted, so drop the delete flag

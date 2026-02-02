@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/types"
 )
 
 type MarkOwnerDeleteProcessor struct {
@@ -76,7 +77,7 @@ func (x ownerDeleteMarkerTask) Run(ctx context.Context, submit func(pool.Task) e
 		x.matches.Append(le)
 	}
 	// Process children recursively
-	for _, c := range x.e.GetChilds(DescendMethodAll) {
+	for _, c := range x.e.GetChilds(types.DescendMethodAll) {
 		// Submit may fail if pool is closed or fail-fast error occurred
 		if err := submit(newOwnerDeleteMarkerTask(x.config, c, x.matches)); err != nil {
 			return err
