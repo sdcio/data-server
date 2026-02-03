@@ -1,4 +1,4 @@
-package tree
+package importer
 
 import (
 	"context"
@@ -125,7 +125,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 					return err
 				}
 				if keyChild, exists = actual.GetChild(kv); !exists {
-					keyChild, err = NewEntry(ctx, actual, kv, task.params.treeContext)
+					keyChild, err = actual.GetOrCreateChilds(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: kv}}})
 					if err != nil {
 						return err
 					}
@@ -154,7 +154,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			child, exists := task.entry.GetChild(childElt.GetName())
 			if !exists {
 				var err error
-				child, err = NewEntry(ctx, task.entry, childElt.GetName(), task.params.treeContext)
+				child, err = task.entry.GetOrCreateChilds(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: childElt.GetName()}}})
 				if err != nil {
 					return fmt.Errorf("error inserting %s at %s: %w", childElt.GetName(), task.entry.SdcpbPath().ToXPath(false), err)
 				}

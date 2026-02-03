@@ -11,6 +11,7 @@ import (
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/importer"
+	procImporter "github.com/sdcio/data-server/pkg/tree/processors/importer"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
@@ -87,7 +88,7 @@ func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, impo
 	if err != nil {
 		return nil, err
 	}
-	ImportConfigProcessor := NewImportConfigProcessor(importer, flags)
+	ImportConfigProcessor := procImporter.NewImportConfigProcessor(importer, flags)
 	err = ImportConfigProcessor.Run(ctx, e, poolFactory)
 	if err != nil {
 		return nil, err

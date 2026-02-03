@@ -10,6 +10,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
+	procImporter "github.com/sdcio/data-server/pkg/tree/processors/importer"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -35,7 +36,7 @@ func loadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root *Roo
 
 	stp := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
 
-	importProcessor := NewImportConfigProcessor(jsonImporter.NewJsonTreeImporter(jsonConfAny, owner, prio, nonRevertive), flags)
+	importProcessor := procImporter.NewImportConfigProcessor(jsonImporter.NewJsonTreeImporter(jsonConfAny, owner, prio, nonRevertive), flags)
 	err = importProcessor.Run(ctx, root.sharedEntryAttributes, stp)
 
 	if err != nil {
