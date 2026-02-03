@@ -1,0 +1,41 @@
+module sdcio_model_mandatorykey {
+  yang-version 1.1;
+  namespace "urn:sdcio/model_mandatorykey";
+  prefix sdcio_model_mandatorykey;
+
+  description
+    "This is part of the test schema for sdcio";
+
+  revision 2026-01-29 {
+    description
+      "Test schema first attempt";
+  }
+
+  grouping mandatorykey-top {
+    list mandatorykey {
+      description
+        "here we have a container with a mandatory key";
+      key "key1";
+      leaf key1 {
+        type string {
+          pattern '[a-z]+';
+        }
+        mandatory true;
+      }
+      leaf mandato {
+        type string;
+        mandatory true;
+      }
+      container cont {
+        description
+          "just a simple container under a mandatory keyed item";
+        leaf value1 {
+          type string;
+        }
+        leaf value2 {
+          type string;
+        }
+      }
+    }
+  }
+}

@@ -15,6 +15,9 @@ module sdcio_model {
   import sdcio_model_doublekey {
     prefix sdcio_model_doublekey;
   }
+  import sdcio_model_mandatorykey {
+    prefix sdcio_model_mandatorykey;
+  }
   import sdcio_model_static_route {
     prefix sdcio_model_static_route;
   }
@@ -53,6 +56,7 @@ module sdcio_model {
   uses sdcio_model_ni:network-instance-top;
   uses sdcio_model_choice:choicecase-top;
   uses sdcio_model_doublekey:doublekey-top;
+  uses sdcio_model_mandatorykey:mandatorykey-top;
   uses sdcio_model_static_route:static-route-top;
   uses sdcio_model_leaflist:leaflist-top;
   uses sdcio_model_list_unique:list-unique-top;
