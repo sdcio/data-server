@@ -3,7 +3,6 @@ module github.com/sdcio/data-server
 go 1.24.0
 
 replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.2-2
-replace github.com/sdcio/sdc-protos => /home/mava/projects/sdc-protos
 
 require (
 	github.com/AlekSi/pointer v1.2.0
