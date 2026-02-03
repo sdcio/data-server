@@ -77,7 +77,7 @@ func TestToJsonTable(t *testing.T) {
       "type": "default"
     }
   ],
-  "patterntest": "foo"
+  "patterntest": "hallo 00"
 }`,
 		},
 		{
@@ -89,7 +89,7 @@ func TestToJsonTable(t *testing.T) {
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
 			expected: `{
-  "sdcio_model:patterntest": "foo",
+  "sdcio_model:patterntest": "hallo 00",
   "sdcio_model_choice:choices": {
     "case1": {
       "case-elem": {
@@ -196,7 +196,7 @@ func TestToJsonTable(t *testing.T) {
       "type": "ip-vrf"
     }
   ],
-  "patterntest": "bar"
+  "patterntest": "hallo 99"
 }`,
 		},
 		{
@@ -216,7 +216,7 @@ func TestToJsonTable(t *testing.T) {
 				return expandUpdateFromConfig(ctx, c, converter)
 			},
 			expected: `{
-  "sdcio_model:patterntest": "bar",
+  "sdcio_model:patterntest": "hallo 99",
   "sdcio_model_if:interface": [
     {
       "admin-state": "enable",
@@ -489,7 +489,7 @@ func config1() *sdcio_schema.Device {
 				"bar",
 			},
 		},
-		Patterntest: ygot.String("foo"),
+		Patterntest: ygot.String("hallo 00"),
 		NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
 			"default": {
 				AdminState:  sdcio_schema.SdcioModelNi_AdminState_disable,
@@ -517,7 +517,7 @@ func config2() *sdcio_schema.Device {
 				},
 			},
 		},
-		Patterntest: ygot.String("bar"),
+		Patterntest: ygot.String("hallo 99"),
 		NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
 			"other": {
 				AdminState:  sdcio_schema.SdcioModelNi_AdminState_enable,

@@ -65,18 +65,17 @@ func newExplicitDeleteTask(entry Entry, params *ExplicitDeleteTaskParameters) *e
 }
 
 func (t *explicitDeleteTask) Run(ctx context.Context, submit func(pool.Task) error) error {
-	if !t.entry.HoldsLeafvariants() {
-		return nil
+	if t.entry.HoldsLeafvariants() {
+		le := t.entry.GetLeafVariantEntries().GetByOwner(t.params.owner)
+		if le != nil {
+			le.MarkExpliciteDelete()
+		} else {
+			le = t.entry.GetLeafVariantEntries().AddExplicitDeleteEntry(t.params.owner, t.params.priority)
+		}
+		t.params.rlvMutex.Lock()
+		t.params.relatedLeafVariants = append(t.params.relatedLeafVariants, le)
+		t.params.rlvMutex.Unlock()
 	}
-	le := t.entry.GetLeafVariantEntries().GetByOwner(t.params.owner)
-	if le != nil {
-		le.MarkExpliciteDelete()
-	} else {
-		le = t.entry.GetLeafVariantEntries().AddExplicitDeleteEntry(t.params.owner, t.params.priority)
-	}
-	t.params.rlvMutex.Lock()
-	t.params.relatedLeafVariants = append(t.params.relatedLeafVariants, le)
-	t.params.rlvMutex.Unlock()
 
 	// trigger the execution on all childs
 	for _, c := range t.entry.GetChilds(types.DescendMethodAll) {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/sdcio/data-server/pkg/tree/types"
-	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -28,7 +27,7 @@ func DefaultValueRetrieve(ctx context.Context, schema *sdcpb.SchemaElem, path *s
 		if defaultVal == "" {
 			return nil, fmt.Errorf("no defaults defined for schema path: %s", path.ToXPath(false))
 		}
-		tv, err = utils.Convert(ctx, defaultVal, schem.Field.GetType())
+		tv, err = sdcpb.TVFromString(schem.Field.GetType(), defaultVal, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -39,7 +38,7 @@ func DefaultValueRetrieve(ctx context.Context, schema *sdcpb.SchemaElem, path *s
 		}
 		tvlist := make([]*sdcpb.TypedValue, 0, len(listDefaults))
 		for _, dv := range schem.Leaflist.GetDefaults() {
-			tvelem, err := utils.Convert(ctx, dv, schem.Leaflist.GetType())
+			tvelem, err := sdcpb.TVFromString(schem.Leaflist.GetType(), dv, 0)
 			if err != nil {
 				return nil, fmt.Errorf("error converting default to typed value for %s, type: %s ; value: %s; err: %v", path.ToXPath(false), schem.Leaflist.GetType().GetTypeName(), dv, err)
 			}
