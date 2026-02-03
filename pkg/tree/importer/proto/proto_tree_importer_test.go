@@ -114,7 +114,7 @@ func TestProtoTreeImporter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tc := tree.NewTreeContext(scb, "test")
+			tc := tree.NewTreeContext(scb, "test", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Error(err)
@@ -149,7 +149,7 @@ func TestProtoTreeImporter(t *testing.T) {
 
 			fmt.Println(protoIntent.PrettyString("  "))
 
-			tcNew := tree.NewTreeContext(scb, "test")
+			tcNew := tree.NewTreeContext(scb, "test", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 			rootNew, err := tree.NewTreeRoot(ctx, tcNew)
 			if err != nil {
 				t.Error(err)

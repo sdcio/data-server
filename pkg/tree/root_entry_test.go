@@ -26,7 +26,7 @@ import (
 func TestRootEntry_TreeExport(t *testing.T) {
 	owner1 := "owner1"
 	owner2 := "owner2"
-	tc := NewTreeContext(nil, owner1)
+	tc := NewTreeContext(nil, owner1, pool.NewSharedTaskPool(context.Background(), runtime.NumCPU()))
 
 	type args struct {
 		owner    string
@@ -397,7 +397,7 @@ func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := NewTreeContext(scb, owner1)
+			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
@@ -434,7 +434,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 		t.Fatal(err)
 	}
 	scb := schemaClient.NewSchemaClientBound(schema, sc)
-	tc := NewTreeContext(scb, "intent1")
+	tc := NewTreeContext(scb, "intent1", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 	type fields struct {
 		sharedEntryAttributes func(t *testing.T) *sharedEntryAttributes
@@ -568,7 +568,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 		{
 			name: "One",
 			rootEntry: func(t *testing.T) *RootEntry {
-				tc := NewTreeContext(scb, "intent1")
+				tc := NewTreeContext(scb, "intent1", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
@@ -589,7 +589,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 			},
 			owner: owner1,
 			want: func(t *testing.T) *RootEntry {
-				tc := NewTreeContext(scb, "intent1")
+				tc := NewTreeContext(scb, "intent1", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
@@ -611,7 +611,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 			root := tt.rootEntry(t)
 			got := root.GetUpdatesForOwner(tt.owner).ToPathAndUpdateSlice()
 
-			tc := NewTreeContext(scb, "intent1")
+			tc := NewTreeContext(scb, "intent1", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 			resultRoot, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)

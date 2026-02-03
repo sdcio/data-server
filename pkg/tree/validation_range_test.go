@@ -27,7 +27,7 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 		t.Error(err)
 	}
 
-	tc := NewTreeContext(scb, "owner1")
+	tc := NewTreeContext(scb, "owner1", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 	root, err := NewTreeRoot(ctx, tc)
 
@@ -157,7 +157,7 @@ func TestValidate_RangesSigned(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			// the tree context
-			tc := NewTreeContext(scb, "owner1")
+			tc := NewTreeContext(scb, "owner1", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 			// the tree root
 			root, err := NewTreeRoot(ctx, tc)
@@ -293,7 +293,7 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			// the tree context
-			tc := NewTreeContext(scb, "owner1")
+			tc := NewTreeContext(scb, "owner1", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 			// the tree root
 			root, err := NewTreeRoot(ctx, tc)

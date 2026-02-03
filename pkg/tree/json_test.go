@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -378,7 +380,7 @@ func TestToJsonTable(t *testing.T) {
 
 			ctx := context.Background()
 
-			tc := NewTreeContext(scb, owner)
+			tc := NewTreeContext(scb, owner, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)

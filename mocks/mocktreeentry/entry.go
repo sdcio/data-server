@@ -586,20 +586,6 @@ func (mr *MockEntryMockRecorder) ValidateLevel(ctx, resultChan, stats, vCfg any)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateLevel", reflect.TypeOf((*MockEntry)(nil).ValidateLevel), ctx, resultChan, stats, vCfg)
 }
 
-// Walk mocks base method.
-func (m *MockEntry) Walk(ctx context.Context, v tree.EntryVisitor) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Walk", ctx, v)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Walk indicates an expected call of Walk.
-func (mr *MockEntryMockRecorder) Walk(ctx, v any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Walk", reflect.TypeOf((*MockEntry)(nil).Walk), ctx, v)
-}
-
 // addUpdateRecursiveInternal mocks base method.
 func (m *MockEntry) addUpdateRecursiveInternal(ctx context.Context, path *sdcpb.Path, idx int, u *types.Update, flags *types.UpdateInsertFlags) (tree.Entry, error) {
 	m.ctrl.T.Helper()
@@ -739,70 +725,6 @@ func (m *MockEntry) validateMandatoryWithKeys(ctx context.Context, level int, at
 func (mr *MockEntryMockRecorder) validateMandatoryWithKeys(ctx, level, attributes, choiceName, resultChan any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "validateMandatoryWithKeys", reflect.TypeOf((*MockEntry)(nil).validateMandatoryWithKeys), ctx, level, attributes, choiceName, resultChan)
-}
-
-// MockEntryVisitor is a mock of EntryVisitor interface.
-type MockEntryVisitor struct {
-	ctrl     *gomock.Controller
-	recorder *MockEntryVisitorMockRecorder
-	isgomock struct{}
-}
-
-// MockEntryVisitorMockRecorder is the mock recorder for MockEntryVisitor.
-type MockEntryVisitorMockRecorder struct {
-	mock *MockEntryVisitor
-}
-
-// NewMockEntryVisitor creates a new mock instance.
-func NewMockEntryVisitor(ctrl *gomock.Controller) *MockEntryVisitor {
-	mock := &MockEntryVisitor{ctrl: ctrl}
-	mock.recorder = &MockEntryVisitorMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockEntryVisitor) EXPECT() *MockEntryVisitorMockRecorder {
-	return m.recorder
-}
-
-// DescendMethod mocks base method.
-func (m *MockEntryVisitor) DescendMethod() types.DescendMethod {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DescendMethod")
-	ret0, _ := ret[0].(types.DescendMethod)
-	return ret0
-}
-
-// DescendMethod indicates an expected call of DescendMethod.
-func (mr *MockEntryVisitorMockRecorder) DescendMethod() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescendMethod", reflect.TypeOf((*MockEntryVisitor)(nil).DescendMethod))
-}
-
-// Up mocks base method.
-func (m *MockEntryVisitor) Up() {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Up")
-}
-
-// Up indicates an expected call of Up.
-func (mr *MockEntryVisitorMockRecorder) Up() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Up", reflect.TypeOf((*MockEntryVisitor)(nil).Up))
-}
-
-// Visit mocks base method.
-func (m *MockEntryVisitor) Visit(ctx context.Context, e tree.Entry) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Visit", ctx, e)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Visit indicates an expected call of Visit.
-func (mr *MockEntryVisitorMockRecorder) Visit(ctx, e any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Visit", reflect.TypeOf((*MockEntryVisitor)(nil).Visit), ctx, e)
 }
 
 // MockLeafVariantEntry is a mock of LeafVariantEntry interface.

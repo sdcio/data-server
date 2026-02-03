@@ -72,7 +72,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	ctx = logf.IntoContext(ctx, log)
 
 	// create a new TreeContext
-	tc := tree.NewTreeContext(d.schemaClient, d.Name())
+	tc := tree.NewTreeContext(d.schemaClient, d.Name(), d.taskPool)
 
 	// create a new TreeRoot to collect validate and hand to SBI.Set()
 	root, err := tree.NewTreeRoot(ctx, tc)

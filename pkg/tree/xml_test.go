@@ -574,7 +574,7 @@ func TestToXMLTable(t *testing.T) {
 
 			converter := utils.NewConverter(scb)
 
-			tc := NewTreeContext(scb, owner)
+			tc := NewTreeContext(scb, owner, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)

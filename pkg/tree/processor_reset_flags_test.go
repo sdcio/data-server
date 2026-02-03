@@ -42,7 +42,7 @@ func TestResetFlagsProcessorRun(t *testing.T) {
 					t.Fatal(err)
 				}
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
-				tc := NewTreeContext(scb, RunningIntentName)
+				tc := NewTreeContext(scb, RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {

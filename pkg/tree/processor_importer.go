@@ -7,7 +7,8 @@ import (
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/pool"
-	"github.com/sdcio/data-server/pkg/tree/importer"
+
+	treeimporter "github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -15,7 +16,7 @@ import (
 
 type importConfigTask struct {
 	entry           Entry
-	importerElement importer.ImportConfigAdapterElement
+	importerElement treeimporter.ImportConfigAdapterElement
 	params          *ImportConfigProcessorParams
 }
 
@@ -28,7 +29,7 @@ type ImportConfigProcessorParams struct {
 	stats        *types.ImportStats
 }
 
-func NewImportConfigProcessorParams(
+func NewParameters(
 	intentName string,
 	intentPrio int32,
 	insertFlags *types.UpdateInsertFlags,
@@ -47,12 +48,12 @@ func NewImportConfigProcessorParams(
 }
 
 type ImportConfigProcessor struct {
-	importer    importer.ImportConfigAdapter
+	importer    treeimporter.ImportConfigAdapter
 	insertFlags *types.UpdateInsertFlags
 	stats       *types.ImportStats
 }
 
-func NewImportConfigProcessor(importer importer.ImportConfigAdapter, insertFlags *types.UpdateInsertFlags) *ImportConfigProcessor {
+func NewImportConfigProcessor(importer treeimporter.ImportConfigAdapter, insertFlags *types.UpdateInsertFlags) *ImportConfigProcessor {
 	return &ImportConfigProcessor{
 		importer:    importer,
 		insertFlags: insertFlags,
@@ -79,7 +80,7 @@ func (p *ImportConfigProcessor) Run(ctx context.Context, e Entry, poolFactory po
 	t := importConfigTask{
 		entry:           e,
 		importerElement: p.importer,
-		params:          NewImportConfigProcessorParams(p.importer.GetName(), p.importer.GetPriority(), p.insertFlags, e.GetTreeContext(), &sync.Map{}, p.stats),
+		params:          NewParameters(p.importer.GetName(), p.importer.GetPriority(), p.insertFlags, e.GetTreeContext(), &sync.Map{}, p.stats),
 	}
 
 	if err := workerPool.Submit(t); err != nil {

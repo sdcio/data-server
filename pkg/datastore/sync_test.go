@@ -54,7 +54,7 @@ func TestApplyToRunning(t *testing.T) {
 					t.Fatal(err)
 				}
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
-				tc := tree.NewTreeContext(scb, tree.RunningIntentName)
+				tc := tree.NewTreeContext(scb, tree.RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 				root, err := tree.NewTreeRoot(ctx, tc)
 				if err != nil {
@@ -160,7 +160,7 @@ func TestApplyToRunning(t *testing.T) {
 					t.Fatal(err)
 				}
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
-				tc := tree.NewTreeContext(scb, tree.RunningIntentName)
+				tc := tree.NewTreeContext(scb, tree.RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 				root, err := tree.NewTreeRoot(ctx, tc)
 				if err != nil {
@@ -264,7 +264,7 @@ func TestApplyToRunning(t *testing.T) {
 					t.Fatal(err)
 				}
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
-				tc := tree.NewTreeContext(scb, tree.RunningIntentName)
+				tc := tree.NewTreeContext(scb, tree.RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 				root, err := tree.NewTreeRoot(ctx, tc)
 				if err != nil {
@@ -390,7 +390,7 @@ func TestApplyToRunning(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := tree.NewTreeContext(scb, tree.RunningIntentName)
+			tc := tree.NewTreeContext(scb, tree.RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 			resultRoot, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {

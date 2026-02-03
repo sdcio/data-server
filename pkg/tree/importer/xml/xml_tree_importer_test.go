@@ -79,7 +79,7 @@ func TestXmlTreeImporter(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	tc := tree.NewTreeContext(scb, "test")
+	tc := tree.NewTreeContext(scb, "test", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

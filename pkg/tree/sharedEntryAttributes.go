@@ -444,26 +444,6 @@ func (s *sharedEntryAttributes) GetLevel() int {
 	return l
 }
 
-// Walk takes the EntryVisitor and applies it to every Entry in the tree
-func (s *sharedEntryAttributes) Walk(ctx context.Context, v EntryVisitor) error {
-
-	// execute the function locally
-	err := v.Visit(ctx, s)
-	if err != nil {
-		return err
-	}
-
-	// trigger the execution on all childs
-	for _, c := range s.GetChilds(v.DescendMethod()) {
-		err := c.Walk(ctx, v)
-		if err != nil {
-			return err
-		}
-	}
-	v.Up()
-	return nil
-}
-
 func (s *sharedEntryAttributes) HoldsLeafvariants() bool {
 	switch x := s.schema.GetSchema().(type) {
 	case *sdcpb.SchemaElem_Container:

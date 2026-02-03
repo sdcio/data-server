@@ -215,7 +215,7 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := NewTreeContext(scb, owner1)
+			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {

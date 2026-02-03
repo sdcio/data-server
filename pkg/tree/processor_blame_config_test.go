@@ -39,7 +39,7 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
@@ -71,7 +71,7 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
@@ -104,7 +104,7 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)

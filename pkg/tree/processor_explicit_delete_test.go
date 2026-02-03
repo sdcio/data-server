@@ -2,11 +2,13 @@ package tree
 
 import (
 	"context"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -46,7 +48,7 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Fatal(err)
 				}
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
@@ -74,7 +76,7 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Fatal(err)
 				}
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
@@ -126,7 +128,7 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Fatal(err)
 				}
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {

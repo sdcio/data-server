@@ -65,7 +65,7 @@ type Entry interface {
 	// GetDeletes returns the cache-updates that are not updated, have no lower priority value left and hence should be deleted completely
 	GetDeletes(entries []types.DeleteEntry, aggregatePaths bool) ([]types.DeleteEntry, error)
 	// Walk takes the EntryVisitor and applies it to every Entry in the tree
-	Walk(ctx context.Context, v EntryVisitor) error
+	// Walk(ctx context.Context, v EntryVisitor) error
 	// Validate kicks off validation
 	ValidateLevel(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, vCfg *config.Validation)
 	// validateMandatory the Mandatory schema field
@@ -146,12 +146,6 @@ type Entry interface {
 	CanDeleteBranch(keepDefault bool) bool
 	DeleteCanDeleteChilds(keepDefault bool)
 	GetTreeContext() *TreeContext
-}
-
-type EntryVisitor interface {
-	DescendMethod() types.DescendMethod
-	Visit(ctx context.Context, e Entry) error
-	Up()
 }
 
 type LeafVariantEntry interface {

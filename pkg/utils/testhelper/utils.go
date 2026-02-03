@@ -13,6 +13,7 @@ import (
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -143,6 +144,15 @@ type RootTreeImport interface {
 	ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, flags *types.UpdateInsertFlags, poolFactory pool.VirtualPoolFactory) (*types.ImportStats, error)
 }
 
+type ImportStatsInterface interface {
+	Changed() bool
+	GetNewCount() int64
+	GetUpdatedCount() int64
+	IncrementNew()
+	IncrementUpdated()
+	String() string
+}
+
 func LoadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root RootTreeImport, owner string, prio int32, nonRevertive bool, flags *types.UpdateInsertFlags) (*types.ImportStats, error) {
 	jconfStr, err := ygot.EmitJSON(gs, &ygot.EmitJSONConfig{
 		Format:         ygot.RFC7951,
@@ -158,12 +168,15 @@ func LoadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root Root
 		return nil, err
 	}
 
-	vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-	_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner, prio, nonRevertive), flags, vpf)
+	stp := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+
+	importProcessor := tree.NewImportConfigProcessor(jsonImporter.NewJsonTreeImporter(jsonConfAny, owner, prio, nonRevertive), flags)
+	err = importProcessor.Run(ctx, root, stp)
+
 	if err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return importProcessor.GetStats(), nil
 }
 
 // SplitStringSortDiff split the two strings a and b on sep, sort alphabetical and return the diff

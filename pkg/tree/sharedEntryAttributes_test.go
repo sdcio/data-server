@@ -37,7 +37,7 @@ func Test_sharedEntryAttributes_checkAndCreateKeysAsLeafs(t *testing.T) {
 	ctx := context.Background()
 	scb := schemaClient.NewSchemaClientBound(schema, sc)
 
-	tc := NewTreeContext(scb, "intent1")
+	tc := NewTreeContext(scb, "intent1", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -93,7 +93,7 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 		{
 			name: "just rootEntry",
 			root: func() *RootEntry {
-				tc := NewTreeContext(nil, owner1)
+				tc := NewTreeContext(nil, owner1, pool.NewSharedTaskPool(context.Background(), runtime.NumCPU()))
 
 				r := &RootEntry{
 					sharedEntryAttributes: &sharedEntryAttributes{
@@ -123,7 +123,7 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 					t.Fatal(err)
 				}
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
@@ -204,7 +204,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
@@ -242,7 +242,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
@@ -339,7 +339,7 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		tc := NewTreeContext(scb, owner1)
+		tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 		root, err := NewTreeRoot(ctx, tc)
 		if err != nil {
 			t.Fatal(err)
@@ -453,7 +453,7 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
@@ -632,7 +632,7 @@ func Test_sharedEntryAttributes_MustCount(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := NewTreeContext(scb, owner1)
+			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
@@ -755,7 +755,7 @@ func Test_sharedEntryAttributes_MustCountDoubleKey(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := NewTreeContext(scb, owner1)
+			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
@@ -867,7 +867,7 @@ func Test_sharedEntryAttributes_getOrCreateChilds(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tc := NewTreeContext(scb, owner1)
+			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -913,7 +913,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
@@ -945,7 +945,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
@@ -1086,7 +1086,7 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tc := NewTreeContext(scb, owner1)
+			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -1127,7 +1127,7 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 			fmt.Println("\nTreeExport:")
 			fmt.Println(string(persistByte))
 
-			tcNew := NewTreeContext(scb, owner1)
+			tcNew := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 			newRoot, err := NewTreeRoot(ctx, tcNew)
 			if err != nil {
 				t.Fatal(err)
@@ -1262,7 +1262,7 @@ func Test_sharedEntryAttributes_validateMinMaxElements(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := NewTreeContext(scb, owner1)
+			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
@@ -1432,7 +1432,7 @@ func Test_sharedEntryAttributes_validateMinMaxElementsDoubleKey(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := NewTreeContext(scb, owner1)
+			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
 
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {

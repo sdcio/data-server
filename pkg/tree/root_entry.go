@@ -236,31 +236,35 @@ func (r *RootEntry) DeleteBranchPaths(ctx context.Context, deletes types.DeleteE
 
 func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 	log := logf.FromContext(ctx)
-	edvs := ExplicitDeleteVisitors{}
+	edpsc := ExplicitDeleteProcessorStatCollection{}
 
 	// apply the explicit deletes
 	for deletePathPrio := range r.treeContext.explicitDeletes.Items() {
-		edv := NewExplicitDeleteVisitor(deletePathPrio.GetOwner(), deletePathPrio.GetPrio())
+
+		params := NewExplicitDeleteTaskParameters(deletePathPrio.GetOwner(), deletePathPrio.GetPrio())
 
 		for path := range deletePathPrio.PathItems() {
+
 			// set the priority
 			// navigate to the stated path
 			entry, err := r.NavigateSdcpbPath(ctx, path)
 			if err != nil {
 				log.Error(nil, "Applying explicit delete - path not found, skipping", "severity", "WARN", "path", path.ToXPath(false))
 			}
-
-			// walk the whole branch adding the explicit delete leafvariant
-			err = entry.Walk(ctx, edv)
+			edp := NewExplicitDeleteProcessor(params)
+			err = edp.Run(ctx, entry, r.GetTreeContext().GetPoolFactory())
 			if err != nil {
 				return err
 			}
-			edvs[deletePathPrio.GetOwner()] = edv
+			edpsc[deletePathPrio.GetOwner()] = edp
 		}
 	}
-	log.V(logf.VDebug).Info("ExplicitDeletes added", "explicit-deletes", utils.MapToString(edvs.Stats(), ", ", func(k string, v int) string {
-		return fmt.Sprintf("%s=%d", k, v)
-	}))
+	// conditional logging
+	if edpsc.ContainsEntries() {
+		log.V(logf.VDebug).Info("ExplicitDeletes added", "explicit-deletes", utils.MapToString(edpsc.Stats(), ", ", func(k string, v int) string {
+			return fmt.Sprintf("%s=%d", k, v)
+		}))
+	}
 
 	return r.sharedEntryAttributes.FinishInsertionPhase(ctx)
 }
