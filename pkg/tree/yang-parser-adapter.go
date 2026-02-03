@@ -4,17 +4,18 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sdcio/data-server/pkg/tree/api"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/yang-parser/xpath"
 	"github.com/sdcio/yang-parser/xpath/xutils"
 )
 
 type yangParserEntryAdapter struct {
-	e   Entry
+	e   api.Entry
 	ctx context.Context
 }
 
-func newYangParserEntryAdapter(ctx context.Context, e Entry) *yangParserEntryAdapter {
+func newYangParserEntryAdapter(ctx context.Context, e api.Entry) *yangParserEntryAdapter {
 	return &yangParserEntryAdapter{
 		e:   e,
 		ctx: ctx,
@@ -73,7 +74,7 @@ func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
 	}
 
 	// if y.e is anything else then a container
-	lv, _ := y.e.getHighestPrecedenceLeafValue(y.ctx)
+	lv, _ := y.e.GetHighestPrecedenceLeafValue(y.ctx)
 	if lv == nil {
 		return xpath.NewNodesetDatum([]xutils.XpathNode{}), nil
 	}

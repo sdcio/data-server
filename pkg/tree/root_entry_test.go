@@ -12,6 +12,7 @@ import (
 	"github.com/openconfig/ygot/ygot"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -54,7 +55,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				result.leafVariants = newLeafVariants(tc, result)
 
 				result.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -117,7 +118,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -184,7 +185,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -194,7 +195,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				)
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "OtherValue"},
@@ -218,7 +219,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -285,7 +286,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -404,7 +405,7 @@ func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, tt.re(), root, owner1, 500, false, flagsNew)
+			_, err = loadYgotStructIntoTreeRoot(ctx, tt.re(), root, owner1, 500, false, flagsNew)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -573,11 +574,11 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 400, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 400, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -594,7 +595,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
