@@ -404,7 +404,7 @@ func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, tt.re(), root, owner1, 500, false, flagsNew)
+			_, err = loadYgotStructIntoTreeRoot(ctx, tt.re(), root, owner1, 500, false, flagsNew)
 			if err != nil {
 				t.Fatal(err)
 			}
