@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/proto"
@@ -34,7 +35,7 @@ func NewBlameConfigProcessorConfig(includeDefaults bool) *BlameConfigProcessorCo
 // (intent) is responsible for each configuration value. The pool parameter should be
 // VirtualFailFast to stop on first error.
 // Returns the blame tree structure and any error encountered.
-func (p *BlameConfigProcessor) Run(ctx context.Context, e Entry, pool pool.VirtualPoolI) (*sdcpb.BlameTreeElement, error) {
+func (p *BlameConfigProcessor) Run(ctx context.Context, e api.Entry, pool pool.VirtualPoolI) (*sdcpb.BlameTreeElement, error) {
 
 	blameTask := NewBlameConfigTask(e, p.config)
 	if err := pool.Submit(blameTask); err != nil {
@@ -57,10 +58,10 @@ type BlameConfigTask struct {
 	config    *BlameConfigProcessorConfig
 	parent    *sdcpb.BlameTreeElement
 	self      *sdcpb.BlameTreeElement
-	selfEntry Entry
+	selfEntry api.Entry
 }
 
-func NewBlameConfigTask(e Entry, c *BlameConfigProcessorConfig) *BlameConfigTask {
+func NewBlameConfigTask(e api.Entry, c *BlameConfigProcessorConfig) *BlameConfigTask {
 	return &BlameConfigTask{
 		config:    c,
 		parent:    nil,

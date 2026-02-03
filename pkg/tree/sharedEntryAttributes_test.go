@@ -15,6 +15,7 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -209,11 +210,11 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -247,11 +248,11 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -288,7 +289,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			les := []*LeafEntry{}
+			les := []*api.LeafEntry{}
 			result := e.GetByOwner(tt.args.owner, les)
 			if len(result) > 0 {
 				t.Errorf("expected all elements under %s to be deleted for owner %s but got %d elements", tt.args.relativePath.ToXPath(false), tt.args.owner, len(result))
@@ -345,7 +346,7 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, d, root, owner1, 5, false, flagsNew)
+		_, err = loadYgotStructIntoTreeRoot(ctx, d, root, owner1, 5, false, flagsNew)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -460,7 +461,7 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 				}
 
 				conf1 := config1()
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -475,7 +476,7 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 
 				running.Patterntest = ygot.String("hallo 0")
 
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, running, root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
+				_, err = loadYgotStructIntoTreeRoot(ctx, running, root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -873,7 +874,7 @@ func Test_sharedEntryAttributes_getOrCreateChilds(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			x, err := root.getOrCreateChilds(ctx, tt.path)
+			x, err := root.GetOrCreateChilds(ctx, tt.path)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("sharedEntryAttributes.getOrCreateChilds() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -920,7 +921,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 				}
 
 				conf1 := config1()
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -977,7 +978,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 						},
 					},
 				}
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}

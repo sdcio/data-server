@@ -5,23 +5,24 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, sdcpbPath *sdcpb.Path) ([]Entry, error) {
+func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, sdcpbPath *sdcpb.Path) ([]api.Entry, error) {
 	var err error
-	var resultEntries []Entry
-	var processEntries []Entry
+	var resultEntries []api.Entry
+	var processEntries []api.Entry
 
 	sdcpbPath.StripPathElemPrefixPath()
 
 	lrefPath := types.NewLrefPath(sdcpbPath)
 
 	if sdcpbPath.GetIsRootBased() {
-		processEntries = []Entry{s.GetRoot()}
+		processEntries = []api.Entry{s.GetRoot()}
 	} else {
-		var entry Entry = s
+		var entry api.Entry = s
 		dotdotcount := 0
 		sdcpbUp := []*sdcpb.PathElem{}
 		// process the .. instructions
@@ -39,7 +40,7 @@ func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, sdcpbPath *sd
 		if err != nil {
 			return nil, err
 		}
-		processEntries = []Entry{entry}
+		processEntries = []api.Entry{entry}
 		lrefPath = lrefPath[dotdotcount:]
 	}
 
@@ -47,7 +48,7 @@ func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, sdcpbPath *sd
 	// forward the path by a single element
 	for _, elem := range lrefPath {
 
-		resultEntries = []Entry{}
+		resultEntries = []api.Entry{}
 		err := s.resolve_leafref_key_path(ctx, elem.Keys)
 		if err != nil {
 			return nil, err
@@ -70,7 +71,7 @@ func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, sdcpbPath *sd
 				resultEntries = append(resultEntries, entry)
 				continue
 			}
-			var childs []Entry
+			var childs []api.Entry
 			// if the entry is a list with keys, try filtering the entries based on the keys
 			if len(entry.GetSchemaKeys()) > 0 {
 				// filter the keys
@@ -92,7 +93,7 @@ func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, sdcpbPath *sd
 }
 
 // NavigateLeafRef
-func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, error) {
+func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]api.Entry, error) {
 
 	// leafref path takes as an argument a string that MUST refer to a leaf or leaf-list node.
 	// e.g.
@@ -133,10 +134,10 @@ func (s *sharedEntryAttributes) NavigateLeafRef(ctx context.Context) ([]Entry, e
 		return nil, err
 	}
 
-	var resultEntries []Entry
+	var resultEntries []api.Entry
 
 	for _, e := range foundEntries {
-		r, err := e.getHighestPrecedenceLeafValue(ctx)
+		r, err := e.GetHighestPrecedenceLeafValue(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -188,7 +189,7 @@ func (s *sharedEntryAttributes) resolve_leafref_key_path(ctx context.Context, ke
 			return err
 		}
 
-		lvs := keyValue.GetHighestPrecedence(LeafVariantSlice{}, false, false, false)
+		lvs := keyValue.GetHighestPrecedence(api.LeafVariantSlice{}, false, false, false)
 		if lvs == nil {
 			return fmt.Errorf("no leafentry found")
 		}
@@ -199,8 +200,8 @@ func (s *sharedEntryAttributes) resolve_leafref_key_path(ctx context.Context, ke
 	return nil
 }
 
-func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats) {
-	if s.shouldDelete() {
+func (s *sharedEntryAttributes) ValidateLeafRefs(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats) {
+	if s.ShouldDelete() {
 		return
 	}
 
@@ -230,7 +231,7 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan
 	}
 
 	// Only if the value remains, even after the SetIntent made it through, the LeafRef can be considered resolved.
-	if entry[0].shouldDelete() {
+	if entry[0].ShouldDelete() {
 		lv := s.leafVariants.GetHighestPrecedence(false, true, false)
 		if lv == nil {
 			return
@@ -248,8 +249,8 @@ func (s *sharedEntryAttributes) validateLeafRefs(ctx context.Context, resultChan
 	stats.Add(types.StatTypeLeafRef, 1)
 }
 
-func generateOptionalWarning(ctx context.Context, s Entry, lref string, resultChan chan<- *types.ValidationResultEntry) {
-	lrefval, err := s.getHighestPrecedenceLeafValue(ctx)
+func generateOptionalWarning(ctx context.Context, s api.Entry, lref string, resultChan chan<- *types.ValidationResultEntry) {
+	lrefval, err := s.GetHighestPrecedenceLeafValue(ctx)
 	if err != nil {
 		resultChan <- types.NewValidationResultEntry(lrefval.Owner(), err, types.ValidationResultEntryTypeError)
 		return

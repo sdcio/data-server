@@ -268,7 +268,7 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 
 			resultChan := make(chan<- *types.ValidationResultEntry, 20)
 			stats := types.NewValidationStats()
-			s.validateLeafRefs(ctx, resultChan, stats)
+			s.ValidateLeafRefs(ctx, resultChan, stats)
 
 			if len(resultChan) != tt.expectedResultLen {
 				t.Fatalf("expected %d, got %d errors on leafref validation", tt.expectedResultLen, len(resultChan))

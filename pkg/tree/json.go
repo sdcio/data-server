@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 func (s *sharedEntryAttributes) ToJson(onlyNewOrUpdated bool) (any, error) {
-	result, err := s.toJsonInternal(onlyNewOrUpdated, false)
+	result, err := s.ToJsonInternal(onlyNewOrUpdated, false)
 	if err != nil {
 		return nil, err
 	}
@@ -21,7 +22,7 @@ func (s *sharedEntryAttributes) ToJson(onlyNewOrUpdated bool) (any, error) {
 }
 
 func (s *sharedEntryAttributes) ToJsonIETF(onlyNewOrUpdated bool) (any, error) {
-	result, err := s.toJsonInternal(onlyNewOrUpdated, true)
+	result, err := s.ToJsonInternal(onlyNewOrUpdated, true)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +36,7 @@ func (s *sharedEntryAttributes) ToJsonIETF(onlyNewOrUpdated bool) (any, error) {
 // If the ietf parameter is set to true, JSON_IETF encoding is used.
 // The actualPrefix is used only for the JSON_IETF encoding and can be ignored for JSON
 // In the initial / users call with ietf == true, actualPrefix should be set to ""
-func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool) (any, error) {
+func (s *sharedEntryAttributes) ToJsonInternal(onlyNewOrUpdated bool, ietf bool) (any, error) {
 	switch s.schema.GetSchema().(type) {
 	case nil:
 		// we're operating on a key level, no schema attached, but the
@@ -46,7 +47,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 			ancest, _ := s.GetFirstAncestorWithSchema()
 			prefixedKey := jsonGetIetfPrefixConditional(key, c, ancest, ietf)
 			// recurse the call
-			js, err := c.toJsonInternal(onlyNewOrUpdated, ietf)
+			js, err := c.ToJsonInternal(onlyNewOrUpdated, ietf)
 			if err != nil {
 				return nil, err
 			}
@@ -74,7 +75,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 
 			result := make([]any, 0, len(childs))
 			for _, c := range childs {
-				j, err := c.toJsonInternal(onlyNewOrUpdated, ietf)
+				j, err := c.ToJsonInternal(onlyNewOrUpdated, ietf)
 				if err != nil {
 					return nil, err
 				}
@@ -104,7 +105,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 			result := map[string]any{}
 			for key, c := range s.GetChilds(types.DescendMethodActiveChilds) {
 				prefixedKey := jsonGetIetfPrefixConditional(key, c, s, ietf)
-				js, err := c.toJsonInternal(onlyNewOrUpdated, ietf)
+				js, err := c.ToJsonInternal(onlyNewOrUpdated, ietf)
 				if err != nil {
 					return nil, err
 				}
@@ -132,7 +133,7 @@ func (s *sharedEntryAttributes) toJsonInternal(onlyNewOrUpdated bool, ietf bool)
 }
 
 // jsonAddIetfPrefixConditional adds the module name
-func jsonGetIetfPrefixConditional(key string, a Entry, b Entry, ietf bool) string {
+func jsonGetIetfPrefixConditional(key string, a api.Entry, b api.Entry, ietf bool) string {
 	// if not ietf, then we do not need module prefixes
 	if !ietf {
 		return key
@@ -146,13 +147,13 @@ func jsonGetIetfPrefixConditional(key string, a Entry, b Entry, ietf bool) strin
 
 // xmlAddKeyElements determines the keys of a certain Entry in the tree and adds those to the
 // element if they do not already exist.
-func jsonAddKeyElements(s Entry, dict map[string]any) {
+func jsonAddKeyElements(s api.Entry, dict map[string]any) {
 	// retrieve the parent schema, we need to extract the key names
 	// values are the tree level names
 	parentSchema, levelsUp := s.GetFirstAncestorWithSchema()
 	// from the parent we get the keys as slice
 	schemaKeys := parentSchema.GetSchemaKeys()
-	var treeElem Entry = s
+	var treeElem api.Entry = s
 	// the keys do match the levels up in the tree in reverse order
 	// hence we init i with levelUp and count down
 	for i := levelsUp - 1; i >= 0; i-- {
