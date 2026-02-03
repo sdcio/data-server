@@ -209,11 +209,11 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -247,11 +247,11 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -345,7 +345,7 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, d, root, owner1, 5, false, flagsNew)
+		_, err = loadYgotStructIntoTreeRoot(ctx, d, root, owner1, 5, false, flagsNew)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -460,7 +460,7 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 				}
 
 				conf1 := config1()
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -475,7 +475,7 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 
 				running.Patterntest = ygot.String("hallo 0")
 
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, running, root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
+				_, err = loadYgotStructIntoTreeRoot(ctx, running, root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -920,7 +920,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 				}
 
 				conf1 := config1()
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -977,7 +977,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 						},
 					},
 				}
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}

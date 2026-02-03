@@ -573,11 +573,11 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 400, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 400, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -594,7 +594,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}

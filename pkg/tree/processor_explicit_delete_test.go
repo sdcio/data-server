@@ -55,7 +55,7 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Error(err)
 				}
 
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsNew)
 				if err != nil {
 					t.Error(err)
 				}
@@ -83,12 +83,12 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Error(err)
 				}
 
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsExisting)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
 
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
@@ -135,17 +135,17 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Error(err)
 				}
 
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsExisting)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
 
-				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
 
-				testhelper.LoadYgotStructIntoTreeRoot(ctx, &sdcio_schema.Device{Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+				loadYgotStructIntoTreeRoot(ctx, &sdcio_schema.Device{Interface: map[string]*sdcio_schema.SdcioModel_Interface{
 					"ethernet-1/1": {
 						Name:        ygot.String("ethernet-1/1"),
 						Description: ygot.String("mydesc"),
