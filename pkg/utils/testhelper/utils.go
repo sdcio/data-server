@@ -2,17 +2,13 @@ package testhelper
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
-	"github.com/sdcio/data-server/pkg/tree/importer"
-	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
@@ -137,30 +133,13 @@ func GetSchemaClientBound(t *testing.T, mockCtrl *gomock.Controller) (*mockschem
 	return mockscb, nil
 }
 
-type RootTreeImport interface {
-	ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
-}
-
-func LoadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root RootTreeImport, owner string, prio int32, flags *types.UpdateInsertFlags) error {
-	jconfStr, err := ygot.EmitJSON(gs, &ygot.EmitJSONConfig{
-		Format:         ygot.RFC7951,
-		SkipValidation: true,
-	})
-	if err != nil {
-		return err
-	}
-
-	var jsonConfAny any
-	err = json.Unmarshal([]byte(jconfStr), &jsonConfAny)
-	if err != nil {
-		return err
-	}
-
-	err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner, prio, flags)
-	if err != nil {
-		return err
-	}
-	return nil
+type ImportStatsInterface interface {
+	Changed() bool
+	GetNewCount() int64
+	GetUpdatedCount() int64
+	IncrementNew()
+	IncrementUpdated()
+	String() string
 }
 
 // SplitStringSortDiff split the two strings a and b on sep, sort alphabetical and return the diff

@@ -61,7 +61,7 @@ func (s *sharedEntryAttributes) BreadthSearch(ctx context.Context, sdcpbPath *sd
 			}
 
 			// if the entry is will be deleted by the actual operation, skip it.
-			if !entry.remainsToExist() {
+			if !entry.RemainsToExist() {
 				continue
 			}
 			// if we're at the final level, no child filtering is needed any more,

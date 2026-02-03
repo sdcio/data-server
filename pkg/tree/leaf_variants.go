@@ -25,7 +25,7 @@ func newLeafVariants(tc *TreeContext, parentEnty Entry) *LeafVariants {
 	}
 }
 
-func (lv *LeafVariants) Add(le *LeafEntry) {
+func (lv *LeafVariants) AddWithStats(le *LeafEntry, stats *types.ImportStats) {
 	if leafVariant := lv.GetByOwner(le.Owner()); leafVariant != nil {
 		if leafVariant.Update.Equal(le.Update) {
 			// it seems like the element was not deleted, so drop the delete flag
@@ -33,13 +33,20 @@ func (lv *LeafVariants) Add(le *LeafEntry) {
 		} else {
 			// if a leafentry of the same owner exists with different value, mark it for update
 			leafVariant.MarkUpdate(le.Update)
+			stats.IncrementUpdated()
+
 		}
 	} else {
 		lv.lesMutex.Lock()
 		defer lv.lesMutex.Unlock()
 		// if LeafVaraint with same owner does not exist, add the new entry
 		lv.les = append(lv.les, le)
+		stats.IncrementNew()
 	}
+}
+
+func (lv *LeafVariants) Add(le *LeafEntry) {
+	lv.AddWithStats(le, nil)
 }
 
 // Items iterator for the LeafVariants
@@ -87,6 +94,20 @@ func (lv *LeafVariants) canDeleteBranch(keepDefault bool) bool {
 		}
 	}
 	return true
+}
+
+// RemoveDeletedByOwner removes and returns the LeafEntry owned by the given owner if it is marked for deletion.
+func (lv *LeafVariants) RemoveDeletedByOwner(owner string) *LeafEntry {
+	lv.lesMutex.Lock()
+	defer lv.lesMutex.Unlock()
+	for i, l := range lv.les {
+		if l.Owner() == owner && l.GetDeleteFlag() {
+			// Remove element from slice
+			lv.les = append(lv.les[:i], lv.les[i+1:]...)
+			return l
+		}
+	}
+	return nil
 }
 
 // checkOnlyRunningAndMaybeDefault checks if only running and maybe default LeafVariants exist
@@ -294,7 +315,10 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 		return nil
 	}
 
+	// figure out the highest precedence LeafEntry
 	var highest *LeafEntry
+	// the second highests is the backup in case the highest is marked for deletion
+	// so this is not actually the second highest always, but the next candidate
 	var secondHighest *LeafEntry
 	for _, e := range lv.les {
 		// first entry set result to it
@@ -311,13 +335,13 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 			highest = e
 		} else {
 			// check if the update is at least higher prio (lower number) then the secondHighest
-			if secondHighest == nil || secondHighest.Priority() > e.Priority() {
+			if secondHighest == nil || secondHighest.Priority() > e.Priority() && !e.GetDeleteFlag() {
 				secondHighest = e
 			}
 		}
 	}
 
-	if highest.IsExplicitDelete && !includeExplicitDelete {
+	if highest == nil || highest.IsExplicitDelete && !includeExplicitDelete {
 		return nil
 	}
 
@@ -348,11 +372,16 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 	return nil
 }
 
+// highestIsUnequalRunning checks if the highest precedence LeafEntry is unequal to the running LeafEntry
+// Expects the caller to hold the read lock on lesMutex.
 func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
-	lv.lesMutex.RLock()
-	defer lv.lesMutex.RUnlock()
 	// if highes is already running or even default, return false
 	if highest.Update.Owner() == RunningIntentName {
+		return false
+	}
+
+	// if highest is not new or updated and highest is non-revertive
+	if !highest.IsNew && !highest.IsUpdated && lv.tc.IsNonRevertiveIntent(highest.Update.Owner()) {
 		return false
 	}
 
@@ -390,6 +419,29 @@ func (lv *LeafVariants) MarkOwnerForDeletion(owner string, onlyIntended bool) *L
 		return le
 	}
 	return nil
+}
+
+func (lv *LeafVariants) ResetFlags(deleteFlag bool, newFlag bool, updatedFlag bool) int {
+	lv.lesMutex.Lock()
+	defer lv.lesMutex.Unlock()
+	count := 0
+
+	for _, le := range lv.les {
+		if deleteFlag && le.Delete {
+			le.Delete = false
+			le.DeleteOnlyIntended = false
+			count++
+		}
+		if updatedFlag && le.IsUpdated {
+			le.IsUpdated = false
+			count++
+		}
+		if newFlag && le.IsNew {
+			le.IsNew = false
+			count++
+		}
+	}
+	return count
 }
 
 func (lv *LeafVariants) DeleteByOwner(owner string) *LeafEntry {

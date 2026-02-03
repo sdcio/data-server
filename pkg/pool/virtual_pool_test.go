@@ -51,8 +51,8 @@ func TestVirtualPools_TolerantAndFailFast(t *testing.T) {
 	sp := NewSharedTaskPool(ctx, 4)
 
 	// create virtual pools
-	vt := sp.NewVirtualPool(VirtualTolerant, 16)
-	vf := sp.NewVirtualPool(VirtualFailFast, 0)
+	vt := sp.NewVirtualPool(VirtualTolerant)
+	vf := sp.NewVirtualPool(VirtualFailFast)
 
 	// submit tasks: tolerant pool will collect errors, fail pool will stop after first error
 	var cntT int64
@@ -88,28 +88,8 @@ func TestVirtualPools_TolerantAndFailFast(t *testing.T) {
 	// close shared pool for submit and wait
 	sp.CloseForSubmit()
 
-	// drain tolerant error channel live
-	var seenErrs int32
-	done := make(chan struct{})
-	go func() {
-		for e := range vt.ErrorChan() {
-			if e != nil {
-				atomic.AddInt32(&seenErrs, 1)
-			}
-		}
-		close(done)
-	}()
-
 	if err := sp.Wait(); err != nil {
 		t.Fatalf("shared wait error: %v", err)
-	}
-
-	// tolerant collector channel is closed automatically when virtual is closed and inflight reaches zero
-	// wait for drain goroutine
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatalf("timeout waiting for tolerant drain")
 	}
 
 	// tolerant: expect 4 increments (one of the tasks had nested:1 which is now allowed even after CloseForSubmit)
@@ -135,7 +115,7 @@ func TestVirtualPools_TolerantAndFailFast(t *testing.T) {
 func TestVirtualPool_Wait_Tolerant(t *testing.T) {
 	ctx := context.Background()
 	sp := NewSharedTaskPool(ctx, 2)
-	vt := sp.NewVirtualPool(VirtualTolerant, 4)
+	vt := sp.NewVirtualPool(VirtualTolerant)
 
 	var cnt int64
 	// submit a few tasks
@@ -157,16 +137,6 @@ func TestVirtualPool_Wait_Tolerant(t *testing.T) {
 	// Wait on virtual specifically
 	vt.Wait()
 
-	// ensure error channel closed (collector closed)
-	select {
-	case _, ok := <-vt.ErrorChan():
-		if ok {
-			t.Fatalf("expected error channel to be closed")
-		}
-	default:
-		// channel may be drained; ensure snapshot is usable
-	}
-
 	if got := atomic.LoadInt64(&cnt); got != 2 {
 		t.Fatalf("expected 2 increments, got %d", got)
 	}
@@ -176,7 +146,7 @@ func TestVirtualPool_Wait_Tolerant(t *testing.T) {
 func TestVirtualPool_Wait_FailFast(t *testing.T) {
 	ctx := context.Background()
 	sp := NewSharedTaskPool(ctx, 2)
-	vf := sp.NewVirtualPool(VirtualFailFast, 0)
+	vf := sp.NewVirtualPool(VirtualFailFast)
 
 	var cnt int64
 	// submit a task that will fail and another that would be skipped when run
@@ -207,7 +177,7 @@ func TestVirtualPool_Wait_FailFast(t *testing.T) {
 func TestVirtualPool_CancellationHang(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	sp := NewSharedTaskPool(ctx, 1)
-	vp := sp.NewVirtualPool(VirtualFailFast, 0)
+	vp := sp.NewVirtualPool(VirtualFailFast)
 
 	var wg sync.WaitGroup
 	wg.Add(2)

@@ -15,7 +15,7 @@ import (
 
 	config "github.com/sdcio/data-server/pkg/config"
 	types "github.com/sdcio/data-server/pkg/datastore/target/types"
-	schema_server "github.com/sdcio/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -63,24 +63,24 @@ func (mr *MockTargetMockRecorder) AddSyncs(ctx any, sps ...any) *gomock.Call {
 }
 
 // Close mocks base method.
-func (m *MockTarget) Close() error {
+func (m *MockTarget) Close(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Close")
+	ret := m.ctrl.Call(m, "Close", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Close indicates an expected call of Close.
-func (mr *MockTargetMockRecorder) Close() *gomock.Call {
+func (mr *MockTargetMockRecorder) Close(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockTarget)(nil).Close))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockTarget)(nil).Close), ctx)
 }
 
 // Get mocks base method.
-func (m *MockTarget) Get(ctx context.Context, req *schema_server.GetDataRequest) (*schema_server.GetDataResponse, error) {
+func (m *MockTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", ctx, req)
-	ret0, _ := ret[0].(*schema_server.GetDataResponse)
+	ret0, _ := ret[0].(*sdcpb.GetDataResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -92,10 +92,10 @@ func (mr *MockTargetMockRecorder) Get(ctx, req any) *gomock.Call {
 }
 
 // Set mocks base method.
-func (m *MockTarget) Set(ctx context.Context, source types.TargetSource) (*schema_server.SetDataResponse, error) {
+func (m *MockTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Set", ctx, source)
-	ret0, _ := ret[0].(*schema_server.SetDataResponse)
+	ret0, _ := ret[0].(*sdcpb.SetDataResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

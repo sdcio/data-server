@@ -11,6 +11,9 @@ import (
 type ImportConfigAdapter interface {
 	ImportConfigAdapterElement
 	GetDeletes() *sdcpb.PathSet
+	GetName() string
+	GetPriority() int32
+	GetNonRevertive() bool
 }
 
 type ImportConfigAdapterElement interface {

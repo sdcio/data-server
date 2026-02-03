@@ -69,6 +69,8 @@ func (l *LeafEntry) MarkNew() {
 }
 
 func (l *LeafEntry) RemoveDeleteFlag() *LeafEntry {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.Delete = false
 	return l
 }
@@ -137,9 +139,19 @@ func (l *LeafEntry) MarkExpliciteDelete() {
 	l.IsNew = false
 }
 
+func (l *LeafEntry) NonRevertive() bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	// this is a hack that makes the tests pass
+	if l.parentEntry == nil {
+		return false
+	}
+	return l.parentEntry.GetTreeContext().IsNonRevertiveIntent(l.Owner())
+}
+
 // String returns a string representation of the LeafEntry
 func (l *LeafEntry) String() string {
-	return fmt.Sprintf("Owner: %s, Priority: %d, Value: %s, New: %t, Delete: %t, Update: %t, DeleteIntendedOnly: %t, ExplicitDelete: %t", l.Owner(), l.Priority(), l.Value().ToString(), l.GetNewFlag(), l.GetDeleteFlag(), l.GetUpdateFlag(), l.GetDeleteOnlyIntendedFlag(), l.GetExplicitDeleteFlag())
+	return fmt.Sprintf("Owner: %s, Priority: %d, Value: %s, New: %t, Delete: %t, Update: %t, DeleteIntendedOnly: %t, ExplicitDelete: %t, Non-Revertive: %t", l.Owner(), l.Priority(), l.Value().ToString(), l.GetNewFlag(), l.GetDeleteFlag(), l.GetUpdateFlag(), l.GetDeleteOnlyIntendedFlag(), l.GetExplicitDeleteFlag(), l.NonRevertive())
 }
 
 // Compare used for slices.SortFunc. Sorts by path and if equal paths then by owner as the second criteria

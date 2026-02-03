@@ -12,17 +12,17 @@ type VirtualPoolI interface {
 	CloseForSubmit()
 	// Wait blocks until the virtual has been closed for submit and all inflight tasks have completed.
 	Wait()
+	// CloseAndWait is a convenience method that closes for submission and waits for drain.
+	CloseAndWait()
 	// FirstError returns the first encountered error for fail-fast virtual pools, or nil.
 	FirstError() error
 	// Errors returns a snapshot of collected errors for tolerant virtual pools.
 	Errors() []error
-	// ErrorChan returns the live channel of errors for tolerant mode, or nil for fail-fast mode.
-	ErrorChan() <-chan error
 }
 
 // Ensure VirtualPool implements the interface.
 var _ VirtualPoolI = (*VirtualPool)(nil)
 
 type VirtualPoolFactory interface {
-	NewVirtualPool(mode VirtualMode, buf int) VirtualPoolI
+	NewVirtualPool(mode VirtualMode) VirtualPoolI
 }
