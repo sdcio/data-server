@@ -12,6 +12,7 @@ import (
 	"github.com/openconfig/ygot/ygot"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -54,7 +55,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				result.leafVariants = newLeafVariants(tc, result)
 
 				result.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -117,7 +118,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -184,7 +185,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -194,7 +195,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				)
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "OtherValue"},
@@ -218,7 +219,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -285,7 +286,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},

@@ -3,11 +3,13 @@ package tree
 import (
 	"sync"
 	"testing"
+
+	"github.com/sdcio/data-server/pkg/tree/api"
 )
 
 func Test_childMap_DeleteChilds(t *testing.T) {
 	type fields struct {
-		c map[string]Entry
+		c map[string]api.Entry
 	}
 	type args struct {
 		names []string
@@ -21,7 +23,7 @@ func Test_childMap_DeleteChilds(t *testing.T) {
 		{
 			name: "Delete single entry",
 			fields: fields{
-				c: map[string]Entry{
+				c: map[string]api.Entry{
 					"one": &sharedEntryAttributes{
 						pathElemName: "one",
 					},
@@ -41,7 +43,7 @@ func Test_childMap_DeleteChilds(t *testing.T) {
 		{
 			name: "Delete two entries",
 			fields: fields{
-				c: map[string]Entry{
+				c: map[string]api.Entry{
 					"one": &sharedEntryAttributes{
 						pathElemName: "one",
 					},
@@ -61,7 +63,7 @@ func Test_childMap_DeleteChilds(t *testing.T) {
 		{
 			name: "Delete non-existing entry",
 			fields: fields{
-				c: map[string]Entry{
+				c: map[string]api.Entry{
 					"one": &sharedEntryAttributes{
 						pathElemName: "one",
 					},
@@ -95,7 +97,7 @@ func Test_childMap_DeleteChilds(t *testing.T) {
 
 func Test_childMap_DeleteChild(t *testing.T) {
 	type fields struct {
-		c map[string]Entry
+		c map[string]api.Entry
 	}
 	type args struct {
 		name string
@@ -109,7 +111,7 @@ func Test_childMap_DeleteChild(t *testing.T) {
 		{
 			name: "Delete existing entry",
 			fields: fields{
-				c: map[string]Entry{
+				c: map[string]api.Entry{
 					"one": &sharedEntryAttributes{
 						pathElemName: "one",
 					},
@@ -129,7 +131,7 @@ func Test_childMap_DeleteChild(t *testing.T) {
 		{
 			name: "Delete non-existing entry",
 			fields: fields{
-				c: map[string]Entry{
+				c: map[string]api.Entry{
 					"one": &sharedEntryAttributes{
 						pathElemName: "one",
 					},

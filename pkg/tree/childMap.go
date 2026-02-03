@@ -4,21 +4,23 @@ import (
 	"iter"
 	"slices"
 	"sync"
+
+	"github.com/sdcio/data-server/pkg/tree/api"
 )
 
 type childMap struct {
-	c  map[string]Entry
+	c  map[string]api.Entry
 	mu sync.RWMutex
 }
 
 func newChildMap() *childMap {
 	return &childMap{
-		c: map[string]Entry{},
+		c: map[string]api.Entry{},
 	}
 }
 
-func (c *childMap) Items() iter.Seq2[string, Entry] {
-	return func(yield func(string, Entry) bool) {
+func (c *childMap) Items() iter.Seq2[string, api.Entry] {
+	return func(yield func(string, api.Entry) bool) {
 		for i, v := range c.c {
 			if !yield(i, v) {
 				return
@@ -41,20 +43,20 @@ func (c *childMap) DeleteChild(name string) {
 	delete(c.c, name)
 }
 
-func (c *childMap) Add(e Entry) {
+func (c *childMap) Add(e api.Entry) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.c[e.PathName()] = e
 }
 
-func (c *childMap) GetEntry(s string) (e Entry, exists bool) {
+func (c *childMap) GetEntry(s string) (e api.Entry, exists bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	e, exists = c.c[s]
 	return e, exists
 }
 
-func (c *childMap) GetAllSorted() []Entry {
+func (c *childMap) GetAllSorted() []api.Entry {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -64,7 +66,7 @@ func (c *childMap) GetAllSorted() []Entry {
 	}
 	slices.Sort(childNames)
 
-	result := make([]Entry, 0, len(c.c))
+	result := make([]api.Entry, 0, len(c.c))
 	// range over children
 	for _, childName := range childNames {
 		result = append(result, c.c[childName])
@@ -73,11 +75,11 @@ func (c *childMap) GetAllSorted() []Entry {
 	return result
 }
 
-func (c *childMap) GetAll() map[string]Entry {
+func (c *childMap) GetAll() map[string]api.Entry {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	result := make(map[string]Entry, len(c.c))
+	result := make(map[string]api.Entry, len(c.c))
 	for k, v := range c.c {
 		result[k] = v
 	}

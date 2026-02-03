@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
 )
 
@@ -23,7 +24,7 @@ func NewRemoveDeletedProcessor(c *RemoveDeletedProcessorParameters) *RemoveDelet
 type RemoveDeletedProcessorParameters struct {
 	owner                     string
 	deleteStatsCount          atomic.Int64
-	zeroLeafEntryElements     []Entry
+	zeroLeafEntryElements     []api.Entry
 	zeroLeafEntryElementsLock sync.Mutex
 }
 
@@ -31,7 +32,7 @@ func NewRemoveDeletedProcessorParameters(owner string) *RemoveDeletedProcessorPa
 	return &RemoveDeletedProcessorParameters{
 		owner:                     owner,
 		deleteStatsCount:          atomic.Int64{},
-		zeroLeafEntryElements:     []Entry{},
+		zeroLeafEntryElements:     []api.Entry{},
 		zeroLeafEntryElementsLock: sync.Mutex{},
 	}
 }
@@ -41,7 +42,7 @@ func (r *RemoveDeletedProcessorParameters) GetDeleteStatsCount() int64 {
 }
 
 // GetZeroLengthLeafVariantEntries returns the entries that have zero-length leaf variant entries after removal
-func (r *RemoveDeletedProcessorParameters) GetZeroLengthLeafVariantEntries() []Entry {
+func (r *RemoveDeletedProcessorParameters) GetZeroLengthLeafVariantEntries() []api.Entry {
 	return r.zeroLeafEntryElements
 }
 
@@ -49,7 +50,7 @@ func (r *RemoveDeletedProcessorParameters) GetZeroLengthLeafVariantEntries() []E
 // for deletion by the specified owner. The pool parameter should be VirtualFailFast
 // to stop on first error.
 // Returns the first error encountered, or nil if successful.
-func (p *RemoveDeletedProcessor) Run(e Entry, poolFactory pool.VirtualPoolFactory) error {
+func (p *RemoveDeletedProcessor) Run(e api.Entry, poolFactory pool.VirtualPoolFactory) error {
 
 	// create a virtual task pool for removeDeleted operations
 	pool := poolFactory.NewVirtualPool(pool.VirtualFailFast)
@@ -69,11 +70,11 @@ func (p *RemoveDeletedProcessor) Run(e Entry, poolFactory pool.VirtualPoolFactor
 
 type removeDeletedTask struct {
 	config       *RemoveDeletedProcessorParameters
-	e            Entry
+	e            api.Entry
 	keepDefaults bool
 }
 
-func newRemoveDeletedTask(c *RemoveDeletedProcessorParameters, e Entry, keepDefaults bool) *removeDeletedTask {
+func newRemoveDeletedTask(c *RemoveDeletedProcessorParameters, e api.Entry, keepDefaults bool) *removeDeletedTask {
 	return &removeDeletedTask{
 		config:       c,
 		e:            e,

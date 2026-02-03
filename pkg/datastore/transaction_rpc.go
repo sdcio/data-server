@@ -10,6 +10,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -217,7 +218,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	// iterate through all the intents
 	for _, intent := range transaction.GetNewIntents() {
 		// update the TreeContext to reflect the actual owner (intent name)
-		lvs := tree.LeafVariantSlice{}
+		lvs := api.LeafVariantSlice{}
 		lvs = root.GetByOwner(intent.GetName(), lvs)
 
 		oldIntentContent := lvs.ToPathAndUpdateSlice()
@@ -263,7 +264,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		root.SetNonRevertiveIntent(intent.GetName(), intent.NonRevertive())
 	}
 
-	les := tree.LeafVariantSlice{}
+	les := api.LeafVariantSlice{}
 	les = root.GetByOwner(tree.RunningIntentName, les)
 
 	transaction.GetOldRunning().AddUpdates(les.ToPathAndUpdateSlice())
@@ -399,7 +400,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 }
 
 // writeBackSyncTree applies the provided changes to the syncTree and applies to the running cache intent
-func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVariantSlice, deletes treetypes.DeleteEntriesList) error {
+func (d *Datastore) writeBackSyncTree(ctx context.Context, updates api.LeafVariantSlice, deletes treetypes.DeleteEntriesList) error {
 	log := logger.FromContext(ctx)
 	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(tree.RunningIntentName, tree.RunningValuesPrio)
 
@@ -546,7 +547,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	return response, err
 }
 
-func updateToSdcpbUpdate(lvs tree.LeafVariantSlice) ([]*sdcpb.Update, error) {
+func updateToSdcpbUpdate(lvs api.LeafVariantSlice) ([]*sdcpb.Update, error) {
 	result := make([]*sdcpb.Update, 0, len(lvs))
 	for _, lv := range lvs {
 		path := lv.GetEntry().SdcpbPath()

@@ -12,7 +12,7 @@ import (
 	"github.com/sdcio/yang-parser/xpath/grammars/expr"
 )
 
-func (s *sharedEntryAttributes) validateMustStatements(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats) {
+func (s *sharedEntryAttributes) ValidateMustStatements(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats) {
 	log := logf.FromContext(ctx)
 
 	// if no schema, then there is nothing to be done, return
