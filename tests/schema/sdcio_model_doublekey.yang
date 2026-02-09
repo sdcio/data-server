@@ -18,12 +18,12 @@ module sdcio_model_doublekey {
       key "key2 key1";
       leaf key2 {
         type string {
-          pattern '[0-9]+';
+          pattern 'k2[a-zA-Z0-9.]+';
         }
       }
       leaf key1 {
         type string {
-          pattern '[a-z]+';
+          pattern 'k1[a-zA-Z0-9.]+';
         }
       }
       leaf mandato {
