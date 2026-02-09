@@ -60,8 +60,8 @@ func Test_sharedEntryAttributes_checkAndCreateKeysAsLeafs(t *testing.T) {
 	p = &sdcpb.Path{
 		Elem: []*sdcpb.PathElem{
 			sdcpb.NewPathElem("doublekey", map[string]string{
-				"key1": "k1.1",
-				"key2": "k1.3",
+				"key1": "k11.1",
+				"key2": "k21.3",
 			}),
 			sdcpb.NewPathElem("mandato", nil),
 		},
@@ -304,11 +304,11 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 		d := &sdcio_schema.Device{
 			Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
 				{
-					Key1: "k1.1",
-					Key2: "k1.2",
+					Key1: "k11.1",
+					Key2: "k21.2",
 				}: {
-					Key1:    ygot.String("k1.1"),
-					Key2:    ygot.String("k1.2"),
+					Key1:    ygot.String("k11.1"),
+					Key2:    ygot.String("k21.2"),
 					Mandato: ygot.String("TheMandatoryValueOther"),
 					Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
 						Value1: ygot.String("containerval1.1"),
@@ -316,11 +316,11 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 					},
 				},
 				{
-					Key1: "k2.1",
-					Key2: "k2.2",
+					Key1: "k12.1",
+					Key2: "k22.2",
 				}: {
-					Key1:    ygot.String("k2.1"),
-					Key2:    ygot.String("k2.2"),
+					Key1:    ygot.String("k12.1"),
+					Key2:    ygot.String("k22.2"),
 					Mandato: ygot.String("TheMandatoryValue2"),
 					Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
 						Value1: ygot.String("containerval2.1"),
@@ -360,18 +360,18 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 	}{
 		{
 			name:      "Double Key - pass",
-			wantNames: []string{"k2.2", "k1.2"},
+			wantNames: []string{"k22.2", "k21.2"},
 			wantKeys:  []string{"key1", "key2", "cont", "mandato"},
 			path:      &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("doublekey", nil)}, IsRootBased: true},
 		},
 		{
 			name:    "nil schema",
-			path:    &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1"})}, IsRootBased: true},
+			path:    &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1"})}, IsRootBased: true},
 			wantErr: true,
 		},
 		{
 			name:    "non container",
-			path:    &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}), sdcpb.NewPathElem("mandato", nil)}, IsRootBased: true},
+			path:    &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}), sdcpb.NewPathElem("mandato", nil)}, IsRootBased: true},
 			wantErr: true,
 		},
 		{
@@ -829,8 +829,8 @@ func Test_sharedEntryAttributes_getOrCreateChilds(t *testing.T) {
 			path: &sdcpb.Path{
 				Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{
-						"key1": "k1.1",
-						"key2": "k1.2",
+						"key1": "k11.1",
+						"key2": "k21.2",
 					}),
 					sdcpb.NewPathElem("mandato", nil),
 				},
@@ -951,11 +951,11 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 				conf1 := &sdcio_schema.Device{
 					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
 						{
-							Key1: "k1.1",
-							Key2: "k1.2",
+							Key1: "k11.1",
+							Key2: "k21.2",
 						}: {
-							Key1: ygot.String("k1.1"),
-							Key2: ygot.String("k1.2"),
+							Key1: ygot.String("k11.1"),
+							Key2: ygot.String("k21.2"),
 							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
 								Value1: ygot.String("containerval1.1"),
 								Value2: ygot.String("containerval1.2"),
@@ -987,7 +987,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 				return root
 			},
 			want: []*types.ValidationResultEntry{
-				types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child [mandato] does not exist, path: /doublekey[key1=k1.1][key2=k1.2]"), types.ValidationResultEntryTypeError),
+				types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child [mandato] does not exist, path: /doublekey[key1=k11.1][key2=k21.2]"), types.ValidationResultEntryTypeError),
 				types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child [autonomous-system] does not exist, path: /network-instance[name=ni1]/protocol/bgp"), types.ValidationResultEntryTypeError),
 				types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child [router-id] does not exist, path: /network-instance[name=ni1]/protocol/bgp"), types.ValidationResultEntryTypeError),
 			},
@@ -1012,8 +1012,8 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 				conf1 := &sdcio_schema.Device{
 					Mandatorykey: map[string]*sdcio_schema.SdcioModel_Mandatorykey{
 						"mk1": {
-							Key1:    ygot.String("k1"),
-							Mandato: ygot.String("asdf"),
+							Key1:    ygot.String("k11"),
+							Mandato: ygot.String("k2asdf"),
 						},
 					},
 				}
@@ -1094,11 +1094,11 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 				conf1 := &sdcio_schema.Device{
 					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
 						{
-							Key1: "k1.1",
-							Key2: "k1.2",
+							Key1: "k11.1",
+							Key2: "k21.2",
 						}: {
-							Key1: ygot.String("k1.1"),
-							Key2: ygot.String("k1.2"),
+							Key1: ygot.String("k11.1"),
+							Key2: ygot.String("k21.2"),
 							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
 								Value1: ygot.String("containerval1.1"),
 								Value2: ygot.String("containerval1.2"),
@@ -1132,8 +1132,8 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 					&sdcpb.Path{
 						Elem: []*sdcpb.PathElem{
 							sdcpb.NewPathElem("doublekey", map[string]string{
-								"key1": "k1.1",
-								"key2": "k1.2",
+								"key1": "k11.1",
+								"key2": "k21.2",
 							}),
 							sdcpb.NewPathElem("mandato", nil),
 						}, IsRootBased: true,
