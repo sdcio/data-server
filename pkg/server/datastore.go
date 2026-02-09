@@ -102,53 +102,56 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		return nil, status.Errorf(codes.InvalidArgument, "datastore %s already exists", name)
 	}
 
+	reqTarget := req.GetTarget()
 	sbi := &config.SBI{
-		Type:    req.GetTarget().GetType(),
-		Port:    req.GetTarget().GetPort(),
-		Address: req.GetTarget().GetAddress(),
+		Type:    reqTarget.GetType(),
+		Port:    reqTarget.GetPort(),
+		Address: reqTarget.GetAddress(),
 	}
 
-	switch strings.ToLower(req.GetTarget().GetType()) {
+	switch strings.ToLower(reqTarget.GetType()) {
 	case "netconf":
+		netconfOpts := reqTarget.GetNetconfOpts()
 		commitDatastore := "candidate"
-		switch req.GetTarget().GetNetconfOpts().GetCommitCandidate() {
+		switch netconfOpts.GetCommitCandidate() {
 		case sdcpb.CommitCandidate_COMMIT_CANDIDATE:
 		case sdcpb.CommitCandidate_COMMIT_RUNNING:
 			commitDatastore = "running"
 		default:
-			log.Error(nil, "unknown commitDatastore", "datastore", req.GetTarget().GetNetconfOpts().GetCommitCandidate())
-			return nil, fmt.Errorf("unknown commitDatastore: %v", req.GetTarget().GetNetconfOpts().GetCommitCandidate())
+			log.Error(nil, "unknown commitDatastore", "datastore", netconfOpts.GetCommitCandidate())
+			return nil, fmt.Errorf("unknown commitDatastore: %v", netconfOpts.GetCommitCandidate())
 		}
 		sbi.NetconfOptions = &config.SBINetconfOptions{
-			IncludeNS:              req.GetTarget().GetNetconfOpts().GetIncludeNs(),
-			OperationWithNamespace: req.GetTarget().GetNetconfOpts().GetOperationWithNs(),
-			UseOperationRemove:     req.GetTarget().GetNetconfOpts().GetUseOperationRemove(),
+			IncludeNS:              netconfOpts.GetIncludeNs(),
+			OperationWithNamespace: netconfOpts.GetOperationWithNs(),
+			UseOperationRemove:     netconfOpts.GetUseOperationRemove(),
 			CommitDatastore:        commitDatastore,
 		}
 
 	case "gnmi":
+		gnmiOpts := reqTarget.GetGnmiOpts()
 		sbi.GnmiOptions = &config.SBIGnmiOptions{
-			Encoding:   req.GetTarget().GetGnmiOpts().GetEncoding(),
-			TargetName: req.GetTarget().GetGnmiOpts().GetTargetName(),
+			Encoding:   gnmiOpts.GetEncoding(),
+			TargetName: gnmiOpts.GetTargetName(),
 		}
 	default:
-		log.Error(nil, "unknowm targetconnection protocol type", "type", req.GetTarget().GetType())
-		return nil, fmt.Errorf("unknowm targetconnection protocol type %s", req.GetTarget().GetType())
+		log.Error(nil, "unknowm targetconnection protocol type", "type", reqTarget.GetType())
+		return nil, fmt.Errorf("unknowm targetconnection protocol type %s", reqTarget.GetType())
 	}
 
-	if req.GetTarget().GetTls() != nil {
+	if tls := reqTarget.GetTls(); tls != nil {
 		sbi.TLS = &config.TLS{
-			CA:         req.GetTarget().GetTls().GetCa(),
-			Cert:       req.GetTarget().GetTls().GetCert(),
-			Key:        req.GetTarget().GetTls().GetKey(),
-			SkipVerify: req.GetTarget().GetTls().GetSkipVerify(),
+			CA:         tls.GetCa(),
+			Cert:       tls.GetCert(),
+			Key:        tls.GetKey(),
+			SkipVerify: tls.GetSkipVerify(),
 		}
 	}
-	if req.GetTarget().GetCredentials() != nil {
+	if creds := reqTarget.GetCredentials(); creds != nil {
 		sbi.Credentials = &config.Creds{
-			Username: req.GetTarget().GetCredentials().GetUsername(),
-			Password: req.GetTarget().GetCredentials().GetPassword(),
-			Token:    req.GetTarget().GetCredentials().GetToken(),
+			Username: creds.GetUsername(),
+			Password: creds.GetPassword(),
+			Token:    creds.GetToken(),
 		}
 	}
 
