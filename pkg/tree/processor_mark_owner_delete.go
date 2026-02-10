@@ -6,25 +6,26 @@ import (
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
 )
 
 type MarkOwnerDeleteProcessor struct {
 	config  *OwnerDeleteMarkerTaskConfig
-	matches *Collector[*LeafEntry]
+	matches *Collector[*api.LeafEntry]
 }
 
 func NewOwnerDeleteMarker(c *OwnerDeleteMarkerTaskConfig) *MarkOwnerDeleteProcessor {
 	return &MarkOwnerDeleteProcessor{
 		config:  c,
-		matches: NewCollector[*LeafEntry](20),
+		matches: NewCollector[*api.LeafEntry](20),
 	}
 }
 
 // Run processes the entry tree starting from e, marking leaf variant entries for deletion
 // by the specified owner. The pool parameter should be VirtualFailFast to stop on first error.
 // Returns the first error encountered, or nil if successful.
-func (p *MarkOwnerDeleteProcessor) Run(e Entry, poolFactory pool.VirtualPoolFactory) error {
+func (p *MarkOwnerDeleteProcessor) Run(e api.Entry, poolFactory pool.VirtualPoolFactory) error {
 	pool := poolFactory.NewVirtualPool(pool.VirtualFailFast)
 	if err := pool.Submit(newOwnerDeleteMarkerTask(p.config, e, p.matches)); err != nil {
 		// Clean up pool even on early error
@@ -56,11 +57,11 @@ func NewOwnerDeleteMarkerTaskConfig(owner string, onlyIntended bool) *OwnerDelet
 
 type ownerDeleteMarkerTask struct {
 	config  *OwnerDeleteMarkerTaskConfig
-	matches *Collector[*LeafEntry]
-	e       Entry
+	matches *Collector[*api.LeafEntry]
+	e       api.Entry
 }
 
-func newOwnerDeleteMarkerTask(c *OwnerDeleteMarkerTaskConfig, e Entry, matches *Collector[*LeafEntry]) *ownerDeleteMarkerTask {
+func newOwnerDeleteMarkerTask(c *OwnerDeleteMarkerTaskConfig, e api.Entry, matches *Collector[*api.LeafEntry]) *ownerDeleteMarkerTask {
 	return &ownerDeleteMarkerTask{
 		config:  c,
 		e:       e,

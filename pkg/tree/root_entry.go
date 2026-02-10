@@ -9,7 +9,9 @@ import (
 
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/importer"
+	procImporter "github.com/sdcio/data-server/pkg/tree/processors/importer"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
@@ -52,7 +54,7 @@ func (r *RootEntry) stringToDisk(filename string) error {
 }
 
 func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
-	tc := r.treeContext.deepCopy()
+	tc := r.treeContext.DeepCopy()
 	se, err := r.sharedEntryAttributes.deepCopy(tc, nil)
 	if err != nil {
 		return nil, err
@@ -82,11 +84,11 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us []*types.PathAnd
 }
 
 func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, flags *types.UpdateInsertFlags, poolFactory pool.VirtualPoolFactory) (*types.ImportStats, error) {
-	e, err := r.sharedEntryAttributes.getOrCreateChilds(ctx, basePath)
+	e, err := r.sharedEntryAttributes.GetOrCreateChilds(ctx, basePath)
 	if err != nil {
 		return nil, err
 	}
-	ImportConfigProcessor := NewImportConfigProcessor(importer, flags)
+	ImportConfigProcessor := procImporter.NewImportConfigProcessor(importer, flags)
 	err = ImportConfigProcessor.Run(ctx, e, poolFactory)
 	if err != nil {
 		return nil, err
@@ -95,7 +97,7 @@ func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, impo
 }
 
 func (r *RootEntry) SetNonRevertiveIntent(intentName string, nonRevertive bool) {
-	r.GetTreeContext().nonRevertiveInfo[intentName] = nonRevertive
+	r.GetTreeContext().AddNonRevertiveInfo(intentName, nonRevertive)
 }
 
 func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation, taskpoolFactory pool.VirtualPoolFactory) (types.ValidationResults, *types.ValidationStats) {
@@ -159,8 +161,8 @@ func (r *RootEntry) GetDeletesForOwner(owner string) sdcpb.Paths {
 // GetHighesPrecedence return the new cache.Update entried from the tree that are the highes priority.
 // If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
 // It will append to the given list and provide a new pointer to the slice
-func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) LeafVariantSlice {
-	return r.sharedEntryAttributes.GetHighestPrecedence(make(LeafVariantSlice, 0), onlyNewOrUpdated, false, false)
+func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) api.LeafVariantSlice {
+	return r.sharedEntryAttributes.GetHighestPrecedence(make(api.LeafVariantSlice, 0), onlyNewOrUpdated, false, false)
 }
 
 // GetDeletes returns the paths that due to the Tree content are to be deleted from the southbound device.
@@ -183,7 +185,7 @@ func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Inte
 		return nil, err
 	}
 
-	explicitDeletes := r.treeContext.explicitDeletes.GetByIntentName(owner).ToPathSlice()
+	explicitDeletes := r.treeContext.GetExplicitDeletes().GetByIntentName(owner).ToPathSlice()
 
 	var rootExportEntry *tree_persist.TreeElement
 	if len(treeExport) != 0 {
@@ -195,7 +197,7 @@ func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Inte
 			IntentName:      owner,
 			Root:            rootExportEntry,
 			Priority:        priority,
-			NonRevertive:    r.treeContext.nonRevertiveInfo[owner],
+			NonRevertive:    r.treeContext.GetNonRevertiveInfo(owner),
 			ExplicitDeletes: explicitDeletes,
 		}, nil
 	}
@@ -204,8 +206,8 @@ func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Inte
 
 // getByOwnerFiltered returns the Tree content filtered by owner, whilst allowing to filter further
 // via providing additional LeafEntryFilter
-func (r *RootEntry) getByOwnerFiltered(owner string, f ...LeafEntryFilter) []*LeafEntry {
-	result := []*LeafEntry{}
+func (r *RootEntry) getByOwnerFiltered(owner string, f ...LeafEntryFilter) []*api.LeafEntry {
+	result := []*api.LeafEntry{}
 	// retrieve all leafentries for the owner
 	leafEntries := r.sharedEntryAttributes.GetByOwner(owner, result)
 	// range through entries
@@ -239,10 +241,9 @@ func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 	edpsc := ExplicitDeleteProcessorStatCollection{}
 
 	// apply the explicit deletes
-	for deletePathPrio := range r.treeContext.explicitDeletes.Items() {
+	for deletePathPrio := range r.treeContext.GetExplicitDeletes().Items() {
 
 		params := NewExplicitDeleteTaskParameters(deletePathPrio.GetOwner(), deletePathPrio.GetPrio())
-
 		for path := range deletePathPrio.PathItems() {
 
 			// set the priority

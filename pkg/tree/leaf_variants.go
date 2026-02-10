@@ -6,26 +6,27 @@ import (
 	"math"
 	"sync"
 
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 type LeafVariants struct {
-	les         LeafVariantSlice
+	les         api.LeafVariantSlice
 	lesMutex    sync.RWMutex
-	tc          *TreeContext
-	parentEntry Entry
+	tc          api.TreeContext
+	parentEntry api.Entry
 }
 
-func newLeafVariants(tc *TreeContext, parentEnty Entry) *LeafVariants {
+func newLeafVariants(tc api.TreeContext, parentEnty api.Entry) *LeafVariants {
 	return &LeafVariants{
-		les:         make(LeafVariantSlice, 0, 2),
+		les:         make(api.LeafVariantSlice, 0, 2),
 		tc:          tc,
 		parentEntry: parentEnty,
 	}
 }
 
-func (lv *LeafVariants) AddWithStats(le *LeafEntry, stats *types.ImportStats) {
+func (lv *LeafVariants) AddWithStats(le *api.LeafEntry, stats *types.ImportStats) {
 	if leafVariant := lv.GetByOwner(le.Owner()); leafVariant != nil {
 		if leafVariant.Update.Equal(le.Update) {
 			// it seems like the element was not deleted, so drop the delete flag
@@ -45,13 +46,13 @@ func (lv *LeafVariants) AddWithStats(le *LeafEntry, stats *types.ImportStats) {
 	}
 }
 
-func (lv *LeafVariants) Add(le *LeafEntry) {
+func (lv *LeafVariants) Add(le *api.LeafEntry) {
 	lv.AddWithStats(le, nil)
 }
 
 // Items iterator for the LeafVariants
-func (lv *LeafVariants) Items() iter.Seq[*LeafEntry] {
-	return func(yield func(*LeafEntry) bool) {
+func (lv *LeafVariants) Items() iter.Seq[*api.LeafEntry] {
+	return func(yield func(*api.LeafEntry) bool) {
 		lv.lesMutex.RLock()
 		defer lv.lesMutex.RUnlock()
 		for _, v := range lv.les {
@@ -97,7 +98,7 @@ func (lv *LeafVariants) canDeleteBranch(keepDefault bool) bool {
 }
 
 // RemoveDeletedByOwner removes and returns the LeafEntry owned by the given owner if it is marked for deletion.
-func (lv *LeafVariants) RemoveDeletedByOwner(owner string) *LeafEntry {
+func (lv *LeafVariants) RemoveDeletedByOwner(owner string) *api.LeafEntry {
 	lv.lesMutex.Lock()
 	defer lv.lesMutex.Unlock()
 	for i, l := range lv.les {
@@ -246,7 +247,7 @@ func (lv *LeafVariants) remainsToExist() bool {
 	return defaultOrRunningExists
 }
 
-func (lv *LeafVariants) GetHighestPrecedenceValue(filter HighestPrecedenceFilter) int32 {
+func (lv *LeafVariants) GetHighestPrecedenceValue(filter api.HighestPrecedenceFilter) int32 {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 	result := int32(math.MaxInt32)
@@ -258,11 +259,11 @@ func (lv *LeafVariants) GetHighestPrecedenceValue(filter HighestPrecedenceFilter
 	return result
 }
 
-func (lv *LeafVariants) DeepCopy(tc *TreeContext, parent Entry) *LeafVariants {
+func (lv *LeafVariants) DeepCopy(tc api.TreeContext, parent api.Entry) *LeafVariants {
 	result := &LeafVariants{
 		lesMutex:    sync.RWMutex{},
 		tc:          tc,
-		les:         make([]*LeafEntry, 0, len(lv.les)),
+		les:         make([]*api.LeafEntry, 0, len(lv.les)),
 		parentEntry: parent,
 	}
 
@@ -276,23 +277,23 @@ func (lv *LeafVariants) DeepCopy(tc *TreeContext, parent Entry) *LeafVariants {
 }
 
 // checkReturnDefault checks if defaults are allowed and if the given LeafEntry is owned by default
-func checkNotDefaultAllowedButIsDefaultOwner(le *LeafEntry, includeDefaults bool) bool {
+func checkNotDefaultAllowedButIsDefaultOwner(le *api.LeafEntry, includeDefaults bool) bool {
 	return !includeDefaults && le.Update.Owner() == DefaultsIntentName
 }
 
-func checkExistsAndDeleteFlagSet(le *LeafEntry) bool {
+func checkExistsAndDeleteFlagSet(le *api.LeafEntry) bool {
 	return le != nil && le.GetDeleteFlag()
 }
 
-func checkNewOrUpdateFlagSet(le *LeafEntry) bool {
+func checkNewOrUpdateFlagSet(le *api.LeafEntry) bool {
 	return le.GetNewFlag() || le.GetUpdateFlag()
 }
 
-func checkNotOwner(le *LeafEntry, owner string) bool {
+func checkNotOwner(le *api.LeafEntry, owner string) bool {
 	return le.Owner() != owner
 }
 
-func (lv *LeafVariants) GetRunning() *LeafEntry {
+func (lv *LeafVariants) GetRunning() *api.LeafEntry {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 	for _, e := range lv.les {
@@ -305,7 +306,7 @@ func (lv *LeafVariants) GetRunning() *LeafEntry {
 
 // GetHighesNewUpdated returns the LeafEntry with the highes priority
 // nil if no leaf entry exists.
-func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool, includeExplicitDelete bool) *LeafEntry {
+func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool, includeExplicitDelete bool) *api.LeafEntry {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 	if len(lv.les) == 0 {
@@ -316,10 +317,10 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 	}
 
 	// figure out the highest precedence LeafEntry
-	var highest *LeafEntry
+	var highest *api.LeafEntry
 	// the second highests is the backup in case the highest is marked for deletion
 	// so this is not actually the second highest always, but the next candidate
-	var secondHighest *LeafEntry
+	var secondHighest *api.LeafEntry
 	for _, e := range lv.les {
 		// first entry set result to it
 		// if it is not marked for deletion
@@ -374,7 +375,7 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 
 // highestIsUnequalRunning checks if the highest precedence LeafEntry is unequal to the running LeafEntry
 // Expects the caller to hold the read lock on lesMutex.
-func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
+func (lv *LeafVariants) highestIsUnequalRunning(highest *api.LeafEntry) bool {
 	// if highes is already running or even default, return false
 	if highest.Update.Owner() == RunningIntentName {
 		return false
@@ -398,7 +399,7 @@ func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
 
 // GetByOwner returns the entry that is owned by the given owner,
 // returns nil if no entry exists.
-func (lv *LeafVariants) GetByOwner(owner string) *LeafEntry {
+func (lv *LeafVariants) GetByOwner(owner string) *api.LeafEntry {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 	for _, e := range lv.les {
@@ -412,7 +413,7 @@ func (lv *LeafVariants) GetByOwner(owner string) *LeafEntry {
 // MarkOwnerForDeletion searches for a LefVariant of given owner, if it exists
 // the entry is marked for deletion.
 // returning the leafentry if an owner entry was found, nil if not.
-func (lv *LeafVariants) MarkOwnerForDeletion(owner string, onlyIntended bool) *LeafEntry {
+func (lv *LeafVariants) MarkOwnerForDeletion(owner string, onlyIntended bool) *api.LeafEntry {
 	le := lv.GetByOwner(owner)
 	if le != nil {
 		le.MarkDelete(onlyIntended)
@@ -444,7 +445,7 @@ func (lv *LeafVariants) ResetFlags(deleteFlag bool, newFlag bool, updatedFlag bo
 	return count
 }
 
-func (lv *LeafVariants) DeleteByOwner(owner string) *LeafEntry {
+func (lv *LeafVariants) DeleteByOwner(owner string) *api.LeafEntry {
 	lv.lesMutex.Lock()
 	defer lv.lesMutex.Unlock()
 	for i, l := range lv.les {
@@ -477,8 +478,8 @@ func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.Devi
 		return
 	}
 
-	var running *LeafEntry
-	var highest *LeafEntry
+	var running *api.LeafEntry
+	var highest *api.LeafEntry
 
 	overruled := make([]*types.DeviationEntry, 0, len(lv.les))
 	for _, le := range lv.les {
@@ -541,8 +542,8 @@ func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.Devi
 
 }
 
-func (lv *LeafVariants) AddExplicitDeleteEntry(intentName string, priority int32) *LeafEntry {
-	le := NewLeafEntry(types.NewUpdate(lv.parentEntry, &sdcpb.TypedValue{}, priority, intentName, 0), types.NewUpdateInsertFlags().SetExplicitDeleteFlag(), lv.parentEntry)
+func (lv *LeafVariants) AddExplicitDeleteEntry(intentName string, priority int32) *api.LeafEntry {
+	le := api.NewLeafEntry(types.NewUpdate(lv.parentEntry, &sdcpb.TypedValue{}, priority, intentName, 0), types.NewUpdateInsertFlags().SetExplicitDeleteFlag(), lv.parentEntry)
 	lv.Add(le)
 	return le
 }

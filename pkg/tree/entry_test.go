@@ -12,6 +12,7 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/pool"
 
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -206,7 +207,7 @@ func Test_Entry_One(t *testing.T) {
 	t.Log(root.String())
 
 	t.Run("Test 1 - expected entries for owner1", func(t *testing.T) {
-		o1Le := []*LeafEntry{}
+		o1Le := []*api.LeafEntry{}
 		o1Le = root.GetByOwner(owner1, o1Le)
 		o1 := LeafEntriesToUpdates(o1Le)
 		// diff the result with the expected
@@ -223,7 +224,7 @@ func Test_Entry_One(t *testing.T) {
 	})
 
 	t.Run("Test 2 - expected entries for owner2", func(t *testing.T) {
-		o2Le := []*LeafEntry{}
+		o2Le := []*api.LeafEntry{}
 		o2Le = root.GetByOwner(owner2, o2Le)
 		o2 := LeafEntriesToUpdates(o2Le)
 		// diff the result with the expected
@@ -1295,8 +1296,8 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{}, nil)
 
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 2, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 1, owner2, ts), flagsExisting, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 2, owner1, ts), flagsExisting, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 1, owner2, ts), flagsExisting, nil))
 			lv.les[1].MarkDelete(false)
 
 			le := lv.GetHighestPrecedence(true, false, false)
@@ -1313,7 +1314,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	t.Run("Single entry thats also marked for deletion",
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{}, nil)
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 1, owner1, ts), flagsExisting, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 1, owner1, ts), flagsExisting, nil))
 			lv.les[0].MarkDelete(false)
 
 			le := lv.GetHighestPrecedence(true, false, false)
@@ -1329,9 +1330,9 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	t.Run("New Low Prio IsUpdate OnlyChanged True",
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{}, nil)
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), flagsNew, nil))
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, RunningValuesPrio, RunningIntentName, ts), flagsExisting, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), flagsExisting, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), flagsNew, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, RunningValuesPrio, RunningIntentName, ts), flagsExisting, nil))
 
 			le := lv.GetHighestPrecedence(true, false, false)
 
@@ -1346,8 +1347,8 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	t.Run("New Low Prio IsUpdate OnlyChanged False",
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{}, nil)
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 6, owner1, ts), flagsNew, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), flagsExisting, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 6, owner1, ts), flagsNew, nil))
 
 			le := lv.GetHighestPrecedence(false, false, false)
 
@@ -1363,9 +1364,9 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{}, nil)
 
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), flagsNew, nil))
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, RunningValuesPrio, RunningIntentName, ts), flagsExisting, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), flagsExisting, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), flagsNew, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, RunningValuesPrio, RunningIntentName, ts), flagsExisting, nil))
 
 			le := lv.GetHighestPrecedence(true, false, false)
 
@@ -1381,8 +1382,8 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{}, nil)
 
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), flagsNew, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), flagsExisting, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), flagsNew, nil))
 
 			le := lv.GetHighestPrecedence(true, false, false)
 
@@ -1395,8 +1396,8 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	t.Run("New Low Prio IsNew OnlyChanged == False",
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{}, nil)
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), flagsNew, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), flagsExisting, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), flagsNew, nil))
 
 			le := lv.GetHighestPrecedence(false, false, false)
 
@@ -1423,9 +1424,9 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	t.Run("secondhighes populated if highes was first",
 		func(t *testing.T) {
 			lv := newLeafVariants(&TreeContext{}, nil)
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 1, owner1, ts), flagsExisting, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 1, owner1, ts), flagsExisting, nil))
 			lv.les[0].MarkDelete(false)
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 2, owner2, ts), flagsExisting, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 2, owner2, ts), flagsExisting, nil))
 
 			le := lv.GetHighestPrecedence(true, false, false)
 

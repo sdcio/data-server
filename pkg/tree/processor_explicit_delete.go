@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 )
@@ -25,14 +26,14 @@ func (edp *ExplicitDeleteProcessor) GetExplicitDeleteCreationCount() int {
 }
 
 // GetCreatedExplicitDeleteLeafEntries returns all the explicitDelete LeafVariants that where created.
-func (edp *ExplicitDeleteProcessor) GetCreatedExplicitDeleteLeafEntries() LeafVariantSlice {
+func (edp *ExplicitDeleteProcessor) GetCreatedExplicitDeleteLeafEntries() api.LeafVariantSlice {
 	return edp.params.relatedLeafVariants
 }
 
 type ExplicitDeleteTaskParameters struct {
 	owner               string
 	priority            int32
-	relatedLeafVariants []*LeafEntry
+	relatedLeafVariants []*api.LeafEntry
 	rlvMutex            *sync.Mutex
 }
 
@@ -40,12 +41,12 @@ func NewExplicitDeleteTaskParameters(owner string, priority int32) *ExplicitDele
 	return &ExplicitDeleteTaskParameters{
 		priority:            priority,
 		owner:               owner,
-		relatedLeafVariants: []*LeafEntry{},
+		relatedLeafVariants: []*api.LeafEntry{},
 		rlvMutex:            &sync.Mutex{},
 	}
 }
 
-func (p *ExplicitDeleteProcessor) Run(ctx context.Context, e Entry, poolFactory pool.VirtualPoolFactory) error {
+func (p *ExplicitDeleteProcessor) Run(ctx context.Context, e api.Entry, poolFactory pool.VirtualPoolFactory) error {
 	taskpool := poolFactory.NewVirtualPool(pool.VirtualTolerant)
 	err := taskpool.Submit(newExplicitDeleteTask(e, p.params))
 	taskpool.CloseAndWait()
@@ -53,11 +54,11 @@ func (p *ExplicitDeleteProcessor) Run(ctx context.Context, e Entry, poolFactory 
 }
 
 type explicitDeleteTask struct {
-	entry  Entry
+	entry  api.Entry
 	params *ExplicitDeleteTaskParameters
 }
 
-func newExplicitDeleteTask(entry Entry, params *ExplicitDeleteTaskParameters) *explicitDeleteTask {
+func newExplicitDeleteTask(entry api.Entry, params *ExplicitDeleteTaskParameters) *explicitDeleteTask {
 	return &explicitDeleteTask{
 		entry:  entry,
 		params: params,
@@ -85,12 +86,24 @@ func (t *explicitDeleteTask) Run(ctx context.Context, submit func(pool.Task) err
 		}
 	}
 
+	// check if the entry holds leafvariants
+	if t.entry.HoldsLeafvariants() {
+		le := t.entry.GetLeafVariantEntries().GetByOwner(t.params.owner)
+		if le != nil {
+			le.MarkExpliciteDelete()
+		} else {
+			le = t.entry.GetLeafVariantEntries().AddExplicitDeleteEntry(t.params.owner, t.params.priority)
+		}
+		t.params.rlvMutex.Lock()
+		t.params.relatedLeafVariants = append(t.params.relatedLeafVariants, le)
+		t.params.rlvMutex.Unlock()
+	}
 	return nil
 }
 
 // Stats structs
 type ExplicitDeleteProcessorStat interface {
-	GetCreatedExplicitDeleteLeafEntries() LeafVariantSlice
+	GetCreatedExplicitDeleteLeafEntries() api.LeafVariantSlice
 	GetExplicitDeleteCreationCount() int
 }
 

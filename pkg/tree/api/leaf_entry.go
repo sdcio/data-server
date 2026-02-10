@@ -1,11 +1,10 @@
-package tree
+package api
 
 import (
 	"fmt"
 	"strings"
 	"sync"
 
-	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -16,7 +15,7 @@ type LeafEntry struct {
 	*types.Update
 
 	// helper values
-	parentEntry        api.Entry
+	parentEntry        Entry
 	IsNew              bool
 	Delete             bool
 	DeleteOnlyIntended bool
@@ -26,7 +25,7 @@ type LeafEntry struct {
 	mu sync.RWMutex
 }
 
-func (l *LeafEntry) DeepCopy(parentEntry api.Entry) *LeafEntry {
+func (l *LeafEntry) DeepCopy(parentEntry Entry) *LeafEntry {
 	upd := l.Update.DeepCopy()
 	upd.SetParent(parentEntry)
 	return &LeafEntry{
@@ -41,7 +40,7 @@ func (l *LeafEntry) DeepCopy(parentEntry api.Entry) *LeafEntry {
 	}
 }
 
-func (l *LeafEntry) GetEntry() api.Entry {
+func (l *LeafEntry) GetEntry() Entry {
 	return l.parentEntry
 }
 
@@ -165,7 +164,7 @@ func (l *LeafEntry) Compare(other *LeafEntry) int {
 }
 
 // NewLeafEntry constructor for a new LeafEntry
-func NewLeafEntry(c *types.Update, flags *types.UpdateInsertFlags, parent api.Entry) *LeafEntry {
+func NewLeafEntry(c *types.Update, flags *types.UpdateInsertFlags, parent Entry) *LeafEntry {
 	le := &LeafEntry{
 		parentEntry: parent,
 		Update:      c,

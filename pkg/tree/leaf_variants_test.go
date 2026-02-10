@@ -3,6 +3,7 @@ package tree
 import (
 	"testing"
 
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -23,7 +24,7 @@ func TestLeafVariants_remainsToExist(t *testing.T) {
 			name: "Empty LeafVariants",
 			setup: func() *LeafVariants {
 				return &LeafVariants{
-					les: make(LeafVariantSlice, 0),
+					les: make(api.LeafVariantSlice, 0),
 				}
 			},
 			expected: false,
@@ -32,9 +33,9 @@ func TestLeafVariants_remainsToExist(t *testing.T) {
 			name: "Single entry, not deleted",
 			setup: func() *LeafVariants {
 				lv := &LeafVariants{
-					les: make(LeafVariantSlice, 0),
+					les: make(api.LeafVariantSlice, 0),
 				}
-				le := NewLeafEntry(
+				le := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 10, "owner1", 0),
 					types.NewUpdateInsertFlags(),
 					nil,
@@ -48,9 +49,9 @@ func TestLeafVariants_remainsToExist(t *testing.T) {
 			name: "Single entry, deleted",
 			setup: func() *LeafVariants {
 				lv := &LeafVariants{
-					les: make(LeafVariantSlice, 0),
+					les: make(api.LeafVariantSlice, 0),
 				}
-				le := NewLeafEntry(
+				le := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 10, "owner1", 0),
 					types.NewUpdateInsertFlags().SetDeleteFlag(),
 					nil,
@@ -64,14 +65,14 @@ func TestLeafVariants_remainsToExist(t *testing.T) {
 			name: "Multiple entries, all deleted",
 			setup: func() *LeafVariants {
 				lv := &LeafVariants{
-					les: make(LeafVariantSlice, 0),
+					les: make(api.LeafVariantSlice, 0),
 				}
-				le1 := NewLeafEntry(
+				le1 := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 10, "owner1", 0),
 					types.NewUpdateInsertFlags().SetDeleteFlag(),
 					nil,
 				)
-				le2 := NewLeafEntry(
+				le2 := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 20, "owner2", 0),
 					types.NewUpdateInsertFlags().SetDeleteFlag(),
 					nil,
@@ -86,14 +87,14 @@ func TestLeafVariants_remainsToExist(t *testing.T) {
 			name: "Multiple entries, one remaining",
 			setup: func() *LeafVariants {
 				lv := &LeafVariants{
-					les: make(LeafVariantSlice, 0),
+					les: make(api.LeafVariantSlice, 0),
 				}
-				le1 := NewLeafEntry(
+				le1 := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 10, "owner1", 0),
 					types.NewUpdateInsertFlags().SetDeleteFlag(),
 					nil,
 				)
-				le2 := NewLeafEntry(
+				le2 := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 20, "owner2", 0),
 					types.NewUpdateInsertFlags(),
 					nil,
@@ -108,16 +109,16 @@ func TestLeafVariants_remainsToExist(t *testing.T) {
 			name: "Explicit delete highest priority",
 			setup: func() *LeafVariants {
 				lv := &LeafVariants{
-					les: make(LeafVariantSlice, 0),
+					les: make(api.LeafVariantSlice, 0),
 				}
 				// Explicit delete with priority 5 (lower is higher priority)
-				le1 := NewLeafEntry(
+				le1 := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 5, "owner1", 0),
 					types.NewUpdateInsertFlags().SetExplicitDeleteFlag(),
 					nil,
 				)
 				// Normal entry with priority 10
-				le2 := NewLeafEntry(
+				le2 := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 10, "owner2", 0),
 					types.NewUpdateInsertFlags(),
 					nil,
@@ -132,16 +133,16 @@ func TestLeafVariants_remainsToExist(t *testing.T) {
 			name: "Explicit delete lower priority",
 			setup: func() *LeafVariants {
 				lv := &LeafVariants{
-					les: make(LeafVariantSlice, 0),
+					les: make(api.LeafVariantSlice, 0),
 				}
 				// Explicit delete with priority 20
-				le1 := NewLeafEntry(
+				le1 := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 20, "owner1", 0),
 					types.NewUpdateInsertFlags().SetExplicitDeleteFlag(),
 					nil,
 				)
 				// Normal entry with priority 10 (higher priority)
-				le2 := NewLeafEntry(
+				le2 := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 10, "owner2", 0),
 					types.NewUpdateInsertFlags(),
 					nil,
@@ -157,16 +158,16 @@ func TestLeafVariants_remainsToExist(t *testing.T) {
 			name: "Delete all, no running",
 			setup: func() *LeafVariants {
 				lv := &LeafVariants{
-					les: make(LeafVariantSlice, 0),
+					les: make(api.LeafVariantSlice, 0),
 				}
 				// Explicit delete with priority 20
-				le1 := NewLeafEntry(
+				le1 := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 20, "owner1", 0),
 					types.NewUpdateInsertFlags().SetDeleteFlag(),
 					nil,
 				)
 				// Normal entry with priority 10 (higher priority)
-				le2 := NewLeafEntry(
+				le2 := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 10, "owner2", 0),
 					types.NewUpdateInsertFlags().SetDeleteFlag(),
 					nil,
@@ -181,21 +182,21 @@ func TestLeafVariants_remainsToExist(t *testing.T) {
 			name: "Delete all, with running",
 			setup: func() *LeafVariants {
 				lv := &LeafVariants{
-					les: make(LeafVariantSlice, 0),
+					les: make(api.LeafVariantSlice, 0),
 				}
 				// Explicit delete with priority 20
-				le1 := NewLeafEntry(
+				le1 := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 20, "owner1", 0),
 					types.NewUpdateInsertFlags().SetDeleteFlag(),
 					nil,
 				)
 				// Normal entry with priority 10 (higher priority)
-				le2 := NewLeafEntry(
+				le2 := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 10, "owner2", 0),
 					types.NewUpdateInsertFlags().SetDeleteFlag(),
 					nil,
 				)
-				lerun := NewLeafEntry(
+				lerun := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, RunningValuesPrio, RunningIntentName, 0),
 					types.NewUpdateInsertFlags(),
 					nil,
@@ -211,9 +212,9 @@ func TestLeafVariants_remainsToExist(t *testing.T) {
 			name: "Only Running",
 			setup: func() *LeafVariants {
 				lv := &LeafVariants{
-					les: make(LeafVariantSlice, 0),
+					les: make(api.LeafVariantSlice, 0),
 				}
-				lerun := NewLeafEntry(
+				lerun := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, RunningValuesPrio, RunningIntentName, 0),
 					types.NewUpdateInsertFlags(),
 					nil,
@@ -227,14 +228,14 @@ func TestLeafVariants_remainsToExist(t *testing.T) {
 			name: "Only Running + default",
 			setup: func() *LeafVariants {
 				lv := &LeafVariants{
-					les: make(LeafVariantSlice, 0),
+					les: make(api.LeafVariantSlice, 0),
 				}
-				lerun := NewLeafEntry(
+				lerun := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, RunningValuesPrio, RunningIntentName, 0),
 					types.NewUpdateInsertFlags(),
 					nil,
 				)
-				ledef := NewLeafEntry(
+				ledef := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, DefaultValuesPrio, DefaultsIntentName, 0),
 					types.NewUpdateInsertFlags(),
 					nil,
@@ -249,19 +250,19 @@ func TestLeafVariants_remainsToExist(t *testing.T) {
 			name: "Running, default and delete",
 			setup: func() *LeafVariants {
 				lv := &LeafVariants{
-					les: make(LeafVariantSlice, 0),
+					les: make(api.LeafVariantSlice, 0),
 				}
-				lerun := NewLeafEntry(
+				lerun := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, RunningValuesPrio, RunningIntentName, 0),
 					types.NewUpdateInsertFlags(),
 					nil,
 				)
-				ledef := NewLeafEntry(
+				ledef := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, DefaultValuesPrio, DefaultsIntentName, 0),
 					types.NewUpdateInsertFlags(),
 					nil,
 				)
-				ledel := NewLeafEntry(
+				ledel := api.NewLeafEntry(
 					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 10, "owner1", 0),
 					types.NewUpdateInsertFlags().SetDeleteFlag(),
 					nil,
