@@ -85,11 +85,11 @@ func TestDatastore_populateTree(t *testing.T) {
 				d := &sdcio_schema.Device{
 					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
 						{
-							Key1: "k1.1",
-							Key2: "k1.2",
+							Key1: "k11.1",
+							Key2: "k21.2",
 						}: {
-							Key1:    ygot.String("k1.1"),
-							Key2:    ygot.String("k1.2"),
+							Key1:    ygot.String("k11.1"),
+							Key2:    ygot.String("k21.2"),
 							Mandato: ygot.String("TheMandatoryValueOther"),
 							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
 								Value1: ygot.String("containerval1.1"),
@@ -97,11 +97,11 @@ func TestDatastore_populateTree(t *testing.T) {
 							},
 						},
 						{
-							Key1: "k2.1",
-							Key2: "k2.2",
+							Key1: "k12.1",
+							Key2: "k22.2",
 						}: {
-							Key1:    ygot.String("k2.1"),
-							Key2:    ygot.String("k2.2"),
+							Key1:    ygot.String("k12.1"),
+							Key2:    ygot.String("k22.2"),
 							Mandato: ygot.String("TheMandatoryValue2"),
 							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
 								Value1: ygot.String("containerval2.1"),
@@ -118,97 +118,97 @@ func TestDatastore_populateTree(t *testing.T) {
 			runningStoreUpdates: []*types.PathAndUpdate{
 				types.NewPathAndUpdate(
 					&sdcpb.Path{Elem: []*sdcpb.PathElem{
-						sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+						sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 						sdcpb.NewPathElem("key1", nil),
 					}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k11.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
 				),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("key2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k21.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("mandato", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("key1", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k11.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("key2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k1.3"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k21.3"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("mandato", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("key1", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k2.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k12.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("key2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k2.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k22.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("mandato", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue2"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval2.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
 				}, IsRootBased: true},
@@ -221,7 +221,7 @@ func TestDatastore_populateTree(t *testing.T) {
 
 			expectedModify: []*types.PathAndUpdate{
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("mandato", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValueOther"), prio10, owner2, 0)),
@@ -229,110 +229,110 @@ func TestDatastore_populateTree(t *testing.T) {
 
 			expectedOwnerUpdates: []*types.PathAndUpdate{
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("mandato", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValueOther"), prio10, owner2, 0)),
 			},
 			expectedOwnerDeletes: []string{
-				"/doublekey[key1=k1.1][key2=k1.3]/key1",
-				"/doublekey[key1=k1.1][key2=k1.3]/key2",
-				"/doublekey[key1=k1.1][key2=k1.3]/mandato",
-				"/doublekey[key1=k1.1][key2=k1.3]/cont/value1",
-				"/doublekey[key1=k1.1][key2=k1.3]/cont/value2",
+				"/doublekey[key1=k11.1][key2=k21.3]/key1",
+				"/doublekey[key1=k11.1][key2=k21.3]/key2",
+				"/doublekey[key1=k11.1][key2=k21.3]/mandato",
+				"/doublekey[key1=k11.1][key2=k21.3]/cont/value1",
+				"/doublekey[key1=k11.1][key2=k21.3]/cont/value2",
 			},
 			intendedStoreUpdates: []*types.PathAndUpdate{
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("key1", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k11.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("key2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k1.2"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k21.2"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("mandato", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("key1", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k11.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("key2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k1.3"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k21.3"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("mandato", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("key1", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k2.1"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k12.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("key2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k2.2"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k22.2"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("mandato", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue2"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval2.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
 				}, IsRootBased: true},
@@ -348,11 +348,11 @@ func TestDatastore_populateTree(t *testing.T) {
 				d := &sdcio_schema.Device{
 					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
 						{
-							Key1: "k1.1",
-							Key2: "k1.2",
+							Key1: "k11.1",
+							Key2: "k21.2",
 						}: {
-							Key1:    ygot.String("k1.1"),
-							Key2:    ygot.String("k1.2"),
+							Key1:    ygot.String("k11.1"),
+							Key2:    ygot.String("k21.2"),
 							Mandato: ygot.String("TheMandatoryValue1"),
 							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
 								Value1: ygot.String("containerval1.1"),
@@ -360,11 +360,11 @@ func TestDatastore_populateTree(t *testing.T) {
 							},
 						},
 						{
-							Key1: "k2.1",
-							Key2: "k2.2",
+							Key1: "k12.1",
+							Key2: "k22.2",
 						}: {
-							Key1:    ygot.String("k2.1"),
-							Key2:    ygot.String("k2.2"),
+							Key1:    ygot.String("k12.1"),
+							Key2:    ygot.String("k22.2"),
 							Mandato: ygot.String("TheMandatoryValue2"),
 							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
 								Value1: ygot.String("containerval2.1"),
@@ -372,11 +372,11 @@ func TestDatastore_populateTree(t *testing.T) {
 							},
 						},
 						{
-							Key1: "k1.1",
-							Key2: "k1.3",
+							Key1: "k11.1",
+							Key2: "k21.3",
 						}: {
-							Key1:    ygot.String("k1.1"),
-							Key2:    ygot.String("k1.3"),
+							Key1:    ygot.String("k11.1"),
+							Key2:    ygot.String("k21.3"),
 							Mandato: ygot.String("TheMandatoryValue1"),
 							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
 								Value1: ygot.String("containerval1.1"),
@@ -392,96 +392,96 @@ func TestDatastore_populateTree(t *testing.T) {
 			},
 			expectedModify: []*types.PathAndUpdate{
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("key1", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k11.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("key2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k1.2"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k21.2"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("mandato", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("key1", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k11.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("key2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k1.3"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k21.3"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("mandato", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("key1", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k2.1"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k12.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("key2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k2.2"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k22.2"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("mandato", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue2"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval2.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
 				}, IsRootBased: true},
@@ -490,96 +490,96 @@ func TestDatastore_populateTree(t *testing.T) {
 
 			expectedOwnerUpdates: []*types.PathAndUpdate{
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("key1", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k11.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("key2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k1.2"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k21.2"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("mandato", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("key1", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k1.1"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k11.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("key2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k1.3"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k21.3"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("mandato", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k1.1", "key2": "k1.3"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.2"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("key1", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k2.1"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k12.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("key2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k2.2"), prio10, owner2, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k22.2"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("mandato", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue2"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
 				}, IsRootBased: true},
 					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval2.1"), prio10, owner2, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
-					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k2.1", "key2": "k2.2"}),
+					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
 				}, IsRootBased: true},
@@ -1488,14 +1488,16 @@ func TestDatastore_populateTree(t *testing.T) {
 				t.Error(err)
 			}
 
+			existingFlag := types.NewUpdateInsertFlags()
+
 			// add intended content
-			err = root.AddUpdatesRecursive(ctx, tt.intendedStoreUpdates, types.NewUpdateInsertFlags())
+			err = root.AddUpdatesRecursive(ctx, tt.intendedStoreUpdates, existingFlag)
 			if err != nil {
 				t.Error(err)
 			}
 
 			// add running content
-			err = root.AddUpdatesRecursive(ctx, tt.runningStoreUpdates, types.NewUpdateInsertFlags())
+			err = root.AddUpdatesRecursive(ctx, tt.runningStoreUpdates, existingFlag)
 			if err != nil {
 				t.Error(err)
 			}
@@ -1509,12 +1511,6 @@ func TestDatastore_populateTree(t *testing.T) {
 				t.Error(err)
 				return
 			}
-
-			// marksOwnerDeleteVisitor := tree.NewMarkOwnerDeleteVisitor(tt.intentName, false)
-			// err = root.Walk(ctx, marksOwnerDeleteVisitor)
-			// if err != nil {
-			// 	t.Error(err)
-			// }
 
 			newFlag := types.NewUpdateInsertFlags().SetNewFlag()
 
