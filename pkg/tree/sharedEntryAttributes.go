@@ -1220,16 +1220,24 @@ func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultCha
 	if s.schema != nil {
 		switch s.schema.GetSchema().(type) {
 		case *sdcpb.SchemaElem_Container:
-			for _, c := range s.schema.GetContainer().GetMandatoryChildrenConfig() {
+			containerSchema := s.schema.GetContainer()
+			for _, c := range containerSchema.GetMandatoryChildrenConfig() {
 				attributes := []string{}
 				choiceName := ""
 				// check if it is a ChildContainer
-				if slices.Contains(s.schema.GetContainer().GetChildren(), c.Name) {
+				if slices.Contains(containerSchema.GetChildren(), c.Name) {
+					attributes = append(attributes, c.Name)
+				}
+
+				// check if it is a Key
+				if slices.ContainsFunc(containerSchema.GetKeys(), func(x *sdcpb.LeafSchema) bool {
+					return x.Name == c.Name
+				}) {
 					attributes = append(attributes, c.Name)
 				}
 
 				// check if it is a Field
-				if slices.ContainsFunc(s.schema.GetContainer().GetFields(), func(x *sdcpb.LeafSchema) bool {
+				if slices.ContainsFunc(containerSchema.GetFields(), func(x *sdcpb.LeafSchema) bool {
 					return x.Name == c.Name
 				}) {
 					attributes = append(attributes, c.Name)
@@ -1237,7 +1245,7 @@ func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultCha
 
 				// otherwise it will probably be a choice
 				if len(attributes) == 0 {
-					choice := s.schema.GetContainer().GetChoiceInfo().GetChoiceByName(c.Name)
+					choice := containerSchema.GetChoiceInfo().GetChoiceByName(c.Name)
 					if choice != nil {
 						attributes = append(attributes, choice.GetAllAttributes()...)
 						choiceName = c.Name
@@ -1248,9 +1256,9 @@ func (s *sharedEntryAttributes) validateMandatory(ctx context.Context, resultCha
 					log.Error(ValidationError, "mandatory attribute could not be found as child, field or choice", "path", s.SdcpbPath().ToXPath(false), "attribute", c.Name)
 				}
 
-				s.validateMandatoryWithKeys(ctx, len(s.GetSchema().GetContainer().GetKeys()), attributes, choiceName, resultChan)
+				s.validateMandatoryWithKeys(ctx, len(containerSchema.GetKeys()), attributes, choiceName, resultChan)
 			}
-			stats.Add(types.StatTypeMandatory, uint32(len(s.schema.GetContainer().GetMandatoryChildrenConfig())))
+			stats.Add(types.StatTypeMandatory, uint32(len(containerSchema.GetMandatoryChildrenConfig())))
 		}
 	}
 }
