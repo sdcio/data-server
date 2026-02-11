@@ -26,7 +26,7 @@ import (
 func TestRootEntry_TreeExport(t *testing.T) {
 	owner1 := "owner1"
 	owner2 := "owner2"
-	tc := NewTreeContext(nil, owner1, pool.NewSharedTaskPool(context.Background(), runtime.NumCPU()))
+	tc := NewTreeContext(nil, owner1, pool.NewSharedTaskPool(context.Background(), runtime.GOMAXPROCS(0)))
 
 	type args struct {
 		owner    string
@@ -397,7 +397,7 @@ func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
@@ -434,7 +434,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 		t.Fatal(err)
 	}
 	scb := schemaClient.NewSchemaClientBound(schema, sc)
-	tc := NewTreeContext(scb, "intent1", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+	tc := NewTreeContext(scb, "intent1", pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 	type fields struct {
 		sharedEntryAttributes func(t *testing.T) *sharedEntryAttributes
@@ -521,7 +521,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+				vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 				ImportConfigProcessor := NewImportConfigProcessor(jsonImporter.NewJsonTreeImporter(jsonAny, "owner1", 5, false), types.NewUpdateInsertFlags())
 				err = ImportConfigProcessor.Run(ctx, s, vpf)
 				if err != nil {
@@ -568,7 +568,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 		{
 			name: "One",
 			rootEntry: func(t *testing.T) *RootEntry {
-				tc := NewTreeContext(scb, "intent1", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+				tc := NewTreeContext(scb, "intent1", pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
@@ -589,7 +589,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 			},
 			owner: owner1,
 			want: func(t *testing.T) *RootEntry {
-				tc := NewTreeContext(scb, "intent1", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+				tc := NewTreeContext(scb, "intent1", pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
@@ -611,7 +611,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 			root := tt.rootEntry(t)
 			got := root.GetUpdatesForOwner(tt.owner).ToPathAndUpdateSlice()
 
-			tc := NewTreeContext(scb, "intent1", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+			tc := NewTreeContext(scb, "intent1", pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			resultRoot, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)

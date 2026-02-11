@@ -89,9 +89,9 @@ func (t *ncTarget) GetImportAdapter(ctx context.Context, req *sdcpb.GetDataReque
 		return nil, err
 	}
 
-	cmlImport := xml.NewXmlTreeImporter(ncResponse.Doc.Root(), tree.RunningIntentName, tree.RunningValuesPrio, false)
+	xmlImport := xml.NewXmlTreeImporter(ncResponse.Doc.Root(), tree.RunningIntentName, tree.RunningValuesPrio, false)
 
-	return cmlImport, nil
+	return xmlImport, nil
 }
 
 func (t *ncTarget) internalGet(ctx context.Context, req *sdcpb.GetDataRequest) (*nctypes.NetconfResponse, error) {

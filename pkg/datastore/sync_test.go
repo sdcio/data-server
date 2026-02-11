@@ -54,7 +54,7 @@ func TestApplyToRunning(t *testing.T) {
 					t.Fatal(err)
 				}
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
-				tc := tree.NewTreeContext(scb, tree.RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+				tc := tree.NewTreeContext(scb, tree.RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 				root, err := tree.NewTreeRoot(ctx, tc)
 				if err != nil {
@@ -80,7 +80,7 @@ func TestApplyToRunning(t *testing.T) {
 				var v any
 				json.Unmarshal([]byte(confStr), &v)
 
-				vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+				vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 				_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
 				if err != nil {
 					t.Fatalf("failed to import test config: %v", err)
@@ -160,7 +160,7 @@ func TestApplyToRunning(t *testing.T) {
 					t.Fatal(err)
 				}
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
-				tc := tree.NewTreeContext(scb, tree.RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+				tc := tree.NewTreeContext(scb, tree.RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 				root, err := tree.NewTreeRoot(ctx, tc)
 				if err != nil {
@@ -186,7 +186,7 @@ func TestApplyToRunning(t *testing.T) {
 				var v any
 				json.Unmarshal([]byte(confStr), &v)
 
-				vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+				vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 				_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
 				if err != nil {
 					t.Fatalf("failed to import test config: %v", err)
@@ -264,7 +264,7 @@ func TestApplyToRunning(t *testing.T) {
 					t.Fatal(err)
 				}
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
-				tc := tree.NewTreeContext(scb, tree.RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+				tc := tree.NewTreeContext(scb, tree.RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 				root, err := tree.NewTreeRoot(ctx, tc)
 				if err != nil {
@@ -290,7 +290,7 @@ func TestApplyToRunning(t *testing.T) {
 				var v any
 				json.Unmarshal([]byte(confStr), &v)
 
-				vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+				vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 				_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
 				if err != nil {
 					t.Fatalf("failed to import test config: %v", err)
@@ -373,7 +373,7 @@ func TestApplyToRunning(t *testing.T) {
 			datastore := &Datastore{
 				syncTreeMutex: &sync.RWMutex{},
 				syncTree:      syncTree,
-				taskPool:      pool.NewSharedTaskPool(ctx, runtime.NumCPU()),
+				taskPool:      pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)),
 				cacheClient:   tt.cacheClientFunc(ctrl),
 				sbi:           tt.sbiFunc(ctrl),
 			}
@@ -390,7 +390,7 @@ func TestApplyToRunning(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := tree.NewTreeContext(scb, tree.RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+			tc := tree.NewTreeContext(scb, tree.RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 			resultRoot, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
@@ -399,7 +399,7 @@ func TestApplyToRunning(t *testing.T) {
 
 			d := tt.resultFunc()
 
-			vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 			_, err = resultRoot.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(d, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
 			if err != nil {
 				t.Fatalf("failed to import test config: %v", err)
@@ -412,7 +412,7 @@ func TestApplyToRunning(t *testing.T) {
 
 			fmt.Println(syncTree.String())
 
-			resetFlagsProcessorParams := tree.NewResetFlagsProcessorParameters(false, true, true)
+			resetFlagsProcessorParams := tree.NewResetFlagsProcessorParameters().SetNewFlag().SetUpdateFlag()
 			err = tree.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(syncTree.GetRoot(), datastore.taskPool)
 			if err != nil {
 				t.Fatalf("failed to reset flags: %v", err)

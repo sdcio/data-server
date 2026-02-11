@@ -187,7 +187,7 @@ func TestDatastore_validateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			tc := tree.NewTreeContext(scb, tt.intentName, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+			tc := tree.NewTreeContext(scb, tt.intentName, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Error(err)
@@ -198,7 +198,7 @@ func TestDatastore_validateTree(t *testing.T) {
 
 			importer := json_importer.NewJsonTreeImporter(jsonConf, tt.intentName, tt.intentPrio, tt.nonRevertive)
 
-			vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 			_, err = root.ImportConfig(ctx, path, importer, flagsNew, vpf)
 			if err != nil {
 				t.Error(err)
@@ -209,7 +209,7 @@ func TestDatastore_validateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 			validationResult, _ := root.Validate(ctx, validationConfig, sharedPool)
 
 			t.Log(root.String())

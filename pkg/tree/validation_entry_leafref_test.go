@@ -215,7 +215,7 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
@@ -238,7 +238,7 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 			_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vpf)
 			if err != nil {
 				t.Fatal(err)

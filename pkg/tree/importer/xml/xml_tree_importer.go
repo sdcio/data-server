@@ -9,7 +9,7 @@ import (
 )
 
 type XmlTreeImporter struct {
-	XmlTreeImporterElement
+	*XmlTreeImporterElement
 	intentName   string
 	priority     int32
 	nonRevertive bool
@@ -17,12 +17,10 @@ type XmlTreeImporter struct {
 
 func NewXmlTreeImporter(d *etree.Element, intentName string, priority int32, nonRevertive bool) *XmlTreeImporter {
 	return &XmlTreeImporter{
-		XmlTreeImporterElement: XmlTreeImporterElement{
-			elem: d,
-		},
-		intentName:   intentName,
-		priority:     priority,
-		nonRevertive: nonRevertive,
+		XmlTreeImporterElement: NewXmlTreeImporterElement(d),
+		intentName:             intentName,
+		priority:               priority,
+		nonRevertive:           nonRevertive,
 	}
 }
 

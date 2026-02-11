@@ -140,12 +140,12 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 			sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).AnyTimes()
 
 			// Setup SyncTree with Running Config
-			tc := tree.NewTreeContext(scb, tree.RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+			tc := tree.NewTreeContext(scb, tree.RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatalf("failed to create sync tree root: %v", err)
 			}
-			vpf := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 			// Populate SyncTree with Running config
 			_, err = syncTreeRoot.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(runningAny, tree.RunningIntentName, tree.RunningValuesPrio, false), treetypes.NewUpdateInsertFlags(), vpf)
 			if err != nil {
@@ -156,7 +156,7 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 				t.Fatalf("failed to finish insertion phase: %v", err)
 			}
 			// Reset flags on syncTree so everything is "existing"
-			resetFlagsProcessorParams := tree.NewResetFlagsProcessorParameters(false, true, true)
+			resetFlagsProcessorParams := tree.NewResetFlagsProcessorParameters().SetNewFlag().SetUpdateFlag()
 			err = tree.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(syncTreeRoot.GetRoot(), vpf)
 			if err != nil {
 				t.Fatalf("failed to reset flags: %v", err)

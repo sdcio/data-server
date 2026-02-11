@@ -42,6 +42,8 @@ func (r *RemoveDeletedProcessorParameters) GetDeleteStatsCount() int64 {
 
 // GetZeroLengthLeafVariantEntries returns the entries that have zero-length leaf variant entries after removal
 func (r *RemoveDeletedProcessorParameters) GetZeroLengthLeafVariantEntries() []Entry {
+	r.zeroLeafEntryElementsLock.Lock()
+	defer r.zeroLeafEntryElementsLock.Unlock()
 	return r.zeroLeafEntryElements
 }
 

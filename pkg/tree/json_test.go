@@ -380,7 +380,7 @@ func TestToJsonTable(t *testing.T) {
 
 			ctx := context.Background()
 
-			tc := NewTreeContext(scb, owner, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+			tc := NewTreeContext(scb, owner, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)

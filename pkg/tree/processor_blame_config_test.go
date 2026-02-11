@@ -39,7 +39,7 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
@@ -71,7 +71,7 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
@@ -104,7 +104,7 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+				tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
@@ -152,7 +152,7 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			treeRoot := tt.r(t)
 
-			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 			vPool := sharedPool.NewVirtualPool(pool.VirtualFailFast)
 
 			bp := NewBlameConfigProcessor(NewBlameConfigProcessorConfig(tt.includeDefaults))

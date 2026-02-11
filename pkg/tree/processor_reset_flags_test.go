@@ -42,7 +42,7 @@ func TestResetFlagsProcessorRun(t *testing.T) {
 					t.Fatal(err)
 				}
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
-				tc := NewTreeContext(scb, RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+				tc := NewTreeContext(scb, RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
@@ -89,7 +89,17 @@ func TestResetFlagsProcessorRun(t *testing.T) {
 			ctx := context.Background()
 
 			// Create processor parameters
-			params := NewResetFlagsProcessorParameters(tt.deleteFlag, tt.newFlag, tt.updateFlag)
+			params := NewResetFlagsProcessorParameters()
+
+			if tt.deleteFlag {
+				params.SetDeleteFlag()
+			}
+			if tt.newFlag {
+				params.SetNewFlag()
+			}
+			if tt.updateFlag {
+				params.SetUpdateFlag()
+			}
 
 			// Create processor
 			processor := NewResetFlagsProcessor(params)
@@ -100,7 +110,7 @@ func TestResetFlagsProcessorRun(t *testing.T) {
 			// This is a simplified version - you may need to adjust based on your actual Entry implementation
 
 			// Create a virtual pool for testing
-			taskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			taskPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 
 			root := tt.tree()
 

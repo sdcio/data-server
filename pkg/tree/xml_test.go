@@ -574,7 +574,7 @@ func TestToXMLTable(t *testing.T) {
 
 			converter := utils.NewConverter(scb)
 
-			tc := NewTreeContext(scb, owner, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+			tc := NewTreeContext(scb, owner, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -593,7 +593,7 @@ func TestToXMLTable(t *testing.T) {
 			fmt.Println(root.String())
 
 			if tt.newConfig != nil {
-				sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+				sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 				ownerDeleteMarker := NewOwnerDeleteMarker(NewOwnerDeleteMarkerTaskConfig(owner, false))
 
 				err = ownerDeleteMarker.Run(root.GetRoot(), sharedTaskPool)

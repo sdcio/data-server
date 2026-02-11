@@ -27,7 +27,7 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 		t.Error(err)
 	}
 
-	tc := NewTreeContext(scb, "owner1", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+	tc := NewTreeContext(scb, "owner1", pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 	root, err := NewTreeRoot(ctx, tc)
 
@@ -67,7 +67,7 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 
 	jimporter := json_importer.NewJsonTreeImporter(jsonConfig, "owner1", 5, false)
 
-	sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+	sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 	_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, types.NewUpdateInsertFlags(), sharedPool)
 	if err != nil {
 		t.Error(err)
@@ -157,7 +157,7 @@ func TestValidate_RangesSigned(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			// the tree context
-			tc := NewTreeContext(scb, "owner1", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+			tc := NewTreeContext(scb, "owner1", pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 			// the tree root
 			root, err := NewTreeRoot(ctx, tc)
@@ -181,7 +181,7 @@ func TestValidate_RangesSigned(t *testing.T) {
 			// new json tree importer
 			jimporter := json_importer.NewJsonTreeImporter(jsonConfig, "owner1", 5, false)
 
-			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 
 			// import via importer
 			_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, types.NewUpdateInsertFlags(), sharedPool)
@@ -293,7 +293,7 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			// the tree context
-			tc := NewTreeContext(scb, "owner1", pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+			tc := NewTreeContext(scb, "owner1", pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 			// the tree root
 			root, err := NewTreeRoot(ctx, tc)
@@ -317,7 +317,7 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 			// new json tree importer
 			jimporter := json_importer.NewJsonTreeImporter(jsonConfig, "owner1", 5, false)
 
-			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 			// import via importer
 			_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, types.NewUpdateInsertFlags(), sharedPool)
 

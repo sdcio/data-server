@@ -35,7 +35,7 @@ func (t *TreeContext) deepCopy() *TreeContext {
 	}
 
 	// deepcopy nonRevertiveInfo
-	m := map[string]bool{}
+	m := make(map[string]bool, len(t.nonRevertiveInfo))
 	for k, v := range t.nonRevertiveInfo {
 		m[k] = v
 	}

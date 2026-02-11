@@ -26,13 +26,25 @@ type ResetFlagsProcessorParameters struct {
 	adjustedFlagsCount              atomic.Int64
 }
 
-func NewResetFlagsProcessorParameters(deleteFlag, newFlag, updateFlag bool) *ResetFlagsProcessorParameters {
+func NewResetFlagsProcessorParameters() *ResetFlagsProcessorParameters {
 	return &ResetFlagsProcessorParameters{
-		deleteFlag:         deleteFlag,
-		newFlag:            newFlag,
-		updateFlag:         updateFlag,
 		adjustedFlagsCount: atomic.Int64{},
 	}
+}
+
+func (r *ResetFlagsProcessorParameters) SetDeleteFlag() *ResetFlagsProcessorParameters {
+	r.deleteFlag = true
+	return r
+}
+
+func (r *ResetFlagsProcessorParameters) SetNewFlag() *ResetFlagsProcessorParameters {
+	r.newFlag = true
+	return r
+}
+
+func (r *ResetFlagsProcessorParameters) SetUpdateFlag() *ResetFlagsProcessorParameters {
+	r.updateFlag = true
+	return r
 }
 
 // GetAdjustedFlagsCount returns the number of flags that were adjusted

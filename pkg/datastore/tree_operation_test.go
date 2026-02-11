@@ -1471,7 +1471,7 @@ func TestDatastore_populateTree(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := tree.NewTreeContext(scb, tt.intentName, pool.NewSharedTaskPool(ctx, runtime.NumCPU()))
+			tc := tree.NewTreeContext(scb, tt.intentName, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
@@ -1503,7 +1503,7 @@ func TestDatastore_populateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 			ownerDeleteMarker := tree.NewOwnerDeleteMarker(tree.NewOwnerDeleteMarkerTaskConfig(tt.intentName, false))
 			err = ownerDeleteMarker.Run(root.GetRoot(), sharedTaskPool)
 			if err != nil {
@@ -1513,7 +1513,7 @@ func TestDatastore_populateTree(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags().SetNewFlag()
 
-			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 
 			_, err = root.ImportConfig(ctx, tt.intentReqPath, jsonImporter.NewJsonTreeImporter(jsonConfAny, tt.intentName, tt.intentPrio, tt.nonRevertive), newFlag, sharedPool)
 

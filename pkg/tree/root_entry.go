@@ -52,7 +52,7 @@ func (r *RootEntry) stringToDisk(filename string) error {
 }
 
 func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
-	tc := r.treeContext.deepCopy()
+	tc := r.GetTreeContext().deepCopy()
 	se, err := r.sharedEntryAttributes.deepCopy(tc, nil)
 	if err != nil {
 		return nil, err
@@ -183,7 +183,7 @@ func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Inte
 		return nil, err
 	}
 
-	explicitDeletes := r.treeContext.explicitDeletes.GetByIntentName(owner).ToPathSlice()
+	explicitDeletes := r.GetTreeContext().explicitDeletes.GetByIntentName(owner).ToPathSlice()
 
 	var rootExportEntry *tree_persist.TreeElement
 	if len(treeExport) != 0 {
@@ -195,7 +195,7 @@ func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Inte
 			IntentName:      owner,
 			Root:            rootExportEntry,
 			Priority:        priority,
-			NonRevertive:    r.treeContext.nonRevertiveInfo[owner],
+			NonRevertive:    r.GetTreeContext().nonRevertiveInfo[owner],
 			ExplicitDeletes: explicitDeletes,
 		}, nil
 	}
@@ -239,7 +239,7 @@ func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 	edpsc := ExplicitDeleteProcessorStatCollection{}
 
 	// apply the explicit deletes
-	for deletePathPrio := range r.treeContext.explicitDeletes.Items() {
+	for deletePathPrio := range r.GetTreeContext().explicitDeletes.Items() {
 
 		params := NewExplicitDeleteTaskParameters(deletePathPrio.GetOwner(), deletePathPrio.GetPrio())
 

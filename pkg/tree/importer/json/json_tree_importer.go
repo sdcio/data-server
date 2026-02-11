@@ -12,7 +12,7 @@ import (
 )
 
 type JsonTreeImporter struct {
-	JsonTreeImporterElement
+	*JsonTreeImporterElement
 	intentName   string
 	priority     int32
 	nonRevertive bool
@@ -32,13 +32,10 @@ func (j *JsonTreeImporter) GetName() string {
 
 func NewJsonTreeImporter(d any, intentName string, priority int32, nonRevertive bool) *JsonTreeImporter {
 	return &JsonTreeImporter{
-		JsonTreeImporterElement: JsonTreeImporterElement{
-			data: d,
-			name: "root",
-		},
-		intentName:   intentName,
-		priority:     priority,
-		nonRevertive: nonRevertive,
+		JsonTreeImporterElement: newJsonTreeImporterElement("root", d),
+		intentName:              intentName,
+		priority:                priority,
+		nonRevertive:            nonRevertive,
 	}
 }
 

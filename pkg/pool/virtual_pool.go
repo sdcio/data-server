@@ -153,7 +153,7 @@ type VirtualPool struct {
 	// firstErr used for fail-fast
 	firstErr atomic.Pointer[error]
 	// per-virtual inflight counter (matches lifecycle of tasks submitted by this virtual)
-	inflight int64
+	inflight atomic.Int64
 	// ensure done channel closed only once (for Wait)
 	waitOnce sync.Once
 	// done is closed when the virtual pool is closed for submit and inflight reaches zero
@@ -214,7 +214,7 @@ func (vt *virtualTask) Run(ctx context.Context, submit func(Task) error) error {
 func (v *VirtualPool) Submit(t Task) error {
 	// Increment inflight BEFORE checking closed to avoid race where CloseForSubmit
 	// sees inflight=0 and closes the pool while we are in the middle of submitting.
-	atomic.AddInt64(&v.inflight, 1)
+	v.inflight.Add(1)
 
 	// fast-fail if virtual pool closed for submit
 	if v.closed.Load() {
@@ -237,7 +237,7 @@ func (v *VirtualPool) Submit(t Task) error {
 }
 
 func (v *VirtualPool) decrementInflight() {
-	if remaining := atomic.AddInt64(&v.inflight, -1); remaining == 0 && v.closed.Load() {
+	if remaining := v.inflight.Add(-1); remaining == 0 && v.closed.Load() {
 		v.waitOnce.Do(func() {
 			close(v.done)
 		})
@@ -258,7 +258,7 @@ func (v *VirtualPool) submitInternal(t Task) error {
 		return ErrVirtualPoolClosed
 	}
 	// increment per-virtual inflight (will be decremented by worker after run)
-	atomic.AddInt64(&v.inflight, 1)
+	v.inflight.Add(1)
 	vt := &virtualTask{vp: v, task: t}
 	if err := v.parent.submitWrapped(vt); err != nil {
 		// submission failed: revert inflight
@@ -274,7 +274,7 @@ func (v *VirtualPool) submitInternal(t Task) error {
 func (v *VirtualPool) CloseForSubmit() {
 	v.closed.Store(true)
 	// if nothing inflight, signal Wait() callers that virtual is drained
-	if atomic.LoadInt64(&v.inflight) == 0 {
+	if v.inflight.Load() == 0 {
 		v.waitOnce.Do(func() {
 			close(v.done)
 		})
