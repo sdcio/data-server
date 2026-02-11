@@ -21,12 +21,12 @@ type importConfigTask struct {
 }
 
 type ImportConfigProcessorParams struct {
-	intentName   string
-	intentPrio   int32
-	insertFlags  *types.UpdateInsertFlags
-	treeContext  *TreeContext
-	leafListLock *sync.Map
-	stats        *types.ImportStats
+	intentName      string
+	intentPrio      int32
+	insertFlags     *types.UpdateInsertFlags
+	treeContext     *TreeContext
+	leafListTracker *sync.Map
+	stats           *types.ImportStats
 }
 
 func NewParameters(
@@ -38,12 +38,12 @@ func NewParameters(
 	stats *types.ImportStats,
 ) *ImportConfigProcessorParams {
 	return &ImportConfigProcessorParams{
-		intentName:   intentName,
-		intentPrio:   intentPrio,
-		insertFlags:  insertFlags,
-		treeContext:  treeContext,
-		leafListLock: leafListLock,
-		stats:        stats,
+		intentName:      intentName,
+		intentPrio:      intentPrio,
+		insertFlags:     insertFlags,
+		treeContext:     treeContext,
+		leafListTracker: leafListLock,
+		stats:           stats,
 	}
 }
 
@@ -90,9 +90,6 @@ func (p *ImportConfigProcessor) Run(ctx context.Context, e Entry, poolFactory po
 	if err := workerPool.FirstError(); err != nil {
 		return err
 	}
-	// TODO: support tolerant mode? Processor usually decides what to return based on pool mode,
-	// but FirstError() works for fail-fast. For tolerant, we might want Errors().
-	// But ImportConfig usually stops on error?
 	return nil
 }
 
@@ -180,34 +177,29 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 		return nil
 
 	case *sdcpb.SchemaElem_Leaflist:
-		// for the leaflist, since in XML the leaf list elements are independet elements, we need to make
-		// sure that the first element is basically resetting the leaflist and all consecutive elemts are then
-		// added to the already resettet leaflist.
-		// strategy here is to create a mutex lock it and try to store it in the leafListLock map.
-		// if the mutex was then stored, we're the first goroutine and need to reset. If we get a different mutex back
-		// and the the loaded var is set to true, we should not reset the list and trxy to lock the returned mutex.
+		// For leaf lists we need to make sure the first insertion resets the leaf list, all consecutive insertions do add to it.
+		// To do so, we have the leafListTracker map that indicates if a leaf list was already reset and the first insertion was done or not.
+		// The key for the map is the combination of the parent entry and the leaf list name, so we can have multiple leaf lists under the same parent without
+		// interference.
 
-		// create a mutex and lock it
-		llMutex := &sync.Mutex{}
-		llMutex.Lock()
+		// create a unique key for the leaflist based on the parent entry and the leaflist name
+		key := struct {
+			parent Entry
+			name   string
+		}{task.entry.GetParent(), task.importerElement.GetName()}
 
-		// try storing it or load it from leafListLock
-		llm, loaded := task.params.leafListLock.LoadOrStore(task.entry.SdcpbPath().ToXPath(false), llMutex)
-
-		// if it was loaded, we need to lock the loaded mutex
-		if loaded {
-			llMutex = llm.(*sync.Mutex)
-			llMutex.Lock()
-		}
-		defer llMutex.Unlock()
+		_, loaded := task.params.leafListTracker.LoadOrStore(key, struct{}{})
 
 		var scalarArr *sdcpb.ScalarArray
 		mustAdd := false
 		var le *LeafEntry
 		if loaded {
+			// if loaded is true, it means that another goroutine already did the first insertion and reset,
+			// so we just need to get the leaf list and add to it
 			le = task.entry.GetLeafVariantEntries().GetByOwner(task.params.intentName)
 			scalarArr = le.Value().GetLeaflistVal()
 		} else {
+			// reset / create the leaf list on the first insertion
 			le = NewLeafEntry(nil, task.params.insertFlags, task.entry)
 			mustAdd = true
 			scalarArr = &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{}}
