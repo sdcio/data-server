@@ -72,7 +72,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	}
 
 	// run reset flags processor to reset flags
-	resetFlagsProcessorParams := tree.NewResetFlagsProcessorParameters(true, true, true)
+	resetFlagsProcessorParams := tree.NewResetFlagsProcessorParameters().SetDeleteFlag().SetNewFlag().SetUpdateFlag()
 	err = tree.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(d.syncTree.GetRoot(), d.taskPool)
 	if err != nil {
 		return err
@@ -99,7 +99,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 }
 
 func (d *Datastore) NewEmptyTree(ctx context.Context) (*tree.RootEntry, error) {
-	tc := tree.NewTreeContext(d.schemaClient, tree.RunningIntentName, d.taskPool)
+	tc := tree.NewTreeContext(d.schemaClient, d.taskPool)
 	newTree, err := tree.NewTreeRoot(ctx, tc)
 	if err != nil {
 		return nil, err

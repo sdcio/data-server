@@ -66,7 +66,7 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntent
 	}
 
 	// otherwise consult cache
-	root, err := tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, intentName, d.taskPool))
+	root, err := tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, d.taskPool))
 	if err != nil {
 		return nil, err
 	}

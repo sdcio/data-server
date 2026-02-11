@@ -93,7 +93,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 	)
 
 	scb := schemaClient.NewSchemaClientBound(c.Schema, sc)
-	tc := tree.NewTreeContext(scb, tree.RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
 	if err != nil {
 		cancel()

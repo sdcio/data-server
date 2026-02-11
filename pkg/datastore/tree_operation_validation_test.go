@@ -187,7 +187,7 @@ func TestDatastore_validateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			tc := tree.NewTreeContext(scb, tt.intentName, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+			tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Error(err)

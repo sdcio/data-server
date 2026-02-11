@@ -66,7 +66,7 @@ func Test_Entry(t *testing.T) {
 	u2 := types.NewUpdate(nil, desc, int32(99), "me", int64(444))
 	u3 := types.NewUpdate(nil, desc, int32(98), "me", int64(88))
 
-	tc := NewTreeContext(scb, "foo", pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -174,7 +174,7 @@ func Test_Entry_One(t *testing.T) {
 	u3 := types.NewUpdate(nil, desc3, prio50, owner2, ts1)
 	u3_1 := types.NewUpdate(nil, testhelper.GetUIntTvProto(10), prio50, owner2, ts1)
 
-	tc := NewTreeContext(scb, "foo", pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -300,7 +300,7 @@ func Test_Entry_Two(t *testing.T) {
 	u1 := types.NewUpdate(nil, desc3, prio50, owner1, ts1)
 	u1_1 := types.NewUpdate(nil, testhelper.GetUIntTvProto(10), prio50, owner1, ts1)
 
-	tc := NewTreeContext(scb, "foo", pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -495,7 +495,7 @@ func Test_Entry_Three(t *testing.T) {
 	u3r := types.NewUpdate(nil, desc3, RunningValuesPrio, RunningIntentName, ts1)
 	u4r := types.NewUpdate(nil, desc3, RunningValuesPrio, RunningIntentName, ts1)
 
-	tc := NewTreeContext(scb, "foo", pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -784,7 +784,7 @@ func Test_Entry_Four(t *testing.T) {
 	}
 	// u2o2_1 := types.NewUpdate(p2o2_1, testhelper.GetUIntTvProto(11), prio55, owner2, ts1)
 
-	tc := NewTreeContext(scb, "foo", pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -956,7 +956,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 	t.Run("Test Leaflist min- & max- elements - One",
 		func(t *testing.T) {
 
-			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -1009,7 +1009,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 	t.Run("Test Leaflist min- & max- elements - Two",
 		func(t *testing.T) {
-			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -1058,7 +1058,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 	t.Run("Test Leaflist min- & max- elements - Four",
 		func(t *testing.T) {
 
-			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -1185,7 +1185,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	}
 	u6 := types.NewUpdate(nil, desc3, prio50, owner1, ts1)
 
-	tc := NewTreeContext(scb, "foo", pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -1480,7 +1480,7 @@ func Test_Schema_Population(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tc := NewTreeContext(scb, "foo", pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -1535,7 +1535,7 @@ func Test_sharedEntryAttributes_SdcpbPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tc := NewTreeContext(scb, "foo", pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -1666,7 +1666,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 
 	t.Run("Test_Validation_String_Pattern - One",
 		func(t *testing.T) {
-			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -1705,7 +1705,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 
 	t.Run("Test_Validation_String_Pattern - Two",
 		func(t *testing.T) {
-			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -1802,7 +1802,7 @@ func Test_Validation_Deref(t *testing.T) {
 
 	t.Run("Test_Validation_String_Pattern - One",
 		func(t *testing.T) {
-			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -1858,7 +1858,7 @@ func Test_Validation_MultiKey_Pattern(t *testing.T) {
 
 	t.Run("MultiKey_Pattern_Valid",
 		func(t *testing.T) {
-			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -1936,7 +1936,7 @@ func Test_Validation_MultiKey_Pattern(t *testing.T) {
 
 	t.Run("MultiKey_Pattern_Invalid_Owner",
 		func(t *testing.T) {
-			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -1980,7 +1980,7 @@ func Test_Validation_MultiKey_Pattern(t *testing.T) {
 
 	t.Run("MultiKey_Pattern_Invalid_NextHop",
 		func(t *testing.T) {
-			tc := NewTreeContext(scb, owner1, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)

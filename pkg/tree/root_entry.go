@@ -37,11 +37,6 @@ func NewTreeRoot(ctx context.Context, tc *TreeContext) (*RootEntry, error) {
 		sharedEntryAttributes: sea,
 	}
 
-	err = tc.SetRoot(sea)
-	if err != nil {
-		return nil, err
-	}
-
 	return root, nil
 }
 
@@ -62,10 +57,6 @@ func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
 		sharedEntryAttributes: se,
 	}
 
-	err = tc.SetRoot(result.sharedEntryAttributes)
-	if err != nil {
-		return nil, err
-	}
 	return result, nil
 }
 

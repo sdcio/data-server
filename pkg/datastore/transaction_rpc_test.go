@@ -140,7 +140,7 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 			sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).AnyTimes()
 
 			// Setup SyncTree with Running Config
-			tc := tree.NewTreeContext(scb, tree.RunningIntentName, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+			tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatalf("failed to create sync tree root: %v", err)

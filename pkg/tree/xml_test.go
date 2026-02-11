@@ -546,35 +546,11 @@ func TestToXMLTable(t *testing.T) {
 			}
 			owner := "owner1"
 
-			// var runningCacheUpds []*types.Update
-			// if tt.runningConfig != nil {
-			// 	runningSdcpbUpds, err := tt.runningConfig(context.Background(), utils.NewConverter(scb))
-			// 	if err != nil {
-			// 		t.Error(err)
-			// 	}
-			// 	runningCacheUpds, err = utils.SdcpbUpdatesToCacheUpdates(runningSdcpbUpds, RunningIntentName, RunningValuesPrio)
-			// 	if err != nil {
-			// 		t.Error(err)
-			// 	}
-			// }
-
-			// var intendedCacheUpds []*types.Update
-			// if tt.existingConfig != nil {
-			// 	intendedSdcpbUpds, err := tt.existingConfig(context.Background(), utils.NewConverter(scb))
-			// 	if err != nil {
-			// 		t.Error(err)
-			// 	}
-			// 	intendedCacheUpds, err = utils.SdcpbUpdatesToCacheUpdates(intendedSdcpbUpds, owner, 5)
-			// 	if err != nil {
-			// 		t.Error(err)
-			// 	}
-			// }
-
 			ctx := context.Background()
 
 			converter := utils.NewConverter(scb)
 
-			tc := NewTreeContext(scb, owner, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)

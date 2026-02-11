@@ -66,9 +66,6 @@ func (p *ImportConfigProcessor) GetStats() *types.ImportStats {
 }
 
 func (p *ImportConfigProcessor) Run(ctx context.Context, e Entry, poolFactory pool.VirtualPoolFactory) error {
-	// set actual owner
-	e.GetTreeContext().SetActualOwner(p.importer.GetName())
-
 	// store non revertive info
 	e.GetTreeContext().nonRevertiveInfo[p.importer.GetName()] = p.importer.GetNonRevertive()
 

@@ -72,16 +72,13 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	ctx = logf.IntoContext(ctx, log)
 
 	// create a new TreeContext
-	tc := tree.NewTreeContext(d.schemaClient, d.Name(), d.taskPool)
+	tc := tree.NewTreeContext(d.schemaClient, d.taskPool)
 
 	// create a new TreeRoot to collect validate and hand to SBI.Set()
 	root, err := tree.NewTreeRoot(ctx, tc)
 	if err != nil {
 		return nil, err
 	}
-
-	// set TreeContext actual owner to the const of ReplaceIntentName
-	tc.SetActualOwner(tree.ReplaceIntentName)
 
 	// store the actual / old running in the transaction
 	runningProto, err := d.cacheClient.IntentGet(ctx, tree.RunningIntentName)
