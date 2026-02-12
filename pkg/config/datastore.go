@@ -76,7 +76,8 @@ type SBI struct {
 }
 
 type SBIGnmiOptions struct {
-	Encoding string `yaml:"encoding,omitempty" json:"encoding,omitempty"`
+	Encoding   string `yaml:"encoding,omitempty" json:"encoding,omitempty"`
+	TargetName string `yaml:"target,omitempty" json:"target,omitempty"`
 }
 
 type SBINetconfOptions struct {
