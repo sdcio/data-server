@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/sdcio/data-server/pkg/datastore/types"
-	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
@@ -41,11 +40,14 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 	if req.GetOrphan() {
 		ti.SetDeleteOnlyIntendedFlag()
 	}
-	if req.GetDeviation() {
-		ti.SetDeviation()
+	if req.GetNonRevertive() {
+		ti.SetNonRevertive()
 	}
 	if req.GetDeleteIgnoreNoExist() {
 		ti.SetDeleteIgnoreNonExisting()
+	}
+	if req.GetPreviouslyApplied() {
+		ti.SetPreviouslyApplied()
 	}
 
 	// convert the sdcpb.updates to tree.UpdateSlice
@@ -70,7 +72,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	ctx = logf.IntoContext(ctx, log)
 
 	// create a new TreeContext
-	tc := tree.NewTreeContext(d.schemaClient, d.Name())
+	tc := tree.NewTreeContext(d.schemaClient, d.taskPool)
 
 	// create a new TreeRoot to collect validate and hand to SBI.Set()
 	root, err := tree.NewTreeRoot(ctx, tc)
@@ -78,15 +80,12 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 		return nil, err
 	}
 
-	// set TreeContext actual owner to the const of ReplaceIntentName
-	tc.SetActualOwner(tree.ReplaceIntentName)
-
 	// store the actual / old running in the transaction
 	runningProto, err := d.cacheClient.IntentGet(ctx, tree.RunningIntentName)
 	if err != nil {
 		return nil, err
 	}
-	err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto), tree.RunningIntentName, tree.RunningValuesPrio, treetypes.NewUpdateInsertFlags())
+	_, err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto), treetypes.NewUpdateInsertFlags(), d.taskPool)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +146,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	return warnings, nil
 }
 
-func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.RootEntry, excludeDeviations bool) ([]string, error) {
+func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.RootEntry) ([]string, error) {
 	log := logf.FromContext(ctx)
 
 	intentNames := []string{}
@@ -174,15 +173,12 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 				IntentChan = nil
 				break selectLoop
 			}
-			if excludeDeviations && intent.Deviation {
-				continue
-			}
 			log.V(logf.VDebug).Info("adding intent to tree", "intent", intent.GetIntentName())
 			log.V(logf.VTrace).Info("adding intent to tree", "intent", intent.GetIntentName(), "content", utils.FormatProtoJSON(intent))
 
 			intentNames = append(intentNames, intent.GetIntentName())
 			protoLoader := treeproto.NewProtoTreeImporter(intent)
-			err := root.ImportConfig(ctx, nil, protoLoader, intent.GetIntentName(), intent.GetPriority(), treetypes.NewUpdateInsertFlags())
+			_, err := root.ImportConfig(ctx, nil, protoLoader, treetypes.NewUpdateInsertFlags(), d.taskPool)
 			if err != nil {
 				return nil, err
 			}
@@ -204,7 +200,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		return nil, err
 	}
 
-	_, err = d.LoadAllButRunningIntents(ctx, root, false)
+	_, err = d.LoadAllButRunningIntents(ctx, root)
 	if err != nil {
 		return nil, err
 	}
@@ -213,6 +209,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	flagNew := treetypes.NewUpdateInsertFlags()
 	// where the New flag is set
 	flagNew.SetNewFlag()
+	flagExisting := treetypes.NewUpdateInsertFlags()
 
 	// iterate through all the intents
 	for _, intent := range transaction.GetNewIntents() {
@@ -222,16 +219,15 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 		oldIntentContent := lvs.ToPathAndUpdateSlice()
 
-		deleteVisitorPool := d.taskPool.NewVirtualPool(pool.VirtualFailFast, 1)
 		ownerDeleteMarker := tree.NewOwnerDeleteMarker(tree.NewOwnerDeleteMarkerTaskConfig(intent.GetName(), intent.GetOnlyIntended()))
 
-		err := ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
+		err := ownerDeleteMarker.Run(root.GetRoot(), d.taskPool)
 		if err != nil {
 			return nil, err
 		}
 
 		// clear the owners existing explicit delete entries, retrieving the old entries for storing in the transaction for possible rollback
-		oldExplicitDeletes := root.RemoveExplicitDeletes(intent.GetName())
+		oldExplicitDeletes := root.GetTreeContext().RemoveExplicitDeletes(intent.GetName())
 
 		priority := int32(math.MaxInt32)
 		if len(oldIntentContent) > 0 {
@@ -245,15 +241,23 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 
 		if !intent.GetDeleteFlag() {
+			flag := flagNew
+			// determine the correct flag to use based on whether the intent is non-revertive and was previously applied
+			if intent.NonRevertive() && intent.GetPreviouslyApplied() {
+				flag = flagExisting
+			}
+
 			// add the content to the Tree
-			err = root.AddUpdatesRecursive(ctx, intent.GetUpdates(), flagNew)
+			err = root.AddUpdatesRecursive(ctx, intent.GetUpdates(), flag)
 			if err != nil {
 				return nil, err
 			}
 
 			// add the explicit delete entries
-			root.AddExplicitDeletes(intent.GetName(), intent.GetPriority(), intent.GetDeletes())
+			root.GetTreeContext().AddExplicitDeletes(intent.GetName(), intent.GetPriority(), intent.GetDeletes())
 		}
+
+		root.SetNonRevertiveIntent(intent.GetName(), intent.NonRevertive())
 	}
 
 	les := tree.LeafVariantSlice{}
@@ -354,7 +358,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		delSl := deletesOwner.ToXPathSlice()
 		log.V(logf.VTrace).Info("deletes owner", "deletes-owner", delSl)
 
-		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority(), intent.Deviation())
+		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority())
 		switch {
 		case errors.Is(err, tree.ErrorIntentNotPresent):
 			err = d.cacheClient.IntentDelete(ctx, intent.GetName(), intent.GetDeleteIgnoreNonExisting())
@@ -420,7 +424,7 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVari
 	}
 
 	// export the synctree
-	newRunningIntent, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
+	newRunningIntent, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
 	if err != nil && err != tree.ErrorIntentNotPresent {
 		return err
 	}

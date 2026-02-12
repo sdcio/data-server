@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/pool"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -213,7 +215,7 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := NewTreeContext(scb, owner1)
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
@@ -236,7 +238,8 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+			vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+			_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vpf)
 			if err != nil {
 				t.Fatal(err)
 			}

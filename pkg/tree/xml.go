@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/beevik/etree"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -42,7 +43,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 		// if the entry remains so exist, we need to add it to the xml doc
 		overallDoAdd := false
 
-		childs := s.GetChilds(DescendMethodActiveChilds)
+		childs := s.GetChilds(types.DescendMethodActiveChilds)
 
 		keys := make([]string, 0, len(childs))
 		for k := range childs {

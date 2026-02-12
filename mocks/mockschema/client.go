@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	schema_server "github.com/sdcio/sdc-protos/sdcpb"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	gomock "go.uber.org/mock/gomock"
 	grpc "google.golang.org/grpc"
 )
@@ -43,14 +43,14 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 }
 
 // CreateSchema mocks base method.
-func (m *MockClient) CreateSchema(ctx context.Context, in *schema_server.CreateSchemaRequest, opts ...grpc.CallOption) (*schema_server.CreateSchemaResponse, error) {
+func (m *MockClient) CreateSchema(ctx context.Context, in *sdcpb.CreateSchemaRequest, opts ...grpc.CallOption) (*sdcpb.CreateSchemaResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, in}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "CreateSchema", varargs...)
-	ret0, _ := ret[0].(*schema_server.CreateSchemaResponse)
+	ret0, _ := ret[0].(*sdcpb.CreateSchemaResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -63,14 +63,14 @@ func (mr *MockClientMockRecorder) CreateSchema(ctx, in any, opts ...any) *gomock
 }
 
 // DeleteSchema mocks base method.
-func (m *MockClient) DeleteSchema(ctx context.Context, in *schema_server.DeleteSchemaRequest, opts ...grpc.CallOption) (*schema_server.DeleteSchemaResponse, error) {
+func (m *MockClient) DeleteSchema(ctx context.Context, in *sdcpb.DeleteSchemaRequest, opts ...grpc.CallOption) (*sdcpb.DeleteSchemaResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, in}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "DeleteSchema", varargs...)
-	ret0, _ := ret[0].(*schema_server.DeleteSchemaResponse)
+	ret0, _ := ret[0].(*sdcpb.DeleteSchemaResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -83,14 +83,14 @@ func (mr *MockClientMockRecorder) DeleteSchema(ctx, in any, opts ...any) *gomock
 }
 
 // ExpandPath mocks base method.
-func (m *MockClient) ExpandPath(ctx context.Context, in *schema_server.ExpandPathRequest, opts ...grpc.CallOption) (*schema_server.ExpandPathResponse, error) {
+func (m *MockClient) ExpandPath(ctx context.Context, in *sdcpb.ExpandPathRequest, opts ...grpc.CallOption) (*sdcpb.ExpandPathResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, in}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "ExpandPath", varargs...)
-	ret0, _ := ret[0].(*schema_server.ExpandPathResponse)
+	ret0, _ := ret[0].(*sdcpb.ExpandPathResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -103,14 +103,14 @@ func (mr *MockClientMockRecorder) ExpandPath(ctx, in any, opts ...any) *gomock.C
 }
 
 // GetSchema mocks base method.
-func (m *MockClient) GetSchema(ctx context.Context, in *schema_server.GetSchemaRequest, opts ...grpc.CallOption) (*schema_server.GetSchemaResponse, error) {
+func (m *MockClient) GetSchema(ctx context.Context, in *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, in}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetSchema", varargs...)
-	ret0, _ := ret[0].(*schema_server.GetSchemaResponse)
+	ret0, _ := ret[0].(*sdcpb.GetSchemaResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -123,14 +123,14 @@ func (mr *MockClientMockRecorder) GetSchema(ctx, in any, opts ...any) *gomock.Ca
 }
 
 // GetSchemaDetails mocks base method.
-func (m *MockClient) GetSchemaDetails(ctx context.Context, in *schema_server.GetSchemaDetailsRequest, opts ...grpc.CallOption) (*schema_server.GetSchemaDetailsResponse, error) {
+func (m *MockClient) GetSchemaDetails(ctx context.Context, in *sdcpb.GetSchemaDetailsRequest, opts ...grpc.CallOption) (*sdcpb.GetSchemaDetailsResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, in}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetSchemaDetails", varargs...)
-	ret0, _ := ret[0].(*schema_server.GetSchemaDetailsResponse)
+	ret0, _ := ret[0].(*sdcpb.GetSchemaDetailsResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -143,14 +143,14 @@ func (mr *MockClientMockRecorder) GetSchemaDetails(ctx, in any, opts ...any) *go
 }
 
 // GetSchemaElements mocks base method.
-func (m *MockClient) GetSchemaElements(ctx context.Context, req *schema_server.GetSchemaRequest, opts ...grpc.CallOption) (chan *schema_server.SchemaElem, error) {
+func (m *MockClient) GetSchemaElements(ctx context.Context, req *sdcpb.GetSchemaRequest, opts ...grpc.CallOption) (chan *sdcpb.SchemaElem, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, req}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetSchemaElements", varargs...)
-	ret0, _ := ret[0].(chan *schema_server.SchemaElem)
+	ret0, _ := ret[0].(chan *sdcpb.SchemaElem)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -163,14 +163,14 @@ func (mr *MockClientMockRecorder) GetSchemaElements(ctx, req any, opts ...any) *
 }
 
 // ListSchema mocks base method.
-func (m *MockClient) ListSchema(ctx context.Context, in *schema_server.ListSchemaRequest, opts ...grpc.CallOption) (*schema_server.ListSchemaResponse, error) {
+func (m *MockClient) ListSchema(ctx context.Context, in *sdcpb.ListSchemaRequest, opts ...grpc.CallOption) (*sdcpb.ListSchemaResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, in}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "ListSchema", varargs...)
-	ret0, _ := ret[0].(*schema_server.ListSchemaResponse)
+	ret0, _ := ret[0].(*sdcpb.ListSchemaResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -183,14 +183,14 @@ func (mr *MockClientMockRecorder) ListSchema(ctx, in any, opts ...any) *gomock.C
 }
 
 // ReloadSchema mocks base method.
-func (m *MockClient) ReloadSchema(ctx context.Context, in *schema_server.ReloadSchemaRequest, opts ...grpc.CallOption) (*schema_server.ReloadSchemaResponse, error) {
+func (m *MockClient) ReloadSchema(ctx context.Context, in *sdcpb.ReloadSchemaRequest, opts ...grpc.CallOption) (*sdcpb.ReloadSchemaResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, in}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "ReloadSchema", varargs...)
-	ret0, _ := ret[0].(*schema_server.ReloadSchemaResponse)
+	ret0, _ := ret[0].(*sdcpb.ReloadSchemaResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -203,14 +203,14 @@ func (mr *MockClientMockRecorder) ReloadSchema(ctx, in any, opts ...any) *gomock
 }
 
 // ToPath mocks base method.
-func (m *MockClient) ToPath(ctx context.Context, in *schema_server.ToPathRequest, opts ...grpc.CallOption) (*schema_server.ToPathResponse, error) {
+func (m *MockClient) ToPath(ctx context.Context, in *sdcpb.ToPathRequest, opts ...grpc.CallOption) (*sdcpb.ToPathResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, in}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "ToPath", varargs...)
-	ret0, _ := ret[0].(*schema_server.ToPathResponse)
+	ret0, _ := ret[0].(*sdcpb.ToPathResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -223,14 +223,14 @@ func (mr *MockClientMockRecorder) ToPath(ctx, in any, opts ...any) *gomock.Call 
 }
 
 // UploadSchema mocks base method.
-func (m *MockClient) UploadSchema(ctx context.Context, opts ...grpc.CallOption) (schema_server.SchemaServer_UploadSchemaClient, error) {
+func (m *MockClient) UploadSchema(ctx context.Context, opts ...grpc.CallOption) (sdcpb.SchemaServer_UploadSchemaClient, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "UploadSchema", varargs...)
-	ret0, _ := ret[0].(schema_server.SchemaServer_UploadSchemaClient)
+	ret0, _ := ret[0].(sdcpb.SchemaServer_UploadSchemaClient)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

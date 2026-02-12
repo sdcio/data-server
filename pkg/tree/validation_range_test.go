@@ -27,7 +27,7 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 		t.Error(err)
 	}
 
-	tc := NewTreeContext(scb, "owner1")
+	tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 	root, err := NewTreeRoot(ctx, tc)
 
@@ -65,9 +65,10 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 		t.Error(err)
 	}
 
-	jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
+	jimporter := json_importer.NewJsonTreeImporter(jsonConfig, "owner1", 5, false)
 
-	err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
+	sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, types.NewUpdateInsertFlags(), sharedPool)
 	if err != nil {
 		t.Error(err)
 	}
@@ -78,7 +79,6 @@ func TestValidate_Range_SDC_Schema(t *testing.T) {
 	}
 
 	valConf := validationConfig.DeepCopy()
-	sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
 
 	validationResult, _ := root.Validate(ctx, valConf, sharedPool)
 
@@ -157,7 +157,7 @@ func TestValidate_RangesSigned(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			// the tree context
-			tc := NewTreeContext(scb, "owner1")
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 			// the tree root
 			root, err := NewTreeRoot(ctx, tc)
@@ -179,10 +179,13 @@ func TestValidate_RangesSigned(t *testing.T) {
 			}
 
 			// new json tree importer
-			jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
+			jimporter := json_importer.NewJsonTreeImporter(jsonConfig, "owner1", 5, false)
+
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 
 			// import via importer
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
+			_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, types.NewUpdateInsertFlags(), sharedPool)
+
 			if err != nil {
 				t.Error(err)
 			}
@@ -192,7 +195,6 @@ func TestValidate_RangesSigned(t *testing.T) {
 				t.Error(err)
 			}
 
-			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
 			validationResult, _ := root.Validate(ctx, validationConfig, sharedPool)
 
 			t.Logf("Validation Errors:\n%s", strings.Join(validationResult.ErrorsStr(), "\n"))
@@ -291,7 +293,7 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			// the tree context
-			tc := NewTreeContext(scb, "owner1")
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 			// the tree root
 			root, err := NewTreeRoot(ctx, tc)
@@ -313,10 +315,12 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 			}
 
 			// new json tree importer
-			jimporter := json_importer.NewJsonTreeImporter(jsonConfig)
+			jimporter := json_importer.NewJsonTreeImporter(jsonConfig, "owner1", 5, false)
 
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 			// import via importer
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, "owner1", 5, types.NewUpdateInsertFlags())
+			_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, types.NewUpdateInsertFlags(), sharedPool)
+
 			if err != nil {
 				t.Error(err)
 			}
@@ -327,7 +331,6 @@ func TestValidate_RangesUnSigned(t *testing.T) {
 			}
 
 			// run validation
-			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
 			validationResults, _ := root.Validate(ctx, validationConfig, sharedPool)
 
 			t.Logf("Validation Errors:\n%s", strings.Join(validationResults.ErrorsStr(), "\n"))

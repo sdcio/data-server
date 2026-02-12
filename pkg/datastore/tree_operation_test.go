@@ -75,6 +75,7 @@ func TestDatastore_populateTree(t *testing.T) {
 		intendedStoreUpdates []*types.PathAndUpdate
 		runningStoreUpdates  []*types.PathAndUpdate
 		NotOnlyNewOrUpdated  bool // it negated when used in the call, usually we want it to be true
+		nonRevertive         bool
 	}{
 		{
 			name:          "DoubleKey - Delete Single item",
@@ -1470,7 +1471,7 @@ func TestDatastore_populateTree(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := tree.NewTreeContext(scb, tt.intentName)
+			tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
@@ -1502,11 +1503,9 @@ func TestDatastore_populateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-			deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+			sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 			ownerDeleteMarker := tree.NewOwnerDeleteMarker(tree.NewOwnerDeleteMarkerTaskConfig(tt.intentName, false))
-
-			err = ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
+			err = ownerDeleteMarker.Run(root.GetRoot(), sharedTaskPool)
 			if err != nil {
 				t.Error(err)
 				return
@@ -1514,7 +1513,10 @@ func TestDatastore_populateTree(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags().SetNewFlag()
 
-			err = root.ImportConfig(ctx, tt.intentReqPath, jsonImporter.NewJsonTreeImporter(jsonConfAny), tt.intentName, tt.intentPrio, newFlag)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+
+			_, err = root.ImportConfig(ctx, tt.intentReqPath, jsonImporter.NewJsonTreeImporter(jsonConfAny, tt.intentName, tt.intentPrio, tt.nonRevertive), newFlag, sharedPool)
+
 			if err != nil {
 				t.Error(err)
 			}
@@ -1526,7 +1528,6 @@ func TestDatastore_populateTree(t *testing.T) {
 			}
 			fmt.Println(root.String())
 
-			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
 			validationResult, _ := root.Validate(ctx, validationConfig, sharedPool)
 
 			fmt.Printf("Validation Errors:\n%v\n", strings.Join(validationResult.ErrorsStr(), "\n"))

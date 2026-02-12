@@ -123,12 +123,6 @@ func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.Dev
 				continue
 			}
 
-			if log := log.V(logger.VTrace); log.Enabled() {
-				if deviation.Reason() == treetypes.DeviationReasonNotApplied { // TODO add check for trace level Trace
-					log.Info("NOT APPLIED", "path", deviation.Path().ToXPath(false), "actual value", deviation.CurrentValue().ToString(), "expected value", deviation.ExpectedValue().ToString(), "intent", deviation.IntentName())
-				}
-			}
-
 			err := dc.Send(&sdcpb.WatchDeviationResponse{
 				Name:          d.config.Name,
 				Intent:        deviation.IntentName(),
@@ -169,7 +163,7 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 		return nil, err
 	}
 
-	addedIntentNames, err := d.LoadAllButRunningIntents(ctx, deviationTree, true)
+	addedIntentNames, err := d.LoadAllButRunningIntents(ctx, deviationTree)
 	if err != nil {
 		return nil, err
 	}

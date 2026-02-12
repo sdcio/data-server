@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	jimport "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -112,7 +114,7 @@ func TestProtoTreeImporter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tc := tree.NewTreeContext(scb, "test")
+			tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Error(err)
@@ -126,8 +128,10 @@ func TestProtoTreeImporter(t *testing.T) {
 				t.Fatalf("error parsing json document: %v", err)
 			}
 
-			jti := jimport.NewJsonTreeImporter(j)
-			err = root.ImportConfig(ctx, nil, jti, "owner1", 5, types.NewUpdateInsertFlags())
+			jti := jimport.NewJsonTreeImporter(j, "owner1", 5, false)
+
+			vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+			_, err = root.ImportConfig(ctx, nil, jti, types.NewUpdateInsertFlags(), vpf)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -138,14 +142,14 @@ func TestProtoTreeImporter(t *testing.T) {
 			}
 			t.Log(root.String())
 
-			protoIntent, err := root.TreeExport("owner1", 5, false)
+			protoIntent, err := root.TreeExport("owner1", 5)
 			if err != nil {
 				t.Error(err)
 			}
 
 			fmt.Println(protoIntent.PrettyString("  "))
 
-			tcNew := tree.NewTreeContext(scb, "test")
+			tcNew := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			rootNew, err := tree.NewTreeRoot(ctx, tcNew)
 			if err != nil {
 				t.Error(err)
@@ -153,7 +157,8 @@ func TestProtoTreeImporter(t *testing.T) {
 
 			protoAdapter := NewProtoTreeImporter(protoIntent)
 
-			err = rootNew.ImportConfig(ctx, nil, protoAdapter, protoIntent.GetIntentName(), protoIntent.GetPriority(), types.NewUpdateInsertFlags())
+			vpf2 := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+			_, err = rootNew.ImportConfig(ctx, nil, protoAdapter, types.NewUpdateInsertFlags(), vpf2)
 			if err != nil {
 				t.Error(err)
 			}

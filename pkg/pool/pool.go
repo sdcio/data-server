@@ -34,10 +34,10 @@ type Pool[T any] struct {
 	inflightC  *sync.Cond
 }
 
-// NewWorkerPool creates a new Pool. If workerCount <= 0 it defaults to runtime.NumCPU().
+// NewWorkerPool creates a new Pool. If workerCount <= 0 it defaults to runtime.GOMAXPROCS(0).
 func NewWorkerPool[T any](parent context.Context, workerCount int) *Pool[T] {
 	if workerCount <= 0 {
-		workerCount = runtime.NumCPU()
+		workerCount = runtime.GOMAXPROCS(0)
 	}
 	ctx, cancel := context.WithCancel(parent)
 	p := &Pool[T]{

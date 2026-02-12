@@ -93,7 +93,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 	)
 
 	scb := schemaClient.NewSchemaClientBound(c.Schema, sc)
-	tc := tree.NewTreeContext(scb, tree.RunningIntentName)
+	tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
 	if err != nil {
 		cancel()
@@ -113,7 +113,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 		deviationClients: make(map[sdcpb.DataServer_WatchDeviationsServer]string),
 		syncTree:         syncTreeRoot,
 		syncTreeMutex:    &sync.RWMutex{},
-		taskPool:         pool.NewSharedTaskPool(ctx, runtime.NumCPU()),
+		taskPool:         pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)),
 	}
 	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
 
@@ -239,12 +239,12 @@ func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdc
 		return nil, err
 	}
 	// load all intents
-	_, err = d.LoadAllButRunningIntents(ctx, root, true)
+	_, err = d.LoadAllButRunningIntents(ctx, root)
 	if err != nil {
 		return nil, err
 	}
 
-	blamePool := d.taskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+	blamePool := d.taskPool.NewVirtualPool(pool.VirtualFailFast)
 	bcp := tree.NewBlameConfigProcessor(tree.NewBlameConfigProcessorConfig(includeDefaults))
 
 	bte, err := bcp.Run(ctx, root.GetRoot(), blamePool)

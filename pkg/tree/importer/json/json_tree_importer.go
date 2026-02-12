@@ -12,29 +12,50 @@ import (
 )
 
 type JsonTreeImporter struct {
+	*JsonTreeImporterElement
+	intentName   string
+	priority     int32
+	nonRevertive bool
+}
+
+func (j *JsonTreeImporter) GetPriority() int32 {
+	return j.priority
+}
+
+func (j *JsonTreeImporter) GetNonRevertive() bool {
+	return j.nonRevertive
+}
+
+func (j *JsonTreeImporter) GetName() string {
+	return j.intentName
+}
+
+func NewJsonTreeImporter(d any, intentName string, priority int32, nonRevertive bool) *JsonTreeImporter {
+	return &JsonTreeImporter{
+		JsonTreeImporterElement: newJsonTreeImporterElement("root", d),
+		intentName:              intentName,
+		priority:                priority,
+		nonRevertive:            nonRevertive,
+	}
+}
+
+type JsonTreeImporterElement struct {
 	data any
 	name string
 }
 
-func newJsonTreeImporterInternal(name string, d any) *JsonTreeImporter {
-	return &JsonTreeImporter{
+func newJsonTreeImporterElement(name string, d any) *JsonTreeImporterElement {
+	return &JsonTreeImporterElement{
 		data: d,
 		name: name,
 	}
 }
 
-func NewJsonTreeImporter(d any) *JsonTreeImporter {
-	return &JsonTreeImporter{
-		data: d,
-		name: "root",
-	}
-}
-
-func (j *JsonTreeImporter) GetDeletes() *sdcpb.PathSet {
+func (j *JsonTreeImporterElement) GetDeletes() *sdcpb.PathSet {
 	return sdcpb.NewPathSet()
 }
 
-func (j *JsonTreeImporter) GetElement(key string) importer.ImportConfigAdapterElement {
+func (j *JsonTreeImporterElement) GetElement(key string) importer.ImportConfigAdapterElement {
 	switch d := j.data.(type) {
 	case map[string]any:
 
@@ -44,14 +65,14 @@ func (j *JsonTreeImporter) GetElement(key string) importer.ImportConfigAdapterEl
 				elemName = beforeColon
 			}
 			if key == elemName {
-				return newJsonTreeImporterInternal(key, v)
+				return newJsonTreeImporterElement(key, v)
 			}
 		}
 	}
 	return nil
 }
 
-func (j *JsonTreeImporter) GetElements() []importer.ImportConfigAdapterElement {
+func (j *JsonTreeImporterElement) GetElements() []importer.ImportConfigAdapterElement {
 	var result []importer.ImportConfigAdapterElement
 	switch d := j.data.(type) {
 	case map[string]any:
@@ -64,10 +85,10 @@ func (j *JsonTreeImporter) GetElements() []importer.ImportConfigAdapterElement {
 			switch subElem := v.(type) {
 			case []any:
 				for _, listElem := range subElem {
-					result = append(result, newJsonTreeImporterInternal(key, listElem))
+					result = append(result, newJsonTreeImporterElement(key, listElem))
 				}
 			default:
-				result = append(result, newJsonTreeImporterInternal(key, v))
+				result = append(result, newJsonTreeImporterElement(key, v))
 			}
 		}
 	default:
@@ -76,17 +97,18 @@ func (j *JsonTreeImporter) GetElements() []importer.ImportConfigAdapterElement {
 	return result
 }
 
-func (j *JsonTreeImporter) GetKeyValue() (string, error) {
+func (j *JsonTreeImporterElement) GetKeyValue() (string, error) {
 	return fmt.Sprintf("%v", j.data), nil
 }
 
-func (j *JsonTreeImporter) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+func (j *JsonTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
 	return utils.ConvertJsonValueToTv(j.data, slt)
 }
 
-func (j *JsonTreeImporter) GetName() string {
+func (j *JsonTreeImporterElement) GetName() string {
 	return j.name
 }
 
 // Function to ensure JsonTreeImporter implements ImportConfigAdapter (optional)
 var _ importer.ImportConfigAdapter = (*JsonTreeImporter)(nil)
+var _ importer.ImportConfigAdapterElement = (*JsonTreeImporterElement)(nil)

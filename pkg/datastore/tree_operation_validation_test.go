@@ -59,6 +59,7 @@ func TestDatastore_validateTree(t *testing.T) {
 		intendedStoreUpdates []*cache.Update
 		NotOnlyNewOrUpdated  bool // it negated when used in the call, usually we want it to be true
 		expectedWarnings     []string
+		nonRevertive         bool
 	}{
 
 		{
@@ -186,7 +187,7 @@ func TestDatastore_validateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			tc := tree.NewTreeContext(scb, tt.intentName)
+			tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := tree.NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Error(err)
@@ -195,9 +196,10 @@ func TestDatastore_validateTree(t *testing.T) {
 			flagsNew := types.NewUpdateInsertFlags()
 			flagsNew.SetNewFlag()
 
-			importer := json_importer.NewJsonTreeImporter(jsonConf)
+			importer := json_importer.NewJsonTreeImporter(jsonConf, tt.intentName, tt.intentPrio, tt.nonRevertive)
 
-			err = root.ImportConfig(ctx, path, importer, tt.intentName, tt.intentPrio, flagsNew)
+			vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+			_, err = root.ImportConfig(ctx, path, importer, flagsNew, vpf)
 			if err != nil {
 				t.Error(err)
 			}
@@ -207,7 +209,7 @@ func TestDatastore_validateTree(t *testing.T) {
 				t.Error(err)
 			}
 
-			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 			validationResult, _ := root.Validate(ctx, validationConfig, sharedPool)
 
 			t.Log(root.String())

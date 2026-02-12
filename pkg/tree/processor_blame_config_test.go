@@ -39,14 +39,14 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				conf1 := config1()
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -71,14 +71,14 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				conf1 := config1()
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -104,20 +104,20 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				conf1 := config1()
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				conf2 := config2()
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf2, root, owner2, 10, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, conf2, root, owner2, 10, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -132,7 +132,7 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 
 				running.Patterntest = ygot.String("hallo 0")
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, running, root, RunningIntentName, RunningValuesPrio, flagsExisting)
+				_, err = loadYgotStructIntoTreeRoot(ctx, running, root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -152,8 +152,8 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			treeRoot := tt.r(t)
 
-			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-			vPool := sharedPool.NewVirtualPool(pool.VirtualFailFast, 10)
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+			vPool := sharedPool.NewVirtualPool(pool.VirtualFailFast)
 
 			bp := NewBlameConfigProcessor(NewBlameConfigProcessorConfig(tt.includeDefaults))
 			got, err := bp.Run(ctx, treeRoot.sharedEntryAttributes, vPool)

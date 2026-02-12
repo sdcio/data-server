@@ -30,6 +30,7 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/target/netconf/driver/scrapligo"
 	nctypes "github.com/sdcio/data-server/pkg/datastore/target/netconf/types"
 	"github.com/sdcio/data-server/pkg/datastore/target/types"
+	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/importer/xml"
 )
@@ -88,9 +89,9 @@ func (t *ncTarget) GetImportAdapter(ctx context.Context, req *sdcpb.GetDataReque
 		return nil, err
 	}
 
-	cmlImport := xml.NewXmlTreeImporter(ncResponse.Doc.Root())
+	xmlImport := xml.NewXmlTreeImporter(ncResponse.Doc.Root(), tree.RunningIntentName, tree.RunningValuesPrio, false)
 
-	return cmlImport, nil
+	return xmlImport, nil
 }
 
 func (t *ncTarget) internalGet(ctx context.Context, req *sdcpb.GetDataRequest) (*nctypes.NetconfResponse, error) {

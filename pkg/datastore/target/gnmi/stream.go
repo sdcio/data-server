@@ -148,7 +148,7 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, sy
 			if err != nil {
 				log.Error(err, "failed adding update to synctree")
 			}
-			syncTree.AddExplicitDeletes(tree.RunningIntentName, tree.RunningValuesPrio, noti.deletes)
+			syncTree.GetTreeContext().AddExplicitDeletes(tree.RunningIntentName, tree.RunningValuesPrio, noti.deletes)
 		case <-syncResponse:
 			syncTree, err = s.syncToRunning(syncTree, syncTreeMutex, true)
 			tickerActive = true
@@ -176,7 +176,7 @@ func (s *StreamSync) gnmiSubscribe(subReq *gnmi.SubscribeRequest, updChan chan<-
 
 	respChan, errChan := s.target.Subscribe(s.ctx, subReq, s.config.Name)
 
-	taskPool := s.vpoolFactory.NewVirtualPool(pool.VirtualTolerant, 10)
+	taskPool := s.vpoolFactory.NewVirtualPool(pool.VirtualTolerant)
 	defer taskPool.CloseForSubmit()
 	taskParams := NewNotificationProcessorTaskParameters(updChan, s.schemaClient)
 
@@ -221,7 +221,7 @@ func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, m *sync.Mutex, logC
 	defer m.Unlock()
 
 	startTime := time.Now()
-	result, err := syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio, false)
+	result, err := syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
 	log.V(logger.VTrace).Info("exported tree", "tree", result.String())
 
 	if err != nil {

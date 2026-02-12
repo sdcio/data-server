@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/pool"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -24,7 +26,7 @@ import (
 func TestRootEntry_TreeExport(t *testing.T) {
 	owner1 := "owner1"
 	owner2 := "owner2"
-	tc := NewTreeContext(nil, owner1)
+	tc := NewTreeContext(nil, pool.NewSharedTaskPool(context.Background(), runtime.GOMAXPROCS(0)))
 
 	type args struct {
 		owner    string
@@ -47,6 +49,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					childsMutex:  sync.RWMutex{},
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
+					treeContext:  tc,
 				}
 				result.leafVariants = newLeafVariants(tc, result)
 
@@ -95,6 +98,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					childsMutex:  sync.RWMutex{},
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
+					treeContext:  tc,
 				}
 				result.leafVariants = newLeafVariants(tc, result)
 
@@ -161,6 +165,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					childsMutex:  sync.RWMutex{},
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
+					treeContext:  tc,
 				}
 				result.leafVariants = newLeafVariants(tc, result)
 
@@ -261,6 +266,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					childsMutex:  sync.RWMutex{},
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
+					treeContext:  tc,
 				}
 				result.leafVariants = newLeafVariants(tc, result)
 
@@ -301,9 +307,8 @@ func TestRootEntry_TreeExport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &RootEntry{
 				sharedEntryAttributes: tt.sharedEntryAttributes(),
-				explicitDeletes:       NewDeletePaths(),
 			}
-			got, err := r.TreeExport(tt.args.owner, tt.args.priority, false)
+			got, err := r.TreeExport(tt.args.owner, tt.args.priority)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("RootEntry.TreeExport() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -392,14 +397,14 @@ func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := NewTreeContext(scb, owner1)
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			err = testhelper.LoadYgotStructIntoTreeRoot(ctx, tt.re(), root, owner1, 500, flagsNew)
+			_, err = loadYgotStructIntoTreeRoot(ctx, tt.re(), root, owner1, 500, false, flagsNew)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -429,7 +434,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 		t.Fatal(err)
 	}
 	scb := schemaClient.NewSchemaClientBound(schema, sc)
-	tc := NewTreeContext(scb, "intent1")
+	tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 	type fields struct {
 		sharedEntryAttributes func(t *testing.T) *sharedEntryAttributes
@@ -516,7 +521,9 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				err = s.ImportConfig(ctx, jsonImporter.NewJsonTreeImporter(jsonAny), "owner1", 5, types.NewUpdateInsertFlags())
+				vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+				ImportConfigProcessor := NewImportConfigProcessor(jsonImporter.NewJsonTreeImporter(jsonAny, "owner1", 5, false), types.NewUpdateInsertFlags())
+				err = ImportConfigProcessor.Run(ctx, s, vpf)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -561,16 +568,16 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 		{
 			name: "One",
 			rootEntry: func(t *testing.T) *RootEntry {
-				tc := NewTreeContext(scb, "intent1")
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 400, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 400, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -582,12 +589,12 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 			},
 			owner: owner1,
 			want: func(t *testing.T) *RootEntry {
-				tc := NewTreeContext(scb, "intent1")
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -604,7 +611,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 			root := tt.rootEntry(t)
 			got := root.GetUpdatesForOwner(tt.owner).ToPathAndUpdateSlice()
 
-			tc := NewTreeContext(scb, "intent1")
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			resultRoot, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -627,7 +634,6 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 				t.Logf("Want:\n%s", wantStr)
 				t.Logf("Got:\n%s", resultRoot.String())
 			}
-
 		})
 	}
 }

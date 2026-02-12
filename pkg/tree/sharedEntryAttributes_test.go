@@ -37,7 +37,7 @@ func Test_sharedEntryAttributes_checkAndCreateKeysAsLeafs(t *testing.T) {
 	ctx := context.Background()
 	scb := schemaClient.NewSchemaClientBound(schema, sc)
 
-	tc := NewTreeContext(scb, "intent1")
+	tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 	root, err := NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -93,7 +93,8 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 		{
 			name: "just rootEntry",
 			root: func() *RootEntry {
-				tc := NewTreeContext(nil, owner1)
+				tc := NewTreeContext(nil, pool.NewSharedTaskPool(context.Background(), runtime.GOMAXPROCS(0)))
+
 				r := &RootEntry{
 					sharedEntryAttributes: &sharedEntryAttributes{
 						pathElemName:     "__root__",
@@ -103,7 +104,6 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 						parent:           nil,
 						treeContext:      tc,
 					},
-					explicitDeletes: NewDeletePaths(),
 				}
 				r.leafVariants = newLeafVariants(tc, r.sharedEntryAttributes)
 				return r
@@ -123,7 +123,7 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 					t.Fatal(err)
 				}
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
@@ -146,7 +146,8 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 
 				newFlag := types.NewUpdateInsertFlags()
 
-				err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+				vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+				_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vpf)
 				if err != nil {
 					t.Error(err)
 				}
@@ -203,16 +204,16 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -241,16 +242,16 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 10, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -338,13 +339,13 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		tc := NewTreeContext(scb, owner1)
+		tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 		root, err := NewTreeRoot(ctx, tc)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		err = testhelper.LoadYgotStructIntoTreeRoot(ctx, d, root, owner1, 5, flagsNew)
+		_, err = loadYgotStructIntoTreeRoot(ctx, d, root, owner1, 5, false, flagsNew)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -406,7 +407,7 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 			for _, elem := range got {
 				elemNames = append(elemNames, elem.PathName())
 				elemChilds[elem.PathName()] = []string{}
-				for k := range elem.GetChilds(DescendMethodAll) {
+				for k := range elem.GetChilds(types.DescendMethodAll) {
 					elemChilds[elem.PathName()] = append(elemChilds[elem.PathName()], k)
 				}
 			}
@@ -452,14 +453,14 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				conf1 := config1()
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -474,7 +475,7 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 
 				running.Patterntest = ygot.String("hallo 0")
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, running, root, RunningIntentName, RunningValuesPrio, flagsExisting)
+				_, err = loadYgotStructIntoTreeRoot(ctx, running, root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -631,7 +632,7 @@ func Test_sharedEntryAttributes_MustCount(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := NewTreeContext(scb, owner1)
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
@@ -654,7 +655,8 @@ func Test_sharedEntryAttributes_MustCount(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+			vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+			_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vpf)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -670,7 +672,7 @@ func Test_sharedEntryAttributes_MustCount(t *testing.T) {
 			valConfig.DisabledValidators.DisableAll()
 			valConfig.DisabledValidators.MustStatement = false
 
-			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 
 			result, _ := root.Validate(ctx, valConfig, sharedPool)
 
@@ -753,7 +755,7 @@ func Test_sharedEntryAttributes_MustCountDoubleKey(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := NewTreeContext(scb, owner1)
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
@@ -776,7 +778,8 @@ func Test_sharedEntryAttributes_MustCountDoubleKey(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+			vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+			_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vpf)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -791,7 +794,7 @@ func Test_sharedEntryAttributes_MustCountDoubleKey(t *testing.T) {
 			valConfig := validationConfig.DeepCopy()
 			valConfig.DisabledValidators.DisableAll()
 			valConfig.DisabledValidators.MustStatement = false
-			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 
 			result, _ := root.Validate(ctx, valConfig, sharedPool)
 
@@ -806,7 +809,6 @@ func Test_sharedEntryAttributes_MustCountDoubleKey(t *testing.T) {
 
 func Test_sharedEntryAttributes_getOrCreateChilds(t *testing.T) {
 	ctx := context.TODO()
-	owner1 := "owner1"
 
 	tests := []struct {
 		name        string
@@ -864,7 +866,7 @@ func Test_sharedEntryAttributes_getOrCreateChilds(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tc := NewTreeContext(scb, owner1)
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -910,14 +912,14 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				conf1 := config1()
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -942,7 +944,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
@@ -974,7 +976,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 						},
 					},
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1003,7 +1005,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Fatal(err)
@@ -1017,7 +1019,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 						},
 					},
 				}
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, conf1, root, owner1, 5, false, flagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1041,7 +1043,7 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 			validationConfig.DisabledValidators.DisableAll()
 			validationConfig.DisabledValidators.Mandatory = false
 
-			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 
 			validationResults, _ := root.Validate(ctx, validationConfig, sharedPool)
 
@@ -1122,7 +1124,7 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tc := NewTreeContext(scb, owner1)
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -1149,7 +1151,7 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 
 			fmt.Println(root.String())
 
-			treepersist, err := root.TreeExport(owner1, owner1Prio, false)
+			treepersist, err := root.TreeExport(owner1, owner1Prio)
 			if err != nil {
 				t.Error(err)
 				return
@@ -1163,24 +1165,24 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 			fmt.Println("\nTreeExport:")
 			fmt.Println(string(persistByte))
 
-			tcNew := NewTreeContext(scb, owner1)
+			tcNew := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			newRoot, err := NewTreeRoot(ctx, tcNew)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			err = newRoot.ImportConfig(ctx, &sdcpb.Path{}, proto.NewProtoTreeImporter(treepersist), owner1, owner1Prio, flagsExisting)
+			vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+			_, err = newRoot.ImportConfig(ctx, &sdcpb.Path{}, proto.NewProtoTreeImporter(treepersist), flagsExisting, vpf)
 			if err != nil {
 				t.Error(err)
 				return
 			}
 
 			// mark owner delete
-			sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-			deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+			sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 			ownerDeleteMarker := NewOwnerDeleteMarker(NewOwnerDeleteMarkerTaskConfig(owner1, false))
 
-			err = ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
+			err = ownerDeleteMarker.Run(root.GetRoot(), sharedTaskPool)
 			if err != nil {
 				t.Error(err)
 				return
@@ -1298,7 +1300,7 @@ func Test_sharedEntryAttributes_validateMinMaxElements(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := NewTreeContext(scb, owner1)
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
@@ -1321,7 +1323,8 @@ func Test_sharedEntryAttributes_validateMinMaxElements(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+			vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+			_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vpf)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1337,7 +1340,7 @@ func Test_sharedEntryAttributes_validateMinMaxElements(t *testing.T) {
 			valConfig.DisabledValidators.DisableAll()
 			valConfig.DisabledValidators.MaxElements = false
 
-			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 			result, _ := root.Validate(ctx, valConfig, sharedPool)
 
 			t.Log(strings.Join(result.ErrorsStr(), "\n"))
@@ -1467,7 +1470,7 @@ func Test_sharedEntryAttributes_validateMinMaxElementsDoubleKey(t *testing.T) {
 				t.Fatal(err)
 			}
 			scb := schemaClient.NewSchemaClientBound(schema, sc)
-			tc := NewTreeContext(scb, owner1)
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
@@ -1490,7 +1493,8 @@ func Test_sharedEntryAttributes_validateMinMaxElementsDoubleKey(t *testing.T) {
 
 			newFlag := types.NewUpdateInsertFlags()
 
-			err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny), owner1, 500, newFlag)
+			vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+			_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vpf)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1506,7 +1510,7 @@ func Test_sharedEntryAttributes_validateMinMaxElementsDoubleKey(t *testing.T) {
 			valConfig.DisabledValidators.DisableAll()
 			valConfig.DisabledValidators.MaxElements = false
 
-			sharedPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 			result, _ := root.Validate(ctx, valConfig, sharedPool)
 
 			t.Log(strings.Join(result.ErrorsStr(), "\n"))

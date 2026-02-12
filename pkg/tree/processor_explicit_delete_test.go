@@ -2,11 +2,13 @@ package tree
 
 import (
 	"context"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -46,14 +48,14 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Fatal(err)
 				}
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, flagsNew)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsNew)
 				if err != nil {
 					t.Error(err)
 				}
@@ -74,19 +76,19 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Fatal(err)
 				}
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, flagsExisting)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, flagsExisting)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
@@ -126,29 +128,29 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 					t.Fatal(err)
 				}
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
-				tc := NewTreeContext(scb, owner1)
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, flagsExisting)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, owner1Prio, false, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
 
-				err = testhelper.LoadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, flagsExisting)
+				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
 				if err != nil {
 					t.Error(err)
 				}
 
-				testhelper.LoadYgotStructIntoTreeRoot(ctx, &sdcio_schema.Device{Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+				loadYgotStructIntoTreeRoot(ctx, &sdcio_schema.Device{Interface: map[string]*sdcio_schema.SdcioModel_Interface{
 					"ethernet-1/1": {
 						Name:        ygot.String("ethernet-1/1"),
 						Description: ygot.String("mydesc"),
 					},
-				}}, root, owner2, owner2Prio, flagsNew)
+				}}, root, owner2, owner2Prio, false, flagsNew)
 
 				return root
 			},
@@ -276,7 +278,7 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := tt.root()
-			root.AddExplicitDeletes(owner2, tt.priority, tt.explicitDeletes)
+			root.GetTreeContext().AddExplicitDeletes(owner2, tt.priority, tt.explicitDeletes)
 
 			err := root.FinishInsertionPhase(ctx)
 			if err != nil {

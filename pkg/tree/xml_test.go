@@ -546,35 +546,11 @@ func TestToXMLTable(t *testing.T) {
 			}
 			owner := "owner1"
 
-			// var runningCacheUpds []*types.Update
-			// if tt.runningConfig != nil {
-			// 	runningSdcpbUpds, err := tt.runningConfig(context.Background(), utils.NewConverter(scb))
-			// 	if err != nil {
-			// 		t.Error(err)
-			// 	}
-			// 	runningCacheUpds, err = utils.SdcpbUpdatesToCacheUpdates(runningSdcpbUpds, RunningIntentName, RunningValuesPrio)
-			// 	if err != nil {
-			// 		t.Error(err)
-			// 	}
-			// }
-
-			// var intendedCacheUpds []*types.Update
-			// if tt.existingConfig != nil {
-			// 	intendedSdcpbUpds, err := tt.existingConfig(context.Background(), utils.NewConverter(scb))
-			// 	if err != nil {
-			// 		t.Error(err)
-			// 	}
-			// 	intendedCacheUpds, err = utils.SdcpbUpdatesToCacheUpdates(intendedSdcpbUpds, owner, 5)
-			// 	if err != nil {
-			// 		t.Error(err)
-			// 	}
-			// }
-
 			ctx := context.Background()
 
 			converter := utils.NewConverter(scb)
 
-			tc := NewTreeContext(scb, owner)
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 			root, err := NewTreeRoot(ctx, tc)
 			if err != nil {
 				t.Fatal(err)
@@ -593,11 +569,10 @@ func TestToXMLTable(t *testing.T) {
 			fmt.Println(root.String())
 
 			if tt.newConfig != nil {
-				sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.NumCPU())
-				deleteVisitorPool := sharedTaskPool.NewVirtualPool(pool.VirtualFailFast, 1)
+				sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 				ownerDeleteMarker := NewOwnerDeleteMarker(NewOwnerDeleteMarkerTaskConfig(owner, false))
 
-				err = ownerDeleteMarker.Run(root.GetRoot(), deleteVisitorPool)
+				err = ownerDeleteMarker.Run(root.GetRoot(), sharedTaskPool)
 				if err != nil {
 					t.Error(err)
 					return

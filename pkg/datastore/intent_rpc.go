@@ -66,7 +66,7 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntent
 	}
 
 	// otherwise consult cache
-	root, err := tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, intentName))
+	root, err := tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, d.taskPool))
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntent
 	}
 	protoImporter := proto.NewProtoTreeImporter(tp)
 
-	err = root.ImportConfig(ctx, nil, protoImporter, tp.GetIntentName(), tp.GetPriority(), types.NewUpdateInsertFlags())
+	_, err = root.ImportConfig(ctx, nil, protoImporter, types.NewUpdateInsertFlags(), d.taskPool)
 	if err != nil {
 		return nil, err
 	}

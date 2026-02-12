@@ -6,11 +6,9 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/config"
-	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/types"
-	"github.com/sdcio/sdc-protos/tree_persist"
-
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/sdc-protos/tree_persist"
 )
 
 const (
@@ -23,8 +21,8 @@ const (
 	ReplaceIntentName  = "replace"
 )
 
-// newEntry constructor for Entries
-func newEntry(ctx context.Context, parent Entry, pathElemName string, tc *TreeContext) (*sharedEntryAttributes, error) {
+// NewEntry constructor for Entries
+func NewEntry(ctx context.Context, parent Entry, pathElemName string, tc *TreeContext) (*sharedEntryAttributes, error) {
 	// create a new sharedEntryAttributes instance
 	sea, err := newSharedEntryAttributes(ctx, parent, pathElemName, tc)
 	if err != nil {
@@ -32,7 +30,7 @@ func newEntry(ctx context.Context, parent Entry, pathElemName string, tc *TreeCo
 	}
 
 	// add the Entry as a child to the parent Entry
-	err = parent.addChild(ctx, sea)
+	err = parent.AddChild(ctx, sea)
 	return sea, err
 }
 
@@ -43,7 +41,7 @@ type Entry interface {
 	// GetLevel returns the depth of the Entry in the tree
 	GetLevel() int
 	// addChild Add a child entry
-	addChild(context.Context, Entry) error
+	AddChild(context.Context, Entry) error
 	// getOrCreateChilds retrieves the sub-child pointed at by the path.
 	// if the path does not exist in its full extend, the entries will be added along the way
 	// if the path does not point to a schema defined path an error will be raise
@@ -66,8 +64,6 @@ type Entry interface {
 	// MarkOwnerDelete(o string, onlyIntended bool)
 	// GetDeletes returns the cache-updates that are not updated, have no lower priority value left and hence should be deleted completely
 	GetDeletes(entries []types.DeleteEntry, aggregatePaths bool) ([]types.DeleteEntry, error)
-	// Walk takes the EntryVisitor and applies it to every Entry in the tree
-	Walk(ctx context.Context, v EntryVisitor) error
 	// Validate kicks off validation
 	ValidateLevel(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, vCfg *config.Validation)
 	// validateMandatory the Mandatory schema field
@@ -106,7 +102,7 @@ type Entry interface {
 	// as part of the SetIntent process. We need to consider this, when evaluating e.g. LeafRefs.
 	// The returned boolean will in indicate if the value remains existing (true) after the setintent.
 	// Or will disappear from device (running) as part of the update action.
-	remainsToExist() bool
+	RemainsToExist() bool
 	// shouldDelete returns true if an explicit delete should be issued for the given branch
 	shouldDelete() bool
 	// canDelete checks if the entry can be Deleted.
@@ -115,7 +111,7 @@ type Entry interface {
 	//    - remainsToExists() returns true, because they remain to exist even though implicitly.
 	//    - shouldDelete() returns false, because no explicit delete should be issued for them.
 	canDelete() bool
-	GetChilds(DescendMethod) EntryMap
+	GetChilds(types.DescendMethod) EntryMap
 	GetChild(name string) (Entry, bool) // entry, exists
 	FilterChilds(keys map[string]string) ([]Entry, error)
 	// ToJson returns the Tree contained structure as JSON
@@ -130,8 +126,6 @@ type Entry interface {
 	// ToXML returns the tree and its current state in the XML representation used by netconf
 	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
 	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error)
-	// ImportConfig allows importing config data received from e.g. the device in different formats (json, xml) to be imported into the tree.
-	ImportConfig(ctx context.Context, importer importer.ImportConfigAdapterElement, intentName string, intentPrio int32, flags *types.UpdateInsertFlags) error
 	TreeExport(owner string) ([]*tree_persist.TreeElement, error)
 	// DeleteBranch Deletes from the tree, all elements of the PathSlice defined branch of the given owner
 	DeleteBranch(ctx context.Context, path *sdcpb.Path, owner string) (err error)
@@ -145,14 +139,9 @@ type Entry interface {
 
 	// returns true if the Entry contains leafvariants (presence container, field or leaflist)
 	HoldsLeafvariants() bool
-	canDeleteBranch(keepDefault bool) bool
-	deleteCanDeleteChilds(keepDefault bool)
-}
-
-type EntryVisitor interface {
-	DescendMethod() DescendMethod
-	Visit(ctx context.Context, e Entry) error
-	Up()
+	CanDeleteBranch(keepDefault bool) bool
+	DeleteCanDeleteChilds(keepDefault bool)
+	GetTreeContext() *TreeContext
 }
 
 type LeafVariantEntry interface {
@@ -163,12 +152,16 @@ type LeafVariantEntry interface {
 
 type LeafVariantEntries interface {
 	MarkOwnerForDeletion(owner string, onlyIntended bool) *LeafEntry
+	ResetFlags(deleteFlag bool, newFlag bool, updatedFlag bool) int
 	GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool, includeExplicitDeletes bool) *LeafEntry
 	GetRunning() *LeafEntry
 	DeleteByOwner(owner string) *LeafEntry
 	AddExplicitDeleteEntry(owner string, priority int32) *LeafEntry
 	GetByOwner(owner string) *LeafEntry
+	RemoveDeletedByOwner(owner string) *LeafEntry
 	Add(l *LeafEntry)
+	AddWithStats(l *LeafEntry, stats *types.ImportStats)
+	Length() int
 }
 
 type DescendMethod int
