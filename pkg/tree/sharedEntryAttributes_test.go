@@ -7,7 +7,6 @@ import (
 	"runtime"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -99,7 +98,6 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 					sharedEntryAttributes: &sharedEntryAttributes{
 						pathElemName:     "__root__",
 						childs:           newChildMap(),
-						childsMutex:      sync.RWMutex{},
 						choicesResolvers: choiceResolvers{},
 						parent:           nil,
 						treeContext:      tc,

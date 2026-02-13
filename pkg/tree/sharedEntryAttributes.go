@@ -34,7 +34,6 @@ type sharedEntryAttributes struct {
 	pathElemName string
 	// childs mutual exclusive with LeafVariants
 	childs      *childMap
-	childsMutex sync.RWMutex
 	// leafVariants mutual exclusive with Childs
 	// If Entry is a leaf it can hold multiple leafVariants
 	leafVariants *LeafVariants
@@ -63,7 +62,6 @@ func (s *sharedEntryAttributes) deepCopy(tc *TreeContext, parent Entry) (*shared
 		schema:           s.schema,
 		treeContext:      tc,
 		choicesResolvers: s.choicesResolvers.deepCopy(),
-		childsMutex:      sync.RWMutex{},
 		schemaMutex:      sync.RWMutex{},
 		cacheMutex:       sync.Mutex{},
 		level:            s.level,
