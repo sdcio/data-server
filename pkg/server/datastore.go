@@ -82,7 +82,12 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 
 	log.Info("creating datastore",
 		"datastore-schema", req.GetSchema(),
-		"datastore-target", req.GetTarget(),
+		"datastore-target-type", req.GetTarget().GetType(),
+		"datastore-target-address", req.GetTarget().GetAddress(),
+		"datastore-target-port", req.GetTarget().GetPort(),
+		"datastore-target-options", req.GetTarget().GetProtocolOptions(),
+		"datastore-target-status", req.GetTarget().GetStatus(),
+		"datastore-target-status-details", req.GetTarget().GetStatusDetails(),
 	)
 	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
 
