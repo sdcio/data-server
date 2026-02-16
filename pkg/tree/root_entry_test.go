@@ -46,7 +46,6 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					parent:       nil,
 					pathElemName: "",
 					childs:       newChildMap(),
-					childsMutex:  sync.RWMutex{},
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
@@ -95,7 +94,6 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					parent:       nil,
 					pathElemName: "",
 					childs:       newChildMap(),
-					childsMutex:  sync.RWMutex{},
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
@@ -107,7 +105,6 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					parent:       result,
 					pathElemName: "interface",
 					childs:       newChildMap(),
-					childsMutex:  sync.RWMutex{},
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
@@ -162,7 +159,6 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					parent:       nil,
 					pathElemName: "",
 					childs:       newChildMap(),
-					childsMutex:  sync.RWMutex{},
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
@@ -174,7 +170,6 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					parent:       result,
 					pathElemName: "interface",
 					childs:       newChildMap(),
-					childsMutex:  sync.RWMutex{},
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
@@ -208,7 +203,6 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					parent:       result,
 					pathElemName: "system",
 					childs:       newChildMap(),
-					childsMutex:  sync.RWMutex{},
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
@@ -263,7 +257,6 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					parent:       nil,
 					pathElemName: "",
 					childs:       newChildMap(),
-					childsMutex:  sync.RWMutex{},
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
@@ -275,7 +268,6 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					parent:       result,
 					pathElemName: "interface",
 					childs:       newChildMap(),
-					childsMutex:  sync.RWMutex{},
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
