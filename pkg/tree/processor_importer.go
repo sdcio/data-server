@@ -67,7 +67,7 @@ func (p *ImportConfigProcessor) GetStats() *types.ImportStats {
 
 func (p *ImportConfigProcessor) Run(ctx context.Context, e Entry, poolFactory pool.VirtualPoolFactory) error {
 	// store non revertive info
-	e.GetTreeContext().nonRevertiveInfo[p.importer.GetName()] = p.importer.GetNonRevertive()
+	e.GetTreeContext().nonRevertiveInfo[p.importer.GetName()] = NewNonRevertiveInfo(p.importer.GetName(), p.importer.GetNonRevertive())
 
 	// store explicit deletes
 	e.GetTreeContext().explicitDeletes.Add(p.importer.GetName(), p.importer.GetPriority(), p.importer.GetDeletes())

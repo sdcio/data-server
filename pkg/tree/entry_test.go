@@ -2,6 +2,7 @@ package tree
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"runtime"
 	"slices"
@@ -9,9 +10,12 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/pool"
+	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 
+	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -2021,4 +2025,137 @@ func Test_Validation_MultiKey_Pattern(t *testing.T) {
 			}
 		},
 	)
+}
+
+func Test_RevertNonRevertive(t *testing.T) {
+
+	owner1 := "OwnerOne"
+	owner1Prio := int32(50)
+
+	// create table test data
+	tests := []struct {
+		name                string
+		running             func() (importer.ImportConfigAdapter, error)
+		existing            func() (importer.ImportConfigAdapter, error)
+		existingIsRevertive bool
+		revertPaths         []*sdcpb.Path
+	}{
+		{
+			name: "Test1",
+			running: func() (importer.ImportConfigAdapter, error) {
+				c := config1()
+
+				c.Interface["ethernet-1/1"].Description = ygot.String("test")
+				c.NetworkInstance["default"].Description = ygot.String("test")
+
+				sConf, err := ygot.EmitJSON(c, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false},
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				var jConf any
+				err = json.Unmarshal([]byte(sConf), &jConf)
+				return jsonImporter.NewJsonTreeImporter(jConf, RunningIntentName, RunningValuesPrio, false), err
+			},
+			existing: func() (importer.ImportConfigAdapter, error) {
+				c := config1()
+				sConf, err := ygot.EmitJSON(c, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false},
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				var jConf any
+				err = json.Unmarshal([]byte(sConf), &jConf)
+				return jsonImporter.NewJsonTreeImporter(jConf, owner1, owner1Prio, true), err // this bool defines the revertive or non revertiveness
+			},
+			existingIsRevertive: true,
+			revertPaths: []*sdcpb.Path{
+				{
+					Elem:        []*sdcpb.PathElem{sdcpb.NewPathElem("interface", nil)},
+					IsRootBased: true,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.TODO()
+
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+
+			scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			runningConfig, err := tt.running()
+			if err != nil {
+				t.Fatalf("failed to get running config: %v", err)
+			}
+
+			existingConfig, err := tt.existing()
+			if err != nil {
+				t.Fatalf("failed to get existing config: %v", err)
+			}
+
+			_, err = root.ImportConfig(ctx, nil, runningConfig, types.NewUpdateInsertFlags(), tc.poolFactory)
+			if err != nil {
+				t.Fatalf("failed to import running config: %v", err)
+			}
+
+			_, err = root.ImportConfig(ctx, nil, existingConfig, types.NewUpdateInsertFlags(), tc.poolFactory)
+			if err != nil {
+				t.Fatalf("failed to import existing config: %v", err)
+			}
+
+			// adding paths to the non revertive info, this should mark the paths as non revertive, and thus not be deleted in the end.
+			for _, path := range tt.revertPaths {
+				nri, exists := tc.GetNonRevertiveInfo(owner1)
+				if !exists {
+					t.Fatalf("expected to find non-revertive info for owner %s, but not found", owner1)
+				}
+
+				nri.AddPath(path)
+			}
+
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Fatalf("failed to finish insertion phase: %v", err)
+			}
+
+			t.Logf("Tree:\n%s", root.String())
+
+			deletes, err := root.GetDeletes(true)
+			if err != nil {
+				t.Fatalf("failed to get deletes: %v", err)
+			}
+			t.Logf("Deletes: %v", deletes)
+
+			j, err := root.ToJson(true)
+			if err != nil {
+				t.Fatalf("failed to convert to JSON: %v", err)
+			}
+
+			jResult, err := json.MarshalIndent(j, "", "  ")
+			if err != nil {
+				t.Fatalf("failed to marshal JSON: %v", err)
+			}
+			t.Logf("Resulting JSON:\n%s", string(jResult))
+		})
+	}
 }

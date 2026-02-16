@@ -86,7 +86,7 @@ func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, impo
 }
 
 func (r *RootEntry) SetNonRevertiveIntent(intentName string, nonRevertive bool) {
-	r.GetTreeContext().nonRevertiveInfo[intentName] = nonRevertive
+	r.GetTreeContext().nonRevertiveInfo[intentName] = NewNonRevertiveInfo(intentName, nonRevertive)
 }
 
 func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation, taskpoolFactory pool.VirtualPoolFactory) (types.ValidationResults, *types.ValidationStats) {
@@ -142,7 +142,7 @@ func (r *RootEntry) GetDeletesForOwner(owner string) sdcpb.Paths {
 	deletesOwner := make(sdcpb.Paths, 0, len(deletesOwnerUpdates))
 	// so collect the paths
 	for _, d := range deletesOwnerUpdates {
-		deletesOwner = append(deletesOwner, d.Path())
+		deletesOwner = append(deletesOwner, d.SdcpbPath())
 	}
 	return deletesOwner
 }
@@ -186,7 +186,7 @@ func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Inte
 			IntentName:      owner,
 			Root:            rootExportEntry,
 			Priority:        priority,
-			NonRevertive:    r.GetTreeContext().nonRevertiveInfo[owner],
+			NonRevertive:    r.GetTreeContext().IsGenerallyNonRevertiveIntent(owner),
 			ExplicitDeletes: explicitDeletes,
 		}, nil
 	}

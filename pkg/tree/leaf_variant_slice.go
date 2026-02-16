@@ -22,7 +22,7 @@ func (lvs LeafVariantSlice) ToUpdateSlice() types.UpdateSlice {
 func (lvs LeafVariantSlice) ToPathAndUpdateSlice() []*types.PathAndUpdate {
 	result := make([]*types.PathAndUpdate, 0, len(lvs))
 	for _, x := range lvs {
-		result = append(result, types.NewPathAndUpdate(x.Path(), x.GetUpdate()))
+		result = append(result, types.NewPathAndUpdate(x.SdcpbPath(), x.GetUpdate()))
 	}
 	return result
 }
@@ -43,14 +43,14 @@ func (lvs LeafVariantSlice) Equal(otherLvs LeafVariantSlice) (bool, error) {
 		return false, fmt.Errorf("LeafVariantSlices differ in length %d vs. %d", len(lvs), len(otherLvs))
 	}
 
+	sorter := func(le1, le2 *LeafEntry) int {
+		return le1.Compare(le2)
+	}
+
 	// sort lvs
-	slices.SortFunc(lvs, func(le1, le2 *LeafEntry) int {
-		return le1.Compare(le2)
-	})
+	slices.SortFunc(lvs, sorter)
 	// sort otherLvs
-	slices.SortFunc(lvs, func(le1, le2 *LeafEntry) int {
-		return le1.Compare(le2)
-	})
+	slices.SortFunc(otherLvs, sorter)
 
 	// compare one by one
 	for idx, le1 := range lvs {
@@ -68,7 +68,7 @@ func (lvs LeafVariantSlice) String() string {
 	sep := ""
 	for _, item := range lvs {
 		sb.WriteString(sep)
-		sb.WriteString(item.Path().ToXPath(false))
+		sb.WriteString(item.SdcpbPath().ToXPath(false))
 		sb.WriteString(" -> ")
 		sb.WriteString(item.String())
 		if first {
