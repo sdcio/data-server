@@ -63,7 +63,7 @@ mocks-gen: mocks-rm ## Generate mocks for all the defined interfaces.
 	mockgen -package=mockcacheclient -source=pkg/cache/cache.go -destination=$(MOCKDIR)/mockcacheclient/client.go
 	mockgen -package=mockcacheclient -source=pkg/cache/cacheClientBound.go -destination=$(MOCKDIR)/mockcacheclient/clientbound.go
 	mockgen -package=mocktarget -source=pkg/datastore/target/target.go -destination=$(MOCKDIR)/mocktarget/target.go
-	mockgen -package=mockTreeEntry -source=pkg/tree/entry.go -destination=$(MOCKDIR)/mocktreeentry/entry.go
+	mockgen -package=mockTreeEntry -source=pkg/tree/api/entry.go -destination=$(MOCKDIR)/mocktreeentry/entry.go
 
 .PHONY: mocks-rm
 mocks-rm: ## remove generated mocks
