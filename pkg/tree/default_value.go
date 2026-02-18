@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -55,5 +56,5 @@ func DefaultValueRetrieve(ctx context.Context, schema *sdcpb.SchemaElem, path *s
 		return nil, fmt.Errorf("no defaults defined for schema path: %s", path.ToXPath(false))
 	}
 
-	return types.NewUpdate(nil, tv, DefaultValuesPrio, DefaultsIntentName, 0), nil
+	return types.NewUpdate(nil, tv, consts.DefaultValuesPrio, consts.DefaultsIntentName, 0), nil
 }

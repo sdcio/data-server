@@ -5,6 +5,8 @@ import (
 	"errors"
 
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/api"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/proto"
@@ -34,7 +36,7 @@ func NewBlameConfigProcessorConfig(includeDefaults bool) *BlameConfigProcessorCo
 // (intent) is responsible for each configuration value. The pool parameter should be
 // VirtualFailFast to stop on first error.
 // Returns the blame tree structure and any error encountered.
-func (p *BlameConfigProcessor) Run(ctx context.Context, e Entry, pool pool.VirtualPoolI) (*sdcpb.BlameTreeElement, error) {
+func (p *BlameConfigProcessor) Run(ctx context.Context, e api.Entry, pool pool.VirtualPoolI) (*sdcpb.BlameTreeElement, error) {
 
 	blameTask := NewBlameConfigTask(e, p.config)
 	if err := pool.Submit(blameTask); err != nil {
@@ -57,10 +59,10 @@ type BlameConfigTask struct {
 	config    *BlameConfigProcessorConfig
 	parent    *sdcpb.BlameTreeElement
 	self      *sdcpb.BlameTreeElement
-	selfEntry Entry
+	selfEntry api.Entry
 }
 
-func NewBlameConfigTask(e Entry, c *BlameConfigProcessorConfig) *BlameConfigTask {
+func NewBlameConfigTask(e api.Entry, c *BlameConfigProcessorConfig) *BlameConfigTask {
 	return &BlameConfigTask{
 		config:    c,
 		parent:    nil,
@@ -80,13 +82,13 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 	}
 
 	// process Value
-	highestLe := t.selfEntry.GetLeafVariantEntries().GetHighestPrecedence(false, true, true)
+	highestLe := t.selfEntry.GetLeafVariants().GetHighestPrecedence(false, true, true)
 	if highestLe != nil {
-		if highestLe.Update.Owner() != DefaultsIntentName || t.config.includeDefaults {
+		if highestLe.Update.Owner() != consts.DefaultsIntentName || t.config.includeDefaults {
 			t.self.SetValue(highestLe.Update.Value()).SetOwner(highestLe.Update.Owner())
 
 			// check if running equals the expected
-			runningLe := t.selfEntry.GetLeafVariantEntries().GetRunning()
+			runningLe := t.selfEntry.GetLeafVariants().GetRunning()
 			if runningLe != nil {
 				if !proto.Equal(runningLe.Update.Value(), highestLe.Update.Value()) {
 					t.self.SetDeviationValue(runningLe.Value())
@@ -98,9 +100,9 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 	childs := t.selfEntry.GetChilds(types.DescendMethodActiveChilds)
 	for _, childKey := range childs.SortedKeys() {
 		childEntry := childs[childKey]
-		childHighestLe := childEntry.GetLeafVariantEntries().GetHighestPrecedence(false, true, true)
+		childHighestLe := childEntry.GetLeafVariants().GetHighestPrecedence(false, true, true)
 		if childHighestLe != nil {
-			if childHighestLe.Update.Owner() == DefaultsIntentName && !t.config.includeDefaults {
+			if childHighestLe.Update.Owner() == consts.DefaultsIntentName && !t.config.includeDefaults {
 				continue
 			}
 		}

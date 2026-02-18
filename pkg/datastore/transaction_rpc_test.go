@@ -16,6 +16,7 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -147,7 +148,7 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 			}
 			vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 			// Populate SyncTree with Running config
-			_, err = syncTreeRoot.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(runningAny, tree.RunningIntentName, tree.RunningValuesPrio, false), treetypes.NewUpdateInsertFlags(), vpf)
+			_, err = syncTreeRoot.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(runningAny, consts.RunningIntentName, consts.RunningValuesPrio, false), treetypes.NewUpdateInsertFlags(), vpf)
 			if err != nil {
 				t.Fatalf("failed to import running config: %v", err)
 			}

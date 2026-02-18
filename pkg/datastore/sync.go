@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/logger"
@@ -30,7 +31,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 			continue
 		}
 		// apply delete marker, setting owner delete flag on running intent
-		err = tree.NewOwnerDeleteMarker(tree.NewOwnerDeleteMarkerTaskConfig(tree.RunningIntentName, false)).Run(deleteRoot, d.taskPool)
+		err = tree.NewOwnerDeleteMarker(tree.NewOwnerDeleteMarkerTaskConfig(consts.RunningIntentName, false)).Run(deleteRoot, d.taskPool)
 		if err != nil {
 			log.Error(err, "failed applying delete to path", "path", delete.ToXPath(false))
 			continue
@@ -46,7 +47,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	}
 
 	// run remove deleted processor to clean up entries marked as deleted by owner
-	delProcessorParams := tree.NewRemoveDeletedProcessorParameters(tree.RunningIntentName)
+	delProcessorParams := tree.NewRemoveDeletedProcessorParameters(consts.RunningIntentName)
 	err := tree.NewRemoveDeletedProcessor(delProcessorParams).Run(d.syncTree.GetRoot(), d.taskPool)
 	if err != nil {
 		return err
@@ -54,7 +55,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 
 	// delete entries that have zero-length leaf variant entries after remove deleted processing
 	for _, e := range delProcessorParams.GetZeroLengthLeafVariantEntries() {
-		err := e.GetParent().DeleteBranch(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(e.PathName(), nil)}}, tree.RunningIntentName)
+		err := e.GetParent().DeleteBranch(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(e.PathName(), nil)}}, consts.RunningIntentName)
 		if err != nil {
 			return err
 		}
@@ -62,7 +63,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 
 	// conditional trace logging
 	if log := log.V(logger.VTrace); log.Enabled() {
-		treeExport, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
+		treeExport, err := d.syncTree.TreeExport(consts.RunningIntentName, consts.RunningValuesPrio)
 		if err == nil {
 			json, err := protojson.MarshalOptions{Multiline: false}.Marshal(treeExport)
 			if err == nil {

@@ -1,10 +1,13 @@
 package tree
 
-import "github.com/sdcio/data-server/pkg/tree/types"
+import (
+	"github.com/sdcio/data-server/pkg/tree/api"
+	"github.com/sdcio/data-server/pkg/tree/types"
+)
 
-func getListEntrySortFunc(parent Entry) func(a, b Entry) int {
+func getListEntrySortFunc(parent api.Entry) func(a, b api.Entry) int {
 	// return the comparison function
-	return func(a, b Entry) int {
+	return func(a, b api.Entry) int {
 		keys := parent.GetSchemaKeys()
 		var cmpResult int
 		for _, v := range keys {
@@ -16,8 +19,8 @@ func getListEntrySortFunc(parent Entry) func(a, b Entry) int {
 			if !exists {
 				return 0
 			}
-			aLvSlice := achild.GetHighestPrecedence(LeafVariantSlice{}, false, true, true)
-			bLvSlice := bchild.GetHighestPrecedence(LeafVariantSlice{}, false, true, true)
+			aLvSlice := achild.GetHighestPrecedence(api.LeafVariantSlice{}, false, true, true)
+			bLvSlice := bchild.GetHighestPrecedence(api.LeafVariantSlice{}, false, true, true)
 
 			aEntry := aLvSlice[0]
 			bEntry := bLvSlice[0]

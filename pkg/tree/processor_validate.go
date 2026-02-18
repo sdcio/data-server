@@ -5,6 +5,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
 )
 
@@ -18,7 +19,7 @@ func NewValidateProcessor(parameters *ValidateProcessorParameters) *ValidateProc
 	}
 }
 
-func (p *ValidateProcessor) Run(taskpoolFactory pool.VirtualPoolFactory, e Entry) {
+func (p *ValidateProcessor) Run(taskpoolFactory pool.VirtualPoolFactory, e api.Entry) {
 	taskpool := taskpoolFactory.NewVirtualPool(pool.VirtualTolerant)
 	taskpool.Submit(newValidateTask(e, p.parameters))
 	taskpool.CloseAndWait()
@@ -39,11 +40,11 @@ func NewValidateProcessorConfig(resultChan chan<- *types.ValidationResultEntry, 
 }
 
 type validateTask struct {
-	e          Entry
+	e          api.Entry
 	parameters *ValidateProcessorParameters
 }
 
-func newValidateTask(e Entry, parameters *ValidateProcessorParameters) *validateTask {
+func newValidateTask(e api.Entry, parameters *ValidateProcessorParameters) *validateTask {
 	return &validateTask{
 		e:          e,
 		parameters: parameters,

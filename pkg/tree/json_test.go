@@ -10,6 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -393,7 +394,7 @@ func TestToJsonTable(t *testing.T) {
 					t.Error(err)
 				}
 
-				err = addToRoot(ctx, root, updsRunning, flagsOld, RunningIntentName, RunningValuesPrio)
+				err = addToRoot(ctx, root, updsRunning, flagsOld, consts.RunningIntentName, consts.RunningValuesPrio)
 				if err != nil {
 					t.Fatal(err)
 				}

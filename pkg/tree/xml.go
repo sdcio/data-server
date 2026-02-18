@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/beevik/etree"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -18,19 +19,19 @@ import (
 // If useOperationRemove is set, the remove operation will be used for deletes, instead of the delete operation.
 func (s *sharedEntryAttributes) ToXML(onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove bool) (*etree.Document, error) {
 	doc := etree.NewDocument()
-	_, err := s.toXmlInternal(&doc.Element, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+	_, err := s.ToXmlInternal(&doc.Element, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
 	if err != nil {
 		return nil, err
 	}
 	return doc, nil
 }
 
-func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error) {
+func (s *sharedEntryAttributes) ToXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error) {
 
 	switch s.schema.GetSchema().(type) {
 	case nil:
 		// This case represents a key level element. So no schema present. all child attributes need to be adedd directly to the parent element, since the key levels are not visible in the resulting xml.
-		if s.shouldDelete() {
+		if s.ShouldDelete() {
 			// If the element is to be deleted
 			// add the delete operation to the parent element
 			utils.AddXMLOperation(parent, utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
@@ -76,7 +77,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 		for _, k := range keys {
 			// recurse the call
 			// no additional element is created, since we're on a key level, so add to parent element
-			doAdd, err := childs[k].toXmlInternal(parent, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+			doAdd, err := childs[k].ToXmlInternal(parent, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
 			if err != nil {
 				return false, err
 			}
@@ -107,7 +108,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 				// process the honorNamespace instruction
 				xmlAddNamespaceConditional(s, s.parent, newElem, honorNamespace)
 				// recurse the call
-				doAdd, err := child.toXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+				doAdd, err := child.ToXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
 				if err != nil {
 					return false, err
 				}
@@ -130,7 +131,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 				}
 			}
 			return overallDoAdd, nil
-		case s.shouldDelete():
+		case s.ShouldDelete():
 			// s is meant to be removed
 			// if delete, create the element as child of parent
 			newElem := parent.CreateElement(s.pathElemName)
@@ -143,7 +144,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 			// process presence containers with no childs
 			if onlyNewOrUpdated {
 				// presence containers have leafvariantes with typedValue_Empty, so check that
-				if s.leafVariants.shouldDelete() {
+				if s.leafVariants.ShouldDelete() {
 					return false, nil
 				}
 				le := s.leafVariants.GetHighestPrecedence(false, false, false)
@@ -191,7 +192,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 					return false, fmt.Errorf("child %s does not exist for %s", k, s.SdcpbPath().ToXPath(false))
 				}
 				// TODO: Do we also need to xmlAddAllChildValues here too?
-				doAdd, err := child.toXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+				doAdd, err := child.ToXmlInternal(newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
 				if err != nil {
 					return false, err
 				}
@@ -210,7 +211,7 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 
 	case *sdcpb.SchemaElem_Leaflist, *sdcpb.SchemaElem_Field:
 		// check if the element remains to exist
-		if s.shouldDelete() {
+		if s.ShouldDelete() {
 			// if not, add the remove / delete op
 			utils.AddXMLOperation(parent.CreateElement(s.pathElemName), utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
 			// see case nil for an explanation of this, it is basically the same
@@ -239,10 +240,10 @@ func (s *sharedEntryAttributes) toXmlInternal(parent *etree.Element, onlyNewOrUp
 
 // namespaceIsEqual takes the two given Entries, gets the namespace
 // and reports if both belong to the same namespace
-func namespaceIsEqual(a Entry, b Entry) bool {
+func namespaceIsEqual(a api.Entry, b api.Entry) bool {
 	// store for the calculated namespaces
 	namespaces := make([]string, 0, 2)
-	for _, e := range []Entry{a, b} {
+	for _, e := range []api.Entry{a, b} {
 		// get schemas for a and b
 		schema := e.GetSchema()
 
@@ -261,7 +262,7 @@ func namespaceIsEqual(a Entry, b Entry) bool {
 }
 
 // xmlAddNamespaceConditional adds the namespace of a to elem if namespaces of a and b are different
-func xmlAddNamespaceConditional(a Entry, b Entry, elem *etree.Element, honorNamespace bool) {
+func xmlAddNamespaceConditional(a api.Entry, b api.Entry, elem *etree.Element, honorNamespace bool) {
 	if honorNamespace && (b == nil || !namespaceIsEqual(a, b)) {
 		elem.CreateAttr("xmlns", utils.GetNamespaceFromGetSchema(a.GetSchema()))
 	}
@@ -269,7 +270,7 @@ func xmlAddNamespaceConditional(a Entry, b Entry, elem *etree.Element, honorName
 
 // xmlAddKeyElements determines the keys of a certain Entry in the tree and adds those to the
 // element if they do not already exist.
-func xmlAddKeyElements(s Entry, parent *etree.Element) {
+func xmlAddKeyElements(s api.Entry, parent *etree.Element) {
 	// retrieve the parent schema, we need to extract the key names
 	// values are the tree level names
 	parentSchema, levelsUp := s.GetFirstAncestorWithSchema()
@@ -279,7 +280,7 @@ func xmlAddKeyElements(s Entry, parent *etree.Element) {
 	//issue #364: sort the slice
 	sort.Strings(schemaKeys)
 
-	var treeElem Entry = s
+	var treeElem api.Entry = s
 	// the keys do match the levels up in the tree in reverse order
 	// hence we init i with levelUp and count down
 	for i := levelsUp - 1; i >= 0; i-- {
@@ -295,9 +296,9 @@ func xmlAddKeyElements(s Entry, parent *etree.Element) {
 	}
 }
 
-func xmlAddAllChildValues(s Entry, parent *etree.Element, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) error {
+func xmlAddAllChildValues(s api.Entry, parent *etree.Element, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) error {
 	parent.Child = make([]etree.Token, 0)
-	_, err := s.toXmlInternal(parent, false, honorNamespace, operationWithNamespace, useOperationRemove)
+	_, err := s.ToXmlInternal(parent, false, honorNamespace, operationWithNamespace, useOperationRemove)
 	if err != nil {
 		return err
 	}

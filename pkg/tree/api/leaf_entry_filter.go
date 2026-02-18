@@ -1,4 +1,4 @@
-package tree
+package api
 
 import "github.com/sdcio/data-server/pkg/tree/types"
 

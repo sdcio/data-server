@@ -8,6 +8,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/pool"
 
+	"github.com/sdcio/data-server/pkg/tree/api"
 	treeimporter "github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -15,7 +16,7 @@ import (
 )
 
 type importConfigTask struct {
-	entry           Entry
+	entry           api.Entry
 	importerElement treeimporter.ImportConfigAdapterElement
 	params          *ImportConfigProcessorParams
 }
@@ -24,7 +25,7 @@ type ImportConfigProcessorParams struct {
 	intentName      string
 	intentPrio      int32
 	insertFlags     *types.UpdateInsertFlags
-	treeContext     *TreeContext
+	treeContext     api.TreeContext
 	leafListTracker *sync.Map
 	stats           *types.ImportStats
 }
@@ -33,7 +34,7 @@ func NewParameters(
 	intentName string,
 	intentPrio int32,
 	insertFlags *types.UpdateInsertFlags,
-	treeContext *TreeContext,
+	treeContext api.TreeContext,
 	leafListLock *sync.Map,
 	stats *types.ImportStats,
 ) *ImportConfigProcessorParams {
@@ -65,12 +66,12 @@ func (p *ImportConfigProcessor) GetStats() *types.ImportStats {
 	return p.stats
 }
 
-func (p *ImportConfigProcessor) Run(ctx context.Context, e Entry, poolFactory pool.VirtualPoolFactory) error {
+func (p *ImportConfigProcessor) Run(ctx context.Context, e api.Entry, poolFactory pool.VirtualPoolFactory) error {
 	// store non revertive info
-	e.GetTreeContext().nonRevertiveInfo[p.importer.GetName()] = p.importer.GetNonRevertive()
+	e.GetTreeContext().NonRevertiveInfo().Add(p.importer.GetName(), p.importer.GetNonRevertive())
 
 	// store explicit deletes
-	e.GetTreeContext().explicitDeletes.Add(p.importer.GetName(), p.importer.GetPriority(), p.importer.GetDeletes())
+	e.GetTreeContext().ExplicitDeletes().Add(p.importer.GetName(), p.importer.GetPriority(), p.importer.GetDeletes())
 
 	workerPool := poolFactory.NewVirtualPool(pool.VirtualFailFast)
 
@@ -103,8 +104,8 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 		// keyed container: handle keys sequentially
 		if len(task.entry.GetSchema().GetContainer().GetKeys()) > 0 {
 			var exists bool
-			var actual Entry = task.entry
-			var keyChild Entry
+			var actual api.Entry = task.entry
+			var keyChild api.Entry
 
 			keys := task.entry.GetSchemaKeys()
 			slices.Sort(keys)
@@ -137,7 +138,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			if schem != nil && schem.IsPresence {
 				tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}
 				upd := types.NewUpdate(task.entry, tv, task.params.intentPrio, task.params.intentName, 0)
-				task.entry.GetLeafVariantEntries().Add(NewLeafEntry(upd, task.params.insertFlags, task.entry))
+				task.entry.GetLeafVariants().Add(api.NewLeafEntry(upd, task.params.insertFlags, task.entry))
 			}
 			return nil
 		}
@@ -173,7 +174,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			return err
 		}
 		upd := types.NewUpdate(task.entry, tv, task.params.intentPrio, task.params.intentName, 0)
-		task.entry.GetLeafVariantEntries().AddWithStats(NewLeafEntry(upd, task.params.insertFlags, task.entry), task.params.stats)
+		task.entry.GetLeafVariants().AddWithStats(api.NewLeafEntry(upd, task.params.insertFlags, task.entry), task.params.stats)
 		return nil
 
 	case *sdcpb.SchemaElem_Leaflist:
@@ -184,7 +185,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 
 		// create a unique key for the leaflist based on the parent entry and the leaflist name
 		key := struct {
-			parent Entry
+			parent api.Entry
 			name   string
 		}{task.entry.GetParent(), task.importerElement.GetName()}
 
@@ -192,15 +193,15 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 
 		var scalarArr *sdcpb.ScalarArray
 		mustAdd := false
-		var le *LeafEntry
+		var le *api.LeafEntry
 		if loaded {
 			// if loaded is true, it means that another goroutine already did the first insertion and reset,
 			// so we just need to get the leaf list and add to it
-			le = task.entry.GetLeafVariantEntries().GetByOwner(task.params.intentName)
+			le = task.entry.GetLeafVariants().GetByOwner(task.params.intentName)
 			scalarArr = le.Value().GetLeaflistVal()
 		} else {
 			// reset / create the leaf list on the first insertion
-			le = NewLeafEntry(nil, task.params.insertFlags, task.entry)
+			le = api.NewLeafEntry(nil, task.params.insertFlags, task.entry)
 			mustAdd = true
 			scalarArr = &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{}}
 		}
@@ -215,7 +216,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 		}
 		le.Update = types.NewUpdate(task.entry, tv, task.params.intentPrio, task.params.intentName, 0)
 		if mustAdd {
-			task.entry.GetLeafVariantEntries().Add(le)
+			task.entry.GetLeafVariants().Add(le)
 		}
 		return nil
 	default:

@@ -10,6 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -594,7 +595,7 @@ func TestToXMLTable(t *testing.T) {
 				if err != nil {
 					t.Error(err)
 				}
-				err = addToRoot(ctx, root, runningUpds, flagsExisting, RunningIntentName, RunningValuesPrio)
+				err = addToRoot(ctx, root, runningUpds, flagsExisting, consts.RunningIntentName, consts.RunningValuesPrio)
 				if err != nil {
 					t.Fatal(err)
 				}

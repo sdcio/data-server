@@ -1,8 +1,9 @@
-package tree
+package api
 
 import (
 	"testing"
 
+	. "github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -278,7 +279,7 @@ func TestLeafVariants_remainsToExist(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			lv := tt.setup()
-			if got := lv.remainsToExist(); got != tt.expected {
+			if got := lv.RemainsToExist(); got != tt.expected {
 				t.Errorf("LeafVariants.remainsToExist() = %v, want %v", got, tt.expected)
 			}
 		})
@@ -467,7 +468,7 @@ func TestLeafVariants_canDelete(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			lv := tt.setup()
-			if got := lv.canDelete(); got != tt.expected {
+			if got := lv.CanDelete(); got != tt.expected {
 				t.Errorf("LeafVariants.canDelete() = %v, want %v", got, tt.expected)
 			}
 		})

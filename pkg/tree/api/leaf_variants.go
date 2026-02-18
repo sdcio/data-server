@@ -1,4 +1,4 @@
-package tree
+package api
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"math"
 	"sync"
 
+	. "github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -13,11 +14,11 @@ import (
 type LeafVariants struct {
 	les         LeafVariantSlice
 	lesMutex    sync.RWMutex
-	tc          *TreeContext
+	tc          TreeContext
 	parentEntry Entry
 }
 
-func newLeafVariants(tc *TreeContext, parentEnty Entry) *LeafVariants {
+func NewLeafVariants(tc TreeContext, parentEnty Entry) *LeafVariants {
 	return &LeafVariants{
 		les:         make(LeafVariantSlice, 0, 2),
 		tc:          tc,
@@ -68,7 +69,7 @@ func (lv *LeafVariants) Length() int {
 	return len(lv.les)
 }
 
-func (lv *LeafVariants) canDeleteBranch(keepDefault bool) bool {
+func (lv *LeafVariants) CanDeleteBranch(keepDefault bool) bool {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 
@@ -135,8 +136,8 @@ func (lv *LeafVariants) checkOnlyRunningAndMaybeDefault() bool {
 	return hasRunning && hasDefault
 }
 
-// canDelete returns true if leafValues exist that are not owned by default or running that do not have the DeleteFlag set [or if delete is set, also the DeleteOnlyIntendedFlag set]
-func (lv *LeafVariants) canDelete() bool {
+// CanDelete returns true if leafValues exist that are not owned by default or running that do not have the DeleteFlag set [or if delete is set, also the DeleteOnlyIntendedFlag set]
+func (lv *LeafVariants) CanDelete() bool {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 	// only procede if we have leave variants
@@ -169,10 +170,10 @@ func (lv *LeafVariants) canDelete() bool {
 	return true
 }
 
-// shouldDelete evaluates the LeafVariants and indicates if the overall result is, that the Entry referencing these
+// ShouldDelete evaluates the LeafVariants and indicates if the overall result is, that the Entry referencing these
 // LeafVariants is explicitly to be deleted. Meaning there are no other LeafVariants remaining after the pending action, that
 // any LeafVariant other then Running or Defaults exist.
-func (lv *LeafVariants) shouldDelete() bool {
+func (lv *LeafVariants) ShouldDelete() bool {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 	// only procede if we have leave variants
@@ -210,7 +211,7 @@ func (lv *LeafVariants) shouldDelete() bool {
 	return foundOtherThenRunningAndDefault
 }
 
-func (lv *LeafVariants) remainsToExist() bool {
+func (lv *LeafVariants) RemainsToExist() bool {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 	// only procede if we have leave variants
@@ -258,7 +259,7 @@ func (lv *LeafVariants) GetHighestPrecedenceValue(filter HighestPrecedenceFilter
 	return result
 }
 
-func (lv *LeafVariants) DeepCopy(tc *TreeContext, parent Entry) *LeafVariants {
+func (lv *LeafVariants) DeepCopy(tc TreeContext, parent Entry) *LeafVariants {
 	result := &LeafVariants{
 		lesMutex:    sync.RWMutex{},
 		tc:          tc,
@@ -311,7 +312,7 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 	if len(lv.les) == 0 {
 		return nil
 	}
-	if onlyNewOrUpdated && lv.canDelete() {
+	if onlyNewOrUpdated && lv.CanDelete() {
 		return nil
 	}
 
@@ -381,7 +382,7 @@ func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
 	}
 
 	// if highest is not new or updated and highest is non-revertive
-	if !highest.IsNew && !highest.IsUpdated && lv.tc.IsNonRevertiveIntent(highest.Update.Owner()) {
+	if !highest.IsNew && !highest.IsUpdated && lv.tc.NonRevertiveInfo().IsGenerallyNonRevertive(highest.Update.Owner()) {
 		return false
 	}
 

@@ -12,6 +12,7 @@ import (
 	"github.com/openconfig/ygot/ygot"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -50,10 +51,10 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
 				}
-				result.leafVariants = newLeafVariants(tc, result)
+				result.leafVariants = api.NewLeafVariants(tc, result)
 
 				result.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -98,7 +99,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
 				}
-				result.leafVariants = newLeafVariants(tc, result)
+				result.leafVariants = api.NewLeafVariants(tc, result)
 
 				// create /interface sharedEntryAttributes
 				interf := &sharedEntryAttributes{
@@ -108,13 +109,13 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
-				interf.leafVariants = newLeafVariants(tc, interf)
+				interf.leafVariants = api.NewLeafVariants(tc, interf)
 				// add interf to result (root)
 				result.childs.Add(interf)
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -163,7 +164,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
 				}
-				result.leafVariants = newLeafVariants(tc, result)
+				result.leafVariants = api.NewLeafVariants(tc, result)
 
 				// create /interface sharedEntryAttributes
 				interf := &sharedEntryAttributes{
@@ -173,13 +174,13 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
-				interf.leafVariants = newLeafVariants(tc, interf)
+				interf.leafVariants = api.NewLeafVariants(tc, interf)
 				// add interf to result (root)
 				result.childs.Add(interf)
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -189,7 +190,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				)
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "OtherValue"},
@@ -206,13 +207,13 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
-				system.leafVariants = newLeafVariants(tc, system)
+				system.leafVariants = api.NewLeafVariants(tc, system)
 				// add interf to result (root)
 				result.childs.Add(system)
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -261,7 +262,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
 				}
-				result.leafVariants = newLeafVariants(tc, result)
+				result.leafVariants = api.NewLeafVariants(tc, result)
 
 				// create /interface sharedEntryAttributes
 				interf := &sharedEntryAttributes{
@@ -271,13 +272,13 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
-				interf.leafVariants = newLeafVariants(tc, interf)
+				interf.leafVariants = api.NewLeafVariants(tc, interf)
 				// add interf to result (root)
 				result.childs.Add(interf)
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -298,7 +299,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &RootEntry{
-				sharedEntryAttributes: tt.sharedEntryAttributes(),
+				Entry: tt.sharedEntryAttributes(),
 			}
 			got, err := r.TreeExport(tt.args.owner, tt.args.priority)
 			if (err != nil) != tt.wantErr {
@@ -455,7 +456,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 						t.Fatal(err)
 					}
 					s.schema = schema.GetSchema()
-					s.leafVariants = newLeafVariants(tc, s)
+					s.leafVariants = api.NewLeafVariants(tc, s)
 					return s
 				},
 			},
@@ -520,14 +521,14 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				return &RootEntry{sharedEntryAttributes: s}
+				return &RootEntry{Entry: s}
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &RootEntry{
-				sharedEntryAttributes: tt.fields.sharedEntryAttributes(t),
+				Entry: tt.fields.sharedEntryAttributes(t),
 			}
 			if err := r.AddUpdatesRecursive(ctx, tt.args.pau, tt.args.flags); (err != nil) != tt.wantErr {
 				t.Errorf("RootEntry.AddUpdatesRecursive() error = %v, wantErr %v", err, tt.wantErr)

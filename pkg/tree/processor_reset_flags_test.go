@@ -8,6 +8,7 @@ import (
 
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/pool"
+	. "github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -42,7 +43,7 @@ func TestResetFlagsProcessorRun(t *testing.T) {
 					t.Fatal(err)
 				}
 				scb := schemaClient.NewSchemaClientBound(schema, sc)
-				tc := NewTreeContext(scb,  pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 
 				root, err := NewTreeRoot(ctx, tc)
 				if err != nil {
