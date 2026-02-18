@@ -23,6 +23,7 @@ import (
 
 	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -54,7 +55,7 @@ func (d *Datastore) applyIntent(ctx context.Context, source targettypes.TargetSo
 
 func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntentResponse, error) {
 	// serve running from synctree
-	if intentName == tree.RunningIntentName {
+	if intentName == consts.RunningIntentName {
 		d.syncTreeMutex.RLock()
 		defer d.syncTreeMutex.RUnlock()
 		err := d.syncTree.FinishInsertionPhase(ctx)

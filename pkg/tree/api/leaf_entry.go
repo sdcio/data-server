@@ -1,4 +1,4 @@
-package tree
+package api
 
 import (
 	"fmt"
@@ -66,13 +66,6 @@ func (l *LeafEntry) MarkNew() {
 	l.Delete = false
 	l.DeleteOnlyIntended = false
 	l.IsNew = true
-}
-
-func (l *LeafEntry) RemoveDeleteFlag() *LeafEntry {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.Delete = false
-	return l
 }
 
 func (l *LeafEntry) GetDeleteFlag() bool {
@@ -146,7 +139,7 @@ func (l *LeafEntry) NonRevertive() bool {
 	if l.parentEntry == nil {
 		return false
 	}
-	return l.parentEntry.GetTreeContext().IsNonRevertiveIntent(l.Owner())
+	return l.parentEntry.GetTreeContext().NonRevertiveInfo().IsNonRevertive(l.Owner(), l)
 }
 
 // String returns a string representation of the LeafEntry
@@ -156,7 +149,7 @@ func (l *LeafEntry) String() string {
 
 // Compare used for slices.SortFunc. Sorts by path and if equal paths then by owner as the second criteria
 func (l *LeafEntry) Compare(other *LeafEntry) int {
-	result := sdcpb.ComparePath(l.Path(), other.Path())
+	result := sdcpb.ComparePath(l.SdcpbPath(), other.SdcpbPath())
 	if result != 0 {
 		return result
 	}

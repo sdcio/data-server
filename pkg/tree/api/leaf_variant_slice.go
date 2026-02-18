@@ -1,4 +1,4 @@
-package tree
+package api
 
 import (
 	"fmt"
@@ -19,10 +19,19 @@ func (lvs LeafVariantSlice) ToUpdateSlice() types.UpdateSlice {
 	return result
 }
 
+func (lvs LeafVariantSlice) GetByOwner(owner string) *LeafEntry {
+	for _, le := range lvs {
+		if le.Owner() == owner {
+			return le
+		}
+	}
+	return nil
+}
+
 func (lvs LeafVariantSlice) ToPathAndUpdateSlice() []*types.PathAndUpdate {
 	result := make([]*types.PathAndUpdate, 0, len(lvs))
 	for _, x := range lvs {
-		result = append(result, types.NewPathAndUpdate(x.Path(), x.GetUpdate()))
+		result = append(result, types.NewPathAndUpdate(x.SdcpbPath(), x.GetUpdate()))
 	}
 	return result
 }
@@ -68,7 +77,7 @@ func (lvs LeafVariantSlice) String() string {
 	sep := ""
 	for _, item := range lvs {
 		sb.WriteString(sep)
-		sb.WriteString(item.Path().ToXPath(false))
+		sb.WriteString(item.SdcpbPath().ToXPath(false))
 		sb.WriteString(" -> ")
 		sb.WriteString(item.String())
 		if first {

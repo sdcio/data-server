@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -132,7 +133,7 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 
 				running.Patterntest = ygot.String("hallo 0")
 
-				_, err = loadYgotStructIntoTreeRoot(ctx, running, root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
+				_, err = loadYgotStructIntoTreeRoot(ctx, running, root, consts.RunningIntentName, consts.RunningValuesPrio, false, flagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -156,7 +157,7 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 			vPool := sharedPool.NewVirtualPool(pool.VirtualFailFast)
 
 			bp := NewBlameConfigProcessor(NewBlameConfigProcessorConfig(tt.includeDefaults))
-			got, err := bp.Run(ctx, treeRoot.sharedEntryAttributes, vPool)
+			got, err := bp.Run(ctx, treeRoot.Entry, vPool)
 			if err != nil {
 				t.Errorf("BlameConfig() error %s", err)
 				return

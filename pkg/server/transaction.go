@@ -7,7 +7,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/datastore"
 	"github.com/sdcio/data-server/pkg/datastore/types"
-	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -69,8 +69,8 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 	var replaceIntent *types.TransactionIntent
 	if req.GetReplaceIntent() != nil {
 		// overwrite replace priority and name with specific value
-		req.ReplaceIntent.Priority = tree.ReplaceValuesPrio
-		req.ReplaceIntent.Intent = tree.ReplaceIntentName
+		req.ReplaceIntent.Priority = consts.ReplaceValuesPrio
+		req.ReplaceIntent.Intent = consts.ReplaceIntentName
 
 		replaceIntent, err = ds.SdcpbTransactionIntentToInternalTI(ctx, req.GetReplaceIntent())
 		if err != nil {

@@ -6,6 +6,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -147,7 +149,7 @@ func TestDefaultValueRetrieve(t *testing.T) {
 				return rsp.GetSchema()
 			},
 			wanterr: false,
-			want:    types.NewUpdate(nil, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: false}}, DefaultValuesPrio, DefaultsIntentName, 0),
+			want:    types.NewUpdate(nil, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_BoolVal{BoolVal: false}}, consts.DefaultValuesPrio, consts.DefaultsIntentName, 0),
 		},
 		{
 			name: "leaflist default",
@@ -170,7 +172,7 @@ func TestDefaultValueRetrieve(t *testing.T) {
 				return rsp.GetSchema()
 			},
 			wanterr: false,
-			want:    types.NewUpdate(nil, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{{Value: &sdcpb.TypedValue_StringVal{StringVal: "foo"}}, {Value: &sdcpb.TypedValue_StringVal{StringVal: "bar"}}}}}}, DefaultValuesPrio, DefaultsIntentName, 0),
+			want:    types.NewUpdate(nil, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{{Value: &sdcpb.TypedValue_StringVal{StringVal: "foo"}}, {Value: &sdcpb.TypedValue_StringVal{StringVal: "bar"}}}}}}, consts.DefaultValuesPrio, consts.DefaultsIntentName, 0),
 		},
 	}
 	for _, tt := range tests {

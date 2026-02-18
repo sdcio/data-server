@@ -27,6 +27,7 @@ import (
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -122,98 +123,98 @@ func TestDatastore_populateTree(t *testing.T) {
 						sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 						sdcpb.NewPathElem("key1", nil),
 					}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k11.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k11.1"), consts.RunningValuesPrio, consts.RunningIntentName, 0),
 				),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("key2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k21.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k21.2"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("mandato", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue1"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.1"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.2"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("key1", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k11.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k11.1"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("key2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k21.3"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k21.3"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("mandato", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue1"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.1"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k11.1", "key2": "k21.3"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval1.2"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("key1", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k12.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k12.1"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("key2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("k22.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("k22.2"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("mandato", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue2"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("TheMandatoryValue2"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value1", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval2.1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval2.1"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("doublekey", map[string]string{"key1": "k12.1", "key2": "k22.2"}),
 					sdcpb.NewPathElem("cont", nil),
 					sdcpb.NewPathElem("value2", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval2.2"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("containerval2.2"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 			},
 
 			expectedDeletes: []string{
@@ -837,9 +838,9 @@ func TestDatastore_populateTree(t *testing.T) {
 			},
 			runningStoreUpdates: []*types.PathAndUpdate{
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("ethernet-1/1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("ethernet-1/1"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("description", nil)}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("MyDescription"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("MyDescription"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 			},
 			expectedOwnerUpdates: []*types.PathAndUpdate{
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}), sdcpb.NewPathElem("name", nil)}, IsRootBased: true},
@@ -937,34 +938,34 @@ func TestDatastore_populateTree(t *testing.T) {
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("name", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("ethernet-1/1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("ethernet-1/1"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("description", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("MyDescription"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("MyDescription"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("name", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("ethernet-1/2"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("ethernet-1/2"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("description", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("Owner3 Description"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("Owner3 Description"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "2"}),
 					sdcpb.NewPathElem("index", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetUIntTvProto(2), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetUIntTvProto(2), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "2"}),
 					sdcpb.NewPathElem("description", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("Subinterface Desc"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("Subinterface Desc"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 			},
 			expectedModify: []*types.PathAndUpdate{
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
@@ -1124,34 +1125,34 @@ func TestDatastore_populateTree(t *testing.T) {
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("name", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("ethernet-1/1"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("ethernet-1/1"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
 					sdcpb.NewPathElem("description", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("MyDescription"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("MyDescription"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("name", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("ethernet-1/2"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("ethernet-1/2"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("description", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("Owner3 Description"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("Owner3 Description"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "2"}),
 					sdcpb.NewPathElem("index", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetUIntTvProto(1), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetUIntTvProto(1), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/2"}),
 					sdcpb.NewPathElem("subinterface", map[string]string{"index": "2"}),
 					sdcpb.NewPathElem("description", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("Subinterface Desc"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("Subinterface Desc"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 			},
 			expectedModify: []*types.PathAndUpdate{
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
@@ -1351,12 +1352,12 @@ func TestDatastore_populateTree(t *testing.T) {
 					sdcpb.NewPathElem("case-elem", nil),
 					sdcpb.NewPathElem("elem", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("case1-content"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("case1-content"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("choices", nil),
 					sdcpb.NewPathElem("case1", nil),
 					sdcpb.NewPathElem("log", nil),
-				}, IsRootBased: true}, types.NewUpdate(nil, TypedValueFalse, tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+				}, IsRootBased: true}, types.NewUpdate(nil, TypedValueFalse, consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 			},
 		},
 		{
@@ -1410,13 +1411,13 @@ func TestDatastore_populateTree(t *testing.T) {
 					sdcpb.NewPathElem("case-elem", nil),
 					sdcpb.NewPathElem("elem", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, testhelper.GetStringTvProto("case1-content"), tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, testhelper.GetStringTvProto("case1-content"), consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 				types.NewPathAndUpdate(&sdcpb.Path{Elem: []*sdcpb.PathElem{
 					sdcpb.NewPathElem("choices", nil),
 					sdcpb.NewPathElem("case1", nil),
 					sdcpb.NewPathElem("log", nil),
 				}, IsRootBased: true},
-					types.NewUpdate(nil, TypedValueFalse, tree.RunningValuesPrio, tree.RunningIntentName, 0)),
+					types.NewUpdate(nil, TypedValueFalse, consts.RunningValuesPrio, consts.RunningIntentName, 0)),
 			},
 		},
 		{

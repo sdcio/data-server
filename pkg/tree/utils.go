@@ -36,7 +36,7 @@ func loadYgotStructIntoTreeRoot(ctx context.Context, gs ygot.GoStruct, root *Roo
 	stp := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 
 	importProcessor := NewImportConfigProcessor(jsonImporter.NewJsonTreeImporter(jsonConfAny, owner, prio, nonRevertive), flags)
-	err = importProcessor.Run(ctx, root.sharedEntryAttributes, stp)
+	err = importProcessor.Run(ctx, root.Entry, stp)
 
 	if err != nil {
 		return nil, err

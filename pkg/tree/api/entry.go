@@ -1,8 +1,7 @@
-package tree
+package api
 
 import (
 	"context"
-	"math"
 
 	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/config"
@@ -10,29 +9,6 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
 )
-
-const (
-	KeysIndexSep       = "_"
-	DefaultValuesPrio  = int32(math.MaxInt32 - 90)
-	DefaultsIntentName = "default"
-	RunningValuesPrio  = int32(math.MaxInt32 - 100)
-	RunningIntentName  = "running"
-	ReplaceValuesPrio  = int32(math.MaxInt32 - 110)
-	ReplaceIntentName  = "replace"
-)
-
-// NewEntry constructor for Entries
-func NewEntry(ctx context.Context, parent Entry, pathElemName string, tc *TreeContext) (*sharedEntryAttributes, error) {
-	// create a new sharedEntryAttributes instance
-	sea, err := newSharedEntryAttributes(ctx, parent, pathElemName, tc)
-	if err != nil {
-		return nil, err
-	}
-
-	// add the Entry as a child to the parent Entry
-	err = parent.AddChild(ctx, sea)
-	return sea, err
-}
 
 // Entry is the primary Element of the Tree.
 type Entry interface {
@@ -45,10 +21,10 @@ type Entry interface {
 	// getOrCreateChilds retrieves the sub-child pointed at by the path.
 	// if the path does not exist in its full extend, the entries will be added along the way
 	// if the path does not point to a schema defined path an error will be raise
-	getOrCreateChilds(ctx context.Context, path *sdcpb.Path) (Entry, error)
+	GetOrCreateChilds(ctx context.Context, path *sdcpb.Path) (Entry, error)
 	// AddUpdateRecursive Add the given cache.Update to the tree
 	AddUpdateRecursive(ctx context.Context, relativePath *sdcpb.Path, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
-	addUpdateRecursiveInternal(ctx context.Context, path *sdcpb.Path, idx int, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
+	AddUpdateRecursiveInternal(ctx context.Context, path *sdcpb.Path, idx int, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
 	// StringIndent debug tree struct as indented string slice
 	StringIndent(result []string) []string
 	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
@@ -57,7 +33,7 @@ type Entry interface {
 	GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool, includeDefaults bool, includeExplicitDelete bool) LeafVariantSlice
 	// getHighestPrecedenceLeafValue returns the highest LeafValue of the Entry at hand
 	// will return an error if the Entry is not a Leaf
-	getHighestPrecedenceLeafValue(context.Context) (*LeafEntry, error)
+	GetHighestPrecedenceLeafValue(context.Context) (*LeafEntry, error)
 	// GetByOwner returns the branches Updates by owner
 	GetByOwner(owner string, result []*LeafEntry) LeafVariantSlice
 	// // markOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
@@ -67,12 +43,12 @@ type Entry interface {
 	// Validate kicks off validation
 	ValidateLevel(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, vCfg *config.Validation)
 	// validateMandatory the Mandatory schema field
-	validateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats)
+	ValidateMandatory(ctx context.Context, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats)
 	// validateMandatoryWithKeys is an internally used function that us called by validateMandatory in case
 	// the container has keys defined that need to be skipped before the mandatory attributes can be checked
-	validateMandatoryWithKeys(ctx context.Context, level int, attributes []string, choiceName string, resultChan chan<- *types.ValidationResultEntry)
+	ValidateMandatoryWithKeys(ctx context.Context, level int, attributes []string, choiceName string, resultChan chan<- *types.ValidationResultEntry)
 	// getHighestPrecedenceValueOfBranch returns the highes Precedence Value (lowest Priority value) of the brach that starts at this Entry
-	getHighestPrecedenceValueOfBranch(filter HighestPrecedenceFilter) int32
+	GetHighestPrecedenceValueOfBranch(filter HighestPrecedenceFilter) int32
 	// GetSchema returns the *sdcpb.SchemaElem of the Entry
 	GetSchema() *sdcpb.SchemaElem
 	// IsRoot returns true if the Entry is the root of the tree
@@ -104,13 +80,13 @@ type Entry interface {
 	// Or will disappear from device (running) as part of the update action.
 	RemainsToExist() bool
 	// shouldDelete returns true if an explicit delete should be issued for the given branch
-	shouldDelete() bool
+	ShouldDelete() bool
 	// canDelete checks if the entry can be Deleted.
 	// This is e.g. to cover e.g. defaults and running. They can be deleted, but should not, they are basically implicitly existing.
 	// In caomparison to
 	//    - remainsToExists() returns true, because they remain to exist even though implicitly.
 	//    - shouldDelete() returns false, because no explicit delete should be issued for them.
-	canDelete() bool
+	CanDelete() bool
 	GetChilds(types.DescendMethod) EntryMap
 	GetChild(name string) (Entry, bool) // entry, exists
 	FilterChilds(keys map[string]string) ([]Entry, error)
@@ -122,10 +98,10 @@ type Entry interface {
 	ToJsonIETF(onlyNewOrUpdated bool) (any, error)
 	// toJsonInternal the internal function that produces JSON and JSON_IETF
 	// Not for external usage
-	toJsonInternal(onlyNewOrUpdated bool, ietf bool) (j any, err error)
+	ToJsonInternal(onlyNewOrUpdated bool, ietf bool) (j any, err error)
 	// ToXML returns the tree and its current state in the XML representation used by netconf
 	ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
-	toXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error)
+	ToXmlInternal(parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error)
 	TreeExport(owner string) ([]*tree_persist.TreeElement, error)
 	// DeleteBranch Deletes from the tree, all elements of the PathSlice defined branch of the given owner
 	DeleteBranch(ctx context.Context, path *sdcpb.Path, owner string) (err error)
@@ -134,14 +110,14 @@ type Entry interface {
 	// this is collecting all the last level key entries.
 	GetListChilds() ([]Entry, error)
 	BreadthSearch(ctx context.Context, path *sdcpb.Path) ([]Entry, error)
-	DeepCopy(tc *TreeContext, parent Entry) (Entry, error)
-	GetLeafVariantEntries() LeafVariantEntries
+	DeepCopy(tc TreeContext, parent Entry) (Entry, error)
+	GetLeafVariants() *LeafVariants
 
 	// returns true if the Entry contains leafvariants (presence container, field or leaflist)
 	HoldsLeafvariants() bool
 	CanDeleteBranch(keepDefault bool) bool
 	DeleteCanDeleteChilds(keepDefault bool)
-	GetTreeContext() *TreeContext
+	GetTreeContext() TreeContext
 }
 
 type LeafVariantEntry interface {
@@ -170,3 +146,15 @@ const (
 	DescendMethodAll DescendMethod = iota
 	DescendMethodActiveChilds
 )
+
+type HighestPrecedenceFilter func(le *LeafEntry) bool
+
+func HighestPrecedenceFilterAll(le *LeafEntry) bool {
+	return true
+}
+func HighestPrecedenceFilterWithoutNew(le *LeafEntry) bool {
+	return !le.IsNew
+}
+func HighestPrecedenceFilterWithoutDeleted(le *LeafEntry) bool {
+	return !le.Delete
+}

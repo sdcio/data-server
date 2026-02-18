@@ -10,6 +10,8 @@ import (
 
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/api"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -81,7 +83,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	}
 
 	// store the actual / old running in the transaction
-	runningProto, err := d.cacheClient.IntentGet(ctx, tree.RunningIntentName)
+	runningProto, err := d.cacheClient.IntentGet(ctx, consts.RunningIntentName)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +216,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	// iterate through all the intents
 	for _, intent := range transaction.GetNewIntents() {
 		// update the TreeContext to reflect the actual owner (intent name)
-		lvs := tree.LeafVariantSlice{}
+		lvs := api.LeafVariantSlice{}
 		lvs = root.GetByOwner(intent.GetName(), lvs)
 
 		oldIntentContent := lvs.ToPathAndUpdateSlice()
@@ -227,7 +229,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 
 		// clear the owners existing explicit delete entries, retrieving the old entries for storing in the transaction for possible rollback
-		oldExplicitDeletes := root.GetTreeContext().RemoveExplicitDeletes(intent.GetName())
+		oldExplicitDeletes := root.GetTreeContext().ExplicitDeletes().Remove(intent.GetName())
 
 		priority := int32(math.MaxInt32)
 		if len(oldIntentContent) > 0 {
@@ -254,14 +256,14 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 			}
 
 			// add the explicit delete entries
-			root.GetTreeContext().AddExplicitDeletes(intent.GetName(), intent.GetPriority(), intent.GetDeletes())
+			root.GetTreeContext().ExplicitDeletes().Add(intent.GetName(), intent.GetPriority(), intent.GetDeletes())
 		}
 
 		root.SetNonRevertiveIntent(intent.GetName(), intent.NonRevertive())
 	}
 
-	les := tree.LeafVariantSlice{}
-	les = root.GetByOwner(tree.RunningIntentName, les)
+	les := api.LeafVariantSlice{}
+	les = root.GetByOwner(consts.RunningIntentName, les)
 
 	transaction.GetOldRunning().AddUpdates(les.ToPathAndUpdateSlice())
 
@@ -396,9 +398,9 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 }
 
 // writeBackSyncTree applies the provided changes to the syncTree and applies to the running cache intent
-func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVariantSlice, deletes treetypes.DeleteEntriesList) error {
+func (d *Datastore) writeBackSyncTree(ctx context.Context, updates api.LeafVariantSlice, deletes treetypes.DeleteEntriesList) error {
 	log := logger.FromContext(ctx)
-	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(tree.RunningIntentName, tree.RunningValuesPrio)
+	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(consts.RunningIntentName, consts.RunningValuesPrio)
 
 	// wrap the lock in an anonymous function to be able to utilize defer for the unlock
 	err := func() error {
@@ -407,7 +409,7 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVari
 		defer d.syncTreeMutex.Unlock()
 
 		// perform deletes
-		err := d.syncTree.DeleteBranchPaths(ctx, deletes, tree.RunningIntentName)
+		err := d.syncTree.DeleteBranchPaths(ctx, deletes, consts.RunningIntentName)
 		if err != nil {
 			return err
 		}
@@ -424,7 +426,7 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVari
 	}
 
 	// export the synctree
-	newRunningIntent, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
+	newRunningIntent, err := d.syncTree.TreeExport(consts.RunningIntentName, consts.RunningValuesPrio)
 	if err != nil && err != tree.ErrorIntentNotPresent {
 		return err
 	}
@@ -543,7 +545,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	return response, err
 }
 
-func updateToSdcpbUpdate(lvs tree.LeafVariantSlice) ([]*sdcpb.Update, error) {
+func updateToSdcpbUpdate(lvs api.LeafVariantSlice) ([]*sdcpb.Update, error) {
 	result := make([]*sdcpb.Update, 0, len(lvs))
 	for _, lv := range lvs {
 		path := lv.GetEntry().SdcpbPath()

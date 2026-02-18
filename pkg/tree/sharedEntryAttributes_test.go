@@ -15,6 +15,8 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/api"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -95,17 +97,20 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 			root: func() *RootEntry {
 				tc := NewTreeContext(nil, pool.NewSharedTaskPool(context.Background(), runtime.GOMAXPROCS(0)))
 
-				r := &RootEntry{
-					sharedEntryAttributes: &sharedEntryAttributes{
-						pathElemName:     "__root__",
-						childs:           newChildMap(),
-						childsMutex:      sync.RWMutex{},
-						choicesResolvers: choiceResolvers{},
-						parent:           nil,
-						treeContext:      tc,
-					},
+				var e api.Entry
+				e = &sharedEntryAttributes{
+					pathElemName:     "__root__",
+					childs:           newChildMap(),
+					childsMutex:      sync.RWMutex{},
+					choicesResolvers: choiceResolvers{},
+					parent:           nil,
+					treeContext:      tc,
+					leafVariants:     api.NewLeafVariants(tc, e),
 				}
-				r.leafVariants = newLeafVariants(tc, r.sharedEntryAttributes)
+				r := &RootEntry{
+					Entry: e,
+				}
+
 				return r
 			},
 		},
@@ -189,13 +194,13 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 	}
 	tests := []struct {
 		name                  string
-		sharedEntryAttributes func(t *testing.T) *sharedEntryAttributes
+		sharedEntryAttributes func(t *testing.T) api.Entry
 		args                  args
 		wantErr               bool
 	}{
 		{
 			name: "one",
-			sharedEntryAttributes: func(t *testing.T) *sharedEntryAttributes {
+			sharedEntryAttributes: func(t *testing.T) api.Entry {
 				mockCtrl := gomock.NewController(t)
 				defer mockCtrl.Finish()
 
@@ -223,7 +228,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				return root.sharedEntryAttributes
+				return root.Entry
 			},
 			args: args{
 				relativePath: &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", nil)}},
@@ -233,7 +238,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 		},
 		{
 			name: "wrong path",
-			sharedEntryAttributes: func(t *testing.T) *sharedEntryAttributes {
+			sharedEntryAttributes: func(t *testing.T) api.Entry {
 				mockCtrl := gomock.NewController(t)
 				defer mockCtrl.Finish()
 
@@ -261,7 +266,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				return root.sharedEntryAttributes
+				return root.Entry
 			},
 			args: args{
 				relativePath: &sdcpb.Path{
@@ -288,7 +293,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			les := []*LeafEntry{}
+			les := []*api.LeafEntry{}
 			result := e.GetByOwner(tt.args.owner, les)
 			if len(result) > 0 {
 				t.Errorf("expected all elements under %s to be deleted for owner %s but got %d elements", tt.args.relativePath.ToXPath(false), tt.args.owner, len(result))
@@ -475,7 +480,7 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 
 				running.Patterntest = ygot.String("hallo 0")
 
-				_, err = loadYgotStructIntoTreeRoot(ctx, running, root, RunningIntentName, RunningValuesPrio, false, flagsExisting)
+				_, err = loadYgotStructIntoTreeRoot(ctx, running, root, consts.RunningIntentName, consts.RunningValuesPrio, false, flagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -512,7 +517,7 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 				).SetCurrentValue(testhelper.GetStringTvProto("hallo 0")).SetExpectedValue(testhelper.GetStringTvProto("hallo 00")),
 				// three
 				types.NewDeviationEntry(
-					RunningIntentName,
+					consts.RunningIntentName,
 					types.DeviationReasonUnhandled,
 					&sdcpb.Path{
 						Elem: []*sdcpb.PathElem{
@@ -524,7 +529,7 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 				).SetCurrentValue(testhelper.GetStringTvProto("ethernet-1/3 description")).SetExpectedValue(nil),
 				// four
 				types.NewDeviationEntry(
-					RunningIntentName,
+					consts.RunningIntentName,
 					types.DeviationReasonUnhandled,
 					&sdcpb.Path{
 						Elem: []*sdcpb.PathElem{
@@ -872,7 +877,7 @@ func Test_sharedEntryAttributes_getOrCreateChilds(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			x, err := root.getOrCreateChilds(ctx, tt.path)
+			x, err := root.GetOrCreateChilds(ctx, tt.path)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("sharedEntryAttributes.getOrCreateChilds() error = %v, wantErr %v", err, tt.wantErr)
 				return

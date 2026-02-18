@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
 )
 
@@ -56,7 +57,7 @@ func (r *ResetFlagsProcessorParameters) GetAdjustedFlagsCount() int64 {
 // according to the processor configuration. The pool parameter can be either VirtualFailFast
 // (stops on first error) or VirtualTolerant (collects all errors).
 // Returns the first error for fail-fast pools, or a combined error for tolerant pools.
-func (p *ResetFlagsProcessor) Run(e Entry, poolFactory pool.VirtualPoolFactory) error {
+func (p *ResetFlagsProcessor) Run(e api.Entry, poolFactory pool.VirtualPoolFactory) error {
 	if e == nil {
 		return fmt.Errorf("entry cannot be nil")
 	}
@@ -80,10 +81,10 @@ func (p *ResetFlagsProcessor) Run(e Entry, poolFactory pool.VirtualPoolFactory) 
 
 type resetFlagsTask struct {
 	config *ResetFlagsProcessorParameters
-	e      Entry
+	e      api.Entry
 }
 
-func newResetFlagsTask(config *ResetFlagsProcessorParameters, e Entry) *resetFlagsTask {
+func newResetFlagsTask(config *ResetFlagsProcessorParameters, e api.Entry) *resetFlagsTask {
 	return &resetFlagsTask{
 		config: config,
 		e:      e,
@@ -92,7 +93,7 @@ func newResetFlagsTask(config *ResetFlagsProcessorParameters, e Entry) *resetFla
 
 func (t *resetFlagsTask) Run(ctx context.Context, submit func(pool.Task) error) error {
 	// Reset flags as per config
-	count := t.e.GetLeafVariantEntries().ResetFlags(t.config.deleteFlag, t.config.newFlag, t.config.updateFlag)
+	count := t.e.GetLeafVariants().ResetFlags(t.config.deleteFlag, t.config.newFlag, t.config.updateFlag)
 	t.config.adjustedFlagsCount.Add(int64(count))
 
 	// Process children recursively

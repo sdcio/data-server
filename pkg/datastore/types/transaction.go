@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -28,8 +28,8 @@ func NewTransaction(id string, tm *TransactionManager) *Transaction {
 		transactionManager: tm,
 		newIntents:         map[string]*TransactionIntent{},
 		oldIntents:         map[string]*TransactionIntent{},
-		oldRunning:         NewTransactionIntent(tree.RunningIntentName, 600),
-		replace:            NewTransactionIntent(tree.ReplaceIntentName, tree.ReplaceValuesPrio),
+		oldRunning:         NewTransactionIntent(consts.RunningIntentName, 600),
+		replace:            NewTransactionIntent(consts.ReplaceIntentName, consts.ReplaceValuesPrio),
 	}
 }
 
