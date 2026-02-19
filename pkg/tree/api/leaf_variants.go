@@ -382,7 +382,7 @@ func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
 	}
 
 	// if highest is not new or updated and highest is non-revertive
-	if !highest.IsNew && !highest.IsUpdated && lv.tc.NonRevertiveInfo().IsGenerallyNonRevertive(highest.Update.Owner()) {
+	if !highest.IsNew && !highest.IsUpdated && lv.tc.NonRevertiveInfo().IsNonRevertive(highest.Update.Owner(), lv.parentEntry) {
 		return false
 	}
 
