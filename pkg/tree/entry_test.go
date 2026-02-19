@@ -2,6 +2,7 @@ package tree
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"runtime"
 	"slices"
@@ -9,10 +10,14 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/api"
 	. "github.com/sdcio/data-server/pkg/tree/consts"
+	"github.com/sdcio/data-server/pkg/tree/importer"
+	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -209,8 +214,7 @@ func Test_Entry_One(t *testing.T) {
 	t.Log(root.String())
 
 	t.Run("Test 1 - expected entries for owner1", func(t *testing.T) {
-		o1Le := []*api.LeafEntry{}
-		o1Le = root.GetByOwner(owner1, o1Le)
+		o1Le := ops.GetByOwner(root, owner1)
 		o1 := api.LeafEntriesToUpdates(o1Le)
 		// diff the result with the expected
 		// if diff := testhelper.DiffUpdates([]*types.Update{u0o1, u2, u2_1, u1, u1_1}, o1); diff != "" {
@@ -226,8 +230,7 @@ func Test_Entry_One(t *testing.T) {
 	})
 
 	t.Run("Test 2 - expected entries for owner2", func(t *testing.T) {
-		o2Le := []*api.LeafEntry{}
-		o2Le = root.GetByOwner(owner2, o2Le)
+		o2Le := ops.GetByOwner(root, owner2)
 		o2 := api.LeafEntriesToUpdates(o2Le)
 		// diff the result with the expected
 		if diff := testhelper.DiffUpdates([]*types.PathAndUpdate{
@@ -2027,4 +2030,255 @@ func Test_Validation_MultiKey_Pattern(t *testing.T) {
 			}
 		},
 	)
+}
+
+func Test_RevertNonRevertive(t *testing.T) {
+
+	owner1 := "OwnerOne"
+	owner1Prio := int32(50)
+	owner2 := "OwnerTwo"
+	owner2Prio := int32(55)
+
+	// create table test data
+	tests := []struct {
+		name                string
+		running             func() (importer.ImportConfigAdapter, error)
+		existing            func() ([]importer.ImportConfigAdapter, error)
+		existingIsRevertive bool
+		revertPaths         []*sdcpb.Path
+		expectedResult      string
+	}{
+		{
+			name: "revertive path with ignored key",
+			running: func() (importer.ImportConfigAdapter, error) {
+				c := config1()
+
+				c.Interface["ethernet-1/1"].Description = ygot.String("test")
+				c.NetworkInstance["default"].Description = ygot.String("test")
+
+				sConf, err := ygot.EmitJSON(c, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false},
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				var jConf any
+				err = json.Unmarshal([]byte(sConf), &jConf)
+				return jsonImporter.NewJsonTreeImporter(jConf, RunningIntentName, RunningValuesPrio, false), err
+			},
+			existing: func() ([]importer.ImportConfigAdapter, error) {
+				c := config1()
+				sConf, err := ygot.EmitJSON(c, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false},
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				var jConf any
+				err = json.Unmarshal([]byte(sConf), &jConf)
+				return []importer.ImportConfigAdapter{jsonImporter.NewJsonTreeImporter(jConf, owner1, owner1Prio, true)}, err // this bool defines the revertive or non revertiveness
+			},
+			existingIsRevertive: true,
+			revertPaths: []*sdcpb.Path{
+				{
+					Elem:        []*sdcpb.PathElem{sdcpb.NewPathElem("interface", nil)},
+					IsRootBased: true,
+				},
+			},
+			expectedResult: `{"interface":[{"description":"Foo","name":"ethernet-1/1"}]}`,
+		},
+		{
+			name: "revertive path /",
+			running: func() (importer.ImportConfigAdapter, error) {
+				c := config1()
+
+				c.Interface["ethernet-1/1"].Description = ygot.String("test")
+				c.NetworkInstance["default"].Description = ygot.String("test")
+
+				sConf, err := ygot.EmitJSON(c, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false},
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				var jConf any
+				err = json.Unmarshal([]byte(sConf), &jConf)
+				return jsonImporter.NewJsonTreeImporter(jConf, RunningIntentName, RunningValuesPrio, false), err
+			},
+			existing: func() ([]importer.ImportConfigAdapter, error) {
+				c := config1()
+				sConf, err := ygot.EmitJSON(c, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false},
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				var jConf any
+				err = json.Unmarshal([]byte(sConf), &jConf)
+				return []importer.ImportConfigAdapter{jsonImporter.NewJsonTreeImporter(jConf, owner1, owner1Prio, true)}, err // this bool defines the revertive or non revertiveness
+			},
+			existingIsRevertive: true,
+			revertPaths: []*sdcpb.Path{
+				{
+					Elem:        []*sdcpb.PathElem{},
+					IsRootBased: true,
+				},
+			},
+			expectedResult: `{"interface":[{"description":"Foo","name":"ethernet-1/1"}],"network-instance":[{"description":"Default NI","name":"default"}]}`,
+		},
+		{
+			name: "revertive path multiple intents, with ignored key",
+			running: func() (importer.ImportConfigAdapter, error) {
+				c := config1()
+				c.Patterntest = nil
+				err := ygot.MergeStructInto(c, config2())
+				if err != nil {
+					return nil, err
+				}
+				c.Interface["ethernet-1/1"].Description = ygot.String("test")
+				c.NetworkInstance["default"].Description = ygot.String("test")
+
+				sConf, err := ygot.EmitJSON(c, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false},
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				var jConf any
+				err = json.Unmarshal([]byte(sConf), &jConf)
+				return jsonImporter.NewJsonTreeImporter(jConf, RunningIntentName, RunningValuesPrio, false), err
+			},
+			existing: func() ([]importer.ImportConfigAdapter, error) {
+				c := config1()
+
+				sConf, err := ygot.EmitJSON(c, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false},
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				var jConf any
+				err = json.Unmarshal([]byte(sConf), &jConf)
+
+				c1Importer := jsonImporter.NewJsonTreeImporter(jConf, owner1, owner1Prio, true)
+
+				c2 := config2()
+				c2.Interface["ethernet-1/2"].Description = ygot.String("test")
+				sConf, err = ygot.EmitJSON(c2, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false},
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				err = json.Unmarshal([]byte(sConf), &jConf)
+				c2Importer := jsonImporter.NewJsonTreeImporter(jConf, owner2, owner2Prio, true)
+
+				return []importer.ImportConfigAdapter{c1Importer, c2Importer}, err // this bool defines the revertive or non revertiveness
+			},
+			existingIsRevertive: true,
+			revertPaths: []*sdcpb.Path{
+				{
+					Elem:        []*sdcpb.PathElem{sdcpb.NewPathElem("interface", nil)},
+					IsRootBased: true,
+				},
+			},
+			expectedResult: `{"interface":[{"description":"Foo","name":"ethernet-1/1"}]}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.TODO()
+
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+
+			scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			runningConfig, err := tt.running()
+			if err != nil {
+				t.Fatalf("failed to get running config: %v", err)
+			}
+
+			existingConfig, err := tt.existing()
+			if err != nil {
+				t.Fatalf("failed to get existing config: %v", err)
+			}
+
+			_, err = root.ImportConfig(ctx, nil, runningConfig, types.NewUpdateInsertFlags(), tc.poolFactory)
+			if err != nil {
+				t.Fatalf("failed to import running config: %v", err)
+			}
+
+			for _, existing := range existingConfig {
+				_, err = root.ImportConfig(ctx, nil, existing, types.NewUpdateInsertFlags(), tc.poolFactory)
+				if err != nil {
+					t.Fatalf("failed to import existing config: %v", err)
+				}
+			}
+
+			// adding paths to the non revertive info, this should mark the paths as non revertive, and thus not be deleted in the end.
+			for _, path := range tt.revertPaths {
+				tc.NonRevertiveInfo().AddNonRevertivePath(owner1, path)
+			}
+
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Fatalf("failed to finish insertion phase: %v", err)
+			}
+
+			t.Logf("Tree:\n%s", root.String())
+
+			deletes, err := root.GetDeletes(true)
+			if err != nil {
+				t.Fatalf("failed to get deletes: %v", err)
+			}
+			t.Logf("Deletes: %v", deletes)
+
+			j, err := root.ToJson(true)
+			if err != nil {
+				t.Fatalf("failed to convert to JSON: %v", err)
+			}
+
+			jPlaneResult, err := json.Marshal(j)
+			if err != nil {
+				t.Fatalf("failed to marshal JSON: %v", err)
+			}
+
+			if string(jPlaneResult) != tt.expectedResult {
+				t.Errorf("expected JSON result to be %s, but got %s", tt.expectedResult, string(jPlaneResult))
+			}
+
+			// logging
+			jResult, err := json.MarshalIndent(j, "", "  ")
+			if err != nil {
+				t.Fatalf("failed to marshal JSON: %v", err)
+			}
+			t.Logf("Resulting JSON:\n%s", string(jResult))
+		})
+	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/consts"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -289,9 +290,7 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 
 			t.Log(root.String())
 
-			lvs := api.LeafVariantSlice{}
-			lvs = root.GetByOwner(owner2, lvs)
-
+			lvs := ops.GetByOwner(root, owner2)
 			equal, err := lvs.Equal(tt.expectedLeafVariants)
 			if err != nil {
 				t.Error(err)

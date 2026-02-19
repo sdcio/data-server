@@ -19,15 +19,6 @@ func (lvs LeafVariantSlice) ToUpdateSlice() types.UpdateSlice {
 	return result
 }
 
-func (lvs LeafVariantSlice) GetByOwner(owner string) *LeafEntry {
-	for _, le := range lvs {
-		if le.Owner() == owner {
-			return le
-		}
-	}
-	return nil
-}
-
 func (lvs LeafVariantSlice) ToPathAndUpdateSlice() []*types.PathAndUpdate {
 	result := make([]*types.PathAndUpdate, 0, len(lvs))
 	for _, x := range lvs {
@@ -57,7 +48,7 @@ func (lvs LeafVariantSlice) Equal(otherLvs LeafVariantSlice) (bool, error) {
 		return le1.Compare(le2)
 	})
 	// sort otherLvs
-	slices.SortFunc(lvs, func(le1, le2 *LeafEntry) int {
+	slices.SortFunc(otherLvs, func(le1, le2 *LeafEntry) int {
 		return le1.Compare(le2)
 	})
 

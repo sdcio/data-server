@@ -11,6 +11,7 @@ import (
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/importer"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
@@ -199,7 +200,8 @@ func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Inte
 func (r *RootEntry) getByOwnerFiltered(owner string, f ...api.LeafEntryFilter) []*api.LeafEntry {
 	result := []*api.LeafEntry{}
 	// retrieve all leafentries for the owner
-	leafEntries := r.Entry.GetByOwner(owner, result)
+	leafEntries := ops.GetByOwner(r.Entry, owner)
+
 	// range through entries
 NEXTELEMENT:
 	for _, e := range leafEntries {

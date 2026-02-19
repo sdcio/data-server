@@ -19,6 +19,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -293,8 +294,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			les := []*api.LeafEntry{}
-			result := e.GetByOwner(tt.args.owner, les)
+			result := ops.GetByOwner(e, tt.args.owner)
 			if len(result) > 0 {
 				t.Errorf("expected all elements under %s to be deleted for owner %s but got %d elements", tt.args.relativePath.ToXPath(false), tt.args.owner, len(result))
 				return

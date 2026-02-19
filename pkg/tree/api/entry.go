@@ -35,7 +35,7 @@ type Entry interface {
 	// will return an error if the Entry is not a Leaf
 	GetHighestPrecedenceLeafValue(context.Context) (*LeafEntry, error)
 	// GetByOwner returns the branches Updates by owner
-	GetByOwner(owner string, result []*LeafEntry) LeafVariantSlice
+	// GetByOwner(owner string, result []*LeafEntry) LeafVariantSlice
 	// // markOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
 	// MarkOwnerDelete(o string, onlyIntended bool)
 	// GetDeletes returns the cache-updates that are not updated, have no lower priority value left and hence should be deleted completely

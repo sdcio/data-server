@@ -1515,9 +1515,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			newFlag := types.NewUpdateInsertFlags().SetNewFlag()
 
 			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-
 			_, err = root.ImportConfig(ctx, tt.intentReqPath, jsonImporter.NewJsonTreeImporter(jsonConfAny, tt.intentName, tt.intentPrio, tt.nonRevertive), newFlag, sharedPool)
-
 			if err != nil {
 				t.Error(err)
 			}

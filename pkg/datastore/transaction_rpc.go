@@ -13,6 +13,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/logger"
@@ -216,8 +217,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	// iterate through all the intents
 	for _, intent := range transaction.GetNewIntents() {
 		// update the TreeContext to reflect the actual owner (intent name)
-		lvs := api.LeafVariantSlice{}
-		lvs = root.GetByOwner(intent.GetName(), lvs)
+		lvs := ops.GetByOwner(root, intent.GetName())
 
 		oldIntentContent := lvs.ToPathAndUpdateSlice()
 
@@ -262,8 +262,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		root.SetNonRevertiveIntent(intent.GetName(), intent.NonRevertive())
 	}
 
-	les := api.LeafVariantSlice{}
-	les = root.GetByOwner(consts.RunningIntentName, les)
+	les := ops.GetByOwner(root, consts.RunningIntentName)
 
 	transaction.GetOldRunning().AddUpdates(les.ToPathAndUpdateSlice())
 

@@ -16,6 +16,7 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/consts"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
@@ -254,8 +255,7 @@ func (s *sharedEntryAttributes) checkAndCreateKeysAsLeafs(ctx context.Context, i
 			// if the key Leaf exists continue with next key
 			if entryExists {
 				// if it exists, we need to check that the entry for the owner exists.
-				var result []*api.LeafEntry
-				lvs := child.GetByOwner(intentName, result)
+				lvs := ops.GetByOwner(child, intentName)
 				if len(lvs) > 0 {
 					lvs[0].DropDeleteFlag()
 					// continue with parent Entry BEFORE continuing the loop
@@ -709,20 +709,6 @@ func (s *sharedEntryAttributes) GetFirstAncestorWithSchema() (api.Entry, int) {
 	// increase the level returned by the parent to
 	// reflect this entry as a level and return
 	return schema, level + 1
-}
-
-// GetByOwner returns all the LeafEntries that belong to a certain owner.
-func (s *sharedEntryAttributes) GetByOwner(owner string, result []*api.LeafEntry) api.LeafVariantSlice {
-	lv := s.leafVariants.GetByOwner(owner)
-	if lv != nil {
-		result = append(result, lv)
-	}
-
-	// continue with childs
-	for _, c := range s.childs.GetAll() {
-		result = c.GetByOwner(owner, result)
-	}
-	return result
 }
 
 // PathName returns the name of the Entry

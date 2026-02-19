@@ -1,5 +1,7 @@
 package api
 
+import "github.com/sdcio/sdc-protos/sdcpb"
+
 type NonRevertiveInfos map[string]*NonRevertiveInfo
 
 func NewNonRevertiveInfos() NonRevertiveInfos {
@@ -7,20 +9,19 @@ func NewNonRevertiveInfos() NonRevertiveInfos {
 }
 
 func (n NonRevertiveInfos) Add(owner string, nonRevertive bool) {
-	info, ok := n[owner]
+	_, ok := n[owner]
 	if !ok {
-		info = NewNonRevertiveInfo(owner, nonRevertive)
-		n[owner] = info
+		n[owner] = NewNonRevertiveInfo(owner, nonRevertive)
 	}
 }
 
-func (n NonRevertiveInfos) AddNonRevertivePath(owner string, path SdcpbPath) {
+func (n NonRevertiveInfos) AddNonRevertivePath(owner string, path *sdcpb.Path) {
 	info, ok := n[owner]
 	if !ok {
 		info = NewNonRevertiveInfo(owner, false)
 		n[owner] = info
 	}
-	info.AddPath(path.SdcpbPath())
+	info.AddPath(path)
 }
 
 func (n NonRevertiveInfos) IsNonRevertive(owner string, path SdcpbPath) bool {
