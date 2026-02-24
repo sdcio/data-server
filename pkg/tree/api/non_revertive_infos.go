@@ -8,20 +8,20 @@ func NewNonRevertiveInfos() NonRevertiveInfos {
 	return make(map[string]*NonRevertiveInfo)
 }
 
-func (n NonRevertiveInfos) Add(owner string, nonRevertive bool) {
+func (n NonRevertiveInfos) Add(owner string, nonRevertive bool, paths ...*sdcpb.Path) {
 	_, ok := n[owner]
 	if !ok {
-		n[owner] = NewNonRevertiveInfo(owner, nonRevertive)
+		n[owner] = NewNonRevertiveInfo(owner, nonRevertive).AddPaths(paths...)
 	}
 }
 
-func (n NonRevertiveInfos) AddNonRevertivePath(owner string, path *sdcpb.Path) {
+func (n NonRevertiveInfos) AddNonRevertivePaths(owner string, path ...*sdcpb.Path) {
 	info, ok := n[owner]
 	if !ok {
 		info = NewNonRevertiveInfo(owner, false)
 		n[owner] = info
 	}
-	info.AddPath(path)
+	info.AddPaths(path...)
 }
 
 func (n NonRevertiveInfos) IsNonRevertive(owner string, path SdcpbPath) bool {

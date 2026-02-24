@@ -18,8 +18,9 @@ func NewNonRevertiveInfo(intentName string, nonRevertive bool) *NonRevertiveInfo
 	}
 }
 
-func (n *NonRevertiveInfo) AddPath(path *sdcpb.Path) {
-	n.revertPaths = append(n.revertPaths, path)
+func (n *NonRevertiveInfo) AddPaths(path ...*sdcpb.Path) *NonRevertiveInfo {
+	n.revertPaths = append(n.revertPaths, path...)
+	return n
 }
 
 // IsGenerallyNonRevertive returns the general non-revertive state of the intent, which is true if the intent is non-revertive for all paths, false otherwise.

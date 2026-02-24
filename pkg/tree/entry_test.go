@@ -2243,7 +2243,7 @@ func Test_RevertNonRevertive(t *testing.T) {
 
 			// adding paths to the non revertive info, this should mark the paths as non revertive, and thus not be deleted in the end.
 			for _, path := range tt.revertPaths {
-				tc.NonRevertiveInfo().AddNonRevertivePath(owner1, path)
+				tc.NonRevertiveInfo().AddNonRevertivePaths(owner1, path)
 			}
 
 			err = root.FinishInsertionPhase(ctx)
