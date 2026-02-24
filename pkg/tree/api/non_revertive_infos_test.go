@@ -105,7 +105,7 @@ func TestNonRevertiveInfos_AddNonRevertivePath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			n := NewNonRevertiveInfos()
 			tt.setup(n)
-			n.AddNonRevertivePath(tt.owner, tt.path)
+			n.AddNonRevertivePaths(tt.owner, tt.path)
 			_, ok := n[tt.owner]
 			if ok != tt.wantPresent {
 				t.Errorf("entry present = %v, want %v", ok, tt.wantPresent)
@@ -146,7 +146,7 @@ func TestNonRevertiveInfos_IsNonRevertive(t *testing.T) {
 		{
 			name: "path outside revert paths is non-revertive",
 			setup: func(n NonRevertiveInfos) {
-				n.AddNonRevertivePath("owner1", &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "interface"}}})
+				n.AddNonRevertivePaths("owner1", &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "interface"}}})
 			},
 			owner:      "owner1",
 			pathElems:  []*sdcpb.PathElem{{Name: "bgp"}},
@@ -155,7 +155,7 @@ func TestNonRevertiveInfos_IsNonRevertive(t *testing.T) {
 		{
 			name: "path under revert path is revertive",
 			setup: func(n NonRevertiveInfos) {
-				n.AddNonRevertivePath("owner1", &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "interface"}}})
+				n.AddNonRevertivePaths("owner1", &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "interface"}}})
 			},
 			owner:      "owner1",
 			pathElems:  []*sdcpb.PathElem{{Name: "interface"}, {Name: "eth0"}},
