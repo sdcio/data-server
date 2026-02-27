@@ -173,7 +173,7 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 
 	switch strings.ToLower(t.cfg.GnmiOptions.Encoding) {
 	case "json":
-		jsonData, err := source.ToJson(true)
+		jsonData, err := source.ToJson(ctx, true)
 		if err != nil {
 			return nil, err
 		}
@@ -188,7 +188,7 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 		}
 
 	case "json_ietf":
-		jsonData, err := source.ToJsonIETF(true)
+		jsonData, err := source.ToJsonIETF(ctx, true)
 		if err != nil {
 			return nil, err
 		}

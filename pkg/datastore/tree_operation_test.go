@@ -29,6 +29,8 @@ import (
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
+	"github.com/sdcio/data-server/pkg/tree/ops/validation"
+	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -1505,8 +1507,8 @@ func TestDatastore_populateTree(t *testing.T) {
 			}
 
 			sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-			ownerDeleteMarker := tree.NewOwnerDeleteMarker(tree.NewOwnerDeleteMarkerTaskConfig(tt.intentName, false))
-			err = ownerDeleteMarker.Run(root.GetRoot(), sharedTaskPool)
+			ownerDeleteMarker := processors.NewOwnerDeleteMarker(processors.NewOwnerDeleteMarkerTaskConfig(tt.intentName, false))
+			err = ownerDeleteMarker.Run(root.Entry, sharedTaskPool)
 			if err != nil {
 				t.Error(err)
 				return
@@ -1527,7 +1529,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			}
 			fmt.Println(root.String())
 
-			validationResult, _ := root.Validate(ctx, validationConfig, sharedPool)
+			validationResult, _ := validation.Validate(ctx, root.Entry, validationConfig, sharedPool)
 
 			fmt.Printf("Validation Errors:\n%v\n", strings.Join(validationResult.ErrorsStr(), "\n"))
 			fmt.Printf("Tree:%s\n", root.String())

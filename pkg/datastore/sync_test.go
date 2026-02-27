@@ -19,6 +19,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
+	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -413,8 +414,8 @@ func TestApplyToRunning(t *testing.T) {
 
 			fmt.Println(syncTree.String())
 
-			resetFlagsProcessorParams := tree.NewResetFlagsProcessorParameters().SetNewFlag().SetUpdateFlag()
-			err = tree.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(syncTree.GetRoot(), datastore.taskPool)
+			resetFlagsProcessorParams := processors.NewResetFlagsProcessorParameters().SetNewFlag().SetUpdateFlag()
+			err = processors.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(syncTree.Entry, datastore.taskPool)
 			if err != nil {
 				t.Fatalf("failed to reset flags: %v", err)
 			}

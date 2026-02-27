@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/logger"
 	logf "github.com/sdcio/logger"
@@ -185,7 +186,7 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 			deviationChan <- treetypes.NewDeviationEntry(n, treetypes.DeviationReasonIntentExists, nil)
 		}
 
-		deviationTree.GetDeviations(ctx, deviationChan)
+		ops.GetDeviations(ctx, deviationTree.Entry, deviationChan, true)
 	}()
 
 	return deviationChan, nil

@@ -5,18 +5,16 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 
-	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/ops"
+	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	"github.com/sdcio/sdc-protos/tree_persist"
 )
 
 // RootEntry the root of the cache.Update tree
@@ -24,13 +22,9 @@ type RootEntry struct {
 	api.Entry
 }
 
-var (
-	ErrorIntentNotPresent = fmt.Errorf("intent not present")
-)
-
 // NewTreeRoot Instantiate a new Tree Root element.
 func NewTreeRoot(ctx context.Context, tc api.TreeContext) (*RootEntry, error) {
-	sea, err := newSharedEntryAttributes(ctx, nil, "", tc)
+	sea, err := NewSharedEntryAttributes(ctx, nil, "", tc)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +60,7 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us []*types.PathAnd
 	var err error
 	for idx, u := range us {
 		_ = idx
-		_, err = r.Entry.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flags)
+		_, err = ops.AddUpdateRecursive(ctx, r.Entry, u.GetPath(), u.GetUpdate(), flags)
 		if err != nil {
 			return err
 		}
@@ -75,11 +69,11 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us []*types.PathAnd
 }
 
 func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, flags *types.UpdateInsertFlags, poolFactory pool.VirtualPoolFactory) (*types.ImportStats, error) {
-	e, err := r.Entry.GetOrCreateChilds(ctx, basePath)
+	e, err := ops.GetOrCreateChilds(ctx, r.Entry, basePath)
 	if err != nil {
 		return nil, err
 	}
-	ImportConfigProcessor := NewImportConfigProcessor(importer, flags)
+	ImportConfigProcessor := processors.NewImportConfigProcessor(importer, flags)
 	err = ImportConfigProcessor.Run(ctx, e, poolFactory)
 	if err != nil {
 		return nil, err
@@ -89,33 +83,6 @@ func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, impo
 
 func (r *RootEntry) SetNonRevertiveIntent(intentName string, nonRevertive bool) {
 	r.GetTreeContext().NonRevertiveInfo().Add(intentName, nonRevertive)
-}
-
-func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation, taskpoolFactory pool.VirtualPoolFactory) (types.ValidationResults, *types.ValidationStats) {
-	// perform validation
-	// we use a channel and cumulate all the errors
-	validationResultEntryChan := make(chan *types.ValidationResultEntry, 10)
-	validationStats := types.NewValidationStats()
-
-	// create a ValidationResult struct
-	validationResult := types.ValidationResults{}
-
-	syncWait := &sync.WaitGroup{}
-	syncWait.Add(1)
-	go func() {
-		// read from the validationResult channel
-		for e := range validationResultEntryChan {
-			validationResult.AddEntry(e)
-		}
-		syncWait.Done()
-	}()
-
-	validationProcessor := NewValidateProcessor(NewValidateProcessorConfig(validationResultEntryChan, validationStats, vCfg))
-	validationProcessor.Run(taskpoolFactory, r.Entry)
-	close(validationResultEntryChan)
-
-	syncWait.Wait()
-	return validationResult, validationStats
 }
 
 // String returns the string representation of the Tree.
@@ -166,35 +133,6 @@ func (r *RootEntry) GetAncestorSchema() (*sdcpb.SchemaElem, int) {
 	return nil, 0
 }
 
-func (r *RootEntry) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry) {
-	r.Entry.GetDeviations(ctx, ch, true)
-}
-
-func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Intent, error) {
-	treeExport, err := r.Entry.TreeExport(owner)
-	if err != nil {
-		return nil, err
-	}
-
-	explicitDeletes := r.GetTreeContext().ExplicitDeletes().GetByIntentName(owner).ToPathSlice()
-
-	var rootExportEntry *tree_persist.TreeElement
-	if len(treeExport) != 0 {
-		rootExportEntry = treeExport[0]
-	}
-
-	if rootExportEntry != nil || len(explicitDeletes) > 0 {
-		return &tree_persist.Intent{
-			IntentName:      owner,
-			Root:            rootExportEntry,
-			Priority:        priority,
-			NonRevertive:    r.GetTreeContext().NonRevertiveInfo().IsGenerallyNonRevertive(owner),
-			ExplicitDeletes: explicitDeletes,
-		}, nil
-	}
-	return nil, ErrorIntentNotPresent
-}
-
 // getByOwnerFiltered returns the Tree content filtered by owner, whilst allowing to filter further
 // via providing additional LeafEntryFilter
 func (r *RootEntry) getByOwnerFiltered(owner string, f ...api.LeafEntryFilter) []*api.LeafEntry {
@@ -220,7 +158,7 @@ NEXTELEMENT:
 // DeleteSubtree Deletes from the tree, all elements of the PathSlice defined branch of the given owner. Return values are remainsToExist and error if an error occured.
 func (r *RootEntry) DeleteBranchPaths(ctx context.Context, deletes types.DeleteEntriesList, intentName string) error {
 	for _, del := range deletes {
-		err := r.DeleteBranch(ctx, del.SdcpbPath(), intentName)
+		err := ops.DeleteBranch(ctx, r.Entry, del.SdcpbPath(), intentName)
 		if err != nil {
 			return err
 		}
@@ -230,12 +168,12 @@ func (r *RootEntry) DeleteBranchPaths(ctx context.Context, deletes types.DeleteE
 
 func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 	log := logf.FromContext(ctx)
-	edpsc := ExplicitDeleteProcessorStatCollection{}
+	edpsc := processors.ExplicitDeleteProcessorStatCollection{}
 
 	// apply the explicit deletes
 	for deletePathPrio := range r.GetTreeContext().ExplicitDeletes().Items() {
 
-		params := NewExplicitDeleteTaskParameters(deletePathPrio.GetOwner(), deletePathPrio.GetPrio())
+		params := processors.NewExplicitDeleteTaskParameters(deletePathPrio.GetOwner(), deletePathPrio.GetPrio())
 
 		for path := range deletePathPrio.PathItems() {
 
@@ -245,7 +183,7 @@ func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 			if err != nil {
 				log.Error(nil, "Applying explicit delete - path not found, skipping", "severity", "WARN", "path", path.ToXPath(false))
 			}
-			edp := NewExplicitDeleteProcessor(params)
+			edp := processors.NewExplicitDeleteProcessor(params)
 			err = edp.Run(ctx, entry, r.GetTreeContext().PoolFactory())
 			if err != nil {
 				return err

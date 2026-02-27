@@ -38,9 +38,9 @@ func (t *TargetSourceReplace) ToProtoDeletes(ctx context.Context) ([]*sdcpb.Path
 
 // ToXML in the XML case, we need to add the XMLReplace operation to the root element
 // So the call is forwarded to the original TargetSource, the attribute is added and returned to the caller
-func (t *TargetSourceReplace) ToXML(onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error) {
+func (t *TargetSourceReplace) ToXML(ctx context.Context, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error) {
 	// forward call to original TargetSource
-	et, err := t.TargetSource.ToXML(onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+	et, err := t.TargetSource.ToXML(ctx, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
 	if err != nil {
 		return nil, err
 	}

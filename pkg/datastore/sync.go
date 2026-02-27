@@ -5,8 +5,11 @@ import (
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/api/adapter"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer"
+	"github.com/sdcio/data-server/pkg/tree/ops"
+	"github.com/sdcio/data-server/pkg/tree/processors"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -31,7 +34,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 			continue
 		}
 		// apply delete marker, setting owner delete flag on running intent
-		err = tree.NewOwnerDeleteMarker(tree.NewOwnerDeleteMarkerTaskConfig(consts.RunningIntentName, false)).Run(deleteRoot, d.taskPool)
+		err = processors.NewOwnerDeleteMarker(processors.NewOwnerDeleteMarkerTaskConfig(consts.RunningIntentName, false)).Run(deleteRoot, d.taskPool)
 		if err != nil {
 			log.Error(err, "failed applying delete to path", "path", delete.ToXPath(false))
 			continue
@@ -47,15 +50,15 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	}
 
 	// run remove deleted processor to clean up entries marked as deleted by owner
-	delProcessorParams := tree.NewRemoveDeletedProcessorParameters(consts.RunningIntentName)
-	err := tree.NewRemoveDeletedProcessor(delProcessorParams).Run(d.syncTree.GetRoot(), d.taskPool)
+	delProcessorParams := processors.NewRemoveDeletedProcessorParameters(consts.RunningIntentName)
+	err := processors.NewRemoveDeletedProcessor(delProcessorParams).Run(d.syncTree.Entry, d.taskPool)
 	if err != nil {
 		return err
 	}
 
 	// delete entries that have zero-length leaf variant entries after remove deleted processing
 	for _, e := range delProcessorParams.GetZeroLengthLeafVariantEntries() {
-		err := e.GetParent().DeleteBranch(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(e.PathName(), nil)}}, consts.RunningIntentName)
+		err := ops.DeleteBranch(ctx, e.GetParent(), &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(e.PathName(), nil)}}, consts.RunningIntentName)
 		if err != nil {
 			return err
 		}
@@ -63,7 +66,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 
 	// conditional trace logging
 	if log := log.V(logger.VTrace); log.Enabled() {
-		treeExport, err := d.syncTree.TreeExport(consts.RunningIntentName, consts.RunningValuesPrio)
+		treeExport, err := ops.TreeExport(d.syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio)
 		if err == nil {
 			json, err := protojson.MarshalOptions{Multiline: false}.Marshal(treeExport)
 			if err == nil {
@@ -73,8 +76,8 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	}
 
 	// run reset flags processor to reset flags
-	resetFlagsProcessorParams := tree.NewResetFlagsProcessorParameters().SetDeleteFlag().SetNewFlag().SetUpdateFlag()
-	err = tree.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(d.syncTree.GetRoot(), d.taskPool)
+	resetFlagsProcessorParams := processors.NewResetFlagsProcessorParameters().SetDeleteFlag().SetNewFlag().SetUpdateFlag()
+	err = processors.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(d.syncTree.Entry, d.taskPool)
 	if err != nil {
 		return err
 	}
@@ -131,7 +134,7 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error 
 
 	// if no deletes, check if we have updates
 	if !performApply {
-		updList, err := t.ToProtoUpdates(ctx, true)
+		updList, err := ops.ToProtoUpdates(ctx, t.Entry, true)
 		if err != nil {
 			return err
 		}
@@ -141,7 +144,7 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error 
 
 	if performApply {
 		log.Info("reverting after sync")
-		resp, err := d.applyIntent(ctx, t)
+		resp, err := d.applyIntent(ctx, adapter.NewEntryOutputAdapter(t.Entry))
 		if err != nil {
 			respJ := protojson.MarshalOptions{Multiline: false}
 			respStr, _ := respJ.Marshal(resp)

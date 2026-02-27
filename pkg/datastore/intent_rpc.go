@@ -23,6 +23,7 @@ import (
 
 	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/api/adapter"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -63,7 +64,7 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntent
 			return nil, err
 		}
 
-		return newTreeRootToGetIntentResponse(d.syncTree), nil
+		return adapter.NewIntentResponseAdapter(d.syncTree.Entry), nil
 	}
 
 	// otherwise consult cache
@@ -87,41 +88,16 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntent
 	if err != nil {
 		return nil, err
 	}
-	return newTreeRootToGetIntentResponse(root), nil
+	return adapter.NewIntentResponseAdapter(root.Entry), nil
 }
 
 type GetIntentResponse interface {
 	// ToJson returns the Tree contained structure as JSON
 	// use e.g. json.MarshalIndent() on the returned struct
-	ToJson() (any, error)
+	ToJson(ctx context.Context) (any, error)
 	// ToJsonIETF returns the Tree contained structure as JSON_IETF
 	// use e.g. json.MarshalIndent() on the returned struct
-	ToJsonIETF() (any, error)
-	ToXML() (*etree.Document, error)
+	ToJsonIETF(ctx context.Context) (any, error)
+	ToXML(ctx context.Context) (*etree.Document, error)
 	ToProtoUpdates(ctx context.Context) ([]*sdcpb.Update, error)
-}
-
-type treeRootToGetIntentResponse struct {
-	root *tree.RootEntry
-}
-
-func newTreeRootToGetIntentResponse(root *tree.RootEntry) *treeRootToGetIntentResponse {
-	return &treeRootToGetIntentResponse{
-		root: root,
-	}
-}
-
-func (t *treeRootToGetIntentResponse) ToJson() (any, error) {
-	return t.root.ToJson(false)
-}
-
-func (t *treeRootToGetIntentResponse) ToJsonIETF() (any, error) {
-	return t.root.ToJsonIETF(false)
-}
-
-func (t *treeRootToGetIntentResponse) ToXML() (*etree.Document, error) {
-	return t.root.ToXML(false, true, false, false)
-}
-func (t *treeRootToGetIntentResponse) ToProtoUpdates(ctx context.Context) ([]*sdcpb.Update, error) {
-	return t.root.ToProtoUpdates(ctx, false)
 }

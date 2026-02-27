@@ -16,6 +16,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	dsutils "github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/logger"
@@ -222,11 +223,11 @@ func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, m *sync.Mutex, logC
 	defer m.Unlock()
 
 	startTime := time.Now()
-	result, err := syncTree.TreeExport(consts.RunningIntentName, consts.RunningValuesPrio)
+	result, err := ops.TreeExport(syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio)
 	log.V(logger.VTrace).Info("exported tree", "tree", result.String())
 
 	if err != nil {
-		if errors.Is(err, tree.ErrorIntentNotPresent) {
+		if errors.Is(err, ops.ErrorIntentNotPresent) {
 			log.Info("sync no config changes")
 			// all good no data present
 			return syncTree, nil

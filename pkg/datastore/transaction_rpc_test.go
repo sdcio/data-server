@@ -18,6 +18,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
+	"github.com/sdcio/data-server/pkg/tree/processors"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -157,8 +158,8 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 				t.Fatalf("failed to finish insertion phase: %v", err)
 			}
 			// Reset flags on syncTree so everything is "existing"
-			resetFlagsProcessorParams := tree.NewResetFlagsProcessorParameters().SetNewFlag().SetUpdateFlag()
-			err = tree.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(syncTreeRoot.GetRoot(), vpf)
+			resetFlagsProcessorParams := processors.NewResetFlagsProcessorParameters().SetNewFlag().SetUpdateFlag()
+			err = processors.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(syncTreeRoot.Entry, vpf)
 			if err != nil {
 				t.Fatalf("failed to reset flags: %v", err)
 			}

@@ -14,6 +14,8 @@ import (
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/api"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
+	"github.com/sdcio/data-server/pkg/tree/ops"
+	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -46,7 +48,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				result := &sharedEntryAttributes{
 					parent:       nil,
 					pathElemName: "",
-					childs:       newChildMap(),
+					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
@@ -94,7 +96,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				result := &sharedEntryAttributes{
 					parent:       nil,
 					pathElemName: "",
-					childs:       newChildMap(),
+					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
@@ -105,7 +107,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				interf := &sharedEntryAttributes{
 					parent:       result,
 					pathElemName: "interface",
-					childs:       newChildMap(),
+					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
@@ -159,7 +161,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				result := &sharedEntryAttributes{
 					parent:       nil,
 					pathElemName: "",
-					childs:       newChildMap(),
+					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
@@ -170,7 +172,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				interf := &sharedEntryAttributes{
 					parent:       result,
 					pathElemName: "interface",
-					childs:       newChildMap(),
+					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
@@ -203,7 +205,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				system := &sharedEntryAttributes{
 					parent:       result,
 					pathElemName: "system",
-					childs:       newChildMap(),
+					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
@@ -257,7 +259,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				result := &sharedEntryAttributes{
 					parent:       nil,
 					pathElemName: "",
-					childs:       newChildMap(),
+					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
@@ -268,7 +270,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				interf := &sharedEntryAttributes{
 					parent:       result,
 					pathElemName: "interface",
-					childs:       newChildMap(),
+					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
@@ -301,7 +303,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 			r := &RootEntry{
 				Entry: tt.sharedEntryAttributes(),
 			}
-			got, err := r.TreeExport(tt.args.owner, tt.args.priority)
+			got, err := ops.TreeExport(r.Entry, tt.args.owner, tt.args.priority)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("RootEntry.TreeExport() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -397,7 +399,7 @@ func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			_, err = loadYgotStructIntoTreeRoot(ctx, tt.re(), root, owner1, 500, false, flagsNew)
+			_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, tt.re(), root.Entry, owner1, 500, false, testhelper.FlagsNew)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -447,7 +449,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 			name: "simple add",
 			fields: fields{
 				sharedEntryAttributes: func(t *testing.T) *sharedEntryAttributes {
-					s, err := newSharedEntryAttributes(ctx, nil, "", tc)
+					s, err := NewSharedEntryAttributes(ctx, nil, "", tc)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -487,7 +489,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 				flags: types.NewUpdateInsertFlags(),
 			},
 			want: func(t *testing.T) *RootEntry {
-				s, err := newSharedEntryAttributes(ctx, nil, "", tc)
+				s, err := NewSharedEntryAttributes(ctx, nil, "", tc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -515,7 +517,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 				}
 
 				vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-				ImportConfigProcessor := NewImportConfigProcessor(jsonImporter.NewJsonTreeImporter(jsonAny, "owner1", 5, false), types.NewUpdateInsertFlags())
+				ImportConfigProcessor := processors.NewImportConfigProcessor(jsonImporter.NewJsonTreeImporter(jsonAny, "owner1", 5, false), types.NewUpdateInsertFlags())
 				err = ImportConfigProcessor.Run(ctx, s, vpf)
 				if err != nil {
 					t.Fatal(err)
@@ -566,11 +568,11 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
+				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, testhelper.Config1(), root.Entry, owner1, 500, false, testhelper.FlagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = loadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 400, false, flagsNew)
+				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, testhelper.Config2(), root.Entry, owner2, 400, false, testhelper.FlagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -587,7 +589,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
+				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, testhelper.Config1(), root.Entry, owner1, 500, false, testhelper.FlagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -609,7 +611,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = resultRoot.AddUpdatesRecursive(ctx, got, flagsNew)
+			err = resultRoot.AddUpdatesRecursive(ctx, got, testhelper.FlagsNew)
 			if err != nil {
 				t.Fatal(err)
 			}
