@@ -14,6 +14,7 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/api"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -175,7 +176,7 @@ func validateMinMaxElements(e api.Entry, resultChan chan<- *types.ValidationResu
 	}
 
 	// get all the childs, skipping the key levels
-	childs, err := e.GetListChilds()
+	childs, err := ops.GetListChilds(e)
 	if err != nil {
 		resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error getting childs for min/max-elements check %v", err), types.ValidationResultEntryTypeError)
 	}
@@ -195,7 +196,7 @@ func validateMinMaxElements(e api.Entry, resultChan chan<- *types.ValidationResu
 		childAttributes := child.GetChilds(types.DescendMethodActiveChilds)
 		keyName := contSchema.GetKeys()[0].GetName()
 		if keyAttr, ok := childAttributes[keyName]; ok {
-			highestPrec := keyAttr.GetHighestPrecedence(nil, false, false, false)
+			highestPrec := ops.GetHighestPrecedence(keyAttr, false, false, false)
 			if len(highestPrec) > 0 {
 				owner := highestPrec[0].Update.Owner()
 				ownersSet[owner] = struct{}{}

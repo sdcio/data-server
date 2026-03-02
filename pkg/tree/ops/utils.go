@@ -19,8 +19,8 @@ func getListEntrySortFunc(parent api.Entry) func(a, b api.Entry) int {
 			if !exists {
 				return 0
 			}
-			aLvSlice := achild.GetHighestPrecedence(api.LeafVariantSlice{}, false, true, true)
-			bLvSlice := bchild.GetHighestPrecedence(api.LeafVariantSlice{}, false, true, true)
+			aLvSlice := GetHighestPrecedence(achild, false, true, true)
+			bLvSlice := GetHighestPrecedence(bchild, false, true, true)
 
 			aEntry := aLvSlice[0]
 			bEntry := bLvSlice[0]

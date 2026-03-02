@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/sdcio/data-server/pkg/tree/api"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/yang-parser/xpath"
 	"github.com/sdcio/yang-parser/xpath/xutils"
@@ -61,7 +62,7 @@ func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
 			return xpath.NewBoolDatum(true), nil
 		}
 		// list
-		childs, err := y.e.GetListChilds()
+		childs, err := ops.GetListChilds(y.e)
 		if err != nil {
 			return nil, err
 		}
@@ -74,7 +75,7 @@ func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
 	}
 
 	// if y.e is anything else then a container
-	lv, _ := y.e.GetHighestPrecedenceLeafValue(y.ctx)
+	lv := y.e.GetLeafVariants().GetHighestPrecedence(false, true, false)
 	if lv == nil {
 		return xpath.NewNodesetDatum([]xutils.XpathNode{}), nil
 	}

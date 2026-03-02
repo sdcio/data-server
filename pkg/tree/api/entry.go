@@ -41,30 +41,8 @@ type Entry interface {
 	GetLevel() int
 	// addChild Add a child entry
 	AddChild(context.Context, Entry) error
-	// // getOrCreateChilds retrieves the sub-child pointed at by the path.
-	// // if the path does not exist in its full extend, the entries will be added along the way
-	// // if the path does not point to a schema defined path an error will be raise
-	// // GetOrCreateChilds(ctx context.Context, path *sdcpb.Path) (Entry, error)
-	// // AddUpdateRecursive Add the given cache.Update to the tree
-	// AddUpdateRecursive(ctx context.Context, relativePath *sdcpb.Path, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
-	// AddUpdateRecursiveInternal(ctx context.Context, path *sdcpb.Path, idx int, u *types.Update, flags *types.UpdateInsertFlags) (Entry, error)
 	// StringIndent debug tree struct as indented string slice
 	StringIndent(result []string) []string
-	// GetHighesPrio return the new cache.Update entried from the tree that are the highes priority.
-	// If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
-	// It will append to the given list and provide a new pointer to the slice
-	GetHighestPrecedence(result LeafVariantSlice, onlyNewOrUpdated bool, includeDefaults bool, includeExplicitDelete bool) LeafVariantSlice
-	// getHighestPrecedenceLeafValue returns the highest LeafValue of the Entry at hand
-	// will return an error if the Entry is not a Leaf
-	GetHighestPrecedenceLeafValue(context.Context) (*LeafEntry, error)
-	// GetByOwner returns the branches Updates by owner
-	// GetByOwner(owner string, result []*LeafEntry) LeafVariantSlice
-	// // markOwnerDelete Sets the delete flag on all the LeafEntries belonging to the given owner.
-	// MarkOwnerDelete(o string, onlyIntended bool)
-	// GetDeletes returns the cache-updates that are not updated, have no lower priority value left and hence should be deleted completely
-	GetDeletes(entries types.DeleteEntriesList, aggregatePaths bool) (types.DeleteEntriesList, error)
-	// getHighestPrecedenceValueOfBranch returns the highes Precedence Value (lowest Priority value) of the brach that starts at this Entry
-	GetHighestPrecedenceValueOfBranch(filter HighestPrecedenceFilter) int32
 	// GetSchema returns the *sdcpb.SchemaElem of the Entry
 	GetSchema() *sdcpb.SchemaElem
 	// IsRoot returns true if the Entry is the root of the tree
@@ -97,21 +75,21 @@ type Entry interface {
 	CanDelete() bool
 	GetChildMap() *ChildMap
 	GetChilds(types.DescendMethod) EntryMap
-	GetChild(name string) (Entry, bool) // entry, exists
-	FilterChilds(keys map[string]string) ([]Entry, error)
+
 	// // DeleteBranch Deletes from the tree, all elements of the PathSlice defined branch of the given owner
 	// DeleteBranch(ctx context.Context, path *sdcpb.Path, owner string) (err error)
 	// GetListChilds collects all the childs of the list. In the tree we store them seperated into their key branches.
 	// this is collecting all the last level key entries.
-	GetListChilds() ([]Entry, error)
+	// GetListChilds() ([]Entry, error)
 	DeepCopy(tc TreeContext, parent Entry) (Entry, error)
 	GetLeafVariants() *LeafVariants
-
-	// returns true if the Entry contains leafvariants (presence container, field or leaflist)
-	HoldsLeafvariants() bool
 	CanDeleteBranch(keepDefault bool) bool
 	DeleteCanDeleteChilds(keepDefault bool)
+	// GetTreeContext returns the TreeContext of the Entry, which holds global information about the tree
+	// and is used for certain operations that require access to this global information.
 	GetTreeContext() TreeContext
+	// ChoicesResolvers returns the choice case resolvers for the entry, if any
+	ChoicesResolvers() ChoiceResolvers
 }
 
 type LeafVariantEntry interface {

@@ -76,7 +76,7 @@ func breadthSearch(ctx context.Context, e api.Entry, sdcpbPath *sdcpb.Path) ([]a
 			// if the entry is a list with keys, try filtering the entries based on the keys
 			if len(ops.GetSchemaKeys(entry)) > 0 {
 				// filter the keys
-				childs, err = entry.FilterChilds(elem.KeysToMap())
+				childs, err = ops.FilterChilds(entry, elem.KeysToMap())
 				if err != nil {
 					return nil, err
 				}
@@ -138,9 +138,9 @@ func navigateLeafRef(ctx context.Context, e api.Entry) ([]api.Entry, error) {
 	var resultEntries []api.Entry
 
 	for _, e := range foundEntries {
-		r, err := e.GetHighestPrecedenceLeafValue(ctx)
-		if err != nil {
-			return nil, err
+		r := e.GetLeafVariants().GetHighestPrecedence(false, true, false)
+		if r == nil {
+			return nil, fmt.Errorf("no leafvariant found for entry %s", e.SdcpbPath())
 		}
 		// Value of the resolved leafref
 		refVal := r.Value()
@@ -190,7 +190,7 @@ func resolveLeafrefKeyPath(ctx context.Context, e api.Entry, keys map[string]*ty
 			return err
 		}
 
-		lvs := keyValue.GetHighestPrecedence(api.LeafVariantSlice{}, false, false, false)
+		lvs := ops.GetHighestPrecedence(keyValue, false, false, false)
 		if lvs == nil {
 			return fmt.Errorf("no leafentry found")
 		}
@@ -215,7 +215,7 @@ func validateLeafRefs(ctx context.Context, e api.Entry, resultChan chan<- *types
 	if err != nil || len(entry) == 0 {
 		// check if the OptionalInstance (!require-instances [https://datatracker.ietf.org/doc/html/rfc7950#section-9.9.3])
 		if e.GetSchema().GetField().GetType().GetOptionalInstance() {
-			generateOptionalWarning(ctx, e, lref, resultChan)
+			generateOptionalWarning(e, lref, resultChan)
 			return
 		}
 		owner := "unknown"
@@ -240,7 +240,7 @@ func validateLeafRefs(ctx context.Context, e api.Entry, resultChan chan<- *types
 
 		// check if the OptionalInstance (!require-instances [https://datatracker.ietf.org/doc/html/rfc7950#section-9.9.3])
 		if e.GetSchema().GetField().GetType().GetOptionalInstance() {
-			generateOptionalWarning(ctx, e, lref, resultChan)
+			generateOptionalWarning(e, lref, resultChan)
 			return
 		}
 		// if required, issue error
@@ -250,10 +250,10 @@ func validateLeafRefs(ctx context.Context, e api.Entry, resultChan chan<- *types
 	stats.Add(types.StatTypeLeafRef, 1)
 }
 
-func generateOptionalWarning(ctx context.Context, s api.Entry, lref string, resultChan chan<- *types.ValidationResultEntry) {
-	lrefval, err := s.GetHighestPrecedenceLeafValue(ctx)
-	if err != nil {
-		resultChan <- types.NewValidationResultEntry(lrefval.Owner(), err, types.ValidationResultEntryTypeError)
+func generateOptionalWarning(s api.Entry, lref string, resultChan chan<- *types.ValidationResultEntry) {
+	lrefval := s.GetLeafVariants().GetHighestPrecedence(false, true, false)
+	if lrefval == nil {
+		resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("no leafvariant found for entry %s", s.SdcpbPath()), types.ValidationResultEntryTypeError)
 		return
 	}
 	tvVal := lrefval.Value()

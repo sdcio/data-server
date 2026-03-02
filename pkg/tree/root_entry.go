@@ -97,7 +97,7 @@ func (r *RootEntry) GetUpdatesForOwner(owner string) types.UpdateSlice {
 	// retrieve all the entries from the tree that belong to the given
 	// Owner / Intent, skipping the once marked for deletion
 	// this is to insert / update entries in the cache.
-	return api.LeafEntriesToUpdates(r.getByOwnerFiltered(owner, api.FilterNonDeletedButNewOrUpdated))
+	return api.LeafEntriesToUpdates(ops.GetByOwnerFiltered(r.Entry, owner, api.FilterNonDeletedButNewOrUpdated))
 }
 
 // GetDeletesForOwner returns the deletes that have been calculated for the given intent / owner
@@ -106,7 +106,7 @@ func (r *RootEntry) GetDeletesForOwner(owner string) sdcpb.Paths {
 	// and that are marked for deletion.
 	// This is to cover all the cases where an intent was changed and certain
 	// part of the config got deleted.
-	deletesOwnerUpdates := api.LeafEntriesToUpdates(r.getByOwnerFiltered(owner, api.FilterDeleted))
+	deletesOwnerUpdates := api.LeafEntriesToUpdates(ops.GetByOwnerFiltered(r.Entry, owner, api.FilterDeleted))
 	// they are retrieved as cache.update, we just need the path for deletion from cache
 	deletesOwner := make(sdcpb.Paths, 0, len(deletesOwnerUpdates))
 	// so collect the paths
@@ -120,39 +120,17 @@ func (r *RootEntry) GetDeletesForOwner(owner string) sdcpb.Paths {
 // If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
 // It will append to the given list and provide a new pointer to the slice
 func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) api.LeafVariantSlice {
-	return r.Entry.GetHighestPrecedence(make(api.LeafVariantSlice, 0), onlyNewOrUpdated, false, false)
+	return ops.GetHighestPrecedence(r.Entry, onlyNewOrUpdated, false, false)
 }
 
 // GetDeletes returns the paths that due to the Tree content are to be deleted from the southbound device.
 func (r *RootEntry) GetDeletes(aggregatePaths bool) (types.DeleteEntriesList, error) {
 	deletes := []types.DeleteEntry{}
-	return r.Entry.GetDeletes(deletes, aggregatePaths)
+	return ops.GetDeletes(r.Entry, deletes, aggregatePaths)
 }
 
 func (r *RootEntry) GetAncestorSchema() (*sdcpb.SchemaElem, int) {
 	return nil, 0
-}
-
-// getByOwnerFiltered returns the Tree content filtered by owner, whilst allowing to filter further
-// via providing additional LeafEntryFilter
-func (r *RootEntry) getByOwnerFiltered(owner string, f ...api.LeafEntryFilter) []*api.LeafEntry {
-	result := []*api.LeafEntry{}
-	// retrieve all leafentries for the owner
-	leafEntries := ops.GetByOwner(r.Entry, owner)
-
-	// range through entries
-NEXTELEMENT:
-	for _, e := range leafEntries {
-		// apply filter
-		for _, filter := range f {
-			// if the filter yields false, skip
-			if !filter(e) {
-				continue NEXTELEMENT
-			}
-		}
-		result = append(result, e)
-	}
-	return result
 }
 
 // DeleteSubtree Deletes from the tree, all elements of the PathSlice defined branch of the given owner. Return values are remainsToExist and error if an error occured.

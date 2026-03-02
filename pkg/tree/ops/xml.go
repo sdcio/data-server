@@ -94,7 +94,7 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 			// the container represents a list
 			// if the container contains keys, then it is a list
 			// hence must be rendered as an array
-			childs, err := e.FilterChilds(nil)
+			childs, err := GetListChilds(e)
 			if err != nil {
 				return false, err
 			}
@@ -141,7 +141,7 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 			// add the delete / remove operation
 			utils.AddXMLOperation(newElem, utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
 			return true, nil
-		case e.GetSchema().GetContainer().IsPresence && ContainsOnlyDefaults(ctx, e):
+		case e.GetSchema().GetContainer().IsPresence && ContainsOnlyDefaults(e):
 			// process presence containers with no childs
 			if onlyNewOrUpdated {
 				// presence containers have leafvariantes with typedValue_Empty, so check that

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 
@@ -31,7 +30,7 @@ type sharedEntryAttributes struct {
 	schema      *sdcpb.SchemaElem
 	schemaMutex sync.RWMutex
 
-	choicesResolvers choiceResolvers
+	choicesResolvers api.ChoiceResolvers
 
 	treeContext api.TreeContext
 
@@ -64,7 +63,7 @@ func (s *sharedEntryAttributes) DeepCopy(tc api.TreeContext, parent api.Entry) (
 		childs:           api.NewChildMap(),
 		schema:           s.schema,
 		treeContext:      tc,
-		choicesResolvers: s.choicesResolvers.deepCopy(),
+		choicesResolvers: s.choicesResolvers.DeepCopy(),
 		schemaMutex:      sync.RWMutex{},
 		cacheMutex:       sync.Mutex{},
 		level:            s.level,
@@ -217,86 +216,6 @@ func (s *sharedEntryAttributes) GetSchema() *sdcpb.SchemaElem {
 	return s.schema
 }
 
-// getListChilds collects all the childs of the list. In the tree we store them seperated into their key branches.
-// this is collecting all the last level key entries.
-func (s *sharedEntryAttributes) GetListChilds() ([]api.Entry, error) {
-	if s.schema == nil {
-		return nil, fmt.Errorf("error GetListChilds() non schema level %s", s.SdcpbPath().ToXPath(false))
-	}
-	if s.schema.GetContainer() == nil {
-		return nil, fmt.Errorf("error GetListChilds() not a Container %s", s.SdcpbPath().ToXPath(false))
-	}
-	keys := s.schema.GetContainer().GetKeys()
-	if len(keys) == 0 {
-		return nil, fmt.Errorf("error GetListChilds() not a List Container %s", s.SdcpbPath().ToXPath(false))
-	}
-	actualEntries := []api.Entry{s}
-	var newEntries []api.Entry
-
-	for level := 0; level < len(keys); level++ {
-		for _, e := range actualEntries {
-			// add all children
-			for _, c := range e.GetChilds(types.DescendMethodAll) {
-				newEntries = append(newEntries, c)
-			}
-		}
-		actualEntries = newEntries
-		newEntries = []api.Entry{}
-	}
-	return actualEntries, nil
-
-}
-
-// FilterChilds returns the child entries (skipping the key entries in the tree) that
-// match the given keys. The keys do not need to match all levels of keys, in which case the
-// key level is considered a wildcard match (*)
-func (s *sharedEntryAttributes) FilterChilds(keys map[string]string) ([]api.Entry, error) {
-	if s.schema == nil {
-		return nil, fmt.Errorf("error non schema level %s", s.SdcpbPath().ToXPath(false))
-	}
-
-	result := []api.Entry{}
-	// init the processEntries with s
-	processEntries := []api.Entry{s}
-
-	// retrieve the schema keys
-	schemaKeys := ops.GetSchemaKeys(s)
-	// sort the keys, such that they appear in the order that they
-	// are inserted in the tree
-	sort.Strings(schemaKeys)
-	// iterate through the keys, resolving the key levels
-	for _, key := range schemaKeys {
-		keyVal, exist := keys[key]
-		// if the key exists in the input map meaning has a filter value
-		// associated, the childs map is filtered for that value
-		if exist {
-			// therefor we need to go through the processEntries List
-			// and collect all the matching childs
-			for _, entry := range processEntries {
-				childs := entry.GetChilds(types.DescendMethodAll)
-				matchEntry, childExists := childs[keyVal]
-				// so if such child, that matches the given filter value exists, we append it to the results
-				if childExists {
-					result = append(result, matchEntry)
-				}
-			}
-		} else {
-			// this is basically the wildcard case, so go through all childs and add them
-			result = []api.Entry{}
-			for _, entry := range processEntries {
-				childs := entry.GetChilds(types.DescendMethodAll)
-				for _, v := range childs {
-					// hence we add all the existing childs to the result list
-					result = append(result, v)
-				}
-			}
-		}
-		// prepare for the next iteration
-		processEntries = result
-	}
-	return result, nil
-}
-
 // GetParent returns the parent entry
 func (s *sharedEntryAttributes) GetParent() api.Entry {
 	return s.parent
@@ -329,63 +248,6 @@ func (s *sharedEntryAttributes) GetLevel() int {
 	// cache level value
 	s.level = &level
 	return level
-}
-
-func (s *sharedEntryAttributes) HoldsLeafvariants() bool {
-	switch x := s.schema.GetSchema().(type) {
-	case *sdcpb.SchemaElem_Container:
-		return x.Container.GetIsPresence()
-	case *sdcpb.SchemaElem_Leaflist:
-		return true
-	case *sdcpb.SchemaElem_Field:
-		return true
-	}
-	return false
-}
-
-// getAggregatedDeletes is called on levels that have no schema attached, meaning key schemas.
-// here we might delete the whole branch of the tree, if all key elements are being deleted
-// if not, we continue with regular deltes
-func (s *sharedEntryAttributes) GetAggregatedDeletes(deletes []types.DeleteEntry, aggregatePaths bool) ([]types.DeleteEntry, error) {
-	var err error
-	// we take a look into the level(s) up
-	// trying to get the schema
-	ancestor, level := ops.GetFirstAncestorWithSchema(s)
-
-	// check if the first schema on the path upwards (parents)
-	// has keys defined (meaning is a contianer with keys)
-	keys := ops.GetSchemaKeys(ancestor)
-
-	// if keys exist and we're on the last level of the keys, validate
-	// if aggregation can happen
-	if len(keys) > 0 && level == len(keys) {
-		doAggregateDelete := true
-		// check the keys for deletion
-		for _, n := range keys {
-			c, exists := s.childs.GetEntry(n)
-			// these keys should aways exist, so for now we do not catch the non existing key case
-			if exists && !c.ShouldDelete() {
-				// if not all the keys are marked for deletion, we need to revert to regular deletion
-				doAggregateDelete = false
-				break
-			}
-		}
-		// if aggregate delet is possible do it
-		if doAggregateDelete {
-			// by adding the key path to the deletes
-			deletes = append(deletes, s)
-		} else {
-			// otherwise continue with deletion on the childs.
-			for _, c := range s.childs.GetAll() {
-				deletes, err = c.GetDeletes(deletes, aggregatePaths)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-		return deletes, nil
-	}
-	return s.getRegularDeletes(deletes, aggregatePaths)
 }
 
 // canDelete checks if the entry can be Deleted.
@@ -515,40 +377,6 @@ func (s *sharedEntryAttributes) RemainsToExist() bool {
 	return remains
 }
 
-// getRegularDeletes performs deletion calculation on elements that have a schema attached.
-func (s *sharedEntryAttributes) getRegularDeletes(deletes types.DeleteEntriesList, aggregate bool) (types.DeleteEntriesList, error) {
-	var err error
-
-	if s.ShouldDelete() && !s.IsRoot() && len(ops.GetSchemaKeys(s)) == 0 {
-		return append(deletes, s), nil
-	}
-
-	for _, elem := range s.choicesResolvers.GetDeletes() {
-		deletes = append(deletes, types.NewDeleteEntryImpl(s.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(elem, nil))))
-	}
-
-	for _, e := range s.childs.GetAll() {
-		deletes, err = e.GetDeletes(deletes, aggregate)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return deletes, nil
-}
-
-// GetDeletes calculate the deletes that need to be send to the device.
-func (s *sharedEntryAttributes) GetDeletes(deletes types.DeleteEntriesList, aggregatePaths bool) (types.DeleteEntriesList, error) {
-
-	// if the actual level has no schema assigned we're on a key level
-	// element. Hence we try deletion via aggregation
-	if s.schema == nil && aggregatePaths {
-		return s.GetAggregatedDeletes(deletes, aggregatePaths)
-	}
-
-	// else perform regular deletion
-	return s.getRegularDeletes(deletes, aggregatePaths)
-}
-
 // PathName returns the name of the Entry
 func (s *sharedEntryAttributes) PathName() string {
 	return s.pathElemName
@@ -571,6 +399,10 @@ func (s *sharedEntryAttributes) AddChild(ctx context.Context, e api.Entry) error
 	}
 	s.childs.Add(e)
 	return nil
+}
+
+func (s *sharedEntryAttributes) ChoicesResolvers() api.ChoiceResolvers {
+	return s.choicesResolvers
 }
 
 func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, path *sdcpb.Path) (api.Entry, error) {
@@ -655,54 +487,6 @@ func (s *sharedEntryAttributes) DeleteCanDeleteChilds(keepDefault bool) {
 	}
 }
 
-// GetHighestPrecedence goes through the whole branch and returns the new and updated cache.Updates.
-// These are the updated that will be send to the device.
-func (s *sharedEntryAttributes) GetHighestPrecedence(result api.LeafVariantSlice, onlyNewOrUpdated bool, includeDefaults bool, includeExplicitDelete bool) api.LeafVariantSlice {
-	// get the highes precedence LeafeVariant and add it to the list
-	lv := s.leafVariants.GetHighestPrecedence(onlyNewOrUpdated, includeDefaults, includeExplicitDelete)
-	if lv != nil {
-		result = append(result, lv)
-	}
-
-	// continue with childs. Childs are part of choices, process only the "active" (highes precedence) childs
-	for _, c := range s.GetChilds(types.DescendMethodActiveChilds) {
-		result = c.GetHighestPrecedence(result, onlyNewOrUpdated, includeDefaults, includeExplicitDelete)
-	}
-	return result
-}
-
-func (s *sharedEntryAttributes) GetHighestPrecedenceLeafValue(ctx context.Context) (*api.LeafEntry, error) {
-	for _, x := range []string{"existing", "default"} {
-		lv := s.leafVariants.GetHighestPrecedence(false, true, false)
-		if lv != nil {
-			return lv, nil
-		}
-		if x != "default" {
-			_, err := s.tryLoadingDefault(ctx, s.SdcpbPath())
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-	return nil, fmt.Errorf("error no value present for %s", s.SdcpbPath().ToXPath(false))
-}
-
-// getHighestPrecedenceValueOfBranch goes through all the child branches to find the highest
-// precedence value (lowest priority value) for the entire branch and returns it.
-func (s *sharedEntryAttributes) GetHighestPrecedenceValueOfBranch(filter api.HighestPrecedenceFilter) int32 {
-	result := int32(math.MaxInt32)
-	for _, e := range s.childs.GetAll() {
-		if val := e.GetHighestPrecedenceValueOfBranch(filter); val < result {
-			result = val
-		}
-	}
-	if val := s.leafVariants.GetHighestPrecedenceValue(filter); val < result {
-		result = val
-	}
-
-	return result
-}
-
 // initChoiceCasesResolvers Choices and their cases are defined in the schema.
 // We need the information on which choices exist and what the below cases are.
 // Therefore the choiceCasesResolvers are initialized with the information.
@@ -720,9 +504,12 @@ func (s *sharedEntryAttributes) initChoiceCasesResolvers() {
 	case *sdcpb.SchemaElem_Container:
 		ci = s.schema.GetContainer().GetChoiceInfo()
 	}
-
+	// // no choice info present
+	// if ci == nil {
+	// 	return
+	// }
 	// create a new choiceCasesResolvers struct
-	choicesResolvers := choiceResolvers{}
+	choicesResolvers := api.ChoiceResolvers{}
 
 	// iterate through choices defined in schema
 	for choiceName, choice := range ci.GetChoice() {
@@ -789,7 +576,7 @@ func (s *sharedEntryAttributes) populateChoiceCaseResolvers(_ context.Context) e
 			child, childExists := s.childs.GetEntry(elem)
 			// set the value from the tree as well
 			if childExists {
-				valWDeleted := child.GetHighestPrecedenceValueOfBranch(api.HighestPrecedenceFilterAll)
+				valWDeleted := ops.GetHighestPrecedenceValueOfBranch(child, api.HighestPrecedenceFilterAll)
 				if valWDeleted <= highestWDeleted {
 					highestWDeleted = valWDeleted
 					if child.CanDelete() {
@@ -797,11 +584,11 @@ func (s *sharedEntryAttributes) populateChoiceCaseResolvers(_ context.Context) e
 					}
 				}
 
-				valWODeleted := child.GetHighestPrecedenceValueOfBranch(api.HighestPrecedenceFilterWithoutDeleted)
+				valWODeleted := ops.GetHighestPrecedenceValueOfBranch(child, api.HighestPrecedenceFilterWithoutDeleted)
 				if valWODeleted <= highestWODeleted {
 					highestWODeleted = valWODeleted
 				}
-				valWONew := child.GetHighestPrecedenceValueOfBranch(api.HighestPrecedenceFilterWithoutNew)
+				valWONew := ops.GetHighestPrecedenceValueOfBranch(child, api.HighestPrecedenceFilterWithoutNew)
 				if valWONew <= highestWONew {
 					highestWONew = valWONew
 				}
@@ -811,10 +598,6 @@ func (s *sharedEntryAttributes) populateChoiceCaseResolvers(_ context.Context) e
 		}
 	}
 	return nil
-}
-
-func (s *sharedEntryAttributes) GetChild(name string) (api.Entry, bool) {
-	return s.childs.GetEntry(name)
 }
 
 func (s *sharedEntryAttributes) GetChilds(d types.DescendMethod) api.EntryMap {

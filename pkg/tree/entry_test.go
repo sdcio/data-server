@@ -621,7 +621,7 @@ func Test_Entry_Three(t *testing.T) {
 		// log the tree
 		t.Log(root.String())
 
-		highPriLe := root.getByOwnerFiltered(owner1, api.FilterNonDeleted)
+		highPriLe := ops.GetByOwnerFiltered(root.Entry, owner1, api.FilterNonDeleted)
 
 		highPri := api.LeafEntriesToUpdates(highPriLe)
 
@@ -895,7 +895,7 @@ func Test_Entry_Four(t *testing.T) {
 		// log the tree
 		t.Log(root.String())
 
-		highPriLe := root.getByOwnerFiltered(owner1, api.FilterNonDeleted)
+		highPriLe := ops.GetByOwnerFiltered(root.Entry, owner1, api.FilterNonDeleted)
 
 		highPri := api.LeafEntriesToUpdates(highPriLe)
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/api"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 )
@@ -66,7 +67,7 @@ func newExplicitDeleteTask(entry api.Entry, params *ExplicitDeleteTaskParameters
 }
 
 func (t *explicitDeleteTask) Run(ctx context.Context, submit func(pool.Task) error) error {
-	if t.entry.HoldsLeafvariants() {
+	if ops.HoldsLeafVariants(t.entry) {
 		le := t.entry.GetLeafVariants().GetByOwner(t.params.owner)
 		if le != nil {
 			le.MarkExpliciteDelete()

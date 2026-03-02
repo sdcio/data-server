@@ -66,7 +66,7 @@ func toJsonInternal(ctx context.Context, e api.Entry, onlyNewOrUpdated bool, iet
 		case len(GetSchemaKeys(e)) > 0:
 			// if the container contains keys, then it is a list
 			// hence must be rendered as an array
-			childs, err := e.FilterChilds(nil)
+			childs, err := FilterChilds(e, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -88,7 +88,7 @@ func toJsonInternal(ctx context.Context, e api.Entry, onlyNewOrUpdated bool, iet
 				return nil, nil
 			}
 			return result, nil
-		case e.GetSchema().GetContainer().IsPresence && ContainsOnlyDefaults(ctx, e):
+		case e.GetSchema().GetContainer().IsPresence && ContainsOnlyDefaults(e):
 			// Presence container without any childs
 			if onlyNewOrUpdated {
 				// presence containers have leafvariantes with typedValue_Empty, so check that

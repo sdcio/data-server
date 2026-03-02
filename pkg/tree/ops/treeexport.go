@@ -52,7 +52,7 @@ func treeExportLevel(e api.Entry, owner string) ([]*tree_persist.TreeElement, er
 	}
 
 	if len(GetSchemaKeys(e)) > 0 {
-		children, err := e.FilterChilds(nil)
+		children, err := GetListChilds(e)
 		if err != nil {
 			return nil, err
 		}

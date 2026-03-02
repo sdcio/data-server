@@ -1,7 +1,6 @@
 package ops
 
 import (
-	"context"
 	"slices"
 
 	"github.com/sdcio/data-server/pkg/tree/api"
@@ -9,34 +8,36 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/types"
 )
 
-// containsOnlyDefaults checks for presence containers, if only default values are present,
-// such that the Entry should also be treated as a presence container
-func ContainsOnlyDefaults(ctx context.Context, e api.Entry) bool {
-	// if no schema is present, we must be in a key level
-	if e.GetSchema() == nil {
+// ContainsOnlyDefaults checks if the given entry is a container that only contains leafvariants with owner defaults,
+// and that all childs are in the list of childs with defaults defined in the container schema. Containers without
+// childs return true, while non-container entries or entries without schema return false. It returns true if the
+// entry is a container with only default values, and false otherwise.
+func ContainsOnlyDefaults(e api.Entry) bool {
+	schema := e.GetSchema()
+	if schema == nil {
 		return false
 	}
-	contSchema := e.GetSchema().GetContainer()
+
+	contSchema := schema.GetContainer()
 	if contSchema == nil {
 		return false
 	}
 
-	// only if length of childs is (more) compared to the number of
-	// attributes carrying defaults, the presence condition can be met
-	if len(e.GetChilds(types.DescendMethodAll)) > len(contSchema.ChildsWithDefaults) {
+	// if the amount of childs is higher than the amount of childs with defaults, it can't be only defaults
+	childs := e.GetChilds(types.DescendMethodAll)
+	if len(childs) > len(contSchema.ChildsWithDefaults) {
 		return false
 	}
-	for k, v := range e.GetChilds(types.DescendMethodAll) {
-		// check if child name is part of ChildsWithDefaults
+
+	// check if all childs are in the list of childs with defaults, and that they only have a leafvariant with owner defaults
+	for k, v := range childs {
 		if !slices.Contains(contSchema.ChildsWithDefaults, k) {
 			return false
 		}
-		// check if the value is the default value
-		le, err := v.GetHighestPrecedenceLeafValue(ctx)
-		if err != nil {
+		le := v.GetLeafVariants().GetHighestPrecedence(false, true, false)
+		if le == nil {
 			return false
 		}
-		// if the owner is not Default return false
 		if le.Owner() != consts.DefaultsIntentName {
 			return false
 		}

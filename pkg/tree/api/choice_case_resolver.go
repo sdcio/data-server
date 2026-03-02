@@ -1,42 +1,47 @@
-package tree
+package api
 
 import (
 	"math"
 )
 
-type choiceResolvers map[string]*choiceResolver
+type ChoiceResolvers map[string]*choiceResolver
 
 // AddChoice adds / registers a new Choice to the choiceCasesResolver
-func (c choiceResolvers) AddChoice(name string) *choiceResolver {
+func (c ChoiceResolvers) AddChoice(name string) *choiceResolver {
 	r := newChoiceResolver()
 	c[name] = r
 	return r
 }
 
 // GetDeletes returns the names of the elements that need to be deleted.
-func (c choiceResolvers) GetDeletes() []string {
-	result := []string{}
+func (c ChoiceResolvers) GetDeletes() []string {
+	if c == nil {
+		return nil
+	}
+	var result []string
 	for _, cases := range c {
 		result = append(result, cases.GetDeletes()...)
 	}
 	return result
 }
 
-func (c choiceResolvers) deepCopy() choiceResolvers {
-	result := choiceResolvers{}
+func (c ChoiceResolvers) DeepCopy() ChoiceResolvers {
+	if c == nil {
+		return nil
+	}
+	result := ChoiceResolvers{}
 
 	for k, v := range c {
 		result[k] = v.deepCopy()
 	}
 
 	return result
-
 }
 
 // GetSkipElements returns the list of all choices elements that are not highes priority.
 // The resulting slice is used to skip these elements.
-func (c choiceResolvers) GetSkipElements() []string {
-	result := []string{}
+func (c ChoiceResolvers) GetSkipElements() []string {
+	var result []string
 	for _, x := range c {
 		result = append(result, x.GetSkipElements()...)
 	}
@@ -52,6 +57,9 @@ type choiceResolver struct {
 }
 
 func (c *choiceResolver) deepCopy() *choiceResolver {
+	if c == nil {
+		return nil
+	}
 	result := &choiceResolver{
 		cases:                map[string]*choicesCase{},
 		elementToCaseMapping: map[string]*choicesCase{},
@@ -105,6 +113,9 @@ func (c *choiceResolver) SetValue(elemName string, highestWODel int32, highestDe
 // GetSkipElements returns the names of all the elements that belong to
 // cases that have not the best priority
 func (c *choiceResolver) GetSkipElements() []string {
+	if c == nil {
+		return nil
+	}
 	result := make([]string, 0, len(c.elementToCaseMapping))
 
 	bestCase := c.GetBestCaseNow()
@@ -117,10 +128,13 @@ func (c *choiceResolver) GetSkipElements() []string {
 	return result
 }
 
-func (c *choiceResolver) GetBestCaseNow() *choicesCase {
-	// best case now
-	var highestCaseWODeleted *choicesCase
+func (c *choiceResolver) getBestCases() (*choicesCase, *choicesCase) {
+	if c == nil {
+		return nil, nil
+	}
+	var highestCaseWODeleted, highestCaseWONew *choicesCase
 	highesPrecedenceWODeletedValue := int32(math.MaxInt32)
+	highesPrecedenceWONewValue := int32(math.MaxInt32)
 
 	for _, cas := range c.cases {
 		actualCaseWODeletedValue := cas.getHighestPrecedenceWODeleted()
@@ -128,31 +142,28 @@ func (c *choiceResolver) GetBestCaseNow() *choicesCase {
 			highesPrecedenceWODeletedValue = actualCaseWODeletedValue
 			highestCaseWODeleted = cas
 		}
-	}
-	return highestCaseWODeleted
-}
-
-func (c *choiceResolver) GetBestCaseBefore() *choicesCase {
-	// best case before
-	var highestCaseWONew *choicesCase
-	highesPrecedenceWONewValue := int32(math.MaxInt32)
-
-	for _, cas := range c.cases {
 		actualCaseWONewValue := cas.getHighestPrecedenceWONew()
 		if actualCaseWONewValue < highesPrecedenceWONewValue {
 			highesPrecedenceWONewValue = actualCaseWONewValue
 			highestCaseWONew = cas
 		}
 	}
-	return highestCaseWONew
+	return highestCaseWODeleted, highestCaseWONew
+}
+
+func (c *choiceResolver) GetBestCaseNow() *choicesCase {
+	best, _ := c.getBestCases()
+	return best
+}
+
+func (c *choiceResolver) GetBestCaseBefore() *choicesCase {
+	_, best := c.getBestCases()
+	return best
 }
 
 func (c *choiceResolver) GetDeletes() []string {
-	result := []string{}
-	// best case now
-	highestCaseNow := c.GetBestCaseNow()
-	// best case before
-	highestCaseBefore := c.GetBestCaseBefore()
+	var result []string
+	highestCaseNow, highestCaseBefore := c.getBestCases()
 
 	// if best case before (highestCaseWONew) != best case now (highestCaseWODeleted)
 	if highestCaseBefore != nil && highestCaseBefore != highestCaseNow {
@@ -214,6 +225,9 @@ func (c *choicesCase) getHighestPrecedenceWODeleted() int32 {
 }
 
 func (c *choicesCase) deepCopy() *choicesCase {
+	if c == nil {
+		return nil
+	}
 	result := &choicesCase{
 		name:     c.name,
 		elements: make(map[string]*caseElement),
@@ -237,6 +251,9 @@ func newCaseElement(name string) *caseElement {
 }
 
 func (c *caseElement) deepCopy() *caseElement {
+	if c == nil {
+		return nil
+	}
 	return &caseElement{
 		name:             c.name,
 		highestWODeleted: c.highestWODeleted,

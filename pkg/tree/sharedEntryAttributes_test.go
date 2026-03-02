@@ -103,7 +103,7 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 				e = &sharedEntryAttributes{
 					pathElemName:     "__root__",
 					childs:           api.NewChildMap(),
-					choicesResolvers: choiceResolvers{},
+					choicesResolvers: api.ChoiceResolvers{},
 					parent:           nil,
 					treeContext:      tc,
 					leafVariants:     api.NewLeafVariants(tc, e),
@@ -398,7 +398,7 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			got, err := e.GetListChilds()
+			got, err := ops.GetListChilds(e)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("sharedEntryAttributes.GetListChilds() error = %v, wantErr %v", err, tt.wantErr)
 				return
