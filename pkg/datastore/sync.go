@@ -28,7 +28,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	// create a virtual task pool for delete operations
 	for _, delete := range deletes {
 		// navigate to delete path
-		deleteRoot, err := d.syncTree.NavigateSdcpbPath(ctx, delete)
+		deleteRoot, err := ops.NavigateSdcpbPath(ctx, d.syncTree.Entry, delete)
 		if err != nil {
 			log.Error(err, "failed navigating to delete path", "path", delete.ToXPath(false))
 			continue

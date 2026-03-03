@@ -168,6 +168,27 @@ func (s *sharedEntryAttributes) loadDefaults(ctx context.Context) error {
 	return nil
 }
 
+func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path *sdcpb.Path) (api.Entry, error) {
+	schema, err := s.treeContext.SchemaClient().GetSchemaSdcpbPath(ctx, path)
+	if err != nil {
+		return nil, fmt.Errorf("error trying to load defaults for %s: %v", path.ToXPath(false), err)
+	}
+
+	upd, err := ops.DefaultValueRetrieve(ctx, schema.GetSchema(), path)
+	if err != nil {
+		return nil, err
+	}
+
+	flags := types.NewUpdateInsertFlags()
+
+	result, err := ops.AddUpdateRecursive(ctx, s, path, upd, flags)
+	if err != nil {
+		return nil, fmt.Errorf("failed adding default value for %s to tree; %v", path.ToXPath(false), err)
+	}
+
+	return result, nil
+}
+
 func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 	getSchema := true
 	var path *sdcpb.Path
@@ -403,79 +424,6 @@ func (s *sharedEntryAttributes) AddChild(ctx context.Context, e api.Entry) error
 
 func (s *sharedEntryAttributes) ChoicesResolvers() api.ChoiceResolvers {
 	return s.choicesResolvers
-}
-
-func (s *sharedEntryAttributes) NavigateSdcpbPath(ctx context.Context, path *sdcpb.Path) (api.Entry, error) {
-	pathElems := path.GetElem()
-	var err error
-	if len(pathElems) == 0 {
-		return s, nil
-	}
-
-	if path.IsRootBased {
-		return ops.GetRoot(s).NavigateSdcpbPath(ctx, path.DeepCopy().SetIsRootBased(false))
-	}
-
-	switch pathElems[0].Name {
-	case ".":
-		s.NavigateSdcpbPath(ctx, path.CopyAndRemoveFirstPathElem())
-	case "..":
-		var entry api.Entry
-		entry = s.parent
-		// we need to skip key levels in the tree
-		// if the next path element is again .. we need to skip key values that are present in the tree
-		// If it is a sub-entry instead, we need to stay in the brach that is defined by the key values
-		// hence only delegate the call to the parent
-
-		if len(pathElems) > 1 && pathElems[1].Name == ".." {
-			entry, _ = ops.GetFirstAncestorWithSchema(s)
-		}
-		return entry.NavigateSdcpbPath(ctx, path.CopyAndRemoveFirstPathElem())
-	default:
-		e, exists := s.GetChilds(types.DescendMethodActiveChilds)[pathElems[0].Name]
-		if !exists {
-			pth := &sdcpb.Path{Elem: pathElems}
-			e, err = s.tryLoadingDefault(ctx, pth)
-			if err != nil {
-				pathStr := pth.ToXPath(false)
-				return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist, trying to load defaults yielded %v", s.SdcpbPath().ToXPath(false), pathStr, err)
-			}
-			return e, nil
-		}
-
-		for v := range pathElems[0].PathElemNamesKeysOnly() {
-			// make sure to only skip the first element
-			e, err = e.NavigateSdcpbPath(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(v, nil)}})
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		return e.NavigateSdcpbPath(ctx, path.CopyAndRemoveFirstPathElem())
-	}
-
-	return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist", s.SdcpbPath().ToXPath(false), pathElems)
-}
-
-func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path *sdcpb.Path) (api.Entry, error) {
-	schema, err := s.treeContext.SchemaClient().GetSchemaSdcpbPath(ctx, path)
-	if err != nil {
-		return nil, fmt.Errorf("error trying to load defaults for %s: %v", path.ToXPath(false), err)
-	}
-
-	upd, err := ops.DefaultValueRetrieve(ctx, schema.GetSchema(), path)
-	if err != nil {
-		return nil, err
-	}
-
-	flags := types.NewUpdateInsertFlags()
-
-	result, err := ops.AddUpdateRecursive(ctx, s, path, upd, flags)
-	if err != nil {
-		return nil, fmt.Errorf("failed adding default value for %s to tree; %v", path.ToXPath(false), err)
-	}
-
-	return result, nil
 }
 
 func (s *sharedEntryAttributes) DeleteCanDeleteChilds(keepDefault bool) {

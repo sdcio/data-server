@@ -289,7 +289,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 			if tt.wantErr {
 				return
 			}
-			e, err := s.NavigateSdcpbPath(ctx, tt.args.relativePath)
+			e, err := ops.NavigateSdcpbPath(ctx, s, tt.args.relativePath)
 			if err != nil {
 				t.Error(err)
 				return
@@ -393,7 +393,7 @@ func Test_sharedEntryAttributes_GetListChilds(t *testing.T) {
 
 			ctx := context.Background()
 
-			e, err := device(t).NavigateSdcpbPath(ctx, tt.path)
+			e, err := ops.NavigateSdcpbPath(ctx, device(t).Entry, tt.path)
 			if err != nil {
 				t.Error(err)
 				return

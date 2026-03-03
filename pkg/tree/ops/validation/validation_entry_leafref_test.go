@@ -14,6 +14,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree"
 
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/ops/validation"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -255,7 +256,7 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 
 			fmt.Println(root.String())
 
-			e, err := root.NavigateSdcpbPath(ctx, tt.lrefNodePath)
+			e, err := ops.NavigateSdcpbPath(ctx, root.Entry, tt.lrefNodePath)
 			if err != nil {
 				t.Error(err)
 			}

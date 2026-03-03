@@ -138,7 +138,7 @@ func TestContainsOnlyDefaults(t *testing.T) {
 			// Navigate to path or use root
 			var entry api.Entry
 			if tt.path != nil {
-				entry, err = root.Entry.NavigateSdcpbPath(ctx, tt.path)
+				entry, err = ops.NavigateSdcpbPath(ctx, root.Entry, tt.path)
 				if err != nil {
 					t.Fatalf("failed to navigate to path %s: %v", tt.path.ToXPath(false), err)
 				}

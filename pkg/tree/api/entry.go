@@ -52,7 +52,6 @@ type Entry interface {
 	FinishInsertionPhase(ctx context.Context) error
 	// GetParent returns the parent entry
 	GetParent() Entry
-	NavigateSdcpbPath(ctx context.Context, path *sdcpb.Path) (Entry, error)
 	// SdcpbPath returns the sdcpb.Path struct for the Entry
 	SdcpbPath() *sdcpb.Path
 	// // // GetSchemaKeys checks for the schema of the entry, and returns the defined keys
@@ -90,26 +89,6 @@ type Entry interface {
 	GetTreeContext() TreeContext
 	// ChoicesResolvers returns the choice case resolvers for the entry, if any
 	ChoicesResolvers() ChoiceResolvers
-}
-
-type LeafVariantEntry interface {
-	MarkDelete(onlyIntended bool) *LeafEntry
-	GetEntry() Entry
-	String() string
-}
-
-type LeafVariantEntries interface {
-	MarkOwnerForDeletion(owner string, onlyIntended bool) *LeafEntry
-	ResetFlags(deleteFlag bool, newFlag bool, updatedFlag bool) int
-	GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool, includeExplicitDeletes bool) *LeafEntry
-	GetRunning() *LeafEntry
-	DeleteByOwner(owner string) *LeafEntry
-	AddExplicitDeleteEntry(owner string, priority int32) *LeafEntry
-	GetByOwner(owner string) *LeafEntry
-	RemoveDeletedByOwner(owner string) *LeafEntry
-	Add(l *LeafEntry)
-	AddWithStats(l *LeafEntry, stats *types.ImportStats)
-	Length() int
 }
 
 type DescendMethod int

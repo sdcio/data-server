@@ -37,7 +37,7 @@ func breadthSearch(ctx context.Context, e api.Entry, sdcpbPath *sdcpb.Path) ([]a
 			dotdotcount++
 		}
 		// else navigate (basically up)
-		entry, err = entry.NavigateSdcpbPath(ctx, &sdcpb.Path{Elem: sdcpbUp})
+		entry, err = ops.NavigateSdcpbPath(ctx, entry, &sdcpb.Path{Elem: sdcpbUp})
 		if err != nil {
 			return nil, err
 		}
@@ -57,7 +57,7 @@ func breadthSearch(ctx context.Context, e api.Entry, sdcpbPath *sdcpb.Path) ([]a
 
 		// we need to do the forwarding for all the already lookedup paths
 		for _, entry := range processEntries {
-			entry, err = entry.NavigateSdcpbPath(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(elem.Name, nil)}})
+			entry, err = ops.NavigateSdcpbPath(ctx, entry, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(elem.Name, nil)}})
 			if err != nil {
 				return nil, err
 			}
@@ -185,7 +185,7 @@ func resolveLeafrefKeyPath(ctx context.Context, e api.Entry, keys map[string]*ty
 		}
 
 		keyp.SetIsRootBased(isRootPath)
-		keyValue, err := e.NavigateSdcpbPath(ctx, keyp)
+		keyValue, err := ops.NavigateSdcpbPath(ctx, e, keyp)
 		if err != nil {
 			return err
 		}

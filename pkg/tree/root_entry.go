@@ -36,7 +36,9 @@ func NewTreeRoot(ctx context.Context, tc api.TreeContext) (*RootEntry, error) {
 	return root, nil
 }
 
-// stringToDisk just for debugging purpose
+// stringToDisk is kept for ad-hoc debugging dumps.
+//
+//nolint:unused // Debug helper intentionally left in place.
 func (r *RootEntry) stringToDisk(filename string) error {
 	err := os.WriteFile(filename, []byte(r.String()), 0755)
 	return err
@@ -157,7 +159,7 @@ func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 
 			// set the priority
 			// navigate to the stated path
-			entry, err := r.NavigateSdcpbPath(ctx, path)
+			entry, err := ops.NavigateSdcpbPath(ctx, r.Entry, path)
 			if err != nil {
 				log.Error(nil, "Applying explicit delete - path not found, skipping", "severity", "WARN", "path", path.ToXPath(false))
 			}
