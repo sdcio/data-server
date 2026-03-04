@@ -7,6 +7,7 @@ import (
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/consts"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/proto"
@@ -79,6 +80,15 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 	t.self.Name = t.selfEntry.PathName()
 	if t.selfEntry.IsRoot() {
 		t.self.Name = "root"
+	}
+
+	// set KeyName for list element key levels
+	if t.selfEntry.GetSchema() == nil {
+		ancestorSchema, levelsUp := ops.GetFirstAncestorWithSchema(t.selfEntry)
+		keys := ops.GetSchemaKeys(ancestorSchema)
+		if len(keys) > 0 && levelsUp >= len(keys) {
+			t.self.KeyName = keys[levelsUp-1]
+		}
 	}
 
 	// process Value
