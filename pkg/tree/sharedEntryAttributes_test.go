@@ -546,7 +546,14 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			root := tt.s(t)
 			ch := make(chan *types.DeviationEntry, 100)
-			ops.GetDeviations(ctx, root.Entry, ch, true)
+
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+			dpc := ops.NewGetDeviationConfig(ch)
+			err := ops.GetDeviations(ctx, root.Entry, dpc, sharedPool)
+			if err != nil {
+				t.Error(err)
+				return
+			}
 			close(ch)
 
 			result := []string{}

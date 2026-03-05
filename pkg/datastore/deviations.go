@@ -186,7 +186,11 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 			deviationChan <- treetypes.NewDeviationEntry(n, treetypes.DeviationReasonIntentExists, nil)
 		}
 
-		ops.GetDeviations(ctx, deviationTree.Entry, deviationChan, true)
+		dpc := ops.NewGetDeviationConfig(deviationChan)
+		err := ops.GetDeviations(ctx, deviationTree.Entry, dpc, d.taskPool)
+		if err != nil {
+			log.Error(err, "failed to run deviation processor")
+		}
 	}()
 
 	return deviationChan, nil
