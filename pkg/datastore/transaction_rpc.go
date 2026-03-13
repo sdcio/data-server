@@ -229,7 +229,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	// iterate through all the intents
 	for _, intent := range transaction.GetNewIntents() {
 		// update the TreeContext to reflect the actual owner (intent name)
-		lvs := ops.GetByOwner(root.Entry, intent.GetName())
+		lvs := ops.LeafsOfOwner(root.Entry, intent.GetName())
 
 		oldIntentContent := lvs.ToPathAndUpdateSlice()
 
@@ -275,7 +275,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		treeContext.NonRevertiveInfo().Add(intent.GetName(), intent.NonRevertive(), intent.GetRevertPaths()...)
 	}
 
-	les := ops.GetByOwner(root.Entry, consts.RunningIntentName)
+	les := ops.LeafsOfOwner(root.Entry, consts.RunningIntentName)
 
 	transaction.GetOldRunning().AddUpdates(les.ToPathAndUpdateSlice())
 

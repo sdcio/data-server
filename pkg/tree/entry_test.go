@@ -209,7 +209,7 @@ func Test_Entry_One(t *testing.T) {
 	t.Log(root.String())
 
 	t.Run("Test 1 - expected entries for owner1", func(t *testing.T) {
-		o1Le := ops.GetByOwner(root.Entry, owner1)
+		o1Le := ops.LeafsOfOwner(root.Entry, owner1)
 		o1 := api.LeafEntriesToUpdates(o1Le)
 		// diff the result with the expected
 		// if diff := testhelper.DiffUpdates([]*types.Update{u0o1, u2, u2_1, u1, u1_1}, o1); diff != "" {
@@ -225,7 +225,7 @@ func Test_Entry_One(t *testing.T) {
 	})
 
 	t.Run("Test 2 - expected entries for owner2", func(t *testing.T) {
-		o2Le := ops.GetByOwner(root.Entry, owner2)
+		o2Le := ops.LeafsOfOwner(root.Entry, owner2)
 		o2 := api.LeafEntriesToUpdates(o2Le)
 		// diff the result with the expected
 		if diff := testhelper.DiffUpdates([]*types.PathAndUpdate{
@@ -621,7 +621,7 @@ func Test_Entry_Three(t *testing.T) {
 		// log the tree
 		t.Log(root.String())
 
-		highPriLe := ops.GetByOwnerFiltered(root.Entry, owner1, api.FilterNonDeleted)
+		highPriLe := ops.LeafsOfOwner(root.Entry, owner1, api.FilterNonDeleted)
 
 		highPri := api.LeafEntriesToUpdates(highPriLe)
 
@@ -895,7 +895,7 @@ func Test_Entry_Four(t *testing.T) {
 		// log the tree
 		t.Log(root.String())
 
-		highPriLe := ops.GetByOwnerFiltered(root.Entry, owner1, api.FilterNonDeleted)
+		highPriLe := ops.LeafsOfOwner(root.Entry, owner1, api.FilterNonDeleted)
 
 		highPri := api.LeafEntriesToUpdates(highPriLe)
 
@@ -2238,7 +2238,7 @@ func Test_RevertNonRevertive(t *testing.T) {
 
 			// adding paths to the non revertive info, this should mark the paths as non revertive, and thus not be deleted in the end.
 			for _, path := range tt.revertPaths {
-				tc.NonRevertiveInfo().AddNonRevertivePaths(owner1, path)
+				tc.NonRevertiveInfo().Add(owner1, false, path)
 			}
 
 			err = root.FinishInsertionPhase(ctx)

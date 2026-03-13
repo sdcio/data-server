@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/sdcio/data-server/pkg/tree/api"
-	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -15,8 +14,7 @@ func ToProtoUpdates(ctx context.Context, e api.Entry, onlyNewOrUpdated bool) ([]
 }
 
 func ToProtoDeletes(ctx context.Context, e api.Entry) ([]*sdcpb.Path, error) {
-	result := []types.DeleteEntry{}
-	deletes, err := GetDeletes(e, result, true)
+	deletes, err := GetDeletes(e, true)
 	if err != nil {
 		return nil, err
 	}

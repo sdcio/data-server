@@ -8,7 +8,12 @@ import (
 )
 
 // GetDeletes calculate the deletes that need to be send to the device.
-func GetDeletes(e api.Entry, deletes types.DeleteEntriesList, aggregatePaths bool) (types.DeleteEntriesList, error) {
+func GetDeletes(e api.Entry, aggregatePaths bool) (types.DeleteEntriesList, error) {
+	return getDeletesInternal(e, make(types.DeleteEntriesList, 0), aggregatePaths)
+}
+
+// getDeletesInternal is the internal function to calculate deletes, it is called recursively on the tree and performs the actual calculation.
+func getDeletesInternal(e api.Entry, deletes types.DeleteEntriesList, aggregatePaths bool) (types.DeleteEntriesList, error) {
 
 	// if the actual level has no schema assigned we're on a key level
 	// element. Hence we try deletion via aggregation
@@ -54,7 +59,7 @@ func getAggregatedDeletes(e api.Entry, deletes []types.DeleteEntry, aggregatePat
 		} else {
 			// otherwise continue with deletion on the childs.
 			for _, c := range e.GetChildMap().GetAll() {
-				deletes, err = GetDeletes(c, deletes, aggregatePaths)
+				deletes, err = getDeletesInternal(c, deletes, aggregatePaths)
 				if err != nil {
 					return nil, err
 				}
@@ -78,7 +83,7 @@ func getRegularDeletes(e api.Entry, deletes types.DeleteEntriesList, aggregate b
 	}
 
 	for _, c := range e.GetChildMap().GetAll() {
-		deletes, err = GetDeletes(c, deletes, aggregate)
+		deletes, err = getDeletesInternal(c, deletes, aggregate)
 		if err != nil {
 			return nil, err
 		}

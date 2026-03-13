@@ -43,7 +43,6 @@ func (n *NonRevertiveInfo) DeepCopy() *NonRevertiveInfo {
 	copy := &NonRevertiveInfo{
 		intentName:   n.intentName,
 		nonRevertive: n.nonRevertive,
-		revertPaths:  make(sdcpb.Paths, len(n.revertPaths)),
 	}
 	copy.revertPaths = n.revertPaths.DeepCopy()
 	return copy

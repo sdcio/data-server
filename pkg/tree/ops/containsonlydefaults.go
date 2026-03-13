@@ -13,12 +13,7 @@ import (
 // childs return true, while non-container entries or entries without schema return false. It returns true if the
 // entry is a container with only default values, and false otherwise.
 func ContainsOnlyDefaults(e api.Entry) bool {
-	schema := e.GetSchema()
-	if schema == nil {
-		return false
-	}
-
-	contSchema := schema.GetContainer()
+	contSchema := e.GetSchema().GetContainer()
 	if contSchema == nil {
 		return false
 	}

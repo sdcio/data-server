@@ -11,17 +11,9 @@ func NewNonRevertiveInfos() NonRevertiveInfos {
 func (n NonRevertiveInfos) Add(owner string, nonRevertive bool, paths ...*sdcpb.Path) {
 	_, ok := n[owner]
 	if !ok {
-		n[owner] = NewNonRevertiveInfo(owner, nonRevertive).AddPaths(paths...)
+		n[owner] = NewNonRevertiveInfo(owner, nonRevertive)
 	}
-}
-
-func (n NonRevertiveInfos) AddNonRevertivePaths(owner string, path ...*sdcpb.Path) {
-	info, ok := n[owner]
-	if !ok {
-		info = NewNonRevertiveInfo(owner, false)
-		n[owner] = info
-	}
-	info.AddPaths(path...)
+	n[owner].AddPaths(paths...)
 }
 
 func (n NonRevertiveInfos) IsNonRevertive(owner string, path SdcpbPath) bool {

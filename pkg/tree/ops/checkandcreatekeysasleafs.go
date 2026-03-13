@@ -52,9 +52,9 @@ func CheckAndCreateKeysAsLeafs(ctx context.Context, e api.Entry, intentName stri
 			// if the key Leaf exists continue with next key
 			if entryExists {
 				// if it exists, we need to check that the entry for the owner exists.
-				lvs := GetByOwner(child, intentName)
-				if len(lvs) > 0 {
-					lvs[0].DropDeleteFlag()
+				le := child.GetLeafVariants().GetByOwner(intentName)
+				if le != nil {
+					le.DropDeleteFlag()
 					// continue with parent Entry BEFORE continuing the loop
 					item = item.GetParent()
 					continue

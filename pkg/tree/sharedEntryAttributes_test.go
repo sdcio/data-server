@@ -294,7 +294,7 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			result := ops.GetByOwner(e, tt.args.owner)
+			result := ops.LeafsOfOwner(e, tt.args.owner)
 			if len(result) > 0 {
 				t.Errorf("expected all elements under %s to be deleted for owner %s but got %d elements", tt.args.relativePath.ToXPath(false), tt.args.owner, len(result))
 				return
@@ -912,39 +912,39 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 		r    func(t *testing.T) *RootEntry
 		want []*types.ValidationResultEntry
 	}{
-		// {
-		// 	name: "no containers with mandatories",
-		// 	r: func(t *testing.T) *RootEntry {
+		{
+			name: "no containers with mandatories",
+			r: func(t *testing.T) *RootEntry {
 
-		// 		mockCtrl := gomock.NewController(t)
-		// 		defer mockCtrl.Finish()
+				mockCtrl := gomock.NewController(t)
+				defer mockCtrl.Finish()
 
-		// 		scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
-		// 		if err != nil {
-		// 			t.Fatal(err)
-		// 		}
+				scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-		// 		tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
-		// 		root, err := NewTreeRoot(ctx, tc)
-		// 		if err != nil {
-		// 			t.Fatal(err)
-		// 		}
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+				root, err := NewTreeRoot(ctx, tc)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-		// 		conf1 := testhelper.Config1()
-		// 		_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root.Entry, owner1, 5, false, testhelper.FlagsNew)
-		// 		if err != nil {
-		// 			t.Fatal(err)
-		// 		}
+				conf1 := testhelper.Config1()
+				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root.Entry, owner1, 5, false, testhelper.FlagsNew)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-		// 		err = root.FinishInsertionPhase(ctx)
-		// 		if err != nil {
-		// 			t.Fatal(err)
-		// 		}
+				err = root.FinishInsertionPhase(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-		// 		return root
-		// 	},
-		// 	want: []*types.ValidationResultEntry{},
-		// },
+				return root
+			},
+			want: []*types.ValidationResultEntry{},
+		},
 		{
 			name: "mandatories missing",
 			r: func(t *testing.T) *RootEntry {
@@ -1006,45 +1006,45 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 				types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child [router-id] does not exist, path: /network-instance[name=ni1]/protocol/bgp"), types.ValidationResultEntryTypeError),
 			},
 		},
-		// {
-		// 	name: "mandatory key present",
-		// 	r: func(t *testing.T) *RootEntry {
-		// 		mockCtrl := gomock.NewController(t)
-		// 		defer mockCtrl.Finish()
+		{
+			name: "mandatory key present",
+			r: func(t *testing.T) *RootEntry {
+				mockCtrl := gomock.NewController(t)
+				defer mockCtrl.Finish()
 
-		// 		scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
-		// 		if err != nil {
-		// 			t.Fatal(err)
-		// 		}
+				scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-		// 		tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
-		// 		root, err := NewTreeRoot(ctx, tc)
-		// 		if err != nil {
-		// 			t.Fatal(err)
-		// 		}
+				tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+				root, err := NewTreeRoot(ctx, tc)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-		// 		conf1 := &sdcio_schema.Device{
-		// 			Mandatorykey: map[string]*sdcio_schema.SdcioModel_Mandatorykey{
-		// 				"mk1": {
-		// 					Key1:    ygot.String("k11"),
-		// 					Mandato: ygot.String("k2asdf"),
-		// 				},
-		// 			},
-		// 		}
-		// 		_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root.Entry, owner1, 5, false, testhelper.FlagsNew)
-		// 		if err != nil {
-		// 			t.Fatal(err)
-		// 		}
+				conf1 := &sdcio_schema.Device{
+					Mandatorykey: map[string]*sdcio_schema.SdcioModel_Mandatorykey{
+						"mk1": {
+							Key1:    ygot.String("k11"),
+							Mandato: ygot.String("k2asdf"),
+						},
+					},
+				}
+				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root.Entry, owner1, 5, false, testhelper.FlagsNew)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-		// 		err = root.FinishInsertionPhase(ctx)
-		// 		if err != nil {
-		// 			t.Fatal(err)
-		// 		}
+				err = root.FinishInsertionPhase(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-		// 		return root
-		// 	},
-		// 	want: []*types.ValidationResultEntry{},
-		// },
+				return root
+			},
+			want: []*types.ValidationResultEntry{},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

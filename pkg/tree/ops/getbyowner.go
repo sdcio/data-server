@@ -6,13 +6,6 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/types"
 )
 
-// GetByOwner returns all the LeafEntries that belong to a certain owner.
-func GetByOwner(e api.Entry, owner string) api.LeafVariantSlice {
-	result := api.LeafVariantSlice{}
-	result = getByOwnerInternal(e, owner, result)
-	return result
-}
-
 // getByOwnerInternal is the internal function that performs the actual retrieval of the LeafEntries by owner. It is called recursively to traverse the tree.
 // It takes an additional result parameter that is used to accumulate the results during the recursive traversal. Since that LeafVariantSlice might grow during the traversal,
 // it is returned as a new slice to ensure that the changes are reflected in the caller.
@@ -39,9 +32,9 @@ func getByOwnerInternal(e api.Entry, owner string, result api.LeafVariantSlice, 
 	return result
 }
 
-// getByOwnerFiltered returns the Tree content filtered by owner, whilst allowing to filter further
+// LeafsOfOwner returns the Tree content filtered by owner, whilst allowing to filter further
 // via providing additional LeafEntryFilter
-func GetByOwnerFiltered(e api.Entry, owner string, f ...api.LeafEntryFilter) api.LeafVariantSlice {
+func LeafsOfOwner(e api.Entry, owner string, f ...api.LeafEntryFilter) api.LeafVariantSlice {
 	result := api.LeafVariantSlice{}
 	result = getByOwnerInternal(e, owner, result, f...)
 	return result

@@ -99,7 +99,7 @@ func (r *RootEntry) GetUpdatesForOwner(owner string) types.UpdateSlice {
 	// retrieve all the entries from the tree that belong to the given
 	// Owner / Intent, skipping the once marked for deletion
 	// this is to insert / update entries in the cache.
-	return api.LeafEntriesToUpdates(ops.GetByOwnerFiltered(r.Entry, owner, api.FilterNonDeletedButNewOrUpdated))
+	return api.LeafEntriesToUpdates(ops.LeafsOfOwner(r.Entry, owner, api.FilterNonDeletedButNewOrUpdated))
 }
 
 // GetDeletesForOwner returns the deletes that have been calculated for the given intent / owner
@@ -108,7 +108,7 @@ func (r *RootEntry) GetDeletesForOwner(owner string) sdcpb.Paths {
 	// and that are marked for deletion.
 	// This is to cover all the cases where an intent was changed and certain
 	// part of the config got deleted.
-	deletesOwnerUpdates := api.LeafEntriesToUpdates(ops.GetByOwnerFiltered(r.Entry, owner, api.FilterDeleted))
+	deletesOwnerUpdates := api.LeafEntriesToUpdates(ops.LeafsOfOwner(r.Entry, owner, api.FilterDeleted))
 	// they are retrieved as cache.update, we just need the path for deletion from cache
 	deletesOwner := make(sdcpb.Paths, 0, len(deletesOwnerUpdates))
 	// so collect the paths
@@ -127,8 +127,7 @@ func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) api.LeafVariantS
 
 // GetDeletes returns the paths that due to the Tree content are to be deleted from the southbound device.
 func (r *RootEntry) GetDeletes(aggregatePaths bool) (types.DeleteEntriesList, error) {
-	deletes := []types.DeleteEntry{}
-	return ops.GetDeletes(r.Entry, deletes, aggregatePaths)
+	return ops.GetDeletes(r.Entry, aggregatePaths)
 }
 
 func (r *RootEntry) GetAncestorSchema() (*sdcpb.SchemaElem, int) {

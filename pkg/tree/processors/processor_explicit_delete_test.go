@@ -293,7 +293,7 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 
 			t.Log(root.String())
 
-			lvs := ops.GetByOwner(root.Entry, owner2)
+			lvs := ops.LeafsOfOwner(root.Entry, owner2)
 			equal, err := lvs.Equal(tt.expectedLeafVariants)
 			if err != nil {
 				t.Error(err)

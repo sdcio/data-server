@@ -20,13 +20,12 @@ func DeleteBranch(ctx context.Context, e api.Entry, path *sdcpb.Path, owner stri
 	if err != nil {
 		return err
 	}
+	if entry == nil {
+		return nil
+	}
 	err = DeleteBranch(ctx, entry, nil, owner)
 	if err != nil {
 		return err
-	}
-
-	if entry == nil {
-		return nil
 	}
 
 	// need to remove the leafvariants down from entry.

@@ -22,7 +22,7 @@ import (
 )
 
 var (
-	ErrValidationError = errors.New("validation error")
+	ErrValidation = errors.New("validation error")
 )
 
 func Validate(ctx context.Context, e api.Entry, vCfg *config.Validation, taskpoolFactory pool.VirtualPoolFactory) (types.ValidationResults, *types.ValidationStats) {
@@ -37,11 +37,11 @@ func Validate(ctx context.Context, e api.Entry, vCfg *config.Validation, taskpoo
 	syncWait := &sync.WaitGroup{}
 	syncWait.Add(1)
 	go func() {
+		defer syncWait.Done()
 		// read from the validationResult channel
 		for e := range validationResultEntryChan {
 			validationResult.AddEntry(e)
 		}
-		syncWait.Done()
 	}()
 
 	validationProcessor := NewValidateProcessor(NewValidateProcessorConfig(validationResultEntryChan, validationStats, vCfg))
@@ -55,7 +55,6 @@ func Validate(ctx context.Context, e api.Entry, vCfg *config.Validation, taskpoo
 // Validate is the highlevel function to perform validation.
 // it will multiplex all the different Validations that need to happen
 func validateLevel(ctx context.Context, e api.Entry, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, vCfg *config.Validation) {
-	// validate the mandatory statement on this entry
 	if e.RemainsToExist() {
 		// TODO: Validate Enums
 		if !vCfg.DisabledValidators.Mandatory {
@@ -348,7 +347,7 @@ func validateMandatory(ctx context.Context, e api.Entry, resultChan chan<- *type
 				}
 
 				if len(attributes) == 0 {
-					log.Error(ErrValidationError, "mandatory attribute could not be found as child, field or choice", "path", e.SdcpbPath().ToXPath(false), "attribute", c.Name)
+					log.Error(ErrValidation, "mandatory attribute could not be found as child, field or choice", "path", e.SdcpbPath().ToXPath(false), "attribute", c.Name)
 				}
 
 				validateMandatoryWithKeys(ctx, e, len(containerSchema.GetKeys()), attributes, choiceName, resultChan)

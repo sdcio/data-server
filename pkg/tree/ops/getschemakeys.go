@@ -9,7 +9,7 @@ func GetSchemaKeys(e api.Entry) []string {
 		if contschema := e.GetSchema().GetContainer(); contschema != nil {
 			// if the level equals the amount of keys defined, we're at the right level, where the
 			// actual elements start (not in a key level within the tree)
-			var keys []string
+			keys := make([]string, 0, len(contschema.GetKeys()))
 			for _, k := range contschema.GetKeys() {
 				keys = append(keys, k.Name)
 			}
