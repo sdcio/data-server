@@ -28,14 +28,14 @@ func (p *ValidateProcessor) Run(taskpoolFactory pool.VirtualPoolFactory, e api.E
 type ValidateProcessorParameters struct {
 	resultChan chan<- *types.ValidationResultEntry
 	stats      *types.ValidationStats
-	vCfg       *config.Validation
+	validators []ValidationFunc
 }
 
 func NewValidateProcessorConfig(resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, vCfg *config.Validation) *ValidateProcessorParameters {
 	return &ValidateProcessorParameters{
 		resultChan: resultChan,
 		stats:      stats,
-		vCfg:       vCfg,
+		validators: activeValidators(vCfg),
 	}
 }
 
@@ -57,7 +57,7 @@ func (t *validateTask) Run(ctx context.Context, submit func(pool.Task) error) er
 	}
 	// validate the mandatory statement on this entry
 	if t.e.RemainsToExist() {
-		validateLevel(ctx, t.e, t.parameters.resultChan, t.parameters.stats, t.parameters.vCfg)
+		validateLevel(ctx, t.e, t.parameters.resultChan, t.parameters.stats, t.parameters.validators)
 
 		for _, c := range t.e.GetChilds(types.DescendMethodActiveChilds) {
 			submit(newValidateTask(c, t.parameters))
