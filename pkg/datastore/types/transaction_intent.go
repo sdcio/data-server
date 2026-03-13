@@ -17,6 +17,8 @@ type TransactionIntent struct {
 	deleteIgnoreNonExisting bool
 	explicitDeletes         *sdcpb.PathSet
 	previouslyApplied       bool
+	// revertPaths paths that are meant to be reverted. This is used for non-revertive intents.
+	revertPaths []*sdcpb.Path
 }
 
 func NewTransactionIntent(name string, priority int32) *TransactionIntent {
@@ -105,4 +107,12 @@ func (ti *TransactionIntent) AddExplicitDeletes(p []*sdcpb.Path) {
 	for _, x := range p {
 		ti.explicitDeletes.AddPath(x)
 	}
+}
+
+func (ti *TransactionIntent) GetRevertPaths() []*sdcpb.Path {
+	return ti.revertPaths
+}
+
+func (ti *TransactionIntent) AddRevertPaths(p ...*sdcpb.Path) {
+	ti.revertPaths = append(ti.revertPaths, p...)
 }

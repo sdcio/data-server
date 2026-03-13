@@ -10,11 +10,16 @@ import (
 
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/api"
+	"github.com/sdcio/data-server/pkg/tree/api/adapter"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
+	"github.com/sdcio/data-server/pkg/tree/ops"
+	"github.com/sdcio/data-server/pkg/tree/ops/validation"
+	"github.com/sdcio/data-server/pkg/tree/processors"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/logger"
-	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -23,13 +28,13 @@ import (
 var (
 	ErrDatastoreLocked   = errors.New("datastore is locked, other action is ongoing")
 	ErrContextDone       = errors.New("context is closed (done)")
-	ErrValidationError   = errors.New("validation error")
+	ErrValidation        = errors.New("validation error")
 	ErrNoIntentsProvided = errors.New("no intents provided")
 )
 
 // SdcpbTransactionIntentToInternalTI converts sdcpb.TransactionIntent to types.TransactionIntent
 func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req *sdcpb.TransactionIntent) (*types.TransactionIntent, error) {
-
+	log := logger.FromContext(ctx)
 	// create a new TransactionIntent with the given name and priority
 	ti := types.NewTransactionIntent(req.GetIntent(), req.GetPriority())
 
@@ -40,9 +45,7 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 	if req.GetOrphan() {
 		ti.SetDeleteOnlyIntendedFlag()
 	}
-	if req.GetNonRevertive() {
-		ti.SetNonRevertive()
-	}
+
 	if req.GetDeleteIgnoreNoExist() {
 		ti.SetDeleteIgnoreNonExisting()
 	}
@@ -50,6 +53,16 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 		ti.SetPreviouslyApplied()
 	}
 
+	if req.GetNonRevertive() {
+		ti.SetNonRevertive()
+	}
+	if len(req.GetRevertPaths()) > 0 {
+		if !req.GetNonRevertive() {
+			log.Error(fmt.Errorf("revert paths provided without non-revertive flag set for intent %s", req.GetIntent()), "severity", "WARN")
+		} else {
+			ti.AddRevertPaths(req.GetRevertPaths()...)
+		}
+	}
 	// convert the sdcpb.updates to tree.UpdateSlice
 	Updates, err := treetypes.ExpandAndConvertIntent(ctx, d.schemaClient, req.GetIntent(), req.GetPriority(), req.GetUpdate(), time.Now().Unix())
 	if err != nil {
@@ -68,8 +81,8 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 // replaceIntent takes a Transaction and treats it as a replaceIntent, replacing the whole device configuration with the content of the given intent.
 // returns the warnings as a []string and potential errors that happend during validation / from SBI Set()
 func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transaction) ([]string, error) {
-	log := logf.FromContext(ctx).WithValues("transaction-type", "replace")
-	ctx = logf.IntoContext(ctx, log)
+	log := logger.FromContext(ctx).WithValues("transaction-type", "replace")
+	ctx = logger.IntoContext(ctx, log)
 
 	// create a new TreeContext
 	tc := tree.NewTreeContext(d.schemaClient, d.taskPool)
@@ -81,7 +94,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	}
 
 	// store the actual / old running in the transaction
-	runningProto, err := d.cacheClient.IntentGet(ctx, tree.RunningIntentName)
+	runningProto, err := d.cacheClient.IntentGet(ctx, consts.RunningIntentName)
 	if err != nil {
 		return nil, err
 	}
@@ -100,17 +113,17 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 		return nil, err
 	}
 
-	log.V(logf.VDebug).Info("transaction finish tree insertion phase")
+	log.V(logger.VDebug).Info("transaction finish tree insertion phase")
 	err = root.FinishInsertionPhase(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// log the tree in trace level, making it a func call to spare overhead in lower log levels.
-	log.V(logf.VTrace).Info("populated tree", "tree", root.String())
+	log.V(logger.VTrace).Info("populated tree", "tree", root.String())
 
 	// perform validation
-	validationResult, validationStats := root.Validate(ctx, d.config.Validation, d.taskPool)
+	validationResult, validationStats := validation.Validate(ctx, root.Entry, d.config.Validation, d.taskPool)
 	validationResult.ErrorsStr()
 	if validationResult.HasErrors() {
 		return nil, validationResult.JoinErrors()
@@ -121,7 +134,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 
 	// we use the TargetSourceReplace, that adjustes the tree results in a way
 	// that the whole config tree is getting replaced.
-	replaceRoot := types.NewTargetSourceReplace(root)
+	replaceRoot := types.NewTargetSourceReplace(adapter.NewEntryOutputAdapter(root.Entry))
 
 	// apply the resulting config to the device
 	dataResp, err := d.applyIntent(ctx, replaceRoot)
@@ -147,13 +160,13 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 }
 
 func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.RootEntry) ([]string, error) {
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 
 	intentNames := []string{}
 	IntentChan := make(chan *tree_persist.Intent)
 	ErrChan := make(chan error, 1)
 
-	go d.cacheClient.IntentGetAll(ctx, []string{"running"}, IntentChan, ErrChan)
+	go d.cacheClient.IntentGetAll(ctx, []string{consts.RunningIntentName}, IntentChan, ErrChan)
 
 	for {
 	selectLoop:
@@ -173,8 +186,8 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 				IntentChan = nil
 				break selectLoop
 			}
-			log.V(logf.VDebug).Info("adding intent to tree", "intent", intent.GetIntentName())
-			log.V(logf.VTrace).Info("adding intent to tree", "intent", intent.GetIntentName(), "content", utils.FormatProtoJSON(intent))
+			log.V(logger.VDebug).Info("adding intent to tree", "intent", intent.GetIntentName())
+			log.V(logger.VTrace).Info("adding intent to tree", "intent", intent.GetIntentName(), "content", utils.FormatProtoJSON(intent))
 
 			intentNames = append(intentNames, intent.GetIntentName())
 			protoLoader := treeproto.NewProtoTreeImporter(intent)
@@ -191,7 +204,7 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 
 // lowlevelTransactionSet
 func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *types.Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 	// create a new TreeRoot
 	d.syncTreeMutex.RLock()
 	root, err := d.syncTree.DeepCopy(ctx)
@@ -211,23 +224,24 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	flagNew.SetNewFlag()
 	flagExisting := treetypes.NewUpdateInsertFlags()
 
+	treeContext := root.GetTreeContext()
+
 	// iterate through all the intents
 	for _, intent := range transaction.GetNewIntents() {
 		// update the TreeContext to reflect the actual owner (intent name)
-		lvs := tree.LeafVariantSlice{}
-		lvs = root.GetByOwner(intent.GetName(), lvs)
+		lvs := ops.LeafsOfOwner(root.Entry, intent.GetName())
 
 		oldIntentContent := lvs.ToPathAndUpdateSlice()
 
-		ownerDeleteMarker := tree.NewOwnerDeleteMarker(tree.NewOwnerDeleteMarkerTaskConfig(intent.GetName(), intent.GetOnlyIntended()))
+		ownerDeleteMarker := processors.NewOwnerDeleteMarker(processors.NewOwnerDeleteMarkerTaskConfig(intent.GetName(), intent.GetOnlyIntended()))
 
-		err := ownerDeleteMarker.Run(root.GetRoot(), d.taskPool)
+		err := ownerDeleteMarker.Run(root.Entry, d.taskPool)
 		if err != nil {
 			return nil, err
 		}
 
 		// clear the owners existing explicit delete entries, retrieving the old entries for storing in the transaction for possible rollback
-		oldExplicitDeletes := root.GetTreeContext().RemoveExplicitDeletes(intent.GetName())
+		oldExplicitDeletes := root.GetTreeContext().ExplicitDeletes().Remove(intent.GetName())
 
 		priority := int32(math.MaxInt32)
 		if len(oldIntentContent) > 0 {
@@ -254,30 +268,30 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 			}
 
 			// add the explicit delete entries
-			root.GetTreeContext().AddExplicitDeletes(intent.GetName(), intent.GetPriority(), intent.GetDeletes())
+			treeContext.ExplicitDeletes().Add(intent.GetName(), intent.GetPriority(), intent.GetDeletes())
 		}
 
-		root.SetNonRevertiveIntent(intent.GetName(), intent.NonRevertive())
+		// add non-revertive info to tree context
+		treeContext.NonRevertiveInfo().Add(intent.GetName(), intent.NonRevertive(), intent.GetRevertPaths()...)
 	}
 
-	les := tree.LeafVariantSlice{}
-	les = root.GetByOwner(tree.RunningIntentName, les)
+	les := ops.LeafsOfOwner(root.Entry, consts.RunningIntentName)
 
 	transaction.GetOldRunning().AddUpdates(les.ToPathAndUpdateSlice())
 
-	log.V(logf.VDebug).Info("transaction finish tree insertion phase")
+	log.V(logger.VDebug).Info("transaction finish tree insertion phase")
 	// FinishInsertion Phase
 	err = root.FinishInsertionPhase(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	log.V(logf.VTrace).Info("populated tree", "tree", root.String())
+	log.V(logger.VTrace).Info("populated tree", "tree", root.String())
 
 	// perform validation
-	validationResult, validationStats := root.Validate(ctx, d.config.Validation, d.taskPool)
+	validationResult, validationStats := validation.Validate(ctx, root.Entry, d.config.Validation, d.taskPool)
 
-	log.V(logf.VDebug).Info("transaction validation stats", "transaction-id", transaction.GetTransactionId(), "stats", validationStats.String())
+	log.V(logger.VDebug).Info("transaction validation stats", "transaction-id", transaction.GetTransactionId(), "stats", validationStats.String())
 
 	// prepare the response struct
 	result := &sdcpb.TransactionSetResponse{
@@ -316,7 +330,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 	// Error out if validation failed.
 	if validationResult.HasErrors() {
-		return result, ErrValidationError
+		return result, ErrValidation
 	}
 
 	log.Info("transaction validation passed")
@@ -328,7 +342,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	}
 
 	// apply the resulting config to the device
-	dataResp, err := d.applyIntent(ctx, root)
+	dataResp, err := d.applyIntent(ctx, adapter.NewEntryOutputAdapter(root.Entry))
 	if err != nil {
 		return nil, err
 	}
@@ -342,8 +356,8 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 	// logging
 	updStrSl := treetypes.Map(updates.ToUpdateSlice(), func(u *treetypes.Update) string { return u.String() })
-	log.V(logf.VTrace).Info("generated updates", "updates", strings.Join(updStrSl, "\n"))
-	log.V(logf.VTrace).Info("generated deletes", "deletes", strings.Join(deletes.SdcpbPaths().ToXPathSlice(), "\n"))
+	log.V(logger.VTrace).Info("generated updates", "updates", strings.Join(updStrSl, "\n"))
+	log.V(logger.VTrace).Info("generated deletes", "deletes", strings.Join(deletes.SdcpbPaths().ToXPathSlice(), "\n"))
 
 	for _, intent := range transaction.GetNewIntents() {
 		log := log.WithValues("intent", intent.GetName())
@@ -353,19 +367,19 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 		// logging
 		strSl := treetypes.Map(updatesOwner, func(u *treetypes.Update) string { return u.String() })
-		log.V(logf.VTrace).Info("updates owner", "updates-owner", strSl)
+		log.V(logger.VTrace).Info("updates owner", "updates-owner", strSl)
 
 		delSl := deletesOwner.ToXPathSlice()
-		log.V(logf.VTrace).Info("deletes owner", "deletes-owner", delSl)
+		log.V(logger.VTrace).Info("deletes owner", "deletes-owner", delSl)
 
-		protoIntent, err := root.TreeExport(intent.GetName(), intent.GetPriority())
+		protoIntent, err := ops.TreeExport(root.Entry, intent.GetName(), intent.GetPriority())
 		switch {
-		case errors.Is(err, tree.ErrorIntentNotPresent):
+		case errors.Is(err, ops.ErrorIntentNotPresent):
 			err = d.cacheClient.IntentDelete(ctx, intent.GetName(), intent.GetDeleteIgnoreNonExisting())
 			if err != nil {
 				log.Error(err, "failed deleting intent from store")
 			}
-			log.V(logf.VDebug).Info("delete intent from cache")
+			log.V(logger.VDebug).Info("delete intent from cache")
 			continue
 		case err != nil:
 			return nil, err
@@ -396,9 +410,9 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 }
 
 // writeBackSyncTree applies the provided changes to the syncTree and applies to the running cache intent
-func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVariantSlice, deletes treetypes.DeleteEntriesList) error {
+func (d *Datastore) writeBackSyncTree(ctx context.Context, updates api.LeafVariantSlice, deletes treetypes.DeleteEntriesList) error {
 	log := logger.FromContext(ctx)
-	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(tree.RunningIntentName, tree.RunningValuesPrio)
+	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(consts.RunningIntentName, consts.RunningValuesPrio)
 
 	// wrap the lock in an anonymous function to be able to utilize defer for the unlock
 	err := func() error {
@@ -407,7 +421,7 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVari
 		defer d.syncTreeMutex.Unlock()
 
 		// perform deletes
-		err := d.syncTree.DeleteBranchPaths(ctx, deletes, tree.RunningIntentName)
+		err := d.syncTree.DeleteBranchPaths(ctx, deletes, consts.RunningIntentName)
 		if err != nil {
 			return err
 		}
@@ -424,8 +438,8 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVari
 	}
 
 	// export the synctree
-	newRunningIntent, err := d.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
-	if err != nil && err != tree.ErrorIntentNotPresent {
+	newRunningIntent, err := ops.TreeExport(d.syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio)
+	if err != nil && err != ops.ErrorIntentNotPresent {
 		return err
 	}
 
@@ -448,7 +462,7 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates tree.LeafVari
 }
 
 func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, transactionIntents []*types.TransactionIntent, replaceIntent *types.TransactionIntent, transactionTimeout time.Duration, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 	var err error
 	var transaction *types.Transaction
 	var transactionGuard *types.TransactionGuard
@@ -523,7 +537,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	response, err := d.lowlevelTransactionSet(ctx, transaction, dryRun)
 	// if it is a validation error, we need to send the response while not successing the transaction guard
 	// since validation errors are transported in the response itself, not in the seperate error
-	if errors.Is(err, ErrValidationError) {
+	if errors.Is(err, ErrValidation) {
 		log.Error(fmt.Errorf("%s", strings.Join(response.GetErrors(), ", ")), "transaction validation failed")
 		return response, nil
 	}
@@ -543,7 +557,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	return response, err
 }
 
-func updateToSdcpbUpdate(lvs tree.LeafVariantSlice) ([]*sdcpb.Update, error) {
+func updateToSdcpbUpdate(lvs api.LeafVariantSlice) ([]*sdcpb.Update, error) {
 	result := make([]*sdcpb.Update, 0, len(lvs))
 	for _, lv := range lvs {
 		path := lv.GetEntry().SdcpbPath()
@@ -558,7 +572,7 @@ func updateToSdcpbUpdate(lvs tree.LeafVariantSlice) ([]*sdcpb.Update, error) {
 }
 
 func (d *Datastore) TransactionConfirm(ctx context.Context, transactionId string) error {
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 	log.Info("transaction confirm")
 
 	if !d.dmutex.TryLock() {
@@ -570,7 +584,7 @@ func (d *Datastore) TransactionConfirm(ctx context.Context, transactionId string
 }
 
 func (d *Datastore) TransactionCancel(ctx context.Context, transactionId string) error {
-	log := logf.FromContext(ctx)
+	log := logger.FromContext(ctx)
 	log.Info("transaction cancel")
 
 	if !d.dmutex.TryLock() {

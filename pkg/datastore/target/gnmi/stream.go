@@ -14,7 +14,9 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	dsutils "github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/logger"
@@ -148,7 +150,7 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, sy
 			if err != nil {
 				log.Error(err, "failed adding update to synctree")
 			}
-			syncTree.GetTreeContext().AddExplicitDeletes(tree.RunningIntentName, tree.RunningValuesPrio, noti.deletes)
+			syncTree.GetTreeContext().ExplicitDeletes().Add(consts.RunningIntentName, consts.RunningValuesPrio, noti.deletes)
 		case <-syncResponse:
 			syncTree, err = s.syncToRunning(syncTree, syncTreeMutex, true)
 			tickerActive = true
@@ -221,11 +223,11 @@ func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, m *sync.Mutex, logC
 	defer m.Unlock()
 
 	startTime := time.Now()
-	result, err := syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
+	result, err := ops.TreeExport(syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio)
 	log.V(logger.VTrace).Info("exported tree", "tree", result.String())
 
 	if err != nil {
-		if errors.Is(err, tree.ErrorIntentNotPresent) {
+		if errors.Is(err, ops.ErrorIntentNotPresent) {
 			log.Info("sync no config changes")
 			// all good no data present
 			return syncTree, nil
@@ -290,7 +292,7 @@ func (t *notificationProcessorTask) Run(ctx context.Context, _ func(pool.Task) e
 	log := logger.FromContext(ctx)
 	sn := dsutils.ToSchemaNotification(ctx, t.item)
 	// updates
-	upds, err := treetypes.ExpandAndConvertIntent(ctx, t.params.schemaClientBound, tree.RunningIntentName, tree.RunningValuesPrio, sn.GetUpdate(), t.item.GetTimestamp())
+	upds, err := treetypes.ExpandAndConvertIntent(ctx, t.params.schemaClientBound, consts.RunningIntentName, consts.RunningValuesPrio, sn.GetUpdate(), t.item.GetTimestamp())
 	if err != nil {
 		log.Error(err, "expansion and conversion failed")
 	}

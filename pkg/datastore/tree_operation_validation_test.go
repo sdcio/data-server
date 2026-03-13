@@ -28,6 +28,7 @@ import (
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	json_importer "github.com/sdcio/data-server/pkg/tree/importer/json"
+	"github.com/sdcio/data-server/pkg/tree/ops/validation"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -210,7 +211,7 @@ func TestDatastore_validateTree(t *testing.T) {
 			}
 
 			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-			validationResult, _ := root.Validate(ctx, validationConfig, sharedPool)
+			validationResult, _ := validation.Validate(ctx, root.Entry, validationConfig, sharedPool)
 
 			t.Log(root.String())
 

@@ -10,6 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -111,7 +112,7 @@ func TestXmlTreeImporter(t *testing.T) {
 				t.Error(err)
 			}
 
-			result, err := root.ToXML(false, false, false, false)
+			result, err := ops.ToXML(ctx, root.Entry, false, false, false, false)
 			if err != nil {
 				t.Fatal(err)
 			}

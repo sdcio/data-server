@@ -1,0 +1,35 @@
+package ops
+
+import (
+	"github.com/sdcio/data-server/pkg/tree/api"
+	"github.com/sdcio/data-server/pkg/tree/types"
+)
+
+func getListEntrySortFunc(parent api.Entry) func(a, b api.Entry) int {
+	// return the comparison function
+	return func(a, b api.Entry) int {
+		keys := GetSchemaKeys(parent)
+		var cmpResult int
+		for _, v := range keys {
+			achild, exists := a.GetChilds(types.DescendMethodAll)[v]
+			if !exists {
+				return 0
+			}
+			bchild, exists := b.GetChilds(types.DescendMethodAll)[v]
+			if !exists {
+				return 0
+			}
+			aLvSlice := GetHighestPrecedence(achild, false, true, true)
+			bLvSlice := GetHighestPrecedence(bchild, false, true, true)
+
+			aEntry := aLvSlice[0]
+			bEntry := bLvSlice[0]
+
+			cmpResult = aEntry.Value().Cmp(bEntry.Value())
+			if cmpResult != 0 {
+				return cmpResult
+			}
+		}
+		return 0
+	}
+}

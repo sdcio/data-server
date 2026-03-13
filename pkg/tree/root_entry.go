@@ -5,56 +5,54 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 
-	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/importer"
+	"github.com/sdcio/data-server/pkg/tree/ops"
+	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	"github.com/sdcio/sdc-protos/tree_persist"
 )
 
 // RootEntry the root of the cache.Update tree
 type RootEntry struct {
-	*sharedEntryAttributes
+	api.Entry
 }
 
-var (
-	ErrorIntentNotPresent = fmt.Errorf("intent not present")
-)
-
 // NewTreeRoot Instantiate a new Tree Root element.
-func NewTreeRoot(ctx context.Context, tc *TreeContext) (*RootEntry, error) {
-	sea, err := newSharedEntryAttributes(ctx, nil, "", tc)
+func NewTreeRoot(ctx context.Context, tc api.TreeContext) (*RootEntry, error) {
+	sea, err := NewSharedEntryAttributes(ctx, nil, "", tc)
 	if err != nil {
 		return nil, err
 	}
 
 	root := &RootEntry{
-		sharedEntryAttributes: sea,
+		Entry: sea,
 	}
 
 	return root, nil
 }
 
-// stringToDisk just for debugging purpose
+// stringToDisk is kept for ad-hoc debugging dumps.
+//
+//nolint:unused // Debug helper intentionally left in place.
 func (r *RootEntry) stringToDisk(filename string) error {
 	err := os.WriteFile(filename, []byte(r.String()), 0755)
 	return err
 }
 
 func (r *RootEntry) DeepCopy(ctx context.Context) (*RootEntry, error) {
-	tc := r.GetTreeContext().deepCopy()
-	se, err := r.sharedEntryAttributes.deepCopy(tc, nil)
+	tc := r.GetTreeContext().DeepCopy()
+	se, err := r.Entry.DeepCopy(tc, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	result := &RootEntry{
-		sharedEntryAttributes: se,
+		Entry: se,
 	}
 
 	return result, nil
@@ -64,7 +62,7 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us []*types.PathAnd
 	var err error
 	for idx, u := range us {
 		_ = idx
-		_, err = r.sharedEntryAttributes.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flags)
+		_, err = ops.AddUpdateRecursive(ctx, r.Entry, u.GetPath(), u.GetUpdate(), flags)
 		if err != nil {
 			return err
 		}
@@ -73,11 +71,11 @@ func (r *RootEntry) AddUpdatesRecursive(ctx context.Context, us []*types.PathAnd
 }
 
 func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, importer importer.ImportConfigAdapter, flags *types.UpdateInsertFlags, poolFactory pool.VirtualPoolFactory) (*types.ImportStats, error) {
-	e, err := r.sharedEntryAttributes.getOrCreateChilds(ctx, basePath)
+	e, err := ops.GetOrCreateChilds(ctx, r.Entry, basePath)
 	if err != nil {
 		return nil, err
 	}
-	ImportConfigProcessor := NewImportConfigProcessor(importer, flags)
+	ImportConfigProcessor := processors.NewImportConfigProcessor(importer, flags)
 	err = ImportConfigProcessor.Run(ctx, e, poolFactory)
 	if err != nil {
 		return nil, err
@@ -86,40 +84,13 @@ func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, impo
 }
 
 func (r *RootEntry) SetNonRevertiveIntent(intentName string, nonRevertive bool) {
-	r.GetTreeContext().nonRevertiveInfo[intentName] = nonRevertive
-}
-
-func (r *RootEntry) Validate(ctx context.Context, vCfg *config.Validation, taskpoolFactory pool.VirtualPoolFactory) (types.ValidationResults, *types.ValidationStats) {
-	// perform validation
-	// we use a channel and cumulate all the errors
-	validationResultEntryChan := make(chan *types.ValidationResultEntry, 10)
-	validationStats := types.NewValidationStats()
-
-	// create a ValidationResult struct
-	validationResult := types.ValidationResults{}
-
-	syncWait := &sync.WaitGroup{}
-	syncWait.Add(1)
-	go func() {
-		// read from the validationResult channel
-		for e := range validationResultEntryChan {
-			validationResult.AddEntry(e)
-		}
-		syncWait.Done()
-	}()
-
-	validationProcessor := NewValidateProcessor(NewValidateProcessorConfig(validationResultEntryChan, validationStats, vCfg))
-	validationProcessor.Run(taskpoolFactory, r.sharedEntryAttributes)
-	close(validationResultEntryChan)
-
-	syncWait.Wait()
-	return validationResult, validationStats
+	r.GetTreeContext().NonRevertiveInfo().Add(intentName, nonRevertive)
 }
 
 // String returns the string representation of the Tree.
 func (r *RootEntry) String() string {
 	s := []string{}
-	s = r.sharedEntryAttributes.StringIndent(s)
+	s = r.Entry.StringIndent(s)
 	return strings.Join(s, "\n")
 }
 
@@ -128,7 +99,7 @@ func (r *RootEntry) GetUpdatesForOwner(owner string) types.UpdateSlice {
 	// retrieve all the entries from the tree that belong to the given
 	// Owner / Intent, skipping the once marked for deletion
 	// this is to insert / update entries in the cache.
-	return LeafEntriesToUpdates(r.getByOwnerFiltered(owner, FilterNonDeletedButNewOrUpdated))
+	return api.LeafEntriesToUpdates(ops.LeafsOfOwner(r.Entry, owner, api.FilterNonDeletedButNewOrUpdated))
 }
 
 // GetDeletesForOwner returns the deletes that have been calculated for the given intent / owner
@@ -137,12 +108,12 @@ func (r *RootEntry) GetDeletesForOwner(owner string) sdcpb.Paths {
 	// and that are marked for deletion.
 	// This is to cover all the cases where an intent was changed and certain
 	// part of the config got deleted.
-	deletesOwnerUpdates := LeafEntriesToUpdates(r.getByOwnerFiltered(owner, FilterDeleted))
+	deletesOwnerUpdates := api.LeafEntriesToUpdates(ops.LeafsOfOwner(r.Entry, owner, api.FilterDeleted))
 	// they are retrieved as cache.update, we just need the path for deletion from cache
 	deletesOwner := make(sdcpb.Paths, 0, len(deletesOwnerUpdates))
 	// so collect the paths
 	for _, d := range deletesOwnerUpdates {
-		deletesOwner = append(deletesOwner, d.Path())
+		deletesOwner = append(deletesOwner, d.SdcpbPath())
 	}
 	return deletesOwner
 }
@@ -150,74 +121,23 @@ func (r *RootEntry) GetDeletesForOwner(owner string) sdcpb.Paths {
 // GetHighesPrecedence return the new cache.Update entried from the tree that are the highes priority.
 // If the onlyNewOrUpdated option is set to true, only the New or Updated entries will be returned
 // It will append to the given list and provide a new pointer to the slice
-func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) LeafVariantSlice {
-	return r.sharedEntryAttributes.GetHighestPrecedence(make(LeafVariantSlice, 0), onlyNewOrUpdated, false, false)
+func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) api.LeafVariantSlice {
+	return ops.GetHighestPrecedence(r.Entry, onlyNewOrUpdated, false, false)
 }
 
 // GetDeletes returns the paths that due to the Tree content are to be deleted from the southbound device.
 func (r *RootEntry) GetDeletes(aggregatePaths bool) (types.DeleteEntriesList, error) {
-	deletes := []types.DeleteEntry{}
-	return r.sharedEntryAttributes.GetDeletes(deletes, aggregatePaths)
+	return ops.GetDeletes(r.Entry, aggregatePaths)
 }
 
 func (r *RootEntry) GetAncestorSchema() (*sdcpb.SchemaElem, int) {
 	return nil, 0
 }
 
-func (r *RootEntry) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry) {
-	r.sharedEntryAttributes.GetDeviations(ctx, ch, true)
-}
-
-func (r *RootEntry) TreeExport(owner string, priority int32) (*tree_persist.Intent, error) {
-	treeExport, err := r.sharedEntryAttributes.TreeExport(owner)
-	if err != nil {
-		return nil, err
-	}
-
-	explicitDeletes := r.GetTreeContext().explicitDeletes.GetByIntentName(owner).ToPathSlice()
-
-	var rootExportEntry *tree_persist.TreeElement
-	if len(treeExport) != 0 {
-		rootExportEntry = treeExport[0]
-	}
-
-	if rootExportEntry != nil || len(explicitDeletes) > 0 {
-		return &tree_persist.Intent{
-			IntentName:      owner,
-			Root:            rootExportEntry,
-			Priority:        priority,
-			NonRevertive:    r.GetTreeContext().nonRevertiveInfo[owner],
-			ExplicitDeletes: explicitDeletes,
-		}, nil
-	}
-	return nil, ErrorIntentNotPresent
-}
-
-// getByOwnerFiltered returns the Tree content filtered by owner, whilst allowing to filter further
-// via providing additional LeafEntryFilter
-func (r *RootEntry) getByOwnerFiltered(owner string, f ...LeafEntryFilter) []*LeafEntry {
-	result := []*LeafEntry{}
-	// retrieve all leafentries for the owner
-	leafEntries := r.sharedEntryAttributes.GetByOwner(owner, result)
-	// range through entries
-NEXTELEMENT:
-	for _, e := range leafEntries {
-		// apply filter
-		for _, filter := range f {
-			// if the filter yields false, skip
-			if !filter(e) {
-				continue NEXTELEMENT
-			}
-		}
-		result = append(result, e)
-	}
-	return result
-}
-
 // DeleteSubtree Deletes from the tree, all elements of the PathSlice defined branch of the given owner. Return values are remainsToExist and error if an error occured.
 func (r *RootEntry) DeleteBranchPaths(ctx context.Context, deletes types.DeleteEntriesList, intentName string) error {
 	for _, del := range deletes {
-		err := r.DeleteBranch(ctx, del.SdcpbPath(), intentName)
+		err := ops.DeleteBranch(ctx, r.Entry, del.SdcpbPath(), intentName)
 		if err != nil {
 			return err
 		}
@@ -227,23 +147,23 @@ func (r *RootEntry) DeleteBranchPaths(ctx context.Context, deletes types.DeleteE
 
 func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 	log := logf.FromContext(ctx)
-	edpsc := ExplicitDeleteProcessorStatCollection{}
+	edpsc := processors.ExplicitDeleteProcessorStatCollection{}
 
 	// apply the explicit deletes
-	for deletePathPrio := range r.GetTreeContext().explicitDeletes.Items() {
+	for deletePathPrio := range r.GetTreeContext().ExplicitDeletes().Items() {
 
-		params := NewExplicitDeleteTaskParameters(deletePathPrio.GetOwner(), deletePathPrio.GetPrio())
+		params := processors.NewExplicitDeleteTaskParameters(deletePathPrio.GetOwner(), deletePathPrio.GetPrio())
 
 		for path := range deletePathPrio.PathItems() {
 
 			// set the priority
 			// navigate to the stated path
-			entry, err := r.NavigateSdcpbPath(ctx, path)
+			entry, err := ops.NavigateSdcpbPath(ctx, r.Entry, path)
 			if err != nil {
 				log.Error(nil, "Applying explicit delete - path not found, skipping", "severity", "WARN", "path", path.ToXPath(false))
 			}
-			edp := NewExplicitDeleteProcessor(params)
-			err = edp.Run(ctx, entry, r.GetTreeContext().GetPoolFactory())
+			edp := processors.NewExplicitDeleteProcessor(params)
+			err = edp.Run(ctx, entry, r.GetTreeContext().PoolFactory())
 			if err != nil {
 				return err
 			}
@@ -257,5 +177,5 @@ func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 		}))
 	}
 
-	return r.sharedEntryAttributes.FinishInsertionPhase(ctx)
+	return r.Entry.FinishInsertionPhase(ctx)
 }

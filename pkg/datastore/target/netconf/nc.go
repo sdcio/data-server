@@ -30,7 +30,7 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/target/netconf/driver/scrapligo"
 	nctypes "github.com/sdcio/data-server/pkg/datastore/target/netconf/types"
 	"github.com/sdcio/data-server/pkg/datastore/target/types"
-	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/importer/xml"
 )
@@ -89,7 +89,7 @@ func (t *ncTarget) GetImportAdapter(ctx context.Context, req *sdcpb.GetDataReque
 		return nil, err
 	}
 
-	xmlImport := xml.NewXmlTreeImporter(ncResponse.Doc.Root(), tree.RunningIntentName, tree.RunningValuesPrio, false)
+	xmlImport := xml.NewXmlTreeImporter(ncResponse.Doc.Root(), consts.RunningIntentName, consts.RunningValuesPrio, false)
 
 	return xmlImport, nil
 }
@@ -238,7 +238,7 @@ func filterRPCErrors(xml *etree.Document, severity string) ([]string, error) {
 
 func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
 	log := logf.FromContext(ctx).WithValues("commit-datastore", commitDatastore)
-	xtree, err := source.ToXML(true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
+	xtree, err := source.ToXML(ctx, true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
 	if err != nil {
 		return nil, err
 	}
