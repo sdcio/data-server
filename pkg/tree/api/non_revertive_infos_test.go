@@ -38,7 +38,7 @@ func TestNonRevertiveInfos_Add(t *testing.T) {
 			wantNonRevertive: true,
 		},
 		{
-			name: "does not overwrite existing entry",
+			name: "update existing entry",
 			adds: []struct {
 				owner        string
 				nonRevertive bool
@@ -47,7 +47,7 @@ func TestNonRevertiveInfos_Add(t *testing.T) {
 				{"owner1", false}, // should be ignored
 			},
 			checkOwner:       "owner1",
-			wantNonRevertive: true,
+			wantNonRevertive: false,
 		},
 		{
 			name: "adds new entry as revertive",

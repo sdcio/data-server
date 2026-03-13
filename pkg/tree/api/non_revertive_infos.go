@@ -12,6 +12,8 @@ func (n NonRevertiveInfos) Add(owner string, nonRevertive bool, paths ...*sdcpb.
 	_, ok := n[owner]
 	if !ok {
 		n[owner] = NewNonRevertiveInfo(owner, nonRevertive)
+	} else {
+		n[owner].SetNonRevertive(nonRevertive)
 	}
 	n[owner].AddPaths(paths...)
 }

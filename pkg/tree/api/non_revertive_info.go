@@ -23,6 +23,10 @@ func (n *NonRevertiveInfo) AddPaths(path ...*sdcpb.Path) *NonRevertiveInfo {
 	return n
 }
 
+func (n *NonRevertiveInfo) SetNonRevertive(nonRevertive bool) {
+	n.nonRevertive = nonRevertive
+}
+
 // IsGenerallyNonRevertive returns the general non-revertive state of the intent, which is true if the intent is non-revertive for all paths, false otherwise.
 func (n *NonRevertiveInfo) IsGenerallyNonRevertive() bool {
 	return n.nonRevertive

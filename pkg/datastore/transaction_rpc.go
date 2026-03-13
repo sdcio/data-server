@@ -166,7 +166,7 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 	IntentChan := make(chan *tree_persist.Intent)
 	ErrChan := make(chan error, 1)
 
-	go d.cacheClient.IntentGetAll(ctx, []string{"running"}, IntentChan, ErrChan)
+	go d.cacheClient.IntentGetAll(ctx, []string{consts.RunningIntentName}, IntentChan, ErrChan)
 
 	for {
 	selectLoop:
