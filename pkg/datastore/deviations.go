@@ -116,9 +116,33 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 	}
 }
 
+// DeviationsStats intent name -> reason -> count
+type DeviationsStats map[string]map[treetypes.DeviationReason]int
+
+func (d DeviationsStats) Add(deviation *treetypes.DeviationEntry) {
+	name := deviation.IntentName()
+	if d[name] == nil {
+		d[name] = make(map[treetypes.DeviationReason]int)
+	}
+	d[name][deviation.Reason()]++
+}
+
+func (d DeviationsStats) LogValue() map[string]map[string]int {
+	stats := make(map[string]map[string]int, len(d))
+	for intentName, reasonCounts := range d {
+		stats[intentName] = make(map[string]int, len(reasonCounts))
+		for reason, count := range reasonCounts {
+			stats[intentName][reason.String()] = count
+		}
+	}
+	return stats
+}
+
 func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.DeviationEntry, deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer) {
 	log := logf.FromContext(ctx)
+	deviationsStats := make(DeviationsStats)
 	for deviation := range ch {
+		deviationsStats.Add(deviation)
 		for clientIdentifier, dc := range deviationClients {
 			if dc.Context().Err() != nil {
 				continue
@@ -143,6 +167,7 @@ func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.Dev
 			}
 		}
 	}
+	log.Info("deviation stats", "stats", deviationsStats.LogValue())
 }
 
 type DeviationEntry interface {
@@ -176,6 +201,7 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 
 	if log := log.V(logger.VTrace); log.Enabled() {
 		log.Info("deviation tree", "content", deviationTree.String())
+		log.Info("nonrevertive infos", "data", deviationTree.GetTreeContext().NonRevertiveInfo().String())
 	}
 
 	deviationChan := make(chan *treetypes.DeviationEntry, 10)

@@ -275,6 +275,8 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		treeContext.NonRevertiveInfo().Add(intent.GetName(), intent.NonRevertive(), intent.GetRevertPaths()...)
 	}
 
+	log.V(logger.VDebug).Info("nonrevertive infos", "data", treeContext.NonRevertiveInfo().String())
+
 	les := ops.LeafsOfOwner(root.Entry, consts.RunningIntentName)
 
 	transaction.GetOldRunning().AddUpdates(les.ToPathAndUpdateSlice())

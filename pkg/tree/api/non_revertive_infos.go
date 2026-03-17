@@ -1,11 +1,24 @@
 package api
 
-import "github.com/sdcio/sdc-protos/sdcpb"
+import (
+	"strings"
+
+	"github.com/sdcio/sdc-protos/sdcpb"
+)
 
 type NonRevertiveInfos map[string]*NonRevertiveInfo
 
 func NewNonRevertiveInfos() NonRevertiveInfos {
 	return make(map[string]*NonRevertiveInfo)
+}
+
+func (n NonRevertiveInfos) String() string {
+	var sb strings.Builder
+	for _, info := range n {
+		sb.WriteString(info.String())
+		sb.WriteString("\n")
+	}
+	return sb.String()
 }
 
 func (n NonRevertiveInfos) Add(owner string, nonRevertive bool, paths ...*sdcpb.Path) {

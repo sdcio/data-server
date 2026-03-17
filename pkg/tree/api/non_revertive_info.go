@@ -1,6 +1,9 @@
 package api
 
 import (
+	"fmt"
+	"strings"
+
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -8,6 +11,10 @@ type NonRevertiveInfo struct {
 	intentName   string
 	nonRevertive bool
 	revertPaths  sdcpb.Paths
+}
+
+func (n *NonRevertiveInfo) String() string {
+	return fmt.Sprintf("%s: nonRevertive=%t, revertPaths=%s", n.intentName, n.nonRevertive, strings.Join(n.revertPaths.ToXPathSlice(), ", "))
 }
 
 func NewNonRevertiveInfo(intentName string, nonRevertive bool) *NonRevertiveInfo {
