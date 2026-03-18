@@ -23,6 +23,12 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
+const (
+	syncSignalBufferSize         = 1
+	notificationSendTimeout      = 5 * time.Second
+	notificationSlowSendWarnTime = 500 * time.Millisecond
+)
+
 type StreamSync struct {
 	ctx          context.Context
 	config       *config.SyncProtocol
@@ -106,7 +112,8 @@ func (s *StreamSync) Start() error {
 
 	updChan := make(chan *NotificationData, 20)
 
-	syncResponse := make(chan struct{})
+	// Keep a single pending sync signal to avoid blocking the subscribe loop.
+	syncResponse := make(chan struct{}, syncSignalBufferSize)
 
 	subReq, err := s.syncConfig()
 	if err != nil {
@@ -208,7 +215,11 @@ func (s *StreamSync) gnmiSubscribe(subReq *gnmi.SubscribeRequest, updChan chan<-
 				}
 			case *gnmi.SubscribeResponse_SyncResponse:
 				log.Info("SyncResponse flag received", "initial sync duration", time.Since(syncStartTime).String())
-				syncResponse <- struct{}{}
+				select {
+				case syncResponse <- struct{}{}:
+				default:
+					log.V(logger.VDebug).Info("sync signal already pending, skipping duplicate")
+				}
 
 			case *gnmi.SubscribeResponse_Error:
 				log.Error(nil, "gnmi subscription error", "error", r.Error.Message)
@@ -225,14 +236,13 @@ func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, m *sync.Mutex, logC
 	startTime := time.Now()
 	result, err := ops.TreeExport(syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio)
 	log.V(logger.VTrace).Info("exported tree", "tree", result.String())
-
 	if err != nil {
 		if errors.Is(err, ops.ErrorIntentNotPresent) {
 			log.Info("sync no config changes")
 			// all good no data present
 			return syncTree, nil
 		}
-		log.Error(err, "sync tree export error: %v")
+		log.Error(err, "sync tree export error")
 		return s.runningStore.NewEmptyTree(s.ctx)
 	}
 	// extract the explicit deletes
@@ -288,6 +298,24 @@ func newNotificationProcessorTask(item *gnmi.Notification, params *NotificationP
 	}
 }
 
+func (t *notificationProcessorTask) sendNotificationData(ctx context.Context, data *NotificationData) error {
+	log := logger.FromContext(ctx)
+	start := time.Now()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case t.params.notificationResult <- data:
+		duration := time.Since(start)
+		if duration > notificationSlowSendWarnTime {
+			log.Info("slow notification delivery to sync loop", "duration", duration.String())
+		}
+		return nil
+	case <-time.After(notificationSendTimeout):
+		log.Error(context.DeadlineExceeded, "notification delivery timeout, dropping update", "timeout", notificationSendTimeout.String())
+		return nil
+	}
+}
+
 func (t *notificationProcessorTask) Run(ctx context.Context, _ func(pool.Task) error) error {
 	log := logger.FromContext(ctx)
 	sn := dsutils.ToSchemaNotification(ctx, t.item)
@@ -304,10 +332,8 @@ func (t *notificationProcessorTask) Run(ctx context.Context, _ func(pool.Task) e
 		}
 	}
 
-	t.params.notificationResult <- &NotificationData{
+	return t.sendNotificationData(ctx, &NotificationData{
 		updates: upds,
 		deletes: deletes,
-	}
-
-	return nil
+	})
 }
