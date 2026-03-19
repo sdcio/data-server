@@ -48,3 +48,8 @@ func (t *TargetSourceReplace) ToXML(ctx context.Context, onlyNewOrUpdated bool, 
 	utils.AddXMLOperation(&et.Element, utils.XMLOperationReplace, operationWithNamespace, useOperationRemove)
 	return et, nil
 }
+
+func (t *TargetSourceReplace) ContainsChanges(ctx context.Context) (bool, error) {
+	// for replace we assume it always contains changes, even if the original TargetSource does not
+	return true, nil
+}

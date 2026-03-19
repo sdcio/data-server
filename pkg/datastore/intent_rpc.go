@@ -39,7 +39,11 @@ func (d *Datastore) applyIntent(ctx context.Context, source targettypes.TargetSo
 	var err error
 
 	var rsp *sdcpb.SetDataResponse
+
 	// send set request only if there are updates and/or deletes
+	if containsChanges, _ := source.ContainsChanges(ctx); !containsChanges {
+		return &sdcpb.SetDataResponse{}, nil
+	}
 
 	if d.sbi == nil {
 		return nil, fmt.Errorf("%s is not connected", d.config.Name)

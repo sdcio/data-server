@@ -17,4 +17,5 @@ type TargetSource interface {
 	ToXML(ctx context.Context, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error)
 	ToProtoUpdates(ctx context.Context, onlyNewOrUpdated bool) ([]*sdcpb.Update, error)
 	ToProtoDeletes(ctx context.Context) ([]*sdcpb.Path, error)
+	ContainsChanges(ctx context.Context) (bool, error)
 }

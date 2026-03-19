@@ -38,3 +38,8 @@ func (t *EntryOutputAdapter) ToProtoUpdates(ctx context.Context, onlyNewOrUpdate
 func (t *EntryOutputAdapter) ToProtoDeletes(ctx context.Context) ([]*sdcpb.Path, error) {
 	return ops.ToProtoDeletes(ctx, t.entry)
 }
+
+func (t *EntryOutputAdapter) ContainsChanges(ctx context.Context) (bool, error) {
+	// TODO: needs to be implemented properly, for now we assume it contains changes
+	return true, nil
+}
