@@ -143,7 +143,7 @@ func TestToJsonTable(t *testing.T) {
 				return testhelper.ExpandUpdateFromConfig(ctx, c, converter)
 			},
 
-			expected: `{}`,
+			expected: `null`,
 		},
 		{
 			name:             "JSON_IETF NewOrUpdated - no new",
@@ -158,7 +158,7 @@ func TestToJsonTable(t *testing.T) {
 				return testhelper.ExpandUpdateFromConfig(ctx, c, converter)
 			},
 
-			expected: `{}`,
+			expected: `null`,
 		},
 		{
 			name:             "JSON NewOrUpdated - with new",

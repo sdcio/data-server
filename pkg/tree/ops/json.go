@@ -16,9 +16,6 @@ func ToJson(ctx context.Context, e api.Entry, onlyNewOrUpdated bool) (any, error
 	if err != nil {
 		return nil, err
 	}
-	if result == nil {
-		return map[string]any{}, nil
-	}
 	return result, err
 }
 
@@ -26,9 +23,6 @@ func ToJsonIETF(ctx context.Context, e api.Entry, onlyNewOrUpdated bool) (any, e
 	result, err := toJsonInternal(ctx, e, onlyNewOrUpdated, true)
 	if err != nil {
 		return nil, err
-	}
-	if result == nil {
-		return map[string]any{}, nil
 	}
 	return result, err
 }
