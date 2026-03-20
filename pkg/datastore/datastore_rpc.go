@@ -35,6 +35,7 @@ import (
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/schema"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/processors"
 )
 
 type Datastore struct {
@@ -245,9 +246,9 @@ func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdc
 	}
 
 	blamePool := d.taskPool.NewVirtualPool(pool.VirtualFailFast)
-	bcp := tree.NewBlameConfigProcessor(tree.NewBlameConfigProcessorConfig(includeDefaults))
+	bcp := processors.NewBlameConfigProcessor(processors.NewBlameConfigProcessorConfig(includeDefaults))
 
-	bte, err := bcp.Run(ctx, root.GetRoot(), blamePool)
+	bte, err := bcp.Run(ctx, root.Entry, blamePool)
 
 	// set the root level elements name to the target name
 	bte.Name = d.config.Name

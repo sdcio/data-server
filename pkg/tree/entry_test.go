@@ -2,6 +2,7 @@ package tree
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"runtime"
 	"slices"
@@ -9,9 +10,16 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/pool"
-
+	"github.com/sdcio/data-server/pkg/tree/api"
+	. "github.com/sdcio/data-server/pkg/tree/consts"
+	"github.com/sdcio/data-server/pkg/tree/importer"
+	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
+	"github.com/sdcio/data-server/pkg/tree/ops"
+	"github.com/sdcio/data-server/pkg/tree/ops/validation"
+	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -19,15 +27,10 @@ import (
 )
 
 var (
-	flagsNew         *types.UpdateInsertFlags
-	flagsExisting    *types.UpdateInsertFlags
 	validationConfig = config.NewValidationConfig()
 )
 
 func init() {
-	flagsNew = types.NewUpdateInsertFlags()
-	flagsNew.SetNewFlag()
-	flagsExisting = types.NewUpdateInsertFlags()
 	validationConfig.SetDisableConcurrency(true)
 }
 
@@ -74,7 +77,7 @@ func Test_Entry(t *testing.T) {
 	}
 
 	for _, u := range []*types.PathAndUpdate{types.NewPathAndUpdate(p1, u1), types.NewPathAndUpdate(p2, u2), types.NewPathAndUpdate(p2, u3)} {
-		_, err = root.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flagsNew)
+		_, err = ops.AddUpdateRecursive(ctx, root.Entry, u.GetPath(), u.GetUpdate(), testhelper.FlagsNew)
 		if err != nil {
 			t.Error(err)
 		}
@@ -191,7 +194,7 @@ func Test_Entry_One(t *testing.T) {
 		types.NewPathAndUpdate(p2, u3),
 		types.NewPathAndUpdate(p2_1, u3_1),
 	} {
-		_, err := root.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flagsNew)
+		_, err := ops.AddUpdateRecursive(ctx, root.Entry, u.GetPath(), u.GetUpdate(), testhelper.FlagsNew)
 		if err != nil {
 			t.Error(err)
 		}
@@ -206,9 +209,8 @@ func Test_Entry_One(t *testing.T) {
 	t.Log(root.String())
 
 	t.Run("Test 1 - expected entries for owner1", func(t *testing.T) {
-		o1Le := []*LeafEntry{}
-		o1Le = root.GetByOwner(owner1, o1Le)
-		o1 := LeafEntriesToUpdates(o1Le)
+		o1Le := ops.LeafsOfOwner(root.Entry, owner1)
+		o1 := api.LeafEntriesToUpdates(o1Le)
 		// diff the result with the expected
 		// if diff := testhelper.DiffUpdates([]*types.Update{u0o1, u2, u2_1, u1, u1_1}, o1); diff != "" {
 		if diff := testhelper.DiffUpdates([]*types.PathAndUpdate{
@@ -223,9 +225,8 @@ func Test_Entry_One(t *testing.T) {
 	})
 
 	t.Run("Test 2 - expected entries for owner2", func(t *testing.T) {
-		o2Le := []*LeafEntry{}
-		o2Le = root.GetByOwner(owner2, o2Le)
-		o2 := LeafEntriesToUpdates(o2Le)
+		o2Le := ops.LeafsOfOwner(root.Entry, owner2)
+		o2 := api.LeafEntriesToUpdates(o2Le)
 		// diff the result with the expected
 		if diff := testhelper.DiffUpdates([]*types.PathAndUpdate{
 			types.NewPathAndUpdate(p0o2, u0o2),
@@ -309,7 +310,7 @@ func Test_Entry_Two(t *testing.T) {
 
 	// start test add "existing" data
 	for _, u := range []*types.PathAndUpdate{types.NewPathAndUpdate(p1, u1)} {
-		_, err := root.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flagsExisting)
+		_, err := ops.AddUpdateRecursive(ctx, root.Entry, u.GetPath(), u.GetUpdate(), testhelper.FlagsExisting)
 		if err != nil {
 			t.Error(err)
 		}
@@ -330,7 +331,7 @@ func Test_Entry_Two(t *testing.T) {
 	n1 := types.NewUpdate(nil, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*types.PathAndUpdate{types.NewPathAndUpdate(pn1, n1)} {
-		_, err = root.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flagsNew)
+		_, err = ops.AddUpdateRecursive(ctx, root.Entry, u.GetPath(), u.GetUpdate(), testhelper.FlagsNew)
 		if err != nil {
 			t.Error(err)
 		}
@@ -508,7 +509,7 @@ func Test_Entry_Three(t *testing.T) {
 		types.NewPathAndUpdate(p2, u2),
 		types.NewPathAndUpdate(p3, u3),
 		types.NewPathAndUpdate(p4, u4)} {
-		_, err := root.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flagsExisting)
+		_, err := ops.AddUpdateRecursive(ctx, root.Entry, u.GetPath(), u.GetUpdate(), testhelper.FlagsExisting)
 		if err != nil {
 			t.Error(err)
 		}
@@ -517,7 +518,7 @@ func Test_Entry_Three(t *testing.T) {
 	// start test add "existing" data as running
 	for _, u := range []*types.PathAndUpdate{
 		types.NewPathAndUpdate(p1r, u1r), types.NewPathAndUpdate(p2r, u2r), types.NewPathAndUpdate(p3r, u3r), types.NewPathAndUpdate(p4r, u4r)} {
-		_, err := root.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flagsExisting)
+		_, err := ops.AddUpdateRecursive(ctx, root.Entry, u.GetPath(), u.GetUpdate(), testhelper.FlagsExisting)
 		if err != nil {
 			t.Error(err)
 		}
@@ -567,9 +568,9 @@ func Test_Entry_Three(t *testing.T) {
 	// indicate that the intent is receiving an update
 	// therefor invalidate all the present entries of the owner / intent
 	sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-	ownerDeleteMarker := NewOwnerDeleteMarker(NewOwnerDeleteMarkerTaskConfig(owner1, false))
+	ownerDeleteMarker := processors.NewOwnerDeleteMarker(processors.NewOwnerDeleteMarkerTaskConfig(owner1, false))
 
-	err = ownerDeleteMarker.Run(root.GetRoot(), sharedTaskPool)
+	err = ownerDeleteMarker.Run(root.Entry, sharedTaskPool)
 	if err != nil {
 		t.Error(err)
 		return
@@ -601,7 +602,7 @@ func Test_Entry_Three(t *testing.T) {
 	n2 := types.NewUpdate(nil, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*types.PathAndUpdate{types.NewPathAndUpdate(pn1, n1), types.NewPathAndUpdate(pn2, n2)} {
-		_, err := root.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flagsNew)
+		_, err := ops.AddUpdateRecursive(ctx, root.Entry, u.GetPath(), u.GetUpdate(), testhelper.FlagsNew)
 		if err != nil {
 			t.Error(err)
 		}
@@ -620,9 +621,9 @@ func Test_Entry_Three(t *testing.T) {
 		// log the tree
 		t.Log(root.String())
 
-		highPriLe := root.getByOwnerFiltered(owner1, FilterNonDeleted)
+		highPriLe := ops.LeafsOfOwner(root.Entry, owner1, api.FilterNonDeleted)
 
-		highPri := LeafEntriesToUpdates(highPriLe)
+		highPri := api.LeafEntriesToUpdates(highPriLe)
 
 		// diff the result with the expected
 		if diff := testhelper.DiffUpdates([]*types.PathAndUpdate{
@@ -804,7 +805,7 @@ func Test_Entry_Four(t *testing.T) {
 		types.NewPathAndUpdate(p1o2, u1o2),
 		types.NewPathAndUpdate(p2o2, u2o2),
 	} {
-		_, err := root.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flagsExisting)
+		_, err := ops.AddUpdateRecursive(ctx, root.Entry, u.GetPath(), u.GetUpdate(), testhelper.FlagsExisting)
 		if err != nil {
 			t.Error(err)
 		}
@@ -841,9 +842,9 @@ func Test_Entry_Four(t *testing.T) {
 	// indicate that the intent is receiving an update
 	// therefor invalidate all the present entries of the owner / intent
 	sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-	ownerDeleteMarker := NewOwnerDeleteMarker(NewOwnerDeleteMarkerTaskConfig(owner1, false))
+	ownerDeleteMarker := processors.NewOwnerDeleteMarker(processors.NewOwnerDeleteMarkerTaskConfig(owner1, false))
 
-	err = ownerDeleteMarker.Run(root.GetRoot(), sharedTaskPool)
+	err = ownerDeleteMarker.Run(root.Entry, sharedTaskPool)
 	if err != nil {
 		t.Error(err)
 		return
@@ -876,7 +877,7 @@ func Test_Entry_Four(t *testing.T) {
 	n2 := types.NewUpdate(nil, overwriteDesc, prio50, owner1, ts1)
 
 	for _, u := range []*types.PathAndUpdate{types.NewPathAndUpdate(pn1, n1), types.NewPathAndUpdate(pn2, n2)} {
-		_, err := root.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flagsNew)
+		_, err := ops.AddUpdateRecursive(ctx, root.Entry, u.GetPath(), u.GetUpdate(), testhelper.FlagsNew)
 		if err != nil {
 			t.Error(err)
 		}
@@ -894,9 +895,9 @@ func Test_Entry_Four(t *testing.T) {
 		// log the tree
 		t.Log(root.String())
 
-		highPriLe := root.getByOwnerFiltered(owner1, FilterNonDeleted)
+		highPriLe := ops.LeafsOfOwner(root.Entry, owner1, api.FilterNonDeleted)
 
-		highPri := LeafEntriesToUpdates(highPriLe)
+		highPri := api.LeafEntriesToUpdates(highPriLe)
 
 		// diff the result with the expected
 		if diff := testhelper.DiffUpdates([]*types.PathAndUpdate{
@@ -982,7 +983,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			// start test add "existing" data
 			for _, u := range []*types.PathAndUpdate{types.NewPathAndUpdate(p1, u1)} {
-				_, err := root.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flagsExisting)
+				_, err := ops.AddUpdateRecursive(ctx, root.Entry, u.GetPath(), u.GetUpdate(), testhelper.FlagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -996,7 +997,7 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 			t.Log(root.String())
 
 			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-			validationResult, _ := root.Validate(context.TODO(), validationConfig, sharedPool)
+			validationResult, _ := validation.Validate(context.TODO(), root.Entry, validationConfig, sharedPool)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1038,14 +1039,14 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			// start test add "existing" data
 			for _, u := range []*types.PathAndUpdate{types.NewPathAndUpdate(p1, u1)} {
-				_, err := root.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flagsExisting)
+				_, err := ops.AddUpdateRecursive(ctx, root.Entry, u.GetPath(), u.GetUpdate(), testhelper.FlagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
 
 			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-			validationResult, _ := root.Validate(context.TODO(), validationConfig, sharedPool)
+			validationResult, _ := validation.Validate(context.TODO(), root.Entry, validationConfig, sharedPool)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1093,14 +1094,14 @@ func Test_Validation_Leaflist_Min_Max(t *testing.T) {
 
 			// start test add "existing" data
 			for _, u := range []*types.PathAndUpdate{types.NewPathAndUpdate(p1, u1)} {
-				_, err := root.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flagsExisting)
+				_, err := ops.AddUpdateRecursive(ctx, root.Entry, u.GetPath(), u.GetUpdate(), testhelper.FlagsExisting)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
 
 			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-			validationResult, _ := root.Validate(context.TODO(), validationConfig, sharedPool)
+			validationResult, _ := validation.Validate(context.TODO(), root.Entry, validationConfig, sharedPool)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1201,23 +1202,23 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 		types.NewPathAndUpdate(p5, u5),
 		types.NewPathAndUpdate(p6, u6),
 	} {
-		_, err := root.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flagsExisting)
+		_, err := ops.AddUpdateRecursive(ctx, root.Entry, u.GetPath(), u.GetUpdate(), testhelper.FlagsExisting)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// add also as running
 		runUpd := u.DeepCopy()
 		runUpd.GetUpdate().SetOwner(RunningIntentName).SetPriority(RunningValuesPrio)
-		_, err = root.AddUpdateRecursive(ctx, runUpd.GetPath(), runUpd.GetUpdate(), flagsExisting)
+		_, err = ops.AddUpdateRecursive(ctx, root.Entry, runUpd.GetPath(), runUpd.GetUpdate(), testhelper.FlagsExisting)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-	ownerDeleteMarker := NewOwnerDeleteMarker(NewOwnerDeleteMarkerTaskConfig(owner1, false))
+	ownerDeleteMarker := processors.NewOwnerDeleteMarker(processors.NewOwnerDeleteMarkerTaskConfig(owner1, false))
 
-	err = ownerDeleteMarker.Run(root.GetRoot(), sharedTaskPool)
+	err = ownerDeleteMarker.Run(root.Entry, sharedTaskPool)
 	if err != nil {
 		t.Error(err)
 		return
@@ -1243,7 +1244,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 
 	// start test add "new" / request data
 	for _, u := range []*types.PathAndUpdate{types.NewPathAndUpdate(p1n, u1n), types.NewPathAndUpdate(p2n, u2n)} {
-		_, err := root.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flagsNew)
+		_, err := ops.AddUpdateRecursive(ctx, root.Entry, u.GetPath(), u.GetUpdate(), testhelper.FlagsNew)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1293,18 +1294,19 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// because thats an update.
 	t.Run("Delete Non New",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{}, nil)
+			lv := api.NewLeafVariants(&TreeContext{}, nil)
 
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 2, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 1, owner2, ts), flagsExisting, nil))
-			lv.les[1].MarkDelete(false)
+			le1 := api.NewLeafEntry(types.NewUpdate(nil, nil, 2, owner1, ts), testhelper.FlagsExisting, nil)
+			lv.Add(le1)
+
+			le2 := api.NewLeafEntry(types.NewUpdate(nil, nil, 1, owner2, ts), testhelper.FlagsDelete, nil)
+			lv.Add(le2)
 
 			le := lv.GetHighestPrecedence(true, false, false)
 
-			if le != lv.les[0] {
-				t.Errorf("expected to get entry %v, got %v", lv.les[0], le)
+			if le != le1 {
+				t.Errorf("expected to get entry %v, got %v", le1, le)
 			}
-
 		},
 	)
 
@@ -1312,10 +1314,8 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// should return nil
 	t.Run("Single entry thats also marked for deletion",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{}, nil)
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 1, owner1, ts), flagsExisting, nil))
-			lv.les[0].MarkDelete(false)
-
+			lv := api.NewLeafVariants(&TreeContext{}, nil)
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 1, owner1, ts), testhelper.FlagsDelete, nil))
 			le := lv.GetHighestPrecedence(true, false, false)
 
 			if le != nil {
@@ -1328,10 +1328,10 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// on onlyIfPrioChanged == true we do not expect output.
 	t.Run("New Low Prio IsUpdate OnlyChanged True",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{}, nil)
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), flagsNew, nil))
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, RunningValuesPrio, RunningIntentName, ts), flagsExisting, nil))
+			lv := api.NewLeafVariants(&TreeContext{}, nil)
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), testhelper.FlagsExisting, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), testhelper.FlagsNew, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, RunningValuesPrio, RunningIntentName, ts), testhelper.FlagsExisting, nil))
 
 			le := lv.GetHighestPrecedence(true, false, false)
 
@@ -1345,14 +1345,16 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// on onlyIfPrioChanged == false we do not expect the highes prio update to be returned.
 	t.Run("New Low Prio IsUpdate OnlyChanged False",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{}, nil)
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 6, owner1, ts), flagsNew, nil))
+			lv := api.NewLeafVariants(&TreeContext{}, nil)
+			le1 := api.NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), testhelper.FlagsExisting, nil)
+			lv.Add(le1)
+			le2 := api.NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), testhelper.FlagsNew, nil)
+			lv.Add(le2)
 
 			le := lv.GetHighestPrecedence(false, false, false)
 
-			if le != lv.les[0] {
-				t.Errorf("expected to get entry %v, got %v", lv.les[0], le)
+			if le != le1 {
+				t.Errorf("expected to get entry %v, got %v", le1, le)
 			}
 		},
 	)
@@ -1361,11 +1363,11 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// // on onlyIfPrioChanged == true we do not expect output.
 	t.Run("New Low Prio IsNew OnlyChanged == True",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{}, nil)
+			lv := api.NewLeafVariants(&TreeContext{}, nil)
 
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), flagsNew, nil))
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, RunningValuesPrio, RunningIntentName, ts), flagsExisting, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), testhelper.FlagsExisting, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), testhelper.FlagsNew, nil))
+			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, RunningValuesPrio, RunningIntentName, ts), testhelper.FlagsExisting, nil))
 
 			le := lv.GetHighestPrecedence(true, false, false)
 
@@ -1379,29 +1381,32 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// // on onlyIfPrioChanged == true we do not expect output.
 	t.Run("New Low Prio IsNew OnlyChanged == True, with running not existing",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{}, nil)
-
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), flagsNew, nil))
+			lv := api.NewLeafVariants(&TreeContext{}, nil)
+			le1 := api.NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), testhelper.FlagsExisting, nil)
+			lv.Add(le1)
+			le2 := api.NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), testhelper.FlagsNew, nil)
+			lv.Add(le2)
 
 			le := lv.GetHighestPrecedence(true, false, false)
 
-			if le != lv.les[0] {
-				t.Errorf("expected to get entry %v, got %v", lv.les[0], le)
+			if le != le1 {
+				t.Errorf("expected to get entry %v, got %v", le1, le)
 			}
 		},
 	)
 
 	t.Run("New Low Prio IsNew OnlyChanged == False",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{}, nil)
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), flagsExisting, nil))
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), flagsNew, nil))
+			lv := api.NewLeafVariants(&TreeContext{}, nil)
+			le1 := api.NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), testhelper.FlagsExisting, nil)
+			lv.Add(le1)
+			le2 := api.NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), testhelper.FlagsNew, nil)
+			lv.Add(le2)
 
 			le := lv.GetHighestPrecedence(false, false, false)
 
-			if le != lv.les[0] {
-				t.Errorf("expected to get entry %v, got %v", lv.les[0], le)
+			if le != le1 {
+				t.Errorf("expected to get entry %v, got %v", le1, le)
 			}
 		},
 	)
@@ -1409,7 +1414,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// If no entries exist in the list nil should be returned.
 	t.Run("No Entries",
 		func(t *testing.T) {
-			lv := LeafVariants{}
+			lv := api.NewLeafVariants(&TreeContext{}, nil)
 
 			le := lv.GetHighestPrecedence(true, false, false)
 
@@ -1422,15 +1427,14 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// make sure the secondhighes is also populated if the highes was the first entry
 	t.Run("secondhighes populated if highes was first",
 		func(t *testing.T) {
-			lv := newLeafVariants(&TreeContext{}, nil)
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 1, owner1, ts), flagsExisting, nil))
-			lv.les[0].MarkDelete(false)
-			lv.Add(NewLeafEntry(types.NewUpdate(nil, nil, 2, owner2, ts), flagsExisting, nil))
-
+			lv := api.NewLeafVariants(&TreeContext{}, nil)
+			le1 := api.NewLeafEntry(types.NewUpdate(nil, nil, 1, owner1, ts), testhelper.FlagsDelete, nil)
+			lv.Add(le1)
+			le2 := api.NewLeafEntry(types.NewUpdate(nil, nil, 2, owner2, ts), testhelper.FlagsExisting, nil)
+			lv.Add(le2)
 			le := lv.GetHighestPrecedence(true, false, false)
-
-			if le != lv.les[1] {
-				t.Errorf("expected to get entry %v, got %v", lv.les[1], le)
+			if le != le2 {
+				t.Errorf("expected to get entry %v, got %v", le2, le)
 			}
 		},
 	)
@@ -1487,37 +1491,37 @@ func Test_Schema_Population(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	interf, err := newSharedEntryAttributes(ctx, root.sharedEntryAttributes, "interface", tc)
+	interf, err := NewSharedEntryAttributes(ctx, root.Entry, "interface", tc)
 	if err != nil {
 		t.Error(err)
 	}
 	expectNotNil(t, interf.schema, "/interface schema")
 
-	e00, err := newSharedEntryAttributes(ctx, interf, "ethernet-1/1", tc)
+	e00, err := NewSharedEntryAttributes(ctx, interf, "ethernet-1/1", tc)
 	if err != nil {
 		t.Error(err)
 	}
 	expectNil(t, e00.schema, "/interface/ethernet-1/1 schema")
 
-	dk, err := newSharedEntryAttributes(ctx, root.sharedEntryAttributes, "doublekey", tc)
+	dk, err := NewSharedEntryAttributes(ctx, root.Entry, "doublekey", tc)
 	if err != nil {
 		t.Error(err)
 	}
 	expectNotNil(t, dk.schema, "/doublekey schema")
 
-	dkk1, err := newSharedEntryAttributes(ctx, dk, "key1", tc)
+	dkk1, err := NewSharedEntryAttributes(ctx, dk, "key1", tc)
 	if err != nil {
 		t.Error(err)
 	}
 	expectNil(t, dkk1.schema, "/doublekey/key1 schema")
 
-	dkk2, err := newSharedEntryAttributes(ctx, dkk1, "key2", tc)
+	dkk2, err := NewSharedEntryAttributes(ctx, dkk1, "key2", tc)
 	if err != nil {
 		t.Error(err)
 	}
 	expectNil(t, dkk2.schema, "/doublekey/key2 schema")
 
-	dkkv, err := newSharedEntryAttributes(ctx, dkk2, "mandato", tc)
+	dkkv, err := NewSharedEntryAttributes(ctx, dkk2, "mandato", tc)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1542,37 +1546,37 @@ func Test_sharedEntryAttributes_SdcpbPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	interf, err := newSharedEntryAttributes(ctx, root.sharedEntryAttributes, "interface", tc)
+	interf, err := NewSharedEntryAttributes(ctx, root.Entry, "interface", tc)
 	if err != nil {
 		t.Error(err)
 	}
 
-	e00, err := newSharedEntryAttributes(ctx, interf, "ethernet-1/1", tc)
+	e00, err := NewSharedEntryAttributes(ctx, interf, "ethernet-1/1", tc)
 	if err != nil {
 		t.Error(err)
 	}
 
-	e00desc, err := newSharedEntryAttributes(ctx, e00, "description", tc)
+	e00desc, err := NewSharedEntryAttributes(ctx, e00, "description", tc)
 	if err != nil {
 		t.Error(err)
 	}
 
-	dk, err := newSharedEntryAttributes(ctx, root.sharedEntryAttributes, "doublekey", tc)
+	dk, err := NewSharedEntryAttributes(ctx, root.Entry, "doublekey", tc)
 	if err != nil {
 		t.Error(err)
 	}
 
-	dkk1, err := newSharedEntryAttributes(ctx, dk, "key1", tc)
+	dkk1, err := NewSharedEntryAttributes(ctx, dk, "key1", tc)
 	if err != nil {
 		t.Error(err)
 	}
 
-	dkk2, err := newSharedEntryAttributes(ctx, dkk1, "key2", tc)
+	dkk2, err := NewSharedEntryAttributes(ctx, dkk1, "key2", tc)
 	if err != nil {
 		t.Error(err)
 	}
 
-	dkkv, err := newSharedEntryAttributes(ctx, dkk2, "mandato", tc)
+	dkkv, err := NewSharedEntryAttributes(ctx, dkk2, "mandato", tc)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1678,7 +1682,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 			u1 := types.NewUpdate(nil, leafval, prio50, owner1, ts1)
 
 			for _, u := range []*types.PathAndUpdate{types.NewPathAndUpdate(p1, u1)} {
-				_, err := root.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flagsNew)
+				_, err := ops.AddUpdateRecursive(ctx, root.Entry, u.GetPath(), u.GetUpdate(), testhelper.FlagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1690,7 +1694,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 			}
 
 			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-			validationResult, _ := root.Validate(context.TODO(), validationConfig, sharedPool)
+			validationResult, _ := validation.Validate(context.TODO(), root.Entry, validationConfig, sharedPool)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1716,7 +1720,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 			u1 := types.NewUpdate(nil, leafval, prio50, owner1, ts1)
 
 			for _, u := range []*types.PathAndUpdate{types.NewPathAndUpdate(p1, u1)} {
-				_, err := root.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flagsNew)
+				_, err := ops.AddUpdateRecursive(ctx, root.Entry, u.GetPath(), u.GetUpdate(), testhelper.FlagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1728,7 +1732,7 @@ func Test_Validation_String_Pattern(t *testing.T) {
 			}
 
 			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-			validationResult, _ := root.Validate(context.TODO(), validationConfig, sharedPool)
+			validationResult, _ := validation.Validate(context.TODO(), root.Entry, validationConfig, sharedPool)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1813,7 +1817,7 @@ func Test_Validation_Deref(t *testing.T) {
 			u1 := types.NewUpdate(nil, leafval, prio50, owner1, ts1)
 
 			for _, u := range []*types.PathAndUpdate{types.NewPathAndUpdate(p1, u1)} {
-				_, err := root.AddUpdateRecursive(ctx, u.GetPath(), u.GetUpdate(), flagsNew)
+				_, err := ops.AddUpdateRecursive(ctx, root.Entry, u.GetPath(), u.GetUpdate(), testhelper.FlagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1825,7 +1829,7 @@ func Test_Validation_Deref(t *testing.T) {
 			}
 
 			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-			validationResult, _ := root.Validate(context.TODO(), validationConfig, sharedPool)
+			validationResult, _ := validation.Validate(context.TODO(), root.Entry, validationConfig, sharedPool)
 
 			// check if errors are received
 			// If so, join them and return the cumulated errors
@@ -1890,7 +1894,7 @@ func Test_Validation_MultiKey_Pattern(t *testing.T) {
 				ts1,
 			)
 
-			_, err = root.AddUpdateRecursive(ctx, p1, u1, flagsNew)
+			_, err = ops.AddUpdateRecursive(ctx, root.Entry, p1, u1, testhelper.FlagsNew)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1913,7 +1917,7 @@ func Test_Validation_MultiKey_Pattern(t *testing.T) {
 				ts1,
 			)
 
-			_, err = root.AddUpdateRecursive(ctx, p2, u2, flagsNew)
+			_, err = ops.AddUpdateRecursive(ctx, root.Entry, p2, u2, testhelper.FlagsNew)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1924,7 +1928,7 @@ func Test_Validation_MultiKey_Pattern(t *testing.T) {
 			}
 
 			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-			validationResult, _ := root.Validate(context.TODO(), validationConfig, sharedPool)
+			validationResult, _ := validation.Validate(context.TODO(), root.Entry, validationConfig, sharedPool)
 
 			// Should have no errors - all keys match their respective patterns
 			if validationResult.HasErrors() {
@@ -1966,7 +1970,7 @@ func Test_Validation_MultiKey_Pattern(t *testing.T) {
 
 			// Pattern validation happens during AddUpdateRecursive (in checkAndCreateKeysAsLeafs)
 			// so we expect an error here
-			_, err = root.AddUpdateRecursive(ctx, p1, u1, flagsNew)
+			_, err = ops.AddUpdateRecursive(ctx, root.Entry, p1, u1, testhelper.FlagsNew)
 			if err == nil {
 				t.Fatal("expected error for owner pattern mismatch, but got none")
 			}
@@ -2010,7 +2014,7 @@ func Test_Validation_MultiKey_Pattern(t *testing.T) {
 
 			// Pattern validation happens during AddUpdateRecursive (in checkAndCreateKeysAsLeafs)
 			// so we expect an error here
-			_, err = root.AddUpdateRecursive(ctx, p1, u1, flagsNew)
+			_, err = ops.AddUpdateRecursive(ctx, root.Entry, p1, u1, testhelper.FlagsNew)
 			if err == nil {
 				t.Fatal("expected error for next-hop pattern mismatch, but got none")
 			}
@@ -2021,4 +2025,255 @@ func Test_Validation_MultiKey_Pattern(t *testing.T) {
 			}
 		},
 	)
+}
+
+func Test_RevertNonRevertive(t *testing.T) {
+
+	owner1 := "OwnerOne"
+	owner1Prio := int32(50)
+	owner2 := "OwnerTwo"
+	owner2Prio := int32(55)
+
+	// create table test data
+	tests := []struct {
+		name                string
+		running             func() (importer.ImportConfigAdapter, error)
+		existing            func() ([]importer.ImportConfigAdapter, error)
+		existingIsRevertive bool
+		revertPaths         []*sdcpb.Path
+		expectedResult      string
+	}{
+		{
+			name: "revertive path with ignored key",
+			running: func() (importer.ImportConfigAdapter, error) {
+				c := testhelper.Config1()
+
+				c.Interface["ethernet-1/1"].Description = ygot.String("test")
+				c.NetworkInstance["default"].Description = ygot.String("test")
+
+				sConf, err := ygot.EmitJSON(c, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false},
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				var jConf any
+				err = json.Unmarshal([]byte(sConf), &jConf)
+				return jsonImporter.NewJsonTreeImporter(jConf, RunningIntentName, RunningValuesPrio, false), err
+			},
+			existing: func() ([]importer.ImportConfigAdapter, error) {
+				c := testhelper.Config1()
+				sConf, err := ygot.EmitJSON(c, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false},
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				var jConf any
+				err = json.Unmarshal([]byte(sConf), &jConf)
+				return []importer.ImportConfigAdapter{jsonImporter.NewJsonTreeImporter(jConf, owner1, owner1Prio, true)}, err // this bool defines the revertive or non revertiveness
+			},
+			existingIsRevertive: true,
+			revertPaths: []*sdcpb.Path{
+				{
+					Elem:        []*sdcpb.PathElem{sdcpb.NewPathElem("interface", nil)},
+					IsRootBased: true,
+				},
+			},
+			expectedResult: `{"interface":[{"description":"Foo","name":"ethernet-1/1"}]}`,
+		},
+		{
+			name: "revertive path /",
+			running: func() (importer.ImportConfigAdapter, error) {
+				c := testhelper.Config1()
+
+				c.Interface["ethernet-1/1"].Description = ygot.String("test")
+				c.NetworkInstance["default"].Description = ygot.String("test")
+
+				sConf, err := ygot.EmitJSON(c, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false},
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				var jConf any
+				err = json.Unmarshal([]byte(sConf), &jConf)
+				return jsonImporter.NewJsonTreeImporter(jConf, RunningIntentName, RunningValuesPrio, false), err
+			},
+			existing: func() ([]importer.ImportConfigAdapter, error) {
+				c := testhelper.Config1()
+				sConf, err := ygot.EmitJSON(c, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false},
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				var jConf any
+				err = json.Unmarshal([]byte(sConf), &jConf)
+				return []importer.ImportConfigAdapter{jsonImporter.NewJsonTreeImporter(jConf, owner1, owner1Prio, true)}, err // this bool defines the revertive or non revertiveness
+			},
+			existingIsRevertive: true,
+			revertPaths: []*sdcpb.Path{
+				{
+					Elem:        []*sdcpb.PathElem{},
+					IsRootBased: true,
+				},
+			},
+			expectedResult: `{"interface":[{"description":"Foo","name":"ethernet-1/1"}],"network-instance":[{"description":"Default NI","name":"default"}]}`,
+		},
+		{
+			name: "revertive path multiple intents, with ignored key",
+			running: func() (importer.ImportConfigAdapter, error) {
+				c := testhelper.Config1()
+				c.Patterntest = nil
+				err := ygot.MergeStructInto(c, testhelper.Config2())
+				if err != nil {
+					return nil, err
+				}
+				c.Interface["ethernet-1/1"].Description = ygot.String("test")
+				c.NetworkInstance["default"].Description = ygot.String("test")
+
+				sConf, err := ygot.EmitJSON(c, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false},
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				var jConf any
+				err = json.Unmarshal([]byte(sConf), &jConf)
+				return jsonImporter.NewJsonTreeImporter(jConf, RunningIntentName, RunningValuesPrio, false), err
+			},
+			existing: func() ([]importer.ImportConfigAdapter, error) {
+				c := testhelper.Config1()
+
+				sConf, err := ygot.EmitJSON(c, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false},
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				var jConf any
+				err = json.Unmarshal([]byte(sConf), &jConf)
+
+				c1Importer := jsonImporter.NewJsonTreeImporter(jConf, owner1, owner1Prio, true)
+
+				c2 := testhelper.Config2()
+				c2.Interface["ethernet-1/2"].Description = ygot.String("test")
+				sConf, err = ygot.EmitJSON(c2, &ygot.EmitJSONConfig{
+					Format:         ygot.RFC7951,
+					SkipValidation: false},
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				err = json.Unmarshal([]byte(sConf), &jConf)
+				c2Importer := jsonImporter.NewJsonTreeImporter(jConf, owner2, owner2Prio, true)
+
+				return []importer.ImportConfigAdapter{c1Importer, c2Importer}, err // this bool defines the revertive or non revertiveness
+			},
+			existingIsRevertive: true,
+			revertPaths: []*sdcpb.Path{
+				{
+					Elem:        []*sdcpb.PathElem{sdcpb.NewPathElem("interface", nil)},
+					IsRootBased: true,
+				},
+			},
+			expectedResult: `{"interface":[{"description":"Foo","name":"ethernet-1/1"}]}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.TODO()
+
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+
+			scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			runningConfig, err := tt.running()
+			if err != nil {
+				t.Fatalf("failed to get running config: %v", err)
+			}
+
+			existingConfig, err := tt.existing()
+			if err != nil {
+				t.Fatalf("failed to get existing config: %v", err)
+			}
+
+			_, err = root.ImportConfig(ctx, nil, runningConfig, types.NewUpdateInsertFlags(), tc.poolFactory)
+			if err != nil {
+				t.Fatalf("failed to import running config: %v", err)
+			}
+
+			for _, existing := range existingConfig {
+				_, err = root.ImportConfig(ctx, nil, existing, types.NewUpdateInsertFlags(), tc.poolFactory)
+				if err != nil {
+					t.Fatalf("failed to import existing config: %v", err)
+				}
+			}
+
+			// adding paths to the non revertive info, this should mark the paths as non revertive, and thus not be deleted in the end.
+			for _, path := range tt.revertPaths {
+				tc.NonRevertiveInfo().Add(owner1, false, path)
+			}
+
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Fatalf("failed to finish insertion phase: %v", err)
+			}
+
+			t.Logf("Tree:\n%s", root.String())
+
+			deletes, err := root.GetDeletes(true)
+			if err != nil {
+				t.Fatalf("failed to get deletes: %v", err)
+			}
+			t.Logf("Deletes: %v", deletes)
+
+			j, err := ops.ToJson(ctx, root.Entry, true)
+			if err != nil {
+				t.Fatalf("failed to convert to JSON: %v", err)
+			}
+
+			jPlaneResult, err := json.Marshal(j)
+			if err != nil {
+				t.Fatalf("failed to marshal JSON: %v", err)
+			}
+
+			if string(jPlaneResult) != tt.expectedResult {
+				t.Errorf("expected JSON result to be %s, but got %s", tt.expectedResult, string(jPlaneResult))
+			}
+
+			// logging
+			jResult, err := json.MarshalIndent(j, "", "  ")
+			if err != nil {
+				t.Fatalf("failed to marshal JSON: %v", err)
+			}
+			t.Logf("Resulting JSON:\n%s", string(jResult))
+		})
+	}
 }

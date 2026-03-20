@@ -76,12 +76,12 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 		var j any
 		switch req.GetFormat() {
 		case sdcpb.Format_Intent_Format_JSON:
-			j, err = rsp.ToJson()
+			j, err = rsp.ToJson(ctx)
 			if err != nil {
 				return nil, err
 			}
 		case sdcpb.Format_Intent_Format_JSON_IETF:
-			j, err = rsp.ToJsonIETF()
+			j, err = rsp.ToJsonIETF(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -99,7 +99,7 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 		}, nil
 
 	case sdcpb.Format_Intent_Format_XML:
-		doc, err := rsp.ToXML()
+		doc, err := rsp.ToXML(ctx)
 		if err != nil {
 			return nil, err
 		}

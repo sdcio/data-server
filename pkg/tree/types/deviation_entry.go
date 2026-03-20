@@ -58,3 +58,20 @@ const (
 	DeviationReasonOverruled
 	DeviationReasonIntentExists
 )
+
+func (d DeviationReason) String() string {
+	switch d {
+	case DeviationReasonUndefined:
+		return "Undefined"
+	case DeviationReasonUnhandled:
+		return "Unhandled"
+	case DeviationReasonNotApplied:
+		return "NotApplied"
+	case DeviationReasonOverruled:
+		return "Overruled"
+	case DeviationReasonIntentExists:
+		return "IntentExists"
+	default:
+		return fmt.Sprintf("Unknown(%d)", d)
+	}
+}
