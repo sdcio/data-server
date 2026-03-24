@@ -51,10 +51,14 @@ func newDeviationTask(e api.Entry, c *GetDeviationConfig, activeCase bool) *devi
 
 func (dt *deviationTask) Run(ctx context.Context, submit func(pool.Task) error) error {
 	evalLeafvariants := true
+
+	// get all active childs
+	activeChilds := dt.entry.GetChilds(types.DescendMethodActiveChilds)
+
 	// if s is a presence container but has active childs, it should not be treated as a presence
 	// container, hence the leafvariants should not be processed. For presence container with
 	// childs the TypedValue.empty_val in the presence container is irrelevant.
-	if dt.entry.GetSchema().GetContainer().GetIsPresence() && len(dt.entry.GetChilds(types.DescendMethodActiveChilds)) > 0 {
+	if dt.entry.GetSchema().GetContainer().GetIsPresence() && len(activeChilds) > 0 {
 		evalLeafvariants = false
 	}
 
@@ -62,9 +66,6 @@ func (dt *deviationTask) Run(ctx context.Context, submit func(pool.Task) error) 
 		// calculate Deviation on the LeafVariants
 		dt.entry.GetLeafVariants().GetDeviations(ctx, dt.config.ch, dt.isActiveCase)
 	}
-
-	// get all active childs
-	activeChilds := dt.entry.GetChilds(types.DescendMethodActiveChilds)
 
 	// iterate through all childs
 	for cName, c := range dt.entry.GetChildMap().GetAll() {

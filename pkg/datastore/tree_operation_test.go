@@ -1507,7 +1507,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			}
 
 			sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-			ownerDeleteMarker := processors.NewOwnerDeleteMarker(processors.NewOwnerDeleteMarkerTaskConfig(tt.intentName, false))
+			ownerDeleteMarker := processors.NewOwnerDeleteMarker(&processors.OwnerDeleteMarkerTaskConfig{Owner: tt.intentName, OnlyIntended: false})
 			err = ownerDeleteMarker.Run(root.Entry, sharedTaskPool)
 			if err != nil {
 				t.Error(err)

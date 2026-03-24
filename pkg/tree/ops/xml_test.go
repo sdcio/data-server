@@ -575,7 +575,7 @@ func TestToXMLTable(t *testing.T) {
 
 			if tt.newConfig != nil {
 				sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-				ownerDeleteMarker := processors.NewOwnerDeleteMarker(processors.NewOwnerDeleteMarkerTaskConfig(owner, false))
+				ownerDeleteMarker := processors.NewOwnerDeleteMarker(&processors.OwnerDeleteMarkerTaskConfig{Owner: owner, OnlyIntended: false})
 
 				err = ownerDeleteMarker.Run(root.Entry, sharedTaskPool)
 				if err != nil {

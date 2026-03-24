@@ -1192,7 +1192,7 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 
 			// mark owner delete
 			sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-			ownerDeleteMarker := processors.NewOwnerDeleteMarker(processors.NewOwnerDeleteMarkerTaskConfig(owner1, false))
+			ownerDeleteMarker := processors.NewOwnerDeleteMarker(&processors.OwnerDeleteMarkerTaskConfig{Owner: owner1, OnlyIntended: false})
 
 			err = ownerDeleteMarker.Run(root.Entry, sharedTaskPool)
 			if err != nil {

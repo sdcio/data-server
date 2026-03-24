@@ -44,15 +44,8 @@ func (p *MarkOwnerDeleteProcessor) Run(e api.Entry, poolFactory pool.VirtualPool
 }
 
 type OwnerDeleteMarkerTaskConfig struct {
-	owner        string
-	onlyIntended bool
-}
-
-func NewOwnerDeleteMarkerTaskConfig(owner string, onlyIntended bool) *OwnerDeleteMarkerTaskConfig {
-	return &OwnerDeleteMarkerTaskConfig{
-		owner:        owner,
-		onlyIntended: onlyIntended,
-	}
+	Owner        string
+	OnlyIntended bool
 }
 
 type ownerDeleteMarkerTask struct {
@@ -73,7 +66,7 @@ func (x ownerDeleteMarkerTask) Run(ctx context.Context, submit func(pool.Task) e
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	le := x.e.GetLeafVariants().MarkOwnerForDeletion(x.config.owner, x.config.onlyIntended)
+	le := x.e.GetLeafVariants().MarkOwnerForDeletion(x.config.Owner, x.config.OnlyIntended)
 	if le != nil {
 		x.matches.Append(le)
 	}

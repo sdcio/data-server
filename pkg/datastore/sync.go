@@ -33,8 +33,14 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 			log.Error(err, "failed navigating to delete path", "path", delete.ToXPath(false))
 			continue
 		}
+
+		deleteMarkerConfig := &processors.OwnerDeleteMarkerTaskConfig{
+			Owner:        consts.RunningIntentName,
+			OnlyIntended: false,
+		}
+
 		// apply delete marker, setting owner delete flag on running intent
-		err = processors.NewOwnerDeleteMarker(processors.NewOwnerDeleteMarkerTaskConfig(consts.RunningIntentName, false)).Run(deleteRoot, d.taskPool)
+		err = processors.NewOwnerDeleteMarker(deleteMarkerConfig).Run(deleteRoot, d.taskPool)
 		if err != nil {
 			log.Error(err, "failed applying delete to path", "path", delete.ToXPath(false))
 			continue
