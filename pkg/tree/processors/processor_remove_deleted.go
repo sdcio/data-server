@@ -11,38 +11,54 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/types"
 )
 
-type RemoveDeletedProcessor struct {
-	config *RemoveDeletedProcessorParameters
+// RemoveDeletedProcessorParams contains the user-provided parameters for the remove deleted operation.
+type RemoveDeletedProcessorParams struct {
+	Owner string
 }
 
-func NewRemoveDeletedProcessor(c *RemoveDeletedProcessorParameters) *RemoveDeletedProcessor {
+// RemoveDeletedProcessor is responsible for removing leaf variant entries marked for deletion by the specified owner.
+type RemoveDeletedProcessor struct {
+	context *removeDeletedTaskContext
+}
+
+func NewRemoveDeletedProcessor(c *RemoveDeletedProcessorParams) *RemoveDeletedProcessor {
 	return &RemoveDeletedProcessor{
-		config: c,
+		context: newRemoveDeletedTaskContext(c),
 	}
 }
 
-type RemoveDeletedProcessorParameters struct {
-	owner                     string
+// GetDeleteStatsCount returns the amount of leaf variant entries that were removed during the RemoveDeleted process.
+func (p *RemoveDeletedProcessor) GetDeleteStatsCount() int64 {
+	return p.context.GetDeleteStatsCount()
+}
+
+// GetZeroLengthLeafVariantEntries returns the entries that have zero-length leaf variant entries after removal
+func (p *RemoveDeletedProcessor) GetZeroLengthLeafVariantEntries() []api.Entry {
+	return p.context.GetZeroLengthLeafVariantEntries()
+}
+
+type removeDeletedTaskContext struct {
+	RemoveDeletedProcessorParams
 	deleteStatsCount          atomic.Int64
 	zeroLeafEntryElements     []api.Entry
 	zeroLeafEntryElementsLock sync.Mutex
 }
 
-func NewRemoveDeletedProcessorParameters(owner string) *RemoveDeletedProcessorParameters {
-	return &RemoveDeletedProcessorParameters{
-		owner:                     owner,
-		deleteStatsCount:          atomic.Int64{},
-		zeroLeafEntryElements:     []api.Entry{},
-		zeroLeafEntryElementsLock: sync.Mutex{},
+func newRemoveDeletedTaskContext(p *RemoveDeletedProcessorParams) *removeDeletedTaskContext {
+	return &removeDeletedTaskContext{
+		RemoveDeletedProcessorParams: *p,
+		deleteStatsCount:             atomic.Int64{},
+		zeroLeafEntryElements:        []api.Entry{},
+		zeroLeafEntryElementsLock:    sync.Mutex{},
 	}
 }
 
-func (r *RemoveDeletedProcessorParameters) GetDeleteStatsCount() int64 {
+func (r *removeDeletedTaskContext) GetDeleteStatsCount() int64 {
 	return r.deleteStatsCount.Load()
 }
 
 // GetZeroLengthLeafVariantEntries returns the entries that have zero-length leaf variant entries after removal
-func (r *RemoveDeletedProcessorParameters) GetZeroLengthLeafVariantEntries() []api.Entry {
+func (r *removeDeletedTaskContext) GetZeroLengthLeafVariantEntries() []api.Entry {
 	r.zeroLeafEntryElementsLock.Lock()
 	defer r.zeroLeafEntryElementsLock.Unlock()
 	return r.zeroLeafEntryElements
@@ -57,7 +73,7 @@ func (p *RemoveDeletedProcessor) Run(e api.Entry, poolFactory pool.VirtualPoolFa
 	// create a virtual task pool for removeDeleted operations
 	pool := poolFactory.NewVirtualPool(pool.VirtualFailFast)
 
-	if err := pool.Submit(newRemoveDeletedTask(p.config, e, false)); err != nil {
+	if err := pool.Submit(newRemoveDeletedTask(p.context, e, false)); err != nil {
 		// Clean up pool even on early error
 		pool.CloseAndWait()
 		return err
@@ -71,14 +87,14 @@ func (p *RemoveDeletedProcessor) Run(e api.Entry, poolFactory pool.VirtualPoolFa
 }
 
 type removeDeletedTask struct {
-	config       *RemoveDeletedProcessorParameters
+	context      *removeDeletedTaskContext
 	e            api.Entry
 	keepDefaults bool
 }
 
-func newRemoveDeletedTask(c *RemoveDeletedProcessorParameters, e api.Entry, keepDefaults bool) *removeDeletedTask {
+func newRemoveDeletedTask(c *removeDeletedTaskContext, e api.Entry, keepDefaults bool) *removeDeletedTask {
 	return &removeDeletedTask{
-		config:       c,
+		context:      c,
 		e:            e,
 		keepDefaults: keepDefaults,
 	}
@@ -89,23 +105,23 @@ func (t *removeDeletedTask) Run(ctx context.Context, submit func(pool.Task) erro
 		return ctx.Err()
 	}
 
-	res := t.e.GetLeafVariants().RemoveDeletedByOwner(t.config.owner)
+	res := t.e.GetLeafVariants().RemoveDeletedByOwner(t.context.Owner)
 	if res != nil {
 		// increment the delete stats count
-		t.config.deleteStatsCount.Add(1)
+		t.context.deleteStatsCount.Add(1)
 	}
 	if t.e.CanDeleteBranch(t.keepDefaults) {
 		func() {
-			t.config.zeroLeafEntryElementsLock.Lock()
-			defer t.config.zeroLeafEntryElementsLock.Unlock()
-			t.config.zeroLeafEntryElements = append(t.config.zeroLeafEntryElements, t.e)
+			t.context.zeroLeafEntryElementsLock.Lock()
+			defer t.context.zeroLeafEntryElementsLock.Unlock()
+			t.context.zeroLeafEntryElements = append(t.context.zeroLeafEntryElements, t.e)
 		}()
 		return nil
 	}
 
 	// Process children recursively
 	for _, c := range t.e.GetChilds(types.DescendMethodAll) {
-		childTask := newRemoveDeletedTask(t.config, c, t.e.GetSchema().GetContainer() == nil)
+		childTask := newRemoveDeletedTask(t.context, c, t.e.GetSchema().GetContainer() == nil)
 		// Submit may fail if pool is closed or fail-fast error occurred
 		if err := submit(childTask); err != nil {
 			return err

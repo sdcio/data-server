@@ -15,39 +15,6 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-type importConfigTask struct {
-	entry           api.Entry
-	importerElement treeimporter.ImportConfigAdapterElement
-	params          *ImportConfigProcessorParams
-}
-
-type ImportConfigProcessorParams struct {
-	intentName      string
-	intentPrio      int32
-	insertFlags     *types.UpdateInsertFlags
-	treeContext     api.TreeContext
-	leafListTracker *sync.Map
-	stats           *types.ImportStats
-}
-
-func NewParameters(
-	intentName string,
-	intentPrio int32,
-	insertFlags *types.UpdateInsertFlags,
-	treeContext api.TreeContext,
-	leafListLock *sync.Map,
-	stats *types.ImportStats,
-) *ImportConfigProcessorParams {
-	return &ImportConfigProcessorParams{
-		intentName:      intentName,
-		intentPrio:      intentPrio,
-		insertFlags:     insertFlags,
-		treeContext:     treeContext,
-		leafListTracker: leafListLock,
-		stats:           stats,
-	}
-}
-
 type ImportConfigProcessor struct {
 	importer    treeimporter.ImportConfigAdapter
 	insertFlags *types.UpdateInsertFlags
@@ -78,7 +45,14 @@ func (p *ImportConfigProcessor) Run(ctx context.Context, e api.Entry, poolFactor
 	t := importConfigTask{
 		entry:           e,
 		importerElement: p.importer,
-		params:          NewParameters(p.importer.GetName(), p.importer.GetPriority(), p.insertFlags, e.GetTreeContext(), &sync.Map{}, p.stats),
+		context: &importConfigProcessorTaskContext{
+			intentName:      p.importer.GetName(),
+			intentPrio:      p.importer.GetPriority(),
+			insertFlags:     p.insertFlags,
+			treeContext:     e.GetTreeContext(),
+			leafListTracker: &sync.Map{},
+			stats:           p.stats,
+		},
 	}
 
 	if err := workerPool.Submit(t); err != nil {
@@ -92,6 +66,12 @@ func (p *ImportConfigProcessor) Run(ctx context.Context, e api.Entry, poolFactor
 		return err
 	}
 	return nil
+}
+
+type importConfigTask struct {
+	entry           api.Entry
+	importerElement treeimporter.ImportConfigAdapterElement
+	context         *importConfigProcessorTaskContext
 }
 
 func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) error) error {
@@ -119,7 +99,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 					return err
 				}
 				if keyChild, exists = actual.GetChildMap().GetEntry(kv); !exists {
-					keyChild, err = api.NewEntry(ctx, actual, kv, task.params.treeContext)
+					keyChild, err = api.NewEntry(ctx, actual, kv, task.context.treeContext)
 					if err != nil {
 						return err
 					}
@@ -128,7 +108,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			}
 			// submit resolved entry with same adapter element
 			// return importHandler(ctx, importTask{entry: actual, importerElement: task.importerElement, intentName: task.intentName, intentPrio: task.intentPrio, insertFlags: task.insertFlags, treeContext: task.treeContext}, submit)
-			return submit(importConfigTask{entry: actual, importerElement: task.importerElement, params: task.params})
+			return submit(importConfigTask{entry: actual, importerElement: task.importerElement, context: task.context})
 		}
 
 		// presence container or children
@@ -137,8 +117,8 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			schem := task.entry.GetSchema().GetContainer()
 			if schem != nil && schem.IsPresence {
 				tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{EmptyVal: &emptypb.Empty{}}}
-				upd := types.NewUpdate(task.entry, tv, task.params.intentPrio, task.params.intentName, 0)
-				task.entry.GetLeafVariants().Add(api.NewLeafEntry(upd, task.params.insertFlags, task.entry))
+				upd := types.NewUpdate(task.entry, tv, task.context.intentPrio, task.context.intentName, 0)
+				task.entry.GetLeafVariants().Add(api.NewLeafEntry(upd, task.context.insertFlags, task.entry))
 			}
 			return nil
 		}
@@ -148,7 +128,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			child, exists := task.entry.GetChildMap().GetEntry(childElt.GetName())
 			if !exists {
 				var err error
-				child, err = api.NewEntry(ctx, task.entry, childElt.GetName(), task.params.treeContext)
+				child, err = api.NewEntry(ctx, task.entry, childElt.GetName(), task.context.treeContext)
 				if err != nil {
 					return fmt.Errorf("error inserting %s at %s: %w", childElt.GetName(), task.entry.SdcpbPath().ToXPath(false), err)
 				}
@@ -156,12 +136,12 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			// need to process Leaflist childs in this goroutine to avois reordering
 			switch child.GetSchema().GetSchema().(type) {
 			case *sdcpb.SchemaElem_Leaflist:
-				err := importConfigTask{entry: child, importerElement: childElt, params: task.params}.Run(ctx, submit)
+				err := importConfigTask{entry: child, importerElement: childElt, context: task.context}.Run(ctx, submit)
 				if err != nil {
 					return err
 				}
 			default:
-				if err := submit(importConfigTask{entry: child, importerElement: childElt, params: task.params}); err != nil {
+				if err := submit(importConfigTask{entry: child, importerElement: childElt, context: task.context}); err != nil {
 					return err
 				}
 			}
@@ -173,8 +153,8 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 		if err != nil {
 			return err
 		}
-		upd := types.NewUpdate(task.entry, tv, task.params.intentPrio, task.params.intentName, 0)
-		task.entry.GetLeafVariants().AddWithStats(api.NewLeafEntry(upd, task.params.insertFlags, task.entry), task.params.stats)
+		upd := types.NewUpdate(task.entry, tv, task.context.intentPrio, task.context.intentName, 0)
+		task.entry.GetLeafVariants().AddWithStats(api.NewLeafEntry(upd, task.context.insertFlags, task.entry), task.context.stats)
 		return nil
 
 	case *sdcpb.SchemaElem_Leaflist:
@@ -189,7 +169,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			name   string
 		}{task.entry.GetParent(), task.importerElement.GetName()}
 
-		_, loaded := task.params.leafListTracker.LoadOrStore(key, struct{}{})
+		_, loaded := task.context.leafListTracker.LoadOrStore(key, struct{}{})
 
 		var scalarArr *sdcpb.ScalarArray
 		mustAdd := false
@@ -197,11 +177,11 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 		if loaded {
 			// if loaded is true, it means that another goroutine already did the first insertion and reset,
 			// so we just need to get the leaf list and add to it
-			le = task.entry.GetLeafVariants().GetByOwner(task.params.intentName)
+			le = task.entry.GetLeafVariants().GetByOwner(task.context.intentName)
 			scalarArr = le.Value().GetLeaflistVal()
 		} else {
 			// reset / create the leaf list on the first insertion
-			le = api.NewLeafEntry(nil, task.params.insertFlags, task.entry)
+			le = api.NewLeafEntry(nil, task.context.insertFlags, task.entry)
 			mustAdd = true
 			scalarArr = &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{}}
 		}
@@ -214,7 +194,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			scalarArr.Element = append(scalarArr.Element, tv)
 			tv = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_LeaflistVal{LeaflistVal: scalarArr}}
 		}
-		le.Update = types.NewUpdate(task.entry, tv, task.params.intentPrio, task.params.intentName, 0)
+		le.Update = types.NewUpdate(task.entry, tv, task.context.intentPrio, task.context.intentName, 0)
 		if mustAdd {
 			task.entry.GetLeafVariants().Add(le)
 		}
@@ -222,4 +202,13 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 	default:
 		return nil
 	}
+}
+
+type importConfigProcessorTaskContext struct {
+	intentName      string
+	intentPrio      int32
+	insertFlags     *types.UpdateInsertFlags
+	treeContext     api.TreeContext
+	leafListTracker *sync.Map
+	stats           *types.ImportStats
 }

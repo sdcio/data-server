@@ -13,43 +13,49 @@ import (
 
 // ResetFlagsProcessor resets the flags on leaf variant entries
 type ResetFlagsProcessor struct {
-	config *ResetFlagsProcessorParameters
+	context *resetFlagsProcessorContext
 }
 
-func NewResetFlagsProcessor(c *ResetFlagsProcessorParameters) *ResetFlagsProcessor {
+func NewResetFlagsProcessor(c *ResetFlagsProcessorParams) *ResetFlagsProcessor {
 	return &ResetFlagsProcessor{
-		config: c,
+		context: &resetFlagsProcessorContext{
+			ResetFlagsProcessorParams: *c,
+			adjustedFlagsCount:        atomic.Int64{},
+		},
 	}
 }
 
-type ResetFlagsProcessorParameters struct {
-	deleteFlag, newFlag, updateFlag bool
-	adjustedFlagsCount              atomic.Int64
+// GetAdjustedFlagsCount returns the number of flags that were adjusted
+func (r *ResetFlagsProcessor) GetAdjustedFlagsCount() int64 {
+	return r.context.GetAdjustedFlagsCount()
 }
 
-func NewResetFlagsProcessorParameters() *ResetFlagsProcessorParameters {
-	return &ResetFlagsProcessorParameters{
-		adjustedFlagsCount: atomic.Int64{},
-	}
+type ResetFlagsProcessorParams struct {
+	DeleteFlag, NewFlag, UpdateFlag bool
 }
 
-func (r *ResetFlagsProcessorParameters) SetDeleteFlag() *ResetFlagsProcessorParameters {
-	r.deleteFlag = true
+type resetFlagsProcessorContext struct {
+	ResetFlagsProcessorParams
+	adjustedFlagsCount atomic.Int64
+}
+
+func (r *ResetFlagsProcessorParams) SetDeleteFlag() *ResetFlagsProcessorParams {
+	r.DeleteFlag = true
 	return r
 }
 
-func (r *ResetFlagsProcessorParameters) SetNewFlag() *ResetFlagsProcessorParameters {
-	r.newFlag = true
+func (r *ResetFlagsProcessorParams) SetNewFlag() *ResetFlagsProcessorParams {
+	r.NewFlag = true
 	return r
 }
 
-func (r *ResetFlagsProcessorParameters) SetUpdateFlag() *ResetFlagsProcessorParameters {
-	r.updateFlag = true
+func (r *ResetFlagsProcessorParams) SetUpdateFlag() *ResetFlagsProcessorParams {
+	r.UpdateFlag = true
 	return r
 }
 
 // GetAdjustedFlagsCount returns the number of flags that were adjusted
-func (r *ResetFlagsProcessorParameters) GetAdjustedFlagsCount() int64 {
+func (r *resetFlagsProcessorContext) GetAdjustedFlagsCount() int64 {
 	return r.adjustedFlagsCount.Load()
 }
 
@@ -66,7 +72,7 @@ func (p *ResetFlagsProcessor) Run(e api.Entry, poolFactory pool.VirtualPoolFacto
 	pool := poolFactory.NewVirtualPool(pool.VirtualFailFast)
 
 	// Submit root task; workers will recursively process children
-	if err := pool.Submit(newResetFlagsTask(p.config, e)); err != nil {
+	if err := pool.Submit(newResetFlagsTask(p.context, e)); err != nil {
 		// Clean up pool even on early error
 		pool.CloseAndWait()
 		return err
@@ -80,26 +86,26 @@ func (p *ResetFlagsProcessor) Run(e api.Entry, poolFactory pool.VirtualPoolFacto
 }
 
 type resetFlagsTask struct {
-	config *ResetFlagsProcessorParameters
-	e      api.Entry
+	context *resetFlagsProcessorContext
+	e       api.Entry
 }
 
-func newResetFlagsTask(config *ResetFlagsProcessorParameters, e api.Entry) *resetFlagsTask {
+func newResetFlagsTask(context *resetFlagsProcessorContext, e api.Entry) *resetFlagsTask {
 	return &resetFlagsTask{
-		config: config,
-		e:      e,
+		context: context,
+		e:       e,
 	}
 }
 
 func (t *resetFlagsTask) Run(ctx context.Context, submit func(pool.Task) error) error {
 	// Reset flags as per config
-	count := t.e.GetLeafVariants().ResetFlags(t.config.deleteFlag, t.config.newFlag, t.config.updateFlag)
-	t.config.adjustedFlagsCount.Add(int64(count))
+	count := t.e.GetLeafVariants().ResetFlags(t.context.DeleteFlag, t.context.NewFlag, t.context.UpdateFlag)
+	t.context.adjustedFlagsCount.Add(int64(count))
 
 	// Process children recursively
 	for _, c := range t.e.GetChilds(types.DescendMethodAll) {
 		// Submit may fail if pool is closed or fail-fast error occurred
-		if err := submit(newResetFlagsTask(t.config, c)); err != nil {
+		if err := submit(newResetFlagsTask(t.context, c)); err != nil {
 			return err
 		}
 	}

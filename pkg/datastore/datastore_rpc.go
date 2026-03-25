@@ -246,7 +246,7 @@ func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdc
 	}
 
 	blamePool := d.taskPool.NewVirtualPool(pool.VirtualFailFast)
-	bcp := processors.NewBlameConfigProcessor(processors.NewBlameConfigProcessorConfig(includeDefaults))
+	bcp := processors.NewBlameConfigProcessor(&processors.BlameConfigProcessorParams{IncludeDefaults: includeDefaults})
 
 	bte, err := bcp.Run(ctx, root.Entry, blamePool)
 

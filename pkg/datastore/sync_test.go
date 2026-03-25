@@ -414,13 +414,14 @@ func TestApplyToRunning(t *testing.T) {
 
 			fmt.Println(syncTree.String())
 
-			resetFlagsProcessorParams := processors.NewResetFlagsProcessorParameters().SetNewFlag().SetUpdateFlag()
-			err = processors.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(syncTree.Entry, datastore.taskPool)
+			resetFlagsProcessorParams := &processors.ResetFlagsProcessorParams{NewFlag: true, UpdateFlag: true}
+			rpf := processors.NewResetFlagsProcessor(resetFlagsProcessorParams)
+			err = rpf.Run(syncTree.Entry, datastore.taskPool)
 			if err != nil {
 				t.Fatalf("failed to reset flags: %v", err)
 			}
 
-			fmt.Println("Adjusted flags count:", resetFlagsProcessorParams.GetAdjustedFlagsCount())
+			fmt.Println("Adjusted flags count:", rpf.GetAdjustedFlagsCount())
 
 			if diff := cmp.Diff(resultRoot.String(), syncTree.String()); diff != "" {
 				t.Errorf("mismatch (-want +got):\n%s", diff)

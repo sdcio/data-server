@@ -11,13 +11,13 @@ import (
 )
 
 type MarkOwnerDeleteProcessor struct {
-	config  *OwnerDeleteMarkerTaskConfig
+	context *OwnerDeleteMarkerProcessorParams
 	matches *Collector[*api.LeafEntry]
 }
 
-func NewOwnerDeleteMarker(c *OwnerDeleteMarkerTaskConfig) *MarkOwnerDeleteProcessor {
+func NewOwnerDeleteMarker(c *OwnerDeleteMarkerProcessorParams) *MarkOwnerDeleteProcessor {
 	return &MarkOwnerDeleteProcessor{
-		config:  c,
+		context: c,
 		matches: NewCollector[*api.LeafEntry](20),
 	}
 }
@@ -27,7 +27,7 @@ func NewOwnerDeleteMarker(c *OwnerDeleteMarkerTaskConfig) *MarkOwnerDeleteProces
 // Returns the first error encountered, or nil if successful.
 func (p *MarkOwnerDeleteProcessor) Run(e api.Entry, poolFactory pool.VirtualPoolFactory) error {
 	pool := poolFactory.NewVirtualPool(pool.VirtualFailFast)
-	if err := pool.Submit(newOwnerDeleteMarkerTask(p.config, e, p.matches)); err != nil {
+	if err := pool.Submit(newOwnerDeleteMarkerTask(p.context, e, p.matches)); err != nil {
 		// Clean up pool even on early error
 		pool.CloseAndWait()
 		return err
@@ -43,20 +43,20 @@ func (p *MarkOwnerDeleteProcessor) Run(e api.Entry, poolFactory pool.VirtualPool
 	return pool.FirstError()
 }
 
-type OwnerDeleteMarkerTaskConfig struct {
+type OwnerDeleteMarkerProcessorParams struct {
 	Owner        string
 	OnlyIntended bool
 }
 
 type ownerDeleteMarkerTask struct {
-	config  *OwnerDeleteMarkerTaskConfig
+	context *OwnerDeleteMarkerProcessorParams
 	matches *Collector[*api.LeafEntry]
 	e       api.Entry
 }
 
-func newOwnerDeleteMarkerTask(c *OwnerDeleteMarkerTaskConfig, e api.Entry, matches *Collector[*api.LeafEntry]) *ownerDeleteMarkerTask {
+func newOwnerDeleteMarkerTask(c *OwnerDeleteMarkerProcessorParams, e api.Entry, matches *Collector[*api.LeafEntry]) *ownerDeleteMarkerTask {
 	return &ownerDeleteMarkerTask{
-		config:  c,
+		context: c,
 		e:       e,
 		matches: matches,
 	}
@@ -66,14 +66,14 @@ func (x ownerDeleteMarkerTask) Run(ctx context.Context, submit func(pool.Task) e
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	le := x.e.GetLeafVariants().MarkOwnerForDeletion(x.config.Owner, x.config.OnlyIntended)
+	le := x.e.GetLeafVariants().MarkOwnerForDeletion(x.context.Owner, x.context.OnlyIntended)
 	if le != nil {
 		x.matches.Append(le)
 	}
 	// Process children recursively
 	for _, c := range x.e.GetChilds(types.DescendMethodAll) {
 		// Submit may fail if pool is closed or fail-fast error occurred
-		if err := submit(newOwnerDeleteMarkerTask(x.config, c, x.matches)); err != nil {
+		if err := submit(newOwnerDeleteMarkerTask(x.context, c, x.matches)); err != nil {
 			return err
 		}
 	}

@@ -568,7 +568,7 @@ func Test_Entry_Three(t *testing.T) {
 	// indicate that the intent is receiving an update
 	// therefor invalidate all the present entries of the owner / intent
 	sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-	ownerDeleteMarker := processors.NewOwnerDeleteMarker(&processors.OwnerDeleteMarkerTaskConfig{Owner: owner1, OnlyIntended: false})
+	ownerDeleteMarker := processors.NewOwnerDeleteMarker(&processors.OwnerDeleteMarkerProcessorParams{Owner: owner1, OnlyIntended: false})
 
 	err = ownerDeleteMarker.Run(root.Entry, sharedTaskPool)
 	if err != nil {
@@ -842,7 +842,7 @@ func Test_Entry_Four(t *testing.T) {
 	// indicate that the intent is receiving an update
 	// therefor invalidate all the present entries of the owner / intent
 	sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-	ownerDeleteMarker := processors.NewOwnerDeleteMarker(&processors.OwnerDeleteMarkerTaskConfig{Owner: owner1, OnlyIntended: false})
+	ownerDeleteMarker := processors.NewOwnerDeleteMarker(&processors.OwnerDeleteMarkerProcessorParams{Owner: owner1, OnlyIntended: false})
 
 	err = ownerDeleteMarker.Run(root.Entry, sharedTaskPool)
 	if err != nil {
@@ -1216,7 +1216,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	}
 
 	sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-	ownerDeleteMarker := processors.NewOwnerDeleteMarker(&processors.OwnerDeleteMarkerTaskConfig{Owner: owner1, OnlyIntended: false})
+	ownerDeleteMarker := processors.NewOwnerDeleteMarker(&processors.OwnerDeleteMarkerProcessorParams{Owner: owner1, OnlyIntended: false})
 
 	err = ownerDeleteMarker.Run(root.Entry, sharedTaskPool)
 	if err != nil {

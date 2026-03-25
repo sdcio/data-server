@@ -34,7 +34,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 			continue
 		}
 
-		deleteMarkerConfig := &processors.OwnerDeleteMarkerTaskConfig{
+		deleteMarkerConfig := &processors.OwnerDeleteMarkerProcessorParams{
 			Owner:        consts.RunningIntentName,
 			OnlyIntended: false,
 		}
@@ -56,14 +56,14 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	}
 
 	// run remove deleted processor to clean up entries marked as deleted by owner
-	delProcessorParams := processors.NewRemoveDeletedProcessorParameters(consts.RunningIntentName)
-	err := processors.NewRemoveDeletedProcessor(delProcessorParams).Run(d.syncTree.Entry, d.taskPool)
+	rdp := processors.NewRemoveDeletedProcessor(&processors.RemoveDeletedProcessorParams{Owner: consts.RunningIntentName})
+	err := rdp.Run(d.syncTree.Entry, d.taskPool)
 	if err != nil {
 		return err
 	}
 
 	// delete entries that have zero-length leaf variant entries after remove deleted processing
-	for _, e := range delProcessorParams.GetZeroLengthLeafVariantEntries() {
+	for _, e := range rdp.GetZeroLengthLeafVariantEntries() {
 		err := ops.DeleteBranch(ctx, e.GetParent(), &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(e.PathName(), nil)}}, consts.RunningIntentName)
 		if err != nil {
 			return err
@@ -82,8 +82,9 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	}
 
 	// run reset flags processor to reset flags
-	resetFlagsProcessorParams := processors.NewResetFlagsProcessorParameters().SetDeleteFlag().SetNewFlag().SetUpdateFlag()
-	err = processors.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(d.syncTree.Entry, d.taskPool)
+	resetFlagsProcessorParams := &processors.ResetFlagsProcessorParams{DeleteFlag: true, NewFlag: true, UpdateFlag: true}
+	rfp := processors.NewResetFlagsProcessor(resetFlagsProcessorParams)
+	err = rfp.Run(d.syncTree.Entry, d.taskPool)
 	if err != nil {
 		return err
 	}

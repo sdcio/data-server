@@ -233,7 +233,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 		oldIntentContent := lvs.ToPathAndUpdateSlice()
 
-		ownerDeleteMarker := processors.NewOwnerDeleteMarker(&processors.OwnerDeleteMarkerTaskConfig{Owner: intent.GetName(), OnlyIntended: intent.GetOnlyIntended()})
+		ownerDeleteMarker := processors.NewOwnerDeleteMarker(&processors.OwnerDeleteMarkerProcessorParams{Owner: intent.GetName(), OnlyIntended: intent.GetOnlyIntended()})
 
 		err := ownerDeleteMarker.Run(root.Entry, d.taskPool)
 		if err != nil {

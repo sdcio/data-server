@@ -12,12 +12,12 @@ import (
 )
 
 type ExplicitDeleteProcessor struct {
-	params *ExplicitDeleteTaskParameters
+	params *explicitDeleteTaskContext
 }
 
-func NewExplicitDeleteProcessor(params *ExplicitDeleteTaskParameters) *ExplicitDeleteProcessor {
+func NewExplicitDeleteProcessor(params *ExplicitDeleteTaskParams) *ExplicitDeleteProcessor {
 	return &ExplicitDeleteProcessor{
-		params: params,
+		params: newExplicitDeleteTaskContext(params),
 	}
 }
 
@@ -31,19 +31,24 @@ func (edp *ExplicitDeleteProcessor) GetCreatedExplicitDeleteLeafEntries() api.Le
 	return edp.params.relatedLeafVariants
 }
 
-type ExplicitDeleteTaskParameters struct {
-	owner               string
-	priority            int32
-	relatedLeafVariants api.LeafVariantSlice
-	rlvMutex            *sync.Mutex
+// ExplicitDeleteTaskParams contains the user-provided parameters for the explicit delete operation.
+type ExplicitDeleteTaskParams struct {
+	Owner    string
+	Priority int32
 }
 
-func NewExplicitDeleteTaskParameters(owner string, priority int32) *ExplicitDeleteTaskParameters {
-	return &ExplicitDeleteTaskParameters{
-		priority:            priority,
-		owner:               owner,
-		relatedLeafVariants: api.LeafVariantSlice{},
-		rlvMutex:            &sync.Mutex{},
+// explicitDeleteTaskContext embeds the input parameters and adds operational/statistics data for the explicit delete process.
+type explicitDeleteTaskContext struct {
+	ExplicitDeleteTaskParams
+	relatedLeafVariants api.LeafVariantSlice
+	rlvMutex            sync.Mutex
+}
+
+func newExplicitDeleteTaskContext(p *ExplicitDeleteTaskParams) *explicitDeleteTaskContext {
+	return &explicitDeleteTaskContext{
+		ExplicitDeleteTaskParams: *p,
+		relatedLeafVariants:      api.LeafVariantSlice{},
+		rlvMutex:                 sync.Mutex{},
 	}
 }
 
@@ -55,33 +60,33 @@ func (p *ExplicitDeleteProcessor) Run(ctx context.Context, e api.Entry, poolFact
 }
 
 type explicitDeleteTask struct {
-	entry  api.Entry
-	params *ExplicitDeleteTaskParameters
+	entry   api.Entry
+	context *explicitDeleteTaskContext
 }
 
-func newExplicitDeleteTask(entry api.Entry, params *ExplicitDeleteTaskParameters) *explicitDeleteTask {
+func newExplicitDeleteTask(entry api.Entry, context *explicitDeleteTaskContext) *explicitDeleteTask {
 	return &explicitDeleteTask{
-		entry:  entry,
-		params: params,
+		entry:   entry,
+		context: context,
 	}
 }
 
 func (t *explicitDeleteTask) Run(ctx context.Context, submit func(pool.Task) error) error {
 	if ops.HoldsLeafVariants(t.entry) {
-		le := t.entry.GetLeafVariants().GetByOwner(t.params.owner)
+		le := t.entry.GetLeafVariants().GetByOwner(t.context.Owner)
 		if le != nil {
 			le.MarkExpliciteDelete()
 		} else {
-			le = t.entry.GetLeafVariants().AddExplicitDeleteEntry(t.params.owner, t.params.priority)
+			le = t.entry.GetLeafVariants().AddExplicitDeleteEntry(t.context.Owner, t.context.Priority)
 		}
-		t.params.rlvMutex.Lock()
-		t.params.relatedLeafVariants = append(t.params.relatedLeafVariants, le)
-		t.params.rlvMutex.Unlock()
+		t.context.rlvMutex.Lock()
+		t.context.relatedLeafVariants = append(t.context.relatedLeafVariants, le)
+		t.context.rlvMutex.Unlock()
 	}
 
 	// trigger the execution on all childs
 	for _, c := range t.entry.GetChilds(types.DescendMethodAll) {
-		err := submit(newExplicitDeleteTask(c, t.params))
+		err := submit(newExplicitDeleteTask(c, t.context))
 		if err != nil {
 			return err
 		}

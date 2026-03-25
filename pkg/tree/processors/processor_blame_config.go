@@ -14,23 +14,17 @@ import (
 )
 
 type BlameConfigProcessor struct {
-	config *BlameConfigProcessorConfig
+	config *BlameConfigProcessorParams
 }
 
-func NewBlameConfigProcessor(config *BlameConfigProcessorConfig) *BlameConfigProcessor {
+func NewBlameConfigProcessor(config *BlameConfigProcessorParams) *BlameConfigProcessor {
 	return &BlameConfigProcessor{
 		config: config,
 	}
 }
 
-type BlameConfigProcessorConfig struct {
-	includeDefaults bool
-}
-
-func NewBlameConfigProcessorConfig(includeDefaults bool) *BlameConfigProcessorConfig {
-	return &BlameConfigProcessorConfig{
-		includeDefaults: includeDefaults,
-	}
+type BlameConfigProcessorParams struct {
+	IncludeDefaults bool
 }
 
 // Run processes the entry tree starting from e, building a blame tree showing which owner
@@ -57,15 +51,15 @@ func (p *BlameConfigProcessor) Run(ctx context.Context, e api.Entry, pool pool.V
 }
 
 type BlameConfigTask struct {
-	config    *BlameConfigProcessorConfig
+	context   *BlameConfigProcessorParams
 	parent    *sdcpb.BlameTreeElement
 	self      *sdcpb.BlameTreeElement
 	selfEntry api.Entry
 }
 
-func NewBlameConfigTask(e api.Entry, c *BlameConfigProcessorConfig) *BlameConfigTask {
+func NewBlameConfigTask(e api.Entry, c *BlameConfigProcessorParams) *BlameConfigTask {
 	return &BlameConfigTask{
-		config:    c,
+		context:   c,
 		parent:    nil,
 		self:      &sdcpb.BlameTreeElement{},
 		selfEntry: e,
@@ -94,7 +88,7 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 	// process Value
 	highestLe := t.selfEntry.GetLeafVariants().GetHighestPrecedence(false, true, true)
 	if highestLe != nil {
-		if highestLe.Update.Owner() != consts.DefaultsIntentName || t.config.includeDefaults {
+		if highestLe.Update.Owner() != consts.DefaultsIntentName || t.context.IncludeDefaults {
 			t.self.SetValue(highestLe.Update.Value()).SetOwner(highestLe.Update.Owner())
 
 			// check if running equals the expected
@@ -112,7 +106,7 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 		childEntry := childs[childKey]
 		childHighestLe := childEntry.GetLeafVariants().GetHighestPrecedence(false, true, true)
 		if childHighestLe != nil {
-			if childHighestLe.Update.Owner() == consts.DefaultsIntentName && !t.config.includeDefaults {
+			if childHighestLe.Update.Owner() == consts.DefaultsIntentName && !t.context.IncludeDefaults {
 				continue
 			}
 		}
@@ -122,7 +116,7 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 
 		// Create a new task for each child
 		task := &BlameConfigTask{
-			config:    t.config,
+			context:   t.context,
 			parent:    t.self,
 			self:      child,
 			selfEntry: childEntry,

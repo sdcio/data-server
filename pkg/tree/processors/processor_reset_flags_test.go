@@ -104,17 +104,7 @@ func TestResetFlagsProcessorRun(t *testing.T) {
 			ctx := context.Background()
 
 			// Create processor parameters
-			params := processors.NewResetFlagsProcessorParameters()
-
-			if tt.deleteFlag {
-				params.SetDeleteFlag()
-			}
-			if tt.newFlag {
-				params.SetNewFlag()
-			}
-			if tt.updateFlag {
-				params.SetUpdateFlag()
-			}
+			params := &processors.ResetFlagsProcessorParams{DeleteFlag: tt.deleteFlag, NewFlag: tt.newFlag, UpdateFlag: tt.updateFlag}
 
 			// Create processor
 			processor := processors.NewResetFlagsProcessor(params)
@@ -142,7 +132,7 @@ func TestResetFlagsProcessorRun(t *testing.T) {
 			// For now, we'll test that the processor can be created and run method exists
 			// Full integration testing would require properly mocked Entry objects
 			assert.NotNil(t, processor)
-			assert.Equal(t, int64(tt.adjustCount), params.GetAdjustedFlagsCount())
+			assert.Equal(t, int64(tt.adjustCount), processor.GetAdjustedFlagsCount())
 		})
 	}
 }

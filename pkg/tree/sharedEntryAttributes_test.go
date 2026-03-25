@@ -548,8 +548,7 @@ func Test_sharedEntryAttributes_GetDeviations(t *testing.T) {
 			ch := make(chan *types.DeviationEntry, 100)
 
 			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-			dpc := ops.NewGetDeviationConfig(ch)
-			err := ops.GetDeviations(ctx, root.Entry, dpc, sharedPool)
+			err := ops.GetDeviations(ctx, root.Entry, &ops.GetDeviationParams{Ch: ch}, sharedPool)
 			if err != nil {
 				t.Error(err)
 				return
@@ -1192,7 +1191,7 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 
 			// mark owner delete
 			sharedTaskPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-			ownerDeleteMarker := processors.NewOwnerDeleteMarker(&processors.OwnerDeleteMarkerTaskConfig{Owner: owner1, OnlyIntended: false})
+			ownerDeleteMarker := processors.NewOwnerDeleteMarker(&processors.OwnerDeleteMarkerProcessorParams{Owner: owner1, OnlyIntended: false})
 
 			err = ownerDeleteMarker.Run(root.Entry, sharedTaskPool)
 			if err != nil {

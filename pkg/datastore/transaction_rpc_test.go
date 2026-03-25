@@ -158,8 +158,7 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 				t.Fatalf("failed to finish insertion phase: %v", err)
 			}
 			// Reset flags on syncTree so everything is "existing"
-			resetFlagsProcessorParams := processors.NewResetFlagsProcessorParameters().SetNewFlag().SetUpdateFlag()
-			err = processors.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(syncTreeRoot.Entry, vpf)
+			err = processors.NewResetFlagsProcessor(&processors.ResetFlagsProcessorParams{NewFlag: true, UpdateFlag: true}).Run(syncTreeRoot.Entry, vpf)
 			if err != nil {
 				t.Fatalf("failed to reset flags: %v", err)
 			}

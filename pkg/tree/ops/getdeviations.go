@@ -9,17 +9,11 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/types"
 )
 
-type GetDeviationConfig struct {
-	ch chan<- *types.DeviationEntry
+type GetDeviationParams struct {
+	Ch chan<- *types.DeviationEntry
 }
 
-func NewGetDeviationConfig(ch chan<- *types.DeviationEntry) *GetDeviationConfig {
-	return &GetDeviationConfig{
-		ch: ch,
-	}
-}
-
-func GetDeviations(ctx context.Context, e api.Entry, config *GetDeviationConfig, poolFactory pool.VirtualPoolFactory) error {
+func GetDeviations(ctx context.Context, e api.Entry, config *GetDeviationParams, poolFactory pool.VirtualPoolFactory) error {
 	pool := poolFactory.NewVirtualPool(pool.VirtualTolerant)
 	err := pool.Submit(newDeviationTask(e, config, true))
 	if err != nil {
@@ -37,11 +31,11 @@ func GetDeviations(ctx context.Context, e api.Entry, config *GetDeviationConfig,
 
 type deviationTask struct {
 	entry        api.Entry
-	config       *GetDeviationConfig
+	config       *GetDeviationParams
 	isActiveCase bool
 }
 
-func newDeviationTask(e api.Entry, c *GetDeviationConfig, activeCase bool) *deviationTask {
+func newDeviationTask(e api.Entry, c *GetDeviationParams, activeCase bool) *deviationTask {
 	return &deviationTask{
 		entry:        e,
 		isActiveCase: activeCase,
@@ -64,7 +58,7 @@ func (dt *deviationTask) Run(ctx context.Context, submit func(pool.Task) error) 
 
 	if evalLeafvariants {
 		// calculate Deviation on the LeafVariants
-		dt.entry.GetLeafVariants().GetDeviations(ctx, dt.config.ch, dt.isActiveCase)
+		dt.entry.GetLeafVariants().GetDeviations(ctx, dt.config.Ch, dt.isActiveCase)
 	}
 
 	// iterate through all childs
