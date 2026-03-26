@@ -16,10 +16,10 @@ type ResetFlagsProcessor struct {
 	context *resetFlagsProcessorContext
 }
 
-func NewResetFlagsProcessor(c *ResetFlagsProcessorParams) *ResetFlagsProcessor {
+func NewResetFlagsProcessor(params *ResetFlagsProcessorParams) *ResetFlagsProcessor {
 	return &ResetFlagsProcessor{
 		context: &resetFlagsProcessorContext{
-			ResetFlagsProcessorParams: *c,
+			ResetFlagsProcessorParams: *params,
 			adjustedFlagsCount:        atomic.Int64{},
 		},
 	}

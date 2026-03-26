@@ -21,9 +21,9 @@ type RemoveDeletedProcessor struct {
 	context *removeDeletedTaskContext
 }
 
-func NewRemoveDeletedProcessor(c *RemoveDeletedProcessorParams) *RemoveDeletedProcessor {
+func NewRemoveDeletedProcessor(params *RemoveDeletedProcessorParams) *RemoveDeletedProcessor {
 	return &RemoveDeletedProcessor{
-		context: newRemoveDeletedTaskContext(c),
+		context: newRemoveDeletedTaskContext(params),
 	}
 }
 

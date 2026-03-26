@@ -15,9 +15,9 @@ type MarkOwnerDeleteProcessor struct {
 	matches *Collector[*api.LeafEntry]
 }
 
-func NewOwnerDeleteMarker(c *OwnerDeleteMarkerProcessorParams) *MarkOwnerDeleteProcessor {
+func NewOwnerDeleteMarker(params *OwnerDeleteMarkerProcessorParams) *MarkOwnerDeleteProcessor {
 	return &MarkOwnerDeleteProcessor{
-		context: c,
+		context: params,
 		matches: NewCollector[*api.LeafEntry](20),
 	}
 }

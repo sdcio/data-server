@@ -14,12 +14,12 @@ import (
 )
 
 type BlameConfigProcessor struct {
-	config *BlameConfigProcessorParams
+	context *BlameConfigProcessorParams
 }
 
-func NewBlameConfigProcessor(config *BlameConfigProcessorParams) *BlameConfigProcessor {
+func NewBlameConfigProcessor(params *BlameConfigProcessorParams) *BlameConfigProcessor {
 	return &BlameConfigProcessor{
-		config: config,
+		context: params,
 	}
 }
 
@@ -33,7 +33,7 @@ type BlameConfigProcessorParams struct {
 // Returns the blame tree structure and any error encountered.
 func (p *BlameConfigProcessor) Run(ctx context.Context, e api.Entry, pool pool.VirtualPoolI) (*sdcpb.BlameTreeElement, error) {
 
-	blameTask := NewBlameConfigTask(e, p.config)
+	blameTask := NewBlameConfigTask(e, p.context)
 	if err := pool.Submit(blameTask); err != nil {
 		// Clean up pool even on early error
 		pool.CloseAndWait()

@@ -12,23 +12,23 @@ import (
 )
 
 type ExplicitDeleteProcessor struct {
-	params *explicitDeleteTaskContext
+	context *explicitDeleteTaskContext
 }
 
 func NewExplicitDeleteProcessor(params *ExplicitDeleteTaskParams) *ExplicitDeleteProcessor {
 	return &ExplicitDeleteProcessor{
-		params: newExplicitDeleteTaskContext(params),
+		context: newExplicitDeleteTaskContext(params),
 	}
 }
 
 // GetExplicitDeleteCreationCount returns the amount of all the explicitDelete LeafVariants that where created.
 func (edp *ExplicitDeleteProcessor) GetExplicitDeleteCreationCount() int {
-	return len(edp.params.relatedLeafVariants)
+	return len(edp.context.relatedLeafVariants)
 }
 
 // GetCreatedExplicitDeleteLeafEntries returns all the explicitDelete LeafVariants that where created.
 func (edp *ExplicitDeleteProcessor) GetCreatedExplicitDeleteLeafEntries() api.LeafVariantSlice {
-	return edp.params.relatedLeafVariants
+	return edp.context.relatedLeafVariants
 }
 
 // ExplicitDeleteTaskParams contains the user-provided parameters for the explicit delete operation.
@@ -54,7 +54,7 @@ func newExplicitDeleteTaskContext(p *ExplicitDeleteTaskParams) *explicitDeleteTa
 
 func (p *ExplicitDeleteProcessor) Run(ctx context.Context, e api.Entry, poolFactory pool.VirtualPoolFactory) error {
 	taskpool := poolFactory.NewVirtualPool(pool.VirtualTolerant)
-	err := taskpool.Submit(newExplicitDeleteTask(e, p.params))
+	err := taskpool.Submit(newExplicitDeleteTask(e, p.context))
 	taskpool.CloseAndWait()
 	return err
 }
