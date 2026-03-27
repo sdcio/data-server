@@ -245,10 +245,8 @@ func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdc
 		return nil, err
 	}
 
-	blamePool := d.taskPool.NewVirtualPool(pool.VirtualFailFast)
 	bcp := processors.NewBlameConfigProcessor(&processors.BlameConfigProcessorParams{IncludeDefaults: includeDefaults})
-
-	bte, err := bcp.Run(ctx, root.Entry, blamePool)
+	bte, err := bcp.Run(ctx, root.Entry, d.taskPool)
 
 	// set the root level elements name to the target name
 	bte.Name = d.config.Name

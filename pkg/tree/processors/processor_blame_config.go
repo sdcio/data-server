@@ -31,8 +31,8 @@ type BlameConfigProcessorParams struct {
 // (intent) is responsible for each configuration value. The pool parameter should be
 // VirtualFailFast to stop on first error.
 // Returns the blame tree structure and any error encountered.
-func (p *BlameConfigProcessor) Run(ctx context.Context, e api.Entry, pool pool.VirtualPoolI) (*sdcpb.BlameTreeElement, error) {
-
+func (p *BlameConfigProcessor) Run(ctx context.Context, e api.Entry, poolFactory pool.VirtualPoolFactory) (*sdcpb.BlameTreeElement, error) {
+	pool := poolFactory.NewVirtualPool(pool.VirtualTolerant)
 	blameTask := NewBlameConfigTask(e, p.context)
 	if err := pool.Submit(blameTask); err != nil {
 		// Clean up pool even on early error
