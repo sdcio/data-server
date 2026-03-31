@@ -42,10 +42,18 @@ func (c *ChildMap) DeleteChild(name string) {
 	delete(c.c, name)
 }
 
-func (c *ChildMap) Add(e Entry) {
+// AddOrGet adds the entry if no entry with the same path name exists.
+// If an entry already exists, it returns the existing (canonical) entry.
+// This provides a safe get-or-create primitive for concurrent callers.
+func (c *ChildMap) AddOrGet(e Entry) Entry {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.c[e.PathName()] = e
+	k := e.PathName()
+	if existing, ok := c.c[k]; ok {
+		return existing
+	}
+	c.c[k] = e
+	return e
 }
 
 func (c *ChildMap) GetEntry(s string) (e Entry, exists bool) {

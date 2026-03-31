@@ -24,10 +24,9 @@ func GetOrCreateChilds(ctx context.Context, e api.Entry, path *sdcpb.Path) (api.
 			if err != nil {
 				return nil, err
 			}
-			if err := current.AddChild(ctx, child); err != nil {
+			if newCurrent, err = current.AddOrGetChild(ctx, child); err != nil {
 				return nil, err
 			}
-			newCurrent = child
 		}
 		current = newCurrent
 
@@ -47,10 +46,9 @@ func GetOrCreateChilds(ctx context.Context, e api.Entry, path *sdcpb.Path) (api.
 				if err != nil {
 					return nil, err
 				}
-				if err := current.AddChild(ctx, keyChild); err != nil {
+				if newCurrent, err = current.AddOrGetChild(ctx, keyChild); err != nil {
 					return nil, err
 				}
-				newCurrent = keyChild
 			}
 			current = newCurrent
 		}
@@ -103,11 +101,10 @@ func AddUpdateRecursiveInternal(ctx context.Context, s api.Entry, path *sdcpb.Pa
 			if err != nil {
 				return nil, err
 			}
-			err = x.AddChild(ctx, newE)
+			e, err = x.AddOrGetChild(ctx, newE)
 			if err != nil {
 				return nil, err
 			}
-			e = newE
 		}
 		x = e
 	}

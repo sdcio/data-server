@@ -75,7 +75,7 @@ func CheckAndCreateKeysAsLeafs(ctx context.Context, e api.Entry, intentName stri
 				}
 			}
 			// add the new child entry to s
-			err = e.AddChild(ctx, child)
+			child, err = e.AddOrGetChild(ctx, child)
 			if err != nil {
 				return err
 			}

@@ -30,6 +30,7 @@ func NewEntry(ctx context.Context, parent Entry, pathElemName string, tc TreeCon
 	if newEntryFunc == nil {
 		return nil, fmt.Errorf("EntryFactory not registered")
 	}
+
 	return newEntryFunc(ctx, parent, pathElemName, tc)
 }
 
@@ -39,8 +40,8 @@ type Entry interface {
 	PathName() string
 	// GetLevel returns the depth of the Entry in the tree
 	GetLevel() int
-	// addChild Add a child entry
-	AddChild(context.Context, Entry) error
+	// AddOrGetChild adds a child entry or returns the existing one if it already exists
+	AddOrGetChild(context.Context, Entry) (Entry, error)
 	// StringIndent debug tree struct as indented string slice
 	StringIndent(result []string) []string
 	// GetSchema returns the *sdcpb.SchemaElem of the Entry

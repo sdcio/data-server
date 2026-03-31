@@ -44,7 +44,7 @@ type sharedEntryAttributes struct {
 }
 
 // NewEntry constructor for Entries
-func NewEntry(ctx context.Context, parent api.Entry, pathElemName string, tc api.TreeContext) (*sharedEntryAttributes, error) {
+func NewEntry(ctx context.Context, parent api.Entry, pathElemName string, tc api.TreeContext) (api.Entry, error) {
 	// create a new sharedEntryAttributes instance
 	sea, err := NewSharedEntryAttributes(ctx, parent, pathElemName, tc)
 	if err != nil {
@@ -52,8 +52,8 @@ func NewEntry(ctx context.Context, parent api.Entry, pathElemName string, tc api
 	}
 
 	// add the Entry as a child to the parent Entry
-	err = parent.AddChild(ctx, sea)
-	return sea, err
+	result, err := parent.AddOrGetChild(ctx, sea)
+	return result, err
 }
 
 func (s *sharedEntryAttributes) DeepCopy(tc api.TreeContext, parent api.Entry) (api.Entry, error) {
@@ -75,7 +75,7 @@ func (s *sharedEntryAttributes) DeepCopy(tc api.TreeContext, parent api.Entry) (
 		if err != nil {
 			return nil, err
 		}
-		result.childs.Add(vCopy)
+		_ = result.childs.AddOrGet(vCopy)
 	}
 
 	// copy leafvariants
@@ -408,18 +408,20 @@ func (s *sharedEntryAttributes) String() string {
 	return s.SdcpbPath().ToXPath(false)
 }
 
-// AddChild add an entry to the list of child entries for the entry.
-func (s *sharedEntryAttributes) AddChild(ctx context.Context, e api.Entry) error {
+// AddOrGetChild add an entry to the list of child entries for the entry.
+func (s *sharedEntryAttributes) AddOrGetChild(ctx context.Context, e api.Entry) (api.Entry, error) {
 	// make sure Entry should not only hold LeafEntries
 	if s.leafVariants.Length() > 0 {
 		// An exception are presence containers
 		_, is_container := s.schema.Schema.(*sdcpb.SchemaElem_Container)
 		if !is_container && !s.schema.GetContainer().IsPresence {
-			return fmt.Errorf("cannot add child to %s since it holds Leafs", s)
+			return nil, fmt.Errorf("cannot add child to %s since it holds Leafs", s)
 		}
 	}
-	s.childs.Add(e)
-	return nil
+	// Use AddOrGet to ensure we don't overwrite an existing canonical entry
+	// when multiple goroutines concurrently try to create the same child.
+	return s.childs.AddOrGet(e), nil
+
 }
 
 func (s *sharedEntryAttributes) ChoicesResolvers() api.ChoiceResolvers {

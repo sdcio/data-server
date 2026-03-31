@@ -113,7 +113,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				}
 				interf.leafVariants = api.NewLeafVariants(tc, interf)
 				// add interf to result (root)
-				result.childs.Add(interf)
+				_ = result.childs.AddOrGet(interf)
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
@@ -178,7 +178,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				}
 				interf.leafVariants = api.NewLeafVariants(tc, interf)
 				// add interf to result (root)
-				result.childs.Add(interf)
+				_ = result.childs.AddOrGet(interf)
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
@@ -210,8 +210,8 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					cacheMutex:   sync.Mutex{},
 				}
 				system.leafVariants = api.NewLeafVariants(tc, system)
-				// add interf to result (root)
-				result.childs.Add(system)
+				// add system to result (root)
+				_ = result.childs.AddOrGet(system)
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
@@ -276,7 +276,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				}
 				interf.leafVariants = api.NewLeafVariants(tc, interf)
 				// add interf to result (root)
-				result.childs.Add(interf)
+				_ = result.childs.AddOrGet(interf)
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(

@@ -6,7 +6,6 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/api"
 )
 
-
 func Test_childMap_DeleteChilds(t *testing.T) {
 	type fields struct {
 		c map[string]api.Entry
