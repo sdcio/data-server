@@ -11,7 +11,7 @@ var (
 	ErrorIntentNotPresent = fmt.Errorf("intent not present")
 )
 
-func TreeExport(e api.Entry, owner string, priority int32) (*tree_persist.Intent, error) {
+func TreeExport(e api.Entry, owner string, priority int32, orphan bool) (*tree_persist.Intent, error) {
 	treeExport, err := treeExportLevel(e, owner)
 	if err != nil {
 		return nil, err
@@ -31,6 +31,7 @@ func TreeExport(e api.Entry, owner string, priority int32) (*tree_persist.Intent
 			Priority:        priority,
 			NonRevertive:    e.GetTreeContext().NonRevertiveInfo().IsGenerallyNonRevertive(owner),
 			ExplicitDeletes: explicitDeletes,
+			Orphan:          orphan,
 		}, nil
 	}
 	return nil, ErrorIntentNotPresent

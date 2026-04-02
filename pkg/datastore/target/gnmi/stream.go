@@ -234,7 +234,7 @@ func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, m *sync.Mutex, logC
 	defer m.Unlock()
 
 	startTime := time.Now()
-	result, err := ops.TreeExport(syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio)
+	result, err := ops.TreeExport(syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio, false)
 	log.V(logger.VTrace).Info("exported tree", "tree", result.String())
 	if err != nil {
 		if errors.Is(err, ops.ErrorIntentNotPresent) {

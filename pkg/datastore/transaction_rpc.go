@@ -374,7 +374,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		delSl := deletesOwner.ToXPathSlice()
 		log.V(logger.VTrace).Info("deletes owner", "deletes-owner", delSl)
 
-		protoIntent, err := ops.TreeExport(root.Entry, intent.GetName(), intent.GetPriority())
+		protoIntent, err := ops.TreeExport(root.Entry, intent.GetName(), intent.GetPriority(), intent.GetOnlyIntended())
 		switch {
 		case errors.Is(err, ops.ErrorIntentNotPresent):
 			err = d.cacheClient.IntentDelete(ctx, intent.GetName(), intent.GetDeleteIgnoreNonExisting())
@@ -440,7 +440,7 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates api.LeafVaria
 	}
 
 	// export the synctree
-	newRunningIntent, err := ops.TreeExport(d.syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio)
+	newRunningIntent, err := ops.TreeExport(d.syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio, false)
 	if err != nil && err != ops.ErrorIntentNotPresent {
 		return err
 	}
