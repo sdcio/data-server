@@ -68,7 +68,16 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntent
 			return nil, err
 		}
 
-		return adapter.NewIntentResponseAdapter(d.syncTree.Entry), nil
+		result := &adapter.IntentResponseAdapter{
+			Entry:           d.syncTree.Entry,
+			IntentName:      consts.RunningIntentName,
+			Priority:        consts.RunningValuesPrio,
+			Orphan:          false,
+			NonRevertive:    false,
+			ExplicitDeletes: nil,
+		}
+
+		return result, nil
 	}
 
 	// otherwise consult cache
@@ -92,10 +101,24 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntent
 	if err != nil {
 		return nil, err
 	}
-	return adapter.NewIntentResponseAdapter(root.Entry), nil
+
+	result := &adapter.IntentResponseAdapter{
+		Entry:           root.Entry,
+		IntentName:      tp.GetIntentName(),
+		Priority:        tp.GetPriority(),
+		Orphan:          tp.GetOrphan(),
+		NonRevertive:    tp.GetNonRevertive(),
+		ExplicitDeletes: tp.GetExplicitDeletes(),
+	}
+	return result, nil
 }
 
 type GetIntentResponse interface {
+	GetIntentName() string
+	GetPriority() int32
+	IsOrphan() bool
+	IsNonRevertive() bool
+	GetExplicitDeletes() []*sdcpb.Path
 	// ToJson returns the Tree contained structure as JSON
 	// use e.g. json.MarshalIndent() on the returned struct
 	ToJson(ctx context.Context) (any, error)

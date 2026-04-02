@@ -72,7 +72,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 
 	// conditional trace logging
 	if log := log.V(logger.VTrace); log.Enabled() {
-		treeExport, err := ops.TreeExport(d.syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio)
+		treeExport, err := ops.TreeExport(d.syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio, false)
 		if err == nil {
 			json, err := protojson.MarshalOptions{Multiline: false}.Marshal(treeExport)
 			if err == nil {

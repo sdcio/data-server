@@ -303,7 +303,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 			r := &RootEntry{
 				Entry: tt.sharedEntryAttributes(),
 			}
-			got, err := ops.TreeExport(r.Entry, tt.args.owner, tt.args.priority)
+			got, err := ops.TreeExport(r.Entry, tt.args.owner, tt.args.priority, false)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("RootEntry.TreeExport() error = %v, wantErr %v", err, tt.wantErr)
 				return

@@ -144,7 +144,7 @@ func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
 		return
 	}
 
-	result, err := ops.TreeExport(s.syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio)
+	result, err := ops.TreeExport(s.syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio, false)
 	if err != nil {
 		log.Error(err, "failure exporting synctree")
 		return

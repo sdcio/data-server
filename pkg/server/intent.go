@@ -71,6 +71,16 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 		return nil, err
 	}
 
+	getIntentResponse := &sdcpb.GetIntentResponse{
+		DatastoreName: req.GetDatastoreName(),
+		Format:        req.GetFormat(),
+		IntentName:    req.GetIntent(),
+		Orphan:        rsp.IsOrphan(),
+		Priority:      rsp.GetPriority(),
+		NonRevertive:  rsp.IsNonRevertive(),
+		Deletes:       rsp.GetExplicitDeletes(),
+	}
+
 	switch req.GetFormat() {
 	case sdcpb.Format_Intent_Format_JSON, sdcpb.Format_Intent_Format_JSON_IETF:
 		var j any
@@ -90,13 +100,10 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 		if err != nil {
 			return nil, err
 		}
-		return &sdcpb.GetIntentResponse{
-			DatastoreName: req.GetIntent(),
-			Format:        req.GetFormat(),
-			Intent: &sdcpb.GetIntentResponse_Blob{
-				Blob: b,
-			},
-		}, nil
+		getIntentResponse.Intent = &sdcpb.GetIntentResponse_Blob{
+			Blob: b,
+		}
+		return getIntentResponse, nil
 
 	case sdcpb.Format_Intent_Format_XML:
 		doc, err := rsp.ToXML(ctx)
@@ -107,30 +114,23 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 		if err != nil {
 			return nil, err
 		}
-
-		return &sdcpb.GetIntentResponse{
-			DatastoreName: req.GetIntent(),
-			Format:        req.GetFormat(),
-			Intent: &sdcpb.GetIntentResponse_Blob{
-				Blob: xml,
-			},
-		}, nil
+		getIntentResponse.Intent = &sdcpb.GetIntentResponse_Blob{
+			Blob: xml,
+		}
+		return getIntentResponse, nil
 	case sdcpb.Format_Intent_Format_PROTO:
 		upds, err := rsp.ToProtoUpdates(ctx)
 		if err != nil {
 			return nil, err
 		}
-
-		return &sdcpb.GetIntentResponse{
-			DatastoreName: req.GetIntent(),
-			Format:        req.GetFormat(),
-			Intent: &sdcpb.GetIntentResponse_Proto{
-				Proto: &sdcpb.Intent{
-					Intent: req.GetIntent(),
-					Update: upds,
-				},
+		getIntentResponse.Intent = &sdcpb.GetIntentResponse_Proto{
+			Proto: &sdcpb.Intent{
+				Intent:   rsp.GetIntentName(),
+				Priority: rsp.GetPriority(),
+				Update:   upds,
 			},
-		}, nil
+		}
+		return getIntentResponse, nil
 	}
 	return nil, fmt.Errorf("unknown format")
 }
