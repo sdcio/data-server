@@ -124,14 +124,13 @@ SCHEMA_CONNECT:
 	log = log.WithValues("schema-server-address", s.config.SchemaServer.Address)
 	ctx = logf.IntoContext(ctx, log)
 
-	dialCtx, cancel := context.WithTimeout(ctx, schemaServerConnectRetry)
-	defer cancel()
-	cc, err := grpc.DialContext(dialCtx, s.config.SchemaServer.Address, opts...)
+	cc, err := grpc.NewClient(s.config.SchemaServer.Address, opts...)
 	if err != nil {
-		log.Error(err, "failed to connect to schema server")
+		log.Error(err, "failed to create schema client")
 		time.Sleep(time.Second)
 		goto SCHEMA_CONNECT
 	}
+
 	log.Info("connected to schema server")
 	s.schemaClient = schema.NewRemoteClient(cc, s.config.SchemaServer.Cache)
 }
