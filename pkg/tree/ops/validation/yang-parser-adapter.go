@@ -1,0 +1,164 @@
+package validation
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/sdcio/data-server/pkg/tree/api"
+	"github.com/sdcio/data-server/pkg/tree/ops"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/yang-parser/xpath"
+	"github.com/sdcio/yang-parser/xpath/xutils"
+)
+
+type yangParserEntryAdapter struct {
+	e   api.Entry
+	ctx context.Context
+}
+
+func newYangParserEntryAdapter(ctx context.Context, e api.Entry) *yangParserEntryAdapter {
+	return &yangParserEntryAdapter{
+		e:   e,
+		ctx: ctx,
+	}
+}
+
+func (y *yangParserEntryAdapter) Copy() xpath.Entry {
+	return newYangParserEntryAdapter(y.ctx, y.e)
+}
+
+func (y *yangParserEntryAdapter) valueToDatum(tv *sdcpb.TypedValue) xpath.Datum {
+	switch ttv := tv.Value.(type) {
+	case *sdcpb.TypedValue_BoolVal:
+		return xpath.NewBoolDatum(tv.GetBoolVal())
+	case *sdcpb.TypedValue_UintVal:
+		return xpath.NewNumDatum(float64(tv.GetUintVal()))
+	case *sdcpb.TypedValue_LeaflistVal:
+		datums := make([]xpath.Datum, 0, len(ttv.LeaflistVal.GetElement()))
+		for _, e := range ttv.LeaflistVal.GetElement() {
+			datum := y.valueToDatum(e)
+			datums = append(datums, datum)
+		}
+		return xpath.NewDatumSliceDatum(datums)
+	case *sdcpb.TypedValue_EmptyVal:
+		return xpath.NewBoolDatum(true)
+	case *sdcpb.TypedValue_IdentityrefVal:
+		return xpath.NewLiteralDatum(tv.GetIdentityrefVal().YangString())
+	default:
+		return xpath.NewLiteralDatum(tv.GetStringVal())
+	}
+}
+
+func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
+	if y.e.GetSchema() == nil {
+		return xpath.NewBoolDatum(true), nil
+	}
+
+	// if y.e is a container
+	if cs := y.e.GetSchema().GetContainer(); cs != nil {
+		// its a container
+		if len(cs.Keys) == 0 {
+			// regular container
+			return xpath.NewBoolDatum(true), nil
+		}
+		// list
+		childs, err := ops.GetListChilds(y.e)
+		if err != nil {
+			return nil, err
+		}
+		datums := make([]xutils.XpathNode, 0, len(childs))
+		for x := 0; x < len(childs); x++ {
+			// this is a dirty fix, that will enable count() to evaluate the right value
+			datums = append(datums, nil)
+		}
+		return xpath.NewNodesetDatum(datums), nil
+	}
+
+	// if y.e is anything else then a container
+	lv := y.e.GetLeafVariants().GetHighestPrecedence(false, true, false)
+	if lv == nil {
+		return xpath.NewNodesetDatum([]xutils.XpathNode{}), nil
+	}
+	return y.valueToDatum(lv.Value()), nil
+}
+
+func (y *yangParserEntryAdapter) BreadthSearch(ctx context.Context, path *sdcpb.Path) ([]xpath.Entry, error) {
+	entries, err := breadthSearch(ctx, y.e, path)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]xpath.Entry, 0, len(entries))
+	for _, x := range entries {
+		result = append(result, newYangParserEntryAdapter(ctx, x))
+	}
+
+	return result, nil
+}
+
+func (y *yangParserEntryAdapter) FollowLeafRef() (xpath.Entry, error) {
+	entries, err := navigateLeafRef(y.ctx, y.e)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("error resolving leafref for %s", y.e.SdcpbPath().ToXPath(false))
+	}
+
+	return newYangParserEntryAdapter(y.ctx, entries[0]), nil
+}
+
+func (y *yangParserEntryAdapter) GetSdcpbPath() *sdcpb.Path {
+	return y.e.SdcpbPath()
+}
+
+func (y *yangParserEntryAdapter) Navigate(p *sdcpb.Path) (xpath.Entry, error) {
+	var err error
+
+	if len(p.GetElem()) == 0 {
+		return y, nil
+	}
+
+	entry, err := ops.NavigateSdcpbPath(y.ctx, y.e, p)
+	if err != nil {
+		return newYangParserValueEntry(xpath.NewNodesetDatum([]xutils.XpathNode{}), err), nil
+	}
+	return newYangParserEntryAdapter(y.ctx, entry), nil
+}
+
+type yangParserValueEntry struct {
+	d xpath.Datum
+	e error
+}
+
+func newYangParserValueEntry(d xpath.Datum, err error) *yangParserValueEntry {
+	return &yangParserValueEntry{
+		d: d,
+		e: err,
+	}
+}
+
+func (y *yangParserValueEntry) Copy() xpath.Entry {
+	return y
+}
+
+func (y *yangParserValueEntry) FollowLeafRef() (xpath.Entry, error) {
+	return nil, fmt.Errorf("yangParserValueEntry navigation impossible")
+}
+
+func (y *yangParserValueEntry) Navigate(p *sdcpb.Path) (xpath.Entry, error) {
+	return nil, fmt.Errorf("yangParserValueEntry navigation impossible")
+}
+
+func (y *yangParserValueEntry) GetValue() (xpath.Datum, error) {
+	return y.d, nil
+}
+
+func (y *yangParserValueEntry) GetSdcpbPath() *sdcpb.Path {
+	return nil
+}
+
+func (y *yangParserValueEntry) BreadthSearch(ctx context.Context, path *sdcpb.Path) ([]xpath.Entry, error) {
+	return nil, nil
+}

@@ -16,7 +16,9 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
+	"github.com/sdcio/data-server/pkg/tree/processors"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -147,7 +149,7 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 			}
 			vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 			// Populate SyncTree with Running config
-			_, err = syncTreeRoot.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(runningAny, tree.RunningIntentName, tree.RunningValuesPrio, false), treetypes.NewUpdateInsertFlags(), vpf)
+			_, err = syncTreeRoot.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(runningAny, consts.RunningIntentName, consts.RunningValuesPrio, false), treetypes.NewUpdateInsertFlags(), vpf)
 			if err != nil {
 				t.Fatalf("failed to import running config: %v", err)
 			}
@@ -156,8 +158,7 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 				t.Fatalf("failed to finish insertion phase: %v", err)
 			}
 			// Reset flags on syncTree so everything is "existing"
-			resetFlagsProcessorParams := tree.NewResetFlagsProcessorParameters().SetNewFlag().SetUpdateFlag()
-			err = tree.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(syncTreeRoot.GetRoot(), vpf)
+			err = processors.NewResetFlagsProcessor(&processors.ResetFlagsProcessorParams{NewFlag: true, UpdateFlag: true}).Run(syncTreeRoot.Entry, vpf)
 			if err != nil {
 				t.Fatalf("failed to reset flags: %v", err)
 			}

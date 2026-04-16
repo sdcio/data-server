@@ -12,7 +12,10 @@ import (
 	"github.com/openconfig/ygot/ygot"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
+	"github.com/sdcio/data-server/pkg/tree/ops"
+	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -45,15 +48,15 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				result := &sharedEntryAttributes{
 					parent:       nil,
 					pathElemName: "",
-					childs:       newChildMap(),
+					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
 				}
-				result.leafVariants = newLeafVariants(tc, result)
+				result.leafVariants = api.NewLeafVariants(tc, result)
 
 				result.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -93,28 +96,28 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				result := &sharedEntryAttributes{
 					parent:       nil,
 					pathElemName: "",
-					childs:       newChildMap(),
+					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
 				}
-				result.leafVariants = newLeafVariants(tc, result)
+				result.leafVariants = api.NewLeafVariants(tc, result)
 
 				// create /interface sharedEntryAttributes
 				interf := &sharedEntryAttributes{
 					parent:       result,
 					pathElemName: "interface",
-					childs:       newChildMap(),
+					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
-				interf.leafVariants = newLeafVariants(tc, interf)
+				interf.leafVariants = api.NewLeafVariants(tc, interf)
 				// add interf to result (root)
-				result.childs.Add(interf)
+				_ = result.childs.AddOrGet(interf)
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -158,28 +161,28 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				result := &sharedEntryAttributes{
 					parent:       nil,
 					pathElemName: "",
-					childs:       newChildMap(),
+					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
 				}
-				result.leafVariants = newLeafVariants(tc, result)
+				result.leafVariants = api.NewLeafVariants(tc, result)
 
 				// create /interface sharedEntryAttributes
 				interf := &sharedEntryAttributes{
 					parent:       result,
 					pathElemName: "interface",
-					childs:       newChildMap(),
+					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
-				interf.leafVariants = newLeafVariants(tc, interf)
+				interf.leafVariants = api.NewLeafVariants(tc, interf)
 				// add interf to result (root)
-				result.childs.Add(interf)
+				_ = result.childs.AddOrGet(interf)
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -189,7 +192,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				)
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "OtherValue"},
@@ -202,17 +205,17 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				system := &sharedEntryAttributes{
 					parent:       result,
 					pathElemName: "system",
-					childs:       newChildMap(),
+					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
-				system.leafVariants = newLeafVariants(tc, system)
-				// add interf to result (root)
-				result.childs.Add(system)
+				system.leafVariants = api.NewLeafVariants(tc, system)
+				// add system to result (root)
+				_ = result.childs.AddOrGet(system)
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -256,28 +259,28 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				result := &sharedEntryAttributes{
 					parent:       nil,
 					pathElemName: "",
-					childs:       newChildMap(),
+					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
 				}
-				result.leafVariants = newLeafVariants(tc, result)
+				result.leafVariants = api.NewLeafVariants(tc, result)
 
 				// create /interface sharedEntryAttributes
 				interf := &sharedEntryAttributes{
 					parent:       result,
 					pathElemName: "interface",
-					childs:       newChildMap(),
+					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
-				interf.leafVariants = newLeafVariants(tc, interf)
+				interf.leafVariants = api.NewLeafVariants(tc, interf)
 				// add interf to result (root)
-				result.childs.Add(interf)
+				_ = result.childs.AddOrGet(interf)
 
 				// add interface LeafVariant
 				interf.leafVariants.Add(
-					NewLeafEntry(
+					api.NewLeafEntry(
 						types.NewUpdate(nil,
 							&sdcpb.TypedValue{
 								Value: &sdcpb.TypedValue_StringVal{StringVal: "Value"},
@@ -298,9 +301,9 @@ func TestRootEntry_TreeExport(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &RootEntry{
-				sharedEntryAttributes: tt.sharedEntryAttributes(),
+				Entry: tt.sharedEntryAttributes(),
 			}
-			got, err := r.TreeExport(tt.args.owner, tt.args.priority)
+			got, err := ops.TreeExport(r.Entry, tt.args.owner, tt.args.priority, false)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("RootEntry.TreeExport() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -396,7 +399,7 @@ func TestRootEntry_DeleteSubtreePaths(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			_, err = loadYgotStructIntoTreeRoot(ctx, tt.re(), root, owner1, 500, false, flagsNew)
+			_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, tt.re(), root.Entry, owner1, 500, false, testhelper.FlagsNew)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -446,7 +449,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 			name: "simple add",
 			fields: fields{
 				sharedEntryAttributes: func(t *testing.T) *sharedEntryAttributes {
-					s, err := newSharedEntryAttributes(ctx, nil, "", tc)
+					s, err := NewSharedEntryAttributes(ctx, nil, "", tc)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -455,7 +458,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 						t.Fatal(err)
 					}
 					s.schema = schema.GetSchema()
-					s.leafVariants = newLeafVariants(tc, s)
+					s.leafVariants = api.NewLeafVariants(tc, s)
 					return s
 				},
 			},
@@ -486,7 +489,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 				flags: types.NewUpdateInsertFlags(),
 			},
 			want: func(t *testing.T) *RootEntry {
-				s, err := newSharedEntryAttributes(ctx, nil, "", tc)
+				s, err := NewSharedEntryAttributes(ctx, nil, "", tc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -514,20 +517,20 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 				}
 
 				vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-				ImportConfigProcessor := NewImportConfigProcessor(jsonImporter.NewJsonTreeImporter(jsonAny, "owner1", 5, false), types.NewUpdateInsertFlags())
+				ImportConfigProcessor := processors.NewImportConfigProcessor(jsonImporter.NewJsonTreeImporter(jsonAny, "owner1", 5, false), types.NewUpdateInsertFlags())
 				err = ImportConfigProcessor.Run(ctx, s, vpf)
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				return &RootEntry{sharedEntryAttributes: s}
+				return &RootEntry{Entry: s}
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &RootEntry{
-				sharedEntryAttributes: tt.fields.sharedEntryAttributes(t),
+				Entry: tt.fields.sharedEntryAttributes(t),
 			}
 			if err := r.AddUpdatesRecursive(ctx, tt.args.pau, tt.args.flags); (err != nil) != tt.wantErr {
 				t.Errorf("RootEntry.AddUpdatesRecursive() error = %v, wantErr %v", err, tt.wantErr)
@@ -565,11 +568,11 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
+				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, testhelper.Config1(), root.Entry, owner1, 500, false, testhelper.FlagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = loadYgotStructIntoTreeRoot(ctx, config2(), root, owner2, 400, false, flagsNew)
+				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, testhelper.Config2(), root.Entry, owner2, 400, false, testhelper.FlagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -586,7 +589,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = loadYgotStructIntoTreeRoot(ctx, config1(), root, owner1, 500, false, flagsNew)
+				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, testhelper.Config1(), root.Entry, owner1, 500, false, testhelper.FlagsNew)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -608,7 +611,7 @@ func TestRootEntry_GetUpdatesForOwner(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = resultRoot.AddUpdatesRecursive(ctx, got, flagsNew)
+			err = resultRoot.AddUpdatesRecursive(ctx, got, testhelper.FlagsNew)
 			if err != nil {
 				t.Fatal(err)
 			}

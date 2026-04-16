@@ -3,11 +3,12 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/sdcio/data-server/pkg/datastore"
 	"github.com/sdcio/data-server/pkg/datastore/types"
-	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -57,9 +58,19 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 
 	// populate the transactionIntents from the req.intents basically transforming from sdcpb to datastore intent format
 	for _, intent := range req.GetIntents() {
-		ti, err := ds.SdcpbTransactionIntentToInternalTI(ctx, intent)
-		if err != nil {
-			return nil, err
+		var ti *types.TransactionIntent
+		switch {
+		// if the intent is the running intent, we only allow explicitdeletes to be present.
+		case intent.GetPriority() == consts.RunningValuesPrio || intent.GetIntent() == consts.RunningIntentName:
+			ti = types.NewTransactionIntent(consts.RevertRunningName, consts.RevertRunningPrio)
+			ti.AddExplicitDeletes(intent.GetDeletes())
+		case intent.Priority > consts.UserSettableMax:
+			return nil, fmt.Errorf("user settable priority not allowed above %d", consts.UserSettableMax)
+		default:
+			ti, err = ds.SdcpbTransactionIntentToInternalTI(ctx, intent)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		transactionIntents = append(transactionIntents, ti)
@@ -69,8 +80,8 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 	var replaceIntent *types.TransactionIntent
 	if req.GetReplaceIntent() != nil {
 		// overwrite replace priority and name with specific value
-		req.ReplaceIntent.Priority = tree.ReplaceValuesPrio
-		req.ReplaceIntent.Intent = tree.ReplaceIntentName
+		req.ReplaceIntent.Priority = consts.ReplaceValuesPrio
+		req.ReplaceIntent.Intent = consts.ReplaceIntentName
 
 		replaceIntent, err = ds.SdcpbTransactionIntentToInternalTI(ctx, req.GetReplaceIntent())
 		if err != nil {

@@ -9,7 +9,9 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/utils"
 	"github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	dsutils "github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/logger"
@@ -142,7 +144,7 @@ func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
 		return
 	}
 
-	result, err := s.syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
+	result, err := ops.TreeExport(s.syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio, false)
 	if err != nil {
 		log.Error(err, "failure exporting synctree")
 		return
@@ -171,7 +173,7 @@ func (s *GetSync) processNotifications(n []*sdcpb.Notification) error {
 
 	for _, noti := range n {
 		// updates
-		upds, err := treetypes.ExpandAndConvertIntent(s.ctx, s.schemaClient, tree.RunningIntentName, tree.RunningValuesPrio, noti.Update, noti.GetTimestamp())
+		upds, err := treetypes.ExpandAndConvertIntent(s.ctx, s.schemaClient, consts.RunningIntentName, consts.RunningValuesPrio, noti.Update, noti.GetTimestamp())
 		if err != nil {
 			log.Error(err, "failure expanding and converting notification")
 			continue
@@ -179,7 +181,7 @@ func (s *GetSync) processNotifications(n []*sdcpb.Notification) error {
 
 		for idx2, upd := range upds {
 			_ = idx2
-			_, err = s.syncTree.AddUpdateRecursive(s.ctx, upd.GetPath(), upd.GetUpdate(), uif)
+			_, err = ops.AddUpdateRecursive(s.ctx, s.syncTree.Entry, upd.GetPath(), upd.GetUpdate(), uif)
 			if err != nil {
 				log.Error(err, "failure adding update to synctree")
 			}

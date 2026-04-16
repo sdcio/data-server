@@ -140,18 +140,24 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 
 		// process value
 		if jsonValue != nil {
-			err = json.Unmarshal(jsonValue, &v)
+			decoder := json.NewDecoder(bytes.NewReader(jsonValue))
+			// Keep numbers as json.Number to avoid precision loss for large integers.
+			decoder.UseNumber()
+			err = decoder.Decode(&v)
 			if err != nil {
 				return nil, err
 			}
-			upd.Value = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: string(jsonValue)}}
+			upd.Value, err = sdcpb.ConvertJsonValueToTv(v, rsp.Field.GetType())
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		// We expect that all identityrefs are sent by schema-server as a identityref type now, not string
 		if upd.GetValue().GetStringVal() != "" {
 			switch {
 			case rsp.Field.GetType().GetTypeName() != "string",
-				 rsp.Field.GetType().Type == "identityref":
+				rsp.Field.GetType().Type == "identityref":
 
 				upd.Value, err = sdcpb.TVFromString(rsp.Field.GetType(), upd.GetValue().GetStringVal(), 0)
 				if err != nil {

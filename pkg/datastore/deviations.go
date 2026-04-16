@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/logger"
 	logf "github.com/sdcio/logger"
@@ -115,9 +116,33 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 	}
 }
 
+// DeviationsStats intent name -> reason -> count
+type DeviationsStats map[string]map[treetypes.DeviationReason]int
+
+func (d DeviationsStats) Add(deviation *treetypes.DeviationEntry) {
+	name := deviation.IntentName()
+	if d[name] == nil {
+		d[name] = make(map[treetypes.DeviationReason]int)
+	}
+	d[name][deviation.Reason()]++
+}
+
+func (d DeviationsStats) LogValue() map[string]map[string]int {
+	stats := make(map[string]map[string]int, len(d))
+	for intentName, reasonCounts := range d {
+		stats[intentName] = make(map[string]int, len(reasonCounts))
+		for reason, count := range reasonCounts {
+			stats[intentName][reason.String()] = count
+		}
+	}
+	return stats
+}
+
 func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.DeviationEntry, deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer) {
 	log := logf.FromContext(ctx)
+	deviationsStats := make(DeviationsStats)
 	for deviation := range ch {
+		deviationsStats.Add(deviation)
 		for clientIdentifier, dc := range deviationClients {
 			if dc.Context().Err() != nil {
 				continue
@@ -142,6 +167,7 @@ func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.Dev
 			}
 		}
 	}
+	log.Info("deviation stats", "stats", deviationsStats.LogValue())
 }
 
 type DeviationEntry interface {
@@ -175,6 +201,7 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 
 	if log := log.V(logger.VTrace); log.Enabled() {
 		log.Info("deviation tree", "content", deviationTree.String())
+		log.Info("nonrevertive infos", "data", deviationTree.GetTreeContext().NonRevertiveInfo().String())
 	}
 
 	deviationChan := make(chan *treetypes.DeviationEntry, 10)
@@ -185,7 +212,10 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 			deviationChan <- treetypes.NewDeviationEntry(n, treetypes.DeviationReasonIntentExists, nil)
 		}
 
-		deviationTree.GetDeviations(ctx, deviationChan)
+		err := ops.GetDeviations(ctx, deviationTree.Entry, &ops.GetDeviationParams{Ch: deviationChan}, d.taskPool)
+		if err != nil {
+			log.Error(err, "failed to run deviation processor")
+		}
 	}()
 
 	return deviationChan, nil

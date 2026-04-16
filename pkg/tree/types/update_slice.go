@@ -14,7 +14,7 @@ type UpdateSlice []*Update
 func (u UpdateSlice) CopyWithNewOwnerAndPrio(owner string, prio int32) []*PathAndUpdate {
 	result := make([]*PathAndUpdate, 0, len(u))
 	for _, x := range u {
-		result = append(result, NewPathAndUpdate(x.Path(), NewUpdate(nil, x.Value(), prio, owner, x.Timestamp())))
+		result = append(result, NewPathAndUpdate(x.SdcpbPath(), NewUpdate(nil, x.Value(), prio, owner, x.Timestamp())))
 	}
 	return result
 }
@@ -22,7 +22,7 @@ func (u UpdateSlice) CopyWithNewOwnerAndPrio(owner string, prio int32) []*PathAn
 func (u UpdateSlice) String() string {
 	sb := &strings.Builder{}
 	for i, j := range u {
-		sb.WriteString(fmt.Sprintf("%d - %s -> %s\n", i, j.Path().ToXPath(false), j.value.ToString()))
+		sb.WriteString(fmt.Sprintf("%d - %s -> %s\n", i, j.SdcpbPath().ToXPath(false), j.value.ToString()))
 	}
 	return sb.String()
 }
@@ -57,7 +57,7 @@ func (u UpdateSlice) GetLowestPriorityValue(filters []CacheUpdateFilter) int32 {
 func (u UpdateSlice) ToSdcpbPathSet() *sdcpb.PathSet {
 	result := &sdcpb.PathSet{}
 	for _, upd := range u {
-		result.AddPath(upd.Path())
+		result.AddPath(upd.SdcpbPath())
 	}
 	return result
 }
@@ -65,7 +65,7 @@ func (u UpdateSlice) ToSdcpbPathSet() *sdcpb.PathSet {
 func (u UpdateSlice) ToPathAndUpdateSlice() []*PathAndUpdate {
 	result := make([]*PathAndUpdate, 0, len(u))
 	for _, x := range u {
-		result = append(result, NewPathAndUpdate(x.Path(), x))
+		result = append(result, NewPathAndUpdate(x.SdcpbPath(), x))
 	}
 	return result
 }

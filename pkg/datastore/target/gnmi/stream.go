@@ -14,11 +14,19 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	dsutils "github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+)
+
+const (
+	syncSignalBufferSize         = 1
+	notificationSendTimeout      = 5 * time.Second
+	notificationSlowSendWarnTime = 500 * time.Millisecond
 )
 
 type StreamSync struct {
@@ -104,7 +112,8 @@ func (s *StreamSync) Start() error {
 
 	updChan := make(chan *NotificationData, 20)
 
-	syncResponse := make(chan struct{})
+	// Keep a single pending sync signal to avoid blocking the subscribe loop.
+	syncResponse := make(chan struct{}, syncSignalBufferSize)
 
 	subReq, err := s.syncConfig()
 	if err != nil {
@@ -148,7 +157,7 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, sy
 			if err != nil {
 				log.Error(err, "failed adding update to synctree")
 			}
-			syncTree.GetTreeContext().AddExplicitDeletes(tree.RunningIntentName, tree.RunningValuesPrio, noti.deletes)
+			syncTree.GetTreeContext().ExplicitDeletes().Add(consts.RunningIntentName, consts.RunningValuesPrio, noti.deletes)
 		case <-syncResponse:
 			syncTree, err = s.syncToRunning(syncTree, syncTreeMutex, true)
 			tickerActive = true
@@ -206,7 +215,11 @@ func (s *StreamSync) gnmiSubscribe(subReq *gnmi.SubscribeRequest, updChan chan<-
 				}
 			case *gnmi.SubscribeResponse_SyncResponse:
 				log.Info("SyncResponse flag received", "initial sync duration", time.Since(syncStartTime).String())
-				syncResponse <- struct{}{}
+				select {
+				case syncResponse <- struct{}{}:
+				default:
+					log.V(logger.VDebug).Info("sync signal already pending, skipping duplicate")
+				}
 
 			case *gnmi.SubscribeResponse_Error:
 				log.Error(nil, "gnmi subscription error", "error", r.Error.Message)
@@ -221,16 +234,15 @@ func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, m *sync.Mutex, logC
 	defer m.Unlock()
 
 	startTime := time.Now()
-	result, err := syncTree.TreeExport(tree.RunningIntentName, tree.RunningValuesPrio)
+	result, err := ops.TreeExport(syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio, false)
 	log.V(logger.VTrace).Info("exported tree", "tree", result.String())
-
 	if err != nil {
-		if errors.Is(err, tree.ErrorIntentNotPresent) {
+		if errors.Is(err, ops.ErrorIntentNotPresent) {
 			log.Info("sync no config changes")
 			// all good no data present
 			return syncTree, nil
 		}
-		log.Error(err, "sync tree export error: %v")
+		log.Error(err, "sync tree export error")
 		return s.runningStore.NewEmptyTree(s.ctx)
 	}
 	// extract the explicit deletes
@@ -286,11 +298,29 @@ func newNotificationProcessorTask(item *gnmi.Notification, params *NotificationP
 	}
 }
 
+func (t *notificationProcessorTask) sendNotificationData(ctx context.Context, data *NotificationData) error {
+	log := logger.FromContext(ctx)
+	start := time.Now()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case t.params.notificationResult <- data:
+		duration := time.Since(start)
+		if duration > notificationSlowSendWarnTime {
+			log.Info("slow notification delivery to sync loop", "duration", duration.String())
+		}
+		return nil
+	case <-time.After(notificationSendTimeout):
+		log.Error(context.DeadlineExceeded, "notification delivery timeout, dropping update", "timeout", notificationSendTimeout.String())
+		return nil
+	}
+}
+
 func (t *notificationProcessorTask) Run(ctx context.Context, _ func(pool.Task) error) error {
 	log := logger.FromContext(ctx)
 	sn := dsutils.ToSchemaNotification(ctx, t.item)
 	// updates
-	upds, err := treetypes.ExpandAndConvertIntent(ctx, t.params.schemaClientBound, tree.RunningIntentName, tree.RunningValuesPrio, sn.GetUpdate(), t.item.GetTimestamp())
+	upds, err := treetypes.ExpandAndConvertIntent(ctx, t.params.schemaClientBound, consts.RunningIntentName, consts.RunningValuesPrio, sn.GetUpdate(), t.item.GetTimestamp())
 	if err != nil {
 		log.Error(err, "expansion and conversion failed")
 	}
@@ -298,14 +328,12 @@ func (t *notificationProcessorTask) Run(ctx context.Context, _ func(pool.Task) e
 	deletes := sdcpb.NewPathSet()
 	if len(t.item.GetDelete()) > 0 {
 		for _, del := range t.item.GetDelete() {
-			deletes.AddPath(dsutils.FromGNMIPath(t.item.GetPrefix(), del))
+			deletes.AddPath(dsutils.FromGNMIPath(t.item.GetPrefix(), del).StripPathElemPrefixPath())
 		}
 	}
 
-	t.params.notificationResult <- &NotificationData{
+	return t.sendNotificationData(ctx, &NotificationData{
 		updates: upds,
 		deletes: deletes,
-	}
-
-	return nil
+	})
 }

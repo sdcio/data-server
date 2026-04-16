@@ -16,8 +16,10 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/target"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
+	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -81,7 +83,7 @@ func TestApplyToRunning(t *testing.T) {
 				json.Unmarshal([]byte(confStr), &v)
 
 				vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-				_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
+				_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, consts.RunningIntentName, consts.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
 				if err != nil {
 					t.Fatalf("failed to import test config: %v", err)
 				}
@@ -109,7 +111,7 @@ func TestApplyToRunning(t *testing.T) {
 				var v any
 				json.Unmarshal([]byte(confStr), &v)
 
-				return jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false)
+				return jsonImporter.NewJsonTreeImporter(v, consts.RunningIntentName, consts.RunningValuesPrio, false)
 			},
 			resultFunc: func() any {
 				d := &sdcio_schema.Device{
@@ -187,7 +189,7 @@ func TestApplyToRunning(t *testing.T) {
 				json.Unmarshal([]byte(confStr), &v)
 
 				vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-				_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
+				_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, consts.RunningIntentName, consts.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
 				if err != nil {
 					t.Fatalf("failed to import test config: %v", err)
 				}
@@ -214,7 +216,7 @@ func TestApplyToRunning(t *testing.T) {
 				var v any
 				json.Unmarshal([]byte(confStr), &v)
 
-				return jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false)
+				return jsonImporter.NewJsonTreeImporter(v, consts.RunningIntentName, consts.RunningValuesPrio, false)
 			},
 			resultFunc: func() any {
 				d := &sdcio_schema.Device{
@@ -291,7 +293,7 @@ func TestApplyToRunning(t *testing.T) {
 				json.Unmarshal([]byte(confStr), &v)
 
 				vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-				_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
+				_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, consts.RunningIntentName, consts.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
 				if err != nil {
 					t.Fatalf("failed to import test config: %v", err)
 				}
@@ -319,7 +321,7 @@ func TestApplyToRunning(t *testing.T) {
 				var v any
 				json.Unmarshal([]byte(confStr), &v)
 
-				return jsonImporter.NewJsonTreeImporter(v, tree.RunningIntentName, tree.RunningValuesPrio, false)
+				return jsonImporter.NewJsonTreeImporter(v, consts.RunningIntentName, consts.RunningValuesPrio, false)
 			},
 			resultFunc: func() any {
 				d := &sdcio_schema.Device{
@@ -400,7 +402,7 @@ func TestApplyToRunning(t *testing.T) {
 			d := tt.resultFunc()
 
 			vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-			_, err = resultRoot.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(d, tree.RunningIntentName, tree.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
+			_, err = resultRoot.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(d, consts.RunningIntentName, consts.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
 			if err != nil {
 				t.Fatalf("failed to import test config: %v", err)
 			}
@@ -412,13 +414,14 @@ func TestApplyToRunning(t *testing.T) {
 
 			fmt.Println(syncTree.String())
 
-			resetFlagsProcessorParams := tree.NewResetFlagsProcessorParameters().SetNewFlag().SetUpdateFlag()
-			err = tree.NewResetFlagsProcessor(resetFlagsProcessorParams).Run(syncTree.GetRoot(), datastore.taskPool)
+			resetFlagsProcessorParams := &processors.ResetFlagsProcessorParams{NewFlag: true, UpdateFlag: true}
+			rpf := processors.NewResetFlagsProcessor(resetFlagsProcessorParams)
+			err = rpf.Run(syncTree.Entry, datastore.taskPool)
 			if err != nil {
 				t.Fatalf("failed to reset flags: %v", err)
 			}
 
-			fmt.Println("Adjusted flags count:", resetFlagsProcessorParams.GetAdjustedFlagsCount())
+			fmt.Println("Adjusted flags count:", rpf.GetAdjustedFlagsCount())
 
 			if diff := cmp.Diff(resultRoot.String(), syncTree.String()); diff != "" {
 				t.Errorf("mismatch (-want +got):\n%s", diff)

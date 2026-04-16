@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/sdcio/data-server/pkg/tree/importer"
-	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -102,7 +101,7 @@ func (j *JsonTreeImporterElement) GetKeyValue() (string, error) {
 }
 
 func (j *JsonTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	return utils.ConvertJsonValueToTv(j.data, slt)
+	return sdcpb.ConvertJsonValueToTv(j.data, slt)
 }
 
 func (j *JsonTreeImporterElement) GetName() string {

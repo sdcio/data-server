@@ -89,7 +89,7 @@ func (u *Update) ValueAsBytes() ([]byte, error) {
 	return proto.Marshal(u.value)
 }
 
-func (u *Update) Path() *sdcpb.Path {
+func (u *Update) SdcpbPath() *sdcpb.Path {
 	if u.parent == nil {
 		return nil
 	}
