@@ -8,6 +8,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -15,18 +16,23 @@ func GetPathCompletions(ctx context.Context, entry api.Entry, toComplete string)
 	var toCompletePath *sdcpb.Path
 	var err error
 
+	log := logger.FromContext(ctx).WithName("GetPathCompletions")
+
 	cleanToComplete := toComplete
 	keyPart := ""
 	doKeyAction := false
 
-	if strings.LastIndex(toComplete, "[") > strings.LastIndex(toComplete, "]") {
-		cleanToComplete = toComplete[:strings.LastIndex(toComplete, "[")]
-		keyPart = toComplete[strings.LastIndex(toComplete, "[")+1:]
+	lastIndexOpen := strings.LastIndex(toComplete, "[")
+
+	if lastIndexOpen > strings.LastIndex(toComplete, "]") {
+		cleanToComplete = toComplete[:lastIndexOpen]
+		keyPart = toComplete[lastIndexOpen+1:]
 		doKeyAction = true
 	}
 
 	toCompletePath, err = sdcpb.ParsePath(cleanToComplete)
 	if err != nil {
+		log.Error(err, "failed parsing path", "severity", "WARN", "path", cleanToComplete)
 		return nil
 	}
 
@@ -35,8 +41,9 @@ func GetPathCompletions(ctx context.Context, entry api.Entry, toComplete string)
 		completePathCopy := toCompletePath.DeepCopy()
 		completePathCopy.Elem[len(toCompletePath.Elem)-1].Key = nil
 
-		elem, _ := NavigateSdcpbPath(ctx, entry, completePathCopy)
-		if elem == nil {
+		elem, err := NavigateSdcpbPath(ctx, entry, completePathCopy)
+		if err != nil {
+			log.Error(err, "failed navigating path", "severity", "WARN", "path", completePathCopy.ToXPath(false))
 			return nil
 		}
 		// if the schema element defines more keys then we have already, we need to continue key completion
@@ -56,11 +63,15 @@ func GetPathCompletions(ctx context.Context, entry api.Entry, toComplete string)
 	return completePathName(ctx, entry, toCompletePath)
 }
 
+// completeKey completes the key values for a given path. It expects the toCompletePath to be the path up to the key and the leftover
+// to contain the key name and value in the format key=value. It returns a list of possible completions in the format path[key=value].
 func completeKey(ctx context.Context, entry api.Entry, toCompletePath *sdcpb.Path, leftover string) []string {
+	log := logger.FromContext(ctx)
 	attrName, attrVal, _ := strings.Cut(leftover, "=")
 
 	entry, err := NavigateSdcpbPath(ctx, entry, toCompletePath)
 	if err != nil {
+		log.Error(err, "failed navigating path", "severity", "WARN", "path", toCompletePath.ToXPath(false))
 		return nil
 	}
 
@@ -72,6 +83,7 @@ func completeKey(ctx context.Context, entry api.Entry, toCompletePath *sdcpb.Pat
 
 	childs, err := FilterChilds(entry, lastLevelKeys)
 	if err != nil {
+		log.Error(err, "failed filtering childs", "severity", "WARN", "path", toCompletePath.ToXPath(false))
 		return nil
 	}
 	result := []string{}
