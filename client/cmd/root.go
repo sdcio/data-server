@@ -17,7 +17,6 @@ package cmd
 import (
 	"context"
 	"os"
-	"time"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
@@ -55,10 +54,7 @@ func init() {
 }
 
 func createDataClient(ctx context.Context, addr string) (sdcpb.DataServerClient, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	cc, err := grpc.DialContext(ctx, addr,
-		grpc.WithBlock(),
+	cc, err := grpc.NewClient(addr,
 		grpc.WithTransportCredentials(
 			insecure.NewCredentials(),
 		),
@@ -67,5 +63,6 @@ func createDataClient(ctx context.Context, addr string) (sdcpb.DataServerClient,
 	if err != nil {
 		return nil, err
 	}
+
 	return sdcpb.NewDataServerClient(cc), nil
 }
