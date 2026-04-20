@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"time"
 )
 
@@ -44,9 +45,21 @@ type DeviationConfig struct {
 }
 
 func (d *DeviationConfig) validateSetDefaults() error {
-	if d.Interval == 0 {
+	switch {
+	case d.Interval < 0:
+		return errors.New("deviation interval cannot be negative")
+	case d.Interval > 0:
+		// use configured value
+	case os.Getenv("DEVIATION_INTERVAL") != "":
+		envInterval, err := time.ParseDuration(os.Getenv("DEVIATION_INTERVAL"))
+		if err != nil {
+			return fmt.Errorf("invalid DEVIATION_INTERVAL: %w", err)
+		}
+		d.Interval = envInterval
+	default:
 		d.Interval = 30 * time.Second
 	}
+
 	return nil
 }
 
