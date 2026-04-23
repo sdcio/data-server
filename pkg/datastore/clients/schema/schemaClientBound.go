@@ -124,3 +124,16 @@ func (scb *SchemaClientBoundImpl) getSchema() *sdcpb.Schema {
 		Vendor:  scb.schema.Vendor,
 	}
 }
+
+func (scb *SchemaClientBoundImpl) ToPath(ctx context.Context, path []string) (*sdcpb.Path, error) {
+	in := &sdcpb.ToPathRequest{
+		PathElement: path,
+		Schema:      scb.getSchema(),
+	}
+
+	resp, err := scb.schemaClient.ToPath(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Path, nil
+}
