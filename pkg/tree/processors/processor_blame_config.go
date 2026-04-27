@@ -93,10 +93,18 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 
 			// check if running equals the expected
 			runningLe := t.selfEntry.GetLeafVariants().GetRunning()
-			if runningLe != nil {
+
+			switch {
+			case runningLe != nil:
+				// if running value is different from the highest precedence value, then we have a deviation,
+				// so we set the deviation value to the running value
 				if !proto.Equal(runningLe.Update.Value(), highestLe.Update.Value()) {
 					t.self.SetDeviationValue(runningLe.Value())
 				}
+			case runningLe == nil && highestLe.GetUpdate().Owner() != consts.DefaultsIntentName:
+				// if running is nil and highest is not from default, then the deviation is from a non-existing running value,
+				// so we set it to empty
+				t.self.SetDeviationValue(&sdcpb.TypedValue{})
 			}
 		}
 	}
