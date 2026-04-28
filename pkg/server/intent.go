@@ -10,6 +10,7 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func (s *Server) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (*sdcpb.ListIntentResponse, error) {
@@ -82,6 +83,20 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 	}
 
 	switch req.GetFormat() {
+	case sdcpb.Format_Intent_Format_XPATH:
+		j, err := rsp.ToXPath(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		b, err := protojson.Marshal(j)
+		if err != nil {
+			return nil, err
+		}
+		getIntentResponse.Intent = &sdcpb.GetIntentResponse_Blob{
+			Blob: b,
+		}
+		return getIntentResponse, nil
 	case sdcpb.Format_Intent_Format_JSON, sdcpb.Format_Intent_Format_JSON_IETF:
 		var j any
 		switch req.GetFormat() {
@@ -95,6 +110,7 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 			if err != nil {
 				return nil, err
 			}
+
 		}
 		b, err := json.Marshal(j)
 		if err != nil {
