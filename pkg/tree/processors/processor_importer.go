@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/api"
 	treeimporter "github.com/sdcio/data-server/pkg/tree/importer"
-	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -87,14 +87,17 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			var actual api.Entry = task.entry
 			var keyChild api.Entry
 
-			keys := ops.GetSchemaKeys(task.entry)
-			slices.Sort(keys)
+			keys := task.entry.GetSchema().GetContainer().GetKeys()
+
+			slices.SortFunc(keys, func(a *sdcpb.LeafSchema, b *sdcpb.LeafSchema) int {
+				return strings.Compare(a.GetName(), b.GetName())
+			})
 			for _, k := range keys {
-				ktrans := task.importerElement.GetElement(k)
+				ktrans := task.importerElement.GetElement(k.GetName())
 				if ktrans == nil {
-					return fmt.Errorf("unable to find key attribute %s under %s", k, task.entry.SdcpbPath().ToXPath(false))
+					return fmt.Errorf("unable to find key attribute %s under %s", k.GetName(), task.entry.SdcpbPath().ToXPath(false))
 				}
-				kv, err := ktrans.GetKeyValue()
+				kv, err := ktrans.GetKeyValue(ctx, k.GetType())
 				if err != nil {
 					return err
 				}
