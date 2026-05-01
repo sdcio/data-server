@@ -11,9 +11,11 @@ import (
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/processors"
+	"github.com/sdcio/data-server/pkg/tree/types"
 
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -635,5 +637,82 @@ func TestToXMLTable(t *testing.T) {
 				t.Fatalf("ToXML() mismatch (-want +got)\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestToXML_KeyLeafDeleteUpgradesToListEntryDelete(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	converter := utils.NewConverter(scb)
+	tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	runningCfg := &sdcio_schema.Device{
+		Patterntest: ygot.String("hallo 00"),
+		NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
+			"default": {
+				AdminState:  sdcio_schema.SdcioModelNi_AdminState_enable,
+				Description: ygot.String("Default NI"),
+				Type:        sdcio_schema.SdcioModelNi_NiType_default,
+				Name:        ygot.String("default"),
+			},
+		},
+	}
+	runningUpds, err := testhelper.ExpandUpdateFromConfig(ctx, runningCfg, converter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = testhelper.AddToRoot(ctx, root.Entry, runningUpds, testhelper.FlagsExisting, consts.RunningIntentName, consts.RunningValuesPrio)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	nameEntry, err := ops.NavigateSdcpbPath(ctx, root.Entry, &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "network-instance", Key: map[string]string{"name": "default"}}, {Name: "name"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleteLeaf := api.NewLeafEntry(
+		types.NewUpdate(nameEntry, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "default"}}, 5, "owner1", 0),
+		testhelper.FlagsDelete,
+		nameEntry,
+	)
+	nameEntry.GetLeafVariants().Add(deleteLeaf)
+	err = nil
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	xmlDoc, err := ops.ToXML(ctx, root.Entry, true, false, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	utils.XmlRecursiveSortElementsByTagName(&xmlDoc.Element)
+	xmlDoc.Indent(2)
+	xmlDocStr, err := xmlDoc.WriteToString()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := `<network-instance operation="delete">
+  <name>default</name>
+</network-instance>
+`
+	if diff := cmp.Diff(want, xmlDocStr); diff != "" {
+		t.Fatalf("ToXML() mismatch (-want +got)\n%s", diff)
 	}
 }
