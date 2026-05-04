@@ -127,11 +127,12 @@ func TestJsonTreeImporter_GetTVValue(t *testing.T) {
 		slt *sdcpb.SchemaLeafType
 	}
 	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *sdcpb.TypedValue
-		wantErr bool
+		name            string
+		fields          fields
+		args            args
+		want            *sdcpb.TypedValue
+		wantMatchedType string // expected matched type name ("" means same as input type)
+		wantErr         bool
 	}{
 		{
 			name: "string",
@@ -144,8 +145,9 @@ func TestJsonTreeImporter_GetTVValue(t *testing.T) {
 					Type: "string",
 				},
 			},
-			wantErr: false,
-			want:    &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "foobar"}},
+			wantErr:         false,
+			wantMatchedType: "string",
+			want:            &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "foobar"}},
 		},
 		{
 			name: "int",
@@ -158,8 +160,28 @@ func TestJsonTreeImporter_GetTVValue(t *testing.T) {
 					Type: "int32",
 				},
 			},
-			wantErr: false,
-			want:    &sdcpb.TypedValue{Value: &sdcpb.TypedValue_IntVal{IntVal: 5}},
+			wantErr:         false,
+			wantMatchedType: "int32",
+			want:            &sdcpb.TypedValue{Value: &sdcpb.TypedValue_IntVal{IntVal: 5}},
+		},
+		{
+			name: "union matched string branch",
+			fields: fields{
+				name: "foo",
+				data: "hello",
+			},
+			args: args{
+				&sdcpb.SchemaLeafType{
+					Type: "union",
+					UnionTypes: []*sdcpb.SchemaLeafType{
+						{Type: "uint32"},
+						{Type: "string"},
+					},
+				},
+			},
+			wantErr:         false,
+			wantMatchedType: "string",
+			want:            &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "hello"}},
 		},
 	}
 	for _, tt := range tests {
@@ -168,13 +190,16 @@ func TestJsonTreeImporter_GetTVValue(t *testing.T) {
 				data: tt.fields.data,
 				name: tt.fields.name,
 			}
-			got, err := j.GetTVValue(ctx, tt.args.slt)
+			got, matchedType, err := j.GetTVValue(ctx, tt.args.slt)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("JsonTreeImporter.GetTVValue() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("JsonTreeImporter.GetTVValue() = %v, want %v", got, tt.want)
+			}
+			if tt.wantMatchedType != "" && (matchedType == nil || matchedType.Type != tt.wantMatchedType) {
+				t.Errorf("JsonTreeImporter.GetTVValue() matchedType = %v, want type %q", matchedType, tt.wantMatchedType)
 			}
 		})
 	}

@@ -152,11 +152,11 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 		return nil
 
 	case *sdcpb.SchemaElem_Field:
-		tv, err := task.importerElement.GetTVValue(ctx, x.Field.GetType())
+		tv, matchedType, err := task.importerElement.GetTVValue(ctx, x.Field.GetType())
 		if err != nil {
 			return err
 		}
-		upd := types.NewUpdate(task.entry, tv, task.context.intentPrio, task.context.intentName, 0)
+		upd := types.NewUpdate(task.entry, tv, task.context.intentPrio, task.context.intentName, 0).WithMatchedType(matchedType)
 		task.entry.GetLeafVariants().AddWithStats(api.NewLeafEntry(upd, task.context.insertFlags, task.entry), task.context.stats)
 		return nil
 
@@ -189,7 +189,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			scalarArr = &sdcpb.ScalarArray{Element: []*sdcpb.TypedValue{}}
 		}
 
-		tv, err := task.importerElement.GetTVValue(ctx, x.Leaflist.GetType())
+		tv, _, err := task.importerElement.GetTVValue(ctx, x.Leaflist.GetType())
 		if err != nil {
 			return err
 		}

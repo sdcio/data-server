@@ -30,8 +30,9 @@ type ImportConfigAdapterElement interface {
 	// When and were to expect a Leafs or LeafList is defined by the yang schema.
 	// The String value is typically used for the keys.
 	GetKeyValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (string, error)
-	// GetTVValue returns the TypedValue based value defined via the SchemaLeafType. Can also only be called on Leafs or LeafLists
-	GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error)
+	// GetTVValue returns the TypedValue based value defined via the SchemaLeafType. Can also only be called on Leafs or LeafLists.
+	// For union-typed leaves the second return value is the matched branch SchemaLeafType; for non-union or proto-loaded values it is nil.
+	GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, *sdcpb.SchemaLeafType, error)
 	// returns the name of the actual Level.
 	GetName() string
 }
