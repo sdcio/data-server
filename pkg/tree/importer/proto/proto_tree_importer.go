@@ -80,20 +80,22 @@ func (p *ProtoTreeImporterElement) GetElement(key string) importer.ImportConfigA
 }
 
 func (p *ProtoTreeImporterElement) GetKeyValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (string, error) {
-	tv, err := p.GetTVValue(ctx, slt)
+	tv, _, err := p.GetTVValue(ctx, slt)
 	if err != nil {
 		return "", fmt.Errorf("failed GetTVValue for %s", p.data.Name)
 	}
 	return tv.ToString(), nil
 }
 
-func (p *ProtoTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+// GetTVValue unmarshals the proto-serialized TypedValue. No original lexical context is available,
+// so the matched union branch type is always nil (graceful fallback to outer schema type in validators).
+func (p *ProtoTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, *sdcpb.SchemaLeafType, error) {
 	result := &sdcpb.TypedValue{}
 	err := proto.Unmarshal(p.data.LeafVariant, result)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return result, nil
+	return result, nil, nil
 }
 func (p *ProtoTreeImporterElement) GetName() string {
 	return p.data.Name

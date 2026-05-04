@@ -237,3 +237,67 @@ func TestXmlTreeImporterElement_IdentityRef(t *testing.T) {
 		t.Fatalf("Integrating xml failed. mismatch (-want +got).\nDiff:\n%s", diff)
 	}
 }
+
+func TestXmlTreeImporterElement_GetTVValue_MatchedType(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name            string
+		xmlText         string
+		slt             *sdcpb.SchemaLeafType
+		wantMatchedType string // expected matched branch TypeName ("" = nil expected)
+		wantErr         bool
+	}{
+		{
+			name:            "non-union returns input type",
+			xmlText:         "hello",
+			slt:             &sdcpb.SchemaLeafType{Type: "string"},
+			wantMatchedType: "string",
+		},
+		{
+			name:    "union matched string branch",
+			xmlText: "hello",
+			slt: &sdcpb.SchemaLeafType{
+				Type: "union",
+				UnionTypes: []*sdcpb.SchemaLeafType{
+					{Type: "uint32"},
+					{Type: "string"},
+				},
+			},
+			wantMatchedType: "string",
+		},
+		{
+			name:    "union matched uint32 branch",
+			xmlText: "42",
+			slt: &sdcpb.SchemaLeafType{
+				Type: "union",
+				UnionTypes: []*sdcpb.SchemaLeafType{
+					{Type: "uint32"},
+					{Type: "string"},
+				},
+			},
+			wantMatchedType: "uint32",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc := etree.NewDocument()
+			doc.ReadFromString("<leaf>" + tt.xmlText + "</leaf>")
+			elem := NewXmlTreeImporterElement(doc.Root())
+
+			_, matchedType, err := elem.GetTVValue(ctx, tt.slt)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("GetTVValue() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantMatchedType == "" {
+				if matchedType != nil {
+					t.Errorf("expected nil matchedType, got %v", matchedType)
+				}
+			} else {
+				if matchedType == nil || matchedType.Type != tt.wantMatchedType {
+					t.Errorf("matchedType = %v, want type %q", matchedType, tt.wantMatchedType)
+				}
+			}
+		})
+	}
+}

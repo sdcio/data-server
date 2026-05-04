@@ -37,16 +37,19 @@ func yangPatternToGo(p string) string {
 
 func validatePattern(_ context.Context, e api.Entry, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats) {
 	if schema := e.GetSchema().GetField(); schema != nil {
-		if len(schema.GetType().GetPatterns()) == 0 {
-			return
-		}
-
 		lv := e.GetLeafVariants().GetHighestPrecedence(false, true, false)
 		if lv == nil {
 			return
 		}
+
+		effectiveType := lv.Update.EffectiveLeafType(schema.GetType())
+
+		if len(effectiveType.GetPatterns()) == 0 {
+			return
+		}
+
 		value := lv.Value().GetStringVal()
-		for _, pattern := range schema.GetType().GetPatterns() {
+		for _, pattern := range effectiveType.GetPatterns() {
 			if p := pattern.GetPattern(); p != "" {
 				goPattern := yangPatternToGo(p)
 				matched, err := regexp.MatchString(goPattern, value)
@@ -60,6 +63,6 @@ func validatePattern(_ context.Context, e api.Entry, resultChan chan<- *types.Va
 			}
 
 		}
-		stats.Add(types.StatTypePattern, uint32(len(schema.GetType().GetPatterns())))
+		stats.Add(types.StatTypePattern, uint32(len(effectiveType.GetPatterns())))
 	}
 }

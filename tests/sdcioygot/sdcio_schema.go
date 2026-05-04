@@ -128,6 +128,10 @@ type Device struct {
 	RangetestLeaflist	[]uint32	`path:"rangetestLeaflist" module:"sdcio_model"`
 	Rangetestsigned	*int32	`path:"rangetestsigned" module:"sdcio_model"`
 	Rangetestunsigned	*uint32	`path:"rangetestunsigned" module:"sdcio_model"`
+	Unionleafreftest	*string	`path:"unionleafreftest" module:"sdcio_model"`
+	Unionlengthtest	SdcioModel_Unionlengthtest_Union	`path:"unionlengthtest" module:"sdcio_model"`
+	Unionpatterntest	SdcioModel_Unionpatterntest_Union	`path:"unionpatterntest" module:"sdcio_model"`
+	Unionrangetest	SdcioModel_Unionrangetest_Union	`path:"unionrangetest" module:"sdcio_model"`
 }
 
 // IsYANGGoStruct ensures that Device implements the yang.GoStruct
@@ -314,6 +318,126 @@ func (t *Device) ΛEnumTypeMap() map[string][]reflect.Type { return ΛEnumTypes 
 // of Device.
 func (*Device) ΛBelongingModule() string {
 	return ""
+}
+
+// SdcioModel_Unionlengthtest_Union is an interface that is implemented by valid types for the union
+// for the leaf /sdcio_model/unionlengthtest within the YANG schema.
+type SdcioModel_Unionlengthtest_Union interface {
+	Is_SdcioModel_Unionlengthtest_Union()
+}
+
+// SdcioModel_Unionlengthtest_Union_String is used when /sdcio_model/unionlengthtest
+// is to be set to a string value.
+type SdcioModel_Unionlengthtest_Union_String struct {
+	String	string
+}
+
+// Is_SdcioModel_Unionlengthtest_Union ensures that SdcioModel_Unionlengthtest_Union_String
+// implements the SdcioModel_Unionlengthtest_Union interface.
+func (*SdcioModel_Unionlengthtest_Union_String) Is_SdcioModel_Unionlengthtest_Union() {}
+
+// SdcioModel_Unionlengthtest_Union_Uint32 is used when /sdcio_model/unionlengthtest
+// is to be set to a uint32 value.
+type SdcioModel_Unionlengthtest_Union_Uint32 struct {
+	Uint32	uint32
+}
+
+// Is_SdcioModel_Unionlengthtest_Union ensures that SdcioModel_Unionlengthtest_Union_Uint32
+// implements the SdcioModel_Unionlengthtest_Union interface.
+func (*SdcioModel_Unionlengthtest_Union_Uint32) Is_SdcioModel_Unionlengthtest_Union() {}
+
+// To_SdcioModel_Unionlengthtest_Union takes an input interface{} and attempts to convert it to a struct
+// which implements the SdcioModel_Unionlengthtest_Union union. It returns an error if the interface{} supplied
+// cannot be converted to a type within the union.
+func (t *Device) To_SdcioModel_Unionlengthtest_Union(i interface{}) (SdcioModel_Unionlengthtest_Union, error) {
+	switch v := i.(type) {
+	case string:
+		return &SdcioModel_Unionlengthtest_Union_String{v}, nil
+	case uint32:
+		return &SdcioModel_Unionlengthtest_Union_Uint32{v}, nil
+	default:
+		return nil, fmt.Errorf("cannot convert %v to SdcioModel_Unionlengthtest_Union, unknown union type, got: %T, want any of [string, uint32]", i, i)
+	}
+}
+
+// SdcioModel_Unionpatterntest_Union is an interface that is implemented by valid types for the union
+// for the leaf /sdcio_model/unionpatterntest within the YANG schema.
+type SdcioModel_Unionpatterntest_Union interface {
+	Is_SdcioModel_Unionpatterntest_Union()
+}
+
+// SdcioModel_Unionpatterntest_Union_String is used when /sdcio_model/unionpatterntest
+// is to be set to a string value.
+type SdcioModel_Unionpatterntest_Union_String struct {
+	String	string
+}
+
+// Is_SdcioModel_Unionpatterntest_Union ensures that SdcioModel_Unionpatterntest_Union_String
+// implements the SdcioModel_Unionpatterntest_Union interface.
+func (*SdcioModel_Unionpatterntest_Union_String) Is_SdcioModel_Unionpatterntest_Union() {}
+
+// SdcioModel_Unionpatterntest_Union_Uint32 is used when /sdcio_model/unionpatterntest
+// is to be set to a uint32 value.
+type SdcioModel_Unionpatterntest_Union_Uint32 struct {
+	Uint32	uint32
+}
+
+// Is_SdcioModel_Unionpatterntest_Union ensures that SdcioModel_Unionpatterntest_Union_Uint32
+// implements the SdcioModel_Unionpatterntest_Union interface.
+func (*SdcioModel_Unionpatterntest_Union_Uint32) Is_SdcioModel_Unionpatterntest_Union() {}
+
+// To_SdcioModel_Unionpatterntest_Union takes an input interface{} and attempts to convert it to a struct
+// which implements the SdcioModel_Unionpatterntest_Union union. It returns an error if the interface{} supplied
+// cannot be converted to a type within the union.
+func (t *Device) To_SdcioModel_Unionpatterntest_Union(i interface{}) (SdcioModel_Unionpatterntest_Union, error) {
+	switch v := i.(type) {
+	case string:
+		return &SdcioModel_Unionpatterntest_Union_String{v}, nil
+	case uint32:
+		return &SdcioModel_Unionpatterntest_Union_Uint32{v}, nil
+	default:
+		return nil, fmt.Errorf("cannot convert %v to SdcioModel_Unionpatterntest_Union, unknown union type, got: %T, want any of [string, uint32]", i, i)
+	}
+}
+
+// SdcioModel_Unionrangetest_Union is an interface that is implemented by valid types for the union
+// for the leaf /sdcio_model/unionrangetest within the YANG schema.
+type SdcioModel_Unionrangetest_Union interface {
+	Is_SdcioModel_Unionrangetest_Union()
+}
+
+// SdcioModel_Unionrangetest_Union_String is used when /sdcio_model/unionrangetest
+// is to be set to a string value.
+type SdcioModel_Unionrangetest_Union_String struct {
+	String	string
+}
+
+// Is_SdcioModel_Unionrangetest_Union ensures that SdcioModel_Unionrangetest_Union_String
+// implements the SdcioModel_Unionrangetest_Union interface.
+func (*SdcioModel_Unionrangetest_Union_String) Is_SdcioModel_Unionrangetest_Union() {}
+
+// SdcioModel_Unionrangetest_Union_Uint32 is used when /sdcio_model/unionrangetest
+// is to be set to a uint32 value.
+type SdcioModel_Unionrangetest_Union_Uint32 struct {
+	Uint32	uint32
+}
+
+// Is_SdcioModel_Unionrangetest_Union ensures that SdcioModel_Unionrangetest_Union_Uint32
+// implements the SdcioModel_Unionrangetest_Union interface.
+func (*SdcioModel_Unionrangetest_Union_Uint32) Is_SdcioModel_Unionrangetest_Union() {}
+
+// To_SdcioModel_Unionrangetest_Union takes an input interface{} and attempts to convert it to a struct
+// which implements the SdcioModel_Unionrangetest_Union union. It returns an error if the interface{} supplied
+// cannot be converted to a type within the union.
+func (t *Device) To_SdcioModel_Unionrangetest_Union(i interface{}) (SdcioModel_Unionrangetest_Union, error) {
+	switch v := i.(type) {
+	case string:
+		return &SdcioModel_Unionrangetest_Union_String{v}, nil
+	case uint32:
+		return &SdcioModel_Unionrangetest_Union_Uint32{v}, nil
+	default:
+		return nil, fmt.Errorf("cannot convert %v to SdcioModel_Unionrangetest_Union, unknown union type, got: %T, want any of [string, uint32]", i, i)
+	}
 }
 
 
@@ -2599,10 +2723,23 @@ var (
 		0x50, 0x6f, 0x7f, 0x43, 0xd8, 0x8f, 0xd1, 0xaf, 0xfd, 0x8a, 0x5d, 0x1e, 0xd7, 0x8a, 0x9d, 0x77,
 		0x6b, 0xbf, 0x62, 0x9d, 0xa3, 0x5a, 0x30, 0x15, 0x0c, 0xed, 0xc5, 0x39, 0xa3, 0xbb, 0x34, 0x0b,
 		0x1b, 0xec, 0xd4, 0x44, 0x4d, 0x95, 0x5b, 0xa3, 0xd8, 0x0c, 0x25, 0xc0, 0x8a, 0xcd, 0x50, 0x6c,
-		0x86, 0x62, 0x33, 0x0e, 0x90, 0xcd, 0x78, 0x95, 0xfc, 0x69, 0x35, 0x17, 0x79, 0x99, 0xcb, 0x86,
-		0xe5, 0xfd, 0x6a, 0x7c, 0xc5, 0x9f, 0x1d, 0x27, 0x6d, 0x41, 0xb6, 0xb3, 0x99, 0x8d, 0xf8, 0x9f,
-		0x12, 0x99, 0xca, 0x5f, 0xf0, 0x93, 0xb5, 0xce, 0x4a, 0xbe, 0xbc, 0x7a, 0xf9, 0x3f, 0x00, 0x00,
-		0x00, 0xff, 0xff, 0x01, 0x00, 0x00, 0xff, 0xff, 0x31, 0x8e, 0x68, 0x02, 0xca, 0xf3, 0x01, 0x00,
+		0x86, 0x62, 0x33, 0x0e, 0x90, 0xcd, 0xc8, 0x34, 0x98, 0x0b, 0xdb, 0x72, 0xec, 0x29, 0x36, 0x46,
+		0x2e, 0x1e, 0xd1, 0x33, 0x82, 0xa9, 0x96, 0xca, 0x5c, 0x96, 0x69, 0x2e, 0xfd, 0xd9, 0xa6, 0x65,
+		0x05, 0x33, 0xe0, 0x47, 0x3f, 0x5e, 0x04, 0xd8, 0xbf, 0xb2, 0x5a, 0x5d, 0xc8, 0xde, 0x15, 0x4a,
+		0x66, 0xb0, 0xf1, 0x69, 0x9d, 0xe5, 0xb6, 0x6c, 0x82, 0xdd, 0x91, 0x31, 0xc4, 0xc1, 0xae, 0xfa,
+		0x86, 0x24, 0x75, 0xc3, 0xcc, 0x9c, 0xa6, 0x33, 0xa8, 0xf2, 0x05, 0xc6, 0x1e, 0x93, 0x09, 0x48,
+		0x5e, 0xa2, 0x86, 0x4a, 0x5c, 0x0e, 0x4d, 0x5c, 0x38, 0x00, 0x48, 0x69, 0xc3, 0x48, 0xe5, 0xb3,
+		0xfb, 0xc3, 0x65, 0x87, 0x53, 0x96, 0x0c, 0x78, 0x38, 0x5f, 0xf8, 0xb8, 0x35, 0xff, 0xf1, 0x6a,
+		0xc8, 0x71, 0x65, 0x9e, 0x23, 0xe8, 0x60, 0x3f, 0x7f, 0x1f, 0x63, 0x15, 0xdc, 0xc4, 0xdb, 0x97,
+		0xac, 0x4b, 0x73, 0xa3, 0x33, 0x40, 0x94, 0x06, 0x8c, 0xd6, 0xca, 0x06, 0xb2, 0x7e, 0x3c, 0x40,
+		0xe6, 0xad, 0x9d, 0x50, 0x5f, 0x40, 0x8b, 0x9b, 0x68, 0xd0, 0x2e, 0xb7, 0x54, 0x4b, 0x65, 0xa4,
+		0x95, 0x91, 0xce, 0x71, 0x69, 0x41, 0x27, 0x9b, 0x41, 0xdb, 0xb2, 0x94, 0x12, 0x57, 0x4a, 0x5c,
+		0x29, 0x71, 0x88, 0x12, 0x8f, 0x38, 0x7a, 0x86, 0x0a, 0xdf, 0xb4, 0x53, 0x0a, 0xfc, 0xd0, 0x14,
+		0xf8, 0x01, 0x68, 0xb5, 0xce, 0x11, 0xa9, 0x35, 0x66, 0x22, 0xe2, 0x88, 0xa3, 0xac, 0x1d, 0x32,
+		0x56, 0xaf, 0x62, 0x3d, 0xcd, 0x3b, 0x9c, 0xd2, 0xb0, 0xbc, 0x5f, 0x8d, 0xaf, 0xf8, 0xb3, 0xe3,
+		0xa4, 0x15, 0xcc, 0xf6, 0x81, 0x95, 0x46, 0xfc, 0x4f, 0x89, 0xc3, 0x28, 0xbf, 0xe0, 0x27, 0x6b,
+		0x7d, 0xf0, 0xe4, 0xe5, 0xd5, 0xcb, 0xff, 0x01, 0x00, 0x00, 0xff, 0xff, 0x01, 0x00, 0x00, 0xff,
+		0xff, 0x8b, 0x36, 0x32, 0x25, 0xad, 0x09, 0x02, 0x00,
 	}
 )
 

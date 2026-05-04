@@ -110,8 +110,30 @@ func (j *JsonTreeImporterElement) GetKeyValue(ctx context.Context, slt *sdcpb.Sc
 	return fmt.Sprintf("%v", j.data), nil
 }
 
-func (j *JsonTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	return sdcpb.ConvertJsonValueToTv(j.data, slt)
+func (j *JsonTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, *sdcpb.SchemaLeafType, error) {
+	return jsonValueToTVWithMatchedType(j.data, slt)
+}
+
+// jsonValueToTVWithMatchedType mirrors sdcpb.ConvertJsonValueToTvWithType (newer sdc-protos);
+// keeps union branch type for validation while staying compatible with sdc-protos v0.0.54.
+func jsonValueToTVWithMatchedType(d any, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, *sdcpb.SchemaLeafType, error) {
+	if slt == nil {
+		return nil, nil, fmt.Errorf("type information is nil")
+	}
+	if slt.Type != "union" {
+		tv, err := sdcpb.ConvertJsonValueToTv(d, slt)
+		if err != nil {
+			return nil, nil, err
+		}
+		return tv, slt, nil
+	}
+	for _, branch := range slt.GetUnionTypes() {
+		tv, matched, err := jsonValueToTVWithMatchedType(d, branch)
+		if err == nil {
+			return tv, matched, nil
+		}
+	}
+	return nil, nil, fmt.Errorf("invalid value %v for union type: %v", d, slt.GetUnionTypes())
 }
 
 func (j *JsonTreeImporterElement) GetName() string {

@@ -91,4 +91,36 @@ module sdcio_model {
       range "10..300 | 5000..5020 | 9999";
     }
   }
+  leaf unionpatterntest {
+    type union {
+      type string {
+        pattern 'hallo [0-9a-fA-F]*';
+      }
+      type uint32;
+    }
+  }
+  leaf unionlengthtest {
+    type union {
+      type string {
+        length "7..10";
+      }
+      type uint32;
+    }
+  }
+  leaf unionrangetest {
+    type union {
+      type uint32 {
+        range "10..300";
+      }
+      type string;
+    }
+  }
+  leaf unionleafreftest {
+    type union {
+      type leafref {
+        path "/interface/name";
+      }
+      type string;
+    }
+  }
 }
