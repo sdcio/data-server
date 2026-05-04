@@ -2,18 +2,24 @@ package xml
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"runtime"
 	"testing"
 
 	"github.com/beevik/etree"
 	"github.com/google/go-cmp/cmp"
+	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/consts"
+	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
+	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 )
 
@@ -138,5 +144,96 @@ func TestXmlTreeImporter(t *testing.T) {
 				t.Fatalf("Integrating xml failed. mismatch (-want +got).\nDiff:\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestXmlTreeImporterElement_IdentityRef(t *testing.T) {
+	d := &sdcio_schema.Device{
+		Identityref: &sdcio_schema.SdcioModel_Identityref{
+			CryptoA: sdcio_schema.SdcioModelIdentityBase_CryptoAlg_des,
+		},
+		Intentityrefkey: map[sdcio_schema.E_SdcioModelIdentityBase_CryptoAlg]*sdcio_schema.SdcioModel_Intentityrefkey{
+			sdcio_schema.SdcioModelIdentityBase_CryptoAlg_des: &sdcio_schema.SdcioModel_Intentityrefkey{
+				Crypto:      sdcio_schema.SdcioModelIdentityBase_CryptoAlg_des,
+				Description: ygot.String("DES crypto"),
+			},
+		},
+	}
+
+	// create a gomock controller
+	controller := gomock.NewController(t)
+
+	scb, err := testhelper.GetSchemaClientBound(t, controller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	confStr, err := ygot.EmitJSON(d, &ygot.EmitJSONConfig{
+		Format:         ygot.RFC7951,
+		SkipValidation: false,
+	})
+	if err != nil {
+		t.Fatalf("failed to marshal test config: %v", err)
+	}
+
+	var v any
+	json.Unmarshal([]byte(confStr), &v)
+
+	vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, consts.RunningIntentName, consts.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
+	if err != nil {
+		t.Fatalf("failed to import test config: %v", err)
+	}
+
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Log(root.String())
+
+	result, err := ops.ToXML(ctx, root.Entry, false, false, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result.Indent(2)
+	xmlResultStr, err := result.WriteToString()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(xmlResultStr)
+
+	vpf = pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	tc = tree.NewTreeContext(scb, vpf)
+
+	newroot, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = newroot.ImportConfig(ctx, &sdcpb.Path{}, NewXmlTreeImporter(&result.Element, consts.RunningIntentName, consts.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
+	if err != nil {
+		t.Fatalf("failed to import test config: %v", err)
+	}
+
+	err = newroot.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Log(newroot.String())
+
+	if diff := cmp.Diff(root.String(), newroot.String()); diff != "" {
+		t.Fatalf("Integrating xml failed. mismatch (-want +got).\nDiff:\n%s", diff)
 	}
 }

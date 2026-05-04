@@ -96,7 +96,7 @@ func (j *JsonTreeImporterElement) GetElements() []importer.ImportConfigAdapterEl
 	return result
 }
 
-func (j *JsonTreeImporterElement) GetKeyValue() (string, error) {
+func (j *JsonTreeImporterElement) GetKeyValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (string, error) {
 	return fmt.Sprintf("%v", j.data), nil
 }
 

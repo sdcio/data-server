@@ -79,8 +79,8 @@ func (p *ProtoTreeImporterElement) GetElement(key string) importer.ImportConfigA
 	return nil
 }
 
-func (p *ProtoTreeImporterElement) GetKeyValue() (string, error) {
-	tv, err := p.GetTVValue(context.Background(), nil)
+func (p *ProtoTreeImporterElement) GetKeyValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (string, error) {
+	tv, err := p.GetTVValue(ctx, slt)
 	if err != nil {
 		return "", fmt.Errorf("failed GetTVValue for %s", p.data.Name)
 	}

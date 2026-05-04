@@ -27,5 +27,16 @@ module sdcio_model_identity {
         }
       }
     }
+    list intentityrefkey {
+      key "crypto";
+      leaf crypto {
+        type identityref {
+          base identity_base:crypto-alg;
+        }
+      }
+      leaf description {
+        type string;
+      }
+    }
   }
 }

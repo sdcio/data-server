@@ -79,7 +79,7 @@ func TestJsonTreeImporter_GetKeyValue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			j := newJsonTreeImporterElement(tt.fields.name, tt.fields.data)
 
-			if got, _ := j.GetKeyValue(); got != tt.want {
+			if got, _ := j.GetKeyValue(context.Background(), nil); got != tt.want {
 				t.Errorf("JsonTreeImporter.GetKeyValue() = %v, want %v", got, tt.want)
 			}
 		})

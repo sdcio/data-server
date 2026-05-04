@@ -15,12 +15,10 @@ module sdcio_model_static_route {
     container ipv6 {
       description
         "IPv6 static route container";
-      
       list static-route {
         key "owner ipv6-prefix next-hop";
         description
           "IPv6 static route configuration.";
-        
         leaf owner {
           type string {
             pattern 'owner-.*';
@@ -28,7 +26,6 @@ module sdcio_model_static_route {
           description
             "Specifies the service owner - must start with 'owner-'";
         }
-        
         leaf ipv6-prefix {
           type string {
             pattern 'prefix-.*';
@@ -36,7 +33,6 @@ module sdcio_model_static_route {
           description
             "IPv6 prefix - must start with 'prefix-'";
         }
-        
         leaf next-hop {
           type string {
             pattern 'nexthop-.*';
@@ -44,10 +40,9 @@ module sdcio_model_static_route {
           description
             "Specifies the next hop - must start with 'nexthop-'";
         }
-        
         leaf bfd-enabled {
           type boolean;
-          default false;
+          default "false";
           description
             "Enable BFD for this static route";
         }
