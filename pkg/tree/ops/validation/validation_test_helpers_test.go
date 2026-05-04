@@ -1,20 +1,16 @@
-package validation
 package validation_test
 
 import (
 	"context"
-	"encoding/json"
 	"runtime"
 	"testing"
 
-	"github.com/openconfig/ygot/ygot"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
-	json_importer "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 // importDeviceJSON creates a fresh tree, imports req via JSON (owner "owner1", priority 5),
@@ -29,20 +25,7 @@ func importDeviceJSON(t *testing.T, ctx context.Context, scb schemaClient.Schema
 		t.Fatal(err)
 	}
 
-	configJSON, err := ygot.EmitJSON(req, &ygot.EmitJSONConfig{Format: ygot.RFC7951, SkipValidation: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var jsonConfig any
-	if err = json.Unmarshal([]byte(configJSON), &jsonConfig); err != nil {
-		t.Fatal(err)
-	}
-
-	jimporter := json_importer.NewJsonTreeImporter(jsonConfig, "owner1", 5, false)
-	sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
-
-	if _, err = root.ImportConfig(ctx, &sdcpb.Path{}, jimporter, types.NewUpdateInsertFlags(), sharedPool); err != nil {
+	if _, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, req, root.Entry, "owner1", 5, false, types.NewUpdateInsertFlags()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -50,5 +33,6 @@ func importDeviceJSON(t *testing.T, ctx context.Context, scb schemaClient.Schema
 		t.Fatal(err)
 	}
 
+	sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 	return root, sharedPool
 }
