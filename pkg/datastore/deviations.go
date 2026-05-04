@@ -201,7 +201,7 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 
 	if log := log.V(logger.VTrace); log.Enabled() {
 		log.Info("deviation tree", "content", deviationTree.String())
-		log.Info("nonrevertive infos", "data", deviationTree.GetTreeContext().NonRevertiveInfo().String())
+		log.Info("nonrevertive infos", "data", deviationTree.GetTreeContext().GetOperationState().NonRevertiveInfo().String())
 	}
 
 	deviationChan := make(chan *treetypes.DeviationEntry, 10)

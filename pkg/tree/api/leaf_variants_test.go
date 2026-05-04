@@ -519,3 +519,53 @@ func TestLeafVariants_canDelete(t *testing.T) {
 		})
 	}
 }
+
+// TestNewLeafVariants_AcceptsOperationState verifies that NewLeafVariants accepts
+// an OperationState (not a full TreeContext) and returns a non-nil LeafVariants.
+func TestNewLeafVariants_AcceptsOperationState(t *testing.T) {
+	os := NewOperationState()
+	lv := NewLeafVariants(os, nil)
+	if lv == nil {
+		t.Fatal("expected NewLeafVariants to return non-nil LeafVariants")
+	}
+}
+
+// TestLeafVariants_NonRevertiveBehaviorPreservedAfterDeepCopy verifies that
+// when an owner is marked non-revertive in OperationState, GetHighestPrecedence
+// does not report the entry as changed — and that DeepCopy preserves this
+// behaviour with the copied state.
+func TestLeafVariants_NonRevertiveBehaviorPreservedAfterDeepCopy(t *testing.T) {
+	os := NewOperationState()
+	os.NonRevertiveInfo().Add("owner1", true)
+
+	// parentEntry nil is safe: NonRevertiveInfo.IsNonRevertive does not
+	// dereference the path when no revert-paths are configured.
+	lv := NewLeafVariants(os, nil)
+
+	// running entry: lower priority (higher number), value "v1"
+	leRun := NewLeafEntry(
+		types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "v1"}}, RunningValuesPrio, RunningIntentName, 0),
+		types.NewUpdateInsertFlags(),
+		nil,
+	)
+	// owner1 entry: higher priority (lower number), different value "v2", not new/updated
+	leOwner := NewLeafEntry(
+		types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "v2"}}, 10, "owner1", 0),
+		types.NewUpdateInsertFlags(),
+		nil,
+	)
+	lv.Add(leRun)
+	lv.Add(leOwner)
+
+	// Non-revertive: even though owner1 has a different value, it is not "new or updated"
+	// so GetHighestPrecedence(onlyNewOrUpdated=true) should return nil.
+	if got := lv.GetHighestPrecedence(true, false, false); got != nil {
+		t.Errorf("expected nil from GetHighestPrecedence with non-revertive owner, got entry owned by %q", got.Owner())
+	}
+
+	// DeepCopy must carry the copied OperationState so the same behaviour holds.
+	lvCopy := lv.DeepCopy(os.DeepCopyState(), nil)
+	if got := lvCopy.GetHighestPrecedence(true, false, false); got != nil {
+		t.Errorf("after DeepCopy: expected nil from GetHighestPrecedence with non-revertive owner, got entry owned by %q", got.Owner())
+	}
+}
