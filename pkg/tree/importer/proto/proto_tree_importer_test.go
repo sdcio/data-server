@@ -15,7 +15,10 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/sdc-protos/tree_persist"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestProtoTreeImporter(t *testing.T) {
@@ -173,5 +176,37 @@ func TestProtoTreeImporter(t *testing.T) {
 				t.Errorf("Error imported data differs:%s", diff)
 			}
 		})
+	}
+}
+
+func TestProtoTreeImporterElement_GetTVValue_NilMatchedType(t *testing.T) {
+	ctx := context.Background()
+
+	// Proto importer has no original lexical context, so matched type must always be nil.
+	tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "hello"}}
+	raw, err := proto.Marshal(tv)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	elem := NewProtoTreeImporterElement(&tree_persist.TreeElement{
+		Name:        "leaf",
+		LeafVariant: raw,
+	})
+
+	unionSlt := &sdcpb.SchemaLeafType{
+		Type: "union",
+		UnionTypes: []*sdcpb.SchemaLeafType{
+			{Type: "uint32"},
+			{Type: "string"},
+		},
+	}
+
+	_, matchedType, err := elem.GetTVValue(ctx, unionSlt)
+	if err != nil {
+		t.Fatalf("GetTVValue() unexpected error: %v", err)
+	}
+	if matchedType != nil {
+		t.Errorf("proto importer should return nil matchedType, got %v", matchedType)
 	}
 }

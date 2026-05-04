@@ -118,6 +118,13 @@ func navigateLeafRef(ctx context.Context, e api.Entry) ([]api.Entry, error) {
 		return nil, fmt.Errorf("error not a leafref %s", e.SdcpbPath())
 	}
 
+	return navigateLeafRefByPath(ctx, e, lref)
+}
+
+// navigateLeafRefByPath navigates the tree to find entries matching the given leafref path and
+// the current entry's value. It is the implementation for both direct leafref leaves and union
+// leaves whose matched branch is a leafref.
+func navigateLeafRefByPath(ctx context.Context, e api.Entry, lref string) ([]api.Entry, error) {
 	lv := e.GetLeafVariants().GetHighestPrecedence(false, true, false)
 	if lv == nil {
 		return nil, fmt.Errorf("no leafvariant found")
@@ -206,15 +213,27 @@ func validateLeafRefs(ctx context.Context, e api.Entry, resultChan chan<- *types
 		return
 	}
 
-	lref := e.GetSchema().GetField().GetType().GetLeafref()
-	if e.GetSchema() == nil || lref == "" {
+	if e.GetSchema() == nil || e.GetSchema().GetField() == nil {
 		return
 	}
 
-	entry, err := navigateLeafRef(ctx, e)
+	// Resolve the effective leaf type — for union leaves, this returns the matched branch;
+	// for direct leafref leaves it returns the outer schema type unchanged.
+	lv := e.GetLeafVariants().GetHighestPrecedence(false, true, false)
+	effectiveType := e.GetSchema().GetField().GetType()
+	if lv != nil {
+		effectiveType = lv.Update.EffectiveLeafType(e.GetSchema().GetField().GetType())
+	}
+
+	lref := effectiveType.GetLeafref()
+	if lref == "" {
+		return
+	}
+
+	entry, err := navigateLeafRefByPath(ctx, e, lref)
 	if err != nil || len(entry) == 0 {
 		// check if the OptionalInstance (!require-instances [https://datatracker.ietf.org/doc/html/rfc7950#section-9.9.3])
-		if e.GetSchema().GetField().GetType().GetOptionalInstance() {
+		if effectiveType.GetOptionalInstance() {
 			generateOptionalWarning(e, lref, resultChan)
 			return
 		}
@@ -239,7 +258,7 @@ func validateLeafRefs(ctx context.Context, e api.Entry, resultChan chan<- *types
 		}
 
 		// check if the OptionalInstance (!require-instances [https://datatracker.ietf.org/doc/html/rfc7950#section-9.9.3])
-		if e.GetSchema().GetField().GetType().GetOptionalInstance() {
+		if effectiveType.GetOptionalInstance() {
 			generateOptionalWarning(e, lref, resultChan)
 			return
 		}
