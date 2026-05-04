@@ -79,7 +79,7 @@ func (s *sharedEntryAttributes) DeepCopy(tc api.TreeContext, parent api.Entry) (
 	}
 
 	// copy leafvariants
-	result.leafVariants = s.leafVariants.DeepCopy(tc, result)
+	result.leafVariants = s.leafVariants.DeepCopy(tc.GetOperationState(), result)
 
 	return result, nil
 }
@@ -95,7 +95,7 @@ func NewSharedEntryAttributes(ctx context.Context, parent api.Entry, pathElemNam
 		childs:       api.NewChildMap(),
 		treeContext:  tc,
 	}
-	s.leafVariants = api.NewLeafVariants(tc, s)
+	s.leafVariants = api.NewLeafVariants(tc.GetOperationState(), s)
 
 	// populate the schema
 	err := s.populateSchema(ctx)
@@ -169,7 +169,7 @@ func (s *sharedEntryAttributes) loadDefaults(ctx context.Context) error {
 }
 
 func (s *sharedEntryAttributes) tryLoadingDefault(ctx context.Context, path *sdcpb.Path) (api.Entry, error) {
-	schema, err := s.treeContext.SchemaClient().GetSchemaSdcpbPath(ctx, path)
+	schema, err := s.treeContext.GetTreeConfig().SchemaClient().GetSchemaSdcpbPath(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("error trying to load defaults for %s: %v", path.ToXPath(false), err)
 	}
@@ -218,7 +218,7 @@ func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 
 	if getSchema {
 		// trieve if the getSchema var is still true
-		schemaResp, err := s.treeContext.SchemaClient().GetSchemaSdcpbPath(ctx, path)
+		schemaResp, err := s.treeContext.GetTreeConfig().SchemaClient().GetSchemaSdcpbPath(ctx, path)
 		if err != nil {
 			return err
 		}
