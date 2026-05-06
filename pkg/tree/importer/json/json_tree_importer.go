@@ -54,16 +54,22 @@ func (j *JsonTreeImporterElement) GetDeletes() *sdcpb.PathSet {
 	return sdcpb.NewPathSet()
 }
 
+// GetElement returns a child element by key, or nil if not found.
+// Tries exact match first, then falls back to local-name match (after ":") to handle
+// RFC 7951 JSON_IETF module-prefixed keys (e.g. "openconfig-if:name" matched by "name").
 func (j *JsonTreeImporterElement) GetElement(key string) importer.ImportConfigAdapterElement {
 	switch d := j.data.(type) {
 	case map[string]any:
-
+		// Exact match first.
+		if v, ok := d[key]; ok {
+			logf.DefaultLogger.V(logf.VTrace).Info("traversing element", "element", key)
+			return newJsonTreeImporterElement(key, v)
+		}
+		// Local-name fallback: find data key whose local part (after ":") matches.
 		for k, v := range d {
-			beforeColon, elemName, found := strings.Cut(k, ":")
-			if !found {
-				elemName = beforeColon
-			}
-			if key == elemName {
+			_, localName, found := strings.Cut(k, ":")
+			if found && localName == key {
+				logf.DefaultLogger.V(logf.VTrace).Info("traversing element by local-name", "element", key, "dataKey", k)
 				return newJsonTreeImporterElement(key, v)
 			}
 		}
@@ -71,23 +77,27 @@ func (j *JsonTreeImporterElement) GetElement(key string) importer.ImportConfigAd
 	return nil
 }
 
+// GetElements returns all child elements at this level.
+// Module prefixes in keys are stripped to local names so the processor can look them up
+// in the schema tree by bare name. Plain JSON keys (no ":") are passed through unchanged.
 func (j *JsonTreeImporterElement) GetElements() []importer.ImportConfigAdapterElement {
 	var result []importer.ImportConfigAdapterElement
 	switch d := j.data.(type) {
 	case map[string]any:
 		result = make([]importer.ImportConfigAdapterElement, 0, len(d))
 		for k, v := range d {
-			beforeColon, key, found := strings.Cut(k, ":")
-			if !found {
-				key = beforeColon
+			name := k
+			if _, localName, found := strings.Cut(k, ":"); found {
+				name = localName
 			}
+			logf.DefaultLogger.V(logf.VTrace).Info("traversing element", "element", name, "dataKey", k)
 			switch subElem := v.(type) {
 			case []any:
 				for _, listElem := range subElem {
-					result = append(result, newJsonTreeImporterElement(key, listElem))
+					result = append(result, newJsonTreeImporterElement(name, listElem))
 				}
 			default:
-				result = append(result, newJsonTreeImporterElement(key, v))
+				result = append(result, newJsonTreeImporterElement(name, v))
 			}
 		}
 	default:
@@ -108,6 +118,5 @@ func (j *JsonTreeImporterElement) GetName() string {
 	return j.name
 }
 
-// Function to ensure JsonTreeImporter implements ImportConfigAdapter (optional)
 var _ importer.ImportConfigAdapter = (*JsonTreeImporter)(nil)
 var _ importer.ImportConfigAdapterElement = (*JsonTreeImporterElement)(nil)
