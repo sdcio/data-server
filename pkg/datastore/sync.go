@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/tree"
@@ -29,7 +30,11 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	for _, delete := range deletes {
 		// navigate to delete path
 		deleteRoot, err := ops.NavigateSdcpbPath(ctx, d.syncTree.Entry, delete)
-		if err != nil {
+		switch {
+		case errors.Is(err, ops.ErrNavigateSdcpbPathNotFound):
+			log.V(logger.VDebug).Info("skipping delete config subtree from internal running with no content", "path", delete.ToXPath(false))
+			continue
+		case err != nil:
 			log.Error(err, "failed navigating to delete path", "path", delete.ToXPath(false))
 			continue
 		}

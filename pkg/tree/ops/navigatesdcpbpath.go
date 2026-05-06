@@ -10,6 +10,10 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
+var (
+	ErrNavigateSdcpbPathNotFound = fmt.Errorf("path not found in tree")
+)
+
 func NavigateSdcpbPath(ctx context.Context, e api.Entry, path *sdcpb.Path) (api.Entry, error) {
 	pathElems := path.GetElem()
 	var err error
@@ -40,7 +44,7 @@ func NavigateSdcpbPath(ctx context.Context, e api.Entry, path *sdcpb.Path) (api.
 		child, exists := e.GetChilds(types.DescendMethodActiveChilds)[pathElems[0].Name]
 		if !exists {
 			pth := &sdcpb.Path{Elem: pathElems}
-			return nil, fmt.Errorf("navigating tree, reached %v but child %v does not exist, trying to load defaults yielded %v", e.SdcpbPath().ToXPath(false), pth.ToXPath(false), err)
+			return nil, fmt.Errorf("%w: reached %v but child %v does not exist. Trying to load defaults failed", ErrNavigateSdcpbPathNotFound, e.SdcpbPath().ToXPath(false), pth.ToXPath(false))
 		}
 
 		for v := range pathElems[0].PathElemNamesKeysOnly() {
