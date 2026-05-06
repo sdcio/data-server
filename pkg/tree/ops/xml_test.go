@@ -716,3 +716,437 @@ func TestToXML_KeyLeafDeleteUpgradesToListEntryDelete(t *testing.T) {
 		t.Fatalf("ToXML() mismatch (-want +got)\n%s", diff)
 	}
 }
+
+func TestToXML_DoubleKeyLeafDeleteUpgradesToListEntryDelete(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	converter := utils.NewConverter(scb)
+	tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	runningCfg := &sdcio_schema.Device{
+		Patterntest: ygot.String("hallo 00"),
+		Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
+			{Key2: "k2foo", Key1: "k1bar"}: {
+				Key2:    ygot.String("k2foo"),
+				Key1:    ygot.String("k1bar"),
+				Mandato: ygot.String("somevalue"),
+			},
+		},
+	}
+	runningUpds, err := testhelper.ExpandUpdateFromConfig(ctx, runningCfg, converter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = testhelper.AddToRoot(ctx, root.Entry, runningUpds, testhelper.FlagsExisting, consts.RunningIntentName, consts.RunningValuesPrio)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Navigate to the key2 leaf and mark it for deletion — this should promote to a list-entry delete
+	key2Entry, err := ops.NavigateSdcpbPath(ctx, root.Entry, &sdcpb.Path{Elem: []*sdcpb.PathElem{
+		{Name: "doublekey", Key: map[string]string{"key2": "k2foo", "key1": "k1bar"}},
+		{Name: "key2"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleteLeaf := api.NewLeafEntry(
+		types.NewUpdate(key2Entry, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "k2foo"}}, 5, "owner1", 0),
+		testhelper.FlagsDelete,
+		key2Entry,
+	)
+	key2Entry.GetLeafVariants().Add(deleteLeaf)
+
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	xmlDoc, err := ops.ToXML(ctx, root.Entry, true, false, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	utils.XmlRecursiveSortElementsByTagName(&xmlDoc.Element)
+	xmlDoc.Indent(2)
+	xmlDocStr, err := xmlDoc.WriteToString()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := `<doublekey operation="delete">
+  <key1>k1bar</key1>
+  <key2>k2foo</key2>
+</doublekey>
+`
+	if diff := cmp.Diff(want, xmlDocStr); diff != "" {
+		t.Fatalf("ToXML() mismatch (-want +got)\n%s", diff)
+	}
+}
+
+// TestToXML_DoubleKeyLeafDeleteOnlyDeletesTargetEntry verifies that when multiple
+// list entries share the same first key (key1), deleting a key leaf on one entry
+// only generates a delete for that specific entry — not for siblings.
+func TestToXML_DoubleKeyLeafDeleteOnlyDeletesTargetEntry(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	converter := utils.NewConverter(scb)
+	tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Three entries: two share key1=k1bar (different key2), one has key1=k1other.
+	// We will delete the key2 leaf of [k1bar][k2foo] only.
+	runningCfg := &sdcio_schema.Device{
+		Patterntest: ygot.String("hallo 00"),
+		Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
+			{Key2: "k2foo", Key1: "k1bar"}: {
+				Key2:    ygot.String("k2foo"),
+				Key1:    ygot.String("k1bar"),
+				Mandato: ygot.String("val1"),
+			},
+			{Key2: "k2other", Key1: "k1bar"}: {
+				Key2:    ygot.String("k2other"),
+				Key1:    ygot.String("k1bar"),
+				Mandato: ygot.String("val2"),
+			},
+			{Key2: "k2foo", Key1: "k1other"}: {
+				Key2:    ygot.String("k2foo"),
+				Key1:    ygot.String("k1other"),
+				Mandato: ygot.String("val3"),
+			},
+		},
+	}
+	runningUpds, err := testhelper.ExpandUpdateFromConfig(ctx, runningCfg, converter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = testhelper.AddToRoot(ctx, root.Entry, runningUpds, testhelper.FlagsExisting, consts.RunningIntentName, consts.RunningValuesPrio)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete the key2 leaf of [k1bar][k2foo] only — should promote to a list-entry delete for that entry.
+	key2Entry, err := ops.NavigateSdcpbPath(ctx, root.Entry, &sdcpb.Path{Elem: []*sdcpb.PathElem{
+		{Name: "doublekey", Key: map[string]string{"key1": "k1bar", "key2": "k2foo"}},
+		{Name: "key2"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleteLeaf := api.NewLeafEntry(
+		types.NewUpdate(key2Entry, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "k2foo"}}, 5, "owner1", 0),
+		testhelper.FlagsDelete,
+		key2Entry,
+	)
+	key2Entry.GetLeafVariants().Add(deleteLeaf)
+
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	xmlDoc, err := ops.ToXML(ctx, root.Entry, true, false, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	utils.XmlRecursiveSortElementsByTagName(&xmlDoc.Element)
+	xmlDoc.Indent(2)
+	xmlDocStr, err := xmlDoc.WriteToString()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Only [k1bar][k2foo] should be deleted; [k1bar][k2other] and [k1other][k2foo] must not appear.
+	want := `<doublekey operation="delete">
+  <key1>k1bar</key1>
+  <key2>k2foo</key2>
+</doublekey>
+`
+	if diff := cmp.Diff(want, xmlDocStr); diff != "" {
+		t.Fatalf("ToXML() mismatch (-want +got)\n%s", diff)
+	}
+}
+
+// TestToXML_DoubleKeyLeafDeleteViaKey1 verifies that deleting the key1 leaf (rather
+// than key2) also promotes to a list-entry delete for the correct entry.
+func TestToXML_DoubleKeyLeafDeleteViaKey1(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	converter := utils.NewConverter(scb)
+	tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	runningCfg := &sdcio_schema.Device{
+		Patterntest: ygot.String("hallo 00"),
+		Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
+			{Key2: "k2foo", Key1: "k1bar"}: {
+				Key2:    ygot.String("k2foo"),
+				Key1:    ygot.String("k1bar"),
+				Mandato: ygot.String("val1"),
+			},
+			{Key2: "k2other", Key1: "k1bar"}: {
+				Key2:    ygot.String("k2other"),
+				Key1:    ygot.String("k1bar"),
+				Mandato: ygot.String("val2"),
+			},
+		},
+	}
+	runningUpds, err := testhelper.ExpandUpdateFromConfig(ctx, runningCfg, converter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = testhelper.AddToRoot(ctx, root.Entry, runningUpds, testhelper.FlagsExisting, consts.RunningIntentName, consts.RunningValuesPrio)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete via key1 leaf of [k1bar][k2foo].
+	key1Entry, err := ops.NavigateSdcpbPath(ctx, root.Entry, &sdcpb.Path{Elem: []*sdcpb.PathElem{
+		{Name: "doublekey", Key: map[string]string{"key1": "k1bar", "key2": "k2foo"}},
+		{Name: "key1"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	key1Entry.GetLeafVariants().Add(api.NewLeafEntry(
+		types.NewUpdate(key1Entry, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "k1bar"}}, 5, "owner1", 0),
+		testhelper.FlagsDelete,
+		key1Entry,
+	))
+
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	xmlDoc, err := ops.ToXML(ctx, root.Entry, true, false, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	utils.XmlRecursiveSortElementsByTagName(&xmlDoc.Element)
+	xmlDoc.Indent(2)
+	xmlDocStr, err := xmlDoc.WriteToString()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Only [k1bar][k2foo] deleted; [k1bar][k2other] must not appear.
+	want := `<doublekey operation="delete">
+  <key1>k1bar</key1>
+  <key2>k2foo</key2>
+</doublekey>
+`
+	if diff := cmp.Diff(want, xmlDocStr); diff != "" {
+		t.Fatalf("ToXML() mismatch (-want +got)\n%s", diff)
+	}
+}
+
+// TestToXML_DoubleKeyNonKeyLeafDeleteDoesNotPromote verifies that deleting a
+// non-key leaf (mandato) emits a targeted leaf delete, NOT a list-entry delete.
+func TestToXML_DoubleKeyNonKeyLeafDeleteDoesNotPromote(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	converter := utils.NewConverter(scb)
+	tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	runningCfg := &sdcio_schema.Device{
+		Patterntest: ygot.String("hallo 00"),
+		Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
+			{Key2: "k2foo", Key1: "k1bar"}: {
+				Key2:    ygot.String("k2foo"),
+				Key1:    ygot.String("k1bar"),
+				Mandato: ygot.String("val1"),
+			},
+		},
+	}
+	runningUpds, err := testhelper.ExpandUpdateFromConfig(ctx, runningCfg, converter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = testhelper.AddToRoot(ctx, root.Entry, runningUpds, testhelper.FlagsExisting, consts.RunningIntentName, consts.RunningValuesPrio)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete the non-key leaf "mandato".
+	mandatoEntry, err := ops.NavigateSdcpbPath(ctx, root.Entry, &sdcpb.Path{Elem: []*sdcpb.PathElem{
+		{Name: "doublekey", Key: map[string]string{"key1": "k1bar", "key2": "k2foo"}},
+		{Name: "mandato"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mandatoEntry.GetLeafVariants().Add(api.NewLeafEntry(
+		types.NewUpdate(mandatoEntry, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "val1"}}, 5, "owner1", 0),
+		testhelper.FlagsDelete,
+		mandatoEntry,
+	))
+
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	xmlDoc, err := ops.ToXML(ctx, root.Entry, true, false, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	utils.XmlRecursiveSortElementsByTagName(&xmlDoc.Element)
+	xmlDoc.Indent(2)
+	xmlDocStr, err := xmlDoc.WriteToString()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The list entry itself must NOT carry operation="delete";
+	// only the mandato child should carry it.
+	want := `<doublekey>
+  <key1>k1bar</key1>
+  <key2>k2foo</key2>
+  <mandato operation="delete"/>
+</doublekey>
+`
+	if diff := cmp.Diff(want, xmlDocStr); diff != "" {
+		t.Fatalf("ToXML() mismatch (-want +got)\n%s", diff)
+	}
+}
+
+// TestToXML_DoubleKeyTwoSimultaneousListEntryDeletes verifies that deleting a key
+// leaf on two different list entries at the same time produces two independent
+// operation="delete" entries in the output.
+func TestToXML_DoubleKeyTwoSimultaneousListEntryDeletes(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	converter := utils.NewConverter(scb)
+	tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	runningCfg := &sdcio_schema.Device{
+		Patterntest: ygot.String("hallo 00"),
+		Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
+			{Key2: "k2foo", Key1: "k1bar"}: {
+				Key2:    ygot.String("k2foo"),
+				Key1:    ygot.String("k1bar"),
+				Mandato: ygot.String("val1"),
+			},
+			{Key2: "k2other", Key1: "k1bar"}: {
+				Key2:    ygot.String("k2other"),
+				Key1:    ygot.String("k1bar"),
+				Mandato: ygot.String("val2"),
+			},
+			{Key2: "k2foo", Key1: "k1other"}: {
+				Key2:    ygot.String("k2foo"),
+				Key1:    ygot.String("k1other"),
+				Mandato: ygot.String("val3"),
+			},
+		},
+	}
+	runningUpds, err := testhelper.ExpandUpdateFromConfig(ctx, runningCfg, converter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = testhelper.AddToRoot(ctx, root.Entry, runningUpds, testhelper.FlagsExisting, consts.RunningIntentName, consts.RunningValuesPrio)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete key2 leaf on [k1bar][k2foo] and [k1other][k2foo] simultaneously.
+	for _, keys := range []map[string]string{
+		{"key1": "k1bar", "key2": "k2foo"},
+		{"key1": "k1other", "key2": "k2foo"},
+	} {
+		entry, err := ops.NavigateSdcpbPath(ctx, root.Entry, &sdcpb.Path{Elem: []*sdcpb.PathElem{
+			{Name: "doublekey", Key: keys},
+			{Name: "key2"},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		entry.GetLeafVariants().Add(api.NewLeafEntry(
+			types.NewUpdate(entry, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: keys["key2"]}}, 5, "owner1", 0),
+			testhelper.FlagsDelete,
+			entry,
+		))
+	}
+
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	xmlDoc, err := ops.ToXML(ctx, root.Entry, true, false, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	utils.XmlRecursiveSortElementsByTagName(&xmlDoc.Element)
+	xmlDoc.Indent(2)
+	xmlDocStr, err := xmlDoc.WriteToString()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Both targeted entries deleted; [k1bar][k2other] must not appear.
+	want := `<doublekey operation="delete">
+  <key1>k1bar</key1>
+  <key2>k2foo</key2>
+</doublekey>
+<doublekey operation="delete">
+  <key1>k1other</key1>
+  <key2>k2foo</key2>
+</doublekey>
+`
+	if diff := cmp.Diff(want, xmlDocStr); diff != "" {
+		t.Fatalf("ToXML() mismatch (-want +got)\n%s", diff)
+	}
+}
