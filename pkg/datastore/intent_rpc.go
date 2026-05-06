@@ -127,4 +127,5 @@ type GetIntentResponse interface {
 	ToJsonIETF(ctx context.Context) (any, error)
 	ToXML(ctx context.Context) (*etree.Document, error)
 	ToProtoUpdates(ctx context.Context) ([]*sdcpb.Update, error)
+	ToXPath(ctx context.Context) (*sdcpb.PathValues, error)
 }

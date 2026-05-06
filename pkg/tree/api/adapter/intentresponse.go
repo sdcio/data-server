@@ -57,3 +57,7 @@ func (t *IntentResponseAdapter) ToProtoUpdates(ctx context.Context) ([]*sdcpb.Up
 func (t *IntentResponseAdapter) ToProtoDeletes(ctx context.Context) ([]*sdcpb.Path, error) {
 	return ops.ToProtoDeletes(ctx, t.Entry)
 }
+
+func (t *IntentResponseAdapter) ToXPath(ctx context.Context) (*sdcpb.PathValues, error) {
+	return ops.ToXPath(ctx, t.Entry, false, false)
+}
