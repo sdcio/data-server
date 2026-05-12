@@ -1,0 +1,14 @@
+Paste into GitHub PR #423 description (append or merge with existing text).
+
+---
+
+Closes https://github.com/sdcio/data-server/issues/177 (when merged).
+
+Follow-ups in this branch:
+- navigateLeafRef / FollowLeafRef now use EffectiveLeafType so XPath and must evaluation agree with validateLeafRefs for union leaves whose matched branch is a leafref.
+- Leaf-list range validation still uses the outer member type only; per-element union branch metadata is not modeled (see comment in validation_entry_range.go).
+- Proto-imported config cannot recover which union branch matched; validators fall back to the outer union type (see validation_union_proto_fallback_test.go). Documented for reviewers.
+
+Tests added: union optional-instance leafref (warning vs error), navigateLeafRef + FollowLeafRef on union leafref, Update.Equal / String edge cases.
+
+Note: Regex compile-error path in validatePattern remains difficult to exercise with pyang-valid YANG patterns; consider a targeted refactor if coverage is required.

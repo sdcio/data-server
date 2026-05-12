@@ -93,7 +93,9 @@ func breadthSearch(ctx context.Context, e api.Entry, sdcpbPath *sdcpb.Path) ([]a
 	return resultEntries, nil
 }
 
-// navigateLeafRef
+// navigateLeafRef resolves a leafref on the current entry, including when the schema type is a
+// union whose matched branch (see types.Update.EffectiveLeafType) is the leafref. This keeps
+// XPath/must evaluation (FollowLeafRef) aligned with validateLeafRefs.
 func navigateLeafRef(ctx context.Context, e api.Entry) ([]api.Entry, error) {
 
 	// leafref path takes as an argument a string that MUST refer to a leaf or leaf-list node.
@@ -108,13 +110,30 @@ func navigateLeafRef(ctx context.Context, e api.Entry) ([]api.Entry, error) {
 	// If /bar/baz resolves to a leaf-list, then foo must have a value equal to one of the existing entries in that leaf-list.
 	// Thus, the "pointer" is not to the entire leaf-list node, but to one instance of it, selected by value.
 
+	if e.GetSchema() == nil {
+		return nil, fmt.Errorf("error not a leafref %s", e.SdcpbPath())
+	}
+
+	lv := e.GetLeafVariants().GetHighestPrecedence(false, true, false)
+
 	var lref string
-	switch {
-	case e.GetSchema().GetField().GetType().GetLeafref() != "":
-		lref = e.GetSchema().GetField().GetType().GetLeafref()
-	case e.GetSchema().GetLeaflist().GetType().GetLeafref() != "":
-		lref = e.GetSchema().GetLeaflist().GetType().GetLeafref()
-	default:
+	if field := e.GetSchema().GetField(); field != nil {
+		effectiveType := field.GetType()
+		if lv != nil {
+			effectiveType = lv.Update.EffectiveLeafType(field.GetType())
+		}
+		lref = effectiveType.GetLeafref()
+	}
+	if lref == "" {
+		if ll := e.GetSchema().GetLeaflist(); ll != nil {
+			effectiveType := ll.GetType()
+			if lv != nil {
+				effectiveType = lv.Update.EffectiveLeafType(ll.GetType())
+			}
+			lref = effectiveType.GetLeafref()
+		}
+	}
+	if lref == "" {
 		return nil, fmt.Errorf("error not a leafref %s", e.SdcpbPath())
 	}
 

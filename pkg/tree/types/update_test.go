@@ -1,6 +1,7 @@
 package types
 
 import (
+	"strings"
 	"testing"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -64,5 +65,31 @@ func TestEqual_IgnoresMatchedType(t *testing.T) {
 	}
 	if !withoutMatched.Equal(withMatched) {
 		t.Errorf("Equal should be symmetric regardless of matchedUnionType")
+	}
+}
+
+func TestEqual_falseWhenOwnerDiffers(t *testing.T) {
+	tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "foo"}}
+	a := NewUpdate(nil, tv, 0, "a", 0)
+	b := NewUpdate(nil, tv, 0, "b", 0)
+	if a.Equal(b) {
+		t.Error("Equal should be false when intentName differs")
+	}
+}
+
+func TestEqual_falseWhenPriorityDiffers(t *testing.T) {
+	tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "foo"}}
+	a := NewUpdate(nil, tv, 1, "owner", 0)
+	b := NewUpdate(nil, tv, 2, "owner", 0)
+	if a.Equal(b) {
+		t.Error("Equal should be false when priority differs")
+	}
+}
+
+func TestString_nilParentPathPlaceholder(t *testing.T) {
+	u := NewUpdate(nil, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "x"}}, 0, "o", 0)
+	s := u.String()
+	if !strings.Contains(s, "<nil>") {
+		t.Errorf("String should show <nil> path when parent nil: %q", s)
 	}
 }

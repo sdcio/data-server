@@ -123,4 +123,13 @@ module sdcio_model {
       type string;
     }
   }
+  leaf unionoptionalleafreftest {
+    type union {
+      type leafref {
+        path "/interface/name";
+        require-instance false;
+      }
+      type string;
+    }
+  }
 }
