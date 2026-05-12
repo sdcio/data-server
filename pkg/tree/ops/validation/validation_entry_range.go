@@ -41,6 +41,8 @@ func validateRange(_ context.Context, e api.Entry, resultChan chan<- *types.Vali
 		// if it is a leaflist, extract the values them to the tvs slice and check them further down
 		tvs = tv.GetLeaflistVal().GetElement()
 		// we also need the Field/Leaf Type schema
+		// Union member types on leaf-list entries are not modeled per element (single matchedUnionType
+		// on the enclosing Update); range for union-typed leaf-lists would need richer metadata.
 		typeSchema = e.GetSchema().GetLeaflist().GetType()
 	default:
 		// if no ranges exist return
