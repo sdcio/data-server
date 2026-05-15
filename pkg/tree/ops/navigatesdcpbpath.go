@@ -15,6 +15,9 @@ var (
 )
 
 func NavigateSdcpbPath(ctx context.Context, e api.Entry, path *sdcpb.Path) (api.Entry, error) {
+	if e == nil {
+		return nil, fmt.Errorf("%w: nil entry", ErrNavigateSdcpbPathNotFound)
+	}
 	pathElems := path.GetElem()
 	var err error
 	if len(pathElems) == 0 {
@@ -38,6 +41,9 @@ func NavigateSdcpbPath(ctx context.Context, e api.Entry, path *sdcpb.Path) (api.
 
 		if len(pathElems) > 1 && pathElems[1].Name == ".." {
 			entry, _ = GetFirstAncestorWithSchema(e)
+		}
+		if entry == nil {
+			return nil, fmt.Errorf("%w: parent is nil at %q", ErrNavigateSdcpbPathNotFound, path.ToXPath(false))
 		}
 		return NavigateSdcpbPath(ctx, entry, path.CopyAndRemoveFirstPathElem())
 	default:

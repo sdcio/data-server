@@ -69,8 +69,17 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 
 	// delete entries that have zero-length leaf variant entries after remove deleted processing
 	for _, e := range rdp.GetZeroLengthLeafVariantEntries() {
-		err := ops.DeleteBranch(ctx, e.GetParent(), &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(e.PathName(), nil)}}, consts.RunningIntentName)
-		if err != nil {
+		if e == nil {
+			log.V(logger.VDebug).Info("skipping zero-length leaf-variant branch cleanup: nil entry in processor list")
+			continue
+		}
+		p := e.GetParent()
+		if p == nil {
+			log.V(logger.VDebug).Info("skipping zero-length leaf-variant branch cleanup: entry has no parent (sync tree root)",
+				"path", e.SdcpbPath().ToXPath(false))
+			continue
+		}
+		if err := ops.DeleteBranch(ctx, p, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(e.PathName(), nil)}}, consts.RunningIntentName); err != nil {
 			return err
 		}
 	}
