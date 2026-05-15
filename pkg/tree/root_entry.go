@@ -136,6 +136,9 @@ func (r *RootEntry) GetAncestorSchema() (*sdcpb.SchemaElem, int) {
 
 // DeleteSubtree Deletes from the tree, all elements of the PathSlice defined branch of the given owner. Return values are remainsToExist and error if an error occured.
 func (r *RootEntry) DeleteBranchPaths(ctx context.Context, deletes types.DeleteEntriesList, intentName string) error {
+	if r.Entry == nil {
+		return fmt.Errorf("DeleteBranchPaths: nil root entry")
+	}
 	for _, del := range deletes {
 		err := ops.DeleteBranch(ctx, r.Entry, del.SdcpbPath(), intentName)
 		if err != nil {

@@ -2,14 +2,24 @@ package ops
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/sdcio/data-server/pkg/tree/api"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
+// ErrDeleteBranchNilEntry is returned when DeleteBranch is called with a nil tree entry.
+// Callers must validate the entry before calling.
+var ErrDeleteBranchNilEntry = errors.New("DeleteBranch: nil tree entry")
+
 func DeleteBranch(ctx context.Context, e api.Entry, path *sdcpb.Path, owner string) error {
 	var entry api.Entry
 	var err error
+
+	if e == nil {
+		return fmt.Errorf("%w: callers must pass a non-nil entry", ErrDeleteBranchNilEntry)
+	}
 
 	if path == nil {
 		return deleteBranchInternal(ctx, e, owner)
@@ -56,6 +66,9 @@ func deleteBranchInternal(ctx context.Context, e api.Entry, owner string) error 
 
 	// recurse the call
 	for childName, child := range e.GetChildMap().GetAll() {
+		if child == nil {
+			return fmt.Errorf("%w: child %q in map is nil under %s", ErrDeleteBranchNilEntry, childName, e.SdcpbPath().ToXPath(false))
+		}
 		err := DeleteBranch(ctx, child, nil, owner)
 		if err != nil {
 			return err
