@@ -2,6 +2,7 @@ package ops
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/sdcio/data-server/pkg/tree/api"
@@ -10,9 +11,9 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-var (
-	ErrNavigateSdcpbPathNotFound = fmt.Errorf("path not found in tree")
-)
+// ErrNavigateSdcpbPathNotFound is returned (wrapped) when tree navigation cannot
+// resolve a path segment. Delete-by-path callers (e.g. DeleteBranch) treat this as idempotent.
+var ErrNavigateSdcpbPathNotFound = errors.New("path not found in tree")
 
 func NavigateSdcpbPath(ctx context.Context, e api.Entry, path *sdcpb.Path) (api.Entry, error) {
 	pathElems := path.GetElem()

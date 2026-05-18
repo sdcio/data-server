@@ -198,6 +198,8 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 		sharedEntryAttributes func(t *testing.T) api.Entry
 		args                  args
 		wantErr               bool
+		// skipLeafCheck: path may not exist; idempotent DeleteBranch returns nil without deleting anything.
+		skipLeafCheck bool
 	}{
 		{
 			name: "one",
@@ -275,7 +277,8 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				},
 				owner: owner1,
 			},
-			wantErr: true,
+			wantErr:       false,
+			skipLeafCheck: true,
 		},
 	}
 	for _, tt := range tests {
@@ -287,6 +290,9 @@ func Test_sharedEntryAttributes_DeleteSubtree(t *testing.T) {
 				return
 			}
 			if tt.wantErr {
+				return
+			}
+			if tt.skipLeafCheck {
 				return
 			}
 			e, err := ops.NavigateSdcpbPath(ctx, s, tt.args.relativePath)
