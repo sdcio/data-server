@@ -28,6 +28,9 @@ func DeleteBranch(ctx context.Context, e api.Entry, path *sdcpb.Path, owner stri
 	// if the relativePath is present, we need to naviagate
 	entry, err = NavigateSdcpbPath(ctx, e, path)
 	if err != nil {
+		if errors.Is(err, ErrNavigateSdcpbPathNotFound) {
+			return nil
+		}
 		return err
 	}
 	if entry == nil {
