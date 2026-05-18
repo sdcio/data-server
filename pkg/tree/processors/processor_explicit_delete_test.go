@@ -284,7 +284,7 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := tt.root()
-			root.GetTreeContext().ExplicitDeletes().Add(owner2, tt.priority, tt.explicitDeletes)
+			root.GetTreeContext().GetOperationState().ExplicitDeletes().Add(owner2, tt.priority, tt.explicitDeletes)
 
 			err := root.FinishInsertionPhase(ctx)
 			if err != nil {

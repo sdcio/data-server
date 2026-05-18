@@ -1294,7 +1294,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// because thats an update.
 	t.Run("Delete Non New",
 		func(t *testing.T) {
-			lv := api.NewLeafVariants(&TreeContext{}, nil)
+			lv := api.NewLeafVariants(api.NewOperationState(), nil)
 
 			le1 := api.NewLeafEntry(types.NewUpdate(nil, nil, 2, owner1, ts), testhelper.FlagsExisting, nil)
 			lv.Add(le1)
@@ -1314,7 +1314,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// should return nil
 	t.Run("Single entry thats also marked for deletion",
 		func(t *testing.T) {
-			lv := api.NewLeafVariants(&TreeContext{}, nil)
+			lv := api.NewLeafVariants(api.NewOperationState(), nil)
 			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 1, owner1, ts), testhelper.FlagsDelete, nil))
 			le := lv.GetHighestPrecedence(true, false, false)
 
@@ -1328,7 +1328,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// on onlyIfPrioChanged == true we do not expect output.
 	t.Run("New Low Prio IsUpdate OnlyChanged True",
 		func(t *testing.T) {
-			lv := api.NewLeafVariants(&TreeContext{}, nil)
+			lv := api.NewLeafVariants(api.NewOperationState(), nil)
 			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), testhelper.FlagsExisting, nil))
 			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), testhelper.FlagsNew, nil))
 			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, RunningValuesPrio, RunningIntentName, ts), testhelper.FlagsExisting, nil))
@@ -1345,7 +1345,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// on onlyIfPrioChanged == false we do not expect the highes prio update to be returned.
 	t.Run("New Low Prio IsUpdate OnlyChanged False",
 		func(t *testing.T) {
-			lv := api.NewLeafVariants(&TreeContext{}, nil)
+			lv := api.NewLeafVariants(api.NewOperationState(), nil)
 			le1 := api.NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), testhelper.FlagsExisting, nil)
 			lv.Add(le1)
 			le2 := api.NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), testhelper.FlagsNew, nil)
@@ -1363,7 +1363,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// // on onlyIfPrioChanged == true we do not expect output.
 	t.Run("New Low Prio IsNew OnlyChanged == True",
 		func(t *testing.T) {
-			lv := api.NewLeafVariants(&TreeContext{}, nil)
+			lv := api.NewLeafVariants(api.NewOperationState(), nil)
 
 			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), testhelper.FlagsExisting, nil))
 			lv.Add(api.NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), testhelper.FlagsNew, nil))
@@ -1381,7 +1381,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// // on onlyIfPrioChanged == true we do not expect output.
 	t.Run("New Low Prio IsNew OnlyChanged == True, with running not existing",
 		func(t *testing.T) {
-			lv := api.NewLeafVariants(&TreeContext{}, nil)
+			lv := api.NewLeafVariants(api.NewOperationState(), nil)
 			le1 := api.NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), testhelper.FlagsExisting, nil)
 			lv.Add(le1)
 			le2 := api.NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), testhelper.FlagsNew, nil)
@@ -1397,7 +1397,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 
 	t.Run("New Low Prio IsNew OnlyChanged == False",
 		func(t *testing.T) {
-			lv := api.NewLeafVariants(&TreeContext{}, nil)
+			lv := api.NewLeafVariants(api.NewOperationState(), nil)
 			le1 := api.NewLeafEntry(types.NewUpdate(nil, nil, 5, owner1, ts), testhelper.FlagsExisting, nil)
 			lv.Add(le1)
 			le2 := api.NewLeafEntry(types.NewUpdate(nil, nil, 6, owner2, ts), testhelper.FlagsNew, nil)
@@ -1414,7 +1414,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// If no entries exist in the list nil should be returned.
 	t.Run("No Entries",
 		func(t *testing.T) {
-			lv := api.NewLeafVariants(&TreeContext{}, nil)
+			lv := api.NewLeafVariants(api.NewOperationState(), nil)
 
 			le := lv.GetHighestPrecedence(true, false, false)
 
@@ -1427,7 +1427,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 	// make sure the secondhighes is also populated if the highes was the first entry
 	t.Run("secondhighes populated if highes was first",
 		func(t *testing.T) {
-			lv := api.NewLeafVariants(&TreeContext{}, nil)
+			lv := api.NewLeafVariants(api.NewOperationState(), nil)
 			le1 := api.NewLeafEntry(types.NewUpdate(nil, nil, 1, owner1, ts), testhelper.FlagsDelete, nil)
 			lv.Add(le1)
 			le2 := api.NewLeafEntry(types.NewUpdate(nil, nil, 2, owner2, ts), testhelper.FlagsExisting, nil)
@@ -2224,13 +2224,13 @@ func Test_RevertNonRevertive(t *testing.T) {
 				t.Fatalf("failed to get existing config: %v", err)
 			}
 
-			_, err = root.ImportConfig(ctx, nil, runningConfig, types.NewUpdateInsertFlags(), tc.poolFactory)
+			_, err = root.ImportConfig(ctx, nil, runningConfig, types.NewUpdateInsertFlags(), tc.GetTreeConfig().PoolFactory())
 			if err != nil {
 				t.Fatalf("failed to import running config: %v", err)
 			}
 
 			for _, existing := range existingConfig {
-				_, err = root.ImportConfig(ctx, nil, existing, types.NewUpdateInsertFlags(), tc.poolFactory)
+				_, err = root.ImportConfig(ctx, nil, existing, types.NewUpdateInsertFlags(), tc.GetTreeConfig().PoolFactory())
 				if err != nil {
 					t.Fatalf("failed to import existing config: %v", err)
 				}
@@ -2238,7 +2238,7 @@ func Test_RevertNonRevertive(t *testing.T) {
 
 			// adding paths to the non revertive info, this should mark the paths as non revertive, and thus not be deleted in the end.
 			for _, path := range tt.revertPaths {
-				tc.NonRevertiveInfo().Add(owner1, false, path)
+				tc.GetOperationState().NonRevertiveInfo().Add(owner1, false, path)
 			}
 
 			err = root.FinishInsertionPhase(ctx)

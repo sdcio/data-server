@@ -17,7 +17,7 @@ func TreeExport(e api.Entry, owner string, priority int32, orphan bool) (*tree_p
 		return nil, err
 	}
 
-	explicitDeletes := e.GetTreeContext().ExplicitDeletes().GetByIntentName(owner).ToPathSlice()
+	explicitDeletes := e.GetTreeContext().GetOperationState().ExplicitDeletes().GetByIntentName(owner).ToPathSlice()
 
 	var rootExportEntry *tree_persist.TreeElement
 	if len(treeExport) != 0 {
@@ -29,7 +29,7 @@ func TreeExport(e api.Entry, owner string, priority int32, orphan bool) (*tree_p
 			IntentName:      owner,
 			Root:            rootExportEntry,
 			Priority:        priority,
-			NonRevertive:    e.GetTreeContext().NonRevertiveInfo().IsGenerallyNonRevertive(owner),
+			NonRevertive:    e.GetTreeContext().GetOperationState().NonRevertiveInfo().IsGenerallyNonRevertive(owner),
 			ExplicitDeletes: explicitDeletes,
 			Orphan:          orphan,
 		}, nil

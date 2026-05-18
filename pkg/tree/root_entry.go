@@ -84,7 +84,7 @@ func (r *RootEntry) ImportConfig(ctx context.Context, basePath *sdcpb.Path, impo
 }
 
 func (r *RootEntry) SetNonRevertiveIntent(intentName string, nonRevertive bool) {
-	r.GetTreeContext().NonRevertiveInfo().Add(intentName, nonRevertive)
+	r.GetTreeContext().GetOperationState().NonRevertiveInfo().Add(intentName, nonRevertive)
 }
 
 // String returns the string representation of the Tree.
@@ -150,7 +150,7 @@ func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 	edpsc := processors.ExplicitDeleteProcessorStatCollection{}
 
 	// apply the explicit deletes
-	for deletePathPrio := range r.GetTreeContext().ExplicitDeletes().Items() {
+	for deletePathPrio := range r.GetTreeContext().GetOperationState().ExplicitDeletes().Items() {
 		for path := range deletePathPrio.PathItems() {
 			// set the priority
 			// navigate to the stated path
@@ -159,7 +159,7 @@ func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 				log.Error(nil, "Applying explicit delete - path not found, skipping", "severity", "WARN", "path", path.ToXPath(false))
 			}
 			edp := processors.NewExplicitDeleteProcessor(&processors.ExplicitDeleteTaskParams{Owner: deletePathPrio.GetOwner(), Priority: deletePathPrio.GetPrio()})
-			err = edp.Run(ctx, entry, r.GetTreeContext().PoolFactory())
+			err = edp.Run(ctx, entry, r.GetTreeContext().GetTreeConfig().PoolFactory())
 			if err != nil {
 				return err
 			}

@@ -139,7 +139,7 @@ func (l *LeafEntry) NonRevertive() bool {
 	if l.parentEntry == nil {
 		return false
 	}
-	return l.parentEntry.GetTreeContext().NonRevertiveInfo().IsNonRevertive(l.Owner(), l)
+	return l.parentEntry.GetTreeContext().GetOperationState().NonRevertiveInfo().IsNonRevertive(l.Owner(), l)
 }
 
 // String returns a string representation of the LeafEntry
