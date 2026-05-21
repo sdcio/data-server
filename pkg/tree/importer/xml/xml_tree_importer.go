@@ -2,9 +2,9 @@ package xml
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/beevik/etree"
+
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -82,31 +82,17 @@ func (x *XmlTreeImporterElement) GetKeyValue(ctx context.Context, slt *sdcpb.Sch
 	return tv.ToString(), nil
 }
 
+// GetTVValue parses the element text. For union-typed leaves, InferUnionMemberFromTypedValue
+// selects the matched branch using RFC 7950 sec. 9.12 member order (same rules as proto tree import).
 func (x *XmlTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, *sdcpb.SchemaLeafType, error) {
-	return tvFromStringWithMatchedType(slt, x.elem.Text(), 0)
-}
-
-// tvFromStringWithMatchedType mirrors sdcpb.TVFromStringWithType (newer sdc-protos).
-func tvFromStringWithMatchedType(schemaType *sdcpb.SchemaLeafType, v string, ts uint64) (*sdcpb.TypedValue, *sdcpb.SchemaLeafType, error) {
-	if schemaType == nil {
-		return nil, nil, fmt.Errorf("schemaType cannot be nil")
+	tv, matched, err := sdcpb.TVFromStringWithType(slt, x.elem.Text(), 0)
+	if err != nil {
+		return nil, nil, err
 	}
-	if schemaType.Type != "union" {
-		tv, err := sdcpb.TVFromString(schemaType, v, ts)
-		if err != nil {
-			return nil, nil, err
-		}
-		return tv, schemaType, nil
+	if slt != nil && slt.Type == "union" {
+		return tv, importer.InferUnionMemberFromTypedValue(tv, slt), nil
 	}
-	for _, branch := range schemaType.UnionTypes {
-		tv, matched, err := tvFromStringWithMatchedType(branch, v, 0)
-		if err != nil {
-			continue
-		}
-		tv.Timestamp = ts
-		return tv, matched, nil
-	}
-	return nil, nil, fmt.Errorf("no union type fit the provided value %q", v)
+	return tv, matched, nil
 }
 
 func (x *XmlTreeImporterElement) GetName() string {

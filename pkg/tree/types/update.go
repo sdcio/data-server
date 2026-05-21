@@ -149,10 +149,12 @@ func ExpandAndConvertIntent(ctx context.Context, scb utils.SchemaClientBound, in
 	// temp storage for types.Update of the req. They are to be added later.
 	newCacheUpdates := make([]*PathAndUpdate, 0, len(expandedReqUpdates))
 
-	for _, u := range expandedReqUpdates {
-		upd := NewUpdate(nil, u.GetValue(), priority, intentName, ts)
-		// construct the types.Update
-		newCacheUpdates = append(newCacheUpdates, NewPathAndUpdate(u.GetPath(), upd))
+	for _, e := range expandedReqUpdates {
+		upd := NewUpdate(nil, e.Update.GetValue(), priority, intentName, ts)
+		if e.MatchedUnionType != nil {
+			upd.WithMatchedType(e.MatchedUnionType)
+		}
+		newCacheUpdates = append(newCacheUpdates, NewPathAndUpdate(e.Update.GetPath(), upd))
 	}
 	return newCacheUpdates, nil
 }

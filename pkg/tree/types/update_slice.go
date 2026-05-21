@@ -14,7 +14,11 @@ type UpdateSlice []*Update
 func (u UpdateSlice) CopyWithNewOwnerAndPrio(owner string, prio int32) []*PathAndUpdate {
 	result := make([]*PathAndUpdate, 0, len(u))
 	for _, x := range u {
-		result = append(result, NewPathAndUpdate(x.SdcpbPath(), NewUpdate(nil, x.Value(), prio, owner, x.Timestamp())))
+		nu := NewUpdate(nil, x.Value(), prio, owner, x.Timestamp())
+		if x.matchedUnionType != nil {
+			nu.WithMatchedType(x.matchedUnionType)
+		}
+		result = append(result, NewPathAndUpdate(x.SdcpbPath(), nu))
 	}
 	return result
 }

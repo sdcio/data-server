@@ -31,7 +31,7 @@ type ImportConfigAdapterElement interface {
 	// The String value is typically used for the keys.
 	GetKeyValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (string, error)
 	// GetTVValue returns the TypedValue based value defined via the SchemaLeafType. Can also only be called on Leafs or LeafLists.
-	// For union-typed leaves the second return value is the matched branch SchemaLeafType; for non-union or proto-loaded values it is nil.
+	// For union-typed leaves the second return value is the matched branch SchemaLeafType; for non-union leaves it is nil. Proto/XML import set it via InferUnionMemberFromTypedValue (RFC 7950 §9.12 first match).
 	GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, *sdcpb.SchemaLeafType, error)
 	// returns the name of the actual Level.
 	GetName() string

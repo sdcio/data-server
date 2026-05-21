@@ -18,15 +18,11 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-// TestValidate_Union_ProtoFallback verifies that proto-imported union leaves —
-// where matchedUnionType is nil because no original lexical context is available —
-// fall back gracefully to the outer schema type in all validators.
-// Expected behaviour:
-//   - No panics in any validator.
-//   - Pattern/length/range/leafref validators silently skip because the outer
-//     union type carries none of those constraints.
-//   - This matches pre-change proto import behaviour (regression guard).
-func TestValidate_Union_ProtoFallback(t *testing.T) {
+// TestValidate_Union_ProtoRoundTripParity checks that after export/re-import via
+// proto, union member inference (RFC 7950 §9.12–aligned via InferUnionMemberFromTypedValue)
+// attaches the same effective branch type as JSON import, so validation matches the JSON path — not the
+// older behaviour where matched type was always nil on proto.
+func TestValidate_Union_ProtoRoundTripParity(t *testing.T) {
 	tests := []struct {
 		name           string
 		req            *sdcio_schema.Device
@@ -34,9 +30,6 @@ func TestValidate_Union_ProtoFallback(t *testing.T) {
 		wantAfterProto int
 	}{
 		{
-			// Valid value: matched string branch pattern ("hallo.*") satisfied.
-			// After proto round-trip the outer union type has no pattern constraint,
-			// so the result is still 0 errors — consistent behaviour.
 			name: "valid union pattern value round-trips without error",
 			req: &sdcio_schema.Device{
 				Unionpatterntest: &sdcio_schema.SdcioModel_Unionpatterntest_Union_String{String: "hallo AB"},
@@ -45,38 +38,28 @@ func TestValidate_Union_ProtoFallback(t *testing.T) {
 			wantAfterProto: 0,
 		},
 		{
-			// Pattern-violating value: matched branch has pattern "hallo.*" which
-			// "hello AB" does not satisfy → 1 error after JSON import.
-			// After proto round-trip matchedType is nil → fallback to outer union
-			// type (no pattern) → 0 errors. Validators must not panic.
-			name: "pattern-violating union value has no error after proto round-trip (fallback)",
+			name: "pattern-violating union value still errors after proto round-trip",
 			req: &sdcio_schema.Device{
 				Unionpatterntest: &sdcio_schema.SdcioModel_Unionpatterntest_Union_String{String: "hello AB"},
 			},
 			wantAfterJSON:  1,
-			wantAfterProto: 0,
+			wantAfterProto: 1,
 		},
 		{
-			// Length-violating value: matched string branch has length constraint
-			// min 8 chars; "123" is too short → 1 error after JSON import.
-			// After proto round-trip matchedType is nil → fallback → 0 errors.
-			name: "length-violating union value has no error after proto round-trip (fallback)",
+			name: "length-violating union value still errors after proto round-trip",
 			req: &sdcio_schema.Device{
 				Unionlengthtest: &sdcio_schema.SdcioModel_Unionlengthtest_Union_String{String: "123"},
 			},
 			wantAfterJSON:  1,
-			wantAfterProto: 0,
+			wantAfterProto: 1,
 		},
 		{
-			// Range-violating value: matched uint32 branch has range 10..300;
-			// 500 is out of range → 1 error after JSON import.
-			// After proto round-trip matchedType is nil → fallback → 0 errors.
-			name: "range-violating union value has no error after proto round-trip (fallback)",
+			name: "range-violating union value still errors after proto round-trip",
 			req: &sdcio_schema.Device{
 				Unionrangetest: &sdcio_schema.SdcioModel_Unionrangetest_Union_Uint32{Uint32: 500},
 			},
 			wantAfterJSON:  1,
-			wantAfterProto: 0,
+			wantAfterProto: 1,
 		},
 	}
 

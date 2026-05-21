@@ -87,16 +87,19 @@ func (p *ProtoTreeImporterElement) GetKeyValue(ctx context.Context, slt *sdcpb.S
 	return tv.ToString(), nil
 }
 
-// GetTVValue unmarshals the proto-serialized TypedValue. No original lexical context is available,
-// so the matched union branch type is always nil (graceful fallback to outer schema type in validators).
+// GetTVValue unmarshals the proto-serialized TypedValue. For union-typed leaves,
+// InferUnionMemberFromTypedValue attaches the matched branch per RFC 7950 §9.12
+// (first matching member in schema order; same narrowing as TVFromStringWithType).
 func (p *ProtoTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, *sdcpb.SchemaLeafType, error) {
 	result := &sdcpb.TypedValue{}
 	err := proto.Unmarshal(p.data.LeafVariant, result)
 	if err != nil {
 		return nil, nil, err
 	}
-	return result, nil, nil
+	matched := importer.InferUnionMemberFromTypedValue(result, slt)
+	return result, matched, nil
 }
+
 func (p *ProtoTreeImporterElement) GetName() string {
 	return p.data.Name
 }

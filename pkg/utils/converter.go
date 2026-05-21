@@ -21,6 +21,16 @@ type SchemaClientBound interface {
 	GetSchemaElements(ctx context.Context, p *sdcpb.Path, done chan struct{}) (chan *sdcpb.GetSchemaResponse, error)
 }
 
+// ExpandedUpdate is one leaf-level update after schema-driven expansion of a wire
+// value. MatchedUnionType is set when conversion resolved a union member (see
+// sdcpb.ConvertJsonValueToTvWithType); nil if not applicable. Union-typed leaf-lists
+// intentionally leave MatchedUnionType nil in Phase 1 (see docs/prd/union-member-
+// resolution-validation/issues/007-DECISION.md).
+type ExpandedUpdate struct {
+	Update           *sdcpb.Update
+	MatchedUnionType *sdcpb.SchemaLeafType
+}
+
 type Converter struct {
 	schemaClientBound SchemaClientBound
 }
@@ -31,8 +41,8 @@ func NewConverter(scb SchemaClientBound) *Converter {
 	}
 }
 
-func (c *Converter) ExpandUpdates(ctx context.Context, updates []*sdcpb.Update) ([]*sdcpb.Update, error) {
-	outUpdates := make([]*sdcpb.Update, 0, len(updates))
+func (c *Converter) ExpandUpdates(ctx context.Context, updates []*sdcpb.Update) ([]*ExpandedUpdate, error) {
+	outUpdates := make([]*ExpandedUpdate, 0, len(updates))
 	for idx, upd := range updates {
 		_ = idx
 		expUpds, err := c.ExpandUpdate(ctx, upd)
@@ -45,9 +55,9 @@ func (c *Converter) ExpandUpdates(ctx context.Context, updates []*sdcpb.Update) 
 }
 
 // expandUpdate Expands the value, in case of json to single typed value updates
-func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
+func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*ExpandedUpdate, error) {
 	log := logger.FromContext(ctx)
-	upds := make([]*sdcpb.Update, 0)
+	upds := make([]*ExpandedUpdate, 0)
 	rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, upd.GetPath())
 	if err != nil {
 		return nil, err
@@ -69,7 +79,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 				upd.Value = &sdcpb.TypedValue{
 					Value: &sdcpb.TypedValue_EmptyVal{},
 				}
-				return append(upds, upd), nil
+				return []*ExpandedUpdate{{Update: upd, MatchedUnionType: nil}}, nil
 			}
 			if len(upd.Path.Elem) > 0 && len(upd.Path.Elem[len(upd.Path.Elem)-1].Key) > 0 {
 				newUpd := &sdcpb.Update{}
@@ -91,7 +101,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 						return nil, err
 					}
 				}
-				upds = append(upds, newUpd)
+				upds = append(upds, &ExpandedUpdate{Update: newUpd, MatchedUnionType: nil})
 				return upds, nil
 			}
 			return nil, nil
@@ -105,7 +115,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 		case *sdcpb.TypedValue_JsonVal:
 			jsonDecoder = json.NewDecoder(bytes.NewReader(upd.GetValue().GetJsonVal()))
 		default:
-			return []*sdcpb.Update{upd}, nil
+			return []*ExpandedUpdate{{Update: upd, MatchedUnionType: nil}}, nil
 		}
 		// don't decode into float64 but keep as a string
 		// this solves issues created by reading long integers
@@ -119,12 +129,13 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 		if err != nil {
 			return nil, err
 		}
-		upds := append(upds, rs...)
+		upds = append(upds, rs...)
 		return upds, nil
 
 	case *sdcpb.SchemaElem_Field:
 		var v interface{}
 		var err error
+		var matched *sdcpb.SchemaLeafType
 
 		var jsonValue []byte
 		if upd.GetValue() == nil {
@@ -147,7 +158,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 			if err != nil {
 				return nil, err
 			}
-			upd.Value, err = sdcpb.ConvertJsonValueToTv(v, rsp.Field.GetType())
+			upd.Value, matched, err = sdcpb.ConvertJsonValueToTvWithType(v, rsp.Field.GetType())
 			if err != nil {
 				return nil, err
 			}
@@ -159,6 +170,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 			case rsp.Field.GetType().GetTypeName() != "string",
 				rsp.Field.GetType().Type == "identityref":
 
+				matched = nil
 				upd.Value, err = sdcpb.TVFromString(rsp.Field.GetType(), upd.GetValue().GetStringVal(), 0)
 				if err != nil {
 					return nil, err
@@ -166,10 +178,10 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 			}
 		}
 
-		upds = append(upds, upd)
+		upds = append(upds, &ExpandedUpdate{Update: upd, MatchedUnionType: matched})
 		return upds, nil
 	case *sdcpb.SchemaElem_Leaflist:
-		upds = append(upds, upd)
+		upds = append(upds, &ExpandedUpdate{Update: upd, MatchedUnionType: nil})
 		return upds, nil
 	}
 	return nil, nil
@@ -218,22 +230,25 @@ func (c *Converter) ExpandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Updat
 	return upds, nil
 }
 
-func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container) ([]*sdcpb.Update, error) {
+func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv any, cs *sdcpb.SchemaElem_Container) ([]*ExpandedUpdate, error) {
 	log := logger.FromContext(ctx)
 	// log.Debugf("expanding jsonVal %T | %v | %v", jv, jv, p)
 	switch jv := jv.(type) {
 	case string:
 		v := strings.Trim(jv, "\"")
-		return []*sdcpb.Update{
+		return []*ExpandedUpdate{
 			{
-				Path: p,
-				Value: &sdcpb.TypedValue{
-					Value: &sdcpb.TypedValue_StringVal{StringVal: v},
+				Update: &sdcpb.Update{
+					Path: p,
+					Value: &sdcpb.TypedValue{
+						Value: &sdcpb.TypedValue_StringVal{StringVal: v},
+					},
 				},
+				MatchedUnionType: nil,
 			},
 		}, nil
 	case map[string]any:
-		upds := make([]*sdcpb.Update, 0)
+		upds := make([]*ExpandedUpdate, 0)
 		// make sure all keys are present
 		// and append them to path
 		var keysInPath map[string]string
@@ -299,23 +314,21 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				np := proto.Clone(p).(*sdcpb.Path)
 				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item.Name})
 				upd := &sdcpb.Update{Path: np}
+				var err error
 				switch item.GetType().GetType() {
 				case "empty":
 					upd.Value = &sdcpb.TypedValue{
 						Value: &sdcpb.TypedValue_EmptyVal{},
 					}
+					upds = append(upds, &ExpandedUpdate{Update: upd, MatchedUnionType: nil})
 				default:
-					schemaRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, np)
+					var matched *sdcpb.SchemaLeafType
+					upd.Value, matched, err = sdcpb.ConvertJsonValueToTvWithType(v, item.GetType())
 					if err != nil {
 						return nil, err
 					}
-					upd.Value, err = sdcpb.SchemaElemToTV(schemaRsp.GetSchema(), fmt.Sprintf("%v", v), 0)
-					if err != nil {
-						return nil, err
-					}
-
+					upds = append(upds, &ExpandedUpdate{Update: upd, MatchedUnionType: matched})
 				}
-				upds = append(upds, upd)
 			case *sdcpb.LeafListSchema: // leaflist
 				// log.Debugf("TODO: handling leafList %s", item.Name)
 				np := proto.Clone(p).(*sdcpb.Path)
@@ -351,7 +364,8 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 						Value:     &sdcpb.TypedValue_LeaflistVal{LeaflistVal: &sdcpb.ScalarArray{Element: list}},
 					},
 				}
-				upds = append(upds, upd)
+				// Phase 1: no list-level union branch on ExpandedUpdate (007-DECISION).
+				upds = append(upds, &ExpandedUpdate{Update: upd, MatchedUnionType: nil})
 
 			case string: // child container
 				// log.Debugf("handling child container %s", item)
@@ -363,17 +377,21 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				}
 				switch rsp := rsp.GetSchema().Schema.(type) {
 				case *sdcpb.SchemaElem_Container:
-					var rs []*sdcpb.Update
+					var rs []*ExpandedUpdate
 					// code for presence containers
 					m, ok := v.(map[string]any)
 					if ok && len(m) == 0 && rsp.Container.IsPresence {
-						rs = []*sdcpb.Update{
+						rs = []*ExpandedUpdate{
 							{
-								Path: np,
-								Value: &sdcpb.TypedValue{
-									Value: &sdcpb.TypedValue_EmptyVal{},
+								Update: &sdcpb.Update{
+									Path: np,
+									Value: &sdcpb.TypedValue{
+										Value: &sdcpb.TypedValue_EmptyVal{},
+									},
 								},
-							}}
+								MatchedUnionType: nil,
+							},
+						}
 					} else {
 						rs, err = c.ExpandContainerValue(ctx, np, v, rsp)
 						if err != nil {
@@ -392,7 +410,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		}
 		return upds, nil
 	case []any:
-		upds := make([]*sdcpb.Update, 0)
+		upds := make([]*ExpandedUpdate, 0)
 		for _, v := range jv {
 			np := proto.Clone(p).(*sdcpb.Path)
 			r, err := c.ExpandContainerValue(ctx, np, v, cs)

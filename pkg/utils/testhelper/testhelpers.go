@@ -74,13 +74,21 @@ func ExpandUpdateFromConfig(ctx context.Context, conf *sdcio_schema.Device, conv
 		return nil, err
 	}
 
-	return converter.ExpandUpdate(ctx,
+	expanded, err := converter.ExpandUpdate(ctx,
 		&sdcpb.Update{
 			Path: &sdcpb.Path{
 				Elem: []*sdcpb.PathElem{},
 			},
 			Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: []byte(strJson)}},
 		})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*sdcpb.Update, 0, len(expanded))
+	for _, e := range expanded {
+		out = append(out, e.Update)
+	}
+	return out, nil
 }
 
 func AddToRoot(ctx context.Context, e api.Entry, updates []*sdcpb.Update, flags *types.UpdateInsertFlags, owner string, prio int32) error {

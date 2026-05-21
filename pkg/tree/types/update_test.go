@@ -18,10 +18,12 @@ func TestEffectiveLeafType_ReturnsFallback_WhenMatchedTypeNil(t *testing.T) {
 	}
 }
 
-func TestEffectiveLeafType_ReturnsMatchedType_WhenSet(t *testing.T) {
-	u := NewUpdate(nil, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "foo"}}, 0, "owner", 0)
+// EffectiveLeafType does not derive schema type from TypedValue; it returns the
+// union branch type stored by WithMatchedType when present (see importer GetTVValue).
+func TestEffectiveLeafType_ReturnsMatchedUnionBranchWhenSet(t *testing.T) {
+	u := NewUpdate(nil, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_UintVal{UintVal: 42}}, 0, "owner", 0)
 	matched := &sdcpb.SchemaLeafType{TypeName: "uint32"}
-	fallback := &sdcpb.SchemaLeafType{TypeName: "string"}
+	fallback := &sdcpb.SchemaLeafType{TypeName: "uint64"}
 
 	u.WithMatchedType(matched)
 	result := u.EffectiveLeafType(fallback)
@@ -32,7 +34,7 @@ func TestEffectiveLeafType_ReturnsMatchedType_WhenSet(t *testing.T) {
 }
 
 func TestWithMatchedType_IsFluent(t *testing.T) {
-	u := NewUpdate(nil, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "foo"}}, 0, "owner", 0)
+	u := NewUpdate(nil, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_UintVal{UintVal: 42}}, 0, "owner", 0)
 	matched := &sdcpb.SchemaLeafType{TypeName: "uint32"}
 
 	returned := u.WithMatchedType(matched)
@@ -44,7 +46,7 @@ func TestWithMatchedType_IsFluent(t *testing.T) {
 
 func TestDeepCopy_PreservesMatchedType(t *testing.T) {
 	matched := &sdcpb.SchemaLeafType{TypeName: "uint32"}
-	u := NewUpdate(nil, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "foo"}}, 0, "owner", 0).
+	u := NewUpdate(nil, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_UintVal{UintVal: 42}}, 0, "owner", 0).
 		WithMatchedType(matched)
 
 	copied := u.DeepCopy()
@@ -55,7 +57,9 @@ func TestDeepCopy_PreservesMatchedType(t *testing.T) {
 }
 
 func TestEqual_IgnoresMatchedType(t *testing.T) {
-	tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "foo"}}
+	// Equal compares marshaled TypedValue (and owner/priority), not matchedUnionType.
+	// Same wire value: one update records the resolved union branch, one does not.
+	tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_UintVal{UintVal: 42}}
 	withMatched := NewUpdate(nil, tv, 0, "owner", 0).
 		WithMatchedType(&sdcpb.SchemaLeafType{TypeName: "uint32"})
 	withoutMatched := NewUpdate(nil, tv, 0, "owner", 0)

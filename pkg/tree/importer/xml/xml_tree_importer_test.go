@@ -241,11 +241,15 @@ func TestXmlTreeImporterElement_IdentityRef(t *testing.T) {
 func TestXmlTreeImporterElement_GetTVValue_MatchedType(t *testing.T) {
 	ctx := context.Background()
 
+	firstStr := &sdcpb.SchemaLeafType{Type: "string"}
+	secondStr := &sdcpb.SchemaLeafType{Type: "string"}
+
 	tests := []struct {
 		name            string
 		xmlText         string
 		slt             *sdcpb.SchemaLeafType
 		wantMatchedType string // expected matched branch TypeName ("" = nil expected)
+		wantSamePtrAs   *sdcpb.SchemaLeafType // optional: assert matched branch is this union member (RFC order)
 		wantErr         bool
 	}{
 		{
@@ -278,6 +282,16 @@ func TestXmlTreeImporterElement_GetTVValue_MatchedType(t *testing.T) {
 			},
 			wantMatchedType: "uint32",
 		},
+		{
+			name:    "union_two_string_branches_rfc_first_member",
+			xmlText: "hello",
+			slt: &sdcpb.SchemaLeafType{
+				Type:       "union",
+				UnionTypes: []*sdcpb.SchemaLeafType{firstStr, secondStr},
+			},
+			wantMatchedType: "string",
+			wantSamePtrAs:   firstStr,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -297,6 +311,9 @@ func TestXmlTreeImporterElement_GetTVValue_MatchedType(t *testing.T) {
 				if matchedType == nil || matchedType.Type != tt.wantMatchedType {
 					t.Errorf("matchedType = %v, want type %q", matchedType, tt.wantMatchedType)
 				}
+			}
+			if tt.wantSamePtrAs != nil && matchedType != tt.wantSamePtrAs {
+				t.Errorf("matchedType pointer %p, want same union member as %p (RFC 7950 §9.12 order)", matchedType, tt.wantSamePtrAs)
 			}
 		})
 	}

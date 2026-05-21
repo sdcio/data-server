@@ -195,3 +195,31 @@ func TestDefaultValueRetrieve(t *testing.T) {
 		})
 	}
 }
+
+// TestDefaultValueRetrieve_unionLeafDefault_attachsMatchedMemberType verifies PRD 004: schema-driven
+// default strings for union leaves use TVFromStringWithType so EffectiveLeafType sees the resolved branch.
+func TestDefaultValueRetrieve_unionLeafDefault_attachsMatchedMemberType(t *testing.T) {
+	ctx := context.Background()
+	sc, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	scb := schemaClient.NewSchemaClientBound(schema, sc)
+	path := &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("unionpatterntest", nil)}}
+	rsp, err := scb.GetSchemaSdcpbPath(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	upd, err := ops.DefaultValueRetrieve(ctx, rsp.GetSchema(), path)
+	if err != nil {
+		t.Fatalf("DefaultValueRetrieve: %v", err)
+	}
+	if got := upd.Value().GetUintVal(); got != 99 {
+		t.Fatalf("default typed value: want uint 99, got %#v", upd.Value())
+	}
+	fallback := rsp.GetSchema().GetField().GetType()
+	eff := upd.EffectiveLeafType(fallback)
+	if eff == nil || eff.GetType() != "uint32" {
+		t.Fatalf("EffectiveLeafType: want uint32 branch, got %v (fallback type=%q)", eff, fallback.GetType())
+	}
+}

@@ -98,6 +98,7 @@ module sdcio_model {
       }
       type uint32;
     }
+    default "99";
   }
   leaf unionlengthtest {
     type union {

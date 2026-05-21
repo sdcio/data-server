@@ -179,10 +179,9 @@ func TestProtoTreeImporter(t *testing.T) {
 	}
 }
 
-func TestProtoTreeImporterElement_GetTVValue_NilMatchedType(t *testing.T) {
+func TestProtoTreeImporterElement_GetTVValue_UnionInfersUniqueBranch(t *testing.T) {
 	ctx := context.Background()
 
-	// Proto importer has no original lexical context, so matched type must always be nil.
 	tv := &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "hello"}}
 	raw, err := proto.Marshal(tv)
 	if err != nil {
@@ -206,7 +205,7 @@ func TestProtoTreeImporterElement_GetTVValue_NilMatchedType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTVValue() unexpected error: %v", err)
 	}
-	if matchedType != nil {
-		t.Errorf("proto importer should return nil matchedType, got %v", matchedType)
+	if matchedType == nil || matchedType.Type != "string" {
+		t.Fatalf("GetTVValue() matchedType = %v, want non-nil branch type string", matchedType)
 	}
 }
