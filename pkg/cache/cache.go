@@ -16,11 +16,8 @@ package cache
 
 import (
 	"context"
-	"fmt"
 
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
-	"google.golang.org/protobuf/proto"
 )
 
 type Client interface {
@@ -37,59 +34,59 @@ type Client interface {
 	InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error)
 }
 
-type Update struct {
-	path     []string
-	value    []byte
-	priority int32
-	owner    string
-	ts       int64
-}
+// type Update struct {
+// 	path     []string
+// 	value    []byte
+// 	priority int32
+// 	owner    string
+// 	ts       int64
+// }
 
-func NewUpdate(path []string, value []byte, priority int32, owner string, ts int64) *Update {
-	return &Update{
-		path:     path,
-		value:    value,
-		priority: priority,
-		owner:    owner,
-		ts:       ts,
-	}
-}
+// func NewUpdate(path []string, value []byte, priority int32, owner string, ts int64) *Update {
+// 	return &Update{
+// 		path:     path,
+// 		value:    value,
+// 		priority: priority,
+// 		owner:    owner,
+// 		ts:       ts,
+// 	}
+// }
 
-func (u *Update) GetPath() []string {
-	return u.path
-}
+// func (u *Update) GetPath() []string {
+// 	return u.path
+// }
 
-func (u *Update) Value() (*sdcpb.TypedValue, error) {
-	tv := new(sdcpb.TypedValue)
-	err := proto.Unmarshal(u.value, tv)
-	if err != nil {
-		return nil, err
-	}
-	return tv, nil
-}
+// func (u *Update) Value() (*sdcpb.TypedValue, error) {
+// 	tv := new(sdcpb.TypedValue)
+// 	err := proto.Unmarshal(u.value, tv)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return tv, nil
+// }
 
-func (u *Update) Bytes() []byte {
-	return u.value
-}
+// func (u *Update) Bytes() []byte {
+// 	return u.value
+// }
 
-func (u *Update) Priority() int32 {
-	return u.priority
-}
+// func (u *Update) Priority() int32 {
+// 	return u.priority
+// }
 
-func (u *Update) Owner() string {
-	return u.owner
-}
+// func (u *Update) Owner() string {
+// 	return u.owner
+// }
 
-func (u *Update) TS() int64 {
-	return u.ts
-}
+// func (u *Update) TS() int64 {
+// 	return u.ts
+// }
 
-func (u *Update) String() string {
-	val := "error decoding value"
-	v, err := u.Value()
-	if err == nil {
-		// if no error occured we use the value
-		val = v.String()
-	}
-	return fmt.Sprintf("path: %s, owner: %s, priority: %d, value: %s", u.path, u.owner, u.priority, val)
-}
+// func (u *Update) String() string {
+// 	val := "error decoding value"
+// 	v, err := u.Value()
+// 	if err == nil {
+// 		// if no error occured we use the value
+// 		val = v.String()
+// 	}
+// 	return fmt.Sprintf("path: %s, owner: %s, priority: %d, value: %s", u.path, u.owner, u.priority, val)
+// }
