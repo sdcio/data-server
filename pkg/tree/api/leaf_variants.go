@@ -233,9 +233,12 @@ func (lv *LeafVariants) RemainsToExist() bool {
 			defaultOrRunningExists = true
 			continue
 		}
-		// if an entry exists that does not have the delete flag set,
-		// then a remaining LeafVariant exists.
-		if !l.GetDeleteFlag() {
+		// If an entry exists that does not have the delete flag set, OR is
+		// only being removed from the intended store (orphan delete: the
+		// device value stays unchanged), then a remaining LeafVariant exists.
+		// This keeps RemainsToExist() consistent with CanDelete()/ShouldDelete()
+		// which already treat DeleteOnlyIntended as "stays on device".
+		if !l.GetDeleteFlag() || l.GetDeleteOnlyIntendedFlag() {
 			return true
 		}
 		deleteExists = true
