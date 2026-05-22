@@ -274,6 +274,51 @@ func TestLeafVariants_remainsToExist(t *testing.T) {
 			},
 			expected: false,
 		},
+		{
+			// Orphan delete: the only owner is being removed from the intended
+			// store but the device value stays. Running stays. The entry must
+			// be reported as remaining so that mandatory/leafref validation
+			// does not falsely fire on paths that the device will still keep.
+			name: "Orphan delete with running",
+			setup: func() *LeafVariants {
+				lv := &LeafVariants{
+					les: make(LeafVariantSlice, 0),
+				}
+				lerun := NewLeafEntry(
+					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, RunningValuesPrio, RunningIntentName, 0),
+					types.NewUpdateInsertFlags(),
+					nil,
+				)
+				ledel := NewLeafEntry(
+					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 10, "owner1", 0),
+					types.NewUpdateInsertFlags().SetDeleteFlag().SetDeleteOnlyUpdatedFlag(),
+					nil,
+				)
+				lv.Add(lerun)
+				lv.Add(ledel)
+				return lv
+			},
+			expected: true,
+		},
+		{
+			// Same as above but no running. The intent is being orphan-deleted
+			// (only-intended), and there's no other variant to fall back to.
+			// The device still has the value, so the entry remains.
+			name: "Orphan delete without running",
+			setup: func() *LeafVariants {
+				lv := &LeafVariants{
+					les: make(LeafVariantSlice, 0),
+				}
+				ledel := NewLeafEntry(
+					types.NewUpdate(&mockUpdateParent{}, &sdcpb.TypedValue{}, 10, "owner1", 0),
+					types.NewUpdateInsertFlags().SetDeleteFlag().SetDeleteOnlyUpdatedFlag(),
+					nil,
+				)
+				lv.Add(ledel)
+				return lv
+			},
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {
