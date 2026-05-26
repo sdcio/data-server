@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -66,7 +67,17 @@ func main() {
 		slogOpts.Level = slog.Level(-logf.VTrace)
 	}
 
-	log := logr.FromSlogHandler(slog.NewJSONHandler(os.Stdout, slogOpts))
+	var output io.Writer = os.Stdout
+	if logFile := os.Getenv("EXTRA_LOG_FILE"); logFile != "" {
+		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to open log file %s: %v\n", logFile, err)
+		} else {
+			output = io.MultiWriter(os.Stdout, f)
+		}
+	}
+
+	log := logr.FromSlogHandler(slog.NewJSONHandler(output, slogOpts))
 	logf.SetDefaultLogger(log)
 	ctx := logf.IntoContext(context.Background(), log)
 
