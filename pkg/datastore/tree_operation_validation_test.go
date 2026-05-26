@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
-	"github.com/sdcio/data-server/pkg/cache"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
@@ -57,7 +56,7 @@ func TestDatastore_validateTree(t *testing.T) {
 		intentName           string
 		intentPrio           int32
 		intentDelete         bool
-		intendedStoreUpdates []*cache.Update
+		intendedStoreUpdates []*types.Update
 		NotOnlyNewOrUpdated  bool // it negated when used in the call, usually we want it to be true
 		expectedWarnings     []string
 		nonRevertive         bool

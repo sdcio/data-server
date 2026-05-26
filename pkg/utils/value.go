@@ -21,10 +21,7 @@ import (
 	"strings"
 
 	"github.com/openconfig/gnmi/proto/gnmi"
-	"github.com/sdcio/data-server/pkg/cache"
-	"github.com/sdcio/schema-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	"google.golang.org/protobuf/proto"
 )
 
 func GetJsonValue(tv *sdcpb.TypedValue, ietf bool) (any, error) {
@@ -124,14 +121,6 @@ func ToGNMITypedValue(v *sdcpb.TypedValue) *gnmi.TypedValue {
 		return &gnmi.TypedValue{
 			Value: &gnmi.TypedValue_BytesVal{BytesVal: v.GetBytesVal()},
 		}
-	// case *sdcpb.TypedValue_DecimalVal:
-	// 	return &gnmi.TypedValue{
-	// 		Value: &gnmi.TypedValue_DecimalVal{DecimalVal: v.GetDecimalVal()},
-	// 	}
-	// case *sdcpb.TypedValue_FloatVal:
-	// 	return &gnmi.TypedValue{
-	// 		Value: &gnmi.TypedValue_FloatVal{FloatVal: v.GetFloatVal()},
-	// 	}
 	case *sdcpb.TypedValue_IntVal:
 		return &gnmi.TypedValue{
 			Value: &gnmi.TypedValue_IntVal{IntVal: v.GetIntVal()},
@@ -232,25 +221,4 @@ func ParseDecimal64(v string) (*sdcpb.Decimal64, error) {
 // BoolPtr retrieve a pointer to a bool value
 func BoolPtr(b bool) *bool {
 	return &b
-}
-
-func SdcpbUpdateToCacheUpdate(upd *sdcpb.Update, owner string, prio int32) (*cache.Update, error) {
-	b, err := proto.Marshal(upd.Value)
-	if err != nil {
-		return nil, err
-	}
-	return cache.NewUpdate(utils.ToStrings(upd.GetPath(), false, false), b, prio, owner, 0), nil
-}
-
-func SdcpbUpdatesToCacheUpdates(upds []*sdcpb.Update, owner string, prio int32) ([]*cache.Update, error) {
-	result := []*cache.Update{}
-	for _, upd := range upds {
-		cUpd, err := SdcpbUpdateToCacheUpdate(upd, owner, prio)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, cUpd)
-	}
-
-	return result, nil
 }
