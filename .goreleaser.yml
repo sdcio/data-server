@@ -25,23 +25,27 @@ builds:
       - linux
     goarch:
       - amd64
-dockers:
-  - goos: linux
-    goarch: amd64
-    ids:
+dockers_v2:
+  - ids:
       - data-server
-    image_templates:
-      - "ghcr.io/sdcio/data-server:latest"
-      - "ghcr.io/sdcio/data-server:v{{ .Version }}"
     dockerfile: goreleaser.dockerfile
-    skip_push: false
-    build_flag_templates:
-      - "--pull"
-      - "--build-arg=USERID=10000"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.source=https://github.com/sdcio/{{.ProjectName}}"
-      - "--label=org.opencontainers.image.version=v{{.Version}}"
+    images:
+      - ghcr.io/sdcio/data-server
+    tags:
+      - latest
+      - "v{{ .Version }}"
+    platforms:
+      - linux/amd64
+    flags:
+      - "--pull=true"
+      - "--provenance=false"
+    build_args:
+      USERID: "10000"
+    labels:
+      org.opencontainers.image.created: "{{.Date}}"
+      org.opencontainers.image.title: "{{.ProjectName}}"
+      org.opencontainers.image.source: "https://github.com/sdcio/{{.ProjectName}}"
+      org.opencontainers.image.version: "v{{.Version }}"
 archives:
   - name_template: >-
       {{ .ProjectName }}_
@@ -55,7 +59,7 @@ archives:
 checksum:
   name_template: "checksums.txt"
 snapshot:
-  name_template: "{{ .Tag }}"
+  version_template: "{{ .Tag }}"
 changelog:
   use: github
   sort: asc
