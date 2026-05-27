@@ -38,6 +38,8 @@ dockers_v2:
       - '{{ if eq .Env.MAIN_BRANCH "true" }}v0.0.0-{{ .ShortCommit }}{{ else if eq .Env.IS_PR "true" }}v0.0.0-PR{{ .Env.PR }}-{{ .ShortCommit }}{{ else }}v0.0.0-{{ .ShortCommit }}{{ end }}'
     platforms:
       - linux/amd64
+    # Disables default SBOM attestation (incompatible with GHA default docker driver).
+    sbom: false
     flags:
       - "--pull=true"
       - "--provenance=false"

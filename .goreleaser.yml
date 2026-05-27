@@ -36,6 +36,8 @@ dockers_v2:
       - "v{{ .Version }}"
     platforms:
       - linux/amd64
+    # Disables default SBOM attestation (incompatible with GHA default docker driver).
+    sbom: false
     flags:
       - "--pull=true"
       - "--provenance=false"
