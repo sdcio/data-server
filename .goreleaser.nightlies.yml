@@ -25,21 +25,32 @@ builds:
       - linux
     goarch:
       - amd64
-dockers:
-  - goos: linux
-    goarch: amd64
-    ids:
+dockers_v2:
+  - ids:
       - data-server
-    image_templates:
-      - "ghcr.io/sdcio/data-server:v0.0.0-{{ if index .Env \"PR\"  }}PR{{ .Env.PR }}-{{ .ShortCommit }}{{ else }}{{ .ShortCommit }}{{ end }}"
     dockerfile: goreleaser.dockerfile
-    skip_push: false
-    build_flag_templates:
-      - "--pull"
-      - "--build-arg=USERID=10000"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.source=https://github.com/sdcio/{{.ProjectName}}"
-      - "--label=org.opencontainers.image.version=v{{.Version}}"
+    images:
+      - ghcr.io/sdcio/data-server
+    tags:
+      # Primary: PR → v0.0.0-PR<n>-<shortsha>. Main → main. Else → v0.0.0-<shortsha>.
+      - '{{ if eq .Env.IS_PR "true" }}v0.0.0-PR{{ .Env.PR }}-{{ .ShortCommit }}{{ else if eq .Env.MAIN_BRANCH "true" }}main{{ else }}v0.0.0-{{ .ShortCommit }}{{ end }}'
+      # Secondary (main only): immutable v0.0.0-<shortsha>; other builds repeat the primary tag (harmless duplicate).
+      - '{{ if eq .Env.MAIN_BRANCH "true" }}v0.0.0-{{ .ShortCommit }}{{ else if eq .Env.IS_PR "true" }}v0.0.0-PR{{ .Env.PR }}-{{ .ShortCommit }}{{ else }}v0.0.0-{{ .ShortCommit }}{{ end }}'
+      # CI/integration: immutable short SHA tag (matches workflow output from git rev-parse --short HEAD).
+      - "{{ .ShortCommit }}"
+    platforms:
+      - linux/amd64
+    # Disables default SBOM attestation (incompatible with GHA default docker driver).
+    sbom: false
+    flags:
+      - "--pull=true"
+      - "--provenance=false"
+    build_args:
+      USERID: "10000"
+    labels:
+      org.opencontainers.image.created: "{{.Date}}"
+      org.opencontainers.image.title: "{{.ProjectName}}"
+      org.opencontainers.image.source: "https://github.com/sdcio/{{.ProjectName}}"
+      org.opencontainers.image.version: "v{{.Version}}"
 release:
   disable: true

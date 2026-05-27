@@ -28,6 +28,8 @@ RUN mkdir -p /schemas
 #
 
 FROM scratch
+# GoReleaser dockers_v2 places pre-built binaries under $TARGETPLATFORM/ in the build context.
+ARG TARGETPLATFORM
 ARG USERID=10000
 # add-in our timezone data file
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
@@ -36,7 +38,7 @@ COPY --from=builder /etc/passwd /etc/group /etc/shadow /etc/
 # add-in our ca certificates
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-COPY --chown=$USERID:$USERID data-server /app/
+COPY --chown=$USERID:$USERID ${TARGETPLATFORM}/data-server /app/data-server
 COPY --from=builder --chown=$USERID:$USERID /schemas /schemas
 WORKDIR /app
 
