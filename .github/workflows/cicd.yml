@@ -40,8 +40,11 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
           fetch-depth: 0
+          fetch-tags: true
 
-      - name: Fetch upstream tags
+      # Fork clones lack canonical release tags; GoReleaser still resolves {{.Version}} from git.
+      - name: Fetch upstream tags (fork PRs only)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
         run: |
           git fetch --force --tags https://github.com/${{ github.repository }}.git '+refs/tags/*:refs/tags/*'
 
