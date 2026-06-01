@@ -31,6 +31,21 @@ const (
 	ncCommitDatastoreCandidate = "candidate"
 )
 
+// DeviceProfile selects NOS-specific southbound behaviour. Wire values are YAML/JSON
+// string scalars. [DeviceProfileNone] is the default (omitted or empty in config).
+type DeviceProfile string
+
+const (
+	// DeviceProfileNone selects generic southbound driver behaviour (no NOS-specific
+	// materialization). It is the zero value and serializes as omitted/empty in YAML/JSON.
+	DeviceProfileNone DeviceProfile = ""
+	// DeviceProfileCiscoIOSXR enables IOS-XR-specific gNMI materialization for
+	// type=gnmi (JSON / JSON_IETF granular path encoding; other encodings use the
+	// generic gNMI plan builder). For type=netconf the value is accepted for
+	// configuration consistency but currently has no profile-specific behaviour.
+	DeviceProfileCiscoIOSXR DeviceProfile = "cisco-ios-xr"
+)
+
 type DatastoreConfig struct {
 	Name       string           `yaml:"name,omitempty" json:"name,omitempty"`
 	Schema     *SchemaConfig    `yaml:"schema,omitempty" json:"schema,omitempty"`
@@ -86,6 +101,10 @@ type SBI struct {
 	ConnectRetry time.Duration `yaml:"connect-retry,omitempty" json:"connect-retry,omitempty"`
 	// Timeout
 	Timeout time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	// DeviceProfile selects NOS-specific southbound behaviour. Use the
+	// [DeviceProfile] constants ([DeviceProfileNone] or [DeviceProfileCiscoIOSXR]);
+	// unknown values are rejected when the datastore configuration is validated.
+	DeviceProfile DeviceProfile `yaml:"device-profile,omitempty" json:"device-profile,omitempty"`
 }
 
 type SBIGnmiOptions struct {
@@ -164,7 +183,20 @@ func (ds *DatastoreConfig) ValidateSetDefaults() error {
 	return nil
 }
 
+// IsCiscoIOSXR reports whether this SBI uses the Cisco IOS-XR device profile.
+// Callers outside pkg/config should use this predicate rather than comparing
+// DeviceProfile directly, so the profile string stays contained here.
+func (s *SBI) IsCiscoIOSXR() bool {
+	return s.DeviceProfile == DeviceProfileCiscoIOSXR
+}
+
 func (s *SBI) validateSetDefaults() error {
+	switch s.DeviceProfile {
+	case DeviceProfileNone, DeviceProfileCiscoIOSXR:
+	default:
+		return fmt.Errorf("unknown device-profile: %q", s.DeviceProfile)
+	}
+
 	switch s.Type {
 	case sbiNOOP:
 		return nil

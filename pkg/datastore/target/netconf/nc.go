@@ -159,16 +159,24 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	return result, nil
 }
 
-func (t *ncTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
+// Set dispatches a pre-built SouthboundSetPlan to the NETCONF target.
+// The plan must carry a NetconfSetPlan with the XML document already built
+// by the materialize layer (issue 003).
+func (t *ncTarget) Set(ctx context.Context, plan types.SouthboundSetPlan) (*sdcpb.SetDataResponse, error) {
 	log := logf.FromContext(ctx).WithName("Set")
 	ctx = logf.IntoContext(ctx, log)
 	if !t.Status().IsConnected() {
 		return nil, fmt.Errorf("%s", types.TargetStatusNotConnected)
 	}
 
+	np, ok := plan.NetconfPlan()
+	if !ok {
+		return nil, fmt.Errorf("netconf target received a non-NETCONF SouthboundSetPlan")
+	}
+
 	switch t.sbiConfig.NetconfOptions.CommitDatastore {
 	case "running", "candidate":
-		return t.setToDevice(ctx, t.sbiConfig.NetconfOptions.CommitDatastore, source)
+		return t.setToDevice(ctx, t.sbiConfig.NetconfOptions.CommitDatastore, np)
 	}
 	// should not get here if the config validation happened.
 	return nil, fmt.Errorf("unknown commit-datastore: %s", t.sbiConfig.NetconfOptions.CommitDatastore)
@@ -236,14 +244,14 @@ func filterRPCErrors(xml *etree.Document, severity string) ([]string, error) {
 	return result, nil
 }
 
-func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
+func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, np *types.NetconfSetPlan) (*sdcpb.SetDataResponse, error) {
 	log := logf.FromContext(ctx).WithValues("commit-datastore", commitDatastore)
-	xtree, err := source.ToXML(ctx, true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
-	if err != nil {
-		return nil, err
+
+	if np.Doc == nil {
+		return &sdcpb.SetDataResponse{Timestamp: time.Now().UnixNano()}, nil
 	}
 
-	xdoc, err := xtree.WriteToString()
+	xdoc, err := np.Doc.WriteToString()
 	if err != nil {
 		return nil, err
 	}

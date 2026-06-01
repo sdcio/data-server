@@ -42,7 +42,6 @@ module sdcio_model {
   import sdcio_model_count {
     prefix sdcio_model_count;
   }
-
   description
     "This is the test schema for sdcio";
 

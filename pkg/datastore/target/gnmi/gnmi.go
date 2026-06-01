@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/AlekSi/pointer"
@@ -153,61 +152,24 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 	return schemaRsp, nil
 }
 
-func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (*sdcpb.SetDataResponse, error) {
+// Set dispatches a pre-built SouthboundSetPlan to the gNMI target.
+// The plan must carry a GnmiSetPlan; encoding is done upstream by the
+// materialize layer.
+func (t *gnmiTarget) Set(ctx context.Context, plan targetTypes.SouthboundSetPlan) (*sdcpb.SetDataResponse, error) {
 	log := logf.FromContext(ctx).WithName("Set")
 	ctx = logf.IntoContext(ctx, log)
-
-	var upds []*sdcpb.Update
-	var deletes []*sdcpb.Path
-	var err error
 
 	if t == nil {
 		return nil, fmt.Errorf("%s", "not connected")
 	}
 
-	// deletes from protos
-	deletes, err = source.ToProtoDeletes(ctx)
-	if err != nil {
-		return nil, err
+	gp, ok := plan.GnmiPlan()
+	if !ok {
+		return nil, fmt.Errorf("gnmi target received a non-gNMI SouthboundSetPlan")
 	}
 
-	switch strings.ToLower(t.cfg.GnmiOptions.Encoding) {
-	case "json":
-		jsonData, err := source.ToJson(ctx, true)
-		if err != nil {
-			return nil, err
-		}
-		if jsonData != nil {
-			jsonBytes, err := json.Marshal(jsonData)
-			if err != nil {
-				return nil, err
-			}
-			if len(jsonBytes) > 0 {
-				upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: jsonBytes}}}}
-			}
-		}
-
-	case "json_ietf":
-		jsonData, err := source.ToJsonIETF(ctx, true)
-		if err != nil {
-			return nil, err
-		}
-		if jsonData != nil {
-			jsonBytes, err := json.Marshal(jsonData)
-			if err != nil {
-				return nil, err
-			}
-			if len(jsonBytes) > 0 {
-				upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonIetfVal{JsonIetfVal: jsonBytes}}}}
-			}
-		}
-
-	case "proto":
-		upds, err = source.ToProtoUpdates(ctx, true)
-		if err != nil {
-			return nil, err
-		}
-	}
+	upds := gp.Updates
+	deletes := gp.Deletes
 
 	if len(deletes) == 0 && len(upds) == 0 {
 		return &sdcpb.SetDataResponse{}, nil
