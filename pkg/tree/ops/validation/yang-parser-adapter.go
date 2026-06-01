@@ -120,6 +120,8 @@ func (y *yangParserEntryAdapter) Navigate(p *sdcpb.Path) (xpath.Entry, error) {
 		return y, nil
 	}
 
+	p.StripPathElemPrefixPath()
+
 	entry, err := ops.NavigateSdcpbPath(y.ctx, y.e, p)
 	if err != nil {
 		return newYangParserValueEntry(xpath.NewNodesetDatum([]xutils.XpathNode{}), err), nil

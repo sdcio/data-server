@@ -29,6 +29,9 @@ type ImportConfigAdapterElement interface {
 	// GetKeyValue can be called on Leafs or LeafList elements to retrieve the underlaying value
 	// When and were to expect a Leafs or LeafList is defined by the yang schema.
 	// The String value is typically used for the keys.
+	// Contract: for identityref leaf types, GetKeyValue must return the bare identity name
+	// (e.g. "BGP"), stripping any module prefix (e.g. "openconfig-policy-types:BGP").
+	// This ensures JSON_IETF and plain JSON inputs produce identical tree keys.
 	GetKeyValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (string, error)
 	// GetTVValue returns the TypedValue based value defined via the SchemaLeafType. Can also only be called on Leafs or LeafLists
 	GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error)

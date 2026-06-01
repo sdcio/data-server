@@ -23,6 +23,147 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+// buildTree creates a tree populated with config supplied as a plain-JSON map.
+func buildTree(t *testing.T, jsonConf map[string]any) *tree.RootEntry {
+	t.Helper()
+	ctx := context.Background()
+
+	sc, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	scb := schemaClient.NewSchemaClientBound(schema, sc)
+	tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConf, "owner1", 500, false), types.NewUpdateInsertFlags(), vpf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := root.FinishInsertionPhase(ctx); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// TestLeafref_IdentityrefKey verifies that leafref validation resolves
+// current()-relative key predicates whose values are identityref leaves.
+// Without the tv.ToString() fix in resolveLeafrefKeyPath the key is "" and
+// the reference cannot be found.
+func TestLeafref_IdentityrefKey(t *testing.T) {
+	tests := []struct {
+		name        string
+		conf        map[string]any
+		wantErrLen  int
+	}{
+		{
+			name: "identityref key resolves - pass",
+			conf: map[string]any{
+				"identityref":        map[string]any{"cryptoA": "otherAlgo"},
+				"intentityrefkey":    []any{map[string]any{"crypto": "otherAlgo", "description": "my-desc"}},
+				"intentityrefkey-ref": "my-desc",
+			},
+			wantErrLen: 0,
+		},
+		{
+			name: "identityref key mismatch - fail",
+			conf: map[string]any{
+				"identityref":        map[string]any{"cryptoA": "rsa"},
+				"intentityrefkey":    []any{map[string]any{"crypto": "otherAlgo", "description": "my-desc"}},
+				"intentityrefkey-ref": "my-desc",
+			},
+			wantErrLen: 1,
+		},
+	}
+
+	lrefPath := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("intentityrefkey-ref", nil)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			root := buildTree(t, tt.conf)
+
+			e, err := ops.NavigateSdcpbPath(ctx, root.Entry, lrefPath)
+			if err != nil {
+				t.Fatalf("NavigateSdcpbPath: %v", err)
+			}
+
+			valConf := config.NewValidationConfig()
+			valConf.DisabledValidators.DisableAll()
+			valConf.DisabledValidators.Leafref = false
+			valConf.DisableConcurrency = true
+
+			result, _ := validation.Validate(ctx, e, valConf, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+			if len(result) != tt.wantErrLen {
+				t.Errorf("Validate() returned %d errors, want %d: %v", len(result), tt.wantErrLen, result)
+			}
+		})
+	}
+}
+
+// TestMust_IdentityrefKey verifies that must-statement validation navigates
+// correctly when the predicate key value originates from an identityref leaf.
+// Without the p.StripPathElemPrefixPath() fix in Navigate the YangString()
+// prefix ("sdcio_identity:otherAlgo") prevents the list entry from being found.
+func TestMust_IdentityrefKey(t *testing.T) {
+	mustPath := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("identityref-must-test", nil)},
+	}
+
+	tests := []struct {
+		name       string
+		conf       map[string]any
+		wantErrLen int
+	}{
+		{
+			name: "must satisfied - pass",
+			conf: map[string]any{
+				"identityref-must-test": map[string]any{"crypto-ref": "otherAlgo"},
+				"intentityrefkey":       []any{map[string]any{"crypto": "otherAlgo", "description": "present"}},
+			},
+			wantErrLen: 0,
+		},
+		{
+			name: "must not satisfied - fail",
+			conf: map[string]any{
+				"identityref-must-test": map[string]any{"crypto-ref": "otherAlgo"},
+				// no intentityrefkey entry → description path resolves to "" → must false
+			},
+			wantErrLen: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			root := buildTree(t, tt.conf)
+
+			e, err := ops.NavigateSdcpbPath(ctx, root.Entry, mustPath)
+			if err != nil {
+				t.Fatalf("NavigateSdcpbPath: %v", err)
+			}
+
+			valConf := config.NewValidationConfig()
+			valConf.DisabledValidators.DisableAll()
+			valConf.DisabledValidators.MustStatement = false
+			valConf.DisableConcurrency = true
+
+			result, _ := validation.Validate(ctx, e, valConf, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+			if len(result) != tt.wantErrLen {
+				t.Errorf("Validate() returned %d errors, want %d: %v", len(result), tt.wantErrLen, result)
+			}
+		})
+	}
+}
+
 func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 	owner1 := "owner1"
 
