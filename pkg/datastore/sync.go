@@ -134,6 +134,14 @@ func (d *Datastore) NewEmptyTree(ctx context.Context) (*tree.RootEntry, error) {
 
 func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error {
 	log := logger.FromContext(ctx)
+
+	// Serialize with in-flight transactions: a concurrent delete transaction must
+	// fully complete (device write + cache delete) before we snapshot the intent
+	// store. Without this, LoadAllButRunningIntents can race with IntentDelete and
+	// push stale intent config back to the device, undoing the deletion.
+	d.dmutex.Lock()
+	defer d.dmutex.Unlock()
+
 	_, err := d.LoadAllButRunningIntents(ctx, t)
 	if err != nil {
 		return err
