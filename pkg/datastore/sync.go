@@ -135,18 +135,20 @@ func (d *Datastore) NewEmptyTree(ctx context.Context) (*tree.RootEntry, error) {
 func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error {
 	log := logger.FromContext(ctx)
 
-	// Serialize with in-flight transactions: a concurrent delete transaction must
-	// fully complete (device write + cache delete) before we snapshot the intent
-	// store. Without this, LoadAllButRunningIntents can race with IntentDelete and
-	// push stale intent config back to the device, undoing the deletion.
+	// Critical section 1: snapshot the intent store.
+	// Hold dmutex so that any concurrent delete transaction (device write +
+	// cache delete) fully completes before we read the cache. Without this,
+	// LoadAllButRunningIntents can race with IntentDelete and push stale intent
+	// config back to the device, undoing the deletion.
 	d.dmutex.Lock()
-	defer d.dmutex.Unlock()
-
 	_, err := d.LoadAllButRunningIntents(ctx, t)
+	d.dmutex.Unlock()
 	if err != nil {
 		return err
 	}
 
+	// Tree processing operates only on the local copy t — no shared state is
+	// accessed, so no lock is required here.
 	err = t.FinishInsertionPhase(ctx)
 	if err != nil {
 		return err
@@ -172,6 +174,12 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error 
 	}
 
 	if performApply {
+		// Critical section 2: device write.
+		// Re-acquire dmutex to serialize the gNMI SET with in-flight
+		// transactions; a concurrent delete must not interleave its device write
+		// with ours.
+		d.dmutex.Lock()
+		defer d.dmutex.Unlock()
 		log.Info("reverting after sync")
 		resp, err := d.applyIntent(ctx, adapter.NewEntryOutputAdapter(t.Entry))
 		if err != nil {
