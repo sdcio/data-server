@@ -31,7 +31,7 @@ const (
 	ncCommitDatastoreCandidate = "candidate"
 )
 
-// DeviceProfile selects NOS-specific southbound behaviour. Wire values are YAML/JSON
+// DeviceProfile selects NOS-specific southbound behaviour. Wire values are YAML/JSON 
 // string scalars. [DeviceProfileNone] is the default (omitted or empty in config).
 type DeviceProfile string
 
