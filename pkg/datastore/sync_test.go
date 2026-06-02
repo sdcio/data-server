@@ -374,6 +374,7 @@ func TestApplyToRunning(t *testing.T) {
 
 			datastore := &Datastore{
 				syncTreeMutex: &sync.RWMutex{},
+				dmutex:        &sync.Mutex{},
 				syncTree:      syncTree,
 				taskPool:      pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)),
 				cacheClient:   tt.cacheClientFunc(ctrl),
