@@ -113,6 +113,9 @@ func buildGnmiUpdates(ctx context.Context, entry api.Entry, encoding gnmi.Encodi
 		if err != nil {
 			return nil, err
 		}
+		if data == nil {
+			return nil, nil
+		}
 		b, err := json.Marshal(data)
 		if err != nil {
 			return nil, fmt.Errorf("materialize: marshal JSON: %w", err)
@@ -126,6 +129,9 @@ func buildGnmiUpdates(ctx context.Context, entry api.Entry, encoding gnmi.Encodi
 		data, err := ops.ToJsonIETF(ctx, entry, true)
 		if err != nil {
 			return nil, err
+		}
+		if data == nil {
+			return nil, nil
 		}
 		b, err := json.Marshal(data)
 		if err != nil {
