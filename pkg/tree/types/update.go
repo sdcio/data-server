@@ -97,6 +97,11 @@ func (u *Update) EffectiveLeafType(fallback *sdcpb.SchemaLeafType) *sdcpb.Schema
 	return fallback
 }
 
+// MatchedType returns the matched union branch type, or nil if not set.
+func (u *Update) MatchedType() *sdcpb.SchemaLeafType {
+	return u.matchedUnionType
+}
+
 // WithMatchedType stores the matched union branch type on the Update and
 // returns the receiver for fluent chaining.
 func (u *Update) WithMatchedType(t *sdcpb.SchemaLeafType) *Update {

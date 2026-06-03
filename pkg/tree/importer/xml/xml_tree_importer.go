@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/beevik/etree"
-
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -82,17 +81,11 @@ func (x *XmlTreeImporterElement) GetKeyValue(ctx context.Context, slt *sdcpb.Sch
 	return tv.ToString(), nil
 }
 
-// GetTVValue parses the element text. For union-typed leaves, InferUnionMemberFromTypedValue
-// selects the matched branch using RFC 7950 sec. 9.12 member order (same rules as proto tree import).
+// GetTVValue parses the element text via sdcpb.TVFromStringWithType, which resolves
+// union branches recursively (RFC 7950 sec. 9.12 first-match order) and returns the
+// matched branch SchemaLeafType.
 func (x *XmlTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, *sdcpb.SchemaLeafType, error) {
-	tv, matched, err := sdcpb.TVFromStringWithType(slt, x.elem.Text(), 0)
-	if err != nil {
-		return nil, nil, err
-	}
-	if slt != nil && slt.Type == "union" {
-		return tv, importer.InferUnionMemberFromTypedValue(tv, slt), nil
-	}
-	return tv, matched, nil
+	return sdcpb.TVFromStringWithType(slt, x.elem.Text(), 0)
 }
 
 func (x *XmlTreeImporterElement) GetName() string {

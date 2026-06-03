@@ -31,7 +31,7 @@ func validateRange(_ context.Context, e api.Entry, resultChan chan<- *types.Vali
 	switch {
 	case e.GetSchema().GetField() != nil:
 		// For leaf nodes, use the effective type (matched union branch if any, else outer type).
-		effectiveType := lv.Update.EffectiveLeafType(e.GetSchema().GetField().GetType())
+		effectiveType, _ := effectiveFieldType(e, e.GetSchema().GetField().GetType())
 		if len(effectiveType.GetRange()) == 0 {
 			return
 		}

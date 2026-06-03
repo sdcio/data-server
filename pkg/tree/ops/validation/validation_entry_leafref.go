@@ -97,7 +97,6 @@ func breadthSearch(ctx context.Context, e api.Entry, sdcpbPath *sdcpb.Path) ([]a
 // union whose matched branch (see types.Update.EffectiveLeafType) is the leafref. This keeps
 // XPath/must evaluation (FollowLeafRef) aligned with validateLeafRefs.
 func navigateLeafRef(ctx context.Context, e api.Entry) ([]api.Entry, error) {
-
 	// leafref path takes as an argument a string that MUST refer to a leaf or leaf-list node.
 	// e.g.
 	// leaf foo {
@@ -113,41 +112,17 @@ func navigateLeafRef(ctx context.Context, e api.Entry) ([]api.Entry, error) {
 	if e.GetSchema() == nil {
 		return nil, fmt.Errorf("error not a leafref %s", e.SdcpbPath())
 	}
-
-	lv := e.GetLeafVariants().GetHighestPrecedence(false, true, false)
-
-	var lref string
-	if field := e.GetSchema().GetField(); field != nil {
-		effectiveType := field.GetType()
-		if lv != nil {
-			effectiveType = lv.Update.EffectiveLeafType(field.GetType())
-		}
-		lref = effectiveType.GetLeafref()
-	}
-	if lref == "" {
-		if ll := e.GetSchema().GetLeaflist(); ll != nil {
-			effectiveType := ll.GetType()
-			if lv != nil {
-				effectiveType = lv.Update.EffectiveLeafType(ll.GetType())
-			}
-			lref = effectiveType.GetLeafref()
-		}
-	}
-	if lref == "" {
+	lref, lv, ok := resolveLeafref(e)
+	if !ok {
 		return nil, fmt.Errorf("error not a leafref %s", e.SdcpbPath())
 	}
-
-	return navigateLeafRefByPath(ctx, e, lref)
+	return navigateLeafRefByPath(ctx, e, lref, lv)
 }
 
 // navigateLeafRefByPath navigates the tree to find entries matching the given leafref path and
 // the current entry's value. It is the implementation for both direct leafref leaves and union
 // leaves whose matched branch is a leafref.
-func navigateLeafRefByPath(ctx context.Context, e api.Entry, lref string) ([]api.Entry, error) {
-	lv := e.GetLeafVariants().GetHighestPrecedence(false, true, false)
-	if lv == nil {
-		return nil, fmt.Errorf("no leafvariant found")
-	}
+func navigateLeafRefByPath(ctx context.Context, e api.Entry, lref string, lv *api.LeafEntry) ([]api.Entry, error) {
 	// value of node with type leafref
 	tv := lv.Value()
 
@@ -236,20 +211,13 @@ func validateLeafRefs(ctx context.Context, e api.Entry, resultChan chan<- *types
 		return
 	}
 
-	// Resolve the effective leaf type — for union leaves, this returns the matched branch;
-	// for direct leafref leaves it returns the outer schema type unchanged.
-	lv := e.GetLeafVariants().GetHighestPrecedence(false, true, false)
-	effectiveType := e.GetSchema().GetField().GetType()
-	if lv != nil {
-		effectiveType = lv.Update.EffectiveLeafType(e.GetSchema().GetField().GetType())
-	}
-
-	lref := effectiveType.GetLeafref()
-	if lref == "" {
+	lref, lv, ok := resolveLeafref(e)
+	if !ok {
 		return
 	}
+	effectiveType := lv.Update.EffectiveLeafType(e.GetSchema().GetField().GetType())
 
-	entry, err := navigateLeafRefByPath(ctx, e, lref)
+	entry, err := navigateLeafRefByPath(ctx, e, lref, lv)
 	if err != nil || len(entry) == 0 {
 		// check if the OptionalInstance (!require-instances [https://datatracker.ietf.org/doc/html/rfc7950#section-9.9.3])
 		if effectiveType.GetOptionalInstance() {

@@ -31,6 +31,13 @@ type ExpandedUpdate struct {
 	MatchedUnionType *sdcpb.SchemaLeafType
 }
 
+// expandedNoUnion wraps an update with no union branch resolved. Used for
+// non-union leaves, leaf-lists, and Phase-1 deferrals where union member
+// tracking is intentionally absent.
+func expandedNoUnion(upd *sdcpb.Update) *ExpandedUpdate {
+	return &ExpandedUpdate{Update: upd}
+}
+
 type Converter struct {
 	schemaClientBound SchemaClientBound
 }
@@ -79,7 +86,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*Exp
 				upd.Value = &sdcpb.TypedValue{
 					Value: &sdcpb.TypedValue_EmptyVal{},
 				}
-				return []*ExpandedUpdate{{Update: upd, MatchedUnionType: nil}}, nil
+				return []*ExpandedUpdate{expandedNoUnion(upd)}, nil
 			}
 			if len(upd.Path.Elem) > 0 && len(upd.Path.Elem[len(upd.Path.Elem)-1].Key) > 0 {
 				newUpd := &sdcpb.Update{}
@@ -101,7 +108,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*Exp
 						return nil, err
 					}
 				}
-				upds = append(upds, &ExpandedUpdate{Update: newUpd, MatchedUnionType: nil})
+				upds = append(upds, expandedNoUnion(newUpd))
 				return upds, nil
 			}
 			return nil, nil
@@ -115,7 +122,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*Exp
 		case *sdcpb.TypedValue_JsonVal:
 			jsonDecoder = json.NewDecoder(bytes.NewReader(upd.GetValue().GetJsonVal()))
 		default:
-			return []*ExpandedUpdate{{Update: upd, MatchedUnionType: nil}}, nil
+			return []*ExpandedUpdate{expandedNoUnion(upd)}, nil
 		}
 		// don't decode into float64 but keep as a string
 		// this solves issues created by reading long integers
@@ -162,15 +169,11 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*Exp
 			if err != nil {
 				return nil, err
 			}
-		}
-
-		// We expect that all identityrefs are sent by schema-server as a identityref type now, not string
-		if upd.GetValue().GetStringVal() != "" {
+		} else if upd.GetValue().GetStringVal() != "" {
+			// We expect that all identityrefs are sent by schema-server as a identityref type now, not string
 			switch {
 			case rsp.Field.GetType().GetTypeName() != "string",
 				rsp.Field.GetType().Type == "identityref":
-
-				matched = nil
 				upd.Value, err = sdcpb.TVFromString(rsp.Field.GetType(), upd.GetValue().GetStringVal(), 0)
 				if err != nil {
 					return nil, err
@@ -181,7 +184,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*Exp
 		upds = append(upds, &ExpandedUpdate{Update: upd, MatchedUnionType: matched})
 		return upds, nil
 	case *sdcpb.SchemaElem_Leaflist:
-		upds = append(upds, &ExpandedUpdate{Update: upd, MatchedUnionType: nil})
+		upds = append(upds, expandedNoUnion(upd))
 		return upds, nil
 	}
 	return nil, nil
@@ -237,15 +240,10 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 	case string:
 		v := strings.Trim(jv, "\"")
 		return []*ExpandedUpdate{
-			{
-				Update: &sdcpb.Update{
-					Path: p,
-					Value: &sdcpb.TypedValue{
-						Value: &sdcpb.TypedValue_StringVal{StringVal: v},
-					},
-				},
-				MatchedUnionType: nil,
-			},
+			expandedNoUnion(&sdcpb.Update{
+				Path:  p,
+				Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: v}},
+			}),
 		}, nil
 	case map[string]any:
 		upds := make([]*ExpandedUpdate, 0)
@@ -320,7 +318,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 					upd.Value = &sdcpb.TypedValue{
 						Value: &sdcpb.TypedValue_EmptyVal{},
 					}
-					upds = append(upds, &ExpandedUpdate{Update: upd, MatchedUnionType: nil})
+					upds = append(upds, expandedNoUnion(upd))
 				default:
 					var matched *sdcpb.SchemaLeafType
 					upd.Value, matched, err = sdcpb.ConvertJsonValueToTvWithType(v, item.GetType())
@@ -364,8 +362,8 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 						Value:     &sdcpb.TypedValue_LeaflistVal{LeaflistVal: &sdcpb.ScalarArray{Element: list}},
 					},
 				}
-				// Phase 1: no list-level union branch on ExpandedUpdate (007-DECISION).
-				upds = append(upds, &ExpandedUpdate{Update: upd, MatchedUnionType: nil})
+			// Phase 1: no list-level union branch on ExpandedUpdate (007-DECISION).
+			upds = append(upds, expandedNoUnion(upd))
 
 			case string: // child container
 				// log.Debugf("handling child container %s", item)
@@ -381,17 +379,12 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 					// code for presence containers
 					m, ok := v.(map[string]any)
 					if ok && len(m) == 0 && rsp.Container.IsPresence {
-						rs = []*ExpandedUpdate{
-							{
-								Update: &sdcpb.Update{
-									Path: np,
-									Value: &sdcpb.TypedValue{
-										Value: &sdcpb.TypedValue_EmptyVal{},
-									},
-								},
-								MatchedUnionType: nil,
-							},
-						}
+				rs = []*ExpandedUpdate{
+						expandedNoUnion(&sdcpb.Update{
+							Path:  np,
+							Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_EmptyVal{}},
+						}),
+					}
 					} else {
 						rs, err = c.ExpandContainerValue(ctx, np, v, rsp)
 						if err != nil {

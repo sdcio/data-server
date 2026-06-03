@@ -54,27 +54,19 @@ func inferUnionLexicalEqual(tv *sdcpb.TypedValue, declared *sdcpb.SchemaLeafType
 // a concrete leaf type matches or inner inference returns nil. The first
 // compatible member in union declaration order wins (RFC 7950 §9.12).
 func inferUnionStructuralUnique(tv *sdcpb.TypedValue, declared *sdcpb.SchemaLeafType) *sdcpb.SchemaLeafType {
-	var matches []*sdcpb.SchemaLeafType
 	for _, branch := range declared.UnionTypes {
-		if branch == nil {
-			continue
-		}
-		if !tvShapeCompatibleWithBranch(tv, branch) {
+		if branch == nil || !tvShapeCompatibleWithBranch(tv, branch) {
 			continue
 		}
 		if branch.Type == "union" {
-			// Record the resolved inner leaf (or sub-union member), not the nested union node itself.
 			if inner := InferUnionMemberFromTypedValue(tv, branch); inner != nil {
-				matches = append(matches, inner)
+				return inner
 			}
 			continue
 		}
-		matches = append(matches, branch)
+		return branch
 	}
-	if len(matches) == 0 {
-		return nil
-	}
-	return matches[0]
+	return nil
 }
 
 // tvShapeCompatibleWithBranch is a coarse wire-type filter: it checks whether the
