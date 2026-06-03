@@ -28,9 +28,9 @@ func TestValidate_Length(t *testing.T) {
 		{
 			name: "non-union leaf length too short",
 			req: &sdcio_schema.Device{
-				Patterntest: ygot.String("hallo A"),
+				Patterntest: ygot.String("hallo "),
 			},
-			wantErrors: 0,
+			wantErrors: 1,
 		},
 		{
 			name: "union leaf - string branch length within range",

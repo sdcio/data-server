@@ -196,9 +196,9 @@ func TestDefaultValueRetrieve(t *testing.T) {
 	}
 }
 
-// TestDefaultValueRetrieve_unionLeafDefault_attachsMatchedMemberType verifies PRD 004: schema-driven
+// TestDefaultValueRetrieve_unionLeafDefault_attachesMatchedMemberType verifies PRD 004: schema-driven
 // default strings for union leaves use TVFromStringWithType so EffectiveLeafType sees the resolved branch.
-func TestDefaultValueRetrieve_unionLeafDefault_attachsMatchedMemberType(t *testing.T) {
+func TestDefaultValueRetrieve_unionLeafDefault_attachesMatchedMemberType(t *testing.T) {
 	ctx := context.Background()
 	sc, schema, err := testhelper.InitSDCIOSchema()
 	if err != nil {
