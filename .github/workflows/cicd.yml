@@ -1,6 +1,15 @@
 name: CI/CD (PR and main)
 on:
   workflow_dispatch:
+    inputs:
+      configserver_version:
+        description: >
+          Optional override for sdcio/config-server (integration checkout + GHCR tag).
+          Empty = auto: main → CS main; else only if PR has label sdc-pair and same-named branch exists on CS → tip SHA;
+          else CS main. (SHA, v0.0.0-PR…, main.)
+        required: false
+        default: ""
+        type: string
   pull_request:
   push:
     branches:
@@ -9,6 +18,7 @@ on:
 
 permissions:
   packages: write
+  pull-requests: read
 
 jobs:
   unittest:
@@ -79,6 +89,63 @@ jobs:
         run: |
           echo "version=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
+  # Picks sdcio/config-server ref for integration-tests. Same-named branch on CS only when PR is labeled sdc-pair
+  # (avoids accidental pairing). workflow_dispatch override always wins. CS images must exist for chosen ref.
+  resolve-configserver-version:
+    runs-on: ubuntu-latest
+    outputs:
+      configversion: ${{ steps.resolve.outputs.configversion }}
+    steps:
+      - name: Resolve config-server version
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_OVERRIDE: ${{ github.event.inputs.configserver_version }}
+          BRANCH: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+          PR_LABELS_JSON: ${{ github.event_name == 'pull_request' && toJSON(github.event.pull_request.labels) || '[]' }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          PAIR_LABEL="sdc-pair"
+          override="$(printf '%s' "${INPUT_OVERRIDE:-}" | tr -d '\r' | xargs || true)"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$override" ]; then
+            echo "configversion=${override}" >> "$GITHUB_OUTPUT"
+            echo "Using workflow_dispatch configserver_version=${override}"
+            exit 0
+          fi
+          if [ "$BRANCH" = "main" ]; then
+            echo "configversion=main" >> "$GITHUB_OUTPUT"
+            echo "DS ref is main -> configserver main"
+            exit 0
+          fi
+          want_pair=false
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            if echo "$PR_LABELS_JSON" | jq -e --arg l "$PAIR_LABEL" 'map(.name) | index($l) != null' >/dev/null 2>&1; then
+              want_pair=true
+            fi
+          elif [ "$EVENT_NAME" = "push" ]; then
+            if gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" 2>/dev/null | \
+              jq -e --arg br "$BRANCH" --arg l "$PAIR_LABEL" '
+                [.[] | select(.head.ref == $br)] | first as $p |
+                if $p == null then false else ($p.labels // [] | map(.name) | index($l) != null) end
+              ' >/dev/null 2>&1; then
+              want_pair=true
+            fi
+          fi
+          if [ "$want_pair" != "true" ]; then
+            echo "configversion=main" >> "$GITHUB_OUTPUT"
+            echo "No ${PAIR_LABEL} label on PR for branch ${BRANCH} -> configserver main"
+            exit 0
+          fi
+          enc_ref="heads/$(printf '%s' "$BRANCH" | sed 's|/|%2F|g')"
+          if sha="$(gh api "repos/sdcio/config-server/git/ref/${enc_ref}" --jq '.object.sha' 2>/dev/null)" && [ -n "$sha" ]; then
+            echo "configversion=${sha}" >> "$GITHUB_OUTPUT"
+            echo "Labeled ${PAIR_LABEL}: sdcio/config-server branch ${BRANCH} -> ${sha}"
+          else
+            echo "configversion=main" >> "$GITHUB_OUTPUT"
+            echo "Labeled ${PAIR_LABEL} but no refs/heads/${BRANCH} on sdcio/config-server -> main"
+          fi
+
   latest-versions:
     name: Fetch latest versions from GH API
     runs-on: ubuntu-latest
@@ -86,7 +153,6 @@ jobs:
       schemaversion: ${{ steps.latest-versions.outputs.schemaversion }}
       dataversion: ${{ steps.latest-versions.outputs.dataversion }}
       cacheversion: ${{ steps.latest-versions.outputs.cacheversion }}
-      configversion: ${{ steps.latest-versions.outputs.configversion }}
       certmanagerversion: ${{ steps.latest-versions.outputs.certmanagerversion }}
     steps:
       - name: Set env vars
@@ -95,14 +161,13 @@ jobs:
           echo "schemaversion=$( curl -sL https://api.github.com/repos/sdcio/schema-server/releases/latest | jq '.name' )" >> $GITHUB_OUTPUT
           echo "dataversion=$( curl -sL https://api.github.com/repos/sdcio/data-server/releases/latest | jq '.name' )" >> $GITHUB_OUTPUT
           echo "cacheversion=$( curl -sL https://api.github.com/repos/sdcio/cache/releases/latest | jq '.name' )" >> $GITHUB_OUTPUT
-          echo "configversion=$( curl -sL https://api.github.com/repos/sdcio/config-server/releases/latest | jq '.name' )" >> $GITHUB_OUTPUT
           echo "certmanagerversion=$( curl -sL https://api.github.com/repos/cert-manager/cert-manager/releases/latest | jq '.name' )" >> $GITHUB_OUTPUT
 
   integration-tests:
-    needs: [latest-versions, pr-release]
+    needs: [latest-versions, pr-release, resolve-configserver-version]
     uses: sdcio/integration-tests/.github/workflows/single.yml@main
     with:
-      configserver_version: ${{ needs.latest-versions.outputs.configversion }}
+      configserver_version: ${{ needs.resolve-configserver-version.outputs.configversion }}
       dataserver_version: ${{ needs.pr-release.outputs.dataversion }}
       schemaserver_version: ${{ needs.latest-versions.outputs.schemaversion }}
       cache_version: ${{ needs.latest-versions.outputs.cacheversion }}
