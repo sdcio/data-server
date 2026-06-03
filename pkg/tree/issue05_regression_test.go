@@ -23,10 +23,10 @@ func TestRootEntry_DeepCopy_CopyMutationDoesNotAffectOriginal(t *testing.T) {
 	}
 
 	// Mutate the copy's ExplicitDeletes.
-	copied.GetTreeContext().GetOperationState().ExplicitDeletes().Add("copyOwner", 5, nil)
+	copied.GetTreeContext().OperationState().ExplicitDeletes().Add("copyOwner", 5, nil)
 
 	// Original must still have zero entries under that intent.
-	paths := root.GetTreeContext().GetOperationState().ExplicitDeletes().GetByIntentName("copyOwner")
+	paths := root.GetTreeContext().OperationState().ExplicitDeletes().GetByIntentName("copyOwner")
 	count := 0
 	for range paths.Items() {
 		count++
@@ -50,10 +50,10 @@ func TestRootEntry_DeepCopy_OriginalMutationPostCopyDoesNotAffectCopy(t *testing
 	}
 
 	// Mutate the original after the copy was taken.
-	root.GetTreeContext().GetOperationState().ExplicitDeletes().Add("origOwner", 5, nil)
+	root.GetTreeContext().OperationState().ExplicitDeletes().Add("origOwner", 5, nil)
 
 	// Copy must still have zero entries under that intent.
-	paths := copied.GetTreeContext().GetOperationState().ExplicitDeletes().GetByIntentName("origOwner")
+	paths := copied.GetTreeContext().OperationState().ExplicitDeletes().GetByIntentName("origOwner")
 	count := 0
 	for range paths.Items() {
 		count++
@@ -63,8 +63,9 @@ func TestRootEntry_DeepCopy_OriginalMutationPostCopyDoesNotAffectCopy(t *testing
 	}
 }
 
-// Behavior 3: Original and copy share the same TreeConfig pointer (immutable config identity).
-func TestRootEntry_DeepCopy_SharesTreeConfigPointer(t *testing.T) {
+// Behavior 3: Original and copy share the same immutable config values
+// (SchemaClient and PoolFactory point to identical underlying objects).
+func TestRootEntry_DeepCopy_SharesImmutableConfig(t *testing.T) {
 	tc := newTestTreeContext(t)
 	root, err := NewTreeRoot(context.Background(), tc)
 	if err != nil {
@@ -76,8 +77,11 @@ func TestRootEntry_DeepCopy_SharesTreeConfigPointer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if root.GetTreeContext().GetTreeConfig() != copied.GetTreeContext().GetTreeConfig() {
-		t.Fatal("expected original and copy to share the same TreeConfig instance (pointer identity)")
+	if root.GetTreeContext().TreeConfig().SchemaClient() != copied.GetTreeContext().TreeConfig().SchemaClient() {
+		t.Fatal("expected original and copy to share the same SchemaClient instance")
+	}
+	if root.GetTreeContext().TreeConfig().PoolFactory() != copied.GetTreeContext().TreeConfig().PoolFactory() {
+		t.Fatal("expected original and copy to share the same PoolFactory instance")
 	}
 }
 
@@ -91,7 +95,7 @@ func TestRootEntry_DeepCopy_NonRevertiveInfoIsDeepCopied(t *testing.T) {
 	}
 
 	// Record a NonRevertiveInfo entry on the original before copying.
-	root.GetTreeContext().GetOperationState().NonRevertiveInfo().Add("ownerA", true)
+	root.GetTreeContext().OperationState().NonRevertiveInfo().Add("ownerA", true)
 
 	copied, err := root.DeepCopy(context.Background())
 	if err != nil {
@@ -99,13 +103,13 @@ func TestRootEntry_DeepCopy_NonRevertiveInfoIsDeepCopied(t *testing.T) {
 	}
 
 	// The copy should carry the pre-copy state.
-	if !copied.GetTreeContext().GetOperationState().NonRevertiveInfo().IsGenerallyNonRevertive("ownerA") {
+	if !copied.GetTreeContext().OperationState().NonRevertiveInfo().IsGenerallyNonRevertive("ownerA") {
 		t.Fatal("expected copy to preserve pre-copy NonRevertiveInfo entry")
 	}
 
 	// Adding a new entry to the copy must not affect the original.
-	copied.GetTreeContext().GetOperationState().NonRevertiveInfo().Add("ownerCopyOnly", true)
-	if root.GetTreeContext().GetOperationState().NonRevertiveInfo().IsGenerallyNonRevertive("ownerCopyOnly") {
+	copied.GetTreeContext().OperationState().NonRevertiveInfo().Add("ownerCopyOnly", true)
+	if root.GetTreeContext().OperationState().NonRevertiveInfo().IsGenerallyNonRevertive("ownerCopyOnly") {
 		t.Fatal("expected original NonRevertiveInfo to be unaffected by copy-side mutation")
 	}
 }

@@ -14,11 +14,11 @@ import (
 type LeafVariants struct {
 	les         LeafVariantSlice
 	lesMutex    sync.RWMutex
-	os          OperationState
+	os          TreeOperationState
 	parentEntry Entry
 }
 
-func NewLeafVariants(os OperationState, parentEnty Entry) *LeafVariants {
+func NewLeafVariants(os TreeOperationState, parentEnty Entry) *LeafVariants {
 	return &LeafVariants{
 		les:         make(LeafVariantSlice, 0, 2),
 		os:          os,
@@ -262,7 +262,7 @@ func (lv *LeafVariants) GetHighestPrecedenceValue(filter HighestPrecedenceFilter
 	return result
 }
 
-func (lv *LeafVariants) DeepCopy(os OperationState, parent Entry) *LeafVariants {
+func (lv *LeafVariants) DeepCopy(os TreeOperationState, parent Entry) *LeafVariants {
 	result := &LeafVariants{
 		lesMutex:    sync.RWMutex{},
 		os:          os,

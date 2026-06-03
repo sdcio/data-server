@@ -35,10 +35,10 @@ func (p *ImportConfigProcessor) GetStats() *types.ImportStats {
 
 func (p *ImportConfigProcessor) Run(ctx context.Context, e api.Entry, poolFactory pool.VirtualPoolFactory) error {
 	// store non revertive info
-	e.GetTreeContext().GetOperationState().NonRevertiveInfo().Add(p.importer.GetName(), p.importer.GetNonRevertive())
+	e.GetTreeContext().OperationState().NonRevertiveInfo().Add(p.importer.GetName(), p.importer.GetNonRevertive())
 
 	// store explicit deletes
-	e.GetTreeContext().GetOperationState().ExplicitDeletes().Add(p.importer.GetName(), p.importer.GetPriority(), p.importer.GetDeletes())
+	e.GetTreeContext().OperationState().ExplicitDeletes().Add(p.importer.GetName(), p.importer.GetPriority(), p.importer.GetDeletes())
 
 	workerPool := poolFactory.NewVirtualPool(pool.VirtualFailFast)
 

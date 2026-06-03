@@ -1,7 +1,7 @@
 package api
 
 type TreeContext interface {
-	GetTreeConfig() TreeConfig
-	GetOperationState() OperationState
+	TreeConfig() TreeConfig
+	OperationState() TreeOperationState
 	DeepCopy() TreeContext
 }

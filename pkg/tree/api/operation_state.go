@@ -1,12 +1,12 @@
 package api
 
-// OperationState holds mutable state accumulated during a tree operation
+// TreeOperationState holds mutable state accumulated during a tree operation
 // (e.g. an import pass or transaction). It is created once per tree root and
 // deep-copied when the tree is branched.
-type OperationState interface {
+type TreeOperationState interface {
 	ExplicitDeletes() *DeletePathSet
 	NonRevertiveInfo() NonRevertiveInfos
-	DeepCopyState() OperationState
+	DeepCopy() TreeOperationState
 }
 
 // operationState is the concrete, package-private implementation.
@@ -15,8 +15,8 @@ type operationState struct {
 	nonRevertiveInfo NonRevertiveInfos
 }
 
-// NewOperationState creates a fresh OperationState with empty collections.
-func NewOperationState() OperationState {
+// NewTreeOperationState creates a fresh TreeOperationState with empty collections.
+func NewTreeOperationState() TreeOperationState {
 	return &operationState{
 		explicitDeletes:  NewDeletePaths(),
 		nonRevertiveInfo: NewNonRevertiveInfos(),
@@ -31,7 +31,7 @@ func (o *operationState) NonRevertiveInfo() NonRevertiveInfos {
 	return o.nonRevertiveInfo
 }
 
-func (o *operationState) DeepCopyState() OperationState {
+func (o *operationState) DeepCopy() TreeOperationState {
 	return &operationState{
 		explicitDeletes:  o.explicitDeletes.DeepCopy(),
 		nonRevertiveInfo: o.nonRevertiveInfo.DeepCopy(),

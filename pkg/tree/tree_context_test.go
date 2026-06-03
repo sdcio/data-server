@@ -20,19 +20,19 @@ func newTestTreeContext(t *testing.T) *TreeContext {
 	return NewTreeContext(scb, pool.NewSharedTaskPool(context.Background(), runtime.GOMAXPROCS(0)))
 }
 
-// Behavior 1: GetTreeConfig returns non-nil
-func TestNewTreeContext_GetTreeConfig_NonNil(t *testing.T) {
+// Behavior 1: TreeConfig returns non-nil
+func TestNewTreeContext_TreeConfig_NonNil(t *testing.T) {
 	tc := newTestTreeContext(t)
-	if tc.GetTreeConfig() == nil {
-		t.Fatal("expected GetTreeConfig() to return non-nil TreeConfig")
+	if tc.TreeConfig() == nil {
+		t.Fatal("expected TreeConfig() to return non-nil TreeConfig")
 	}
 }
 
-// Behavior 2: GetOperationState returns non-nil
-func TestNewTreeContext_GetOperationState_NonNil(t *testing.T) {
+// Behavior 2: OperationState returns non-nil
+func TestNewTreeContext_OperationState_NonNil(t *testing.T) {
 	tc := newTestTreeContext(t)
-	if tc.GetOperationState() == nil {
-		t.Fatal("expected GetOperationState() to return non-nil OperationState")
+	if tc.OperationState() == nil {
+		t.Fatal("expected OperationState() to return non-nil TreeOperationState")
 	}
 }
 
@@ -45,7 +45,7 @@ func TestNewTreeContext_TreeConfig_SchemaClient(t *testing.T) {
 		t.Fatal(err)
 	}
 	tc := NewTreeContext(scb, pool.NewSharedTaskPool(context.Background(), runtime.GOMAXPROCS(0)))
-	if tc.GetTreeConfig().SchemaClient() != scb {
+	if tc.TreeConfig().SchemaClient() != scb {
 		t.Fatal("expected TreeConfig.SchemaClient() to be the same instance passed to NewTreeContext")
 	}
 }
@@ -60,7 +60,7 @@ func TestNewTreeContext_TreeConfig_PoolFactory(t *testing.T) {
 	}
 	pf := pool.NewSharedTaskPool(context.Background(), runtime.GOMAXPROCS(0))
 	tc := NewTreeContext(scb, pf)
-	if tc.GetTreeConfig().PoolFactory() != pf {
+	if tc.TreeConfig().PoolFactory() != pf {
 		t.Fatal("expected TreeConfig.PoolFactory() to be the same instance passed to NewTreeContext")
 	}
 }
@@ -68,7 +68,7 @@ func TestNewTreeContext_TreeConfig_PoolFactory(t *testing.T) {
 // Behavior 5: OperationState starts with non-nil, empty ExplicitDeletes
 func TestNewTreeContext_OperationState_EmptyExplicitDeletes(t *testing.T) {
 	tc := newTestTreeContext(t)
-	ed := tc.GetOperationState().ExplicitDeletes()
+	ed := tc.OperationState().ExplicitDeletes()
 	if ed == nil {
 		t.Fatal("expected ExplicitDeletes() to be non-nil")
 	}
@@ -84,22 +84,29 @@ func TestNewTreeContext_OperationState_EmptyExplicitDeletes(t *testing.T) {
 // Behavior 6: OperationState starts with non-nil, empty NonRevertiveInfo
 func TestNewTreeContext_OperationState_EmptyNonRevertiveInfo(t *testing.T) {
 	tc := newTestTreeContext(t)
-	nri := tc.GetOperationState().NonRevertiveInfo()
+	nri := tc.OperationState().NonRevertiveInfo()
 	if nri == nil {
 		t.Fatal("expected NonRevertiveInfo() to be non-nil")
 	}
 }
 
-// Behavior 7: DeepCopy reuses the same TreeConfig instance (pointer identity)
-func TestTreeContext_DeepCopy_ReusesTreeConfig(t *testing.T) {
-	tc := newTestTreeContext(t)
-	copied := tc.DeepCopy()
-	concreteCopy, ok := copied.(*TreeContext)
-	if !ok {
-		t.Fatal("DeepCopy did not return a *TreeContext")
+// Behavior 7: DeepCopy shares the same immutable config values (SchemaClient
+// and PoolFactory point to the same underlying objects).
+func TestTreeContext_DeepCopy_SharesImmutableConfig(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if tc.GetTreeConfig() != concreteCopy.GetTreeConfig() {
-		t.Fatal("expected DeepCopy to reuse the same TreeConfig instance (pointer identity)")
+	pf := pool.NewSharedTaskPool(context.Background(), runtime.GOMAXPROCS(0))
+	tc := NewTreeContext(scb, pf)
+	copied := tc.DeepCopy()
+	if tc.TreeConfig().SchemaClient() != copied.TreeConfig().SchemaClient() {
+		t.Fatal("expected DeepCopy to share the same SchemaClient instance")
+	}
+	if tc.TreeConfig().PoolFactory() != copied.TreeConfig().PoolFactory() {
+		t.Fatal("expected DeepCopy to share the same PoolFactory instance")
 	}
 }
 
@@ -111,8 +118,8 @@ func TestTreeContext_DeepCopy_DistinctOperationState(t *testing.T) {
 	if !ok {
 		t.Fatal("DeepCopy did not return a *TreeContext")
 	}
-	if tc.GetOperationState() == concreteCopy.GetOperationState() {
-		t.Fatal("expected DeepCopy to produce a distinct OperationState instance")
+	if tc.OperationState() == concreteCopy.OperationState() {
+		t.Fatal("expected DeepCopy to produce a distinct TreeOperationState instance")
 	}
 }
 
@@ -125,8 +132,8 @@ func TestTreeContext_DeepCopy_MutationIsolation(t *testing.T) {
 		t.Fatal("DeepCopy did not return a *TreeContext")
 	}
 	// Add an explicit delete to the original; copy must stay empty
-	tc.GetOperationState().ExplicitDeletes().Add("owner1", 0, nil)
-	copyPaths := concreteCopy.GetOperationState().ExplicitDeletes().GetByIntentName("owner1")
+	tc.OperationState().ExplicitDeletes().Add("owner1", 0, nil)
+	copyPaths := concreteCopy.OperationState().ExplicitDeletes().GetByIntentName("owner1")
 	copyCount := 0
 	for range copyPaths.Items() {
 		copyCount++

@@ -523,7 +523,7 @@ func TestLeafVariants_canDelete(t *testing.T) {
 // TestNewLeafVariants_AcceptsOperationState verifies that NewLeafVariants accepts
 // an OperationState (not a full TreeContext) and returns a non-nil LeafVariants.
 func TestNewLeafVariants_AcceptsOperationState(t *testing.T) {
-	os := NewOperationState()
+	os := NewTreeOperationState()
 	lv := NewLeafVariants(os, nil)
 	if lv == nil {
 		t.Fatal("expected NewLeafVariants to return non-nil LeafVariants")
@@ -535,7 +535,7 @@ func TestNewLeafVariants_AcceptsOperationState(t *testing.T) {
 // does not report the entry as changed — and that DeepCopy preserves this
 // behaviour with the copied state.
 func TestLeafVariants_NonRevertiveBehaviorPreservedAfterDeepCopy(t *testing.T) {
-	os := NewOperationState()
+	os := NewTreeOperationState()
 	os.NonRevertiveInfo().Add("owner1", true)
 
 	// parentEntry nil is safe: NonRevertiveInfo.IsNonRevertive does not
@@ -564,7 +564,7 @@ func TestLeafVariants_NonRevertiveBehaviorPreservedAfterDeepCopy(t *testing.T) {
 	}
 
 	// DeepCopy must carry the copied OperationState so the same behaviour holds.
-	lvCopy := lv.DeepCopy(os.DeepCopyState(), nil)
+	lvCopy := lv.DeepCopy(os.DeepCopy(), nil)
 	if got := lvCopy.GetHighestPrecedence(true, false, false); got != nil {
 		t.Errorf("after DeepCopy: expected nil from GetHighestPrecedence with non-revertive owner, got entry owned by %q", got.Owner())
 	}
