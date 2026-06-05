@@ -30,7 +30,7 @@ func Validate(ctx context.Context, e api.Entry, vCfg *config.Validation, taskpoo
 		defer syncWait.Done()
 		// read from the validationResult channel
 		for e := range validationResultEntryChan {
-			validationResult.AddEntry(e)
+			_ = validationResult.AddEntry(e)
 		}
 	}()
 

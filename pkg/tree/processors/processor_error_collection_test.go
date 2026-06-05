@@ -62,7 +62,9 @@ func TestProcessorErrorCollection(t *testing.T) {
 	}
 
 	sharedPool.CloseForSubmit()
-	sharedPool.Wait()
+	if err := sharedPool.Wait(); err != nil {
+		t.Fatalf("shared pool wait: %v", err)
+	}
 }
 
 // TestProcessorEarlyReturnCleanup verifies that if Submit fails early,
@@ -103,5 +105,7 @@ func TestProcessorEarlyReturnCleanup(t *testing.T) {
 	}
 
 	sharedPool.CloseForSubmit()
-	sharedPool.Wait()
+	if err := sharedPool.Wait(); err != nil {
+		t.Fatalf("shared pool wait: %v", err)
+	}
 }

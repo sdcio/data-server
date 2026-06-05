@@ -90,7 +90,7 @@ func (r *RootEntry) SetNonRevertiveIntent(intentName string, nonRevertive bool) 
 // String returns the string representation of the Tree.
 func (r *RootEntry) String() string {
 	s := []string{}
-	s = r.Entry.StringIndent(s)
+	s = r.StringIndent(s)
 	return strings.Join(s, "\n")
 }
 

@@ -54,7 +54,9 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 		t.Fatalf("failed to marshal running config: %v", err)
 	}
 	var runningAny any
-	json.Unmarshal([]byte(runningJson), &runningAny)
+	if err := json.Unmarshal([]byte(runningJson), &runningAny); err != nil {
+		t.Fatalf("unmarshal running config: %v", err)
+	}
 
 	// Setup Intent Data (Same as Running)
 	intentStrSame := runningJson // Same content

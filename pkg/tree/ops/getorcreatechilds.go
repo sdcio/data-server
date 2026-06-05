@@ -14,7 +14,7 @@ func GetOrCreateChilds(ctx context.Context, e api.Entry, path *sdcpb.Path) (api.
 		return e, nil
 	}
 
-	var current api.Entry = e
+	current := e
 	for i, pe := range path.Elem {
 		// Step 1: Find or create the child for the path element name
 		newCurrent, exists := current.GetChilds(types.DescendMethodAll)[pe.Name]
@@ -93,7 +93,7 @@ func AddUpdateRecursiveInternal(ctx context.Context, s api.Entry, path *sdcpb.Pa
 	}
 
 	var e api.Entry
-	var x api.Entry = s
+	x := s
 	var exists bool
 	for name := range path.GetElem()[idx].PathElemNames() {
 		if e, exists = x.GetChilds(types.DescendMethodAll)[name]; !exists {

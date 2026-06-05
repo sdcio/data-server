@@ -90,7 +90,7 @@ func toJsonInternal(ctx context.Context, e api.Entry, onlyNewOrUpdated bool, iet
 					return nil, nil
 				}
 				le := e.GetLeafVariants().GetHighestPrecedence(false, false, false)
-				if le == nil || onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
+				if le == nil || onlyNewOrUpdated && !le.IsNew && !le.IsUpdated {
 					return nil, nil
 				}
 			}
@@ -148,7 +148,7 @@ func jsonAddKeyElements(s api.Entry, dict map[string]any) {
 	parentSchema, levelsUp := GetFirstAncestorWithSchema(s)
 	// from the parent we get the keys as slice
 	schemaKeys := GetSchemaKeys(parentSchema)
-	var treeElem api.Entry = s
+	treeElem := s
 	// the keys do match the levels up in the tree in reverse order
 	// hence we init i with levelUp and count down
 	for i := levelsUp - 1; i >= 0; i-- {

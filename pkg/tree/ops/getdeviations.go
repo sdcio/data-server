@@ -66,7 +66,7 @@ func (dt *deviationTask) Run(ctx context.Context, submit func(pool.Task) error) 
 		// check if c is a active child (choice / case)
 		_, isActiveChild := activeChilds[cName]
 		// recurse the call
-		submit(newDeviationTask(c, dt.config, isActiveChild))
+		_ = submit(newDeviationTask(c, dt.config, isActiveChild))
 	}
 	return nil
 }

@@ -24,7 +24,7 @@ func validateRange(_ context.Context, e api.Entry, resultChan chan<- *types.Vali
 		return
 	}
 
-	tv := lv.Update.Value()
+	tv := lv.Value()
 
 	var tvs []*sdcpb.TypedValue
 	var typeSchema *sdcpb.SchemaLeafType

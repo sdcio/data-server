@@ -105,7 +105,9 @@ func TestXmlTreeImporter(t *testing.T) {
 
 			_, err = root.ImportConfig(ctx, nil, NewXmlTreeImporter(&inputDoc.Element, "owner1", 5, false), types.NewUpdateInsertFlags(), sharedPool)
 			sharedPool.CloseForSubmit()
-			sharedPool.Wait()
+			if err := sharedPool.Wait(); err != nil {
+				t.Fatal(err)
+			}
 
 			if err != nil {
 				t.Fatal(err)
@@ -185,7 +187,9 @@ func TestXmlTreeImporterElement_IdentityRef(t *testing.T) {
 	}
 
 	var v any
-	json.Unmarshal([]byte(confStr), &v)
+	if err := json.Unmarshal([]byte(confStr), &v); err != nil {
+		t.Fatalf("unmarshal test config: %v", err)
+	}
 
 	vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 	_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, consts.RunningIntentName, consts.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)

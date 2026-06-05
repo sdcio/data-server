@@ -1443,7 +1443,7 @@ func TestLeafVariants_GetHighesPrio(t *testing.T) {
 func expectNil(t *testing.T, a any, name string) {
 	fail := true
 	switch reflect.TypeOf(a).Kind() {
-	case reflect.Ptr, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
+	case reflect.Pointer, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
 		fail = !reflect.ValueOf(a).IsNil()
 	default:
 		if a != nil {
@@ -1459,7 +1459,7 @@ func expectNil(t *testing.T, a any, name string) {
 func expectNotNil(t *testing.T, a any, name string) {
 	fail := true
 	switch reflect.TypeOf(a).Kind() {
-	case reflect.Ptr, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
+	case reflect.Pointer, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
 		fail = reflect.ValueOf(a).IsNil()
 	default:
 		if a != nil {
@@ -2165,7 +2165,9 @@ func Test_RevertNonRevertive(t *testing.T) {
 				}
 
 				var jConf any
-				err = json.Unmarshal([]byte(sConf), &jConf)
+				if err := json.Unmarshal([]byte(sConf), &jConf); err != nil {
+					return nil, err
+				}
 
 				c1Importer := jsonImporter.NewJsonTreeImporter(jConf, owner1, owner1Prio, true)
 
@@ -2179,7 +2181,9 @@ func Test_RevertNonRevertive(t *testing.T) {
 					return nil, err
 				}
 
-				err = json.Unmarshal([]byte(sConf), &jConf)
+				if err := json.Unmarshal([]byte(sConf), &jConf); err != nil {
+					return nil, err
+				}
 				c2Importer := jsonImporter.NewJsonTreeImporter(jConf, owner2, owner2Prio, true)
 
 				return []importer.ImportConfigAdapter{c1Importer, c2Importer}, err // this bool defines the revertive or non revertiveness

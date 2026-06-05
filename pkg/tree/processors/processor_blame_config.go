@@ -88,8 +88,8 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 	// process Value
 	highestLe := t.selfEntry.GetLeafVariants().GetHighestPrecedence(false, true, true)
 	if highestLe != nil {
-		if highestLe.Update.Owner() != consts.DefaultsIntentName || t.context.IncludeDefaults {
-			t.self.SetValue(highestLe.Update.Value()).SetOwner(highestLe.Update.Owner())
+		if highestLe.Owner() != consts.DefaultsIntentName || t.context.IncludeDefaults {
+			t.self.SetValue(highestLe.Value()).SetOwner(highestLe.Owner())
 
 			// check if running equals the expected
 			runningLe := t.selfEntry.GetLeafVariants().GetRunning()
@@ -98,10 +98,10 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 			case runningLe != nil:
 				// if running value is different from the highest precedence value, then we have a deviation,
 				// so we set the deviation value to the running value
-				if !proto.Equal(runningLe.Update.Value(), highestLe.Update.Value()) {
+				if !proto.Equal(runningLe.Value(), highestLe.Value()) {
 					t.self.SetDeviationValue(runningLe.Value())
 				}
-			case runningLe == nil && highestLe.GetUpdate().Owner() != consts.DefaultsIntentName:
+			case runningLe == nil && highestLe.Owner() != consts.DefaultsIntentName:
 				// if running is nil and highest is not from default, then the deviation is from a non-existing running value,
 				// so we set it to empty
 				t.self.SetDeviationValue(&sdcpb.TypedValue{})
@@ -114,7 +114,7 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 		childEntry := childs[childKey]
 		childHighestLe := childEntry.GetLeafVariants().GetHighestPrecedence(false, true, true)
 		if childHighestLe != nil {
-			if childHighestLe.Update.Owner() == consts.DefaultsIntentName && !t.context.IncludeDefaults {
+			if childHighestLe.Owner() == consts.DefaultsIntentName && !t.context.IncludeDefaults {
 				continue
 			}
 		}

@@ -43,10 +43,6 @@ import (
 	"github.com/sdcio/data-server/pkg/schema"
 )
 
-const (
-	schemaServerConnectRetry = 10 * time.Second
-)
-
 type Server struct {
 	config *config.Config
 	ready  bool
@@ -82,7 +78,7 @@ func NewDatastoreMap() *DatastoreMap {
 }
 func (d *DatastoreMap) StopAll(ctx context.Context) {
 	for _, ds := range d.datastores {
-		ds.Stop(ctx)
+		_ = ds.Stop(ctx)
 	}
 }
 
@@ -104,7 +100,7 @@ func (d *DatastoreMap) DeleteDatastore(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	ds.Delete(ctx)
+	_ = ds.Delete(ctx)
 	delete(d.datastores, name)
 	return nil
 }

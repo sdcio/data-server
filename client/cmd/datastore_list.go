@@ -78,6 +78,6 @@ func printDataStoresTable(rsp *sdcpb.ListDataStoreResponse) {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.Header([]string{"Name", "Schema", "Protocol", "Address", "State", "Candidate (C/O/P)"})
 	table.Options(tablewriter.WithAlignment(tw.Alignment{tw.AlignLeft}))
-	table.Bulk(tableData)
-	table.Render()
+	_ = table.Bulk(tableData)
+	_ = table.Render()
 }

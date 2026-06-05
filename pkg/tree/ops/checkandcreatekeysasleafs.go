@@ -39,7 +39,7 @@ func CheckAndCreateKeysAsLeafs(ctx context.Context, e api.Entry, intentName stri
 		})
 
 		// iterate through the keys
-		var item api.Entry = e
+		item := e
 
 		// construct the key path
 		// doing so outside the loop to reuse
