@@ -37,6 +37,9 @@ func activeValidators(vCfg *config.Validation) []ValidationFunc {
 	if !vCfg.DisabledValidators.MaxElements {
 		active = append(active, validateMinMaxElements)
 	}
+	if !vCfg.DisabledValidators.Unique {
+		active = append(active, validateUnique)
+	}
 	return active
 }
 
