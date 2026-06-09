@@ -147,8 +147,9 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error 
 		return err
 	}
 
-	// Tree processing operates only on the local copy t — no shared state is
-	// accessed, so no lock is required here.
+	// t is a caller-owned deep copy (the caller must pass a value obtained via
+	// d.syncTree.DeepCopy, as ApplyToRunning does). All operations below work
+	// exclusively on that isolated copy, so no dmutex is needed here.
 	err = t.FinishInsertionPhase(ctx)
 	if err != nil {
 		return err
