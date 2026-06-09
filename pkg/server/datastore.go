@@ -77,8 +77,6 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 	log = log.WithValues(
 		"datastore-name", req.GetDatastoreName(),
 	)
-	_ = logf.IntoContext(ctx, log)
-
 	log.Info("creating datastore",
 		"datastore-schema", req.GetSchema(),
 		"datastore-target", req.GetTarget(),
