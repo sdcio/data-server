@@ -67,7 +67,7 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
 
-	rsp, err := ds.GetIntent(ctx, req.GetIntent())
+	rsp, err := ds.GetIntent(ctx, req.GetIntent(), req.GetIncludeSensitive())
 	if err != nil {
 		return nil, err
 	}
