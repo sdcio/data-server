@@ -618,7 +618,12 @@ func TestToXMLTable(t *testing.T) {
 				t.Error(err)
 			}
 
-			xmlDoc, err := ops.ToXML(ctx, root.Entry, tt.onlyNewOrUpdated, tt.honorNamespace, tt.operationWithNamespace, tt.useOperationRemove)
+			xmlDoc, err := ops.ToXML(ctx, root.Entry, ops.XMLRenderOpts{
+				RenderOpts:             ops.RenderOpts{OnlyNewOrUpdated: tt.onlyNewOrUpdated},
+				HonorNamespace:         tt.honorNamespace,
+				OperationWithNamespace: tt.operationWithNamespace,
+				UseOperationRemove:     tt.useOperationRemove,
+			})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -695,7 +700,7 @@ func TestToXML_KeyLeafDeleteUpgradesToListEntryDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xmlDoc, err := ops.ToXML(ctx, root.Entry, true, false, false, false)
+	xmlDoc, err := ops.ToXML(ctx, root.Entry, ops.XMLRenderOpts{RenderOpts: ops.RenderOpts{OnlyNewOrUpdated: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -838,7 +843,7 @@ func TestToXML_DoubleKeyLeafDeleteUpgradesToListEntryDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xmlDoc, err := ops.ToXML(ctx, root.Entry, true, false, false, false)
+	xmlDoc, err := ops.ToXML(ctx, root.Entry, ops.XMLRenderOpts{RenderOpts: ops.RenderOpts{OnlyNewOrUpdated: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -931,7 +936,7 @@ func TestToXML_DoubleKeyLeafDeleteOnlyDeletesTargetEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xmlDoc, err := ops.ToXML(ctx, root.Entry, true, false, false, false)
+	xmlDoc, err := ops.ToXML(ctx, root.Entry, ops.XMLRenderOpts{RenderOpts: ops.RenderOpts{OnlyNewOrUpdated: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1016,7 +1021,7 @@ func TestToXML_DoubleKeyLeafDeleteViaKey1(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xmlDoc, err := ops.ToXML(ctx, root.Entry, true, false, false, false)
+	xmlDoc, err := ops.ToXML(ctx, root.Entry, ops.XMLRenderOpts{RenderOpts: ops.RenderOpts{OnlyNewOrUpdated: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1096,7 +1101,7 @@ func TestToXML_DoubleKeyNonKeyLeafDeleteDoesNotPromote(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xmlDoc, err := ops.ToXML(ctx, root.Entry, true, false, false, false)
+	xmlDoc, err := ops.ToXML(ctx, root.Entry, ops.XMLRenderOpts{RenderOpts: ops.RenderOpts{OnlyNewOrUpdated: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1117,6 +1122,77 @@ func TestToXML_DoubleKeyNonKeyLeafDeleteDoesNotPromote(t *testing.T) {
 `
 	if diff := cmp.Diff(want, xmlDocStr); diff != "" {
 		t.Fatalf("ToXML() mismatch (-want +got)\n%s", diff)
+	}
+}
+
+// TestToXML_SensitiveRedaction verifies that ToXML replaces sensitive-leaf values
+// with the redaction sentinel when IncludeSensitive=false, and returns the real
+// value when IncludeSensitive=true.
+func TestToXML_SensitiveRedaction(t *testing.T) {
+	flagsOld := types.NewUpdateInsertFlags()
+
+	tests := []struct {
+		name            string
+		exposeSensitive bool
+		wantPatterntest string
+	}{
+		{
+			name:            "redacts sensitive leaf when IncludeSensitive=false",
+			exposeSensitive: false,
+			wantPatterntest: "***",
+		},
+		{
+			name:            "reveals sensitive leaf when IncludeSensitive=true",
+			exposeSensitive: true,
+			wantPatterntest: "hallo 00",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			scb := newSchemaClientMarkingSensitive(t, ctrl, "patterntest")
+
+			ctx := context.Background()
+			tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+			root, err := tree.NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			converter := utils.NewConverter(scb)
+
+			upds, err := testhelper.ExpandUpdateFromConfig(ctx, testhelper.Config1(), converter)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := testhelper.AddToRoot(ctx, root.Entry, upds, flagsOld, "owner1", 5); err != nil {
+				t.Fatal(err)
+			}
+			if err := root.FinishInsertionPhase(ctx); err != nil {
+				t.Fatal(err)
+			}
+
+			xmlDoc, err := ops.ToXML(ctx, root.Entry, ops.XMLRenderOpts{
+				RenderOpts: ops.RenderOpts{IncludeSensitive: tt.exposeSensitive},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			utils.XmlRecursiveSortElementsByTagName(&xmlDoc.Element)
+			xmlDoc.Indent(2)
+			xmlDocStr, err := xmlDoc.WriteToString()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			pattElem := xmlDoc.FindElement("//patterntest")
+			if pattElem == nil {
+				t.Fatalf("patterntest element not found in XML output:\n%s", xmlDocStr)
+			}
+			if diff := cmp.Diff(tt.wantPatterntest, pattElem.Text()); diff != "" {
+				t.Errorf("patterntest value mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
@@ -1193,7 +1269,7 @@ func TestToXML_DoubleKeyTwoSimultaneousListEntryDeletes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xmlDoc, err := ops.ToXML(ctx, root.Entry, true, false, false, false)
+	xmlDoc, err := ops.ToXML(ctx, root.Entry, ops.XMLRenderOpts{RenderOpts: ops.RenderOpts{OnlyNewOrUpdated: true}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -20,19 +20,28 @@ func NewEntryOutputAdapter(e api.Entry) *EntryOutputAdapter {
 }
 
 func (t *EntryOutputAdapter) ToJson(ctx context.Context, onlyNewOrUpdated bool) (any, error) {
-	return ops.ToJson(ctx, t.entry, onlyNewOrUpdated)
+	// Southbound: always send real values to the device, never redact.
+	return ops.ToJson(ctx, t.entry, ops.RenderOpts{OnlyNewOrUpdated: onlyNewOrUpdated, IncludeSensitive: true})
 }
 
 func (t *EntryOutputAdapter) ToJsonIETF(ctx context.Context, onlyNewOrUpdated bool) (any, error) {
-	return ops.ToJsonIETF(ctx, t.entry, onlyNewOrUpdated)
+	// Southbound: always send real values to the device, never redact.
+	return ops.ToJsonIETF(ctx, t.entry, ops.RenderOpts{OnlyNewOrUpdated: onlyNewOrUpdated, IncludeSensitive: true})
 }
 
 func (t *EntryOutputAdapter) ToXML(ctx context.Context, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error) {
-	return ops.ToXML(ctx, t.entry, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+	// Southbound: always send real values to the device, never redact.
+	return ops.ToXML(ctx, t.entry, ops.XMLRenderOpts{
+		RenderOpts:             ops.RenderOpts{OnlyNewOrUpdated: onlyNewOrUpdated, IncludeSensitive: true},
+		HonorNamespace:         honorNamespace,
+		OperationWithNamespace: operationWithNamespace,
+		UseOperationRemove:     useOperationRemove,
+	})
 }
 
 func (t *EntryOutputAdapter) ToProtoUpdates(ctx context.Context, onlyNewOrUpdated bool) ([]*sdcpb.Update, error) {
-	return ops.ToProtoUpdates(ctx, t.entry, onlyNewOrUpdated)
+	// Southbound: always send real values to the device, never redact.
+	return ops.ToProtoUpdates(ctx, t.entry, ops.RenderOpts{OnlyNewOrUpdated: onlyNewOrUpdated, IncludeSensitive: true})
 }
 
 func (t *EntryOutputAdapter) ToProtoDeletes(ctx context.Context) ([]*sdcpb.Path, error) {
