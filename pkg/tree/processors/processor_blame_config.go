@@ -25,6 +25,9 @@ func NewBlameConfigProcessor(params *BlameConfigProcessorParams) *BlameConfigPro
 
 type BlameConfigProcessorParams struct {
 	IncludeDefaults bool
+	// RenderOpts carries sensitive-redaction flags (IncludeSensitive,
+	// SensitivePathSet) shared with all other northbound render operations.
+	ops.RenderOpts
 }
 
 // Run processes the entry tree starting from e, building a blame tree showing which owner
@@ -89,18 +92,27 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 	highestLe := t.selfEntry.GetLeafVariants().GetHighestPrecedence(false, true, true)
 	if highestLe != nil {
 		if highestLe.Update.Owner() != consts.DefaultsIntentName || t.context.IncludeDefaults {
-			t.self.SetValue(highestLe.Update.Value()).SetOwner(highestLe.Update.Owner())
+		shouldRedact := ops.ShouldRedact(t.selfEntry, t.context.IncludeSensitive, t.context.SensitivePathSet)
+		value := highestLe.Update.Value()
+		if shouldRedact {
+			value = types.RedactedTypedValue
+		}
+		t.self.SetValue(value).SetOwner(highestLe.Update.Owner())
 
-			// check if running equals the expected
-			runningLe := t.selfEntry.GetLeafVariants().GetRunning()
+		// check if running equals the expected
+		runningLe := t.selfEntry.GetLeafVariants().GetRunning()
 
-			switch {
-			case runningLe != nil:
-				// if running value is different from the highest precedence value, then we have a deviation,
-				// so we set the deviation value to the running value
-				if !proto.Equal(runningLe.Update.Value(), highestLe.Update.Value()) {
-					t.self.SetDeviationValue(runningLe.Value())
+		switch {
+		case runningLe != nil:
+			// if running value is different from the highest precedence value, then we have a deviation,
+			// so we set the deviation value to the running value
+			if !proto.Equal(runningLe.Update.Value(), highestLe.Update.Value()) {
+				deviationValue := runningLe.Value()
+				if shouldRedact {
+					deviationValue = types.RedactedTypedValue
 				}
+				t.self.SetDeviationValue(deviationValue)
+			}
 			case runningLe == nil && highestLe.GetUpdate().Owner() != consts.DefaultsIntentName:
 				// if running is nil and highest is not from default, then the deviation is from a non-existing running value,
 				// so we set it to empty

@@ -118,7 +118,7 @@ func TestXmlTreeImporter(t *testing.T) {
 				t.Error(err)
 			}
 
-			result, err := ops.ToXML(ctx, root.Entry, false, false, false, false)
+			result, err := ops.ToXML(ctx, root.Entry, ops.XMLRenderOpts{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -200,7 +200,7 @@ func TestXmlTreeImporterElement_IdentityRef(t *testing.T) {
 
 	t.Log(root.String())
 
-	result, err := ops.ToXML(ctx, root.Entry, false, false, false, false)
+	result, err := ops.ToXML(ctx, root.Entry, ops.XMLRenderOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}

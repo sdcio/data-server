@@ -2254,7 +2254,7 @@ func Test_RevertNonRevertive(t *testing.T) {
 			}
 			t.Logf("Deletes: %v", deletes)
 
-			j, err := ops.ToJson(ctx, root.Entry, true)
+			j, err := ops.ToJson(ctx, root.Entry, ops.RenderOpts{OnlyNewOrUpdated: true})
 			if err != nil {
 				t.Fatalf("failed to convert to JSON: %v", err)
 			}

@@ -17,6 +17,7 @@ package datastore
 import (
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
 	"sync"
 	"time"
@@ -35,7 +36,10 @@ import (
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/schema"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/processors"
+	treetypes "github.com/sdcio/data-server/pkg/tree/types"
+	tree_persist "github.com/sdcio/sdc-protos/tree_persist"
 )
 
 type Datastore struct {
@@ -68,6 +72,10 @@ type Datastore struct {
 	// SyncTree
 	syncTree      *tree.RootEntry
 	syncTreeMutex *sync.RWMutex
+
+	// sensitivePathIndex is the in-memory reverse index of sensitive paths.
+	// It is populated at startup and updated on every intent write or delete.
+	sensitivePathIndex *treetypes.SensitivePathIndex
 
 	taskPool *pool.SharedTaskPool
 }
@@ -104,23 +112,30 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 	ccb := cache.NewCacheClientBound(c.Name, cc)
 
 	ds := &Datastore{
-		config:           c,
-		schemaClient:     scb,
-		ctx:              ctx,
-		cfn:              cancel,
-		cacheClient:      ccb,
-		m:                &sync.RWMutex{},
-		dmutex:           &sync.Mutex{},
-		deviationClients: make(map[sdcpb.DataServer_WatchDeviationsServer]string),
-		syncTree:         syncTreeRoot,
-		syncTreeMutex:    &sync.RWMutex{},
-		taskPool:         pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)),
+		config:             c,
+		schemaClient:       scb,
+		ctx:                ctx,
+		cfn:                cancel,
+		cacheClient:        ccb,
+		m:                  &sync.RWMutex{},
+		dmutex:             &sync.Mutex{},
+		deviationClients:   make(map[sdcpb.DataServer_WatchDeviationsServer]string),
+		syncTree:           syncTreeRoot,
+		syncTreeMutex:      &sync.RWMutex{},
+		sensitivePathIndex: treetypes.NewSensitivePathIndex(),
+		taskPool:           pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)),
 	}
 	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
 
 	// create cache instance if needed
 	// this is a blocking call
 	ds.initCache(ctx)
+
+	// populate the sensitive-path index from all existing intents in cache.
+	if err := populateSensitivePathIndex(ctx, ds.sensitivePathIndex, ccb); err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to populate sensitive path index: %w", err)
+	}
 
 	go func() {
 		// init sbi, this is a blocking call
@@ -228,7 +243,7 @@ func (d *Datastore) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdcpb.BlameTreeElement, error) {
+func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults, exposeSensitive bool) (*sdcpb.BlameTreeElement, error) {
 	log := logger.FromContext(ctx).WithName("BlameConfig")
 	ctx = logger.IntoContext(ctx, log)
 
@@ -239,13 +254,19 @@ func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdc
 	if err != nil {
 		return nil, err
 	}
-	// load all intents
+	// load all intents into the tree for blame; sensitive paths come from the index.
 	_, err = d.LoadAllButRunningIntents(ctx, root)
 	if err != nil {
 		return nil, err
 	}
 
-	bcp := processors.NewBlameConfigProcessor(&processors.BlameConfigProcessorParams{IncludeDefaults: includeDefaults})
+	bcp := processors.NewBlameConfigProcessor(&processors.BlameConfigProcessorParams{
+		IncludeDefaults: includeDefaults,
+		RenderOpts: ops.RenderOpts{
+			IncludeSensitive: exposeSensitive,
+			SensitivePathSet: d.sensitivePathIndex,
+		},
+	})
 	bte, err := bcp.Run(ctx, root.Entry, d.taskPool)
 
 	// set the root level elements name to the target name
@@ -272,3 +293,15 @@ func (dra *DatastoreRollbackAdapter) TransactionRollback(ctx context.Context, tr
 
 // Assure the types.RollbackInterface is implemented by the DatastoreRollbackAdapter
 var _ types.RollbackInterface = &DatastoreRollbackAdapter{}
+
+// populateSensitivePathIndex scans all intents in cache and loads their
+// sensitive_paths into s. It is called once during Datastore startup, before
+// the first northbound read is served.
+func populateSensitivePathIndex(ctx context.Context, s *treetypes.SensitivePathIndex, cc cache.CacheClientBound) error {
+	return forEachIntent(ctx, cc, nil, func(intent *tree_persist.Intent) error {
+		if len(intent.GetSensitivePaths()) > 0 {
+			s.Set(intent.GetIntentName(), intent.GetSensitivePaths())
+		}
+		return nil
+	})
+}
