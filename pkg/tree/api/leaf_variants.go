@@ -461,7 +461,8 @@ func (lv *LeafVariants) DeleteByOwner(owner string) *LeafEntry {
 	return nil
 }
 
-func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, isActiveCase bool) {
+
+func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, isActiveCase bool, includeSensitive bool, sps types.SensitivePathChecker) {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 
@@ -473,10 +474,19 @@ func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.Devi
 	// is valid for all entries
 	sdcpbPath := lv.parentEntry.SdcpbPath()
 
+	sensitive := types.ShouldRedact(includeSensitive, lv.parentEntry.GetSchema(), sdcpbPath, sps)
+
+	redact := func(v *sdcpb.TypedValue) *sdcpb.TypedValue {
+		if sensitive {
+			return types.RedactedTypedValue
+		}
+		return v
+	}
+
 	// we are part of an inactive case of a choice
 	if !isActiveCase {
 		for _, le := range lv.les {
-			ch <- types.NewDeviationEntry(le.Owner(), types.DeviationReasonOverruled, sdcpbPath).SetExpectedValue(le.Value())
+			ch <- types.NewDeviationEntry(le.Owner(), types.DeviationReasonOverruled, sdcpbPath).SetExpectedValue(redact(le.Value()))
 		}
 		return
 	}
@@ -520,7 +530,7 @@ func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.Devi
 			// skip if higher prio equals the overruled
 			continue
 		}
-		ch <- de.SetCurrentValue(highest.Value())
+		ch <- de.SetExpectedValue(redact(de.ExpectedValue())).SetCurrentValue(redact(highest.Value()))
 	}
 
 	// if there is no running and no highest (probably a default), skip
@@ -530,16 +540,21 @@ func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.Devi
 
 	// unhandled -> running but no intent data
 	if running != nil && highest == nil {
-		ch <- types.NewDeviationEntry(running.Owner(), types.DeviationReasonUnhandled, sdcpbPath).SetCurrentValue(running.Value())
+		ch <- types.NewDeviationEntry(running.Owner(), types.DeviationReasonUnhandled, sdcpbPath).SetCurrentValue(redact(running.Value()))
 		return
 	}
 
 	// if highest exists but not running  OR   running != highest
 	if (running == nil && highest != nil) || !running.Value().Equal(highest.Value()) {
-		de := types.NewDeviationEntry(highest.Owner(), types.DeviationReasonNotApplied, sdcpbPath).SetExpectedValue(highest.Value())
+		var currentVal *sdcpb.TypedValue
 		if running != nil {
-			de.SetCurrentValue(running.Value())
+			currentVal = running.Value()
 		}
+		// When sensitive and running is absent, still emit a redacted CurrentValue
+		// so that the absence of a device value is not exposed.
+		de := types.NewDeviationEntry(highest.Owner(), types.DeviationReasonNotApplied, sdcpbPath).
+			SetExpectedValue(redact(highest.Value())).
+			SetCurrentValue(redact(currentVal))
 		ch <- de
 	}
 

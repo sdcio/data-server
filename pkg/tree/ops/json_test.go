@@ -9,7 +9,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
+	"github.com/sdcio/data-server/mocks/mockschemaclientbound"
 	"github.com/sdcio/data-server/pkg/pool"
+
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/ops"
@@ -20,6 +22,18 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 )
+
+// newSchemaClientMarkingSensitive returns a mock schema client that behaves like
+// the standard test schema client but marks the leaf named sensitiveLeafName as
+// Sensitive=true in its returned schema.
+func newSchemaClientMarkingSensitive(t *testing.T, ctrl *gomock.Controller, sensitiveLeafName string) *mockschemaclientbound.MockSchemaClientBound {
+	t.Helper()
+	scb, err := testhelper.GetSchemaClientBoundMarkingLeafSensitive(t, ctrl, sensitiveLeafName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return scb
+}
 
 func TestToJsonTable(t *testing.T) {
 
@@ -431,13 +445,14 @@ func TestToJsonTable(t *testing.T) {
 
 			var jsonStruct any
 
+			renderOpts := ops.RenderOpts{OnlyNewOrUpdated: tt.onlyNewOrUpdated}
 			if tt.ietf {
-				jsonStruct, err = ops.ToJsonIETF(ctx, root.Entry, tt.onlyNewOrUpdated)
+				jsonStruct, err = ops.ToJsonIETF(ctx, root.Entry, renderOpts)
 				if err != nil {
 					t.Fatal(err)
 				}
 			} else {
-				jsonStruct, err = ops.ToJson(ctx, root.Entry, tt.onlyNewOrUpdated)
+				jsonStruct, err = ops.ToJson(ctx, root.Entry, renderOpts)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -459,6 +474,78 @@ func TestToJsonTable(t *testing.T) {
 			}
 
 			mockCtrl.Finish()
+		})
+	}
+}
+
+func TestToJsonSensitiveRedaction(t *testing.T) {
+	flagsOld := types.NewUpdateInsertFlags()
+
+	tests := []struct {
+		name            string
+		exposeSensitive bool
+		wantPatterntest string
+	}{
+		{
+			name:            "redacts sensitive leaf when IncludeSensitive=false",
+			exposeSensitive: false,
+			wantPatterntest: "***",
+		},
+		{
+			name:            "reveals sensitive leaf when IncludeSensitive=true",
+			exposeSensitive: true,
+			wantPatterntest: "hallo 00",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			scb := newSchemaClientMarkingSensitive(t, ctrl, "patterntest")
+
+			ctx := context.Background()
+			tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+			root, err := tree.NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			converter := utils.NewConverter(scb)
+
+			upds, err := testhelper.ExpandUpdateFromConfig(ctx, testhelper.Config1(), converter)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := testhelper.AddToRoot(ctx, root.Entry, upds, flagsOld, "owner1", 5); err != nil {
+				t.Fatal(err)
+			}
+			if err := root.FinishInsertionPhase(ctx); err != nil {
+				t.Fatal(err)
+			}
+
+			jsonStruct, err := ops.ToJson(ctx, root.Entry, ops.RenderOpts{IncludeSensitive: tt.exposeSensitive})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			jsonBytes, err := json.Marshal(jsonStruct)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var result map[string]any
+			if err := json.Unmarshal(jsonBytes, &result); err != nil {
+				t.Fatal(err)
+			}
+
+			got, ok := result["patterntest"].(string)
+			if !ok {
+				t.Fatalf("patterntest not found or not a string in JSON output: %s", string(jsonBytes))
+			}
+			if diff := cmp.Diff(tt.wantPatterntest, got); diff != "" {
+				t.Errorf("patterntest mismatch (-want +got):\n%s", diff)
+			}
+
+			ctrl.Finish()
 		})
 	}
 }
