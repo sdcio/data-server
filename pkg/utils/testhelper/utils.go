@@ -133,6 +133,44 @@ func GetSchemaClientBound(t *testing.T, mockCtrl *gomock.Controller) (*mockschem
 	return mockscb, nil
 }
 
+// GetSchemaClientBoundMarkingLeafSensitive creates a SchemaClientBound mock that behaves
+// like GetSchemaClientBound but marks the leaf with the given name as Sensitive=true in
+// its returned schema. Use in tests that need to exercise sensitive-data redaction paths.
+func GetSchemaClientBoundMarkingLeafSensitive(t *testing.T, mockCtrl *gomock.Controller, sensitiveLeafName string) (*mockschemaclientbound.MockSchemaClientBound, error) {
+	t.Helper()
+	x, schema, err := InitSDCIOSchema()
+	if err != nil {
+		return nil, err
+	}
+
+	sdcpbSchema := &sdcpb.Schema{
+		Name:    schema.Name,
+		Vendor:  schema.Vendor,
+		Version: schema.Version,
+	}
+
+	mockscb := mockschemaclientbound.NewMockSchemaClientBound(mockCtrl)
+	mockscb.EXPECT().GetSchemaSdcpbPath(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+		func(ctx context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+			resp, err := x.GetSchema(ctx, &sdcpb.GetSchemaRequest{
+				Path:   path,
+				Schema: sdcpbSchema,
+			})
+			if err != nil || resp == nil {
+				return resp, err
+			}
+			elems := path.GetElem()
+			if len(elems) > 0 && elems[len(elems)-1].GetName() == sensitiveLeafName {
+				if field := resp.GetSchema().GetField(); field != nil {
+					field.Sensitive = true
+				}
+			}
+			return resp, nil
+		},
+	)
+	return mockscb, nil
+}
+
 type ImportStatsInterface interface {
 	Changed() bool
 	GetNewCount() int64
