@@ -9,8 +9,10 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/types"
 )
 
+
 type GetDeviationParams struct {
 	Ch chan<- *types.DeviationEntry
+	RenderOpts
 }
 
 func GetDeviations(ctx context.Context, e api.Entry, config *GetDeviationParams, poolFactory pool.VirtualPoolFactory) error {
@@ -58,7 +60,7 @@ func (dt *deviationTask) Run(ctx context.Context, submit func(pool.Task) error) 
 
 	if evalLeafvariants {
 		// calculate Deviation on the LeafVariants
-		dt.entry.GetLeafVariants().GetDeviations(ctx, dt.config.Ch, dt.isActiveCase)
+		dt.entry.GetLeafVariants().GetDeviations(ctx, dt.config.Ch, dt.isActiveCase, dt.config.IncludeSensitive, dt.config.SensitivePathSet)
 	}
 
 	// iterate through all childs
