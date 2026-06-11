@@ -70,38 +70,40 @@ func (t *noopTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 	return result, nil
 }
 
-func (t *noopTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
+func (t *noopTarget) Set(ctx context.Context, plan types.SouthboundSetPlan) (*sdcpb.SetDataResponse, error) {
 	log := logf.FromContext(ctx).WithName("Set")
-	ctx = logf.IntoContext(ctx, log)
-
-	upds, err := source.ToProtoUpdates(ctx, true)
-	if err != nil {
-		return nil, err
-	}
-
-	deletes, err := source.ToProtoDeletes(ctx)
-	if err != nil {
-		return nil, err
-	}
 
 	result := &sdcpb.SetDataResponse{
-		Response: make([]*sdcpb.UpdateResult, 0,
-			len(upds)+len(deletes)),
 		Timestamp: time.Now().UnixNano(),
 	}
 
-	for _, upd := range upds {
-		result.Response = append(result.Response, &sdcpb.UpdateResult{
-			Path: upd.GetPath(),
-			Op:   sdcpb.UpdateResult_UPDATE,
-		})
+	if gp, ok := plan.GnmiPlan(); ok {
+		result.Response = make([]*sdcpb.UpdateResult, 0, len(gp.Updates)+len(gp.Deletes))
+		for _, upd := range gp.Updates {
+			log.V(logf.VDebug).Info("noop set update", "path", upd.GetPath())
+			result.Response = append(result.Response, &sdcpb.UpdateResult{
+				Path: upd.GetPath(),
+				Op:   sdcpb.UpdateResult_UPDATE,
+			})
+		}
+		for _, p := range gp.Deletes {
+			log.V(logf.VDebug).Info("noop set delete", "path", p)
+			result.Response = append(result.Response, &sdcpb.UpdateResult{
+				Path: p,
+				Op:   sdcpb.UpdateResult_DELETE,
+			})
+		}
+		return result, nil
 	}
-	for _, p := range deletes {
-		result.Response = append(result.Response, &sdcpb.UpdateResult{
-			Path: p,
-			Op:   sdcpb.UpdateResult_DELETE,
-		})
+
+	if _, ok := plan.NetconfPlan(); ok {
+		log.V(logf.VDebug).Info("noop set netconf plan received")
+		result.Response = []*sdcpb.UpdateResult{}
+		return result, nil
 	}
+
+	log.V(logf.VDebug).Info("noop set empty plan received")
+	result.Response = []*sdcpb.UpdateResult{}
 	return result, nil
 }
 

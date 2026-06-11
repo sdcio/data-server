@@ -104,9 +104,10 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 
 	reqTarget := req.GetTarget()
 	sbi := &config.SBI{
-		Type:    reqTarget.GetType(),
-		Port:    reqTarget.GetPort(),
-		Address: reqTarget.GetAddress(),
+		Type:          reqTarget.GetType(),
+		Port:          reqTarget.GetPort(),
+		Address:       reqTarget.GetAddress(),
+		DeviceProfile: sdcpbDeviceProfileToConfig(reqTarget.GetDeviceProfile()),
 	}
 
 	switch strings.ToLower(reqTarget.GetType()) {
@@ -306,8 +307,9 @@ func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*
 		DatastoreName: ds.Config().Name,
 	}
 	rsp.Target = &sdcpb.Target{
-		Type:    ds.Config().SBI.Type,
-		Address: ds.Config().SBI.Address,
+		Type:          ds.Config().SBI.Type,
+		Address:       ds.Config().SBI.Address,
+		DeviceProfile: configDeviceProfileToSdcpb(ds.Config().SBI.DeviceProfile),
 	}
 	rsp.Intents, err = ds.IntentsList(ctx)
 	if err != nil {
@@ -351,4 +353,22 @@ func (s *Server) BlameConfig(ctx context.Context, req *sdcpb.BlameConfigRequest)
 		ConfigTree: tree,
 	}, nil
 
+}
+
+func sdcpbDeviceProfileToConfig(p sdcpb.DeviceProfile) config.DeviceProfile {
+	switch p {
+	case sdcpb.DeviceProfile_DEVICE_PROFILE_CISCO_IOS_XR:
+		return config.DeviceProfileCiscoIOSXR
+	default:
+		return config.DeviceProfileNone
+	}
+}
+
+func configDeviceProfileToSdcpb(p config.DeviceProfile) sdcpb.DeviceProfile {
+	switch p {
+	case config.DeviceProfileCiscoIOSXR:
+		return sdcpb.DeviceProfile_DEVICE_PROFILE_CISCO_IOS_XR
+	default:
+		return sdcpb.DeviceProfile_DEVICE_PROFILE_GENERIC
+	}
 }

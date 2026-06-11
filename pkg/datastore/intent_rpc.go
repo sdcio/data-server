@@ -21,8 +21,9 @@ import (
 
 	"github.com/beevik/etree"
 
-	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
+	"github.com/sdcio/data-server/pkg/datastore/target/materialize"
 	"github.com/sdcio/data-server/pkg/tree"
+	treeapi "github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/api/adapter"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
@@ -34,22 +35,21 @@ import (
 
 var ErrIntentNotFound = errors.New("intent not found")
 
-func (d *Datastore) applyIntent(ctx context.Context, source targettypes.TargetSource) (*sdcpb.SetDataResponse, error) {
+func (d *Datastore) applyIntent(ctx context.Context, entry treeapi.Entry, replace bool) (*sdcpb.SetDataResponse, error) {
 	log := logf.FromContext(ctx)
 	var err error
 
 	var rsp *sdcpb.SetDataResponse
 
-	// send set request only if there are updates and/or deletes
-	if containsChanges, _ := source.ContainsChanges(ctx); !containsChanges {
-		return &sdcpb.SetDataResponse{}, nil
-	}
-
 	if d.sbi == nil {
 		return nil, fmt.Errorf("%s is not connected", d.config.Name)
 	}
 
-	rsp, err = d.sbi.Set(ctx, source)
+	plan, err := materialize.BuildPlan(ctx, d.schemaClient, d.config.SBI, entry, replace)
+	if err != nil {
+		return nil, err
+	}
+	rsp, err = d.sbi.Set(ctx, plan)
 	if err != nil {
 		return nil, err
 	}

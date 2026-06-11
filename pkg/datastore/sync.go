@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/tree"
-	"github.com/sdcio/data-server/pkg/tree/api/adapter"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/ops"
@@ -165,7 +164,7 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error 
 
 	if performApply {
 		log.Info("reverting after sync")
-		resp, err := d.applyIntent(ctx, adapter.NewEntryOutputAdapter(t.Entry))
+		resp, err := d.applyIntent(ctx, t.Entry, false)
 		if err != nil {
 			respJ := protojson.MarshalOptions{Multiline: false}
 			respStr, _ := respJ.Marshal(resp)

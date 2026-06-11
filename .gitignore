@@ -25,3 +25,4 @@ dist/
 clab-*
 tests/robot/*-yang-models/
 .idea/
+docs/prd/
