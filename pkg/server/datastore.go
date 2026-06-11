@@ -342,7 +342,7 @@ func (s *Server) BlameConfig(ctx context.Context, req *sdcpb.BlameConfigRequest)
 		return nil, err
 	}
 
-	tree, err := ds.BlameConfig(ctx, req.GetIncludeDefaults())
+	tree, err := ds.BlameConfig(ctx, req.GetIncludeDefaults(), req.GetIncludeSensitive())
 	if err != nil {
 		return nil, err
 	}
