@@ -5,7 +5,7 @@ on:
       configserver_version:
         description: >
           Optional override for sdcio/config-server (integration checkout + GHCR tag).
-          Empty = auto: main → CS main; else only if PR has label sdc-pair and same-named branch exists on CS → tip SHA;
+          Empty = auto: main → CS main; else only if PR has label paired-test and same-named branch exists on CS → tip SHA;
           else CS main. (SHA, v0.0.0-PR…, main.)
         required: false
         default: ""
@@ -89,7 +89,7 @@ jobs:
         run: |
           echo "version=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-  # Picks sdcio/config-server ref for integration-tests. Same-named branch on CS only when PR is labeled sdc-pair
+  # Picks sdcio/config-server ref for integration-tests. Same-named branch on CS only when PR is labeled paired-test
   # (avoids accidental pairing). workflow_dispatch override always wins. CS images must exist for chosen ref.
   resolve-configserver-version:
     runs-on: ubuntu-latest
@@ -106,7 +106,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          PAIR_LABEL="sdc-pair"
+          PAIR_LABEL="paired-test"
           override="$(printf '%s' "${INPUT_OVERRIDE:-}" | tr -d '\r' | xargs || true)"
           if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$override" ]; then
             echo "configversion=${override}" >> "$GITHUB_OUTPUT"
