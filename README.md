@@ -2,134 +2,138 @@
 
 ![sdc logo](https://docs.sdcio.dev/assets/logos/SDC-transparent-withname-100x133.png)
 
-This repository is part of Schema Driven Configuration (SDC)
+**data-server** is an intent-driven configuration engine for network automation that accommodates mixed operation: northbound **Intents** at explicit **priorities** merge into an effective tree together with **Running**—device configuration the datastore maintains through **Sync** (subscriptions, polling, or one-shot reads)—so CLI edits, Ansible, and other out-of-band changes share the same YANG-backed view as declarative automation. Schema binding is a hard requirement for interpreting and **validating** that tree; southbound drivers—for example **gNMI** or **NETCONF**—apply and refresh state without tying northbound callers to one protocol. Comparing merged intent expectations to **Running** produces **Deviations**; **revertive** intents re-converge on drift and **non-revertive** intents surface divergence without automatic re-push. **Owner** precedence and **blame** record who wins each leaf; **Transactions** follow confirmed-commit semantics with optional **dry-run**, then confirm or cancel/timeout rollback; where a published specification governs wire behaviour, it is the default interoperability contract unless this repository documents a deliberate exception.
 
-The paradigm of schema-driven API approaches is gaining increasing popularity as it facilitates programmatic interaction with systems by both machines and humans. While OpenAPI schema stands out as a widely embraced system, there are other notable schema approaches like YANG, among others. This project endeavors to empower users with a declarative and idempotent method for seamless interaction with API systems, providing a robust foundation for effective system configuration."
+Concretely, for each **Target**, **data-server** owns a **Datastore** that runs that merge, **Sync**, validation, apply, and rollback pipeline, with **gRPC** northbound for datastores, intents, transactions, deviation reporting, and introspection ([Northbound surface](docs/architecture.md#5-northbound-surface)). In [Schema Driven Configuration (SDC)](https://docs.sdcio.dev), it is the **southbound** component that materialises configuration on devices while integrating with **schema-server**, **cache**, and the rest of the platform.
 
-The data-server component serves as a versatile intermediary, connecting the config-server, schema-server, cache, and xNF/Device in a stateless design for scalability. It features a North-bound API for both imperative and declarative interactions and supports various South-bound protocols. With dedicated DataStores per target, flexible synchronization options, candidate-based interactions, and the ability to connect multiple data servers per device, it provides a resilient and adaptable foundation for managing and synchronizing data in dynamic system environments.
+**Where to read next**
 
-## build
+- **Platform overview** — [docs.sdcio.dev](https://docs.sdcio.dev)
 
-```shell
-make build
+**Integration**
+
+The primary **northbound** API is **gRPC** (datastores, transactions, intents, and schema-related usage—see [Northbound surface](docs/architecture.md#5-northbound-surface) in the architecture doc). data-server is **not limited to Kubernetes or config-server**: any control plane that can use those RPCs and supply the configured dependencies can run or embed it; schema and southbound contracts are documented in-repo rather than implied by a specific orchestrator layout.
+
+## System context
+
+Northbound callers use **gRPC**; southbound is **gNMI** or **NETCONF** to the **Target**. Schema and intent storage are usually backed by separate **schema-server** and **cache** deployments (or equivalents), as laid out in [docs/architecture.md](docs/architecture.md#2-system-context).
+
+```mermaid
+flowchart TB
+  subgraph nb["Northbound"]
+    CP["Control plane / tooling\n(gRPC)"]
+  end
+  subgraph sb["Southbound"]
+    DEV["Device / Target\n(gNMI or NETCONF)"]
+  end
+  subgraph dep["Typical companions"]
+    SCH["schema-server"]
+    CAC["cache"]
+  end
+
+  CP --> DS["data-server"]
+  DS --> DEV
+  DS -.-> SCH
+  DS -.-> CAC
 ```
 
-## run the server
+## Related repositories
 
-```shell
-./bin/data-server
-```
+| Repository | Role |
+|------------|------|
+| [sdcio/sdc-protos](https://github.com/sdcio/sdc-protos) | Shared **gRPC** / protobuf contracts (`data.proto` and related APIs). |
+| [sdcio/schema-server](https://github.com/sdcio/schema-server) | Compiled YANG → **SDCPB** (and related) schema consumed by data paths. |
+| [sdcio/cache](https://github.com/sdcio/cache) | Intent blob storage and retrieval used in typical layouts. |
+| [sdcio/yang-parser](https://github.com/sdcio/yang-parser) | YANG parsing utilities used alongside the tree and validation stack. |
+| [sdcio/goyang](https://github.com/sdcio/goyang) | **goyang** fork referenced from this module’s `go.mod` `replace` directive. |
+| [openconfig/ygot](https://github.com/openconfig/ygot) | **ygot** (generated / structural helpers) as pulled in by this codebase. |
+| [sdcio/config-server](https://github.com/sdcio/config-server) | Reference SDC control plane that drives data-server over gRPC (not the only possible caller). |
 
-## run the client
+## Toolchain
 
-```shell
-bin/datactl -a clab-distributed-data-server:56000 datastore get --ds srl1
+- **Go** — **1.25.0** (see [`go.mod`](go.mod) for the authoritative `go` directive and dependencies).
+- **YANG / schema stack** — This service builds on **OpenConfig goyang** (via the **sdcio/goyang** fork in `go.mod`), **ygot**, **yang-parser**, and **schema-server** for compiled schema and metadata. It does **not** use **libyang** as a runtime dependency; do not assume libyang-specific semantics unless that changes in code and docs.
 
+The **YANG compatibility matrix** in this README may later be mirrored or moved to [docs.sdcio.dev](https://docs.sdcio.dev); there is no requirement to do so for the current README-first rollout.
 
-## create a candidate datastore
-bin/datactl -a clab-distributed-data-server:56000 datastore create --ds srl1 --candidate default
-bin/datactl -a clab-distributed-data-server:56000 datastore create --ds srl1 --candidate temp
-bin/datactl -a clab-distributed-data-server:56000 datastore get --ds srl1
-# delete candidate "temp" datastore
-bin/datactl -a clab-distributed-data-server:56000 datastore delete --ds srl1 --candidate temp
-bin/datactl -a clab-distributed-data-server:56000 datastore get --ds srl1
+## YANG compatibility matrix
 
-# data
-## state
-bin/datactl -a clab-distributed-data-server:56000 data get --ds srl1 --path interface[name=*]/subinterface[index=0]/statistics/in-octets
-bin/datactl -a clab-distributed-data-server:56000 data get --ds srl1 --path interface[name=*]/subinterface[index=0]/statistics/in-octets --candidate default
-## configure
-bin/datactl -a clab-distributed-data-server:56000 data set --ds srl1 --candidate default --update interface[name=ethernet-1/1]/admin-state:::disable
-bin/datactl -a clab-distributed-data-server:56000 data set --ds srl1 --candidate default --update interface[name=ethernet-1/1]/description:::desc1
-bin/datactl -a clab-distributed-data-server:56000 data set --ds srl1 --candidate default --update interface[name=ethernet-1/1]/subinterface[index=0]/admin-state:::enable
-bin/datactl -a clab-distributed-data-server:56000 data set --ds srl1 --candidate default --update interface[name=ethernet-1/1]/subinterface[index=0]/description:::desc1
-### get fom candidate
-bin/datactl -a clab-distributed-data-server:56000 data get --ds srl1 --candidate default --path interface[name=ethernet-1/1]/admin-state
-bin/datactl -a clab-distributed-data-server:56000 data get --ds srl1 --candidate default --path interface[name=ethernet-1/1]/description
-bin/datactl -a clab-distributed-data-server:56000 data get --ds srl1 --candidate default --path interface[name=ethernet-1/1]/subinterface[index=0]/admin-state
-bin/datactl -a clab-distributed-data-server:56000 data get --ds srl1 --candidate default --path interface[name=ethernet-1/1]/subinterface[index=0]/description
-### get from main
-bin/datactl -a clab-distributed-data-server:56000 data get --ds srl1 --path interface[name=ethernet-1/1]/admin-state
-bin/datactl -a clab-distributed-data-server:56000 data get --ds srl1 --path interface[name=ethernet-1/1]/description
-bin/datactl -a clab-distributed-data-server:56000 data get --ds srl1 --path interface[name=ethernet-1/1]/subinterface[index=0]/admin-state
-bin/datactl -a clab-distributed-data-server:56000 data get --ds srl1 --path interface[name=ethernet-1/1]/subinterface[index=0]/description
-# diff
-bin/datactl -a clab-distributed-data-server:56000 data diff --ds srl1 --candidate default
-### commit
-bin/datactl -a clab-distributed-data-server:56000 datastore commit --ds srl1 --candidate default
-bin/datactl -a clab-distributed-data-server:56000 datastore get --ds srl1
-```
+**Normative YANG** spans much more than this table: the IETF definitions in *[RFC 7950](https://datatracker.ietf.org/doc/html/rfc7950)* (YANG 1.0) and *[RFC 7951](https://datatracker.ietf.org/doc/html/rfc7951)* (YANG 1.1—including `pattern` **`invert`**, refined regex rules, and other subtleties) are the standards; this matrix is **product truth** for the **SDC datastore** path (**SDCPB** from **schema-server** + default **data-server** validators). It is **not** a claim of full RFC coverage for every type, encoding, and edge case.
 
-### SROS
+**Compiled schema (southbound)** is the **SDCPB** / proto-shaped schema artefact produced by the YANG **compile pipeline** (typically **schema-server**), which data-server binds per **Datastore**—it is **not** “data-server parses arbitrary `.yang` at runtime” for that contract. **Value validation (default on)** means each **Yes** / **Partial** cell in the right column below is active unless you disable that check under [`validation-defaults`](#configuration) (see [Configuration](#configuration) for YAML keys). The struct layout is in [`pkg/config/validation.go`](pkg/config/validation.go).
 
-```shell
-bin/datactl -a clab-distributed-data-server:56000 datastore create --ds sr1 --candidate default
-bin/datactl -a clab-distributed-data-server:56000 datastore get --ds sr1
-bin/datactl -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default --update /configure/system/name:::sr123
-bin/datactl -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default --update /configure/service/vprn[service-name=vprn1]/customer:::1
-bin/datactl -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default --update /configure/service/vprn[service-name=vprn1]/service-id:::100
-bin/datactl -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default --update /configure/service/vprn[service-name=vprn1]/admin-state:::enable
-##
-# bin/datactl -a clab-distributed-data-server:56000 data get --ds sr1 --path /configure/system/name
-bin/datactl -a clab-distributed-data-server:56000 data get --ds sr1 --candidate default --path /configure/system/name
-bin/datactl -a clab-distributed-data-server:56000 data get --ds sr1 --candidate default --path /configure/service/vprn[service-name=vprn1]
-bin/datactl -a clab-distributed-data-server:56000 datastore commit --ds sr1 --candidate default
-```
+**Legend:** **Yes** — reflected or enforced for the **common** paths we use in real deployments (still not a substitute for reading the RFCs when you rely on obscure constructs). **Partial** — deliberate gaps vs the full RFC feature surface, multi-repo ownership, or type-specific behaviour (see footnotes). **No** — not enforced in that column. **N/A** — not meaningful as instance validation here.
 
-```shell
-bin/datactl -a clab-distributed-data-server:56000 datastore create --ds sr1 --candidate default
+| Construct | Compiled schema (southbound) | Value validation (default on) |
+|-----------|------------------------------|--------------------------------|
+| **mandatory** | Yes | Yes |
+| **leafref** | Yes | Partial¹ |
+| **pattern** | Yes | Partial⁶ |
+| **must** | Yes | Partial² |
+| **length** | Yes | Partial⁶ |
+| **range** | Yes | Partial⁶ |
+| **min-elements / max-elements** (list) | Yes | Yes |
+| **min-elements / max-elements** (leaflist) | Yes | Yes |
+| **when** | Partial³ | No |
+| **if-feature** | Partial³ | N/A |
+| **deviation** (YANG) | Partial⁴ | No |
+| **unique** | Partial⁵ | No |
+| **ordered-by** | Partial⁴ | N/A |
 
-bin/datactl -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default  \
-             --update-path /configure/router[router-name=Base]/interface[interface-name=system] \
-             --update-file lab/common/configs/sros_interface_base.json
-bin/datactl -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default  \
-             --update-path configure/service/vprn[service-name=vprn1] \
-             --update-file lab/common/configs/sros_vprn.json
-bin/datactl -a clab-distributed-data-server:56000 data set --ds sr1 --candidate default  \
-             --update-path /configure/router[router-name=Base]/interface \
-             --update-file lab/common/configs/sros_interfaces_base.json
-bin/datactl -a clab-distributed-data-server:56000 datastore commit --ds sr1 --candidate default
-```
+**Footnotes**
 
-### SRL JSON VALUE
+1. **Leafref** resolution (including **identityref** keys and `current()` key predicates) is shared with **schema-server** / importer behaviour; deep caveats and fixes are tracked in the [must / leafref / identityref normalization PRD](docs/prd/must-leafref-identityref-normalization/PRD.md).
+2. **Must** runs in the **yang-parser** xpath VM over compiled expressions from schema; identity / import-alias normalisation spans compile and runtime per the same PRD. Rare VM parse/eval errors may be handled without failing the transaction (see implementation logs).
+3. **`when`** and **`if-feature`** are primarily **compile-time** concerns in the effective schema (**schema-server**); data-server does not run a separate **`when`** / **`if-feature`** validator pass in [`pkg/tree/ops/validation`](pkg/tree/ops/validation).
+4. **Deviation** and **ordered-by** shape the effective schema and materialisation; data-server validates against the **compiled** result, not the raw deviation text, and does not treat **ordered-by** as its own validator.
+5. **`unique`** — no dedicated **unique** row validator in the active dispatcher today; do not assume list **unique** is re-checked at instance validation unless a maintainer confirms schema mapping.
+6. **Pattern, length, range (RFC vs this implementation):** **Pattern** — enforced in [`validatePattern`](pkg/tree/ops/validation/validation_entry_pattern.go) for leaf values wired as **`Field`** entries; the XSD-style expression is translated with [`yangPatternToGo`](pkg/tree/ops/validation/validation_entry_pattern.go) into a **Go RE2** regexp (best-effort, not every XSD facet). An **inverted** match is applied **only if** the compiled pattern object carries an invert flag (YANG 1.1-style metadata from the pipeline)—if your compile path never emits it, you will not get invert semantics even though the validator can consume it. **Length** — [`validateLength`](pkg/tree/ops/validation/validation_entry_length.go) applies **UTF-8 rune** counts to the **string** form used at validation time; that is **not** identical to every YANG `length` rule across *binary*, *hex-string*, unions, etc., unless values are represented consistently end-to-end. **Range** — [`validateRange`](pkg/tree/ops/validation/validation_entry_range.go) covers **integral** numeric families (`int8`–`int64`, `uint8`–`uint64`) for leaves and leaflists; other numeric types depend on SDCPB typing and **TypedValue** encoding.
 
-```shell
-bin/datactl -a clab-distributed-data-server:56000 datastore create --ds srl1 --candidate default
+---
 
-bin/datactl -a clab-distributed-data-server:56000 data set --ds srl1 --candidate default  \
-             --update-path / \
-             --update-file lab/common/configs/srl_interface.json
-bin/datactl -a clab-distributed-data-server:56000 data set --ds srl1 --candidate default \
-             --update-path / \
-             --update-file lab/common/configs/srl_interfaces.json
+*This matrix applies to **[data-server v0.0.69](https://github.com/sdcio/data-server/releases/tag/v0.0.69)**. Update the tag (and cells if needed) when validation or the schema contract changes materially.*
 
-bin/datactl -a clab-distributed-data-server:56000 datastore commit --ds srl1 --candidate default
-```
+## Configuration
 
-### leafref exp1: leafref as key
+Server behaviour is driven by a YAML file (see the sample [`data-server.yaml`](data-server.yaml) in this repository). **Do not commit secrets**; keep credentials in environment-specific files or secret stores, not in copy-pasted examples.
 
-```shell
-bin/datactl -a clab-distributed-data-server:56000 datastore create --ds srl1 --candidate default
-bin/datactl -a clab-distributed-data-server:56000 data set --ds srl1 --candidate default  \
-             --update /system/gnmi-server/network-instance[name=default]/admin-state:::enable
-bin/datactl -a clab-distributed-data-server:56000 data set --ds srl1 --candidate default  \
-             --update /system/gnmi-server/network-instance[name=default]/tls-profile:::clab-profile
-bin/datactl -a clab-distributed-data-server:56000 datastore commit --ds srl1 --candidate default
-```
+### `validation-defaults`
 
-### leafref exp2: leafref as leaf (not key)
+Top-level `validation-defaults` supplies the default **Validation** block for datastores loaded from config (gRPC-created datastores currently receive the same defaults). Under `disabled-validators`, set a key to **`true`** to **turn off** that runtime check (all default to **`false`** = enabled):
 
-```shell
-# create candidate
-bin/datactl -a clab-distributed-data-server:56000 datastore create --ds srl1 --candidate default
+| YAML key | Validator |
+|----------|-----------|
+| `mandatory` | Mandatory children / keys / choice branches |
+| `leafref` | Leafref target existence and path resolution |
+| `leafref-min-max-attributes` | Constraints tied to leafref-typed attributes on leaflists |
+| `pattern` | Pattern / regex (leaf `Field` path; XSD→RE2 shim; see matrix **footnote 6**) |
+| `must-statement` | `must` xpath evaluation |
+| `length` | Length bounds (UTF-8 string semantics at validation; see matrix **footnote 6**) |
+| `range` | Numeric range (integral types in validator; see matrix **footnote 6**) |
+| `max-elements` | `min-elements` / `max-elements` for **lists** and **leaflists** (single toggle in config) |
 
-bin/datactl -a clab-distributed-data-server:56000 data set --ds srl1 --candidate default  \
-             --update /system/gnmi-server/network-instance[name=mgmt]/admin-state:::enable
-bin/datactl -a clab-distributed-data-server:56000 data set --ds srl1 --candidate default  \
-             --update /system/gnmi-server/network-instance[name=mgmt]/tls-profile:::dummy-profile
-# commit
-bin/datactl -a clab-distributed-data-server:56000 datastore commit --ds srl1 --candidate default
-```
+Optional: `disable-concurrency: true` under `validation-defaults` changes how validation is scheduled internally.
+
+### Prometheus metrics
+
+If the `prometheus:` block is present in config, the process starts an HTTP listener on `prometheus.address` and exposes **`/metrics`** (Prometheus scrape format, including gRPC metrics when enabled). Example from [`data-server.yaml`](data-server.yaml): `address: ":56090"` → scrape `http://<host>:56090/metrics`.
+
+## Development
+
+- Contributor conventions, docs expectations, and PR notes: **[docs/development.md](docs/development.md)**.
+- **Build:** `make build` → `bin/data-server` and `bin/datactl`.
+- **Run:** `./bin/data-server --config <path-to.yaml>` (see `data-server --help`). Never put real credentials in files you commit or share—see [Configuration](#configuration).
+- **Tests:** `make go-tests` or `go test ./...`; broader checks with `make test` (includes Robot). Heavy unit run: `make unit-tests` (generates mocks, race detector, coverage dir under `/tmp/sdcio/dataserver-tests/coverage`).
+
+## Observability
+
+- **Metrics:** when `prometheus` is configured, see [above](#prometheus-metrics).
+- **Profiling:** the binary always starts Go **`pprof`** on **`http://127.0.0.1:6060/debug/pprof/`** (see [`main.go`](main.go)); bind is loopback-only.
+- **Readiness:** there is no separate HTTP health file in this README; until bootstrap finishes, gRPC calls can fail with **unavailable** via the server’s ready gate (see [`pkg/server/server.go`](pkg/server/server.go)).
+
+## Contributing
+
+Use **[docs/development.md](docs/development.md)** for conventions, documentation touch points, and pull-request expectations. There is no separate `CONTRIBUTING.md` in this repository today.
 
 ## Join us
 
@@ -137,6 +141,6 @@ Have questions, ideas, bug reports or just want to chat? Come join [our discord 
 
 ## License and Code of Conduct
 
-Code is under the [Apache License 2.0](LICENSE), documentation is [CC BY 4.0](LICENSE-documentation).
+**Licenses (SPDX):** [Apache-2.0](LICENSE) (code), [CC-BY-4.0](LICENSE-documentation) (documentation).
 
 The SDC project is following the [CNCF Code of Conduct](https://github.com/cncf/foundation/blob/main/code-of-conduct.md). More information and links about the CNCF Code of Conduct are [here](code-of-conduct.md).
