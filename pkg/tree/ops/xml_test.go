@@ -52,12 +52,12 @@ func TestToXMLTable(t *testing.T) {
   </case1>
 </choices>
 <interface>
+  <name>ethernet-1/1</name>
   <admin-state>enable</admin-state>
   <description>Foo</description>
-  <name>ethernet-1/1</name>
   <subinterface>
-    <description>Subinterface 0</description>
     <index>0</index>
+    <description>Subinterface 0</description>
     <type>sdcio_model_common:routed</type>
   </subinterface>
 </interface>
@@ -66,9 +66,9 @@ func TestToXMLTable(t *testing.T) {
   <entry>bar</entry>
 </leaflist>
 <network-instance>
+  <name>default</name>
   <admin-state>disable</admin-state>
   <description>Default NI</description>
-  <name>default</name>
   <type>sdcio_model_ni:default</type>
 </network-instance>
 <patterntest>hallo 00</patterntest>
@@ -108,12 +108,12 @@ func TestToXMLTable(t *testing.T) {
   <name>ethernet-1/1</name>
 </interface>
 <interface>
+  <name>ethernet-1/2</name>
   <admin-state>enable</admin-state>
   <description>Foo</description>
-  <name>ethernet-1/2</name>
   <subinterface>
-    <description>Subinterface 5</description>
     <index>5</index>
+    <description>Subinterface 5</description>
     <type>sdcio_model_common:routed</type>
   </subinterface>
 </interface>
@@ -122,9 +122,9 @@ func TestToXMLTable(t *testing.T) {
   <name>default</name>
 </network-instance>
 <network-instance>
+  <name>other</name>
   <admin-state>enable</admin-state>
   <description>Other NI</description>
-  <name>other</name>
   <type>sdcio_model_ni:ip-vrf</type>
 </network-instance>
 <patterntest>hallo 99</patterntest>
@@ -190,11 +190,11 @@ func TestToXMLTable(t *testing.T) {
 				return testhelper.ExpandUpdateFromConfig(ctx, c, converter)
 			},
 			expected: `<interface xmlns="urn:sdcio/model">
-  <description xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
   <name>ethernet-1/1</name>
+  <description xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
   <subinterface>
-    <description xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
     <index>0</index>
+    <description xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove"/>
     <type>sdcio_model_common:bridged</type>
   </subinterface>
 </interface>
@@ -227,9 +227,9 @@ func TestToXMLTable(t *testing.T) {
   <name>ethernet-1/1</name>
 </interface>
 <interface>
+  <name>ethernet-1/2</name>
   <admin-state>enable</admin-state>
   <description>Test</description>
-  <name>ethernet-1/2</name>
 </interface>
 <patterntest operation="delete"/>
 `,
@@ -524,9 +524,9 @@ func TestToXMLTable(t *testing.T) {
 			},
 			expected: `<ipv6>
   <static-route operation="delete">
+    <owner>owner-service1</owner>
     <ipv6-prefix>prefix-2001:db8::/32</ipv6-prefix>
     <next-hop>nexthop-2001:db8::1</next-hop>
-    <owner>owner-service1</owner>
   </static-route>
 </ipv6>
 `,
@@ -621,10 +621,6 @@ func TestToXMLTable(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			// Make sure the attributes are sorted, otherwise the comparison is an issue
-			//TODO: Follow order of schema
-			utils.XmlRecursiveSortElementsByTagName(&xmlDoc.Element)
-
 			xmlDoc.Indent(2)
 			xmlDocStr, err := xmlDoc.WriteToString()
 			if err != nil {
@@ -701,7 +697,6 @@ func TestToXML_KeyLeafDeleteUpgradesToListEntryDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	utils.XmlRecursiveSortElementsByTagName(&xmlDoc.Element)
 	xmlDoc.Indent(2)
 	xmlDocStr, err := xmlDoc.WriteToString()
 	if err != nil {
@@ -777,16 +772,17 @@ func TestToXML_DoubleKeyLeafDeleteUpgradesToListEntryDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	utils.XmlRecursiveSortElementsByTagName(&xmlDoc.Element)
 	xmlDoc.Indent(2)
 	xmlDocStr, err := xmlDoc.WriteToString()
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	// YANG schema declares `key "key2 key1"`, so key elements must follow that
+	// schema order (key2 first), not alphabetical order.
 	want := `<doublekey operation="delete">
-  <key1>k1bar</key1>
   <key2>k2foo</key2>
+  <key1>k1bar</key1>
 </doublekey>
 `
 	if diff := cmp.Diff(want, xmlDocStr); diff != "" {
@@ -869,7 +865,6 @@ func TestToXML_DoubleKeyLeafDeleteOnlyDeletesTargetEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	utils.XmlRecursiveSortElementsByTagName(&xmlDoc.Element)
 	xmlDoc.Indent(2)
 	xmlDocStr, err := xmlDoc.WriteToString()
 	if err != nil {
@@ -877,9 +872,11 @@ func TestToXML_DoubleKeyLeafDeleteOnlyDeletesTargetEntry(t *testing.T) {
 	}
 
 	// Only [k1bar][k2foo] should be deleted; [k1bar][k2other] and [k1other][k2foo] must not appear.
+	// YANG schema declares `key "key2 key1"`, so key elements must follow that
+	// schema order (key2 first), not alphabetical order.
 	want := `<doublekey operation="delete">
-  <key1>k1bar</key1>
   <key2>k2foo</key2>
+  <key1>k1bar</key1>
 </doublekey>
 `
 	if diff := cmp.Diff(want, xmlDocStr); diff != "" {
@@ -953,7 +950,6 @@ func TestToXML_DoubleKeyLeafDeleteViaKey1(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	utils.XmlRecursiveSortElementsByTagName(&xmlDoc.Element)
 	xmlDoc.Indent(2)
 	xmlDocStr, err := xmlDoc.WriteToString()
 	if err != nil {
@@ -961,9 +957,11 @@ func TestToXML_DoubleKeyLeafDeleteViaKey1(t *testing.T) {
 	}
 
 	// Only [k1bar][k2foo] deleted; [k1bar][k2other] must not appear.
+	// YANG schema declares `key "key2 key1"`, so key elements must follow that
+	// schema order (key2 first), not alphabetical order.
 	want := `<doublekey operation="delete">
-  <key1>k1bar</key1>
   <key2>k2foo</key2>
+  <key1>k1bar</key1>
 </doublekey>
 `
 	if diff := cmp.Diff(want, xmlDocStr); diff != "" {
@@ -1032,7 +1030,6 @@ func TestToXML_DoubleKeyNonKeyLeafDeleteDoesNotPromote(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	utils.XmlRecursiveSortElementsByTagName(&xmlDoc.Element)
 	xmlDoc.Indent(2)
 	xmlDocStr, err := xmlDoc.WriteToString()
 	if err != nil {
@@ -1041,9 +1038,10 @@ func TestToXML_DoubleKeyNonKeyLeafDeleteDoesNotPromote(t *testing.T) {
 
 	// The list entry itself must NOT carry operation="delete";
 	// only the mandato child should carry it.
+	// YANG schema declares `key "key2 key1"`, so key elements must be in schema order.
 	want := `<doublekey>
-  <key1>k1bar</key1>
   <key2>k2foo</key2>
+  <key1>k1bar</key1>
   <mandato operation="delete"/>
 </doublekey>
 `
@@ -1129,7 +1127,6 @@ func TestToXML_DoubleKeyTwoSimultaneousListEntryDeletes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	utils.XmlRecursiveSortElementsByTagName(&xmlDoc.Element)
 	xmlDoc.Indent(2)
 	xmlDocStr, err := xmlDoc.WriteToString()
 	if err != nil {
@@ -1137,13 +1134,14 @@ func TestToXML_DoubleKeyTwoSimultaneousListEntryDeletes(t *testing.T) {
 	}
 
 	// Both targeted entries deleted; [k1bar][k2other] must not appear.
+	// YANG schema declares `key "key2 key1"`, so key elements must be in schema order.
 	want := `<doublekey operation="delete">
-  <key1>k1bar</key1>
   <key2>k2foo</key2>
+  <key1>k1bar</key1>
 </doublekey>
 <doublekey operation="delete">
-  <key1>k1other</key1>
   <key2>k2foo</key2>
+  <key1>k1other</key1>
 </doublekey>
 `
 	if diff := cmp.Diff(want, xmlDocStr); diff != "" {

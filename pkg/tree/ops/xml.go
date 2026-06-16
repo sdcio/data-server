@@ -278,30 +278,37 @@ func xmlAddNamespaceConditional(a api.Entry, b api.Entry, elem *etree.Element, h
 	}
 }
 
-// xmlAddKeyElements determines the keys of a certain Entry in the tree and adds those to the
-// element if they do not already exist.
+// xmlAddKeyElements adds the list key elements for entry s to parent if they
+// are not already present.
+//
+// Tree key levels are ordered alphabetically by key name (see
+// PathElem.PathElemNames), but NETCONF requires keys in YANG `key` order
+// (RFC 7950 §7.8.5). We map each tree level to its key via the sorted names
+// (preserving the value/key pairing), then emit in schema
+// order.
 func xmlAddKeyElements(s api.Entry, parent *etree.Element) {
-	// retrieve the parent schema, we need to extract the key names
-	// values are the tree level names
 	parentSchema, levelsUp := GetFirstAncestorWithSchema(s)
 
-	// from the parent we get the keys as slice
-	schemaKeys := GetSchemaKeys(parentSchema)
-	//issue #364: sort the slice
-	sort.Strings(schemaKeys)
+	schemaKeys := GetSchemaKeys(parentSchema) // YANG definition order
+	alphaKeys := slices.Clone(schemaKeys)
+	sort.Strings(alphaKeys) // matches the alphabetical tree level order
 
+	// Walk up the tree, pairing each level with its correct key name.
+	keyValues := make(map[string]string, levelsUp)
 	treeElem := s
-	// the keys do match the levels up in the tree in reverse order
-	// hence we init i with levelUp and count down
 	for i := levelsUp - 1; i >= 0; i-- {
-		// skip if the element already exists
-		existingElem := parent.SelectElement(schemaKeys[i])
-		if existingElem == nil {
-			// and finally we create the key elements in schema order
-			keyElem := etree.NewElement(schemaKeys[i])
-			keyElem.SetText(treeElem.PathName())
-			parent.InsertChildAt(0, keyElem) // we go backwards, so always add to front of parent
-			treeElem = treeElem.GetParent()
+		keyValues[alphaKeys[i]] = treeElem.PathName()
+		treeElem = treeElem.GetParent()
+	}
+
+	// Emit in schema order; reverse + InsertChildAt(0) puts the first key at the front.
+	for i := len(schemaKeys) - 1; i >= 0; i-- {
+		keyName := schemaKeys[i]
+		// the key leaves may already exist (e.g. emitted via child recursion)
+		if parent.SelectElement(keyName) == nil {
+			keyElem := etree.NewElement(keyName)
+			keyElem.SetText(keyValues[keyName])
+			parent.InsertChildAt(0, keyElem)
 		}
 	}
 }
