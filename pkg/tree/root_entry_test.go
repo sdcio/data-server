@@ -53,7 +53,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
 				}
-				result.leafVariants = api.NewLeafVariants(tc, result)
+				result.leafVariants = api.NewLeafVariants(tc.OperationState(), result)
 
 				result.leafVariants.Add(
 					api.NewLeafEntry(
@@ -101,7 +101,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
 				}
-				result.leafVariants = api.NewLeafVariants(tc, result)
+				result.leafVariants = api.NewLeafVariants(tc.OperationState(), result)
 
 				// create /interface sharedEntryAttributes
 				interf := &sharedEntryAttributes{
@@ -111,7 +111,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
-				interf.leafVariants = api.NewLeafVariants(tc, interf)
+				interf.leafVariants = api.NewLeafVariants(tc.OperationState(), interf)
 				// add interf to result (root)
 				_ = result.childs.AddOrGet(interf)
 
@@ -166,7 +166,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
 				}
-				result.leafVariants = api.NewLeafVariants(tc, result)
+				result.leafVariants = api.NewLeafVariants(tc.OperationState(), result)
 
 				// create /interface sharedEntryAttributes
 				interf := &sharedEntryAttributes{
@@ -176,7 +176,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
-				interf.leafVariants = api.NewLeafVariants(tc, interf)
+				interf.leafVariants = api.NewLeafVariants(tc.OperationState(), interf)
 				// add interf to result (root)
 				_ = result.childs.AddOrGet(interf)
 
@@ -209,7 +209,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
-				system.leafVariants = api.NewLeafVariants(tc, system)
+				system.leafVariants = api.NewLeafVariants(tc.OperationState(), system)
 				// add system to result (root)
 				_ = result.childs.AddOrGet(system)
 
@@ -264,7 +264,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					cacheMutex:   sync.Mutex{},
 					treeContext:  tc,
 				}
-				result.leafVariants = api.NewLeafVariants(tc, result)
+				result.leafVariants = api.NewLeafVariants(tc.OperationState(), result)
 
 				// create /interface sharedEntryAttributes
 				interf := &sharedEntryAttributes{
@@ -274,7 +274,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
 				}
-				interf.leafVariants = api.NewLeafVariants(tc, interf)
+				interf.leafVariants = api.NewLeafVariants(tc.OperationState(), interf)
 				// add interf to result (root)
 				_ = result.childs.AddOrGet(interf)
 
@@ -453,12 +453,12 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					schema, err := tc.schemaClient.GetSchemaSdcpbPath(ctx, nil)
+					schema, err := tc.TreeConfig().SchemaClient().GetSchemaSdcpbPath(ctx, nil)
 					if err != nil {
 						t.Fatal(err)
 					}
 					s.schema = schema.GetSchema()
-					s.leafVariants = api.NewLeafVariants(tc, s)
+					s.leafVariants = api.NewLeafVariants(tc.OperationState(), s)
 					return s
 				},
 			},

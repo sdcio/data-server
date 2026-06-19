@@ -106,7 +106,7 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 					choicesResolvers: api.ChoiceResolvers{},
 					parent:           nil,
 					treeContext:      tc,
-					leafVariants:     api.NewLeafVariants(tc, e),
+					leafVariants:     api.NewLeafVariants(tc.OperationState(), e),
 				}
 				r := &RootEntry{
 					Entry: e,

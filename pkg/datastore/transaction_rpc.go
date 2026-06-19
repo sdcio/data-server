@@ -241,7 +241,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 
 		// clear the owners existing explicit delete entries, retrieving the old entries for storing in the transaction for possible rollback
-		oldExplicitDeletes := root.GetTreeContext().ExplicitDeletes().Remove(intent.GetName())
+		oldExplicitDeletes := root.GetTreeContext().OperationState().ExplicitDeletes().Remove(intent.GetName())
 
 		priority := int32(math.MaxInt32)
 		if len(oldIntentContent) > 0 {
@@ -268,14 +268,14 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 			}
 
 			// add the explicit delete entries
-			treeContext.ExplicitDeletes().Add(intent.GetName(), intent.GetPriority(), intent.GetDeletes())
+			treeContext.OperationState().ExplicitDeletes().Add(intent.GetName(), intent.GetPriority(), intent.GetDeletes())
 		}
 
 		// add non-revertive info to tree context
-		treeContext.NonRevertiveInfo().Add(intent.GetName(), intent.NonRevertive(), intent.GetRevertPaths()...)
+		treeContext.OperationState().NonRevertiveInfo().Add(intent.GetName(), intent.NonRevertive(), intent.GetRevertPaths()...)
 	}
 
-	log.V(logger.VDebug).Info("nonrevertive infos", "data", treeContext.NonRevertiveInfo().String())
+	log.V(logger.VDebug).Info("nonrevertive infos", "data", treeContext.OperationState().NonRevertiveInfo().String())
 
 	les := ops.LeafsOfOwner(root.Entry, consts.RunningIntentName)
 

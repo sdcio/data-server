@@ -6,46 +6,54 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/api"
 )
 
+// TreeContext holds immutable setup fields (SchemaClient, PoolFactory) and
+// mutable per-operation state (TreeOperationState). It implements both
+// api.TreeContext and api.TreeConfig: TreeConfig() returns itself, so callers
+// reading immutable fields see a narrower interface that signals "this never
+// changes," while callers reading mutable state use OperationState().
 type TreeContext struct {
-	schemaClient     schemaClient.SchemaClientBound
-	nonRevertiveInfo api.NonRevertiveInfos
-	explicitDeletes  *api.DeletePathSet
-	poolFactory      pool.VirtualPoolFactory
+	schemaClient   schemaClient.SchemaClientBound
+	poolFactory    pool.VirtualPoolFactory
+	operationState api.TreeOperationState
 }
 
 func NewTreeContext(sc schemaClient.SchemaClientBound, poolFactory pool.VirtualPoolFactory) *TreeContext {
 	return &TreeContext{
-		schemaClient:     sc,
-		nonRevertiveInfo: api.NewNonRevertiveInfos(),
-		explicitDeletes:  api.NewDeletePaths(),
-		poolFactory:      poolFactory,
+		schemaClient:   sc,
+		poolFactory:    poolFactory,
+		operationState: api.NewTreeOperationState(),
 	}
 }
 
-// deepCopy root is required to be set manually
-func (t *TreeContext) DeepCopy() api.TreeContext {
-	tc := &TreeContext{
-		schemaClient: t.schemaClient,
-		poolFactory:  t.poolFactory,
-	}
-
-	tc.nonRevertiveInfo = t.nonRevertiveInfo.DeepCopy()
-	tc.explicitDeletes = t.explicitDeletes.DeepCopy()
-	return tc
+// TreeConfig implements api.TreeContext. Returns self — the immutable fields
+// live directly on TreeContext, so no wrapper is needed.
+func (t *TreeContext) TreeConfig() api.TreeConfig {
+	return t
 }
 
-func (t *TreeContext) PoolFactory() pool.VirtualPoolFactory {
-	return t.poolFactory
+// OperationState implements api.TreeContext.
+func (t *TreeContext) OperationState() api.TreeOperationState {
+	return t.operationState
 }
 
+// SchemaClient implements api.TreeConfig.
 func (t *TreeContext) SchemaClient() schemaClient.SchemaClientBound {
 	return t.schemaClient
 }
 
-func (t *TreeContext) ExplicitDeletes() *api.DeletePathSet {
-	return t.explicitDeletes
+// PoolFactory implements api.TreeConfig.
+func (t *TreeContext) PoolFactory() pool.VirtualPoolFactory {
+	return t.poolFactory
 }
 
-func (t *TreeContext) NonRevertiveInfo() api.NonRevertiveInfos {
-	return t.nonRevertiveInfo
+// DeepCopy implements api.TreeContext. Interface values (schemaClient,
+// poolFactory) copy as references — the underlying objects are shared, which
+// is the correct "immutable config" semantics. Only operationState is
+// deep-copied.
+func (t *TreeContext) DeepCopy() api.TreeContext {
+	return &TreeContext{
+		schemaClient:   t.schemaClient,
+		poolFactory:    t.poolFactory,
+		operationState: t.operationState.DeepCopy(),
+	}
 }

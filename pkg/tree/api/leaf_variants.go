@@ -14,14 +14,14 @@ import (
 type LeafVariants struct {
 	les         LeafVariantSlice
 	lesMutex    sync.RWMutex
-	tc          TreeContext
+	os          TreeOperationState
 	parentEntry Entry
 }
 
-func NewLeafVariants(tc TreeContext, parentEnty Entry) *LeafVariants {
+func NewLeafVariants(os TreeOperationState, parentEnty Entry) *LeafVariants {
 	return &LeafVariants{
 		les:         make(LeafVariantSlice, 0, 2),
-		tc:          tc,
+		os:          os,
 		parentEntry: parentEnty,
 	}
 }
@@ -262,10 +262,10 @@ func (lv *LeafVariants) GetHighestPrecedenceValue(filter HighestPrecedenceFilter
 	return result
 }
 
-func (lv *LeafVariants) DeepCopy(tc TreeContext, parent Entry) *LeafVariants {
+func (lv *LeafVariants) DeepCopy(os TreeOperationState, parent Entry) *LeafVariants {
 	result := &LeafVariants{
 		lesMutex:    sync.RWMutex{},
-		tc:          tc,
+		os:          os,
 		les:         make([]*LeafEntry, 0, len(lv.les)),
 		parentEntry: parent,
 	}
@@ -385,7 +385,7 @@ func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
 	}
 
 	// if highest is not new or updated and highest is non-revertive
-	if !highest.IsNew && !highest.IsUpdated && lv.tc.NonRevertiveInfo().IsNonRevertive(highest.Update.Owner(), lv.parentEntry) {
+	if !highest.IsNew && !highest.IsUpdated && lv.os.NonRevertiveInfo().IsNonRevertive(highest.Update.Owner(), lv.parentEntry) {
 		return false
 	}
 

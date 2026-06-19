@@ -177,7 +177,7 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, sy
 			if err != nil {
 				log.Error(err, "failed adding update to synctree")
 			}
-			syncTree.GetTreeContext().ExplicitDeletes().Add(consts.RunningIntentName, consts.RunningValuesPrio, noti.deletes)
+			syncTree.GetTreeContext().OperationState().ExplicitDeletes().Add(consts.RunningIntentName, consts.RunningValuesPrio, noti.deletes)
 		case <-syncResponse:
 			treeToCommit := syncTree
 			syncTree, err = s.runningStore.NewEmptyTree(s.ctx)
