@@ -14,8 +14,7 @@ import (
 // validateRange does check this condition.
 func validateRange(_ context.Context, e api.Entry, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats) {
 
-	// if no schema present or Field and LeafList Types do not contain any ranges, return there is nothing to check
-	if e.GetSchema() == nil || (len(e.GetSchema().GetField().GetType().GetRange()) == 0 && len(e.GetSchema().GetLeaflist().GetType().GetRange()) == 0) {
+	if e.GetSchema() == nil {
 		return
 	}
 
@@ -30,15 +29,20 @@ func validateRange(_ context.Context, e api.Entry, resultChan chan<- *types.Vali
 	var typeSchema *sdcpb.SchemaLeafType
 	// ranges are defined on Leafs or LeafLists.
 	switch {
-	case len(e.GetSchema().GetField().GetType().GetRange()) != 0:
-		// if it is a leaf, extract the value add it as a single value to the tvs slice and check it further down
+	case e.GetSchema().GetField() != nil:
+		// For leaf nodes, use the effective type (matched union branch if any, else outer type).
+		effectiveType, _ := effectiveFieldType(e, e.GetSchema().GetField().GetType())
+		if len(effectiveType.GetRange()) == 0 {
+			return
+		}
 		tvs = []*sdcpb.TypedValue{tv}
-		// we also need the Field/Leaf Type schema
-		typeSchema = e.GetSchema().GetField().GetType()
+		typeSchema = effectiveType
 	case len(e.GetSchema().GetLeaflist().GetType().GetRange()) != 0:
 		// if it is a leaflist, extract the values them to the tvs slice and check them further down
 		tvs = tv.GetLeaflistVal().GetElement()
 		// we also need the Field/Leaf Type schema
+		// Union member types on leaf-list entries are not modeled per element (single matchedUnionType
+		// on the enclosing Update); range for union-typed leaf-lists would need richer metadata.
 		typeSchema = e.GetSchema().GetLeaflist().GetType()
 	default:
 		// if no ranges exist return

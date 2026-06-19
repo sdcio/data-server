@@ -11,11 +11,12 @@ import (
 )
 
 type Update struct {
-	value      *sdcpb.TypedValue
-	priority   int32
-	intentName string
-	timestamp  int64
-	parent     UpdateParent
+	value            *sdcpb.TypedValue
+	priority         int32
+	intentName       string
+	timestamp        int64
+	parent           UpdateParent
+	matchedUnionType *sdcpb.SchemaLeafType
 }
 
 func NewUpdateFromSdcpbUpdate(parent UpdateParent, u *sdcpb.Update, prio int32, intent string, ts int64) *Update {
@@ -44,11 +45,12 @@ func (u *Update) DeepCopy() *Update {
 	clonedVal := proto.Clone(u.Value()).(*sdcpb.TypedValue)
 
 	return &Update{
-		value:      clonedVal,
-		priority:   u.Priority(),
-		intentName: u.intentName,
-		timestamp:  u.timestamp,
-		parent:     u.parent,
+		value:            clonedVal,
+		priority:         u.Priority(),
+		intentName:       u.intentName,
+		timestamp:        u.timestamp,
+		parent:           u.parent,
+		matchedUnionType: u.matchedUnionType,
 	}
 }
 
@@ -83,6 +85,28 @@ func (u *Update) Timestamp() int64 {
 
 func (u *Update) Value() *sdcpb.TypedValue {
 	return u.value
+}
+
+// EffectiveLeafType returns the matched union branch type if set,
+// otherwise returns the fallback (the outer schema type). Used by
+// all validators to enforce branch-specific constraints.
+func (u *Update) EffectiveLeafType(fallback *sdcpb.SchemaLeafType) *sdcpb.SchemaLeafType {
+	if u.matchedUnionType != nil {
+		return u.matchedUnionType
+	}
+	return fallback
+}
+
+// MatchedType returns the matched union branch type, or nil if not set.
+func (u *Update) MatchedType() *sdcpb.SchemaLeafType {
+	return u.matchedUnionType
+}
+
+// WithMatchedType stores the matched union branch type on the Update and
+// returns the receiver for fluent chaining.
+func (u *Update) WithMatchedType(t *sdcpb.SchemaLeafType) *Update {
+	u.matchedUnionType = t
+	return u
 }
 
 func (u *Update) ValueAsBytes() ([]byte, error) {
@@ -130,10 +154,12 @@ func ExpandAndConvertIntent(ctx context.Context, scb utils.SchemaClientBound, in
 	// temp storage for types.Update of the req. They are to be added later.
 	newCacheUpdates := make([]*PathAndUpdate, 0, len(expandedReqUpdates))
 
-	for _, u := range expandedReqUpdates {
-		upd := NewUpdate(nil, u.GetValue(), priority, intentName, ts)
-		// construct the types.Update
-		newCacheUpdates = append(newCacheUpdates, NewPathAndUpdate(u.GetPath(), upd))
+	for _, e := range expandedReqUpdates {
+		upd := NewUpdate(nil, e.Update.GetValue(), priority, intentName, ts)
+		if e.MatchedUnionType != nil {
+			upd.WithMatchedType(e.MatchedUnionType)
+		}
+		newCacheUpdates = append(newCacheUpdates, NewPathAndUpdate(e.Update.GetPath(), upd))
 	}
 	return newCacheUpdates, nil
 }

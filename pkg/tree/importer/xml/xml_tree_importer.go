@@ -81,8 +81,11 @@ func (x *XmlTreeImporterElement) GetKeyValue(ctx context.Context, slt *sdcpb.Sch
 	return tv.ToString(), nil
 }
 
-func (x *XmlTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	return sdcpb.TVFromString(slt, x.elem.Text(), 0)
+// GetTVValue parses the element text via sdcpb.TVFromStringWithType, which resolves
+// union branches recursively (RFC 7950 sec. 9.12 first-match order) and returns the
+// matched branch SchemaLeafType.
+func (x *XmlTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, *sdcpb.SchemaLeafType, error) {
+	return sdcpb.TVFromStringWithType(slt, x.elem.Text(), 0)
 }
 
 func (x *XmlTreeImporterElement) GetName() string {

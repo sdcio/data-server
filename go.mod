@@ -4,6 +4,10 @@ go 1.25.0
 
 replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.2-2
 
+// sdc-protos PR #115 (TypedValue union helpers). Remove this replace after the next sdc-protos release that includes it.
+// https://github.com/sdcio/sdc-protos/pull/115
+replace github.com/sdcio/sdc-protos => github.com/sdcio/sdc-protos v0.0.52-0.20260504101706-192d1e8e12bf
+
 require (
 	github.com/AlekSi/pointer v1.2.0
 	github.com/beevik/etree v1.6.0
