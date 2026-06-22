@@ -131,9 +131,11 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 			Encoding:   gnmiOpts.GetEncoding(),
 			TargetName: gnmiOpts.GetTargetName(),
 		}
+	case "noop":
+		// no protocol-specific options needed for the noop target
 	default:
-		log.Error(nil, "unknowm targetconnection protocol type", "type", reqTarget.GetType())
-		return nil, fmt.Errorf("unknowm targetconnection protocol type %s", reqTarget.GetType())
+		log.Error(nil, "unknown targetconnection protocol type", "type", reqTarget.GetType())
+		return nil, status.Errorf(codes.InvalidArgument, "unknown targetconnection protocol type %q", reqTarget.GetType())
 	}
 
 	if tls := reqTarget.GetTls(); tls != nil {

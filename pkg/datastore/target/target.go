@@ -60,7 +60,7 @@ func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemaC
 		if err != nil {
 			return nil, err
 		}
-	case targetTypeNOOP, "":
+	case targetTypeNOOP:
 		t, err = noop.NewNoopTarget(ctx, name)
 		if err != nil {
 			return nil, err
