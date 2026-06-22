@@ -1,0 +1,8 @@
+# https://golangci-lint.run/docs/configuration/file/
+version: "2"
+
+linters:
+  exclusions:
+    paths:
+      # ygot-generated schema (see file header); do not lint.
+      - tests/sdcioygot/sdcio_schema.go

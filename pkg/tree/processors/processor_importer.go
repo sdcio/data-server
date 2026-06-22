@@ -84,7 +84,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 		// keyed container: handle keys sequentially
 		if len(task.entry.GetSchema().GetContainer().GetKeys()) > 0 {
 			var exists bool
-			var actual api.Entry = task.entry
+			actual := task.entry
 			var keyChild api.Entry
 
 			keys := task.entry.GetSchema().GetContainer().GetKeys()

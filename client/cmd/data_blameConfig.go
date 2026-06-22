@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/spf13/cobra"
@@ -43,7 +42,7 @@ var dataBlameConfig = &cobra.Command{
 			}
 			b, err := opts.Marshal(rsp.ConfigTree)
 			if err != nil {
-				fmt.Fprintf(os.Stdout, "%v", err)
+				return err
 			}
 			fmt.Println(string(b))
 		}

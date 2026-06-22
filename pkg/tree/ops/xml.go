@@ -149,7 +149,7 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 					return false, nil
 				}
 				le := e.GetLeafVariants().GetHighestPrecedence(false, false, false)
-				if le == nil || onlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
+				if le == nil || onlyNewOrUpdated && !le.IsNew && !le.IsUpdated {
 					return false, nil
 				}
 			}
@@ -290,7 +290,7 @@ func xmlAddKeyElements(s api.Entry, parent *etree.Element) {
 	//issue #364: sort the slice
 	sort.Strings(schemaKeys)
 
-	var treeElem api.Entry = s
+	treeElem := s
 	// the keys do match the levels up in the tree in reverse order
 	// hence we init i with levelUp and count down
 	for i := levelsUp - 1; i >= 0; i-- {

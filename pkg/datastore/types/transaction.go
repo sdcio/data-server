@@ -63,7 +63,7 @@ func (t *Transaction) Confirm() error {
 
 func (t *Transaction) rollback(ctx context.Context) func() {
 	return func() {
-		t.transactionManager.Rollback(ctx, t.GetRollbackTransaction())
+		_ = t.transactionManager.Rollback(ctx, t.GetRollbackTransaction())
 	}
 }
 
@@ -94,7 +94,7 @@ func (t *Transaction) GetRollbackTransaction() *Transaction {
 	t.timer.Stop()
 	tr := NewTransaction(t.GetTransactionId()+" - Rollback", t.transactionManager)
 	for _, v := range t.oldIntents {
-		tr.AddTransactionIntent(v, TransactionIntentNew)
+		_ = tr.AddTransactionIntent(v, TransactionIntentNew)
 	}
 	tr.isRollback = true
 	return tr

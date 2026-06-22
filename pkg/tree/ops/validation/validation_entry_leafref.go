@@ -23,7 +23,7 @@ func breadthSearch(ctx context.Context, e api.Entry, sdcpbPath *sdcpb.Path) ([]a
 	if sdcpbPath.GetIsRootBased() {
 		processEntries = []api.Entry{ops.GetRoot(e)}
 	} else {
-		var entry api.Entry = e
+		entry := e
 		dotdotcount := 0
 		sdcpbUp := []*sdcpb.PathElem{}
 		// process the .. instructions

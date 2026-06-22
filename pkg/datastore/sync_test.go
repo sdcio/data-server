@@ -80,7 +80,9 @@ func TestApplyToRunning(t *testing.T) {
 				}
 
 				var v any
-				json.Unmarshal([]byte(confStr), &v)
+				if err := json.Unmarshal([]byte(confStr), &v); err != nil {
+					t.Fatalf("unmarshal test config: %v", err)
+				}
 
 				vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 				_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, consts.RunningIntentName, consts.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
@@ -109,7 +111,9 @@ func TestApplyToRunning(t *testing.T) {
 				}
 
 				var v any
-				json.Unmarshal([]byte(confStr), &v)
+				if err := json.Unmarshal([]byte(confStr), &v); err != nil {
+					t.Fatalf("unmarshal test config: %v", err)
+				}
 
 				return jsonImporter.NewJsonTreeImporter(v, consts.RunningIntentName, consts.RunningValuesPrio, false)
 			},
@@ -131,7 +135,9 @@ func TestApplyToRunning(t *testing.T) {
 				}
 
 				var v any
-				json.Unmarshal([]byte(confStr), &v)
+				if err := json.Unmarshal([]byte(confStr), &v); err != nil {
+					t.Fatalf("unmarshal test config: %v", err)
+				}
 				return v
 			},
 			wantErr: false,
@@ -186,7 +192,9 @@ func TestApplyToRunning(t *testing.T) {
 				}
 
 				var v any
-				json.Unmarshal([]byte(confStr), &v)
+				if err := json.Unmarshal([]byte(confStr), &v); err != nil {
+					t.Fatalf("unmarshal test config: %v", err)
+				}
 
 				vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 				_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, consts.RunningIntentName, consts.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
@@ -214,7 +222,9 @@ func TestApplyToRunning(t *testing.T) {
 				}
 
 				var v any
-				json.Unmarshal([]byte(confStr), &v)
+				if err := json.Unmarshal([]byte(confStr), &v); err != nil {
+					t.Fatalf("unmarshal test config: %v", err)
+				}
 
 				return jsonImporter.NewJsonTreeImporter(v, consts.RunningIntentName, consts.RunningValuesPrio, false)
 			},
@@ -235,7 +245,9 @@ func TestApplyToRunning(t *testing.T) {
 				}
 
 				var v any
-				json.Unmarshal([]byte(confStr), &v)
+				if err := json.Unmarshal([]byte(confStr), &v); err != nil {
+					t.Fatalf("unmarshal test config: %v", err)
+				}
 				return v
 			},
 			wantErr: false,
@@ -290,7 +302,9 @@ func TestApplyToRunning(t *testing.T) {
 				}
 
 				var v any
-				json.Unmarshal([]byte(confStr), &v)
+				if err := json.Unmarshal([]byte(confStr), &v); err != nil {
+					t.Fatalf("unmarshal test config: %v", err)
+				}
 
 				vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 				_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, consts.RunningIntentName, consts.RunningValuesPrio, false), types.NewUpdateInsertFlags(), vpf)
@@ -319,7 +333,9 @@ func TestApplyToRunning(t *testing.T) {
 				}
 
 				var v any
-				json.Unmarshal([]byte(confStr), &v)
+				if err := json.Unmarshal([]byte(confStr), &v); err != nil {
+					t.Fatalf("unmarshal test config: %v", err)
+				}
 
 				return jsonImporter.NewJsonTreeImporter(v, consts.RunningIntentName, consts.RunningValuesPrio, false)
 			},
@@ -341,7 +357,9 @@ func TestApplyToRunning(t *testing.T) {
 				}
 
 				var v any
-				json.Unmarshal([]byte(confStr), &v)
+				if err := json.Unmarshal([]byte(confStr), &v); err != nil {
+					t.Fatalf("unmarshal test config: %v", err)
+				}
 				return v
 			},
 			wantErr: false,

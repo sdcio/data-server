@@ -43,7 +43,7 @@ func validateMinMaxElements(_ context.Context, e api.Entry, resultChan chan<- *t
 		if keyAttr, ok := childAttributes[keyName]; ok {
 			highestPrec := ops.GetHighestPrecedence(keyAttr, false, false, false)
 			if len(highestPrec) > 0 {
-				owner := highestPrec[0].Update.Owner()
+				owner := highestPrec[0].Owner()
 				ownersSet[owner] = struct{}{}
 			}
 		}
@@ -72,7 +72,7 @@ func validateLeafListMinMaxAttributes(_ context.Context, e api.Entry, resultChan
 	if schema := e.GetSchema().GetLeaflist(); schema != nil {
 		if schema.GetMinElements() > 0 || schema.GetMaxElements() < math.MaxUint64 {
 			if lv := e.GetLeafVariants().GetHighestPrecedence(false, true, false); lv != nil {
-				tv := lv.Update.Value()
+				tv := lv.Value()
 
 				if val := tv.GetLeaflistVal(); val != nil {
 					// check minelements if set

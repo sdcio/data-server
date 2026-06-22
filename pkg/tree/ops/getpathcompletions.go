@@ -170,7 +170,7 @@ func completePathName(ctx context.Context, entry api.Entry, toCompletePath *sdcp
 		if len(GetSchemaKeys(e)) > 0 {
 			results = append(results, fmt.Sprintf("%s[%s=", sdcpbPath.ToXPath(false), GetSchemaKeys(e)[0]))
 		}
-		results = append(results, fmt.Sprintf("%s", sdcpbPath.ToXPath(false)))
+		results = append(results, sdcpbPath.ToXPath(false))
 	}
 	sort.Strings(results)
 	return results

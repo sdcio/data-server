@@ -263,7 +263,12 @@ func (s *StreamSync) gnmiSubscribe(subReq *gnmi.SubscribeRequest, updChan chan<-
 				}
 
 			case *gnmi.SubscribeResponse_Error:
-				log.Error(nil, "gnmi subscription error", "error", r.Error.Message)
+				subscribeErr := r.Error //nolint:staticcheck // gnmi SubscribeResponse_Error deprecated upstream without replacement.
+				msg := ""
+				if subscribeErr != nil {
+					msg = subscribeErr.GetMessage()
+				}
+				log.Error(nil, "gnmi subscription error", "error", msg)
 			}
 		}
 	}

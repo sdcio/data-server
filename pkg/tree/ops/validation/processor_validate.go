@@ -21,7 +21,7 @@ func NewValidateProcessor(parameters *ValidateProcessorParameters) *ValidateProc
 
 func (p *ValidateProcessor) Run(taskpoolFactory pool.VirtualPoolFactory, e api.Entry) {
 	taskpool := taskpoolFactory.NewVirtualPool(pool.VirtualTolerant)
-	taskpool.Submit(newValidateTask(e, p.parameters))
+	_ = taskpool.Submit(newValidateTask(e, p.parameters))
 	taskpool.CloseAndWait()
 }
 
@@ -60,7 +60,7 @@ func (t *validateTask) Run(ctx context.Context, submit func(pool.Task) error) er
 		validateLevel(ctx, t.e, t.parameters.resultChan, t.parameters.stats, t.parameters.validators)
 
 		for _, c := range t.e.GetChilds(types.DescendMethodActiveChilds) {
-			submit(newValidateTask(c, t.parameters))
+			_ = submit(newValidateTask(c, t.parameters))
 		}
 	}
 	return nil

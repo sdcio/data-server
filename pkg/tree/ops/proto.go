@@ -8,8 +8,7 @@ import (
 )
 
 func ToProtoUpdates(ctx context.Context, e api.Entry, onlyNewOrUpdated bool) ([]*sdcpb.Update, error) {
-	result := api.LeafVariantSlice{}
-	result = GetHighestPrecedence(e, onlyNewOrUpdated, false, true)
+	result := GetHighestPrecedence(e, onlyNewOrUpdated, false, true)
 	return result.ToSdcpbUpdateSlice(), nil
 }
 

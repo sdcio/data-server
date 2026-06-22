@@ -131,7 +131,7 @@ func (t *ncTarget) internalGet(ctx context.Context, req *sdcpb.GetDataRequest) (
 	ncResponse, err := t.driver.GetConfig(source, filterDoc)
 	if err != nil {
 		if strings.Contains(err.Error(), "EOF") {
-			t.Close(ctx)
+			_ = t.Close(ctx)
 			go t.reconnect(ctx)
 		}
 		return nil, err
@@ -262,7 +262,7 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 	if err != nil {
 		log.Error(err, "failed during edit-config")
 		if strings.Contains(err.Error(), "EOF") {
-			t.Close(ctx)
+			_ = t.Close(ctx)
 			go t.reconnect(ctx)
 			return nil, err
 		}
@@ -289,7 +289,7 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 		err = t.driver.Commit()
 		if err != nil {
 			if strings.Contains(err.Error(), "EOF") {
-				t.Close(ctx)
+				_ = t.Close(ctx)
 				go t.reconnect(ctx)
 			}
 			return nil, err

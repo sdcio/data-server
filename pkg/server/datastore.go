@@ -25,7 +25,6 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore"
 	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/utils"
-	"github.com/sdcio/logger"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc/codes"
@@ -78,8 +77,6 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 	log = log.WithValues(
 		"datastore-name", req.GetDatastoreName(),
 	)
-	ctx = logf.IntoContext(ctx, log)
-
 	log.Info("creating datastore",
 		"datastore-schema", req.GetSchema(),
 		"datastore-target", req.GetTarget(),
@@ -287,7 +284,7 @@ func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.
 
 	// add datastore name to log
 	log = log.WithValues("datastore-name", req.GetName()[0])
-	logger.IntoContext(ctx, log)
+	logf.IntoContext(ctx, log)
 
 	err = ds.WatchDeviations(req, stream)
 	if err != nil {

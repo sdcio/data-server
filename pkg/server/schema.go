@@ -100,9 +100,7 @@ func (s *Server) createLocalSchemaStore(ctx context.Context) {
 func (s *Server) createRemoteSchemaClient(ctx context.Context) {
 	log := logf.FromContext(ctx)
 SCHEMA_CONNECT:
-	opts := []grpc.DialOption{
-		grpc.WithBlock(),
-	}
+	opts := []grpc.DialOption{}
 	switch s.config.SchemaServer.TLS {
 	case nil:
 		opts = append(opts,
