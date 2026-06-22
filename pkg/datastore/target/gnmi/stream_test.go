@@ -144,7 +144,11 @@ func TestBuildTreeSyncWithDatastore_PostSyncNotificationsNotDropped(t *testing.T
 	if err := ss.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	defer ss.Stop()
+	defer func() {
+		if err := ss.Stop(); err != nil {
+			t.Errorf("Stop: %v", err)
+		}
+	}()
 
 	// Initial sync: one notification + SyncResponse.
 	respChan <- interfaceDescriptionNotif("ethernet-1/1", "pre-sync")
@@ -223,7 +227,11 @@ func TestBuildTreeSyncWithDatastore_NewEmptyTreeFailureExits(t *testing.T) {
 	if err := ss.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	defer ss.Stop()
+	defer func() {
+		if err := ss.Stop(); err != nil {
+			t.Errorf("Stop: %v", err)
+		}
+	}()
 
 	// Close the inner firstUnblock immediately so the first ApplyToRunning
 	// does not stall; we just want NewEmptyTree to fail on the second call.
