@@ -40,6 +40,7 @@ type Validators struct {
 	Length                  bool `yaml:"length,omitempty" json:"length,omitempty"`
 	Range                   bool `yaml:"range,omitempty" json:"range,omitempty"`
 	MaxElements             bool `yaml:"max-elements,omitempty" json:"max-elements,omitempty"`
+	Unique                  bool `yaml:"unique,omitempty" json:"unique,omitempty"`
 }
 
 func (v *Validators) DisableAll() *Validators {
@@ -51,6 +52,7 @@ func (v *Validators) DisableAll() *Validators {
 	v.MustStatement = true
 	v.Pattern = true
 	v.Range = true
+	v.Unique = true
 	return v
 }
 
@@ -64,5 +66,6 @@ func (v *Validators) DeepCopy() *Validators {
 		Length:                  v.Length,
 		Range:                   v.Range,
 		MaxElements:             v.MaxElements,
+		Unique:                  v.Unique,
 	}
 }

@@ -201,3 +201,4 @@ validation-defaults:
     length: false
     range: false
     max-elements: false # Not yet implemented
+    unique: false
