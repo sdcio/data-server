@@ -1,8 +1,14 @@
 package ops
 
-import "github.com/sdcio/data-server/pkg/tree/api"
+import (
+	"slices"
+	"sort"
 
-// GetSchemaKeys checks for the schema of the entry, and returns the defined keys
+	"github.com/sdcio/data-server/pkg/tree/api"
+)
+
+// GetSchemaKeys returns list key leaf names in YANG schema declaration order
+// (the order of the bound schema's `key` statement).
 func GetSchemaKeys(e api.Entry) []string {
 	if e.GetSchema() != nil {
 		// if the schema is a container schema, we need to process the aggregation logic
@@ -17,4 +23,16 @@ func GetSchemaKeys(e api.Entry) []string {
 		}
 	}
 	return nil
+}
+
+// GetSchemaKeysAlphabeticalOrder returns list key leaf names sorted alphabetically,
+// matching tree key level order.
+func GetSchemaKeysAlphabeticalOrder(e api.Entry) []string {
+	keys := GetSchemaKeys(e)
+	if len(keys) == 0 {
+		return nil
+	}
+	keys = slices.Clone(keys)
+	sort.Strings(keys)
+	return keys
 }

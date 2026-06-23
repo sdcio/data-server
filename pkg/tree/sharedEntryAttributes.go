@@ -649,13 +649,9 @@ func (s *sharedEntryAttributes) SdcpbPath() *sdcpb.Path {
 		// 3. Add the key-value pair to the parent's last path element
 
 		parentSchema, levelsUp := ops.GetFirstAncestorWithSchema(s)
-		// Get the list of keys defined in the parent schema.
-		schemaKeys := ops.GetSchemaKeys(parentSchema)
-		// Sort keys to match the tree's insertion order (consistent with how keys are organized in levels)
-		slices.Sort(schemaKeys)
-		// Select the key name based on how many levels up the schema is.
-		// If levelsUp=1, we're one level below the schema, so we use schemaKeys[0], etc.
-		keyName := schemaKeys[levelsUp-1]
+		alphaKeys := ops.GetSchemaKeysAlphabeticalOrder(parentSchema)
+		// If levelsUp=1, we're one level below the schema, so we use alphaKeys[0], etc.
+		keyName := alphaKeys[levelsUp-1]
 		// Set this entry's name as the value for the selected key in the parent's last element
 		newElems[len(newElems)-1].Key[keyName] = s.pathElemName
 

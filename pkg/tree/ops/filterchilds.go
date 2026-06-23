@@ -2,7 +2,6 @@ package ops
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -16,9 +15,8 @@ func FilterChilds(s api.Entry, keys map[string]string) ([]api.Entry, error) {
 		return nil, fmt.Errorf("error non schema level %s", s.SdcpbPath().ToXPath(false))
 	}
 
-	// Retrieve and sort schema keys to maintain insertion order
-	schemaKeys := GetSchemaKeys(s)
-	sort.Strings(schemaKeys)
+	// Walk key levels in tree order (alphabetical by key name).
+	schemaKeys := GetSchemaKeysAlphabeticalOrder(s)
 
 	// Start with the root entry
 	currentEntries := []api.Entry{s}

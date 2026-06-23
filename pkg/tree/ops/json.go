@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"sort"
 
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -149,8 +148,7 @@ func jsonGetIetfPrefixConditional(key string, a api.Entry, b api.Entry, ietf boo
 func jsonAddKeyElements(s api.Entry, dict map[string]any) {
 	parentSchema, levelsUp := GetFirstAncestorWithSchema(s)
 
-	alphaKeys := slices.Clone(GetSchemaKeys(parentSchema))
-	sort.Strings(alphaKeys) // matches the alphabetical tree level order
+	alphaKeys := GetSchemaKeysAlphabeticalOrder(parentSchema)
 
 	treeElem := s
 	for i := levelsUp - 1; i >= 0; i-- {

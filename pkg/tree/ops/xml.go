@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"sort"
 
 	"github.com/beevik/etree"
 	"github.com/sdcio/data-server/pkg/tree/api"
@@ -289,9 +288,8 @@ func xmlAddNamespaceConditional(a api.Entry, b api.Entry, elem *etree.Element, h
 func xmlAddKeyElements(s api.Entry, parent *etree.Element) {
 	parentSchema, levelsUp := GetFirstAncestorWithSchema(s)
 
-	schemaKeys := GetSchemaKeys(parentSchema) // YANG definition order
-	alphaKeys := slices.Clone(schemaKeys)
-	sort.Strings(alphaKeys) // matches the alphabetical tree level order
+	schemaKeys := GetSchemaKeys(parentSchema)
+	alphaKeys := GetSchemaKeysAlphabeticalOrder(parentSchema)
 
 	// Walk up the tree, pairing each level with its correct key name.
 	keyValues := make(map[string]string, levelsUp)
