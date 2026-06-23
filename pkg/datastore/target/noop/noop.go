@@ -16,7 +16,6 @@ package noop
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	logf "github.com/sdcio/logger"
@@ -38,14 +37,7 @@ func NewNoopTarget(_ context.Context, name string) (*noopTarget, error) {
 }
 
 func (t *noopTarget) AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) error {
-	log := logf.FromContext(ctx)
-	for _, sp := range sps {
-		jConf, err := json.Marshal(sp)
-		if err != nil {
-			return err
-		}
-		log.Info("Sync added", "Config", jConf)
-	}
+	logf.FromContext(ctx).V(1).Info("AddSyncs: discarding sync config (noop target)", "count", len(sps))
 	return nil
 }
 
