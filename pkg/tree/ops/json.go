@@ -140,23 +140,21 @@ func jsonGetIetfPrefixConditional(key string, a api.Entry, b api.Entry, ietf boo
 	return fmt.Sprintf("%s:%s", aModule, key)
 }
 
-// xmlAddKeyElements determines the keys of a certain Entry in the tree and adds those to the
-// element if they do not already exist.
+// jsonAddKeyElements adds the list key/value pairs for entry s to dict.
+//
+// Tree key levels are ordered alphabetically by key name, so we pair each level
+// with the sorted key names to keep values matched to the right key. JSON member
+// order is insignificant (RFC 7951), so no schema-order emission is needed.
 func jsonAddKeyElements(s api.Entry, dict map[string]any) {
-	// retrieve the parent schema, we need to extract the key names
-	// values are the tree level names
 	parentSchema, levelsUp := GetFirstAncestorWithSchema(s)
-	// from the parent we get the keys as slice
-	schemaKeys := GetSchemaKeys(parentSchema)
+
+	alphaKeys := GetSchemaKeysAlphabeticalOrder(parentSchema)
+
 	treeElem := s
-	// the keys do match the levels up in the tree in reverse order
-	// hence we init i with levelUp and count down
 	for i := levelsUp - 1; i >= 0; i-- {
-		// skip if the element already exists
-		if _, exists := dict[schemaKeys[i]]; !exists {
-			// and finally we create the patheleme key attributes
-			dict[schemaKeys[i]] = treeElem.PathName()
-			treeElem = treeElem.GetParent()
+		if _, exists := dict[alphaKeys[i]]; !exists {
+			dict[alphaKeys[i]] = treeElem.PathName()
 		}
+		treeElem = treeElem.GetParent()
 	}
 }

@@ -79,7 +79,7 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 	// set KeyName for list element key levels
 	if t.selfEntry.GetSchema() == nil {
 		ancestorSchema, levelsUp := ops.GetFirstAncestorWithSchema(t.selfEntry)
-		keys := ops.GetSchemaKeys(ancestorSchema)
+		keys := ops.GetSchemaKeysAlphabeticalOrder(ancestorSchema)
 		if len(keys) > 0 && levelsUp >= len(keys) {
 			t.self.KeyName = keys[levelsUp-1]
 		}
