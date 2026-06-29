@@ -28,6 +28,7 @@ import (
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/sdc-protos/tree_persist"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -51,6 +52,14 @@ func newTestServer(t *testing.T) *Server {
 	mockCC.EXPECT().
 		InstanceExists(gomock.Any(), gomock.Any()).
 		Return(true).
+		AnyTimes()
+	// populateSensitivePathIndex streams all intents at datastore startup.
+	mockCC.EXPECT().
+		InstanceIntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+			close(intentChan)
+			close(errChan)
+		}).
 		AnyTimes()
 
 	ctx, cancel := context.WithCancel(context.Background())
