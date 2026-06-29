@@ -67,19 +67,6 @@ func collectDeviations(t *testing.T, entry api.Entry, params *ops.GetDeviationPa
 	return result
 }
 
-// setupLeafMock wires a MockEntry to behave as a single leaf node (no children)
-// with the given schema and leaf variants.
-func setupLeafMock(ctrl *gomock.Controller, schema *sdcpb.SchemaElem, tc api.TreeContext, lv *api.LeafVariants) *mockTreeEntry.MockEntry {
-	e := mockTreeEntry.NewMockEntry(ctrl)
-	path := &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "test-leaf"}}, IsRootBased: true}
-	e.EXPECT().SdcpbPath().Return(path).AnyTimes()
-	e.EXPECT().GetSchema().Return(schema).AnyTimes()
-	e.EXPECT().GetChilds(types.DescendMethodActiveChilds).Return(api.EntryMap{}).AnyTimes()
-	e.EXPECT().GetChildMap().Return(api.NewChildMap()).AnyTimes()
-	e.EXPECT().GetLeafVariants().Return(lv).AnyTimes()
-	return e
-}
-
 // TestGetDeviations_SchemaSensitiveRedacted is the tracer bullet.
 // IncludeSensitive=false must replace both expected and current values with "***"
 // when the leaf's schema marks it sensitive.
