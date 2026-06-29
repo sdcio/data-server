@@ -88,7 +88,7 @@ func toJsonInternal(ctx context.Context, e api.Entry, opts RenderOpts, ietf bool
 					return nil, nil
 				}
 				le := e.GetLeafVariants().GetHighestPrecedence(false, false, false)
-			if le == nil || opts.OnlyNewOrUpdated && !(le.IsNew || le.IsUpdated) {
+				if le == nil || opts.OnlyNewOrUpdated && !le.IsNew && !le.IsUpdated {
 					return nil, nil
 				}
 			}
