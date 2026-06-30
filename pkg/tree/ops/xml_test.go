@@ -777,7 +777,7 @@ func TestToXML_ImporterPreservesMultiKeyOrder(t *testing.T) {
 	if iOwner == -1 || iPrefix == -1 || iNextHop == -1 {
 		t.Fatalf("expected all three key elements in output, got:\n%s", xmlDocStr)
 	}
-	if !(iOwner < iPrefix && iPrefix < iNextHop) {
+	if iOwner >= iPrefix || iPrefix >= iNextHop {
 		t.Fatalf("list keys not in YANG definition order (want owner < ipv6-prefix < next-hop), got:\n%s", xmlDocStr)
 	}
 }
