@@ -87,7 +87,11 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			actual := task.entry
 			var keyChild api.Entry
 
-			keys := task.entry.GetSchema().GetContainer().GetKeys()
+			// Clone before sorting: GetKeys() returns the underlying slice of the
+			// shared/cached schema. Sorting it in place would mutate the schema's
+			// key order (to alphabetical) for every later reader, e.g. ToXML/ToJson,
+			// which must emit list keys in YANG `key` definition order.
+			keys := slices.Clone(task.entry.GetSchema().GetContainer().GetKeys())
 
 			slices.SortFunc(keys, func(a *sdcpb.LeafSchema, b *sdcpb.LeafSchema) int {
 				return strings.Compare(a.GetName(), b.GetName())

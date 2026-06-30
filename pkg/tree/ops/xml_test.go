@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -13,6 +14,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/consts"
+	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -709,6 +711,74 @@ func TestToXML_KeyLeafDeleteUpgradesToListEntryDelete(t *testing.T) {
 `
 	if diff := cmp.Diff(want, xmlDocStr); diff != "" {
 		t.Fatalf("ToXML() mismatch (-want +got)\n%s", diff)
+	}
+}
+
+// TestToXML_ImporterPreservesMultiKeyOrder is a regression test for a bug where
+// the config importer sorted a list's key leaves in place on the slice returned
+// by GetContainer().GetKeys(). That slice is backed by the shared/cached schema,
+// so sorting it alphabetically permanently reordered the schema's keys. Every
+// later ToXML/ToJson then emitted list keys in alphabetical order instead of the
+// YANG `key` definition order, which NETCONF requires (RFC 7950 §7.8.5).
+func TestToXML_ImporterPreservesMultiKeyOrder(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	jsonConfAny := map[string]any{
+		"sdcio_model:ipv6": map[string]any{
+			"static-route": []any{
+				map[string]any{
+					"owner":       "owner-up",
+					"ipv6-prefix": "prefix-default",
+					"next-hop":    "nexthop-1",
+					"bfd-enabled": true,
+				},
+			},
+		},
+	}
+
+	vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, "intent1", 500, false), testhelper.FlagsNew, vpf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = root.FinishInsertionPhase(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	xmlDoc, err := ops.ToXML(ctx, root.Entry, false, false, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	xmlDoc.Indent(2)
+	xmlDocStr, err := xmlDoc.WriteToString()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Keys must appear in YANG definition order: owner, ipv6-prefix, next-hop.
+	iOwner := strings.Index(xmlDocStr, "<owner>")
+	iPrefix := strings.Index(xmlDocStr, "<ipv6-prefix>")
+	iNextHop := strings.Index(xmlDocStr, "<next-hop>")
+	if iOwner == -1 || iPrefix == -1 || iNextHop == -1 {
+		t.Fatalf("expected all three key elements in output, got:\n%s", xmlDocStr)
+	}
+	if iOwner >= iPrefix || iPrefix >= iNextHop {
+		t.Fatalf("list keys not in YANG definition order (want owner < ipv6-prefix < next-hop), got:\n%s", xmlDocStr)
 	}
 }
 
