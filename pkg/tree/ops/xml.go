@@ -13,20 +13,20 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-// ToXML yields the xml representation of the tree. Either updates only (onlyNewOrUpdated flag) or the actual view on the whole tree.
-// If honorNamespace is set, the xml elements will carry their respective namespace attributes.
-// If operationWithNamespace is set, the operation attributes added to the to be deleted alements will also carry the Netconf Base namespace.
-// If useOperationRemove is set, the remove operation will be used for deletes, instead of the delete operation.
-func ToXML(ctx context.Context, e api.Entry, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove bool) (*etree.Document, error) {
+// ToXML yields the xml representation of the tree. Either updates only (OnlyNewOrUpdated flag) or the actual view on the whole tree.
+// If HonorNamespace is set, the xml elements will carry their respective namespace attributes.
+// If OperationWithNamespace is set, the operation attributes added to the to be deleted elements will also carry the Netconf Base namespace.
+// If UseOperationRemove is set, the remove operation will be used for deletes, instead of the delete operation.
+func ToXML(ctx context.Context, e api.Entry, opts XMLRenderOpts) (*etree.Document, error) {
 	doc := etree.NewDocument()
-	_, err := toXmlInternal(ctx, e, &doc.Element, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+	_, err := toXmlInternal(ctx, e, &doc.Element, opts)
 	if err != nil {
 		return nil, err
 	}
 	return doc, nil
 }
 
-func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (doAdd bool, err error) {
+func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, opts XMLRenderOpts) (doAdd bool, err error) {
 
 	switch e.GetSchema().GetSchema().(type) {
 	case nil:
@@ -34,7 +34,7 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 		if e.ShouldDelete() {
 			// If the element is to be deleted
 			// add the delete operation to the parent element
-			utils.AddXMLOperation(parent, utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
+			utils.AddXMLOperation(parent, utils.XMLOperationDelete, opts.OperationWithNamespace, opts.UseOperationRemove)
 			// retrieve the parent schema, we need to extract the key names
 			// values are the tree level names
 			xmlAddKeyElements(e, parent)
@@ -77,7 +77,7 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 		for _, k := range keys {
 			// recurse the call
 			// no additional element is created, since we're on a key level, so add to parent element
-			doAdd, err := toXmlInternal(ctx, childs[k], parent, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+			doAdd, err := toXmlInternal(ctx, childs[k], parent, opts)
 			if err != nil {
 				return false, err
 			}
@@ -106,9 +106,9 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 				// create the element for the child, that in the recursed call will appear as parent
 				newElem := etree.NewElement(e.PathName())
 				// process the honorNamespace instruction
-				xmlAddNamespaceConditional(e, e.GetParent(), newElem, honorNamespace)
+				xmlAddNamespaceConditional(e, e.GetParent(), newElem, opts.HonorNamespace)
 				// recurse the call
-				doAdd, err := toXmlInternal(ctx, child, newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+				doAdd, err := toXmlInternal(ctx, child, newElem, opts)
 				if err != nil {
 					return false, err
 				}
@@ -119,7 +119,7 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 					replaceAttr := newElem.SelectAttr("nc:operation")
 					if replaceAttr != nil && replaceAttr.Value == string(utils.XMLOperationReplace) {
 						// If we are replacing, we need to have all child values added to the xml tree else they will be removed from the device
-						err := xmlAddAllChildValues(ctx, child, newElem, honorNamespace, operationWithNamespace, useOperationRemove)
+						err := xmlAddAllChildValues(ctx, child, newElem, opts)
 						if err != nil {
 							return false, err
 						}
@@ -136,25 +136,25 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 			// if delete, create the element as child of parent
 			newElem := parent.CreateElement(e.PathName())
 			// add namespace if we create doc with namespace and the actual namespace differs from the parent namespace
-			xmlAddNamespaceConditional(e, e.GetParent(), newElem, honorNamespace)
+			xmlAddNamespaceConditional(e, e.GetParent(), newElem, opts.HonorNamespace)
 			// add the delete / remove operation
-			utils.AddXMLOperation(newElem, utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
+			utils.AddXMLOperation(newElem, utils.XMLOperationDelete, opts.OperationWithNamespace, opts.UseOperationRemove)
 			return true, nil
 		case e.GetSchema().GetContainer().IsPresence && ContainsOnlyDefaults(e):
 			// process presence containers with no childs
-			if onlyNewOrUpdated {
+			if opts.OnlyNewOrUpdated {
 				// presence containers have leafvariantes with typedValue_Empty, so check that
 				if e.GetLeafVariants().ShouldDelete() {
 					return false, nil
 				}
 				le := e.GetLeafVariants().GetHighestPrecedence(false, false, false)
-				if le == nil || onlyNewOrUpdated && !le.IsNew && !le.IsUpdated {
+				if le == nil || opts.OnlyNewOrUpdated && !le.IsNew && !le.IsUpdated {
 					return false, nil
 				}
 			}
 			newElem := parent.CreateElement(e.PathName())
 			// process the honorNamespace instruction
-			xmlAddNamespaceConditional(e, e.GetParent(), newElem, honorNamespace)
+			xmlAddNamespaceConditional(e, e.GetParent(), newElem, opts.HonorNamespace)
 			return true, nil
 
 		default:
@@ -180,7 +180,7 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 				if e.GetParent() != nil {
 					// only if not the root level, we can check if parent namespace != actual elements namespace
 					// so if we need to add namespaces, check if they are equal, if not add the namespace attribute
-					xmlAddNamespaceConditional(e, e.GetParent(), newElem, honorNamespace)
+					xmlAddNamespaceConditional(e, e.GetParent(), newElem, opts.HonorNamespace)
 				} else {
 					// if this is the root node, we take the given element from the parent parameter as p
 					// avoiding wrongly adding an additional level in the xml doc.
@@ -192,7 +192,7 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 					return false, fmt.Errorf("child %s does not exist for %s", k, e.SdcpbPath().ToXPath(false))
 				}
 				// TODO: Do we also need to xmlAddAllChildValues here too?
-				doAdd, err := toXmlInternal(ctx, child, newElem, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+				doAdd, err := toXmlInternal(ctx, child, newElem, opts)
 				if err != nil {
 					return false, err
 				}
@@ -216,13 +216,13 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 				ancestorWithSchema, _ := GetFirstAncestorWithSchema(e.GetParent())
 				if ancestorWithSchema != nil && slices.Contains(GetSchemaKeys(ancestorWithSchema), e.PathName()) {
 					// Key leaf deletions should delete the list entry identified by key value.
-					utils.AddXMLOperation(parent, utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
+					utils.AddXMLOperation(parent, utils.XMLOperationDelete, opts.OperationWithNamespace, opts.UseOperationRemove)
 					xmlAddKeyElements(e.GetParent(), parent)
 					return true, nil
 				}
 			}
 			// if not, add the remove / delete op
-			utils.AddXMLOperation(parent.CreateElement(e.PathName()), utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
+			utils.AddXMLOperation(parent.CreateElement(e.PathName()), utils.XMLOperationDelete, opts.OperationWithNamespace, opts.UseOperationRemove)
 			// see case nil for an explanation of this, it is basically the same
 			if e.GetParent().GetSchema() == nil {
 				xmlAddKeyElements(e.GetParent(), parent)
@@ -230,18 +230,22 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 			return true, nil
 		}
 		// if the Field or Leaflist remains to exist
-		// get highes Precedence value
-		le := e.GetLeafVariants().GetHighestPrecedence(onlyNewOrUpdated, false, false)
+		// get highest precedence value
+		le := e.GetLeafVariants().GetHighestPrecedence(opts.OnlyNewOrUpdated, false, false)
 		if le == nil {
 			return false, nil
 		}
 		ns := ""
 		// process the namespace attribute
-		if e.GetParent() == nil || (honorNamespace && !namespaceIsEqual(e, e.GetParent())) {
+		if e.GetParent() == nil || (opts.HonorNamespace && !namespaceIsEqual(e, e.GetParent())) {
 			ns = utils.GetNamespaceFromGetSchema(e.GetSchema())
 		}
+		value := le.Value()
+		if ShouldRedact(e, opts.IncludeSensitive, opts.SensitivePathSet) {
+			value = types.RedactedTypedValue
+		}
 		// convert value to XML and add to parent
-		utils.TypedValueToXML(parent, le.Value(), e.PathName(), ns, onlyNewOrUpdated, operationWithNamespace, useOperationRemove)
+		utils.TypedValueToXML(parent, value, e.PathName(), ns, opts.OnlyNewOrUpdated, opts.OperationWithNamespace, opts.UseOperationRemove)
 		return true, nil
 	}
 	return false, fmt.Errorf("unable to convert to xml (%s)", e.SdcpbPath().ToXPath(false))
@@ -311,9 +315,16 @@ func xmlAddKeyElements(s api.Entry, parent *etree.Element) {
 	}
 }
 
-func xmlAddAllChildValues(ctx context.Context, s api.Entry, parent *etree.Element, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) error {
+func xmlAddAllChildValues(ctx context.Context, s api.Entry, parent *etree.Element, opts XMLRenderOpts) error {
 	parent.Child = make([]etree.Token, 0)
-	_, err := toXmlInternal(ctx, s, parent, false, honorNamespace, operationWithNamespace, useOperationRemove)
+	// NETCONF replace semantics: the device replaces the entire list entry with exactly what is
+	// sent. If only changed children were included (OnlyNewOrUpdated=true), the device would
+	// treat the absent children as deletions. Override to false so every child is emitted,
+	// regardless of whether it changed. All other opts (namespace, sensitive-path filtering, …)
+	// are preserved from the caller.
+	allOpts := opts
+	allOpts.OnlyNewOrUpdated = false
+	_, err := toXmlInternal(ctx, s, parent, allOpts)
 	if err != nil {
 		return err
 	}
