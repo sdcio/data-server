@@ -5,8 +5,14 @@ on:
       configserver_version:
         description: >
           Optional override for sdcio/config-server (integration checkout + GHCR tag).
-          Empty = auto: main → CS main; else only if PR has label paired-test and same-named branch exists on CS → tip SHA;
-          else CS main. (SHA, v0.0.0-PR…, main.)
+          Accepts: full SHA, v0.0.0-PR…, or main. Empty = use Pairs-with resolution or main.
+        required: false
+        default: ""
+        type: string
+      integration_tests_ref:
+        description: >
+          Optional override for sdcio/integration-tests branch/SHA checked out during integration.
+          Empty = use Pairs-with resolution or main.
         required: false
         default: ""
         type: string
@@ -89,61 +95,101 @@ jobs:
         run: |
           echo "version=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-  # Picks sdcio/config-server ref for integration-tests. Same-named branch on CS only when PR is labeled paired-test
-  # (avoids accidental pairing). workflow_dispatch override always wins. CS images must exist for chosen ref.
-  resolve-configserver-version:
+  # Resolves paired repo refs from "Pairs-with: sdcio/<repo>#<PR>" lines in the PR body.
+  # workflow_dispatch explicit inputs always win. Falls back to main for any repo not referenced.
+  # CS images (GHCR) must exist for the resolved SHA before integration tests run.
+  resolve-paired-refs:
     runs-on: ubuntu-latest
     outputs:
       configversion: ${{ steps.resolve.outputs.configversion }}
+      inttest_ref: ${{ steps.resolve.outputs.inttest_ref }}
     steps:
-      - name: Resolve config-server version
+      - name: Resolve paired refs from PR body
         id: resolve
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVENT_NAME: ${{ github.event_name }}
-          INPUT_OVERRIDE: ${{ github.event.inputs.configserver_version }}
           BRANCH: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
-          PR_LABELS_JSON: ${{ github.event_name == 'pull_request' && toJSON(github.event.pull_request.labels) || '[]' }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          INPUT_CS: ${{ inputs.configserver_version }}
+          INPUT_IT: ${{ inputs.integration_tests_ref }}
         run: |
           set -euo pipefail
-          PAIR_LABEL="paired-test"
-          override="$(printf '%s' "${INPUT_OVERRIDE:-}" | tr -d '\r' | xargs || true)"
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$override" ]; then
-            echo "configversion=${override}" >> "$GITHUB_OUTPUT"
-            echo "Using workflow_dispatch configserver_version=${override}"
-            exit 0
-          fi
+
+          # On main there is nothing to pair
           if [ "$BRANCH" = "main" ]; then
             echo "configversion=main" >> "$GITHUB_OUTPUT"
-            echo "DS ref is main -> configserver main"
+            echo "inttest_ref=main" >> "$GITHUB_OUTPUT"
+            echo "Branch is main -> all paired repos use main"
             exit 0
           fi
-          want_pair=false
+
+          # workflow_dispatch: honour explicit overrides, skip body parsing
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            CS="$(printf '%s' "${INPUT_CS:-}" | tr -d '\r' | xargs || true)"
+            IT="$(printf '%s' "${INPUT_IT:-}" | tr -d '\r' | xargs || true)"
+            echo "configversion=${CS:-main}" >> "$GITHUB_OUTPUT"
+            echo "inttest_ref=${IT:-main}" >> "$GITHUB_OUTPUT"
+            echo "workflow_dispatch: config-server=${CS:-main} integration-tests=${IT:-main}"
+            exit 0
+          fi
+
+          # Fetch PR body
+          BODY=""
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            if echo "$PR_LABELS_JSON" | jq -e --arg l "$PAIR_LABEL" 'map(.name) | index($l) != null' >/dev/null 2>&1; then
-              want_pair=true
-            fi
+            BODY=$(gh pr view --repo "$REPO" "$PR_NUMBER" --json body -q '.body' 2>/dev/null || true)
           elif [ "$EVENT_NAME" = "push" ]; then
-            if gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" 2>/dev/null | \
-              jq -e --arg br "$BRANCH" --arg l "$PAIR_LABEL" '
-                [.[] | select(.head.ref == $br)] | first as $p |
-                if $p == null then false else ($p.labels // [] | map(.name) | index($l) != null) end
-              ' >/dev/null 2>&1; then
-              want_pair=true
+            BODY=$(gh api "repos/${REPO}/pulls?state=open&head=${REPO%%/*}:${BRANCH}&per_page=5" \
+                     --jq '.[0].body // ""' 2>/dev/null || true)
+          fi
+
+          # Extract the PR number from a "Pairs-with: org/repo#NNN" line
+          pairs_with_pr() {
+            local repo="$1"
+            printf '%s' "$BODY" | grep -oP "(?i)Pairs-with:\s+${repo}#\K[0-9]+" | head -1
+          }
+
+          # Resolve config-server: PR# → branch → full SHA (used as GHCR image tag)
+          CS_PR=$(pairs_with_pr "sdcio/config-server")
+          if [ -n "$CS_PR" ]; then
+            CS_BRANCH=$(gh pr view --repo sdcio/config-server "$CS_PR" \
+                          --json headRefName -q '.headRefName' 2>/dev/null || true)
+            if [ -n "$CS_BRANCH" ]; then
+              ENC="heads/$(printf '%s' "$CS_BRANCH" | sed 's|/|%2F|g')"
+              CS_SHA=$(gh api "repos/sdcio/config-server/git/ref/${ENC}" \
+                         --jq '.object.sha' 2>/dev/null || true)
+              if [ -n "$CS_SHA" ]; then
+                echo "configversion=${CS_SHA}" >> "$GITHUB_OUTPUT"
+                echo "config-server: PR#${CS_PR} branch=${CS_BRANCH} -> ${CS_SHA}"
+              else
+                echo "configversion=main" >> "$GITHUB_OUTPUT"
+                echo "config-server: PR#${CS_PR} branch=${CS_BRANCH} not found on remote -> main"
+              fi
+            else
+              echo "configversion=main" >> "$GITHUB_OUTPUT"
+              echo "config-server: PR#${CS_PR} not found -> main"
             fi
-          fi
-          if [ "$want_pair" != "true" ]; then
-            echo "configversion=main" >> "$GITHUB_OUTPUT"
-            echo "No ${PAIR_LABEL} label on PR for branch ${BRANCH} -> configserver main"
-            exit 0
-          fi
-          enc_ref="heads/$(printf '%s' "$BRANCH" | sed 's|/|%2F|g')"
-          if sha="$(gh api "repos/sdcio/config-server/git/ref/${enc_ref}" --jq '.object.sha' 2>/dev/null)" && [ -n "$sha" ]; then
-            echo "configversion=${sha}" >> "$GITHUB_OUTPUT"
-            echo "Labeled ${PAIR_LABEL}: sdcio/config-server branch ${BRANCH} -> ${sha}"
           else
             echo "configversion=main" >> "$GITHUB_OUTPUT"
-            echo "Labeled ${PAIR_LABEL} but no refs/heads/${BRANCH} on sdcio/config-server -> main"
+            echo "config-server: no Pairs-with -> main"
+          fi
+
+          # Resolve integration-tests: PR# → branch name (for checkout ref)
+          IT_PR=$(pairs_with_pr "sdcio/integration-tests")
+          if [ -n "$IT_PR" ]; then
+            IT_BRANCH=$(gh pr view --repo sdcio/integration-tests "$IT_PR" \
+                          --json headRefName -q '.headRefName' 2>/dev/null || true)
+            if [ -n "$IT_BRANCH" ]; then
+              echo "inttest_ref=${IT_BRANCH}" >> "$GITHUB_OUTPUT"
+              echo "integration-tests: PR#${IT_PR} -> branch=${IT_BRANCH}"
+            else
+              echo "inttest_ref=main" >> "$GITHUB_OUTPUT"
+              echo "integration-tests: PR#${IT_PR} not found -> main"
+            fi
+          else
+            echo "inttest_ref=main" >> "$GITHUB_OUTPUT"
+            echo "integration-tests: no Pairs-with -> main"
           fi
 
   latest-versions:
@@ -164,12 +210,13 @@ jobs:
           echo "certmanagerversion=$( curl -sL https://api.github.com/repos/cert-manager/cert-manager/releases/latest | jq '.name' )" >> $GITHUB_OUTPUT
 
   integration-tests:
-    needs: [latest-versions, pr-release, resolve-configserver-version]
+    needs: [latest-versions, pr-release, resolve-paired-refs]
     uses: sdcio/integration-tests/.github/workflows/single.yml@main
     with:
-      configserver_version: ${{ needs.resolve-configserver-version.outputs.configversion }}
+      configserver_version: ${{ needs.resolve-paired-refs.outputs.configversion }}
       dataserver_version: ${{ needs.pr-release.outputs.dataversion }}
       schemaserver_version: ${{ needs.latest-versions.outputs.schemaversion }}
       cache_version: ${{ needs.latest-versions.outputs.cacheversion }}
       certmanager_version: ${{ needs.latest-versions.outputs.certmanagerversion }}
+      integration_tests_ref: ${{ needs.resolve-paired-refs.outputs.inttest_ref }}
     secrets: inherit
