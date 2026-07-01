@@ -765,7 +765,7 @@ func TestToXML_ImporterPreservesMultiKeyOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xmlDoc, err := ops.ToXML(ctx, root.Entry, false, false, false, false)
+	xmlDoc, err := ops.ToXML(ctx, root.Entry, ops.XMLRenderOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
