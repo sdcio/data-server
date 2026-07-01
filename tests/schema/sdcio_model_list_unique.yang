@@ -8,6 +8,7 @@ module sdcio_model_list_unique {
       list server {
         key "name";
         unique "ip port";
+        unique "description";
         leaf name {
           type string;
         }
@@ -16,6 +17,30 @@ module sdcio_model_list_unique {
         }
         leaf port {
           type uint16;
+        }
+        leaf description {
+          type string;
+        }
+      }
+      list plain {
+        key "name";
+        leaf name {
+          type string;
+        }
+        leaf value {
+          type string;
+        }
+      }
+      list multi-seg {
+        key "name";
+        unique "sub/field";
+        leaf name {
+          type string;
+        }
+        container sub {
+          leaf field {
+            type string;
+          }
         }
       }
     }
