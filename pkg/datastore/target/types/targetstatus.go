@@ -1,5 +1,11 @@
 package types
 
+import "errors"
+
+// ErrNotConnected indicates the southbound interface (device connection) of a
+// datastore is not established
+var ErrNotConnected = errors.New("not connected")
+
 type TargetStatus struct {
 	Status  TargetConnectionStatus
 	Details string

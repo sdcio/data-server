@@ -99,7 +99,7 @@ func (t *ncTarget) internalGet(ctx context.Context, req *sdcpb.GetDataRequest) (
 	ctx = logf.IntoContext(ctx, log)
 
 	if !t.Status().IsConnected() {
-		return nil, fmt.Errorf("%s", types.TargetStatusNotConnected)
+		return nil, fmt.Errorf("%s: %w", t.name, types.ErrNotConnected)
 	}
 	source := "running"
 
@@ -163,7 +163,7 @@ func (t *ncTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.S
 	log := logf.FromContext(ctx).WithName("Set")
 	ctx = logf.IntoContext(ctx, log)
 	if !t.Status().IsConnected() {
-		return nil, fmt.Errorf("%s", types.TargetStatusNotConnected)
+		return nil, fmt.Errorf("%s: %w", t.name, types.ErrNotConnected)
 	}
 
 	switch t.sbiConfig.NetconfOptions.CommitDatastore {

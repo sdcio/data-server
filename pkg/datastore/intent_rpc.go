@@ -46,7 +46,7 @@ func (d *Datastore) applyIntent(ctx context.Context, source targettypes.TargetSo
 	}
 
 	if d.sbi == nil {
-		return nil, fmt.Errorf("%s is not connected", d.config.Name)
+		return nil, fmt.Errorf("%s: %w", d.config.Name, targettypes.ErrNotConnected)
 	}
 
 	rsp, err = d.sbi.Set(ctx, source)

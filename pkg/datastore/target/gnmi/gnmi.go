@@ -161,7 +161,7 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 	var err error
 
 	if t == nil {
-		return nil, fmt.Errorf("%s", "not connected")
+		return nil, targetTypes.ErrNotConnected
 	}
 
 	// deletes from protos
