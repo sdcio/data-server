@@ -33,7 +33,7 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 		"transaction-peer", pr.Addr.String(),
 	)
 
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.ProtoJSON(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
@@ -108,7 +108,7 @@ func (s *Server) TransactionConfirm(ctx context.Context, req *sdcpb.TransactionC
 		"transaction-peer", pr.Addr.String(),
 	)
 
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.ProtoJSON(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
@@ -137,7 +137,7 @@ func (s *Server) TransactionCancel(ctx context.Context, req *sdcpb.TransactionCa
 		"transaction-peer", pr.Addr.String(),
 	)
 
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.ProtoJSON(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
