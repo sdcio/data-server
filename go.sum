@@ -181,8 +181,6 @@ github.com/prometheus/procfs v0.16.1/go.mod h1:teAbpZRB1iIAJYREa1LsoWUXykVXA1KlT
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
-github.com/scrapli/scrapligo v1.4.0 h1:gF7bIiRHT/aB1zTu9PYIK9R2A/gXr4fF/CKUyyWaNq4=
-github.com/scrapli/scrapligo v1.4.0/go.mod h1:pOWxVyPsQRrWTrkoSSDg05tjOqtWfLffAZtAsCc0w3M=
 github.com/sdcio/cache v0.0.38 h1:8meykZC/DAgzKI+R3GtZvTs0/OXWRCeNN5mxVKG0Ba8=
 github.com/sdcio/cache v0.0.38/go.mod h1:PHJd4pTmfFZBLdPohtXJAVBNmAKhhKdZHTi3MejGrk0=
 github.com/sdcio/goyang v1.6.2-2 h1:qfeUKBmoKpiKAruuEc3+V8wgHKP/n1jRDEnTy23knV8=
@@ -205,6 +203,8 @@ github.com/spf13/cobra v1.10.2/go.mod h1:7C1pvHqHw5A4vrJfjNwvOdzYu0Gml16OCs2GRiT
 github.com/spf13/pflag v1.0.9/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
 github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
 github.com/spf13/pflag v1.0.10/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
+github.com/steiler/scrapligo v0.0.0-20260805094018-c96889d37120 h1:bOazpNwMiFUpAtYcM7ucLsIYHHs6w9y62egMjZHuuB4=
+github.com/steiler/scrapligo v0.0.0-20260805094018-c96889d37120/go.mod h1:pOWxVyPsQRrWTrkoSSDg05tjOqtWfLffAZtAsCc0w3M=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.1.1/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=

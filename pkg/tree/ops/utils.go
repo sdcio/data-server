@@ -22,6 +22,14 @@ func getListEntrySortFunc(parent api.Entry) func(a, b api.Entry) int {
 			aLvSlice := GetHighestPrecedence(achild, false, true, true)
 			bLvSlice := GetHighestPrecedence(bchild, false, true, true)
 
+			// A key leaf can legitimately end up without any LeafVariant (e.g. a
+			// structural/placeholder entry created while navigating the tree without
+			// a value ever being set for it). We cannot compare such entries, so treat
+			// them as equal on this key, just like the "doesn't exist" case above.
+			if len(aLvSlice) == 0 || len(bLvSlice) == 0 {
+				return 0
+			}
+
 			aEntry := aLvSlice[0]
 			bEntry := bLvSlice[0]
 
