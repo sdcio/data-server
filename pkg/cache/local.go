@@ -21,6 +21,8 @@ import (
 	"github.com/sdcio/cache/pkg/config"
 	"github.com/sdcio/cache/pkg/store/filesystem"
 	"github.com/sdcio/cache/pkg/types"
+	"github.com/sdcio/data-server/pkg/tree/importer"
+	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/sdc-protos/tree_persist"
 	"google.golang.org/protobuf/proto"
 )
@@ -46,7 +48,7 @@ type LocalCache struct {
 	*cache.Cache
 }
 
-func (l *LocalCache) InstanceIntentGet(ctx context.Context, cacheName string, intentName string) (*tree_persist.Intent, error) {
+func (l *LocalCache) InstanceIntentGet(ctx context.Context, cacheName string, intentName string) (importer.ImportConfigAdapter, error) {
 	b, err := l.Cache.InstanceIntentGet(ctx, cacheName, intentName)
 	if err != nil {
 		return nil, err
@@ -57,10 +59,10 @@ func (l *LocalCache) InstanceIntentGet(ctx context.Context, cacheName string, in
 	if err != nil {
 		return nil, err
 	}
-	return result, nil
+	return treeproto.NewProtoTreeImporter(result), nil
 }
 
-func (l *LocalCache) InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChanOrig chan<- *tree_persist.Intent, errChanOrig chan<- error) {
+func (l *LocalCache) InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChanOrig chan<- importer.ImportConfigAdapter, errChanOrig chan<- error) {
 	// create new channels
 	intentChan := make(chan *types.Intent, 5)
 	errChan := make(chan error, 1)
@@ -86,7 +88,7 @@ func (l *LocalCache) InstanceIntentGetAll(ctx context.Context, cacheName string,
 				return
 			}
 			// forward to caller
-			intentChanOrig <- tpIntent
+			intentChanOrig <- treeproto.NewProtoTreeImporter(tpIntent)
 		case err, ok := <-errChan: // Handle errors after intents
 			if !ok {
 				errChan = nil // Mark errChan as nil so select ignores it
