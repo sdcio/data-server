@@ -128,8 +128,14 @@ type SyncProtocol struct {
 	Encoding string        `yaml:"encoding,omitempty" json:"encoding,omitempty"`
 }
 
+const (
+	cacheTypeLocal        = "local"
+	cacheTypeRemote       = "remote"
+	cacheTypeConfigServer = "config-server"
+)
+
 type CacheConfig struct {
-	// cache type: "local" or "remote"
+	// cache type: "local", "remote" or "config-server"
 	Type string `yaml:"type,omitempty" json:"type,omitempty"`
 	// Local cache attr
 	StoreType string `yaml:"store-type,omitempty" json:"store-type,omitempty"`
@@ -237,8 +243,11 @@ func (s *SyncProtocol) validateSetDefaults() error {
 }
 
 func (c *CacheConfig) validateSetDefaults() error {
+	if c.Type == "" {
+		c.Type = defaultCacheType
+	}
 	switch c.Type {
-	case "remote":
+	case cacheTypeRemote:
 		if c.Address == "" {
 			c.Address = defaultRemoteCacheAddress
 		}
@@ -246,16 +255,17 @@ func (c *CacheConfig) validateSetDefaults() error {
 		if err != nil {
 			return err
 		}
-	default:
-		if c.Type != defaultCacheType {
-			c.Type = defaultCacheType
-		}
+	case cacheTypeLocal:
 		if c.StoreType == "" {
 			c.StoreType = defaultStoreType
 		}
 		if c.Dir == "" {
 			c.Dir = defaultCacheDir
 		}
+	case cacheTypeConfigServer:
+		// no connection settings yet; added by a follow-up ticket.
+	default:
+		return fmt.Errorf("unknown cache type: %q", c.Type)
 	}
 	return nil
 }
