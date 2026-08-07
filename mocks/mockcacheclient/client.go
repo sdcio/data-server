@@ -183,6 +183,35 @@ func (mr *MockClientMockRecorder) InstanceIntentsList(ctx, cacheInstanceName any
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceIntentsList", reflect.TypeOf((*MockClient)(nil).InstanceIntentsList), ctx, cacheInstanceName)
 }
 
+// InstanceRunningGet mocks base method.
+func (m *MockClient) InstanceRunningGet(ctx context.Context, cacheName string) (*tree_persist.Intent, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceRunningGet", ctx, cacheName)
+	ret0, _ := ret[0].(*tree_persist.Intent)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// InstanceRunningGet indicates an expected call of InstanceRunningGet.
+func (mr *MockClientMockRecorder) InstanceRunningGet(ctx, cacheName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceRunningGet", reflect.TypeOf((*MockClient)(nil).InstanceRunningGet), ctx, cacheName)
+}
+
+// InstanceRunningModify mocks base method.
+func (m *MockClient) InstanceRunningModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceRunningModify", ctx, cacheName, intent)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstanceRunningModify indicates an expected call of InstanceRunningModify.
+func (mr *MockClientMockRecorder) InstanceRunningModify(ctx, cacheName, intent any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceRunningModify", reflect.TypeOf((*MockClient)(nil).InstanceRunningModify), ctx, cacheName, intent)
+}
+
 // InstancesList mocks base method.
 func (m *MockClient) InstancesList(ctx context.Context) []string {
 	m.ctrl.T.Helper()

@@ -138,6 +138,8 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 
 			// Expect IntentModify (called by TransactionSet to save intent)
 			ccb.EXPECT().IntentModify(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			// Expect RunningModify (called by writeBackSyncTree to persist running)
+			ccb.EXPECT().RunningModify(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 			// Setup Mock SBI
 			sbi := mocktarget.NewMockTarget(ctrl)
@@ -285,6 +287,9 @@ func TestTransactionSet_SensitivePathsPersisted(t *testing.T) {
 			}
 			return nil
 		}).AnyTimes()
+	ccb.EXPECT().
+		RunningModify(gomock.Any(), gomock.Any()).
+		Return(nil).AnyTimes()
 
 	sbi := mocktarget.NewMockTarget(ctrl)
 	sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).AnyTimes()
