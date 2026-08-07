@@ -182,3 +182,32 @@ func (mr *MockCacheClientBoundMockRecorder) IntentsList(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IntentsList", reflect.TypeOf((*MockCacheClientBound)(nil).IntentsList), ctx)
 }
+
+// RunningGet mocks base method.
+func (m *MockCacheClientBound) RunningGet(ctx context.Context) (*tree_persist.Intent, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RunningGet", ctx)
+	ret0, _ := ret[0].(*tree_persist.Intent)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RunningGet indicates an expected call of RunningGet.
+func (mr *MockCacheClientBoundMockRecorder) RunningGet(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunningGet", reflect.TypeOf((*MockCacheClientBound)(nil).RunningGet), ctx)
+}
+
+// RunningModify mocks base method.
+func (m *MockCacheClientBound) RunningModify(ctx context.Context, intent *tree_persist.Intent) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RunningModify", ctx, intent)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RunningModify indicates an expected call of RunningModify.
+func (mr *MockCacheClientBoundMockRecorder) RunningModify(ctx, intent any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunningModify", reflect.TypeOf((*MockCacheClientBound)(nil).RunningModify), ctx, intent)
+}
