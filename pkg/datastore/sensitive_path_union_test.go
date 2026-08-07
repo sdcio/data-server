@@ -13,6 +13,8 @@ import (
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/consts"
+	"github.com/sdcio/data-server/pkg/tree/importer"
+	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/sensitive"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
@@ -125,9 +127,9 @@ func TestBlameConfig_CrossIntentSensitivePathRedaction(t *testing.T) {
 			// LoadAllButRunningIntents streams via IntentGetAll (excludes running).
 			ccb.EXPECT().
 				IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-				DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
-					intentChan <- dataIntent
-					intentChan <- markerIntent
+				DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+					intentChan <- treeproto.NewProtoTreeImporter(dataIntent)
+					intentChan <- treeproto.NewProtoTreeImporter(markerIntent)
 					close(intentChan)
 					close(errChan)
 				})
@@ -217,7 +219,7 @@ func TestGetIntent_CrossIntentPathsRedact(t *testing.T) {
 			// GetIntent loads the specific intent only — no IntentGetAll.
 			ccb.EXPECT().
 				IntentGet(gomock.Any(), "data-intent").
-				Return(dataIntent, nil)
+				Return(treeproto.NewProtoTreeImporter(dataIntent), nil)
 
 			idx := sensitive.NewPathIndex()
 			idx.Set("marker-intent", markerSensitivePaths)
@@ -302,7 +304,7 @@ func TestGetIntent_OwnSensitivePaths_Redacted(t *testing.T) {
 			ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
 			ccb.EXPECT().
 				IntentGet(gomock.Any(), "data-intent").
-				Return(dataIntent, nil)
+				Return(treeproto.NewProtoTreeImporter(dataIntent), nil)
 
 			syncTree := buildEmptySyncTree(t, ctx, scb)
 			idx := sensitive.NewPathIndex()
@@ -366,7 +368,7 @@ func TestGetIntent_NoSensitivePaths_NoRedaction(t *testing.T) {
 	ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
 	ccb.EXPECT().
 		IntentGet(gomock.Any(), "data-intent").
-		Return(dataIntent, nil)
+		Return(treeproto.NewProtoTreeImporter(dataIntent), nil)
 
 	syncTree := buildEmptySyncTree(t, ctx, scb)
 	ds := &Datastore{

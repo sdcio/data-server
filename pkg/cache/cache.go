@@ -17,6 +17,7 @@ package cache
 import (
 	"context"
 
+	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/sdc-protos/tree_persist"
 )
 
@@ -27,9 +28,9 @@ type Client interface {
 	InstanceExists(ctx context.Context, cacheInstanceName string) bool
 	InstancesList(ctx context.Context) []string
 	InstanceIntentsList(ctx context.Context, cacheInstanceName string) ([]string, error)
-	InstanceIntentGet(ctx context.Context, cacheName string, intentName string) (*tree_persist.Intent, error)
+	InstanceIntentGet(ctx context.Context, cacheName string, intentName string) (importer.ImportConfigAdapter, error)
 	InstanceIntentModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error
 	InstanceIntentDelete(ctx context.Context, cacheName string, intentName string, IgnoreNonExisting bool) error
 	InstanceIntentExists(ctx context.Context, cacheName string, intentName string) (bool, error)
-	InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error)
+	InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error)
 }

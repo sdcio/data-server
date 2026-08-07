@@ -35,10 +35,10 @@ import (
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/schema"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/tree/sensitive"
-	tree_persist "github.com/sdcio/sdc-protos/tree_persist"
 )
 
 type Datastore struct {
@@ -295,9 +295,9 @@ var _ types.RollbackInterface = &DatastoreRollbackAdapter{}
 // populateSensitivePathIndex loads every cached intent's sensitive_paths into s
 // once at datastore startup, before the first northbound read.
 func populateSensitivePathIndex(ctx context.Context, s *sensitive.PathIndex, cc cache.CacheClientBound) error {
-	return forEachIntent(ctx, cc, nil, func(intent *tree_persist.Intent) error {
+	return forEachIntent(ctx, cc, nil, func(intent importer.ImportConfigAdapter) error {
 		if len(intent.GetSensitivePaths()) > 0 {
-			s.Set(intent.GetIntentName(), intent.GetSensitivePaths())
+			s.Set(intent.GetName(), intent.GetSensitivePaths())
 		}
 		return nil
 	})
