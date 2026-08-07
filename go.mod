@@ -9,7 +9,10 @@ replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.2-2
 //   - sdcio/sdc-protos PR#123: feat(sensitive): schema.Path + LeafSchema.sensitive flag
 replace (
 	github.com/sdcio/goyang v1.6.2-2 => github.com/sdcio/goyang v1.6.2-2.0.20260608121857-4668a077cf72
-	github.com/sdcio/sdc-protos v0.0.54 => github.com/sdcio/sdc-protos v0.0.55-0.20260610090020-aeb8edf494c4
+	// sdcio/sdc-protos config-server-cache-backend branch (commit a8f3da0, adds
+	// config_read.ConfigReadService for ticket 01) — not pushed/tagged yet, so
+	// pinned to the sibling local checkout until it lands and is tagged.
+	github.com/sdcio/sdc-protos => ../sdc-protos
 )
 
 require (
