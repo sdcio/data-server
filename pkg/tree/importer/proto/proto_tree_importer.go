@@ -12,10 +12,12 @@ import (
 
 type ProtoTreeImporter struct {
 	ProtoTreeImporterElement
-	deletes      *sdcpb.PathSet
-	intentName   string
-	priority     int32
-	nonRevertive bool
+	deletes        *sdcpb.PathSet
+	intentName     string
+	priority       int32
+	nonRevertive   bool
+	orphan         bool
+	sensitivePaths []*sdcpb.Path
 }
 
 func NewProtoTreeImporter(data *tree_persist.Intent) *ProtoTreeImporter {
@@ -26,10 +28,12 @@ func NewProtoTreeImporter(data *tree_persist.Intent) *ProtoTreeImporter {
 		ProtoTreeImporterElement: ProtoTreeImporterElement{
 			data: data.GetRoot(),
 		},
-		deletes:      pathSet,
-		intentName:   data.GetIntentName(),
-		priority:     data.GetPriority(),
-		nonRevertive: data.GetNonRevertive(),
+		deletes:        pathSet,
+		intentName:     data.GetIntentName(),
+		priority:       data.GetPriority(),
+		nonRevertive:   data.GetNonRevertive(),
+		orphan:         data.GetOrphan(),
+		sensitivePaths: data.GetSensitivePaths(),
 	}
 }
 
@@ -47,6 +51,14 @@ func (p *ProtoTreeImporter) GetName() string {
 
 func (p *ProtoTreeImporter) GetDeletes() *sdcpb.PathSet {
 	return p.deletes
+}
+
+func (p *ProtoTreeImporter) GetOrphan() bool {
+	return p.orphan
+}
+
+func (p *ProtoTreeImporter) GetSensitivePaths() []*sdcpb.Path {
+	return p.sensitivePaths
 }
 
 type ProtoTreeImporterElement struct {

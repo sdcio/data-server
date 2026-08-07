@@ -14,6 +14,8 @@ type ImportConfigAdapter interface {
 	GetName() string
 	GetPriority() int32
 	GetNonRevertive() bool
+	GetOrphan() bool
+	GetSensitivePaths() []*sdcpb.Path
 }
 
 type ImportConfigAdapterElement interface {
