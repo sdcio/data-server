@@ -18,6 +18,7 @@ import (
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/consts"
+	"github.com/sdcio/data-server/pkg/tree/importer"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/processors"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
@@ -130,7 +131,7 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 			// Expect IntentGetAll (called by LoadAllButRunningIntents)
 			ccb.EXPECT().
 				IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-				DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+				DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
 					close(intentChan)
 					close(errChan)
 				}).AnyTimes()
@@ -272,7 +273,7 @@ func TestTransactionSet_SensitivePathsPersisted(t *testing.T) {
 	ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
 	ccb.EXPECT().
 		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+		DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
 			close(intentChan)
 			close(errChan)
 		}).AnyTimes()

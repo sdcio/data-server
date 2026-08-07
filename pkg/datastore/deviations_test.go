@@ -9,12 +9,13 @@ import (
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/mocks/mockcacheclient"
 	"github.com/sdcio/data-server/pkg/config"
-	"github.com/sdcio/data-server/pkg/pool"
 	schemaClientPkg "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/importer"
+	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
-	tree_persist "github.com/sdcio/sdc-protos/tree_persist"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc/metadata"
@@ -132,9 +133,9 @@ func TestWatchDeviations_SensitivePathMasking(t *testing.T) {
 	ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
 	ccb.EXPECT().
 		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
-			intentChan <- dataIntent
-			intentChan <- markerIntent
+		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+			intentChan <- treeproto.NewProtoTreeImporter(dataIntent)
+			intentChan <- treeproto.NewProtoTreeImporter(markerIntent)
 			close(intentChan)
 			close(errChan)
 		})

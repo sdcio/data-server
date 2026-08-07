@@ -13,6 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	importer "github.com/sdcio/data-server/pkg/tree/importer"
 	tree_persist "github.com/sdcio/sdc-protos/tree_persist"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -127,10 +128,10 @@ func (mr *MockCacheClientBoundMockRecorder) IntentExists(ctx, intentName any) *g
 }
 
 // IntentGet mocks base method.
-func (m *MockCacheClientBound) IntentGet(ctx context.Context, intentName string) (*tree_persist.Intent, error) {
+func (m *MockCacheClientBound) IntentGet(ctx context.Context, intentName string) (importer.ImportConfigAdapter, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IntentGet", ctx, intentName)
-	ret0, _ := ret[0].(*tree_persist.Intent)
+	ret0, _ := ret[0].(importer.ImportConfigAdapter)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -142,7 +143,7 @@ func (mr *MockCacheClientBoundMockRecorder) IntentGet(ctx, intentName any) *gomo
 }
 
 // IntentGetAll mocks base method.
-func (m *MockCacheClientBound) IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+func (m *MockCacheClientBound) IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "IntentGetAll", ctx, excludeIntentNames, intentChan, errChan)
 }
