@@ -15,6 +15,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/api/adapter"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer"
+	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/ops/validation"
 	"github.com/sdcio/data-server/pkg/tree/processors"
@@ -96,11 +97,11 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	}
 
 	// store the actual / old running in the transaction
-	runningIntent, err := d.cacheClient.IntentGet(ctx, consts.RunningIntentName)
+	runningIntent, err := d.cacheClient.RunningGet(ctx)
 	if err != nil {
 		return nil, err
 	}
-	_, err = root.ImportConfig(ctx, nil, runningIntent, treetypes.NewUpdateInsertFlags(), d.taskPool)
+	_, err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningIntent), treetypes.NewUpdateInsertFlags(), d.taskPool)
 	if err != nil {
 		return nil, err
 	}
@@ -469,7 +470,7 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates api.LeafVaria
 
 	// write the synctree to disk
 	if newRunningIntent != nil {
-		err = d.cacheClient.IntentModify(ctx, newRunningIntent)
+		err = d.cacheClient.RunningModify(ctx, newRunningIntent)
 		if err != nil {
 			return fmt.Errorf("failed updating the running store for %s: %w", d.Name(), err)
 		}

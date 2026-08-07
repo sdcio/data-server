@@ -33,4 +33,11 @@ type Client interface {
 	InstanceIntentDelete(ctx context.Context, cacheName string, intentName string, IgnoreNonExisting bool) error
 	InstanceIntentExists(ctx context.Context, cacheName string, intentName string) (bool, error)
 	InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error)
+
+	// running: split out of the generic Intent surface, independent of Cache.Type.
+	// LocalCache keeps its existing disk-backed store for it (unchanged on-disk
+	// behavior); other backends may back it however they see fit (e.g. purely
+	// in-memory), since it's never config-server's data to begin with.
+	InstanceRunningGet(ctx context.Context, cacheName string) (*tree_persist.Intent, error)
+	InstanceRunningModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error
 }
