@@ -21,6 +21,7 @@ import (
 	"github.com/sdcio/cache/pkg/config"
 	"github.com/sdcio/cache/pkg/store/filesystem"
 	"github.com/sdcio/cache/pkg/types"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/sdc-protos/tree_persist"
@@ -106,4 +107,30 @@ func (l *LocalCache) InstanceIntentModify(ctx context.Context, cacheName string,
 		return err
 	}
 	return l.Cache.InstanceIntentModify(ctx, cacheName, intent.GetIntentName(), b)
+}
+
+// InstanceRunningGet and InstanceRunningModify are thin passthroughs to the same
+// disk-backed mechanism InstanceIntentGet/InstanceIntentModify already use, so the
+// local backend's on-disk behavior for "running" is unchanged by the split — it
+// simply becomes unreachable via the intent-name-keyed InstanceIntent* surface.
+func (l *LocalCache) InstanceRunningGet(ctx context.Context, cacheName string) (*tree_persist.Intent, error) {
+	b, err := l.Cache.InstanceIntentGet(ctx, cacheName, consts.RunningIntentName)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &tree_persist.Intent{}
+	err = proto.Unmarshal(b, result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (l *LocalCache) InstanceRunningModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error {
+	b, err := proto.Marshal(intent)
+	if err != nil {
+		return err
+	}
+	return l.Cache.InstanceIntentModify(ctx, cacheName, consts.RunningIntentName, b)
 }
