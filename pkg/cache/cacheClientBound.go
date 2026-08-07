@@ -32,6 +32,9 @@ type CacheClientBound interface {
 	IntentExists(ctx context.Context, intentName string) (bool, error)
 	IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error)
 	InstanceClose(ctx context.Context) error
+
+	RunningGet(ctx context.Context) (*tree_persist.Intent, error)
+	RunningModify(ctx context.Context, intent *tree_persist.Intent) error
 }
 
 type CacheClientBoundImpl struct {
@@ -75,4 +78,10 @@ func (c *CacheClientBoundImpl) IntentExists(ctx context.Context, intentName stri
 }
 func (c *CacheClientBoundImpl) IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
 	c.cacheClient.InstanceIntentGetAll(ctx, c.cacheName, excludeIntentNames, intentChan, errChan)
+}
+func (c *CacheClientBoundImpl) RunningGet(ctx context.Context) (*tree_persist.Intent, error) {
+	return c.cacheClient.InstanceRunningGet(ctx, c.cacheName)
+}
+func (c *CacheClientBoundImpl) RunningModify(ctx context.Context, intent *tree_persist.Intent) error {
+	return c.cacheClient.InstanceRunningModify(ctx, c.cacheName, intent)
 }
