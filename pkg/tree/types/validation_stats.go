@@ -19,6 +19,7 @@ const (
 	StatTypeLeafRef
 	StatTypeMinMaxElementsList
 	StatTypeEnums
+	StatTypeUnique
 )
 
 var AllStatTypes = []StatType{
@@ -31,6 +32,7 @@ var AllStatTypes = []StatType{
 	StatTypeLeafRef,
 	StatTypeMinMaxElementsList,
 	StatTypeEnums,
+	StatTypeUnique,
 }
 
 func (s StatType) String() string {
@@ -53,6 +55,8 @@ func (s StatType) String() string {
 		return "min/max elements list"
 	case StatTypeEnums:
 		return "enums"
+	case StatTypeUnique:
+		return "unique"
 	}
 	return ""
 }
