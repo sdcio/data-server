@@ -9,7 +9,6 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/sdc-protos/tree_persist"
-	"google.golang.org/protobuf/testing/protocmp"
 )
 
 func newTestLocalCache(t *testing.T) *LocalCache {
@@ -28,6 +27,9 @@ func newTestLocalCache(t *testing.T) *LocalCache {
 // TestLocalCache_RunningRoundTrip verifies InstanceRunningModify/InstanceRunningGet
 // are thin passthroughs to the same disk-backed store InstanceIntentGet/Modify use,
 // so the local backend's on-disk behavior for "running" is unchanged by the split.
+// InstanceRunningGet returns an importer.ImportConfigAdapter — the same mechanical
+// "ready for Tree.ImportConfig" shape InstanceIntentGet returns — rather than the
+// raw *tree_persist.Intent, so the assertions go through its accessors.
 func TestLocalCache_RunningRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	lc := newTestLocalCache(t)
@@ -54,8 +56,11 @@ func TestLocalCache_RunningRoundTrip(t *testing.T) {
 		t.Fatalf("InstanceRunningGet: %v", err)
 	}
 
-	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
-		t.Errorf("InstanceRunningGet mismatch (-want +got):\n%s", diff)
+	if gotName := got.GetName(); gotName != consts.RunningIntentName {
+		t.Errorf("InstanceRunningGet().GetName() = %q, want %q", gotName, consts.RunningIntentName)
+	}
+	if gotPriority := got.GetPriority(); gotPriority != consts.RunningValuesPrio {
+		t.Errorf("InstanceRunningGet().GetPriority() = %d, want %d", gotPriority, consts.RunningValuesPrio)
 	}
 }
 

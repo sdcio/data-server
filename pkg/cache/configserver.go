@@ -22,6 +22,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/cache/configserver"
 	"github.com/sdcio/data-server/pkg/tree/importer"
+	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/sdc-protos/tree_persist"
 )
 
@@ -204,7 +205,7 @@ func (c *ConfigServerCache) InstanceIntentGetAll(ctx context.Context, cacheName 
 // independent in-memory, per-instance store — entirely separate from the
 // seam, since "running" never touches config-server under any backend.
 
-func (c *ConfigServerCache) InstanceRunningGet(ctx context.Context, cacheName string) (*tree_persist.Intent, error) {
+func (c *ConfigServerCache) InstanceRunningGet(ctx context.Context, cacheName string) (importer.ImportConfigAdapter, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	intent, exists := c.running[cacheName]
@@ -214,7 +215,7 @@ func (c *ConfigServerCache) InstanceRunningGet(ctx context.Context, cacheName st
 	if intent == nil {
 		return nil, ErrRunningNotFound
 	}
-	return intent, nil
+	return treeproto.NewProtoTreeImporter(intent), nil
 }
 
 func (c *ConfigServerCache) InstanceRunningModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error {

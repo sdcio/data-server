@@ -15,7 +15,6 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/api/adapter"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer"
-	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/ops/validation"
 	"github.com/sdcio/data-server/pkg/tree/processors"
@@ -101,7 +100,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	if err != nil {
 		return nil, err
 	}
-	_, err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningIntent), treetypes.NewUpdateInsertFlags(), d.taskPool)
+	_, err = root.ImportConfig(ctx, nil, runningIntent, treetypes.NewUpdateInsertFlags(), d.taskPool)
 	if err != nil {
 		return nil, err
 	}

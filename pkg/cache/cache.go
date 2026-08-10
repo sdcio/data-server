@@ -38,6 +38,6 @@ type Client interface {
 	// LocalCache keeps its existing disk-backed store for it (unchanged on-disk
 	// behavior); other backends may back it however they see fit (e.g. purely
 	// in-memory), since it's never config-server's data to begin with.
-	InstanceRunningGet(ctx context.Context, cacheName string) (*tree_persist.Intent, error)
+	InstanceRunningGet(ctx context.Context, cacheName string) (importer.ImportConfigAdapter, error)
 	InstanceRunningModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error
 }

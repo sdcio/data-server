@@ -263,7 +263,10 @@ func TestConfigServerCache_InstanceLifecycle(t *testing.T) {
 // TestConfigServerCache_RunningIndependentOfSeam verifies InstanceRunningGet
 // / InstanceRunningModify work purely off the in-memory store, entirely
 // independent of the LocalConfigReader seam (which never sees "running" at
-// all under this backend).
+// all under this backend). InstanceRunningGet returns an
+// importer.ImportConfigAdapter — the same mechanical shape InstanceIntentGet
+// returns — rather than the raw *tree_persist.Intent, so the assertions go
+// through its accessors.
 func TestConfigServerCache_RunningIndependentOfSeam(t *testing.T) {
 	ctx := context.Background()
 	c, reader := newTestConfigServerCache(t)
@@ -281,8 +284,11 @@ func TestConfigServerCache_RunningIndependentOfSeam(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InstanceRunningGet() error = %v", err)
 	}
-	if got != want {
-		t.Errorf("InstanceRunningGet() = %v, want %v", got, want)
+	if gotName := got.GetName(); gotName != want.GetIntentName() {
+		t.Errorf("InstanceRunningGet().GetName() = %q, want %q", gotName, want.GetIntentName())
+	}
+	if gotPriority := got.GetPriority(); gotPriority != want.GetPriority() {
+		t.Errorf("InstanceRunningGet().GetPriority() = %d, want %d", gotPriority, want.GetPriority())
 	}
 
 	// The seam was never seeded with anything and never asked for

@@ -184,10 +184,10 @@ func (mr *MockCacheClientBoundMockRecorder) IntentsList(ctx any) *gomock.Call {
 }
 
 // RunningGet mocks base method.
-func (m *MockCacheClientBound) RunningGet(ctx context.Context) (*tree_persist.Intent, error) {
+func (m *MockCacheClientBound) RunningGet(ctx context.Context) (importer.ImportConfigAdapter, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RunningGet", ctx)
-	ret0, _ := ret[0].(*tree_persist.Intent)
+	ret0, _ := ret[0].(importer.ImportConfigAdapter)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
