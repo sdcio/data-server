@@ -49,18 +49,24 @@ type LocalCache struct {
 	*cache.Cache
 }
 
+// decodeIntent unmarshals the disk-backed store's raw bytes into a
+// *tree_persist.Intent and wraps it as an importer.ImportConfigAdapter — the
+// shared decode step every InstanceIntentGet/InstanceIntentGetAll/
+// InstanceRunningGet call site needs.
+func (l *LocalCache) decodeIntent(b []byte) (importer.ImportConfigAdapter, error) {
+	result := &tree_persist.Intent{}
+	if err := proto.Unmarshal(b, result); err != nil {
+		return nil, err
+	}
+	return treeproto.NewProtoTreeImporter(result), nil
+}
+
 func (l *LocalCache) InstanceIntentGet(ctx context.Context, cacheName string, intentName string) (importer.ImportConfigAdapter, error) {
 	b, err := l.Cache.InstanceIntentGet(ctx, cacheName, intentName)
 	if err != nil {
 		return nil, err
 	}
-
-	result := &tree_persist.Intent{}
-	err = proto.Unmarshal(b, result)
-	if err != nil {
-		return nil, err
-	}
-	return treeproto.NewProtoTreeImporter(result), nil
+	return l.decodeIntent(b)
 }
 
 func (l *LocalCache) InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChanOrig chan<- importer.ImportConfigAdapter, errChanOrig chan<- error) {
@@ -81,15 +87,13 @@ func (l *LocalCache) InstanceIntentGetAll(ctx context.Context, cacheName string,
 			if !ok {
 				return
 			}
-			// unmarshall it into a tree_persit.Intent
-			tpIntent := &tree_persist.Intent{}
-			err := proto.Unmarshal(intent.Data(), tpIntent)
+			adapter, err := l.decodeIntent(intent.Data())
 			if err != nil {
 				errChanOrig <- err
 				return
 			}
 			// forward to caller
-			intentChanOrig <- treeproto.NewProtoTreeImporter(tpIntent)
+			intentChanOrig <- adapter
 		case err, ok := <-errChan: // Handle errors after intents
 			if !ok {
 				errChan = nil // Mark errChan as nil so select ignores it
@@ -118,13 +122,7 @@ func (l *LocalCache) InstanceRunningGet(ctx context.Context, cacheName string) (
 	if err != nil {
 		return nil, err
 	}
-
-	result := &tree_persist.Intent{}
-	err = proto.Unmarshal(b, result)
-	if err != nil {
-		return nil, err
-	}
-	return treeproto.NewProtoTreeImporter(result), nil
+	return l.decodeIntent(b)
 }
 
 func (l *LocalCache) InstanceRunningModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error {
