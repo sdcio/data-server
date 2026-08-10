@@ -24,6 +24,43 @@ func newTestLocalCache(t *testing.T) *LocalCache {
 	return lc
 }
 
+// TestLocalCache_InstanceIntentGetRoundTrip verifies InstanceIntentModify/InstanceIntentGet
+// round-trip a *tree_persist.Intent through the disk-backed store — a regression check
+// pinning current decode behavior before extracting it into a shared helper.
+func TestLocalCache_InstanceIntentGetRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	lc := newTestLocalCache(t)
+
+	const cacheName = "ds1"
+	if err := lc.InstanceCreate(ctx, cacheName); err != nil {
+		t.Fatalf("InstanceCreate: %v", err)
+	}
+
+	want := &tree_persist.Intent{
+		IntentName: "intent1",
+		Priority:   10,
+		Root: &tree_persist.TreeElement{
+			Name: "root",
+		},
+	}
+
+	if err := lc.InstanceIntentModify(ctx, cacheName, want); err != nil {
+		t.Fatalf("InstanceIntentModify: %v", err)
+	}
+
+	got, err := lc.InstanceIntentGet(ctx, cacheName, "intent1")
+	if err != nil {
+		t.Fatalf("InstanceIntentGet: %v", err)
+	}
+
+	if gotName := got.GetName(); gotName != want.GetIntentName() {
+		t.Errorf("InstanceIntentGet().GetName() = %q, want %q", gotName, want.GetIntentName())
+	}
+	if gotPriority := got.GetPriority(); gotPriority != want.GetPriority() {
+		t.Errorf("InstanceIntentGet().GetPriority() = %d, want %d", gotPriority, want.GetPriority())
+	}
+}
+
 // TestLocalCache_RunningRoundTrip verifies InstanceRunningModify/InstanceRunningGet
 // are thin passthroughs to the same disk-backed store InstanceIntentGet/Modify use,
 // so the local backend's on-disk behavior for "running" is unchanged by the split.
