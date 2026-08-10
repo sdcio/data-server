@@ -208,28 +208,6 @@ func TestConfigServerCache_InstanceIntentExists(t *testing.T) {
 	}
 }
 
-// TestConfigServerCache_WritesAreNoOps verifies InstanceIntentModify and
-// InstanceIntentDelete never error, never panic, and never reach the seam
-// (the fake has no Modify/Delete methods at all — only Get/List — so any
-// attempt to use it that way wouldn't compile in the first place).
-func TestConfigServerCache_WritesAreNoOps(t *testing.T) {
-	ctx := context.Background()
-	c, _ := newTestConfigServerCache(t)
-
-	if err := c.InstanceIntentModify(ctx, testCacheName, &tree_persist.Intent{IntentName: "intent1"}); err != nil {
-		t.Errorf("InstanceIntentModify() error = %v, want nil", err)
-	}
-	if err := c.InstanceIntentDelete(ctx, testCacheName, "intent1", false); err != nil {
-		t.Errorf("InstanceIntentDelete() error = %v, want nil", err)
-	}
-
-	// A write must not make the intent appear/disappear from the seam's
-	// perspective — this backend never touches it either way.
-	if _, err := c.InstanceIntentGet(ctx, testCacheName, "intent1"); !errors.Is(err, configserver.ErrNotFound) {
-		t.Errorf("InstanceIntentGet() error = %v, want ErrNotFound (write must be a no-op)", err)
-	}
-}
-
 func TestConfigServerCache_InstanceLifecycle(t *testing.T) {
 	ctx := context.Background()
 	c, _ := newTestConfigServerCache(t)
@@ -327,6 +305,17 @@ func TestConfigServerCache_InstanceRunningGet_UnknownInstance(t *testing.T) {
 	}
 }
 
-func TestConfigServerCache_ImplementsClient(t *testing.T) {
-	var _ Client = NewConfigServerCache(configserver.NewFakeLocalConfigReader(), testNamespace)
+// TestConfigServerCache_ImplementsReaderCapabilities verifies
+// *ConfigServerCache satisfies IntentReader, RunningStore, and
+// InstanceLifecycle directly. It deliberately does not assert IntentWriter
+// here — there is no method left on the type to test for no-op behavior;
+// that behavior lives in noopIntentWriter, composed in at
+// Server.createCacheClient instead.
+func TestConfigServerCache_ImplementsReaderCapabilities(t *testing.T) {
+	c := NewConfigServerCache(configserver.NewFakeLocalConfigReader(), testNamespace)
+	var (
+		_ IntentReader      = c
+		_ RunningStore      = c
+		_ InstanceLifecycle = c
+	)
 }

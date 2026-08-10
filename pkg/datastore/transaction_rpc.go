@@ -166,7 +166,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 // cache stream. Both channels are drained to completion before returning.
 func forEachIntent(
 	ctx context.Context,
-	cc cache.CacheClientBound,
+	cc cache.BoundIntentReader,
 	exclude []string,
 	fn func(importer.ImportConfigAdapter) error,
 ) error {

@@ -17,6 +17,7 @@ package configserver
 import (
 	"fmt"
 
+	csreader "github.com/sdcio/data-server/pkg/cache/configserver"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	jsonimporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -37,7 +38,7 @@ type documentImporter struct {
 }
 
 // NewImportAdapter builds the importer.ImportConfigAdapter for doc.
-func NewImportAdapter(doc *Document) (importer.ImportConfigAdapter, error) {
+func NewImportAdapter(doc *csreader.Document) (importer.ImportConfigAdapter, error) {
 	root, err := mergeConfigBlobs(doc.Config)
 	if err != nil {
 		return nil, fmt.Errorf("configserver: building config for %q: %w", doc.Name, err)

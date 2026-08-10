@@ -22,6 +22,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/cache/configserver"
 	"github.com/sdcio/data-server/pkg/tree/importer"
+	csimporter "github.com/sdcio/data-server/pkg/tree/importer/configserver"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/sdc-protos/tree_persist"
 )
@@ -56,6 +57,20 @@ func NewConfigServerCache(reader configserver.LocalConfigReader, namespace strin
 		reader:    reader,
 		namespace: namespace,
 		running:   map[string]*tree_persist.Intent{},
+	}
+}
+
+// NewConfigServerClient composes a reader-backed *ConfigServerCache with the
+// generic noopIntentWriter into a full Client. ConfigServerCache alone never
+// implements IntentWriter (config-server/kube-api is the sole writer of real
+// Intents), so this is the one seam Server.createCacheClient's config-server
+// case uses to assemble s.cacheClient.
+func NewConfigServerClient(reader configserver.LocalConfigReader, namespace string) Client {
+	return struct {
+		*ConfigServerCache
+		noopIntentWriter
+	}{
+		ConfigServerCache: NewConfigServerCache(reader, namespace),
 	}
 }
 
@@ -141,19 +156,7 @@ func (c *ConfigServerCache) InstanceIntentGet(ctx context.Context, cacheName str
 	if err != nil {
 		return nil, err
 	}
-	return configserver.NewImportAdapter(doc)
-}
-
-// InstanceIntentModify is an unconditional no-op: config-server/kube-api
-// owns writes to real intents, this backend has nothing to do.
-func (c *ConfigServerCache) InstanceIntentModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error {
-	return nil
-}
-
-// InstanceIntentDelete is an unconditional no-op, for the same reason as
-// InstanceIntentModify.
-func (c *ConfigServerCache) InstanceIntentDelete(ctx context.Context, cacheName string, intentName string, IgnoreNonExisting bool) error {
-	return nil
+	return csimporter.NewImportAdapter(doc)
 }
 
 // InstanceIntentExists calls Get and maps "not found" to (false, nil),
@@ -188,7 +191,7 @@ func (c *ConfigServerCache) InstanceIntentGetAll(ctx context.Context, cacheName 
 	}
 
 	for _, d := range docs {
-		adapter, err := configserver.NewImportAdapter(d)
+		adapter, err := csimporter.NewImportAdapter(d)
 		if err != nil {
 			errChan <- err
 			return
@@ -228,4 +231,13 @@ func (c *ConfigServerCache) InstanceRunningModify(ctx context.Context, cacheName
 	return nil
 }
 
-var _ Client = (*ConfigServerCache)(nil)
+// ConfigServerCache deliberately does not satisfy IntentWriter — real-Intent
+// writes are config-server/kube-api's job, not this backend's, and there is
+// no method left on the type to no-op that away. Server.createCacheClient
+// composes noopIntentWriter alongside *ConfigServerCache to produce a full
+// Client.
+var (
+	_ IntentReader      = (*ConfigServerCache)(nil)
+	_ RunningStore      = (*ConfigServerCache)(nil)
+	_ InstanceLifecycle = (*ConfigServerCache)(nil)
+)

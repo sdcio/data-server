@@ -18,6 +18,286 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
+// MockIntentReader is a mock of IntentReader interface.
+type MockIntentReader struct {
+	ctrl     *gomock.Controller
+	recorder *MockIntentReaderMockRecorder
+	isgomock struct{}
+}
+
+// MockIntentReaderMockRecorder is the mock recorder for MockIntentReader.
+type MockIntentReaderMockRecorder struct {
+	mock *MockIntentReader
+}
+
+// NewMockIntentReader creates a new mock instance.
+func NewMockIntentReader(ctrl *gomock.Controller) *MockIntentReader {
+	mock := &MockIntentReader{ctrl: ctrl}
+	mock.recorder = &MockIntentReaderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockIntentReader) EXPECT() *MockIntentReaderMockRecorder {
+	return m.recorder
+}
+
+// InstanceIntentExists mocks base method.
+func (m *MockIntentReader) InstanceIntentExists(ctx context.Context, cacheName, intentName string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceIntentExists", ctx, cacheName, intentName)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// InstanceIntentExists indicates an expected call of InstanceIntentExists.
+func (mr *MockIntentReaderMockRecorder) InstanceIntentExists(ctx, cacheName, intentName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceIntentExists", reflect.TypeOf((*MockIntentReader)(nil).InstanceIntentExists), ctx, cacheName, intentName)
+}
+
+// InstanceIntentGet mocks base method.
+func (m *MockIntentReader) InstanceIntentGet(ctx context.Context, cacheName, intentName string) (importer.ImportConfigAdapter, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceIntentGet", ctx, cacheName, intentName)
+	ret0, _ := ret[0].(importer.ImportConfigAdapter)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// InstanceIntentGet indicates an expected call of InstanceIntentGet.
+func (mr *MockIntentReaderMockRecorder) InstanceIntentGet(ctx, cacheName, intentName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceIntentGet", reflect.TypeOf((*MockIntentReader)(nil).InstanceIntentGet), ctx, cacheName, intentName)
+}
+
+// InstanceIntentGetAll mocks base method.
+func (m *MockIntentReader) InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "InstanceIntentGetAll", ctx, cacheName, excludeIntentNames, intentChan, errChan)
+}
+
+// InstanceIntentGetAll indicates an expected call of InstanceIntentGetAll.
+func (mr *MockIntentReaderMockRecorder) InstanceIntentGetAll(ctx, cacheName, excludeIntentNames, intentChan, errChan any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceIntentGetAll", reflect.TypeOf((*MockIntentReader)(nil).InstanceIntentGetAll), ctx, cacheName, excludeIntentNames, intentChan, errChan)
+}
+
+// InstanceIntentsList mocks base method.
+func (m *MockIntentReader) InstanceIntentsList(ctx context.Context, cacheInstanceName string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceIntentsList", ctx, cacheInstanceName)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// InstanceIntentsList indicates an expected call of InstanceIntentsList.
+func (mr *MockIntentReaderMockRecorder) InstanceIntentsList(ctx, cacheInstanceName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceIntentsList", reflect.TypeOf((*MockIntentReader)(nil).InstanceIntentsList), ctx, cacheInstanceName)
+}
+
+// MockIntentWriter is a mock of IntentWriter interface.
+type MockIntentWriter struct {
+	ctrl     *gomock.Controller
+	recorder *MockIntentWriterMockRecorder
+	isgomock struct{}
+}
+
+// MockIntentWriterMockRecorder is the mock recorder for MockIntentWriter.
+type MockIntentWriterMockRecorder struct {
+	mock *MockIntentWriter
+}
+
+// NewMockIntentWriter creates a new mock instance.
+func NewMockIntentWriter(ctrl *gomock.Controller) *MockIntentWriter {
+	mock := &MockIntentWriter{ctrl: ctrl}
+	mock.recorder = &MockIntentWriterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockIntentWriter) EXPECT() *MockIntentWriterMockRecorder {
+	return m.recorder
+}
+
+// InstanceIntentDelete mocks base method.
+func (m *MockIntentWriter) InstanceIntentDelete(ctx context.Context, cacheName, intentName string, IgnoreNonExisting bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceIntentDelete", ctx, cacheName, intentName, IgnoreNonExisting)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstanceIntentDelete indicates an expected call of InstanceIntentDelete.
+func (mr *MockIntentWriterMockRecorder) InstanceIntentDelete(ctx, cacheName, intentName, IgnoreNonExisting any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceIntentDelete", reflect.TypeOf((*MockIntentWriter)(nil).InstanceIntentDelete), ctx, cacheName, intentName, IgnoreNonExisting)
+}
+
+// InstanceIntentModify mocks base method.
+func (m *MockIntentWriter) InstanceIntentModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceIntentModify", ctx, cacheName, intent)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstanceIntentModify indicates an expected call of InstanceIntentModify.
+func (mr *MockIntentWriterMockRecorder) InstanceIntentModify(ctx, cacheName, intent any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceIntentModify", reflect.TypeOf((*MockIntentWriter)(nil).InstanceIntentModify), ctx, cacheName, intent)
+}
+
+// MockRunningStore is a mock of RunningStore interface.
+type MockRunningStore struct {
+	ctrl     *gomock.Controller
+	recorder *MockRunningStoreMockRecorder
+	isgomock struct{}
+}
+
+// MockRunningStoreMockRecorder is the mock recorder for MockRunningStore.
+type MockRunningStoreMockRecorder struct {
+	mock *MockRunningStore
+}
+
+// NewMockRunningStore creates a new mock instance.
+func NewMockRunningStore(ctrl *gomock.Controller) *MockRunningStore {
+	mock := &MockRunningStore{ctrl: ctrl}
+	mock.recorder = &MockRunningStoreMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockRunningStore) EXPECT() *MockRunningStoreMockRecorder {
+	return m.recorder
+}
+
+// InstanceRunningGet mocks base method.
+func (m *MockRunningStore) InstanceRunningGet(ctx context.Context, cacheName string) (importer.ImportConfigAdapter, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceRunningGet", ctx, cacheName)
+	ret0, _ := ret[0].(importer.ImportConfigAdapter)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// InstanceRunningGet indicates an expected call of InstanceRunningGet.
+func (mr *MockRunningStoreMockRecorder) InstanceRunningGet(ctx, cacheName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceRunningGet", reflect.TypeOf((*MockRunningStore)(nil).InstanceRunningGet), ctx, cacheName)
+}
+
+// InstanceRunningModify mocks base method.
+func (m *MockRunningStore) InstanceRunningModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceRunningModify", ctx, cacheName, intent)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstanceRunningModify indicates an expected call of InstanceRunningModify.
+func (mr *MockRunningStoreMockRecorder) InstanceRunningModify(ctx, cacheName, intent any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceRunningModify", reflect.TypeOf((*MockRunningStore)(nil).InstanceRunningModify), ctx, cacheName, intent)
+}
+
+// MockInstanceLifecycle is a mock of InstanceLifecycle interface.
+type MockInstanceLifecycle struct {
+	ctrl     *gomock.Controller
+	recorder *MockInstanceLifecycleMockRecorder
+	isgomock struct{}
+}
+
+// MockInstanceLifecycleMockRecorder is the mock recorder for MockInstanceLifecycle.
+type MockInstanceLifecycleMockRecorder struct {
+	mock *MockInstanceLifecycle
+}
+
+// NewMockInstanceLifecycle creates a new mock instance.
+func NewMockInstanceLifecycle(ctrl *gomock.Controller) *MockInstanceLifecycle {
+	mock := &MockInstanceLifecycle{ctrl: ctrl}
+	mock.recorder = &MockInstanceLifecycleMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockInstanceLifecycle) EXPECT() *MockInstanceLifecycleMockRecorder {
+	return m.recorder
+}
+
+// InstanceClose mocks base method.
+func (m *MockInstanceLifecycle) InstanceClose(ctx context.Context, cacheInstanceName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceClose", ctx, cacheInstanceName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstanceClose indicates an expected call of InstanceClose.
+func (mr *MockInstanceLifecycleMockRecorder) InstanceClose(ctx, cacheInstanceName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceClose", reflect.TypeOf((*MockInstanceLifecycle)(nil).InstanceClose), ctx, cacheInstanceName)
+}
+
+// InstanceCreate mocks base method.
+func (m *MockInstanceLifecycle) InstanceCreate(ctx context.Context, cacheInstanceName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceCreate", ctx, cacheInstanceName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstanceCreate indicates an expected call of InstanceCreate.
+func (mr *MockInstanceLifecycleMockRecorder) InstanceCreate(ctx, cacheInstanceName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceCreate", reflect.TypeOf((*MockInstanceLifecycle)(nil).InstanceCreate), ctx, cacheInstanceName)
+}
+
+// InstanceDelete mocks base method.
+func (m *MockInstanceLifecycle) InstanceDelete(ctx context.Context, cacheInstanceName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceDelete", ctx, cacheInstanceName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstanceDelete indicates an expected call of InstanceDelete.
+func (mr *MockInstanceLifecycleMockRecorder) InstanceDelete(ctx, cacheInstanceName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceDelete", reflect.TypeOf((*MockInstanceLifecycle)(nil).InstanceDelete), ctx, cacheInstanceName)
+}
+
+// InstanceExists mocks base method.
+func (m *MockInstanceLifecycle) InstanceExists(ctx context.Context, cacheInstanceName string) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceExists", ctx, cacheInstanceName)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// InstanceExists indicates an expected call of InstanceExists.
+func (mr *MockInstanceLifecycleMockRecorder) InstanceExists(ctx, cacheInstanceName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceExists", reflect.TypeOf((*MockInstanceLifecycle)(nil).InstanceExists), ctx, cacheInstanceName)
+}
+
+// InstancesList mocks base method.
+func (m *MockInstanceLifecycle) InstancesList(ctx context.Context) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstancesList", ctx)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// InstancesList indicates an expected call of InstancesList.
+func (mr *MockInstanceLifecycleMockRecorder) InstancesList(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstancesList", reflect.TypeOf((*MockInstanceLifecycle)(nil).InstancesList), ctx)
+}
+
 // MockClient is a mock of Client interface.
 type MockClient struct {
 	ctrl     *gomock.Controller

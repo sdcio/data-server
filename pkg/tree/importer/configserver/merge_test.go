@@ -18,10 +18,11 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	csreader "github.com/sdcio/data-server/pkg/cache/configserver"
 )
 
 func TestMergeConfigBlobs_SimpleLeaf(t *testing.T) {
-	got, err := mergeConfigBlobs([]*ConfigBlob{
+	got, err := mergeConfigBlobs([]*csreader.ConfigBlob{
 		{Path: "/description", Value: []byte(`"top level"`)},
 	})
 	if err != nil {
@@ -34,7 +35,7 @@ func TestMergeConfigBlobs_SimpleLeaf(t *testing.T) {
 }
 
 func TestMergeConfigBlobs_NestedContainer(t *testing.T) {
-	got, err := mergeConfigBlobs([]*ConfigBlob{
+	got, err := mergeConfigBlobs([]*csreader.ConfigBlob{
 		{Path: "/system/config/hostname", Value: []byte(`"router1"`)},
 	})
 	if err != nil {
@@ -53,7 +54,7 @@ func TestMergeConfigBlobs_NestedContainer(t *testing.T) {
 }
 
 func TestMergeConfigBlobs_ListEntry_KeySeeded(t *testing.T) {
-	got, err := mergeConfigBlobs([]*ConfigBlob{
+	got, err := mergeConfigBlobs([]*csreader.ConfigBlob{
 		{Path: "/interface[name=eth0]/config/mtu", Value: []byte(`9000`)},
 	})
 	if err != nil {
@@ -75,7 +76,7 @@ func TestMergeConfigBlobs_ListEntry_KeySeeded(t *testing.T) {
 }
 
 func TestMergeConfigBlobs_MultipleBlobsConvergeOnSameListEntry(t *testing.T) {
-	got, err := mergeConfigBlobs([]*ConfigBlob{
+	got, err := mergeConfigBlobs([]*csreader.ConfigBlob{
 		{Path: "/interface[name=eth0]/config/mtu", Value: []byte(`9000`)},
 		{Path: "/interface[name=eth0]/config/description", Value: []byte(`"uplink"`)},
 		{Path: "/interface[name=eth1]/config/mtu", Value: []byte(`1500`)},
@@ -106,7 +107,7 @@ func TestMergeConfigBlobs_MultipleBlobsConvergeOnSameListEntry(t *testing.T) {
 }
 
 func TestMergeConfigBlobs_MultiKeyList(t *testing.T) {
-	got, err := mergeConfigBlobs([]*ConfigBlob{
+	got, err := mergeConfigBlobs([]*csreader.ConfigBlob{
 		{Path: "/neighbor[local-as=65001][peer-as=65002]/description", Value: []byte(`"peer"`)},
 	})
 	if err != nil {
@@ -127,7 +128,7 @@ func TestMergeConfigBlobs_MultiKeyList(t *testing.T) {
 }
 
 func TestMergeConfigBlobs_NoValue(t *testing.T) {
-	got, err := mergeConfigBlobs([]*ConfigBlob{
+	got, err := mergeConfigBlobs([]*csreader.ConfigBlob{
 		{Path: "/enabled"},
 	})
 	if err != nil {
@@ -149,7 +150,7 @@ func TestMergeConfigBlobs_Empty(t *testing.T) {
 }
 
 func TestMergeConfigBlobs_InvalidPath(t *testing.T) {
-	_, err := mergeConfigBlobs([]*ConfigBlob{
+	_, err := mergeConfigBlobs([]*csreader.ConfigBlob{
 		{Path: "[invalid", Value: []byte(`1`)},
 	})
 	if err == nil {
@@ -158,7 +159,7 @@ func TestMergeConfigBlobs_InvalidPath(t *testing.T) {
 }
 
 func TestMergeConfigBlobs_InvalidJSON(t *testing.T) {
-	_, err := mergeConfigBlobs([]*ConfigBlob{
+	_, err := mergeConfigBlobs([]*csreader.ConfigBlob{
 		{Path: "/mtu", Value: []byte(`not-json`)},
 	})
 	if err == nil {
