@@ -113,7 +113,7 @@ func (l *LocalCache) InstanceIntentModify(ctx context.Context, cacheName string,
 // disk-backed mechanism InstanceIntentGet/InstanceIntentModify already use, so the
 // local backend's on-disk behavior for "running" is unchanged by the split — it
 // simply becomes unreachable via the intent-name-keyed InstanceIntent* surface.
-func (l *LocalCache) InstanceRunningGet(ctx context.Context, cacheName string) (*tree_persist.Intent, error) {
+func (l *LocalCache) InstanceRunningGet(ctx context.Context, cacheName string) (importer.ImportConfigAdapter, error) {
 	b, err := l.Cache.InstanceIntentGet(ctx, cacheName, consts.RunningIntentName)
 	if err != nil {
 		return nil, err
@@ -124,7 +124,7 @@ func (l *LocalCache) InstanceRunningGet(ctx context.Context, cacheName string) (
 	if err != nil {
 		return nil, err
 	}
-	return result, nil
+	return treeproto.NewProtoTreeImporter(result), nil
 }
 
 func (l *LocalCache) InstanceRunningModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error {

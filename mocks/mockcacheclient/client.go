@@ -184,10 +184,10 @@ func (mr *MockClientMockRecorder) InstanceIntentsList(ctx, cacheInstanceName any
 }
 
 // InstanceRunningGet mocks base method.
-func (m *MockClient) InstanceRunningGet(ctx context.Context, cacheName string) (*tree_persist.Intent, error) {
+func (m *MockClient) InstanceRunningGet(ctx context.Context, cacheName string) (importer.ImportConfigAdapter, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstanceRunningGet", ctx, cacheName)
-	ret0, _ := ret[0].(*tree_persist.Intent)
+	ret0, _ := ret[0].(importer.ImportConfigAdapter)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
