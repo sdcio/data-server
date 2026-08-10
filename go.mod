@@ -3,7 +3,6 @@ module github.com/sdcio/data-server
 go 1.25.0
 
 replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.2-2
-replace github.com/scrapli/scrapligo => github.com/steiler/scrapligo v0.0.0-20260805094018-c96889d37120
 
 require (
 	github.com/AlekSi/pointer v1.2.0
@@ -21,7 +20,7 @@ require (
 	github.com/openconfig/goyang v1.6.0
 	github.com/openconfig/ygot v0.34.0
 	github.com/prometheus/client_golang v1.23.2
-	github.com/scrapli/scrapligo v1.4.0
+	github.com/scrapli/scrapligo v1.4.1
 	github.com/sdcio/cache v0.0.38
 	github.com/sdcio/logger v0.0.3
 	github.com/sdcio/schema-server v0.0.34
@@ -117,4 +116,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.3 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
-
