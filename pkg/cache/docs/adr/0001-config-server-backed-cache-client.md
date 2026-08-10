@@ -34,7 +34,7 @@ type ImportConfigAdapter interface {
 
 `ProtoTreeImporter` (local backend, wraps `*tree_persist.Intent`) implements both directly from fields it already carries. `JsonTreeImporter`/`XmlTreeImporter` (used only for synced `running`/device data via netconf/gnmi sync, never for real intents) grow trivial stubs returning `false`/`nil`. A future config-server-backed importer implements `GetOrphan()` from `Config.Spec.Lifecycle.DeletionPolicy == DeletionOrphan` and `GetSensitivePaths()` from the joined `SensitiveConfig.Spec.SensitivePaths` (see field mapping and Known limitations).
 
-**`cache.Client`** (`pkg/cache/cache.go`) — real-intent methods generalize their return/element type from `*tree_persist.Intent` to `importer.ImportConfigAdapter`; `"running"` moves to two new methods:
+**`cache.Client`** (`pkg/cache/cache.go`) — every read-side method, `"running"` included, generalizes its return/element type from `*tree_persist.Intent` to `importer.ImportConfigAdapter`; `"running"` moves to two new methods:
 
 ```go
 type Client interface {
@@ -52,7 +52,7 @@ type Client interface {
 	InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error)
 
 	// running: always in-process/in-memory, independent of Cache.Type.
-	InstanceRunningGet(ctx context.Context, cacheName string) (*tree_persist.Intent, error)
+	InstanceRunningGet(ctx context.Context, cacheName string) (importer.ImportConfigAdapter, error)
 	InstanceRunningModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error
 }
 ```
@@ -72,10 +72,12 @@ type CacheClientBound interface {
 	IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error)
 	InstanceClose(ctx context.Context) error
 
-	RunningGet(ctx context.Context) (*tree_persist.Intent, error)
+	RunningGet(ctx context.Context) (importer.ImportConfigAdapter, error)
 	RunningModify(ctx context.Context, intent *tree_persist.Intent) error
 }
 ```
+
+**Amendment (see below the fold):** `InstanceRunningGet`/`RunningGet` originally returned `*tree_persist.Intent` — see "Amendment: `InstanceRunningGet` returns `importer.ImportConfigAdapter`" for why that was corrected before implementation landed.
 
 **New `cache.Client` implementation** (`pkg/cache/configserver.go` or similar, package `cache`) selected by a new `case "config-server":` in `Server.createCacheClient` (`pkg/server/cache.go`), alongside a new `s.config.Cache.Type` value and whatever connection settings the config-server-side local RPC needs (extends `config.CacheConfig`, `pkg/config/datastore.go`). It composes two independent things behind the one `Client` interface:
 
@@ -107,7 +109,15 @@ One unary `Get(target, name)` / `List(target)` RPC pair (per the contract above)
 
 ### `"running"` call sites
 
-`replaceIntent` (`pkg/datastore/transaction_rpc.go:101`) calls `RunningGet` instead of `IntentGet(ctx, consts.RunningIntentName)`. `writeBackSyncTree` (`pkg/datastore/transaction_rpc.go:476`) calls `RunningModify` instead of `IntentModify`. Neither passes `consts.RunningIntentName` through the generic real-intent surface anymore. `GetIntent`'s own `"running"` branch (`pkg/datastore/intent_rpc.go:66`) is unaffected — it already bypasses the cache entirely and reads the in-memory `syncTree` directly.
+`replaceIntent` (`pkg/datastore/transaction_rpc.go:101`) calls `RunningGet` instead of `IntentGet(ctx, consts.RunningIntentName)`, and passes the result straight to `root.ImportConfig(...)` — same as the real-intent path, no local wrapping. `writeBackSyncTree` (`pkg/datastore/transaction_rpc.go:476`) calls `RunningModify` instead of `IntentModify`. Neither passes `consts.RunningIntentName` through the generic real-intent surface anymore. `GetIntent`'s own `"running"` branch (`pkg/datastore/intent_rpc.go:66`) is unaffected — it already bypasses the cache entirely and reads the in-memory `syncTree` directly.
+
+## Amendment: `InstanceRunningGet` returns `importer.ImportConfigAdapter`
+
+The original version of this ADR gave `InstanceRunningGet`/`RunningGet` the concrete return type `*tree_persist.Intent`, on the reasoning that `"running"` is structurally different from a real `Intent` (in-process only, single producer/consumer, no second backend representation), so wrapping it in `importer.ImportConfigAdapter` looked like unjustified abstraction over one implementation.
+
+That reasoning is correct about the *domain* (`"running"` is still not an `Intent` — different accessor names, different storage, excluded from `InstanceIntentGetAll`, unchanged by this amendment) but wrong about what the *return type* is for. `importer.ImportConfigAdapter` isn't "the intent-shaped adapter" — it's the mechanical contract every `Client` read method uses to hand back "data ready for `Tree.ImportConfig`," independent of how many concrete producers exist behind it. Under the original signature, every caller of `RunningGet` had to separately know `"running"` is proto-backed and wrap it themselves (`treeproto.NewProtoTreeImporter(runningIntent)` in `replaceIntent`) — the exact backend-representation leak `InstanceIntentGet` was designed to avoid, just relocated to the call site instead of removed.
+
+The fix: `InstanceRunningGet`/`RunningGet` return `importer.ImportConfigAdapter`, and each `Client` implementation wraps its own `*tree_persist.Intent` before returning it — `LocalCache` and `ConfigServerCache` both already have the value in hand, so the wrap is trivial in both. `transaction_rpc.go` no longer imports `treeproto` for this purpose at all.
 
 ## Known limitations
 
