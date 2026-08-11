@@ -29,7 +29,6 @@ func TestCreateConfigServerCacheClient(t *testing.T) {
 			Cache: &config.CacheConfig{
 				Type:      "config-server",
 				Address:   "localhost:50051",
-				Namespace: "sdcio",
 			},
 		},
 	}
@@ -53,7 +52,6 @@ func TestCreateConfigServerCacheClient_WritesAreNoOps(t *testing.T) {
 			Cache: &config.CacheConfig{
 				Type:      "config-server",
 				Address:   "localhost:50051",
-				Namespace: "sdcio",
 			},
 		},
 	}

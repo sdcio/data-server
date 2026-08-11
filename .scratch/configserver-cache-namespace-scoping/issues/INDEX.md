@@ -6,7 +6,7 @@ Ticket list for this effort, in dependency order. Each ticket's `Status:` line l
 |---|--------|-----------|--------|
 | [01](01-namespace-name-split-helper.md) | Standalone namespace/name split helper | None | done |
 | [02](02-wire-split-into-configservercache.md) | `ConfigServerCache` derives namespace/name per call, drops fixed `namespace` field | 01 | done |
-| [03](03-delete-cacheconfig-namespace-field.md) | Delete `CacheConfig.Namespace` config field and its validation | 02 | ready-for-agent |
+| [03](03-delete-cacheconfig-namespace-field.md) | Delete `CacheConfig.Namespace` config field and its validation | 02 | done |
 
 Not ticketed: `pkg/cache/CONTEXT.md`'s "Datastore name" / "Target namespace" / "Target name" glossary entries (spec implementation decision #6) were already added during the `/grilling` session that produced the spec — no further action needed.
 

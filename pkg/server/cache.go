@@ -73,7 +73,7 @@ func (s *Server) createLocalCacheClient(ctx context.Context) error {
 // stays independent in-memory state owned by cache.ConfigServerCache itself.
 func (s *Server) createConfigServerCacheClient(ctx context.Context) error {
 	log := logf.FromContext(ctx)
-	log.Info("initializing config-server cache client", "address", s.config.Cache.Address, "namespace", s.config.Cache.Namespace)
+	log.Info("initializing config-server cache client", "address", s.config.Cache.Address)
 	cc, err := configserver.Dial(s.config.Cache.Address)
 	if err != nil {
 		return err

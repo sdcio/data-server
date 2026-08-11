@@ -145,9 +145,6 @@ type CacheConfig struct {
 	// ConfigReadService (see the ADR's "New cache.Client implementation"
 	// section).
 	Address string `yaml:"address,omitempty" json:"address,omitempty"`
-	// Config-server cache attr: the southbound-target namespace every cache
-	// instance is scoped under.
-	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 func (ds *DatastoreConfig) ValidateSetDefaults() error {
@@ -274,9 +271,6 @@ func (c *CacheConfig) validateSetDefaults() error {
 		}
 		if _, _, err := net.SplitHostPort(c.Address); err != nil {
 			return err
-		}
-		if c.Namespace == "" {
-			return errors.New("missing config-server cache namespace")
 		}
 	default:
 		return fmt.Errorf("unknown cache type: %q", c.Type)
