@@ -28,7 +28,6 @@ func TestCreateConfigServerCacheClient(t *testing.T) {
 			Cache: &config.CacheConfig{
 				Type:      "config-server",
 				Address:   "localhost:50051",
-				Namespace: "sdcio",
 			},
 		},
 	}
@@ -43,5 +42,33 @@ func TestCreateConfigServerCacheClient(t *testing.T) {
 	}
 	if _, ok := s.cacheClient.(cache.IntentReader); !ok {
 		t.Fatalf("cacheClient = %T, does not implement cache.IntentReader", s.cacheClient)
+	}
+	var _ cache.Client = s.cacheClient
+}
+
+// TestCreateConfigServerCacheClient_WritesAreNoOps verifies the config-server
+// case composes a Client whose IntentModify/IntentDelete behavior is the
+// generic no-op (noopIntentWriter) — reachable without ever going through
+// the read seam (configserver.LocalConfigReader), since a real backend would
+// need network/reader wiring to answer at all.
+func TestCreateConfigServerCacheClient_WritesAreNoOps(t *testing.T) {
+	s := &Server{
+		config: &config.Config{
+			Cache: &config.CacheConfig{
+				Type:    "config-server",
+				Address: "localhost:50051",
+			},
+		},
+	}
+
+	if err := s.createConfigServerCacheClient(context.Background()); err != nil {
+		t.Fatalf("createConfigServerCacheClient() error = %v", err)
+	}
+
+	if err := s.cacheClient.InstanceIntentModify(context.Background(), "ns1.target1", nil); err != nil {
+		t.Errorf("InstanceIntentModify() error = %v, want nil", err)
+	}
+	if err := s.cacheClient.InstanceIntentDelete(context.Background(), "ns1.target1", "intent1", false); err != nil {
+		t.Errorf("InstanceIntentDelete() error = %v, want nil", err)
 	}
 }
