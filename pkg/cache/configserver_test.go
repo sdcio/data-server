@@ -29,13 +29,14 @@ import (
 
 const (
 	testNamespace = "ns1"
-	testCacheName = "target1"
+	testTarget    = "target1"
+	testCacheName = testNamespace + "." + testTarget
 )
 
 func newTestConfigServerCache(t *testing.T) (*ConfigServerCache, *configserver.FakeLocalConfigReader) {
 	t.Helper()
 	reader := configserver.NewFakeLocalConfigReader()
-	return NewConfigServerCache(reader, testNamespace), reader
+	return NewConfigServerCache(reader), reader
 }
 
 // TestConfigServerCache_InstanceIntentGet_FieldMapping verifies
@@ -46,7 +47,7 @@ func TestConfigServerCache_InstanceIntentGet_FieldMapping(t *testing.T) {
 	c, reader := newTestConfigServerCache(t)
 
 	sensitivePaths := []*sdcpb.Path{{Elem: []*sdcpb.PathElem{{Name: "secret"}}}}
-	reader.Seed(configserver.Target{Namespace: testNamespace, Name: testCacheName}, &configserver.Document{
+	reader.Seed(configserver.Target{Namespace: testNamespace, Name: testTarget}, &configserver.Document{
 		Name:           "intent1",
 		Priority:       10,
 		NonRevertive:   true,
@@ -88,7 +89,7 @@ func TestConfigServerCache_InstanceIntentGet_NotFound(t *testing.T) {
 func TestConfigServerCache_InstanceIntentsList(t *testing.T) {
 	ctx := context.Background()
 	c, reader := newTestConfigServerCache(t)
-	target := configserver.Target{Namespace: testNamespace, Name: testCacheName}
+	target := configserver.Target{Namespace: testNamespace, Name: testTarget}
 	reader.Seed(target,
 		&configserver.Document{Name: "intent2"},
 		&configserver.Document{Name: "intent1"},
@@ -106,7 +107,7 @@ func TestConfigServerCache_InstanceIntentsList(t *testing.T) {
 func TestConfigServerCache_InstanceIntentGetAll(t *testing.T) {
 	ctx := context.Background()
 	c, reader := newTestConfigServerCache(t)
-	target := configserver.Target{Namespace: testNamespace, Name: testCacheName}
+	target := configserver.Target{Namespace: testNamespace, Name: testTarget}
 	reader.Seed(target,
 		&configserver.Document{Name: "intent1", Priority: 1},
 		&configserver.Document{Name: "intent2", Priority: 2},
@@ -154,7 +155,7 @@ func TestConfigServerCache_InstanceIntentGetAll_NoDocuments(t *testing.T) {
 // rather than blocking forever on an unbuffered, unread channel.
 func TestConfigServerCache_InstanceIntentGetAll_ContextCancelled(t *testing.T) {
 	c, reader := newTestConfigServerCache(t)
-	target := configserver.Target{Namespace: testNamespace, Name: testCacheName}
+	target := configserver.Target{Namespace: testNamespace, Name: testTarget}
 	reader.Seed(target,
 		&configserver.Document{Name: "intent1"},
 		&configserver.Document{Name: "intent2"},
@@ -188,7 +189,7 @@ func TestConfigServerCache_InstanceIntentGetAll_ContextCancelled(t *testing.T) {
 func TestConfigServerCache_InstanceIntentExists(t *testing.T) {
 	ctx := context.Background()
 	c, reader := newTestConfigServerCache(t)
-	target := configserver.Target{Namespace: testNamespace, Name: testCacheName}
+	target := configserver.Target{Namespace: testNamespace, Name: testTarget}
 	reader.Seed(target, &configserver.Document{Name: "intent1"})
 
 	exists, err := c.InstanceIntentExists(ctx, testCacheName, "intent1")
@@ -205,6 +206,65 @@ func TestConfigServerCache_InstanceIntentExists(t *testing.T) {
 	}
 	if exists {
 		t.Error("InstanceIntentExists() = true, want false")
+	}
+}
+
+// TestConfigServerCache_MalformedDatastoreName_ReadCallers verifies
+// InstanceIntentsList/InstanceIntentGet/InstanceIntentExists all surface
+// ErrMalformedDatastoreName as a normal returned error when the
+// cacheInstanceName they're called with doesn't decode into a
+// namespace/name pair, rather than building a lookup with an empty
+// namespace or sending the whole compound name as the bare target name.
+func TestConfigServerCache_MalformedDatastoreName_ReadCallers(t *testing.T) {
+	ctx := context.Background()
+	c, _ := newTestConfigServerCache(t)
+	const malformed = "no-dot-here"
+
+	if _, err := c.InstanceIntentsList(ctx, malformed); !errors.Is(err, ErrMalformedDatastoreName) {
+		t.Errorf("InstanceIntentsList() error = %v, want ErrMalformedDatastoreName", err)
+	}
+	if _, err := c.InstanceIntentGet(ctx, malformed, "intent1"); !errors.Is(err, ErrMalformedDatastoreName) {
+		t.Errorf("InstanceIntentGet() error = %v, want ErrMalformedDatastoreName", err)
+	}
+	if _, err := c.InstanceIntentExists(ctx, malformed, "intent1"); !errors.Is(err, ErrMalformedDatastoreName) {
+		t.Errorf("InstanceIntentExists() error = %v, want ErrMalformedDatastoreName", err)
+	}
+}
+
+// TestConfigServerCache_InstanceIntentGetAll_MalformedDatastoreName verifies
+// InstanceIntentGetAll sends ErrMalformedDatastoreName on its existing
+// errChan, the same channel real reader.List errors already use, and closes
+// both channels.
+func TestConfigServerCache_InstanceIntentGetAll_MalformedDatastoreName(t *testing.T) {
+	c, _ := newTestConfigServerCache(t)
+	const malformed = "no-dot-here"
+
+	intentChan := make(chan importer.ImportConfigAdapter)
+	errChan := make(chan error, 1)
+	go c.InstanceIntentGetAll(context.Background(), malformed, nil, intentChan, errChan)
+
+	if _, open := <-intentChan; open {
+		t.Error("intentChan should be closed without ever sending on a malformed name")
+	}
+	if err := <-errChan; !errors.Is(err, ErrMalformedDatastoreName) {
+		t.Errorf("errChan error = %v, want ErrMalformedDatastoreName", err)
+	}
+}
+
+// TestConfigServerCache_InstanceCreate_MalformedDatastoreName verifies
+// InstanceCreate rejects a malformed datastore name at creation time,
+// before it ever mutates the running map — the instance must not be left
+// half-created.
+func TestConfigServerCache_InstanceCreate_MalformedDatastoreName(t *testing.T) {
+	ctx := context.Background()
+	c, _ := newTestConfigServerCache(t)
+	const malformed = "no-dot-here"
+
+	if err := c.InstanceCreate(ctx, malformed); !errors.Is(err, ErrMalformedDatastoreName) {
+		t.Fatalf("InstanceCreate() error = %v, want ErrMalformedDatastoreName", err)
+	}
+	if c.InstanceExists(ctx, malformed) {
+		t.Error("InstanceExists() = true after InstanceCreate rejected a malformed name")
 	}
 }
 
@@ -272,7 +332,7 @@ func TestConfigServerCache_RunningIndependentOfSeam(t *testing.T) {
 	// The seam was never seeded with anything and never asked for
 	// "running" — List/Get must still be untouched (fake has no docs at
 	// all for this target).
-	docs, err := reader.List(ctx, configserver.Target{Namespace: testNamespace, Name: testCacheName})
+	docs, err := reader.List(ctx, configserver.Target{Namespace: testNamespace, Name: testTarget})
 	if err != nil {
 		t.Fatalf("reader.List() error = %v", err)
 	}
@@ -312,7 +372,7 @@ func TestConfigServerCache_InstanceRunningGet_UnknownInstance(t *testing.T) {
 // that behavior lives in noopIntentWriter, composed in at
 // Server.createCacheClient instead.
 func TestConfigServerCache_ImplementsReaderCapabilities(t *testing.T) {
-	c := NewConfigServerCache(configserver.NewFakeLocalConfigReader(), testNamespace)
+	c := NewConfigServerCache(configserver.NewFakeLocalConfigReader())
 	var (
 		_ IntentReader      = c
 		_ RunningStore      = c
