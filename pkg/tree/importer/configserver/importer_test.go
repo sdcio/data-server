@@ -103,5 +103,5 @@ func TestNewImportAdapter_ImplementsInterface(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewImportAdapter() error = %v", err)
 	}
-	var _ importer.ImportConfigAdapter = adapter
+	var _ importer.ImportConfigAdapter = adapter //nolint:staticcheck // explicit interface assertion is the point of this test
 }

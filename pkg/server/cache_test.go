@@ -38,7 +38,7 @@ func TestCreateConfigServerCacheClient(t *testing.T) {
 		t.Fatalf("createConfigServerCacheClient() error = %v", err)
 	}
 
-	var _ cache.Client = s.cacheClient
+	var _ cache.Client = s.cacheClient //nolint:staticcheck // explicit interface assertion is the point of this test
 }
 
 // TestCreateConfigServerCacheClient_WritesAreNoOps verifies the config-server
