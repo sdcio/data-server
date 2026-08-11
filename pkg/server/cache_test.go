@@ -38,7 +38,10 @@ func TestCreateConfigServerCacheClient(t *testing.T) {
 		t.Fatalf("createConfigServerCacheClient() error = %v", err)
 	}
 
-	if _, ok := s.cacheClient.(*cache.ConfigServerCache); !ok {
-		t.Fatalf("cacheClient = %T, want *cache.ConfigServerCache", s.cacheClient)
+	if s.cacheClient == nil {
+		t.Fatal("cacheClient = nil, want a config-server-backed cache.Client")
+	}
+	if _, ok := s.cacheClient.(cache.IntentReader); !ok {
+		t.Fatalf("cacheClient = %T, does not implement cache.IntentReader", s.cacheClient)
 	}
 }

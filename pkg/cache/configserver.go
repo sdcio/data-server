@@ -35,28 +35,43 @@ import (
 // own independent in-memory, per-instance store, entirely separate from the
 // seam.
 type ConfigServerCache struct {
-	reader    configserver.LocalConfigReader
-	namespace string
+	reader configserver.LocalConfigReader
 
 	mu      sync.RWMutex
 	running map[string]*tree_persist.Intent
 }
 
 // NewConfigServerCache returns a Client backed by reader for real Intents.
-// namespace scopes every InstanceIntent* call against reader's
-// configserver.Target{Namespace, Name} shape: data-server has no per-target
-// namespace of its own today, so every cache instance name is resolved
-// against one deployment-wide namespace (the colocated controller's own).
-func NewConfigServerCache(reader configserver.LocalConfigReader, namespace string) *ConfigServerCache {
+// Every InstanceIntent* call derives its target namespace/name from the
+// cacheInstanceName it's given (see target), so a single ConfigServerCache
+// correctly serves datastores across multiple Kubernetes namespaces.
+func NewConfigServerCache(reader configserver.LocalConfigReader) *ConfigServerCache {
 	return &ConfigServerCache{
-		reader:    reader,
-		namespace: namespace,
-		running:   map[string]*tree_persist.Intent{},
+		reader:  reader,
+		running: map[string]*tree_persist.Intent{},
 	}
 }
 
-func (c *ConfigServerCache) target(cacheInstanceName string) configserver.Target {
-	return configserver.Target{Namespace: c.namespace, Name: cacheInstanceName}
+// NewConfigServerClient composes a reader-backed *ConfigServerCache with the
+// generic noopIntentWriter into a full Client. ConfigServerCache alone never
+// implements IntentWriter (config-server/kube-api is the sole writer of real
+// Intents), so this is the one seam Server.createCacheClient's config-server
+// case uses to assemble s.cacheClient.
+func NewConfigServerClient(reader configserver.LocalConfigReader) Client {
+	return struct {
+		*ConfigServerCache
+		noopIntentWriter
+	}{
+		ConfigServerCache: NewConfigServerCache(reader),
+	}
+}
+
+// target derives the target namespace/name from cacheInstanceName, mirroring
+// config-server's own <target namespace>.<target name> datastore-naming
+// convention. It returns ErrMalformedDatastoreName when cacheInstanceName
+// doesn't decode into a non-empty namespace and a non-empty name.
+func (c *ConfigServerCache) target(cacheInstanceName string) (configserver.Target, error) {
+	return splitDatastoreName(cacheInstanceName)
 }
 
 // InstanceCreate/InstanceDelete/InstanceClose/InstanceExists/InstancesList
@@ -68,6 +83,9 @@ func (c *ConfigServerCache) target(cacheInstanceName string) configserver.Target
 // github.com/sdcio/cache Cache.InstanceCreate/InstanceDelete that LocalCache
 // itself defers to for the same methods.
 func (c *ConfigServerCache) InstanceCreate(ctx context.Context, cacheInstanceName string) error {
+	if _, err := c.target(cacheInstanceName); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if _, exists := c.running[cacheInstanceName]; exists {
@@ -123,7 +141,11 @@ func (c *ConfigServerCache) InstancesList(ctx context.Context) []string {
 // always returns full objects on the config-server side, so there is no
 // cheaper name-only mode to prefer.
 func (c *ConfigServerCache) InstanceIntentsList(ctx context.Context, cacheInstanceName string) ([]string, error) {
-	docs, err := c.reader.List(ctx, c.target(cacheInstanceName))
+	target, err := c.target(cacheInstanceName)
+	if err != nil {
+		return nil, err
+	}
+	docs, err := c.reader.List(ctx, target)
 	if err != nil {
 		return nil, err
 	}
@@ -137,30 +159,26 @@ func (c *ConfigServerCache) InstanceIntentsList(ctx context.Context, cacheInstan
 // InstanceIntentGet calls Get, wrapping the result in an
 // importer.IntentAdapter per the ADR's field-mapping table.
 func (c *ConfigServerCache) InstanceIntentGet(ctx context.Context, cacheName string, intentName string) (importer.IntentAdapter, error) {
-	doc, err := c.reader.Get(ctx, c.target(cacheName), intentName)
+	target, err := c.target(cacheName)
+	if err != nil {
+		return nil, err
+	}
+	doc, err := c.reader.Get(ctx, target, intentName)
 	if err != nil {
 		return nil, err
 	}
 	return configserver.NewImportAdapter(doc)
 }
 
-// InstanceIntentModify is an unconditional no-op: config-server/kube-api
-// owns writes to real intents, this backend has nothing to do.
-func (c *ConfigServerCache) InstanceIntentModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error {
-	return nil
-}
-
-// InstanceIntentDelete is an unconditional no-op, for the same reason as
-// InstanceIntentModify.
-func (c *ConfigServerCache) InstanceIntentDelete(ctx context.Context, cacheName string, intentName string, IgnoreNonExisting bool) error {
-	return nil
-}
-
 // InstanceIntentExists calls Get and maps "not found" to (false, nil),
 // matching the Client contract's existing meaning of that return; any other
 // error propagates as (false, err).
 func (c *ConfigServerCache) InstanceIntentExists(ctx context.Context, cacheName string, intentName string) (bool, error) {
-	_, err := c.reader.Get(ctx, c.target(cacheName), intentName)
+	target, err := c.target(cacheName)
+	if err != nil {
+		return false, err
+	}
+	_, err = c.reader.Get(ctx, target, intentName)
 	if err != nil {
 		if errors.Is(err, configserver.ErrNotFound) {
 			return false, nil
@@ -181,7 +199,13 @@ func (c *ConfigServerCache) InstanceIntentGetAll(ctx context.Context, cacheName 
 	defer close(intentChan)
 	defer close(errChan)
 
-	docs, err := c.reader.List(ctx, c.target(cacheName))
+	target, err := c.target(cacheName)
+	if err != nil {
+		errChan <- err
+		return
+	}
+
+	docs, err := c.reader.List(ctx, target)
 	if err != nil {
 		errChan <- err
 		return
@@ -224,5 +248,3 @@ func (c *ConfigServerCache) InstanceRunningModify(ctx context.Context, cacheName
 	c.running[cacheName] = intent
 	return nil
 }
-
-var _ Client = (*ConfigServerCache)(nil)
