@@ -78,7 +78,7 @@ func (s *Server) createConfigServerCacheClient(ctx context.Context) error {
 		return err
 	}
 	reader := configserver.NewGRPCConfigReader(cc)
-	s.cacheClient = cache.NewConfigServerCache(reader, s.config.Cache.Namespace)
+	s.cacheClient = cache.NewConfigServerClient(reader)
 	log.Info("config-server cache client created")
 	return nil
 }
