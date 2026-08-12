@@ -20,7 +20,7 @@ require (
 	github.com/openconfig/goyang v1.6.0
 	github.com/openconfig/ygot v0.34.0
 	github.com/prometheus/client_golang v1.23.2
-	github.com/scrapli/scrapligo v1.4.0
+	github.com/scrapli/scrapligo v1.4.1
 	github.com/sdcio/cache v0.0.38
 	github.com/sdcio/logger v0.0.3
 	github.com/sdcio/schema-server v0.0.34
