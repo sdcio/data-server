@@ -160,8 +160,8 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 	var deletes []*sdcpb.Path
 	var err error
 
-	if t == nil {
-		return nil, targetTypes.ErrNotConnected
+	if err := t.Status().Err(); err != nil {
+		return nil, err
 	}
 
 	// deletes from protos
@@ -251,19 +251,19 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 }
 
 func (t *gnmiTarget) Status() *targetTypes.TargetStatus {
-	result := targetTypes.NewTargetStatus(targetTypes.TargetStatusNotConnected)
+	result := targetTypes.NewTargetStatus(sdcpb.TargetStatus_NOT_CONNECTED)
 
 	if t == nil || t.target == nil {
 		result.Details = "connection not initialized"
 		return result
 	}
-	switch t.target.ConnState() {
-	case connectivity.Ready.String(), connectivity.Idle.String():
-		result.Status = targetTypes.TargetStatusConnected
-		result.Details = t.target.ConnState()
-	case connectivity.Connecting.String(), connectivity.Shutdown.String(), connectivity.TransientFailure.String():
-		result.Status = targetTypes.TargetStatusNotConnected
-		result.Details = t.target.ConnState()
+	state := t.target.ConnectivityState()
+	result.Details = state.String()
+	switch state {
+	case connectivity.Ready, connectivity.Idle:
+		result.Status = sdcpb.TargetStatus_CONNECTED
+	default:
+		result.Status = sdcpb.TargetStatus_NOT_CONNECTED
 	}
 
 	return result

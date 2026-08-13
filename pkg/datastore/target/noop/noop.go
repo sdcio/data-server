@@ -96,7 +96,7 @@ func (t *noopTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb
 
 func (t *noopTarget) Status() *types.TargetStatus {
 	return &types.TargetStatus{
-		Status: types.TargetStatusConnected,
+		Status: sdcpb.TargetStatus_CONNECTED,
 	}
 }
 

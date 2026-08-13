@@ -207,7 +207,7 @@ func (d *Datastore) Delete(ctx context.Context) error {
 
 func (d *Datastore) ConnectionState() *targettypes.TargetStatus {
 	if d.sbi == nil {
-		return targettypes.NewTargetStatus(targettypes.TargetStatusNotConnected)
+		return targettypes.NewTargetStatus(sdcpb.TargetStatus_NOT_CONNECTED)
 	}
 	return d.sbi.Status()
 }

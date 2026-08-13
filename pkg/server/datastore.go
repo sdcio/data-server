@@ -23,7 +23,6 @@ import (
 
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore"
-	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -312,15 +311,9 @@ func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*
 	if err != nil {
 		return nil, err
 	}
-	// map datastore sbi conn state to sdcpb.TargetStatus
-	switch ds.ConnectionState().Status {
-	case targettypes.TargetStatusConnected:
-		rsp.Target.Status = sdcpb.TargetStatus_CONNECTED
-	case targettypes.TargetStatusNotConnected:
-		rsp.Target.Status = sdcpb.TargetStatus_NOT_CONNECTED
-	default:
-		rsp.Target.Status = sdcpb.TargetStatus_UNKNOWN
-	}
+	connState := ds.ConnectionState()
+	rsp.Target.Status = connState.Status
+	rsp.Target.StatusDetails = connState.Details
 
 	rsp.Schema = ds.Config().Schema.GetSchema()
 	return rsp, nil
