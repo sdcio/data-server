@@ -466,7 +466,9 @@ func TestPerformRevert_HoldsDmutexAcrossSnapshotAndApply(t *testing.T) {
 		t.Fatalf("failed to marshal test config: %v", err)
 	}
 	var v any
-	json.Unmarshal([]byte(confStr), &v)
+	if err := json.Unmarshal([]byte(confStr), &v); err != nil {
+		t.Fatalf("failed to unmarshal test config: %v", err)
+	}
 
 	// import as New so it survives into a ToProtoUpdates diff without needing
 	// a competing intent from the cache
