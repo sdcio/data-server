@@ -33,8 +33,7 @@ START:
 	var err error
 	switch s.config.Cache.Type {
 	default:
-		log.Error(nil, "invalid cache type")
-		fmt.Fprintf(os.Stderr, "unknown cache type: %s", s.config.Cache.Type)
+		log.Error(fmt.Errorf("unknown cache type: %s", s.config.Cache.Type), "invalid cache type")
 		os.Exit(1)
 	case "local":
 		err = s.createLocalCacheClient(ctx)

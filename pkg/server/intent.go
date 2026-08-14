@@ -20,7 +20,7 @@ func (s *Server) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (
 	)
 	ctx = logf.IntoContext(ctx, log)
 
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.ProtoJSON(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
@@ -52,7 +52,7 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 	log.Info("GetIntent",
 		"intent-format", req.GetFormat(),
 	)
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.FormatProtoJSON(req))
+	log.V(logf.VDebug).Info("received request", "raw-request", utils.ProtoJSON(req))
 
 	if req.GetDatastoreName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")

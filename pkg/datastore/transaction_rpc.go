@@ -22,7 +22,6 @@ import (
 	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var (
@@ -187,7 +186,7 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 				break selectLoop
 			}
 			log.V(logger.VDebug).Info("adding intent to tree", "intent", intent.GetIntentName())
-			log.V(logger.VTrace).Info("adding intent to tree", "intent", intent.GetIntentName(), "content", utils.FormatProtoJSON(intent))
+			log.V(logger.VTrace).Info("adding intent to tree", "intent", intent.GetIntentName(), "content", utils.ProtoJSON(intent))
 
 			intentNames = append(intentNames, intent.GetIntentName())
 			protoLoader := treeproto.NewProtoTreeImporter(intent)
@@ -447,10 +446,7 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates api.LeafVaria
 
 	// conditional trace logging
 	if log := log.V(logger.VTrace); log.Enabled() {
-		json, err := protojson.MarshalOptions{Multiline: false}.Marshal(newRunningIntent)
-		if err == nil {
-			log.Info("writeback synctree", "content", string(json))
-		}
+		log.Info("writeback synctree", "content", utils.ProtoJSON(newRunningIntent))
 	}
 
 	// write the synctree to disk

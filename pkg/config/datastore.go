@@ -15,11 +15,14 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"os"
 	"time"
+
+	"github.com/sdcio/data-server/pkg/utils"
 )
 
 const (
@@ -110,6 +113,19 @@ type Creds struct {
 	Username string `yaml:"username,omitempty" json:"username,omitempty"`
 	Password string `yaml:"password,omitempty" json:"password,omitempty"`
 	Token    string `yaml:"token,omitempty" json:"token,omitempty"`
+}
+
+// MarshalJSON redacts credentials from config dumps.
+func (c Creds) MarshalJSON() ([]byte, error) {
+	type creds Creds // sheds the marshaler to avoid recursing into this method
+	redacted := creds(c)
+	if redacted.Password != "" {
+		redacted.Password = utils.Redacted
+	}
+	if redacted.Token != "" {
+		redacted.Token = utils.Redacted
+	}
+	return json.Marshal(redacted)
 }
 
 type Sync struct {

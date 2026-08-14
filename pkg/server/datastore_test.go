@@ -15,13 +15,18 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"strings"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/sdcio/data-server/mocks/mockcacheclient"
 	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc/codes"
@@ -60,6 +65,47 @@ func newTestServer(t *testing.T) *Server {
 			Validation: config.NewValidationConfig(),
 			Deviation:  &config.DeviationConfig{},
 		},
+	}
+}
+
+// Runs the RPC against a logger set up like the one in main.go, at trace level
+func TestCreateDataStore_DoesNotLogCredentials(t *testing.T) {
+	s := newTestServer(t)
+
+	buf := &bytes.Buffer{}
+	slogOpts := &slog.HandlerOptions{
+		Level: slog.Level(-logf.VTrace),
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			return utils.RedactAttr(groups, logf.ReplaceTimeAttr(groups, a))
+		},
+	}
+	ctx := logf.IntoContext(context.Background(), logr.FromSlogHandler(slog.NewJSONHandler(buf, slogOpts)))
+
+	req := noopCreateReq("ds-creds", "noop")
+	req.Target.Credentials = &sdcpb.Credentials{
+		Username: "admin",
+		Password: "s3cr3t",
+		Token:    "t0k3n",
+	}
+
+	if _, err := s.CreateDataStore(ctx, req); err != nil {
+		t.Fatalf("CreateDataStore: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "creating datastore") {
+		t.Fatalf("the datastore creation was not logged at all: %s", out)
+	}
+	for _, secret := range []string{"s3cr3t", "t0k3n"} {
+		if strings.Contains(out, secret) {
+			t.Errorf("%q leaked into the log: %s", secret, out)
+		}
+	}
+	if !strings.Contains(out, "admin") {
+		t.Errorf("the username should still be logged: %s", out)
+	}
+	if !strings.Contains(out, utils.Redacted) {
+		t.Errorf("expected the redacted placeholder in %s", out)
 	}
 }
 

@@ -134,7 +134,7 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 		return nil, err
 	}
 
-	log.V(logf.VDebug).Info("gnmi request", "raw-request", utils.FormatProtoJSON(gnmiReq))
+	log.V(logf.VDebug).Info("gnmi request", "raw-request", utils.ProtoJSON(gnmiReq))
 
 	// execute the gnmi get
 	gnmiRsp, err := t.target.Get(ctx, gnmiReq)
@@ -231,7 +231,7 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 		setReq.Update = append(setReq.Update, gupd)
 	}
 
-	log.V(logf.VDebug).Info("gnmi request", "raw-request", utils.FormatProtoJSON(setReq))
+	log.V(logf.VDebug).Info("gnmi request", "raw-request", utils.ProtoJSON(setReq))
 
 	rsp, err := t.target.Set(ctx, setReq)
 	if err != nil {

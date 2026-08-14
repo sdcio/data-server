@@ -53,7 +53,7 @@ func (d *Datastore) applyIntent(ctx context.Context, source targettypes.TargetSo
 	if err != nil {
 		return nil, err
 	}
-	log.V(logf.VDebug).Info("got SetResponse from SBI", "raw-response", utils.FormatProtoJSON(rsp))
+	log.V(logf.VDebug).Info("got SetResponse from SBI", "raw-response", utils.ProtoJSON(rsp))
 
 	return rsp, nil
 }

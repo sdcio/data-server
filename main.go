@@ -31,6 +31,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/server"
+	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	"github.com/spf13/pflag"
 )
@@ -57,8 +58,10 @@ func main() {
 	}
 
 	slogOpts := &slog.HandlerOptions{
-		Level:       slog.LevelInfo,
-		ReplaceAttr: logf.ReplaceTimeAttr,
+		Level: slog.LevelInfo,
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			return utils.RedactAttr(groups, logf.ReplaceTimeAttr(groups, a))
+		},
 	}
 	if debug {
 		slogOpts.Level = slog.Level(-logf.VDebug)
@@ -110,7 +113,7 @@ START:
 
 	// add logger to context
 	ctx, cancel := context.WithCancel(ctx)
-	setupCloseHandler(cancel)
+	setupCloseHandler(log, cancel)
 	s, err = server.New(ctx, cfg)
 	if err != nil {
 		log.Error(err, "failed to create server")
@@ -128,12 +131,12 @@ START:
 	}
 }
 
-func setupCloseHandler(cancelFn context.CancelFunc) {
+func setupCloseHandler(log logr.Logger, cancelFn context.CancelFunc) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		sig := <-c
-		fmt.Fprintf(os.Stderr, "\nreceived signal '%s'. terminating...\n", sig.String())
+		log.Info("received signal, terminating", "signal", sig.String())
 		stop = true
 		cancelFn()
 		time.Sleep(500 * time.Millisecond)
