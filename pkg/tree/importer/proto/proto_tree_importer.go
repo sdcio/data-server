@@ -80,21 +80,26 @@ func (p *ProtoTreeImporterElement) GetElement(key string) importer.ImportConfigA
 }
 
 func (p *ProtoTreeImporterElement) GetKeyValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (string, error) {
-	tv, err := p.GetTVValue(ctx, slt)
+	tv, _, err := p.GetTVValue(ctx, slt)
 	if err != nil {
 		return "", fmt.Errorf("failed GetTVValue for %s", p.data.Name)
 	}
 	return tv.ToString(), nil
 }
 
-func (p *ProtoTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
+// GetTVValue unmarshals the proto-serialized TypedValue. For union-typed leaves,
+// InferUnionMemberFromTypedValue attaches the matched branch per RFC 7950 §9.12
+// (first matching member in schema order; same narrowing as TVFromStringWithType).
+func (p *ProtoTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, *sdcpb.SchemaLeafType, error) {
 	result := &sdcpb.TypedValue{}
 	err := proto.Unmarshal(p.data.LeafVariant, result)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return result, nil
+	matched := importer.InferUnionMemberFromTypedValue(result, slt)
+	return result, matched, nil
 }
+
 func (p *ProtoTreeImporterElement) GetName() string {
 	return p.data.Name
 }

@@ -110,8 +110,8 @@ func (j *JsonTreeImporterElement) GetKeyValue(ctx context.Context, slt *sdcpb.Sc
 	return fmt.Sprintf("%v", j.data), nil
 }
 
-func (j *JsonTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
-	return sdcpb.ConvertJsonValueToTv(j.data, slt)
+func (j *JsonTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, *sdcpb.SchemaLeafType, error) {
+	return sdcpb.ConvertJsonValueToTvWithType(j.data, slt)
 }
 
 func (j *JsonTreeImporterElement) GetName() string {

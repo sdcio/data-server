@@ -13,18 +13,16 @@ import (
 func validateLength(_ context.Context, e api.Entry, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats) {
 	if schema := e.GetSchema().GetField(); schema != nil {
 
-		if len(schema.GetType().GetLength()) == 0 {
+		effectiveType, ok := effectiveFieldType(e, schema.GetType())
+		if !ok || len(effectiveType.GetLength()) == 0 {
 			return
 		}
 
 		lv := e.GetLeafVariants().GetHighestPrecedence(false, true, false)
-		if lv == nil {
-			return
-		}
 		value := lv.Value().GetStringVal()
 		actualLength := utf8.RuneCountInString(value)
 
-		for _, lengthDef := range schema.GetType().GetLength() {
+		for _, lengthDef := range effectiveType.GetLength() {
 
 			if lengthDef.Min.Value <= uint64(actualLength) && uint64(actualLength) <= lengthDef.Max.Value {
 				// continue if the length is within the range
@@ -32,11 +30,11 @@ func validateLength(_ context.Context, e api.Entry, resultChan chan<- *types.Val
 			}
 			// this is already the failure case
 			lenghts := []string{}
-			for _, lengthDef := range schema.GetType().GetLength() {
+			for _, lengthDef := range effectiveType.GetLength() {
 				lenghts = append(lenghts, fmt.Sprintf("%d..%d", lengthDef.Min.Value, lengthDef.Max.Value))
 			}
 			resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("error length of Path: %s, Value: %s not within allowed length %s", e.SdcpbPath().ToXPath(false), value, strings.Join(lenghts, ", ")), types.ValidationResultEntryTypeError)
 		}
-		stats.Add(types.StatTypeLength, uint32(len(schema.GetType().GetLength())))
+		stats.Add(types.StatTypeLength, uint32(len(effectiveType.GetLength())))
 	}
 }

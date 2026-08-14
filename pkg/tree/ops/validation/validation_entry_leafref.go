@@ -93,9 +93,10 @@ func breadthSearch(ctx context.Context, e api.Entry, sdcpbPath *sdcpb.Path) ([]a
 	return resultEntries, nil
 }
 
-// navigateLeafRef
+// navigateLeafRef resolves a leafref on the current entry, including when the schema type is a
+// union whose matched branch (see types.Update.EffectiveLeafType) is the leafref. This keeps
+// XPath/must evaluation (FollowLeafRef) aligned with validateLeafRefs.
 func navigateLeafRef(ctx context.Context, e api.Entry) ([]api.Entry, error) {
-
 	// leafref path takes as an argument a string that MUST refer to a leaf or leaf-list node.
 	// e.g.
 	// leaf foo {
@@ -108,20 +109,20 @@ func navigateLeafRef(ctx context.Context, e api.Entry) ([]api.Entry, error) {
 	// If /bar/baz resolves to a leaf-list, then foo must have a value equal to one of the existing entries in that leaf-list.
 	// Thus, the "pointer" is not to the entire leaf-list node, but to one instance of it, selected by value.
 
-	var lref string
-	switch {
-	case e.GetSchema().GetField().GetType().GetLeafref() != "":
-		lref = e.GetSchema().GetField().GetType().GetLeafref()
-	case e.GetSchema().GetLeaflist().GetType().GetLeafref() != "":
-		lref = e.GetSchema().GetLeaflist().GetType().GetLeafref()
-	default:
+	if e.GetSchema() == nil {
 		return nil, fmt.Errorf("error not a leafref %s", e.SdcpbPath())
 	}
-
-	lv := e.GetLeafVariants().GetHighestPrecedence(false, true, false)
-	if lv == nil {
-		return nil, fmt.Errorf("no leafvariant found")
+	lref, lv, ok := resolveLeafref(e)
+	if !ok {
+		return nil, fmt.Errorf("error not a leafref %s", e.SdcpbPath())
 	}
+	return navigateLeafRefByPath(ctx, e, lref, lv)
+}
+
+// navigateLeafRefByPath navigates the tree to find entries matching the given leafref path and
+// the current entry's value. It is the implementation for both direct leafref leaves and union
+// leaves whose matched branch is a leafref.
+func navigateLeafRefByPath(ctx context.Context, e api.Entry, lref string, lv *api.LeafEntry) ([]api.Entry, error) {
 	// value of node with type leafref
 	tv := lv.Value()
 
@@ -206,15 +207,20 @@ func validateLeafRefs(ctx context.Context, e api.Entry, resultChan chan<- *types
 		return
 	}
 
-	lref := e.GetSchema().GetField().GetType().GetLeafref()
-	if e.GetSchema() == nil || lref == "" {
+	if e.GetSchema() == nil || e.GetSchema().GetField() == nil {
 		return
 	}
 
-	entry, err := navigateLeafRef(ctx, e)
+	lref, lv, ok := resolveLeafref(e)
+	if !ok {
+		return
+	}
+	effectiveType := lv.Update.EffectiveLeafType(e.GetSchema().GetField().GetType())
+
+	entry, err := navigateLeafRefByPath(ctx, e, lref, lv)
 	if err != nil || len(entry) == 0 {
 		// check if the OptionalInstance (!require-instances [https://datatracker.ietf.org/doc/html/rfc7950#section-9.9.3])
-		if e.GetSchema().GetField().GetType().GetOptionalInstance() {
+		if effectiveType.GetOptionalInstance() {
 			generateOptionalWarning(e, lref, resultChan)
 			return
 		}
@@ -239,7 +245,7 @@ func validateLeafRefs(ctx context.Context, e api.Entry, resultChan chan<- *types
 		}
 
 		// check if the OptionalInstance (!require-instances [https://datatracker.ietf.org/doc/html/rfc7950#section-9.9.3])
-		if e.GetSchema().GetField().GetType().GetOptionalInstance() {
+		if effectiveType.GetOptionalInstance() {
 			generateOptionalWarning(e, lref, resultChan)
 			return
 		}

@@ -205,11 +205,12 @@ func TestJsonTreeImporter_GetKeyValue(t *testing.T) {
 func TestJsonTreeImporter_GetTVValue(t *testing.T) {
 	ctx := context.TODO()
 	tests := []struct {
-		name    string
-		data    any
-		slt     *sdcpb.SchemaLeafType
-		want    *sdcpb.TypedValue
-		wantErr bool
+		name            string
+		data            any
+		slt             *sdcpb.SchemaLeafType
+		want            *sdcpb.TypedValue
+		wantMatchedType string
+		wantErr         bool
 	}{
 		{
 			name: "string",
@@ -249,17 +250,33 @@ func TestJsonTreeImporter_GetTVValue(t *testing.T) {
 			slt:     &sdcpb.SchemaLeafType{Type: "identityref", IdentityPrefixesMap: map[string]string{}, ModulePrefixMap: map[string]string{}},
 			wantErr: true,
 		},
+		{
+			name: "union matched string branch",
+			data: "hello",
+			slt: &sdcpb.SchemaLeafType{
+				Type: "union",
+				UnionTypes: []*sdcpb.SchemaLeafType{
+					{Type: "uint32"},
+					{Type: "string"},
+				},
+			},
+			wantMatchedType: "string",
+			want:            &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "hello"}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			elem := &JsonTreeImporterElement{data: tt.data, name: "leaf"}
-			got, err := elem.GetTVValue(ctx, tt.slt)
+			got, matchedType, err := elem.GetTVValue(ctx, tt.slt)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetTVValue() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("GetTVValue() = %v, want %v", got, tt.want)
+			}
+			if tt.wantMatchedType != "" && (matchedType == nil || matchedType.Type != tt.wantMatchedType) {
+				t.Errorf("JsonTreeImporter.GetTVValue() matchedType = %v, want type %q", matchedType, tt.wantMatchedType)
 			}
 		})
 	}
