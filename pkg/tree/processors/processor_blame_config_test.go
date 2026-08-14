@@ -11,6 +11,7 @@ import (
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/consts"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -181,6 +182,98 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 			if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
 				t.Errorf("BlameConfig() mismatch (-want +got)\n%s", diff)
 				return
+			}
+		})
+	}
+}
+
+func TestBlameConfigSensitiveRedaction(t *testing.T) {
+	ctx := context.TODO()
+	owner1 := "owner1"
+
+	tests := []struct {
+		name                  string
+		exposeSensitive       bool
+		wantPatterntestValue  string
+		wantDeviationValue    string
+	}{
+		{
+			name:                 "redacts value and deviationValue when IncludeSensitive=false",
+			exposeSensitive:      false,
+			wantPatterntestValue: "***",
+			wantDeviationValue:   "***",
+		},
+		{
+			name:                 "reveals value and deviationValue when IncludeSensitive=true",
+			exposeSensitive:      true,
+			wantPatterntestValue: "hallo 00",
+			wantDeviationValue:   "hallo 0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+
+			scb, err := testhelper.GetSchemaClientBoundMarkingLeafSensitive(t, mockCtrl, "patterntest")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+			root, err := tree.NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			conf1 := testhelper.Config1()
+			_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, conf1, root.Entry, owner1, 5, false, flagsNew)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// running has a different patterntest so we get a deviationValue
+			running := testhelper.Config1()
+			running.Patterntest = ygot.String("hallo 0")
+			_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, running, root.Entry, consts.RunningIntentName, consts.RunningValuesPrio, false, flagsExisting)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := root.FinishInsertionPhase(ctx); err != nil {
+				t.Fatal(err)
+			}
+
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+			bp := processors.NewBlameConfigProcessor(&processors.BlameConfigProcessorParams{
+				RenderOpts: ops.RenderOpts{IncludeSensitive: tt.exposeSensitive},
+			})
+			got, err := bp.Run(ctx, root.Entry, sharedPool)
+			if err != nil {
+				t.Fatalf("BlameConfig() error: %s", err)
+			}
+
+			// Find patterntest in the blame tree
+			var patterntestElem *sdcpb.BlameTreeElement
+			for _, child := range got.GetChilds() {
+				if child.GetName() == "patterntest" {
+					patterntestElem = child
+					break
+				}
+			}
+			if patterntestElem == nil {
+				t.Fatal("patterntest element not found in blame tree")
+			}
+
+			gotValue := patterntestElem.GetValue().GetStringVal()
+			if diff := cmp.Diff(tt.wantPatterntestValue, gotValue); diff != "" {
+				t.Errorf("patterntest Value mismatch (-want +got):\n%s", diff)
+			}
+
+			gotDeviation := patterntestElem.GetDeviationValue().GetStringVal()
+			if diff := cmp.Diff(tt.wantDeviationValue, gotDeviation); diff != "" {
+				t.Errorf("patterntest DeviationValue mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

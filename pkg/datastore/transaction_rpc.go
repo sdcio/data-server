@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/api"
@@ -63,6 +64,9 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 			ti.AddRevertPaths(req.GetRevertPaths()...)
 		}
 	}
+
+	ti.SetSensitivePaths(req.GetSensitivePaths())
+
 	// convert the sdcpb.updates to tree.UpdateSlice
 	Updates, err := treetypes.ExpandAndConvertIntent(ctx, d.schemaClient, req.GetIntent(), req.GetPriority(), req.GetUpdate(), time.Now().Unix())
 	if err != nil {
@@ -159,47 +163,58 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	return warnings, nil
 }
 
-func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.RootEntry) ([]string, error) {
-	log := logger.FromContext(ctx)
-
-	intentNames := []string{}
-	IntentChan := make(chan *tree_persist.Intent)
-	ErrChan := make(chan error, 1)
-
-	go d.cacheClient.IntentGetAll(ctx, []string{consts.RunningIntentName}, IntentChan, ErrChan)
-
-	for {
-	selectLoop:
+// forEachIntent streams every intent from cc (excluding any names in exclude)
+// and calls fn for each one. It returns the first error from fn or from the
+// cache stream. Both channels are drained to completion before returning.
+func forEachIntent(
+	ctx context.Context,
+	cc cache.CacheClientBound,
+	exclude []string,
+	fn func(*tree_persist.Intent) error,
+) error {
+	intentChan := make(chan *tree_persist.Intent)
+	errChan := make(chan error, 1)
+	go cc.IntentGetAll(ctx, exclude, intentChan, errChan)
+	for errChan != nil || intentChan != nil {
 		select {
-		case err, ok := <-ErrChan:
+		case err, ok := <-errChan:
 			if !ok {
-				// ErrChan already closed which is fine, continue
-				ErrChan = nil
-				break selectLoop
+				errChan = nil
+				continue
 			}
-			return nil, err
+			return err
 		case <-ctx.Done():
-			return nil, fmt.Errorf("context closed while retrieving all intents")
-		case intent, ok := <-IntentChan:
+			return fmt.Errorf("context closed while iterating intents")
+		case intent, ok := <-intentChan:
 			if !ok {
-				// IntentChan closed due to finish
-				IntentChan = nil
-				break selectLoop
+				intentChan = nil
+				continue
 			}
-			log.V(logger.VDebug).Info("adding intent to tree", "intent", intent.GetIntentName())
-			log.V(logger.VTrace).Info("adding intent to tree", "intent", intent.GetIntentName(), "content", utils.FormatProtoJSON(intent))
-
-			intentNames = append(intentNames, intent.GetIntentName())
-			protoLoader := treeproto.NewProtoTreeImporter(intent)
-			_, err := root.ImportConfig(ctx, nil, protoLoader, treetypes.NewUpdateInsertFlags(), d.taskPool)
-			if err != nil {
-				return nil, err
+			if err := fn(intent); err != nil {
+				return err
 			}
-		}
-		if ErrChan == nil && IntentChan == nil {
-			return intentNames, nil
 		}
 	}
+	return nil
+}
+
+// LoadAllButRunningIntents streams all non-running intents from cache and imports
+// each into root. Returns the list of loaded intent names.
+func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.RootEntry) ([]string, error) {
+	log := logger.FromContext(ctx)
+	var intentNames []string
+	err := forEachIntent(ctx, d.cacheClient, []string{consts.RunningIntentName}, func(intent *tree_persist.Intent) error {
+		log.V(logger.VDebug).Info("adding intent to tree", "intent", intent.GetIntentName())
+		log.V(logger.VTrace).Info("adding intent to tree", "intent", intent.GetIntentName(), "content", utils.FormatProtoJSON(intent))
+		intentNames = append(intentNames, intent.GetIntentName())
+		protoLoader := treeproto.NewProtoTreeImporter(intent)
+		_, err := root.ImportConfig(ctx, nil, protoLoader, treetypes.NewUpdateInsertFlags(), d.taskPool)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return intentNames, nil
 }
 
 // lowlevelTransactionSet
@@ -381,15 +396,18 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 			if err != nil {
 				log.Error(err, "failed deleting intent from store")
 			}
+			d.sensitivePathIndex.Delete(intent.GetName())
 			log.V(logger.VDebug).Info("delete intent from cache")
 			continue
 		case err != nil:
 			return nil, err
 		}
+		protoIntent.SensitivePaths = intent.GetSensitivePaths()
 		err = d.cacheClient.IntentModify(ctx, protoIntent)
 		if err != nil {
 			return nil, fmt.Errorf("failed updating the intended store for %s: %w", d.Name(), err)
 		}
+		d.sensitivePathIndex.Set(intent.GetName(), intent.GetSensitivePaths())
 	}
 
 	// OPTIMISTIC WRITEBACK TO RUNNING / syncTree

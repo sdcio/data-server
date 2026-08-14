@@ -4,6 +4,14 @@ go 1.25.0
 
 replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.2-2
 
+// Pinned to open PRs; replace with tagged releases once merged:
+//   - sdcio/goyang PR#4:    fix(ApplyDeviate): replace Exts on deviate replace, not append
+//   - sdcio/sdc-protos PR#123: feat(sensitive): schema.Path + LeafSchema.sensitive flag
+replace (
+	github.com/sdcio/goyang v1.6.2-2 => github.com/sdcio/goyang v1.6.2-2.0.20260608121857-4668a077cf72
+	github.com/sdcio/sdc-protos v0.0.54 => github.com/sdcio/sdc-protos v0.0.55-0.20260610090020-aeb8edf494c4
+)
+
 require (
 	github.com/AlekSi/pointer v1.2.0
 	github.com/beevik/etree v1.6.0

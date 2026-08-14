@@ -16,6 +16,7 @@ type IntentResponseAdapter struct {
 	Orphan          bool
 	NonRevertive    bool
 	ExplicitDeletes []*sdcpb.Path
+	RenderOpts      ops.RenderOpts
 }
 
 func (t *IntentResponseAdapter) GetIntentName() string {
@@ -39,19 +40,22 @@ func (t *IntentResponseAdapter) GetExplicitDeletes() []*sdcpb.Path {
 }
 
 func (t *IntentResponseAdapter) ToJson(ctx context.Context) (any, error) {
-	return ops.ToJson(ctx, t.Entry, false)
+	return ops.ToJson(ctx, t.Entry, t.RenderOpts)
 }
 
 func (t *IntentResponseAdapter) ToJsonIETF(ctx context.Context) (any, error) {
-	return ops.ToJsonIETF(ctx, t.Entry, false)
+	return ops.ToJsonIETF(ctx, t.Entry, t.RenderOpts)
 }
 
 func (t *IntentResponseAdapter) ToXML(ctx context.Context) (*etree.Document, error) {
-	return ops.ToXML(ctx, t.Entry, false, true, false, false)
+	return ops.ToXML(ctx, t.Entry, ops.XMLRenderOpts{
+		RenderOpts:     t.RenderOpts,
+		HonorNamespace: true,
+	})
 }
 
 func (t *IntentResponseAdapter) ToProtoUpdates(ctx context.Context) ([]*sdcpb.Update, error) {
-	return ops.ToProtoUpdates(ctx, t.Entry, false)
+	return ops.ToProtoUpdates(ctx, t.Entry, t.RenderOpts)
 }
 
 func (t *IntentResponseAdapter) ToProtoDeletes(ctx context.Context) ([]*sdcpb.Path, error) {
@@ -59,5 +63,5 @@ func (t *IntentResponseAdapter) ToProtoDeletes(ctx context.Context) ([]*sdcpb.Pa
 }
 
 func (t *IntentResponseAdapter) ToXPath(ctx context.Context) (*sdcpb.PathValues, error) {
-	return ops.ToXPath(ctx, t.Entry, false, false)
+	return ops.ToXPath(ctx, t.Entry, ops.XPathRenderOpts{RenderOpts: t.RenderOpts})
 }

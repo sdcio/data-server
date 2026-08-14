@@ -11,27 +11,25 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-func ToJson(ctx context.Context, e api.Entry, onlyNewOrUpdated bool) (any, error) {
-	result, err := toJsonInternal(ctx, e, onlyNewOrUpdated, false)
+func ToJson(ctx context.Context, e api.Entry, opts RenderOpts) (any, error) {
+	result, err := toJsonInternal(ctx, e, opts, false)
 	if err != nil {
 		return nil, err
 	}
 	return result, err
 }
 
-func ToJsonIETF(ctx context.Context, e api.Entry, onlyNewOrUpdated bool) (any, error) {
-	result, err := toJsonInternal(ctx, e, onlyNewOrUpdated, true)
+func ToJsonIETF(ctx context.Context, e api.Entry, opts RenderOpts) (any, error) {
+	result, err := toJsonInternal(ctx, e, opts, true)
 	if err != nil {
 		return nil, err
 	}
 	return result, err
 }
 
-// ToJson returns the Branch of the tree as a struct that can be marshalled as JSON
+// toJsonInternal returns the Branch of the tree as a struct that can be marshalled as JSON.
 // If the ietf parameter is set to true, JSON_IETF encoding is used.
-// The actualPrefix is used only for the JSON_IETF encoding and can be ignored for JSON
-// In the initial / users call with ietf == true, actualPrefix should be set to ""
-func toJsonInternal(ctx context.Context, e api.Entry, onlyNewOrUpdated bool, ietf bool) (any, error) {
+func toJsonInternal(ctx context.Context, e api.Entry, opts RenderOpts, ietf bool) (any, error) {
 	switch e.GetSchema().GetSchema().(type) {
 	case nil:
 		// we're operating on a key level, no schema attached, but the
@@ -42,7 +40,7 @@ func toJsonInternal(ctx context.Context, e api.Entry, onlyNewOrUpdated bool, iet
 			ancest, _ := GetFirstAncestorWithSchema(e)
 			prefixedKey := jsonGetIetfPrefixConditional(key, c, ancest, ietf)
 			// recurse the call
-			js, err := toJsonInternal(ctx, c, onlyNewOrUpdated, ietf)
+			js, err := toJsonInternal(ctx, c, opts, ietf)
 			if err != nil {
 				return nil, err
 			}
@@ -70,7 +68,7 @@ func toJsonInternal(ctx context.Context, e api.Entry, onlyNewOrUpdated bool, iet
 
 			result := make([]any, 0, len(childs))
 			for _, c := range childs {
-				j, err := toJsonInternal(ctx, c, onlyNewOrUpdated, ietf)
+				j, err := toJsonInternal(ctx, c, opts, ietf)
 				if err != nil {
 					return nil, err
 				}
@@ -84,13 +82,13 @@ func toJsonInternal(ctx context.Context, e api.Entry, onlyNewOrUpdated bool, iet
 			return result, nil
 		case e.GetSchema().GetContainer().IsPresence && ContainsOnlyDefaults(e):
 			// Presence container without any childs
-			if onlyNewOrUpdated {
+			if opts.OnlyNewOrUpdated {
 				// presence containers have leafvariantes with typedValue_Empty, so check that
 				if e.GetLeafVariants().ShouldDelete() {
 					return nil, nil
 				}
 				le := e.GetLeafVariants().GetHighestPrecedence(false, false, false)
-				if le == nil || onlyNewOrUpdated && !le.IsNew && !le.IsUpdated {
+				if le == nil || opts.OnlyNewOrUpdated && !le.IsNew && !le.IsUpdated {
 					return nil, nil
 				}
 			}
@@ -100,7 +98,7 @@ func toJsonInternal(ctx context.Context, e api.Entry, onlyNewOrUpdated bool, iet
 			result := map[string]any{}
 			for key, c := range e.GetChilds(types.DescendMethodActiveChilds) {
 				prefixedKey := jsonGetIetfPrefixConditional(key, c, e, ietf)
-				js, err := toJsonInternal(ctx, c, onlyNewOrUpdated, ietf)
+				js, err := toJsonInternal(ctx, c, opts, ietf)
 				if err != nil {
 					return nil, err
 				}
@@ -118,9 +116,12 @@ func toJsonInternal(ctx context.Context, e api.Entry, onlyNewOrUpdated bool, iet
 		if e.GetLeafVariants().CanDelete() {
 			return nil, nil
 		}
-		le := e.GetLeafVariants().GetHighestPrecedence(onlyNewOrUpdated, false, false)
+		le := e.GetLeafVariants().GetHighestPrecedence(opts.OnlyNewOrUpdated, false, false)
 		if le == nil {
 			return nil, nil
+		}
+		if ShouldRedact(e, opts.IncludeSensitive, opts.SensitivePathSet) {
+			return types.RedactedStringValue, nil
 		}
 		return utils.GetJsonValue(le.Value(), ietf)
 	}
