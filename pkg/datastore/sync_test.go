@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
@@ -429,4 +430,117 @@ func TestApplyToRunning(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestPerformRevert_HoldsDmutexAcrossSnapshotAndApply verifies that dmutex stays
+// held for the full snapshot-diff-apply sequence in performRevert, not just
+// around the individual cache read and device write. A concurrent TryLock
+// (the pattern TransactionSet/Confirm/Cancel use) must fail for the entire
+// duration of the revert, including while the diff is being computed, and
+// must succeed again only once performRevert has returned.
+func TestPerformRevert_HoldsDmutexAcrossSnapshotAndApply(t *testing.T) {
+	ctx := context.Background()
+
+	sc, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	scb := schemaClient.NewSchemaClientBound(schema, sc)
+	tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatalf("failed to create new tree root: %v", err)
+	}
+
+	d := &sdcio_schema.Device{
+		Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+			"ethernet-1/1": {
+				Name:        ygot.String("ethernet-1/1"),
+				Description: ygot.String("revert me"),
+			},
+		},
+	}
+	confStr, err := ygot.EmitJSON(d, &ygot.EmitJSONConfig{Format: ygot.RFC7951, SkipValidation: false})
+	if err != nil {
+		t.Fatalf("failed to marshal test config: %v", err)
+	}
+	var v any
+	json.Unmarshal([]byte(confStr), &v)
+
+	// import as New so it survives into a ToProtoUpdates diff without needing
+	// a competing intent from the cache
+	flagNew := types.NewUpdateInsertFlags()
+	flagNew.SetNewFlag()
+	vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(v, consts.RunningIntentName, consts.RunningValuesPrio, false), flagNew, vpf)
+	if err != nil {
+		t.Fatalf("failed to import test config: %v", err)
+	}
+	if err := root.FinishInsertionPhase(ctx); err != nil {
+		t.Fatalf("failed to finish insertion phase: %v", err)
+	}
+
+	ctrl := gomock.NewController(t)
+
+	ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
+	ccb.EXPECT().
+		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+			close(intentChan)
+			close(errChan)
+		}).AnyTimes()
+
+	setStarted := make(chan struct{})
+	release := make(chan struct{})
+	sbi := mocktarget.NewMockTarget(ctrl)
+	sbi.EXPECT().
+		Set(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, source any) (*sdcpb.SetDataResponse, error) {
+			close(setStarted)
+			<-release
+			return &sdcpb.SetDataResponse{}, nil
+		})
+
+	datastore := &Datastore{
+		dmutex:      &sync.Mutex{},
+		taskPool:    pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)),
+		cacheClient: ccb,
+		sbi:         sbi,
+	}
+
+	revertDone := make(chan error, 1)
+	go func() {
+		revertDone <- datastore.performRevert(ctx, root)
+	}()
+
+	select {
+	case <-setStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for performRevert to reach the device apply")
+	}
+
+	// The device write is in flight, so dmutex must still be held: a
+	// concurrent TransactionSet-style TryLock must fail.
+	if datastore.dmutex.TryLock() {
+		datastore.dmutex.Unlock()
+		t.Fatal("dmutex.TryLock() succeeded while performRevert's apply was in flight, want held")
+	}
+
+	close(release)
+
+	select {
+	case err := <-revertDone:
+		if err != nil {
+			t.Fatalf("performRevert() error = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for performRevert to return")
+	}
+
+	// Now that performRevert has returned, dmutex must be free again.
+	if !datastore.dmutex.TryLock() {
+		t.Fatal("dmutex.TryLock() failed after performRevert returned, want free")
+	}
+	datastore.dmutex.Unlock()
 }

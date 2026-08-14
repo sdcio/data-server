@@ -135,21 +135,23 @@ func (d *Datastore) NewEmptyTree(ctx context.Context) (*tree.RootEntry, error) {
 func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error {
 	log := logger.FromContext(ctx)
 
-	// Critical section 1: snapshot the intent store.
-	// Hold dmutex so that any concurrent delete transaction (device write +
-	// cache delete) fully completes before we read the cache. Without this,
-	// LoadAllButRunningIntents can race with IntentDelete and push stale intent
-	// config back to the device, undoing the deletion.
+	// Hold dmutex for the entire snapshot-diff-apply sequence below, not just
+	// around the individual cache read and device write. Releasing it in
+	// between (even though the diff computation itself only touches t, a
+	// caller-owned deep copy) would open a window for a concurrent transaction
+	// to commit new intent/device state after we snapshot the cache but before
+	// we push our diff, causing performRevert to apply a now-stale diff and
+	// clobber that transaction's changes. A single critical section removes
+	// that window entirely, at the cost of holding dmutex for the duration of
+	// the (in-memory, non-network) diff computation as well.
 	d.dmutex.Lock()
+	defer d.dmutex.Unlock()
+
 	_, err := d.LoadAllButRunningIntents(ctx, t)
-	d.dmutex.Unlock()
 	if err != nil {
 		return err
 	}
 
-	// t is a caller-owned deep copy (the caller must pass a value obtained via
-	// d.syncTree.DeepCopy, as ApplyToRunning does). All operations below work
-	// exclusively on that isolated copy, so no dmutex is needed here.
 	err = t.FinishInsertionPhase(ctx)
 	if err != nil {
 		return err
@@ -175,12 +177,6 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error 
 	}
 
 	if performApply {
-		// Critical section 2: device write.
-		// Re-acquire dmutex to serialize the gNMI SET with in-flight
-		// transactions; a concurrent delete must not interleave its device write
-		// with ours.
-		d.dmutex.Lock()
-		defer d.dmutex.Unlock()
 		log.Info("reverting after sync")
 		resp, err := d.applyIntent(ctx, adapter.NewEntryOutputAdapter(t.Entry))
 		if err != nil {
