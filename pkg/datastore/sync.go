@@ -131,6 +131,19 @@ func (d *Datastore) NewEmptyTree(ctx context.Context) (*tree.RootEntry, error) {
 
 func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error {
 	log := logger.FromContext(ctx)
+
+	// Hold dmutex for the entire snapshot-diff-apply sequence below, not just
+	// around the individual cache read and device write. Releasing it in
+	// between (even though the diff computation itself only touches t, a
+	// caller-owned deep copy) would open a window for a concurrent transaction
+	// to commit new intent/device state after we snapshot the cache but before
+	// we push our diff, causing performRevert to apply a now-stale diff and
+	// clobber that transaction's changes. A single critical section removes
+	// that window entirely, at the cost of holding dmutex for the duration of
+	// the (in-memory, non-network) diff computation as well.
+	d.dmutex.Lock()
+	defer d.dmutex.Unlock()
+
 	_, err := d.LoadAllButRunningIntents(ctx, t)
 	if err != nil {
 		return err

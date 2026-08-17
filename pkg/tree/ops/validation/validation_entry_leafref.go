@@ -195,7 +195,7 @@ func resolveLeafrefKeyPath(ctx context.Context, e api.Entry, keys map[string]*ty
 			return fmt.Errorf("no leafentry found")
 		}
 		tv := lvs[0].Value()
-		keys[k].Value = tv.GetStringVal()
+		keys[k].Value = tv.ToString()
 		keys[k].DoNotResolve = true
 	}
 	return nil

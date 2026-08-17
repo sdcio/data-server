@@ -120,6 +120,12 @@ func (y *yangParserEntryAdapter) Navigate(p *sdcpb.Path) (xpath.Entry, error) {
 		return y, nil
 	}
 
+	// xpath path elements produced by the yang-parser may carry a module prefix
+	// (e.g. "sdcio-model:list-name"). NavigateSdcpbPath does exact-name
+	// matching, so prefixes must be stripped before navigation — consistent
+	// with how BreadthSearch handles paths in validation_entry_leafref.go.
+	p.StripPathElemPrefixPath()
+
 	entry, err := ops.NavigateSdcpbPath(y.ctx, y.e, p)
 	if err != nil {
 		return newYangParserValueEntry(xpath.NewNodesetDatum([]xutils.XpathNode{}), err), nil

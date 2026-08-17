@@ -332,3 +332,34 @@ func TestJsonTreeImporter_UnknownContainer(t *testing.T) {
 		t.Error("GetElement(\"non-existent-container\") should return nil")
 	}
 }
+
+// TestJsonTreeImporter_GetKeyValue_Identityref verifies that GetKeyValue strips the module
+// prefix from a JSON_IETF identityref value and returns the bare identity name, and that
+// plain JSON (no prefix) and JSON_IETF (module-prefixed) inputs produce identical keys.
+func TestJsonTreeImporter_GetKeyValue_Identityref(t *testing.T) {
+	slt := &sdcpb.SchemaLeafType{
+		Type:                "identityref",
+		IdentityPrefixesMap: map[string]string{"BGP": "oc-policy-types"},
+		ModulePrefixMap:     map[string]string{"BGP": "openconfig-policy-types"},
+	}
+
+	tests := []struct {
+		name string
+		data any
+	}{
+		{"plain_json", "BGP"},
+		{"json_ietf_prefixed", "openconfig-policy-types:BGP"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			elem := newJsonTreeImporterElement("afi-safi-type", tt.data)
+			got, err := elem.GetKeyValue(context.Background(), slt)
+			if err != nil {
+				t.Fatalf("GetKeyValue() error: %v", err)
+			}
+			if got != "BGP" {
+				t.Errorf("GetKeyValue() = %q, want %q", got, "BGP")
+			}
+		})
+	}
+}

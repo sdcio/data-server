@@ -156,5 +156,8 @@ func translateInternalToGrpcError(err error) error {
 	if errors.Is(err, datastore.ErrDatastoreLocked) {
 		return status.Error(codes.Aborted, err.Error())
 	}
+	if errors.Is(err, types.ErrTransactionOngoing) {
+		return status.Error(codes.Aborted, err.Error())
+	}
 	return err
 }
