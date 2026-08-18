@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sdcio/data-server/pkg/datastore"
+	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -153,8 +154,12 @@ func (s *Server) TransactionCancel(ctx context.Context, req *sdcpb.TransactionCa
 
 // translateInternalToGrpcError central function to map internal errors to grpc error codes
 func translateInternalToGrpcError(err error) error {
-	if errors.Is(err, datastore.ErrDatastoreLocked) {
+	switch {
+	case errors.Is(err, datastore.ErrDatastoreLocked):
 		return status.Error(codes.Aborted, err.Error())
+	case errors.Is(err, targettypes.ErrNotConnected):
+		return status.Error(codes.Unavailable, err.Error())
+	default:
+		return err
 	}
-	return err
 }

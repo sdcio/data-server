@@ -98,8 +98,8 @@ func (t *ncTarget) internalGet(ctx context.Context, req *sdcpb.GetDataRequest) (
 	log := logf.FromContext(ctx).WithName("Get")
 	ctx = logf.IntoContext(ctx, log)
 
-	if !t.Status().IsConnected() {
-		return nil, fmt.Errorf("%s", types.TargetStatusNotConnected)
+	if err := t.Status().Err(); err != nil {
+		return nil, err
 	}
 	source := "running"
 
@@ -162,8 +162,8 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 func (t *ncTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
 	log := logf.FromContext(ctx).WithName("Set")
 	ctx = logf.IntoContext(ctx, log)
-	if !t.Status().IsConnected() {
-		return nil, fmt.Errorf("%s", types.TargetStatusNotConnected)
+	if err := t.Status().Err(); err != nil {
+		return nil, err
 	}
 
 	switch t.sbiConfig.NetconfOptions.CommitDatastore {
@@ -175,13 +175,13 @@ func (t *ncTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.S
 }
 
 func (t *ncTarget) Status() *types.TargetStatus {
-	result := types.NewTargetStatus(types.TargetStatusNotConnected)
+	result := types.NewTargetStatus(sdcpb.TargetStatus_NOT_CONNECTED)
 	if t == nil || t.driver == nil {
 		result.Details = "connection not initialized"
 		return result
 	}
 	if t.driver.IsAlive() {
-		result.Status = types.TargetStatusConnected
+		result.Status = sdcpb.TargetStatus_CONNECTED
 	}
 	return result
 }
