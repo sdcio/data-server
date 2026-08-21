@@ -43,7 +43,7 @@ func NewImportAdapter(doc *Document) (importer.IntentAdapter, error) {
 		return nil, fmt.Errorf("configserver: building config for %q: %w", doc.Name, err)
 	}
 	return &documentImporter{
-		JsonTreeImporter: jsonimporter.NewJsonTreeImporter(root, doc.Name, doc.Priority, doc.NonRevertive),
+		JsonTreeImporter: jsonimporter.NewJsonTreeImporter(root, doc.IntentName(), doc.Priority, doc.NonRevertive),
 		orphan:           doc.Orphan,
 		sensitivePaths:   doc.SensitivePaths,
 	}, nil
