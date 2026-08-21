@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/cache/configserver"
@@ -77,6 +78,19 @@ func NewConfigServerClient(reader configserver.LocalConfigReader) Client {
 // doesn't decode into a non-empty namespace and a non-empty name.
 func (c *ConfigServerCache) target(cacheInstanceName string) (configserver.Target, error) {
 	return splitDatastoreName(cacheInstanceName)
+}
+
+// lookupConfigName maps an owner/intent name onto the bare Config resource
+// name ConfigReadService keys TargetSnapshot.Spec.Configs by. GetGVKNSN
+// names ("<namespace>.<name>") are stripped when the namespace matches the
+// target; a bare name is passed through unchanged so existing Get callers
+// keep working.
+func lookupConfigName(target configserver.Target, intentName string) string {
+	prefix := target.Namespace + "."
+	if rest, ok := strings.CutPrefix(intentName, prefix); ok && rest != "" {
+		return rest
+	}
+	return intentName
 }
 
 // InstanceCreate/InstanceDelete/InstanceClose/InstanceExists/InstancesList
@@ -152,7 +166,7 @@ func (c *ConfigServerCache) InstanceIntentsList(ctx context.Context, cacheInstan
 	}
 	names := make([]string, 0, len(docs))
 	for _, d := range docs {
-		names = append(names, d.Name)
+		names = append(names, d.IntentName())
 	}
 	return names, nil
 }
@@ -164,7 +178,7 @@ func (c *ConfigServerCache) InstanceIntentGet(ctx context.Context, cacheName str
 	if err != nil {
 		return nil, err
 	}
-	doc, err := c.reader.Get(ctx, target, intentName)
+	doc, err := c.reader.Get(ctx, target, lookupConfigName(target, intentName))
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +193,7 @@ func (c *ConfigServerCache) InstanceIntentExists(ctx context.Context, cacheName 
 	if err != nil {
 		return false, err
 	}
-	_, err = c.reader.Get(ctx, target, intentName)
+	_, err = c.reader.Get(ctx, target, lookupConfigName(target, intentName))
 	if err != nil {
 		if errors.Is(err, configserver.ErrNotFound) {
 			return false, nil

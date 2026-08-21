@@ -49,6 +49,7 @@ func TestConfigServerCache_InstanceIntentGet_FieldMapping(t *testing.T) {
 	sensitivePaths := []*sdcpb.Path{{Elem: []*sdcpb.PathElem{{Name: "secret"}}}}
 	reader.Seed(configserver.Target{Namespace: testNamespace, Name: testTarget}, &configserver.Document{
 		Name:           "intent1",
+		Namespace:      testNamespace,
 		Priority:       10,
 		NonRevertive:   true,
 		Orphan:         true,
@@ -62,8 +63,8 @@ func TestConfigServerCache_InstanceIntentGet_FieldMapping(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InstanceIntentGet() error = %v", err)
 	}
-	if got := adapter.GetName(); got != "intent1" {
-		t.Errorf("GetName() = %q, want %q", got, "intent1")
+	if got := adapter.GetName(); got != testNamespace+".intent1" {
+		t.Errorf("GetName() = %q, want %q", got, testNamespace+".intent1")
 	}
 	if got := adapter.GetPriority(); got != 10 {
 		t.Errorf("GetPriority() = %d, want 10", got)
@@ -86,20 +87,37 @@ func TestConfigServerCache_InstanceIntentGet_NotFound(t *testing.T) {
 	}
 }
 
+func TestConfigServerCache_InstanceIntentGet_GVKNSNName(t *testing.T) {
+	ctx := context.Background()
+	c, reader := newTestConfigServerCache(t)
+	reader.Seed(configserver.Target{Namespace: testNamespace, Name: testTarget}, &configserver.Document{
+		Name:      "intent1",
+		Namespace: testNamespace,
+	})
+
+	adapter, err := c.InstanceIntentGet(ctx, testCacheName, testNamespace+".intent1")
+	if err != nil {
+		t.Fatalf("InstanceIntentGet() error = %v", err)
+	}
+	if got := adapter.GetName(); got != testNamespace+".intent1" {
+		t.Errorf("GetName() = %q, want %q", got, testNamespace+".intent1")
+	}
+}
+
 func TestConfigServerCache_InstanceIntentsList(t *testing.T) {
 	ctx := context.Background()
 	c, reader := newTestConfigServerCache(t)
 	target := configserver.Target{Namespace: testNamespace, Name: testTarget}
 	reader.Seed(target,
-		&configserver.Document{Name: "intent2"},
-		&configserver.Document{Name: "intent1"},
+		&configserver.Document{Name: "intent2", Namespace: testNamespace},
+		&configserver.Document{Name: "intent1", Namespace: testNamespace},
 	)
 
 	got, err := c.InstanceIntentsList(ctx, testCacheName)
 	if err != nil {
 		t.Fatalf("InstanceIntentsList() error = %v", err)
 	}
-	if diff := cmp.Diff([]string{"intent1", "intent2"}, got); diff != "" {
+	if diff := cmp.Diff([]string{testNamespace + ".intent1", testNamespace + ".intent2"}, got); diff != "" {
 		t.Errorf("InstanceIntentsList() mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -109,8 +127,8 @@ func TestConfigServerCache_InstanceIntentGetAll(t *testing.T) {
 	c, reader := newTestConfigServerCache(t)
 	target := configserver.Target{Namespace: testNamespace, Name: testTarget}
 	reader.Seed(target,
-		&configserver.Document{Name: "intent1", Priority: 1},
-		&configserver.Document{Name: "intent2", Priority: 2},
+		&configserver.Document{Name: "intent1", Namespace: testNamespace, Priority: 1},
+		&configserver.Document{Name: "intent2", Namespace: testNamespace, Priority: 2},
 	)
 
 	intentChan := make(chan importer.ImportConfigAdapter)
@@ -124,7 +142,7 @@ func TestConfigServerCache_InstanceIntentGetAll(t *testing.T) {
 	if err := <-errChan; err != nil {
 		t.Fatalf("InstanceIntentGetAll() error = %v", err)
 	}
-	if diff := cmp.Diff([]string{"intent1", "intent2"}, names); diff != "" {
+	if diff := cmp.Diff([]string{testNamespace + ".intent1", testNamespace + ".intent2"}, names); diff != "" {
 		t.Errorf("InstanceIntentGetAll() names mismatch (-want +got):\n%s", diff)
 	}
 }

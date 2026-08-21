@@ -33,6 +33,7 @@ func TestNewImportAdapter_FieldMapping(t *testing.T) {
 	}
 	doc := &csreader.Document{
 		Name:           "intent1",
+		Namespace:      "ns1",
 		Priority:       10,
 		NonRevertive:   true,
 		Orphan:         true,
@@ -47,8 +48,12 @@ func TestNewImportAdapter_FieldMapping(t *testing.T) {
 		t.Fatalf("NewImportAdapter() error = %v", err)
 	}
 
-	if got := adapter.GetName(); got != doc.Name {
-		t.Errorf("GetName() = %q, want %q", got, doc.Name)
+	// ADR: GetName() is metadata.name/namespace via config.GetGVKNSN.
+	// A bare Config name (no ".") is what crashed config-server's
+	// DeviationWatcher: index parts[1] of SplitN(name, ".", 2).
+	const wantName = "ns1.intent1"
+	if got := adapter.GetName(); got != wantName {
+		t.Errorf("GetName() = %q, want %q (GetGVKNSN)", got, wantName)
 	}
 	if got := adapter.GetPriority(); got != doc.Priority {
 		t.Errorf("GetPriority() = %d, want %d", got, doc.Priority)
