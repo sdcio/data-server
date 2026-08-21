@@ -60,6 +60,7 @@ func TestGRPCConfigReader_Get(t *testing.T) {
 
 	want := &Document{
 		Name:         "intent1",
+		Namespace:    "ns1",
 		Priority:     10,
 		NonRevertive: true,
 		Orphan:       true,
@@ -127,8 +128,8 @@ func TestGRPCConfigReader_List(t *testing.T) {
 		TargetName:      "target1",
 	}).Return(&config_read.ListConfigResponse{
 		Config: []*config_read.ConfigEntry{
-			{Name: "intent1", Priority: 1},
-			{Name: "intent2", Priority: 2},
+			{Name: "intent1", Namespace: "ns1", Priority: 1},
+			{Name: "intent2", Namespace: "ns1", Priority: 2},
 		},
 	}, nil)
 
@@ -141,9 +142,9 @@ func TestGRPCConfigReader_List(t *testing.T) {
 	}
 	var names []string
 	for _, d := range got {
-		names = append(names, d.Name)
+		names = append(names, d.IntentName())
 	}
-	if diff := cmp.Diff([]string{"intent1", "intent2"}, names); diff != "" {
+	if diff := cmp.Diff([]string{"ns1.intent1", "ns1.intent2"}, names); diff != "" {
 		t.Errorf("List() names mismatch (-want +got):\n%s", diff)
 	}
 }

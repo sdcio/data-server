@@ -54,15 +54,31 @@ type ConfigBlob struct {
 // Document is the seam's representation of one config-server Config (joined
 // with its SensitiveConfig, if any). It carries exactly the fields the ADR's
 // field-mapping table needs to build an importer.ImportConfigAdapter:
-// name, priority, non-revertive flag, orphan flag, sensitive paths, and the
-// raw config payload.
+// name, namespace, priority, non-revertive flag, orphan flag, sensitive
+// paths, and the raw config payload.
 type Document struct {
-	Name           string
+	// Name is the Config resource's metadata.name — the lookup key
+	// ConfigReadService uses against TargetSnapshot.Spec.Configs.
+	Name string
+	// Namespace is the Config's Kubernetes namespace, populated from
+	// ConfigEntry.Namespace. Together with Name it forms the owner string
+	// config-server uses on TransactionSet (config.GetGVKNSN).
+	Namespace      string
 	Priority       int32
 	NonRevertive   bool
 	Orphan         bool
 	SensitivePaths []*sdcpb.Path
 	Config         []*ConfigBlob
+}
+
+// IntentName is the owner name data-server and config-server share for a
+// Config: "<namespace>.<name>", matching config.GetGVKNSN. When Namespace is
+// empty the bare Name is returned, so incomplete fixtures stay usable.
+func (d *Document) IntentName() string {
+	if d.Namespace == "" {
+		return d.Name
+	}
+	return d.Namespace + "." + d.Name
 }
 
 // LocalConfigReader is the local-read seam a config-server-backed
