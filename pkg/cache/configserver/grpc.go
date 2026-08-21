@@ -103,6 +103,7 @@ func documentFromEntry(e *config_read.ConfigEntry) *Document {
 	}
 	return &Document{
 		Name:           e.GetName(),
+		Namespace:      e.GetNamespace(),
 		Priority:       e.GetPriority(),
 		NonRevertive:   e.GetNonRevertive(),
 		Orphan:         e.GetOrphan(),
