@@ -45,11 +45,36 @@ func mergeConfigBlobs(blobs []*csreader.ConfigBlob) (map[string]any, error) {
 			}
 		}
 
-		if err := insertAtPath(root, p.GetElem(), val); err != nil {
+		elems := p.GetElem()
+		if len(elems) == 0 {
+			if err := mergeRootBlob(root, val); err != nil {
+				return nil, fmt.Errorf("inserting %q: %w", b.Path, err)
+			}
+			continue
+		}
+
+		if err := insertAtPath(root, elems, val); err != nil {
 			return nil, fmt.Errorf("inserting %q: %w", b.Path, err)
 		}
 	}
 	return root, nil
+}
+
+// mergeRootBlob shallow-merges a config-server root blob (path "/") into root.
+// An empty or absent value contributes nothing; the value must be a JSON object
+// whose top-level keys are YANG children under the model root.
+func mergeRootBlob(root map[string]any, val any) error {
+	if val == nil {
+		return nil
+	}
+	child, ok := val.(map[string]any)
+	if !ok {
+		return fmt.Errorf("root blob value must be a JSON object")
+	}
+	for k, v := range child {
+		root[k] = v
+	}
+	return nil
 }
 
 // insertAtPath walks elems into node, creating intermediate containers/list

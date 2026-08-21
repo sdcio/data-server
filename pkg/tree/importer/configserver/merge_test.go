@@ -166,3 +166,85 @@ func TestMergeConfigBlobs_InvalidJSON(t *testing.T) {
 		t.Fatal("mergeConfigBlobs() expected error for invalid JSON, got nil")
 	}
 }
+
+func TestMergeConfigBlobs_RootBlob(t *testing.T) {
+	got, err := mergeConfigBlobs([]*csreader.ConfigBlob{
+		{Path: "/", Value: []byte(`{"interface":[{"name":"ethernet-1/1","admin-state":"enable"}],"network-instance":[{"name":"vrf1","type":"ip-vrf"}]}`)},
+	})
+	if err != nil {
+		t.Fatalf("mergeConfigBlobs() error = %v", err)
+	}
+	want := map[string]any{
+		"interface": []any{
+			map[string]any{
+				"name":        "ethernet-1/1",
+				"admin-state": "enable",
+			},
+		},
+		"network-instance": []any{
+			map[string]any{
+				"name": "vrf1",
+				"type": "ip-vrf",
+			},
+		},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("mergeConfigBlobs() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestMergeConfigBlobs_RootBlobEmpty(t *testing.T) {
+	got, err := mergeConfigBlobs([]*csreader.ConfigBlob{
+		{Path: "/"},
+	})
+	if err != nil {
+		t.Fatalf("mergeConfigBlobs() error = %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("mergeConfigBlobs() = %v, want empty", got)
+	}
+}
+
+func TestMergeConfigBlobs_RootBlobEmptyObject(t *testing.T) {
+	got, err := mergeConfigBlobs([]*csreader.ConfigBlob{
+		{Path: "/", Value: []byte(`{}`)},
+	})
+	if err != nil {
+		t.Fatalf("mergeConfigBlobs() error = %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("mergeConfigBlobs() = %v, want empty", got)
+	}
+}
+
+func TestMergeConfigBlobs_RootBlobScalarRejected(t *testing.T) {
+	_, err := mergeConfigBlobs([]*csreader.ConfigBlob{
+		{Path: "/", Value: []byte(`"hello"`)},
+	})
+	if err == nil {
+		t.Fatal("mergeConfigBlobs() expected error for scalar root blob, got nil")
+	}
+}
+
+func TestMergeConfigBlobs_RootBlobThenGranular(t *testing.T) {
+	got, err := mergeConfigBlobs([]*csreader.ConfigBlob{
+		{Path: "/", Value: []byte(`{"interface":[{"name":"eth0","config":{"mtu":1500}}]}`)},
+		{Path: "/interface[name=eth0]/config/mtu", Value: []byte(`9000`)},
+	})
+	if err != nil {
+		t.Fatalf("mergeConfigBlobs() error = %v", err)
+	}
+	want := map[string]any{
+		"interface": []any{
+			map[string]any{
+				"name": "eth0",
+				"config": map[string]any{
+					"mtu": float64(9000),
+				},
+			},
+		},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("mergeConfigBlobs() mismatch (-want +got):\n%s", diff)
+	}
+}
