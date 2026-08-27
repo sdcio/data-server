@@ -47,6 +47,10 @@ const (
 	// value is accepted for configuration consistency but currently has no
 	// profile-specific behaviour.
 	DeviceProfileCiscoIOSXR DeviceProfile = "cisco-ios-xr"
+	// DeviceProfileSonic enables SONiC translib-specific gNMI materialization for
+	// type=gnmi. Only JSON_IETF encoding is supported for this profile; any other
+	// encoding is rejected at config-load time.
+	DeviceProfileSonic DeviceProfile = "sonic"
 )
 
 type DatastoreConfig struct {
@@ -105,8 +109,9 @@ type SBI struct {
 	// Timeout
 	Timeout time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	// DeviceProfile selects NOS-specific southbound behaviour. Use the
-	// [DeviceProfile] constants ([DeviceProfileNone] or [DeviceProfileCiscoIOSXR]);
-	// unknown values are rejected when the datastore configuration is validated.
+	// [DeviceProfile] constants ([DeviceProfileNone], [DeviceProfileCiscoIOSXR], or
+	// [DeviceProfileSonic]); unknown values are rejected when the datastore
+	// configuration is validated.
 	DeviceProfile DeviceProfile `yaml:"device-profile,omitempty" json:"device-profile,omitempty"`
 }
 
@@ -193,9 +198,16 @@ func (s *SBI) IsCiscoIOSXR() bool {
 	return s.DeviceProfile == DeviceProfileCiscoIOSXR
 }
 
+// IsSonic reports whether this SBI uses the SONiC device profile. Callers
+// outside pkg/config should use this predicate rather than comparing
+// DeviceProfile directly, so the profile string stays contained here.
+func (s *SBI) IsSonic() bool {
+	return s.DeviceProfile == DeviceProfileSonic
+}
+
 func (s *SBI) validateSetDefaults() error {
 	switch s.DeviceProfile {
-	case DeviceProfileNone, DeviceProfileCiscoIOSXR:
+	case DeviceProfileNone, DeviceProfileCiscoIOSXR, DeviceProfileSonic:
 	default:
 		return fmt.Errorf("unknown device-profile: %q", s.DeviceProfile)
 	}
@@ -220,6 +232,9 @@ func (s *SBI) validateSetDefaults() error {
 		if s.DeviceProfile == DeviceProfileCiscoIOSXR && !strings.EqualFold(s.GnmiOptions.Encoding, "JSON_IETF") {
 			return fmt.Errorf("device-profile %q with sbi type %q requires gnmi-options.encoding %q, got %q",
 				DeviceProfileCiscoIOSXR, sbiGNMI, "JSON_IETF", s.GnmiOptions.Encoding)
+		}
+		if s.DeviceProfile == DeviceProfileSonic && !strings.EqualFold(s.GnmiOptions.Encoding, "JSON_IETF") {
+			return fmt.Errorf("device-profile %q requires gnmi encoding JSON_IETF, got %q", s.DeviceProfile, s.GnmiOptions.Encoding)
 		}
 	default:
 		return fmt.Errorf("unknown sbi type: %q", s.Type)

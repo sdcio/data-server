@@ -84,3 +84,57 @@ func TestSBI_validateSetDefaults_DeviceProfile_CiscoIOSXRGNMIPlainJSONIsRejected
 		t.Fatal("expected error for cisco-ios-xr + gnmi + json, got nil")
 	}
 }
+
+func TestSBI_IsSonic(t *testing.T) {
+	if (&SBI{DeviceProfile: DeviceProfileSonic}).IsSonic() != true {
+		t.Fatal("expected true for sonic profile")
+	}
+	if (&SBI{DeviceProfile: DeviceProfileNone}).IsSonic() != false {
+		t.Fatal("expected false for DeviceProfileNone")
+	}
+	if (&SBI{}).IsSonic() != false {
+		t.Fatal("expected false for zero-value DeviceProfile (same as DeviceProfileNone)")
+	}
+	if (&SBI{DeviceProfile: DeviceProfileCiscoIOSXR}).IsSonic() != false {
+		t.Fatal("expected false for cisco-ios-xr profile")
+	}
+	if (&SBI{DeviceProfile: DeviceProfile("other")}).IsSonic() != false {
+		t.Fatal("expected false for unrelated profile")
+	}
+}
+
+func TestSBI_validateSetDefaults_DeviceProfile_SonicGNMIJSONIETFIsAccepted(t *testing.T) {
+	sbi := validGNMISBI("JSON_IETF", DeviceProfileSonic)
+	if err := sbi.validateSetDefaults(); err != nil {
+		t.Fatalf("unexpected error for sonic + gnmi + JSON_IETF: %v", err)
+	}
+}
+
+func TestSBI_validateSetDefaults_DeviceProfile_SonicGNMIJSONIsRejected(t *testing.T) {
+	sbi := validGNMISBI("JSON", DeviceProfileSonic)
+	if err := sbi.validateSetDefaults(); err == nil {
+		t.Fatal("expected error for sonic + gnmi + JSON, got nil")
+	}
+}
+
+func TestSBI_validateSetDefaults_DeviceProfile_SonicGNMIProtoIsRejected(t *testing.T) {
+	sbi := validGNMISBI("PROTO", DeviceProfileSonic)
+	if err := sbi.validateSetDefaults(); err == nil {
+		t.Fatal("expected error for sonic + gnmi + PROTO, got nil")
+	}
+}
+
+func TestSBI_validateSetDefaults_DeviceProfile_UnaffectedProfilesAndEncodingsUnchanged(t *testing.T) {
+	if err := validGNMISBI("json_ietf", DeviceProfileNone).validateSetDefaults(); err != nil {
+		t.Fatalf("unexpected error for none + gnmi + json_ietf: %v", err)
+	}
+	if err := validGNMISBI("json", DeviceProfileNone).validateSetDefaults(); err != nil {
+		t.Fatalf("unexpected error for none + gnmi + json: %v", err)
+	}
+	if err := validGNMISBI("proto", DeviceProfileNone).validateSetDefaults(); err != nil {
+		t.Fatalf("unexpected error for none + gnmi + proto: %v", err)
+	}
+	if err := validGNMISBI("json", DeviceProfileCiscoIOSXR).validateSetDefaults(); err != nil {
+		t.Fatalf("unexpected error for cisco-ios-xr + gnmi + json: %v", err)
+	}
+}
