@@ -215,6 +215,64 @@ func TestBuildPlan_CiscoIOSXR_Netconf_ReturnsNetconfSetPlan(t *testing.T) {
 	}
 }
 
+// --- Cycle 3: Sonic + json_ietf → sonic-encoded GnmiSetPlan ---------------
+
+func TestBuildPlan_Sonic_JsonIETF_RoutesToSonicEncoder(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	root, scb := newTestRoot(t, mockCtrl)
+
+	addAndFinish(t, root, interfaceUpdates("ethernet-1/1", "uplink"), testhelper.FlagsNew)
+
+	sbi := &config.SBI{
+		Type:          "gnmi",
+		DeviceProfile: config.DeviceProfileSonic,
+		GnmiOptions:   &config.SBIGnmiOptions{Encoding: "JSON_IETF"},
+	}
+
+	plan, err := materialize.BuildPlan(context.Background(), scb, sbi, root.Entry, false)
+	if err != nil {
+		t.Fatalf("BuildPlan: unexpected error: %v", err)
+	}
+	if plan.Gnmi == nil {
+		t.Fatalf("BuildPlan: expected Gnmi plan, got nil")
+	}
+	if len(plan.Gnmi.Updates) == 0 {
+		t.Fatal("BuildPlan: expected at least one Update from sonic encoder, got none")
+	}
+	for _, u := range plan.Gnmi.Updates {
+		if u.GetPath().GetOrigin() != "sonic_yang" {
+			t.Errorf("sonic plan: expected Path.Origin %q, got %q", "sonic_yang", u.GetPath().GetOrigin())
+		}
+	}
+}
+
+// TestBuildPlan_NonSonic_NotAffectedBySonicBranch checks that a generic gNMI
+// profile still gets the standard single-root plan after the sonic branch lands.
+func TestBuildPlan_NonSonic_NotAffectedBySonicBranch(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	root, scb := newTestRoot(t, mockCtrl)
+
+	addAndFinish(t, root, interfaceUpdates("ethernet-1/1", "uplink"), testhelper.FlagsNew)
+
+	sbi := &config.SBI{
+		Type:        "gnmi",
+		GnmiOptions: &config.SBIGnmiOptions{Encoding: "PROTO"},
+	}
+
+	plan, err := materialize.BuildPlan(context.Background(), scb, sbi, root.Entry, false)
+	if err != nil {
+		t.Fatalf("BuildPlan: unexpected error: %v", err)
+	}
+	if plan.Gnmi == nil {
+		t.Fatalf("BuildPlan: expected Gnmi plan, got nil")
+	}
+	for _, u := range plan.Gnmi.Updates {
+		if u.GetPath().GetOrigin() != "" {
+			t.Errorf("generic plan must not set Path.Origin, got %q", u.GetPath().GetOrigin())
+		}
+	}
+}
+
 // --- Existing generic path tests -----------------------------------------
 
 func TestBuildPlan_GnmiSBI_ReturnsGnmiSetPlan(t *testing.T) {

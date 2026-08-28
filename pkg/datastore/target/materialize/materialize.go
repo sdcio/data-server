@@ -26,6 +26,7 @@ import (
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	gnmiutils "github.com/sdcio/data-server/pkg/datastore/target/gnmi/utils"
 	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/permodule"
+	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/sonic"
 	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/ops"
@@ -44,6 +45,7 @@ import (
 //
 // Supported SBI types:
 //   - "gnmi"  with empty DeviceProfile  →  GnmiSetPlan (single root update)
+//   - "gnmi"  with DeviceProfile "sonic"  →  GnmiSetPlan (parent-bound via sonic encoder)
 //   - "gnmi"  with DeviceProfile "cisco-ios-xr" + json_ietf  →  GnmiSetPlan (per YANG module via permodule); json/proto rejected at config-load (see pkg/config)
 //   - "gnmi"  with DeviceProfile "cisco-ios-xr" + proto  →  GnmiSetPlan (generic, single root update)
 //   - "netconf" with empty DeviceProfile  →  NetconfSetPlan
@@ -54,6 +56,14 @@ func BuildPlan(ctx context.Context, scb schemaClient.SchemaClientBound, sbi *con
 		// empty plan so the driver can decide what to do with it.
 		return targettypes.SouthboundSetPlan{}, nil
 	}
+	if sbi.Type == "gnmi" && sbi.IsSonic() {
+		plan, err := sonic.Encode(ctx, scb, entry, replace)
+		if err != nil {
+			return targettypes.SouthboundSetPlan{}, err
+		}
+		return targettypes.SouthboundSetPlan{Gnmi: plan}, nil
+	}
+
 	if sbi.Type == "gnmi" && sbi.IsCiscoIOSXR() {
 		encoding := gnmi.Encoding(gnmiutils.ParseGnmiEncoding(sbi.GnmiOptions.Encoding))
 		switch encoding {
