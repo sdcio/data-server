@@ -7,7 +7,7 @@ Ticket list for this effort, in dependency order. Each ticket's `Status:` line l
 | [01](01-device-profile-config-field-and-validation.md) | Sonic device-profile config field and closed-set validation | None | done |
 | [02](02-sdc-protos-device-profile-sonic-enum.md) | sdc-protos: add `DEVICE_PROFILE_SONIC` to the `DeviceProfile` enum | None | done |
 | [03](03-sonic-encoder-package.md) | Sonic `GnmiSetPlan` encoder package | None | done |
-| [04](04-wire-sonic-dispatch-in-materialize.md) | Wire sonic dispatch into `materialize.BuildPlan` | 01, 03 | ready-for-agent |
+| [04](04-wire-sonic-dispatch-in-materialize.md) | Wire sonic dispatch into `materialize.BuildPlan` | 01, 03 | done |
 | [05](05-expose-sonic-profile-on-grpc-target-cr.md) | Expose `DeviceProfileSonic` on the gRPC/Target-CR layer | 01, 02 | ready-for-agent |
 
 Note: ticket 02 lands on the separate `sdc-protos` repo (`deviceprofile` branch), not `data-server` — track its status there but keep this row in sync.
