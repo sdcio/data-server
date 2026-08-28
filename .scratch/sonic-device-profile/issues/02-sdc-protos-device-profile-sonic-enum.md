@@ -4,8 +4,12 @@
 
 **Blocked by:** None — can start immediately, in parallel with the data-server-side tickets. It is a cross-repo dependency: ticket 05 (gRPC/Target-CR exposure in data-server) cannot land until this enum value is available on that branch and data-server's `go.mod` can be bumped to a commit that includes it.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `data.proto`'s `enum DeviceProfile` gains `DEVICE_PROFILE_SONIC = 2` on the `deviceprofile` branch.
-- [ ] Generated Go code for the enum is regenerated/committed on that branch.
-- [ ] Existing `DEVICE_PROFILE_CISCO_IOS_XR = 1` value and any other enum values on the branch are unaffected.
+- [x] `data.proto`'s `enum DeviceProfile` gains `DEVICE_PROFILE_SONIC = 2` on the `deviceprofile` branch.
+- [x] Generated Go code for the enum is regenerated/committed on that branch.
+- [x] Existing `DEVICE_PROFILE_CISCO_IOS_XR = 1` value and any other enum values on the branch are unaffected.
+
+## Comments
+
+- Landed on `sdc-protos` branch `deviceprofile`, commit `40ed0bc` (`feat(deviceprofile): add DEVICE_PROFILE_SONIC enum value`).
