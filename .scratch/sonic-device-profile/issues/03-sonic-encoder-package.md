@@ -19,4 +19,4 @@
 
 ## Comments
 
-- Landed as `pkg/datastore/target/gnmi/parentbound` on branch `sonic-device-profile`, commit `8ef738b`.
+- Landed as `pkg/datastore/target/gnmi/sonic` on branch `sonic-device-profile`, commit `8ef738b` (fixed up in `41ae92e`, renamed from `parentbound` in a follow-up commit). Named for the device profile rather than the encoding shape (unlike `permodule`) because `Path.Origin` is unconditionally forced to the fixed literal `"sonic_yang"` rather than derived from the schema — that hardcoding makes the package a poor fit for any other target as-is.
