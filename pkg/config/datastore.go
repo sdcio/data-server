@@ -191,6 +191,11 @@ func (ds *DatastoreConfig) ValidateSetDefaults() error {
 	return nil
 }
 
+// IsGnmi reports whether this SBI uses the gNMI transport type.
+func (s *SBI) IsGnmi() bool {
+	return s.Type == sbiGNMI
+}
+
 // IsCiscoIOSXR reports whether this SBI uses the Cisco IOS-XR device profile.
 // Callers outside pkg/config should use this predicate rather than comparing
 // DeviceProfile directly, so the profile string stays contained here.
