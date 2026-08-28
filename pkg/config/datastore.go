@@ -196,19 +196,6 @@ func (ds *DatastoreConfig) ValidateSetDefaults() error {
 	return nil
 }
 
-// IsCiscoIOSXR reports whether this SBI uses the Cisco IOS-XR device profile.
-// Callers outside pkg/config should use this predicate rather than comparing
-// DeviceProfile directly, so the profile string stays contained here.
-func (s *SBI) IsCiscoIOSXR() bool {
-	return s.DeviceProfile == DeviceProfileCiscoIOSXR
-}
-
-// IsSonic reports whether this SBI uses the SONiC device profile. Callers
-// outside pkg/config should use this predicate rather than comparing
-// DeviceProfile directly, so the profile string stays contained here.
-func (s *SBI) IsSonic() bool {
-	return s.DeviceProfile == DeviceProfileSonic
-}
 
 func (s *SBI) validateSetDefaults() error {
 	switch s.DeviceProfile {

@@ -56,11 +56,11 @@ func BuildPlan(ctx context.Context, scb schemaClient.SchemaClientBound, sbi *con
 		// empty plan so the driver can decide what to do with it.
 		return targettypes.SouthboundSetPlan{}, nil
 	}
-	if sbi.Type == config.SBITypeGnmi && sbi.IsSonic() {
+	if sbi.Type == config.SBITypeGnmi && sbi.DeviceProfile == config.DeviceProfileSonic {
 		return gnmiPlan(sonic.Encode(ctx, scb, entry, replace))
 	}
 
-	if sbi.Type == config.SBITypeGnmi && sbi.IsCiscoIOSXR() {
+	if sbi.Type == config.SBITypeGnmi && sbi.DeviceProfile == config.DeviceProfileCiscoIOSXR {
 		encoding := gnmi.Encoding(gnmiutils.ParseGnmiEncoding(sbi.GnmiOptions.Encoding))
 		switch encoding {
 		case gnmi.Encoding_JSON_IETF:

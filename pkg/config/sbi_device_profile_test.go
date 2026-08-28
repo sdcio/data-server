@@ -29,20 +29,6 @@ func validGNMISBI(encoding string, deviceProfile DeviceProfile) *SBI {
 	}
 }
 
-func TestSBI_IsCiscoIOSXR(t *testing.T) {
-	if (&SBI{DeviceProfile: DeviceProfileCiscoIOSXR}).IsCiscoIOSXR() != true {
-		t.Fatal("expected true for cisco-ios-xr profile")
-	}
-	if (&SBI{DeviceProfile: DeviceProfileNone}).IsCiscoIOSXR() != false {
-		t.Fatal("expected false for DeviceProfileNone")
-	}
-	if (&SBI{}).IsCiscoIOSXR() != false {
-		t.Fatal("expected false for zero-value DeviceProfile (same as DeviceProfileNone)")
-	}
-	if (&SBI{DeviceProfile: DeviceProfile("other")}).IsCiscoIOSXR() != false {
-		t.Fatal("expected false for unrelated profile")
-	}
-}
 
 func TestSBI_validateSetDefaults_DeviceProfile_UnknownProfileIsRejected(t *testing.T) {
 	sbi := validGNMISBI("json_ietf", DeviceProfile("not-a-valid-profile"))
@@ -85,23 +71,6 @@ func TestSBI_validateSetDefaults_DeviceProfile_CiscoIOSXRGNMIPlainJSONIsRejected
 	}
 }
 
-func TestSBI_IsSonic(t *testing.T) {
-	if (&SBI{DeviceProfile: DeviceProfileSonic}).IsSonic() != true {
-		t.Fatal("expected true for sonic profile")
-	}
-	if (&SBI{DeviceProfile: DeviceProfileNone}).IsSonic() != false {
-		t.Fatal("expected false for DeviceProfileNone")
-	}
-	if (&SBI{}).IsSonic() != false {
-		t.Fatal("expected false for zero-value DeviceProfile (same as DeviceProfileNone)")
-	}
-	if (&SBI{DeviceProfile: DeviceProfileCiscoIOSXR}).IsSonic() != false {
-		t.Fatal("expected false for cisco-ios-xr profile")
-	}
-	if (&SBI{DeviceProfile: DeviceProfile("other")}).IsSonic() != false {
-		t.Fatal("expected false for unrelated profile")
-	}
-}
 
 func TestSBI_validateSetDefaults_DeviceProfile_SonicGNMIJSONIETFIsAccepted(t *testing.T) {
 	sbi := validGNMISBI("JSON_IETF", DeviceProfileSonic)
