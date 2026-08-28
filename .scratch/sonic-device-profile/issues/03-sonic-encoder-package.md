@@ -19,4 +19,4 @@
 
 ## Comments
 
-- Landed as `pkg/datastore/target/gnmi/parentbound` on branch `sonic-device-profile` (package name reflects parent-bound encoding shape, sibling to `permodule`).
+- Landed as `pkg/datastore/target/gnmi/parentbound` on branch `sonic-device-profile`, commit `8ef738b`.
