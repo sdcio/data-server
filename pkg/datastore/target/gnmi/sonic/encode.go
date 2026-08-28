@@ -12,11 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package parentbound encodes gNMI Set plans with parent-bound JSON payloads
-// suitable for SONiC translib: plain containers batch changed sibling leaves
-// into one Update at the container path; keyed list rows emit one Update per
-// touched row at the list-instance path with a full-row array wrap.
-package parentbound
+// Package sonic encodes gNMI Set plans for the "sonic" device-profile
+// (SONiC translib): plain containers batch changed sibling leaves into one
+// Update at the container path; keyed list rows emit one Update per touched
+// row at the list-instance path with a full-row array wrap. Every Update's
+// Path.Origin is unconditionally forced to "sonic_yang", which is what ties
+// this package to the sonic profile specifically — unlike permodule (which
+// derives its origin per-module from the schema and is therefore reusable
+// across NOS targets), this package's fixed origin makes it a poor fit for
+// any other target as-is, so it is named for the device profile rather than
+// its encoding shape.
+package sonic
 
 import (
 	"context"
@@ -27,8 +33,8 @@ import (
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/tree/api"
-	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/tree/ops"
+	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -66,7 +72,7 @@ func Encode(
 
 	deletes, err := ops.ToProtoDeletes(ctx, entry)
 	if err != nil {
-		return nil, fmt.Errorf("parentbound: collect deletes: %w", err)
+		return nil, fmt.Errorf("sonic: collect deletes: %w", err)
 	}
 	plan.Deletes = deletes
 
@@ -159,7 +165,7 @@ func buildUpdate(ctx context.Context, g parentGroup) (*sdcpb.Update, error) {
 		body, err = ops.ToJsonIETF(ctx, g.target, true)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("parentbound: serialise %s: %w", g.target.PathName(), err)
+		return nil, fmt.Errorf("sonic: serialise %s: %w", g.target.PathName(), err)
 	}
 	if body == nil {
 		return nil, nil
@@ -168,7 +174,7 @@ func buildUpdate(ctx context.Context, g parentGroup) (*sdcpb.Update, error) {
 	stripped := stripRFC7951Prefixes(body)
 	b, err := json.Marshal(stripped)
 	if err != nil {
-		return nil, fmt.Errorf("parentbound: marshal %s: %w", g.target.PathName(), err)
+		return nil, fmt.Errorf("sonic: marshal %s: %w", g.target.PathName(), err)
 	}
 
 	path := g.target.SdcpbPath().DeepCopy()

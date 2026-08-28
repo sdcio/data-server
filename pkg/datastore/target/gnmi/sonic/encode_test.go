@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parentbound_test
+package sonic_test
 
 import (
 	"context"
@@ -22,7 +22,7 @@ import (
 	"testing"
 
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
-	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/parentbound"
+	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/sonic"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/consts"
@@ -201,7 +201,7 @@ func TestEncode_SingleLeafPlainContainer_OneUpdate(t *testing.T) {
 	addToRoot(t, root, bgpLeafUpdates("default", 65001, "192.0.2.1")[:1], testhelper.FlagsNew)
 	finish(t, root)
 
-	plan, err := parentbound.Encode(context.Background(), scb, root.Entry, false)
+	plan, err := sonic.Encode(context.Background(), scb, root.Entry, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +230,7 @@ func TestEncode_MultipleSiblingLeavesPlainContainer_Batched(t *testing.T) {
 	addToRoot(t, root, bgpLeafUpdates("default", 65001, "192.0.2.1"), testhelper.FlagsNew)
 	finish(t, root)
 
-	plan, err := parentbound.Encode(context.Background(), scb, root.Entry, false)
+	plan, err := sonic.Encode(context.Background(), scb, root.Entry, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestEncode_NewKeyedListRow_FullRowWrap(t *testing.T) {
 	addToRoot(t, root, interfaceDescriptionUpdate("ethernet-1/1", "uplink"), testhelper.FlagsNew)
 	finish(t, root)
 
-	plan, err := parentbound.Encode(context.Background(), scb, root.Entry, false)
+	plan, err := sonic.Encode(context.Background(), scb, root.Entry, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +294,7 @@ func TestEncode_ExistingKeyedListRowChange_FullRowWrap(t *testing.T) {
 	addToRoot(t, root, interfaceDescriptionUpdate("ethernet-1/1", "new-desc"), testhelper.FlagsNew)
 	finish(t, root)
 
-	plan, err := parentbound.Encode(ctx, scb, root.Entry, false)
+	plan, err := sonic.Encode(ctx, scb, root.Entry, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,7 +319,7 @@ func TestEncode_MultiKeyListRow_FullRowWrap(t *testing.T) {
 	addToRoot(t, root, doublekeyMandatoUpdate("k2a", "k1a", "value"), testhelper.FlagsNew)
 	finish(t, root)
 
-	plan, err := parentbound.Encode(context.Background(), scb, root.Entry, false)
+	plan, err := sonic.Encode(context.Background(), scb, root.Entry, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,7 +358,7 @@ func TestEncode_NestedModuleContainerList_IndependentGrouping(t *testing.T) {
 	addToRoot(t, root, nestedNIInterfaceUpdate("default", "ethernet-1/1.0"), testhelper.FlagsNew)
 	finish(t, root)
 
-	plan, err := parentbound.Encode(ctx, scb, root.Entry, false)
+	plan, err := sonic.Encode(ctx, scb, root.Entry, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -385,7 +385,7 @@ func TestEncode_RFC7951PrefixesStrippedRecursively(t *testing.T) {
 	addToRoot(t, root, bgpLeafUpdates("default", 65001, "192.0.2.2"), testhelper.FlagsNew)
 	finish(t, root)
 
-	plan, err := parentbound.Encode(context.Background(), scb, root.Entry, false)
+	plan, err := sonic.Encode(context.Background(), scb, root.Entry, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -406,7 +406,7 @@ func TestEncode_RFC7951PrefixesStrippedInCrossModuleListRow(t *testing.T) {
 	addToRoot(t, root, networkInstanceDescriptionUpdate("default", "Default NI"), testhelper.FlagsNew)
 	finish(t, root)
 
-	plan, err := parentbound.Encode(context.Background(), scb, root.Entry, false)
+	plan, err := sonic.Encode(context.Background(), scb, root.Entry, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -436,7 +436,7 @@ func TestEncode_DeletePassthrough(t *testing.T) {
 	}
 	finish(t, root)
 
-	plan, err := parentbound.Encode(ctx, scb, root.Entry, false)
+	plan, err := sonic.Encode(ctx, scb, root.Entry, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -466,7 +466,7 @@ func TestEncode_NoChanges_EmitsNothing(t *testing.T) {
 	}
 	finish(t, root)
 
-	plan, err := parentbound.Encode(ctx, scb, root.Entry, false)
+	plan, err := sonic.Encode(ctx, scb, root.Entry, false)
 	if err != nil {
 		t.Fatal(err)
 	}
