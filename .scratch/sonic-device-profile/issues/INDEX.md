@@ -2,6 +2,15 @@
 
 Ticket list for this effort, in dependency order. Each ticket's `Status:` line lives in its own file — this index is a read-only summary, not the source of truth for status.
 
+## Where to work
+
+Do this work in the worktree at `/home/mava/projects/data-server-worktrees/sonic-device-profile`,
+on branch `sonic-device-profile` (base `ciscoiosxrd2`; see [PR #480](https://github.com/sdcio/data-server/pull/480)).
+**Do not** use `/home/mava/projects/data-server` directly — that checkout sits on
+`config-server-cache-backend`, an unrelated branch with no connection to this effort. The
+config-server side has the same trap: see `config-server/.scratch/sonic-device-profile/issues/INDEX.md`'s
+own "Where to work" note.
+
 | # | Ticket | Blocked by | Status |
 |---|--------|-----------|--------|
 | [01](01-device-profile-config-field-and-validation.md) | Sonic device-profile config field and closed-set validation | None | done |
