@@ -56,11 +56,11 @@ func BuildPlan(ctx context.Context, scb schemaClient.SchemaClientBound, sbi *con
 		// empty plan so the driver can decide what to do with it.
 		return targettypes.SouthboundSetPlan{}, nil
 	}
-	if sbi.IsGnmi() && sbi.IsSonic() {
+	if sbi.Type == config.SBITypeGnmi && sbi.IsSonic() {
 		return gnmiPlan(sonic.Encode(ctx, scb, entry, replace))
 	}
 
-	if sbi.IsGnmi() && sbi.IsCiscoIOSXR() {
+	if sbi.Type == config.SBITypeGnmi && sbi.IsCiscoIOSXR() {
 		encoding := gnmi.Encoding(gnmiutils.ParseGnmiEncoding(sbi.GnmiOptions.Encoding))
 		switch encoding {
 		case gnmi.Encoding_JSON_IETF:
@@ -73,9 +73,9 @@ func BuildPlan(ctx context.Context, scb schemaClient.SchemaClientBound, sbi *con
 	}
 
 	switch sbi.Type {
-	case "gnmi":
+	case config.SBITypeGnmi:
 		return buildGnmiPlan(ctx, sbi, entry, replace)
-	case "netconf":
+	case config.SBITypeNetconf:
 		return buildNetconfPlan(ctx, sbi, entry, replace)
 	default:
 		return targettypes.SouthboundSetPlan{}, fmt.Errorf("materialize: unknown SBI type: %q", sbi.Type)

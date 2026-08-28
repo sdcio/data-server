@@ -28,6 +28,11 @@ const (
 	sbiNETCONF = "netconf"
 	sbiGNMI    = "gnmi"
 
+	// SBITypeGnmi, SBITypeNetconf, SBITypeNoop are the valid values for SBI.Type.
+	SBITypeGnmi    = sbiGNMI
+	SBITypeNetconf = sbiNETCONF
+	SBITypeNoop    = sbiNOOP
+
 	ncCommitDatastoreRunning   = "running"
 	ncCommitDatastoreCandidate = "candidate"
 )
@@ -189,11 +194,6 @@ func (ds *DatastoreConfig) ValidateSetDefaults() error {
 		return err
 	}
 	return nil
-}
-
-// IsGnmi reports whether this SBI uses the gNMI transport type.
-func (s *SBI) IsGnmi() bool {
-	return s.Type == sbiGNMI
 }
 
 // IsCiscoIOSXR reports whether this SBI uses the Cisco IOS-XR device profile.
