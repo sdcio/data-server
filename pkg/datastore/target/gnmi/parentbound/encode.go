@@ -104,23 +104,21 @@ func groupingTarget(leaf api.Entry) (api.Entry, bool) {
 	if parent == nil || parent.IsRoot() {
 		return nil, false
 	}
-	if parent.GetSchema() == nil {
-		ancestor, level := ops.GetFirstAncestorWithSchema(parent)
-		keys := ops.GetSchemaKeys(ancestor)
-		if len(keys) > 0 && level == len(keys) {
-			return parent, true
-		}
+	if parent.GetSchema() != nil {
+		// A schema-bearing parent is always a plain (non-list) container:
+		// per the tree model (pkg/tree/ops/json.go's type-switch), a keyed
+		// list's own container never has leaves as direct children — its
+		// children are always schema-less key-level entries.
 		return parent, false
 	}
-	switch parent.GetSchema().GetSchema().(type) {
-	case *sdcpb.SchemaElem_Container:
-		if len(ops.GetSchemaKeys(parent)) > 0 {
-			return parent, true
-		}
-		return parent, false
-	default:
-		return parent, false
+	// Schema-less key-level entry: walk up to the nearest schema-bearing
+	// ancestor and check whether parent sits exactly len(keys) levels below
+	// it — that is the actual list-instance row, whatever the key count.
+	ancestor, level := ops.GetFirstAncestorWithSchema(parent)
+	if keys := ops.GetSchemaKeys(ancestor); len(keys) > 0 && level == len(keys) {
+		return parent, true
 	}
+	return parent, false
 }
 
 func collectChangedLeaves(e api.Entry) []api.Entry {
@@ -191,9 +189,13 @@ func serializeListRowUpdate(ctx context.Context, listInstance api.Entry) (any, e
 		return nil, nil
 	}
 
-	listContainer := listInstance.GetParent()
+	// listInstance sits len(keys) schema-less key levels below the actual
+	// list container for multi-key lists, so GetParent() alone only reaches
+	// the list container for single-key lists. Walk up to the nearest
+	// schema-bearing ancestor instead, which is correct for any key count.
+	listContainer, _ := ops.GetFirstAncestorWithSchema(listInstance)
 	if listContainer == nil {
-		return nil, fmt.Errorf("list instance %s has no parent", listInstance.PathName())
+		return nil, fmt.Errorf("list instance %s has no schema-bearing ancestor", listInstance.PathName())
 	}
 
 	wrapKey := jsonIETFKey(listContainer)

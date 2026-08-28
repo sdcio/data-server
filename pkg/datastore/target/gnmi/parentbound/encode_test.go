@@ -173,6 +173,16 @@ func nestedNIInterfaceUpdate(niName, ifName string) []*sdcpb.Update {
 	}}
 }
 
+func doublekeyMandatoUpdate(key2, key1, mandato string) []*sdcpb.Update {
+	return []*sdcpb.Update{{
+		Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
+			{Name: "doublekey", Key: map[string]string{"key2": key2, "key1": key1}},
+			{Name: "mandato"},
+		}},
+		Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: mandato}},
+	}}
+}
+
 func networkInstanceDescriptionUpdate(name, desc string) []*sdcpb.Update {
 	return []*sdcpb.Update{{
 		Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
@@ -299,6 +309,42 @@ func TestEncode_ExistingKeyedListRowChange_FullRowWrap(t *testing.T) {
 	}
 	if row["admin-state"] != "enable" {
 		t.Errorf("expected full row to include unchanged admin-state, got %v", row["admin-state"])
+	}
+}
+
+func TestEncode_MultiKeyListRow_FullRowWrap(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	root, scb := newTestRoot(t, mockCtrl)
+
+	addToRoot(t, root, doublekeyMandatoUpdate("k2a", "k1a", "value"), testhelper.FlagsNew)
+	finish(t, root)
+
+	plan, err := parentbound.Encode(context.Background(), scb, root.Entry, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Updates) != 1 {
+		t.Fatalf("want 1 Update, got %d", len(plan.Updates))
+	}
+	u := plan.Updates[0]
+	lastElem := u.GetPath().GetElem()[len(u.GetPath().GetElem())-1]
+	if lastElem.GetName() != "doublekey" || lastElem.GetKey()["key2"] != "k2a" || lastElem.GetKey()["key1"] != "k1a" {
+		t.Errorf("unexpected path elem: %v", lastElem)
+	}
+	body := updateJSON(t, u)
+	rows, ok := body["doublekey"].([]any)
+	if !ok || len(rows) != 1 {
+		t.Fatalf("want array-wrapped doublekey row keyed by the list name, got %v", body)
+	}
+	row, ok := rows[0].(map[string]any)
+	if !ok {
+		t.Fatalf("row is not an object: %T", rows[0])
+	}
+	if row["mandato"] != "value" {
+		t.Errorf("row mandato: got %v", row["mandato"])
+	}
+	if row["key2"] != "k2a" || row["key1"] != "k1a" {
+		t.Errorf("row keys: got key2=%v key1=%v", row["key2"], row["key1"])
 	}
 }
 
