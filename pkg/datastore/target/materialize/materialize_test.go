@@ -91,7 +91,7 @@ func TestBuildPlan_CiscoIOSXR_JsonIETF_PerModulePlan(t *testing.T) {
 	addAndFinish(t, root, upds, testhelper.FlagsNew)
 
 	sbi := &config.SBI{
-		Type:          "gnmi",
+		Type:          config.SBITypeGnmi,
 		DeviceProfile: config.DeviceProfileCiscoIOSXR,
 		GnmiOptions:   &config.SBIGnmiOptions{Encoding: "JSON_IETF"},
 	}
@@ -130,7 +130,7 @@ func TestBuildPlan_CiscoIOSXR_Proto_GenericPlan(t *testing.T) {
 	addAndFinish(t, root, interfaceUpdates("ethernet-1/1", "uplink"), testhelper.FlagsNew)
 
 	sbi := &config.SBI{
-		Type:          "gnmi",
+		Type:          config.SBITypeGnmi,
 		DeviceProfile: config.DeviceProfileCiscoIOSXR,
 		GnmiOptions:   &config.SBIGnmiOptions{Encoding: "PROTO"},
 	}
@@ -224,7 +224,7 @@ func TestBuildPlan_Sonic_JsonIETF_RoutesToSonicEncoder(t *testing.T) {
 	addAndFinish(t, root, interfaceUpdates("ethernet-1/1", "uplink"), testhelper.FlagsNew)
 
 	sbi := &config.SBI{
-		Type:          "gnmi",
+		Type:          config.SBITypeGnmi,
 		DeviceProfile: config.DeviceProfileSonic,
 		GnmiOptions:   &config.SBIGnmiOptions{Encoding: "JSON_IETF"},
 	}
@@ -255,7 +255,7 @@ func TestBuildPlan_NonSonic_NotAffectedBySonicBranch(t *testing.T) {
 	addAndFinish(t, root, interfaceUpdates("ethernet-1/1", "uplink"), testhelper.FlagsNew)
 
 	sbi := &config.SBI{
-		Type:        "gnmi",
+		Type:        config.SBITypeGnmi,
 		GnmiOptions: &config.SBIGnmiOptions{Encoding: "PROTO"},
 	}
 
@@ -279,7 +279,7 @@ func TestBuildPlan_GnmiSBI_ReturnsGnmiSetPlan(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	root, scb := newTestRoot(t, mockCtrl)
 	sbi := &config.SBI{
-		Type:        "gnmi",
+		Type:        config.SBITypeGnmi,
 		GnmiOptions: &config.SBIGnmiOptions{Encoding: "PROTO"},
 	}
 
