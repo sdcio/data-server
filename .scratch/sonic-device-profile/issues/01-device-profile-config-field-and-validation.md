@@ -7,11 +7,12 @@
 **Status:** done
 
 - [x] New `DeviceProfileSonic DeviceProfile = "sonic"` constant added alongside the existing `DeviceProfileNone`/`DeviceProfileCiscoIOSXR` constants.
-- [x] New `(*SBI).IsSonic() bool` predicate added, mirroring the existing `IsCiscoIOSXR()` predicate.
+- [x] ~~New `(*SBI).IsSonic() bool` predicate added, mirroring the existing `IsCiscoIOSXR()` predicate.~~ _Landed then removed during ticket 04 refactor — see below._
 - [x] Closed-set device-profile validation in `SBI.validateSetDefaults()` accepts `"sonic"` as a valid value (unknown values still rejected).
 - [x] When `device-profile == "sonic"`, validation rejects any `GnmiOptions.Encoding` other than `JSON_IETF` at config-load time.
-- [x] Unit tests (same style as the existing Cisco IOS-XR device-profile tests): `sonic` + `JSON_IETF` accepted; `sonic` + `JSON` rejected; `sonic` + `PROTO` rejected; unaffected profiles/encodings unchanged; `IsSonic()` predicate behaves correctly for sonic/none/other profiles.
+- [x] Unit tests: `sonic` + `JSON_IETF` accepted; `sonic` + `JSON` rejected; `sonic` + `PROTO` rejected; unaffected profiles/encodings unchanged. _(The `IsSonic()` predicate test was removed when the predicate was deleted.)_
 
 ## Comments
 
 - Landed on branch `sonic-device-profile` (based off local `ciscoiosxrd2`), commit adding `DeviceProfileSonic`/`IsSonic()`/encoding validation + tests in `pkg/config/datastore.go` and `pkg/config/sbi_device_profile_test.go`.
+- During ticket 04: `IsSonic()` and `IsCiscoIOSXR()` were identified as middle-man predicates and removed (commit `b5980bd`). Dispatch now compares `sbi.DeviceProfile` directly against the exported `DeviceProfileSonic`/`DeviceProfileCiscoIOSXR` constants. `SBITypeGnmi`/`SBITypeNetconf`/`SBITypeNoop` were also exported at the same time (commit `c7aa62e`).

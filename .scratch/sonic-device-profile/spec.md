@@ -33,7 +33,7 @@ Add a new `DeviceProfileSonic` (`"sonic"`) device-profile, mirroring how `Device
 6. As an operator, I want a delete against a `sonic_yang` path to work unmodified (no encoder involvement needed), so that I don't have to think differently about deletes vs. updates for this profile — translib DELETE is path-only with no JSON body requirement.
 7. As an operator, I want multiple Set changes destined for the same device to be batched into one gNMI `SetRequest` where possible, so that they land as a single atomic `translib.Bulk` transaction on the SONiC side rather than N independent non-atomic writes.
 8. As an operator configuring a Target with `device-profile: sonic`, I want the config to be rejected at load time if I configure any encoding other than `JSON_IETF` for that SBI, so that I get a fast, clear error instead of a confusing runtime Set failure.
-9. As a maintainer, I want the sonic device-profile's dispatch condition (`sbi.Type == "gnmi" && sbi.IsSonic()`) to live entirely inside `materialize.BuildPlan`, with the actual encoding logic in its own package (sibling to `permodule`), so that no NOS-specific `if`/`switch` branches leak into `gnmi.go`, `target.New`, or other generic infrastructure (per the repo's "avoid tight coupling on target types" rule).
+9. As a maintainer, I want the sonic device-profile's dispatch condition (`sbi.Type == config.SBITypeGnmi && sbi.DeviceProfile == config.DeviceProfileSonic`) to live entirely inside `materialize.BuildPlan`, with the actual encoding logic in its own package (sibling to `permodule`), so that no NOS-specific `if`/`switch` branches leak into `gnmi.go`, `target.New`, or other generic infrastructure (per the repo's "avoid tight coupling on target types" rule).
 10. As an operator setting up sync/subscribe against a SONiC device, I want documentation telling me that a single root (`/`) sync path will fail, and that I need to list one path per top-level `sonic_yang` module in `SyncConfig.Paths` instead, so that I don't have to rediscover this the hard way.
 11. As a maintainer, I want the `DeviceProfile` enum exposed on the gRPC/Target-CR layer (not just in local YAML config), matching how `DEVICE_PROFILE_CISCO_IOS_XR` is exposed, so the sonic profile can eventually be set via the Target API/CRD, not only via static SBI config files.
 
@@ -42,14 +42,14 @@ Add a new `DeviceProfileSonic` (`"sonic"`) device-profile, mirroring how `Device
 ### Device profile
 
 - New constant `DeviceProfileSonic DeviceProfile = "sonic"` in `pkg/config`, alongside the existing `DeviceProfileNone`/`DeviceProfileCiscoIOSXR`.
-- New predicate `(*SBI).IsSonic() bool`, mirroring `IsCiscoIOSXR()`.
+- ~~New predicate `(*SBI).IsSonic() bool`, mirroring `IsCiscoIOSXR()`.~~ _Landed in ticket 01 then removed during ticket 04 refactoring: both `IsSonic()` and `IsCiscoIOSXR()` were middle-man wrappers over a single constant comparison, so they were deleted. Callers compare `sbi.DeviceProfile` directly against the exported constants. `SBITypeGnmi`/`SBITypeNetconf`/`SBITypeNoop` were also exported at the same time to eliminate bare string literals in dispatch code._
 - Closed-set validation extended to accept `"sonic"` as a valid `device-profile` value.
 - Additional validation specific to this profile: when `device-profile == "sonic"`, the SBI's configured `GnmiOptions.Encoding` (or equivalent) must be `JSON_IETF` only — reject at config validation time (not just at `materialize.BuildPlan` runtime) if any other encoding is configured. `BuildPlan` may additionally assert this defensively, but config-time validation is the primary guard.
 - Companion protobuf: `sdc-protos`' `data.proto` `enum DeviceProfile` gains `DEVICE_PROFILE_SONIC = 2` (on the existing open `deviceprofile` branch, not `main` directly — that branch is what `sdc-protos#120`/data-server's `ciscoiosxrd2` branch depend on). `pkg/server/datastore.go`'s `sdcpbDeviceProfileToConfig`/`configDeviceProfileToSdcpb` conversion switches gain the corresponding case, matching the existing Cisco IOS-XR mapping.
 
 ### Dispatch
 
-- `materialize.BuildPlan` gains a branch: `sbi.Type == "gnmi" && sbi.IsSonic()` → call the new encoder package's `Encode(...)`, mirroring exactly how the existing `sbi.IsCiscoIOSXR()` branch calls `permodule.Encode(...)`.
+- `materialize.BuildPlan` gains a branch: `sbi.Type == config.SBITypeGnmi && sbi.DeviceProfile == config.DeviceProfileSonic` → call the new encoder package's `Encode(...)`, mirroring exactly how the existing `DeviceProfileCiscoIOSXR` branch calls `permodule.Encode(...)`. _(Originally specified as `sbi.IsSonic()`; the predicate was removed as a middle man during ticket 04 refactoring.)_
 - No fallback to the generic gNMI plan for non-`JSON_IETF` encodings on this profile (unlike Cisco's IOS-XR+proto fallback, which works because IOS-XR is a real proto-native gNMI target) — this is enforced primarily by the config-time validation above, not by a runtime fallback/error branch doing double duty.
 - `target.New` is unaffected — device-profile selection happens only inside `materialize.BuildPlan`, same as Cisco's.
 
@@ -90,7 +90,7 @@ Three seams, all mirroring existing prior art for the Cisco IOS-XR device-profil
    - Delete path → passes through unmodified, no payload.
    - Rejection/no-emit behavior when there are no new/changed leaves (mirroring the existing nil-guard fix already present in `materialize.go` for Cisco).
 2. **Config validation** (`pkg/config`): unit tests for the new `DeviceProfileSonic` closed-set value and the JSON_IETF-only encoding restriction, same style as the existing `sbi_device_profile_test.go`. Cases: valid `sonic` + `JSON_IETF` accepted; `sonic` + `JSON` rejected; `sonic` + `PROTO` rejected; unaffected profiles/encodings unchanged.
-3. **Dispatch** (`materialize.BuildPlan`): routing tests confirming `sbi.Type=="gnmi" && sbi.IsSonic()` calls the new encoder and that non-sonic profiles are unaffected, same style as the existing `materialize_test.go` routing tests for Cisco IOS-XR.
+3. **Dispatch** (`materialize.BuildPlan`): routing tests confirming `sbi.Type == config.SBITypeGnmi && sbi.DeviceProfile == config.DeviceProfileSonic` calls the new encoder and that non-sonic profiles are unaffected, same style as the existing `materialize_test.go` routing tests for Cisco IOS-XR.
 
 Only test external behavior (the produced `GnmiSetPlan`/config validation result), not internal helper functions, per existing repo test style.
 
