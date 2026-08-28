@@ -12,5 +12,5 @@
 
 ## Comments
 
-- Landed on `sdc-protos` branch `deviceprofile`, commit [`40ed0bc`](https://github.com/sdcio/sdc-protos/commit/40ed0bc26a71263302a5b24b741ab67db4fac01f) (`feat(deviceprofile): add DEVICE_PROFILE_SONIC enum value`), stacked on [sdc-protos#120](https://github.com/sdcio/sdc-protos/pull/120).
+- Landed on `sdc-protos` branch `deviceprofile`, commit [`40ed0bc`](https://github.com/sdcio/sdc-protos/commit/40ed0bc26a71263302a5b24b741ab67db4fac01f) (`feat(deviceprofile): add DEVICE_PROFILE_SONIC enum value`), stacked on [sdc-protos#120](https://github.com/sdcio/sdc-protos/pull/120). Pushed to `origin/deviceprofile`.
 - Downstream: [05](05-expose-sonic-profile-on-grpc-target-cr.md) bumps `go.mod` to this commit and wires the gRPC mapping.
