@@ -359,6 +359,8 @@ func sdcpbDeviceProfileToConfig(p sdcpb.DeviceProfile) config.DeviceProfile {
 	switch p {
 	case sdcpb.DeviceProfile_DEVICE_PROFILE_CISCO_IOS_XR:
 		return config.DeviceProfileCiscoIOSXR
+	case sdcpb.DeviceProfile_DEVICE_PROFILE_SONIC:
+		return config.DeviceProfileSonic
 	default:
 		return config.DeviceProfileNone
 	}
@@ -368,6 +370,8 @@ func configDeviceProfileToSdcpb(p config.DeviceProfile) sdcpb.DeviceProfile {
 	switch p {
 	case config.DeviceProfileCiscoIOSXR:
 		return sdcpb.DeviceProfile_DEVICE_PROFILE_CISCO_IOS_XR
+	case config.DeviceProfileSonic:
+		return sdcpb.DeviceProfile_DEVICE_PROFILE_SONIC
 	default:
 		return sdcpb.DeviceProfile_DEVICE_PROFILE_GENERIC
 	}
