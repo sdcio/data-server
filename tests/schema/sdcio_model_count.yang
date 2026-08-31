@@ -41,5 +41,22 @@ module sdcio_model_count {
         error-message "Absolute Path - There must be exactly 2 server entries.";
       }
     }
+    container must-sibling {
+      list server {
+        key "keyAttr";
+        leaf keyAttr {
+          type string;
+        }
+        leaf val1 {
+          type uint8;
+        }
+        leaf val2 {
+          type uint8;
+        }
+        must 'val1 + val2 <= 128' {
+          error-message "val1 + val2 must not exceed 128.";
+        }
+      }
+    }
   }
 }
