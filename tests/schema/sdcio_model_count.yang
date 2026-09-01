@@ -58,5 +58,13 @@ module sdcio_model_count {
         }
       }
     }
+    container count-leaflist {
+      leaf-list flag {
+        type string;
+      }
+      must 'count(./flag[text()="all"]) = 0 or count(./flag) = 1' {
+        error-message "If 'all' is set, it must be the only flag.";
+      }
+    }
   }
 }
