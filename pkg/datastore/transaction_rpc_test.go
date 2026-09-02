@@ -369,11 +369,28 @@ func TestTransactionSet_SensitivePathsPersisted(t *testing.T) {
 // drifting from what TreeExport actually emits.
 func buildFixtureIntent(t *testing.T, scb schemaClient.SchemaClientBound, name string, priority int32, device *sdcio_schema.Device) *tree_persist.Intent {
 	t.Helper()
+	return buildFixtureIntentWithValidation(t, scb, name, priority, device, false)
+}
+
+// buildFixtureIntentAllowInvalid is buildFixtureIntent, except it skips
+// ygot's own leafref validation on marshal. It exists for fixtures that
+// deliberately contain a dangling leafref (e.g. ghost-intent tests) — ygot's
+// validation is stricter than (and duplicates) what pkg/tree/ops/validation
+// exercises, and would otherwise reject such fixtures before the tree ever
+// sees them. Regular fixtures should keep using buildFixtureIntent so ygot's
+// own checks still catch accidentally-invalid test data.
+func buildFixtureIntentAllowInvalid(t *testing.T, scb schemaClient.SchemaClientBound, name string, priority int32, device *sdcio_schema.Device) *tree_persist.Intent {
+	t.Helper()
+	return buildFixtureIntentWithValidation(t, scb, name, priority, device, true)
+}
+
+func buildFixtureIntentWithValidation(t *testing.T, scb schemaClient.SchemaClientBound, name string, priority int32, device *sdcio_schema.Device, skipValidation bool) *tree_persist.Intent {
+	t.Helper()
 	ctx := context.Background()
 
 	deviceJSON, err := ygot.EmitJSON(device, &ygot.EmitJSONConfig{
 		Format:         ygot.RFC7951,
-		SkipValidation: false,
+		SkipValidation: skipValidation,
 	})
 	if err != nil {
 		t.Fatalf("marshal fixture device: %v", err)
@@ -734,6 +751,227 @@ func TestConfigServerBackend_DeleteApply_NoRehydration(t *testing.T) {
 	if len(names) != 0 {
 		t.Errorf("LoadAllButRunningIntents() (post-delete) = %v, want empty — intent1 was rehydrated after delete-apply", names)
 	}
+}
+
+// TestTransactionSet_LoadAllOnlyValidationError_DoesNotBlockUnrelatedIntent
+// is ticket 05's safety-net regression test: a ghost intent (loaded only via
+// LoadAllButRunningIntents, not part of this RPC's own intents) with a
+// broken leafref must not hard-fail a transaction that only touches an
+// unrelated intent. This is the "02-CRUD SROS teardown hung deleting
+// customer while intent1 ghosted the tree" CI signature from the spec.
+func TestTransactionSet_LoadAllOnlyValidationError_DoesNotBlockUnrelatedIntent(t *testing.T) {
+	ctx := context.Background()
+
+	sc, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	scb := schemaClient.NewSchemaClientBound(schema, sc)
+
+	// intent1 (the ghost): a network-instance interface-ref pointing at an
+	// interface that does not exist anywhere in the tree — a dangling
+	// leafref owned by intent1.
+	ghostDevice := &sdcio_schema.Device{
+		NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
+			"ni1": {
+				Name: ygot.String("ni1"),
+				Type: sdcio_schema.SdcioModelNi_NiType_default,
+				Interface: map[string]*sdcio_schema.SdcioModel_NetworkInstance_Interface{
+					"ethernet-1/1": {
+						Name: ygot.String("ethernet-1/1"),
+						InterfaceRef: &sdcio_schema.SdcioModel_NetworkInstance_Interface_InterfaceRef{
+							Interface:    ygot.String("ethernet-1/1"),
+							Subinterface: ygot.Uint32(5),
+						},
+					},
+				},
+			},
+		},
+	}
+	ghostIntent := buildFixtureIntentAllowInvalid(t, scb, "intent1", 10, ghostDevice)
+
+	// customer: unrelated valid content, no leafref involved.
+	customerDevice := &sdcio_schema.Device{
+		Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+			"ethernet-1/3": {
+				Name:        ygot.String("ethernet-1/3"),
+				Description: ygot.String("customer interface"),
+			},
+		},
+	}
+	customerIntent := buildFixtureIntent(t, scb, "customer", 20, customerDevice)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
+	ccb.EXPECT().
+		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+			intentChan <- treeproto.NewProtoTreeImporter(ghostIntent)
+			intentChan <- treeproto.NewProtoTreeImporter(customerIntent)
+			close(intentChan)
+			close(errChan)
+		}).AnyTimes()
+	ccb.EXPECT().IntentDelete(gomock.Any(), "customer", gomock.Any()).Return(nil)
+	ccb.EXPECT().RunningModify(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	sbi := mocktarget.NewMockTarget(ctrl)
+	sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).AnyTimes()
+
+	vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	tc := tree.NewTreeContext(scb, vpf)
+	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := syncTreeRoot.FinishInsertionPhase(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	ds := &Datastore{
+		config: &config.DatastoreConfig{
+			Validation: config.NewValidationConfig(),
+			Name:       "test-ds",
+		},
+		syncTreeMutex:      &sync.RWMutex{},
+		syncTree:           syncTreeRoot,
+		taskPool:           vpf,
+		cacheClient:        ccb,
+		sbi:                sbi,
+		dmutex:             &sync.Mutex{},
+		schemaClient:       scb,
+		sensitivePathIndex: treetypes.NewSensitivePathIndex(),
+	}
+	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
+
+	ti := types.NewTransactionIntent("customer", 20)
+	ti.SetDeleteFlag()
+
+	resp, err := ds.TransactionSet(ctx, "txn-loadall-only-error", []*types.TransactionIntent{ti}, nil, 10*time.Second, false)
+	if err != nil {
+		t.Fatalf("TransactionSet() error = %v, want nil (ghost intent1's leafref error must not block unrelated customer delete)", err)
+	}
+	if resp == nil {
+		t.Fatal("TransactionSet() response = nil, want non-nil")
+	}
+	if errs := resp.GetIntents()["customer"].GetErrors(); len(errs) != 0 {
+		t.Errorf("response.Intents[customer].Errors = %v, want empty", errs)
+	}
+	// The excluded ghost intent's own validation errors are still reported
+	// for observability — excluding it from the abort decision does not
+	// change result.Intents population, only whether it blocks the
+	// transaction.
+	if errs := resp.GetIntents()["intent1"].GetErrors(); len(errs) == 0 {
+		t.Errorf("response.Intents[intent1].Errors = empty, want the ghost's dangling leafref error still reported")
+	}
+}
+
+// TestTransactionSet_ValidationError_OwnedByRPCIntent_StillFails is the
+// control case for ticket 05: when the intent that owns a validation error
+// IS one of this RPC's own intents (not LoadAll-only), the transaction must
+// still hard-fail exactly as before — the safety net only excuses
+// LoadAll-only owners.
+func TestTransactionSet_ValidationError_OwnedByRPCIntent_StillFails(t *testing.T) {
+	ctx := context.Background()
+
+	sc, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	scb := schemaClient.NewSchemaClientBound(schema, sc)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
+	ccb.EXPECT().
+		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+			close(intentChan)
+			close(errChan)
+		}).AnyTimes()
+
+	sbi := mocktarget.NewMockTarget(ctrl)
+
+	vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	tc := tree.NewTreeContext(scb, vpf)
+	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := syncTreeRoot.FinishInsertionPhase(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	ds := &Datastore{
+		config: &config.DatastoreConfig{
+			Validation: config.NewValidationConfig(),
+			Name:       "test-ds",
+		},
+		syncTreeMutex:      &sync.RWMutex{},
+		syncTree:           syncTreeRoot,
+		taskPool:           vpf,
+		cacheClient:        ccb,
+		sbi:                sbi,
+		dmutex:             &sync.Mutex{},
+		schemaClient:       scb,
+		sensitivePathIndex: treetypes.NewSensitivePathIndex(),
+	}
+	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
+
+	// intent1 is submitted directly as part of this RPC, with the same
+	// dangling leafref as the ghost scenario above.
+	ti := types.NewTransactionIntent("intent1", 10)
+	updates, err := treetypes.ExpandAndConvertIntent(ctx, scb, "intent1", 10, []*sdcpb.Update{{
+		Path: &sdcpb.Path{},
+		Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: mustMarshalDevice(t, &sdcio_schema.Device{
+			NetworkInstance: map[string]*sdcio_schema.SdcioModel_NetworkInstance{
+				"ni1": {
+					Name: ygot.String("ni1"),
+					Type: sdcio_schema.SdcioModelNi_NiType_default,
+					Interface: map[string]*sdcio_schema.SdcioModel_NetworkInstance_Interface{
+						"ethernet-1/1": {
+							Name: ygot.String("ethernet-1/1"),
+							InterfaceRef: &sdcio_schema.SdcioModel_NetworkInstance_Interface_InterfaceRef{
+								Interface:    ygot.String("ethernet-1/1"),
+								Subinterface: ygot.Uint32(5),
+							},
+						},
+					},
+				},
+			},
+		})}},
+	}}, time.Now().Unix())
+	if err != nil {
+		t.Fatalf("expand intent: %v", err)
+	}
+	ti.AddUpdates(updates)
+
+	// No Set() expectation is registered on sbi: apply must not be reached
+	// when the RPC's own intent fails validation, so any call would fail
+	// the mock's strict expectations.
+	resp, err := ds.TransactionSet(ctx, "txn-rpc-owned-error", []*types.TransactionIntent{ti}, nil, 10*time.Second, false)
+	if err != nil {
+		t.Fatalf("TransactionSet() error = %v, want nil (validation errors are carried in the response)", err)
+	}
+	if errs := resp.GetIntents()["intent1"].GetErrors(); len(errs) == 0 {
+		t.Errorf("response.Intents[intent1].Errors = empty, want the dangling leafref error (RPC-owned errors must still be reported and block apply)")
+	}
+}
+
+// mustMarshalDevice marshals device to RFC7951 JSON bytes, failing the test
+// on error.
+func mustMarshalDevice(t *testing.T, device *sdcio_schema.Device) []byte {
+	t.Helper()
+	b, err := ygot.EmitJSON(device, &ygot.EmitJSONConfig{
+		Format:         ygot.RFC7951,
+		SkipValidation: true,
+	})
+	if err != nil {
+		t.Fatalf("marshal device: %v", err)
+	}
+	return []byte(b)
 }
 
 // TestForEachIntent_NarrowIntentReader verifies forEachIntent streams every

@@ -30,7 +30,20 @@ func (v ValidationResults) AddEntry(e *ValidationResultEntry) error {
 }
 
 func (v ValidationResults) HasErrors() bool {
-	for _, intent := range v {
+	return v.HasErrorsExcludingOwners(nil)
+}
+
+// HasErrorsExcludingOwners is HasErrors, except errors owned by an intent
+// name present in excludeOwners are ignored. It exists so a transaction can
+// treat validation errors owned by intents it has no involvement with (e.g.
+// ghost intents rehydrated by LoadAllButRunningIntents) as non-blocking,
+// while still hard-failing on any error owned by an intent it does not
+// exclude.
+func (v ValidationResults) HasErrorsExcludingOwners(excludeOwners map[string]struct{}) bool {
+	for intentName, intent := range v {
+		if _, excluded := excludeOwners[intentName]; excluded {
+			continue
+		}
 		if len(intent.errors) > 0 {
 			return true
 		}
