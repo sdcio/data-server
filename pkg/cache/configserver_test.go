@@ -25,7 +25,19 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
+	"google.golang.org/protobuf/proto"
 )
+
+// leafVariant marshals tv the same way TreeExport does (le.ValueAsBytes()),
+// so fixtures build TreeElements the way a real export would.
+func leafVariant(t *testing.T, tv *sdcpb.TypedValue) []byte {
+	t.Helper()
+	b, err := proto.Marshal(tv)
+	if err != nil {
+		t.Fatalf("marshal TypedValue: %v", err)
+	}
+	return b
+}
 
 const (
 	testNamespace = "ns1"
@@ -33,10 +45,10 @@ const (
 	testCacheName = testNamespace + "." + testTarget
 )
 
-func newTestConfigServerCache(t *testing.T) (*ConfigServerCache, *configserver.FakeLocalConfigReader) {
+func newTestConfigServerCache(t *testing.T) (*ConfigServerCache, *configserver.FakeLocalConfigClient) {
 	t.Helper()
-	reader := configserver.NewFakeLocalConfigReader()
-	return NewConfigServerCache(reader), reader
+	client := configserver.NewFakeLocalConfigClient()
+	return NewConfigServerCache(client), client
 }
 
 // TestConfigServerCache_InstanceIntentGet_FieldMapping verifies
@@ -383,17 +395,100 @@ func TestConfigServerCache_InstanceRunningGet_UnknownInstance(t *testing.T) {
 	}
 }
 
-// TestConfigServerCache_ImplementsReaderCapabilities verifies
-// *ConfigServerCache satisfies IntentReader, RunningStore, and
-// InstanceLifecycle directly. It deliberately does not assert IntentWriter
-// here — there is no method left on the type to test for no-op behavior;
-// that behavior lives in noopIntentWriter, composed in at
-// Server.createCacheClient instead.
-func TestConfigServerCache_ImplementsReaderCapabilities(t *testing.T) {
-	c := NewConfigServerCache(configserver.NewFakeLocalConfigReader())
-	var (
-		_ IntentReader      = c
-		_ RunningStore      = c
-		_ InstanceLifecycle = c
-	)
+// TestConfigServerCache_ImplementsClient verifies *ConfigServerCache
+// satisfies the full cache.Client directly — including IntentWriter, now
+// that Modify/Delete are real writes against the LocalConfigWriter seam
+// rather than the generic noopIntentWriter.
+func TestConfigServerCache_ImplementsClient(t *testing.T) {
+	c := NewConfigServerCache(configserver.NewFakeLocalConfigClient())
+	var _ Client = c
+}
+
+// TestConfigServerCache_InstanceIntentModify_CreatesAndIsReadableBack
+// covers the write-then-read round trip through the seam: a modified
+// Intent must be readable back via InstanceIntentGet with the content that
+// was written, matching the ghost-intent regression's "last-applied
+// updates at apply time" contract.
+func TestConfigServerCache_InstanceIntentModify_CreatesAndIsReadableBack(t *testing.T) {
+	ctx := context.Background()
+	c, _ := newTestConfigServerCache(t)
+
+	intent := &tree_persist.Intent{
+		IntentName: testNamespace + ".intent1",
+		Priority:   5,
+		Root: &tree_persist.TreeElement{
+			Childs: []*tree_persist.TreeElement{
+				{Name: "hostname", LeafVariant: leafVariant(t, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "router1"}})},
+			},
+		},
+	}
+
+	if err := c.InstanceIntentModify(ctx, testCacheName, intent); err != nil {
+		t.Fatalf("InstanceIntentModify() error = %v", err)
+	}
+
+	adapter, err := c.InstanceIntentGet(ctx, testCacheName, testNamespace+".intent1")
+	if err != nil {
+		t.Fatalf("InstanceIntentGet() after Modify: %v", err)
+	}
+	if adapter.GetPriority() != 5 {
+		t.Errorf("GetPriority() = %d, want 5", adapter.GetPriority())
+	}
+}
+
+// TestConfigServerCache_InstanceIntentDelete_RemovesFromSeam is the
+// regression test for the ghost-intent bug this ticket exists to fix:
+// deleting an intent must make it unreadable via the seam immediately, not
+// only after some later, unrelated reconcile.
+func TestConfigServerCache_InstanceIntentDelete_RemovesFromSeam(t *testing.T) {
+	ctx := context.Background()
+	c, reader := newTestConfigServerCache(t)
+	target := configserver.Target{Namespace: testNamespace, Name: testTarget}
+	reader.Seed(target, &configserver.Document{Name: "intent1", Namespace: testNamespace})
+
+	if err := c.InstanceIntentDelete(ctx, testCacheName, testNamespace+".intent1", false); err != nil {
+		t.Fatalf("InstanceIntentDelete() error = %v", err)
+	}
+
+	if _, err := c.InstanceIntentGet(ctx, testCacheName, testNamespace+".intent1"); !errors.Is(err, configserver.ErrNotFound) {
+		t.Errorf("InstanceIntentGet() after Delete: err = %v, want ErrNotFound", err)
+	}
+}
+
+// TestConfigServerCache_InstanceIntentDelete_MissingIsNoop matches the
+// ConfigSnapshotService.Delete contract: deleting an intent that was never
+// present is a no-op success under this backend regardless of
+// ignoreNonExisting — TargetSnapshot's membership model has no tombstone to
+// distinguish "already gone" from "never existed".
+func TestConfigServerCache_InstanceIntentDelete_MissingIsNoop(t *testing.T) {
+	ctx := context.Background()
+	c, _ := newTestConfigServerCache(t)
+
+	if err := c.InstanceIntentDelete(ctx, testCacheName, "missing", false); err != nil {
+		t.Errorf("InstanceIntentDelete() of missing intent: %v, want no-op success", err)
+	}
+}
+
+// TestConfigServerCache_InstanceIntentModify_MalformedDatastoreName and
+// TestConfigServerCache_InstanceIntentDelete_MalformedDatastoreName lock the
+// same ErrMalformedDatastoreName contract the read callers already have,
+// for the write callers.
+func TestConfigServerCache_InstanceIntentModify_MalformedDatastoreName(t *testing.T) {
+	ctx := context.Background()
+	c, _ := newTestConfigServerCache(t)
+
+	err := c.InstanceIntentModify(ctx, "no-dot-here", &tree_persist.Intent{IntentName: "intent1"})
+	if !errors.Is(err, ErrMalformedDatastoreName) {
+		t.Errorf("InstanceIntentModify() error = %v, want ErrMalformedDatastoreName", err)
+	}
+}
+
+func TestConfigServerCache_InstanceIntentDelete_MalformedDatastoreName(t *testing.T) {
+	ctx := context.Background()
+	c, _ := newTestConfigServerCache(t)
+
+	err := c.InstanceIntentDelete(ctx, "no-dot-here", "intent1", false)
+	if !errors.Is(err, ErrMalformedDatastoreName) {
+		t.Errorf("InstanceIntentDelete() error = %v, want ErrMalformedDatastoreName", err)
+	}
 }

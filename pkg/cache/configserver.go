@@ -33,43 +33,40 @@ import (
 var ErrRunningNotFound = errors.New("configserver cache: running not found")
 
 // ConfigServerCache is the Cache.Type: config-server Client: real Intents
-// are read-only, served through a configserver.LocalConfigReader seam over
-// the colocated config-server controller's own watch-synced store — this
-// backend never persists its own copy of them, and write calls on them are
-// unconditional no-ops, since config-server/kube-api is the sole writer.
+// are read through and written to a configserver.LocalConfigClient seam over
+// the colocated config-server controller (ConfigSnapshotService) — this
+// backend never persists its own copy of them, and Modify/Delete write
+// through synchronously at apply time, the same moment Cache.Type: local
+// persists last-applied, so last-applied never lags behind southbound apply
+// (see pkg/cache/docs/adr/0003-config-server-write-path-real-last-applied-writes.md).
 // "running" is unaffected by backend choice (see the ADR): it is kept in its
 // own independent in-memory, per-instance store, entirely separate from the
 // seam.
 type ConfigServerCache struct {
-	reader configserver.LocalConfigReader
+	client configserver.LocalConfigClient
 
 	mu      sync.RWMutex
 	running map[string]*tree_persist.Intent
 }
 
-// NewConfigServerCache returns a Client backed by reader for real Intents.
+// NewConfigServerCache returns a Client backed by client for real Intents.
 // Every InstanceIntent* call derives its target namespace/name from the
 // cacheInstanceName it's given (see target), so a single ConfigServerCache
 // correctly serves datastores across multiple Kubernetes namespaces.
-func NewConfigServerCache(reader configserver.LocalConfigReader) *ConfigServerCache {
+func NewConfigServerCache(client configserver.LocalConfigClient) *ConfigServerCache {
 	return &ConfigServerCache{
-		reader:  reader,
+		client:  client,
 		running: map[string]*tree_persist.Intent{},
 	}
 }
 
-// NewConfigServerClient composes a reader-backed *ConfigServerCache with the
-// generic noopIntentWriter into a full Client. ConfigServerCache alone never
-// implements IntentWriter (config-server/kube-api is the sole writer of real
-// Intents), so this is the one seam Server.createCacheClient's config-server
-// case uses to assemble s.cacheClient.
-func NewConfigServerClient(reader configserver.LocalConfigReader) Client {
-	return struct {
-		*ConfigServerCache
-		noopIntentWriter
-	}{
-		ConfigServerCache: NewConfigServerCache(reader),
-	}
+// NewConfigServerClient returns a client-backed *ConfigServerCache as a
+// Client. ConfigServerCache satisfies IntentWriter directly now (Modify/
+// Delete write through the LocalConfigClient seam to config-server), so
+// unlike other Cache.Type backends this needs no noopIntentWriter
+// composition.
+func NewConfigServerClient(client configserver.LocalConfigClient) Client {
+	return NewConfigServerCache(client)
 }
 
 // target derives the target namespace/name from cacheInstanceName, mirroring
@@ -160,7 +157,7 @@ func (c *ConfigServerCache) InstanceIntentsList(ctx context.Context, cacheInstan
 	if err != nil {
 		return nil, err
 	}
-	docs, err := c.reader.List(ctx, target)
+	docs, err := c.client.List(ctx, target)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +175,7 @@ func (c *ConfigServerCache) InstanceIntentGet(ctx context.Context, cacheName str
 	if err != nil {
 		return nil, err
 	}
-	doc, err := c.reader.Get(ctx, target, lookupConfigName(target, intentName))
+	doc, err := c.client.Get(ctx, target, lookupConfigName(target, intentName))
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +190,7 @@ func (c *ConfigServerCache) InstanceIntentExists(ctx context.Context, cacheName 
 	if err != nil {
 		return false, err
 	}
-	_, err = c.reader.Get(ctx, target, lookupConfigName(target, intentName))
+	_, err = c.client.Get(ctx, target, lookupConfigName(target, intentName))
 	if err != nil {
 		if errors.Is(err, configserver.ErrNotFound) {
 			return false, nil
@@ -220,7 +217,7 @@ func (c *ConfigServerCache) InstanceIntentGetAll(ctx context.Context, cacheName 
 		return
 	}
 
-	docs, err := c.reader.List(ctx, target)
+	docs, err := c.client.List(ctx, target)
 	if err != nil {
 		errChan <- err
 		return
@@ -267,13 +264,42 @@ func (c *ConfigServerCache) InstanceRunningModify(ctx context.Context, cacheName
 	return nil
 }
 
-// ConfigServerCache deliberately does not satisfy IntentWriter — real-Intent
-// writes are config-server/kube-api's job, not this backend's, and there is
-// no method left on the type to no-op that away. Server.createCacheClient
-// composes noopIntentWriter alongside *ConfigServerCache to produce a full
-// Client.
+// InstanceIntentModify flattens intent into a Document (see
+// configserver.DocumentFromIntent) and writes it through the seam
+// synchronously, at the same moment TransactionSet's apply loop calls it —
+// matching Cache.Type: local's write-at-apply timing so last-applied never
+// lags behind southbound apply.
+func (c *ConfigServerCache) InstanceIntentModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error {
+	target, err := c.target(cacheName)
+	if err != nil {
+		return err
+	}
+	name := lookupConfigName(target, intent.GetIntentName())
+	doc, err := configserver.DocumentFromIntent(target, name, intent)
+	if err != nil {
+		return err
+	}
+	return c.client.Modify(ctx, target, doc)
+}
+
+// InstanceIntentDelete writes through the seam's Delete synchronously.
+// ignoreNonExisting is accepted for interface compatibility but is always a
+// no-op in practice: LocalConfigWriter.Delete is already idempotent on a
+// missing name (TargetSnapshot's membership model has no tombstone to
+// distinguish "already gone" from "never existed"), so there is no
+// non-idempotent behavior left to gate.
+func (c *ConfigServerCache) InstanceIntentDelete(ctx context.Context, cacheName string, intentName string, ignoreNonExisting bool) error {
+	target, err := c.target(cacheName)
+	if err != nil {
+		return err
+	}
+	return c.client.Delete(ctx, target, lookupConfigName(target, intentName))
+}
+
 var (
 	_ IntentReader      = (*ConfigServerCache)(nil)
+	_ IntentWriter      = (*ConfigServerCache)(nil)
 	_ RunningStore      = (*ConfigServerCache)(nil)
 	_ InstanceLifecycle = (*ConfigServerCache)(nil)
+	_ Client            = (*ConfigServerCache)(nil)
 )

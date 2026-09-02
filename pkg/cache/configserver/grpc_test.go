@@ -30,9 +30,9 @@ import (
 	"github.com/sdcio/sdc-protos/config_read"
 )
 
-func TestGRPCConfigReader_Get(t *testing.T) {
+func TestGRPCConfigClient_Get(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	client := mockconfigread.NewMockConfigReadServiceClient(ctrl)
+	client := mockconfigread.NewMockConfigSnapshotServiceClient(ctrl)
 	target := Target{Namespace: "ns1", Name: "target1"}
 
 	client.EXPECT().Get(gomock.Any(), &config_read.GetConfigRequest{
@@ -55,7 +55,7 @@ func TestGRPCConfigReader_Get(t *testing.T) {
 		},
 	}, nil)
 
-	r := NewGRPCConfigReader(nil)
+	r := NewGRPCConfigClient(nil)
 	r.client = client
 
 	want := &Document{
@@ -81,15 +81,15 @@ func TestGRPCConfigReader_Get(t *testing.T) {
 	}
 }
 
-func TestGRPCConfigReader_Get_NotFound(t *testing.T) {
+func TestGRPCConfigClient_Get_NotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	client := mockconfigread.NewMockConfigReadServiceClient(ctrl)
+	client := mockconfigread.NewMockConfigSnapshotServiceClient(ctrl)
 	target := Target{Namespace: "ns1", Name: "target1"}
 
 	client.EXPECT().Get(gomock.Any(), gomock.Any()).
 		Return(nil, status.Error(codes.NotFound, "no such Config"))
 
-	r := NewGRPCConfigReader(nil)
+	r := NewGRPCConfigClient(nil)
 	r.client = client
 
 	_, err := r.Get(context.Background(), target, "missing")
@@ -98,15 +98,15 @@ func TestGRPCConfigReader_Get_NotFound(t *testing.T) {
 	}
 }
 
-func TestGRPCConfigReader_Get_OtherError(t *testing.T) {
+func TestGRPCConfigClient_Get_OtherError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	client := mockconfigread.NewMockConfigReadServiceClient(ctrl)
+	client := mockconfigread.NewMockConfigSnapshotServiceClient(ctrl)
 	target := Target{Namespace: "ns1", Name: "target1"}
 
 	wantErr := status.Error(codes.Unavailable, "controller unreachable")
 	client.EXPECT().Get(gomock.Any(), gomock.Any()).Return(nil, wantErr)
 
-	r := NewGRPCConfigReader(nil)
+	r := NewGRPCConfigClient(nil)
 	r.client = client
 
 	_, err := r.Get(context.Background(), target, "intent1")
@@ -118,9 +118,9 @@ func TestGRPCConfigReader_Get_OtherError(t *testing.T) {
 	}
 }
 
-func TestGRPCConfigReader_List(t *testing.T) {
+func TestGRPCConfigClient_List(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	client := mockconfigread.NewMockConfigReadServiceClient(ctrl)
+	client := mockconfigread.NewMockConfigSnapshotServiceClient(ctrl)
 	target := Target{Namespace: "ns1", Name: "target1"}
 
 	client.EXPECT().List(gomock.Any(), &config_read.ListConfigRequest{
@@ -133,7 +133,7 @@ func TestGRPCConfigReader_List(t *testing.T) {
 		},
 	}, nil)
 
-	r := NewGRPCConfigReader(nil)
+	r := NewGRPCConfigClient(nil)
 	r.client = client
 
 	got, err := r.List(context.Background(), target)
@@ -149,15 +149,15 @@ func TestGRPCConfigReader_List(t *testing.T) {
 	}
 }
 
-func TestGRPCConfigReader_List_Empty(t *testing.T) {
+func TestGRPCConfigClient_List_Empty(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	client := mockconfigread.NewMockConfigReadServiceClient(ctrl)
+	client := mockconfigread.NewMockConfigSnapshotServiceClient(ctrl)
 	target := Target{Namespace: "ns1", Name: "target1"}
 
 	client.EXPECT().List(gomock.Any(), gomock.Any()).
 		Return(&config_read.ListConfigResponse{}, nil)
 
-	r := NewGRPCConfigReader(nil)
+	r := NewGRPCConfigClient(nil)
 	r.client = client
 
 	got, err := r.List(context.Background(), target)
@@ -169,15 +169,15 @@ func TestGRPCConfigReader_List_Empty(t *testing.T) {
 	}
 }
 
-func TestGRPCConfigReader_List_Error(t *testing.T) {
+func TestGRPCConfigClient_List_Error(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	client := mockconfigread.NewMockConfigReadServiceClient(ctrl)
+	client := mockconfigread.NewMockConfigSnapshotServiceClient(ctrl)
 	target := Target{Namespace: "ns1", Name: "target1"}
 
 	wantErr := status.Error(codes.Unavailable, "controller unreachable")
 	client.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, wantErr)
 
-	r := NewGRPCConfigReader(nil)
+	r := NewGRPCConfigClient(nil)
 	r.client = client
 
 	_, err := r.List(context.Background(), target)

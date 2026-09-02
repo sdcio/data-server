@@ -67,10 +67,10 @@ func (s *Server) createLocalCacheClient(ctx context.Context) error {
 }
 
 // createConfigServerCacheClient wires the colocated config-server
-// controller's local ConfigReadService (ticket 07) in as the real-intent
-// backend, per the ADR's "New cache.Client implementation" section:
-// real Intents are read through configserver.GRPCConfigReader, "running"
-// stays independent in-memory state owned by cache.ConfigServerCache itself.
+// controller's local ConfigSnapshotService in as the real-intent backend,
+// per the ADR's "New cache.Client implementation" section: real Intents are
+// read and written through configserver.GRPCConfigClient, "running" stays
+// independent in-memory state owned by cache.ConfigServerCache itself.
 func (s *Server) createConfigServerCacheClient(ctx context.Context) error {
 	log := logf.FromContext(ctx)
 	log.Info("initializing config-server cache client", "address", s.config.Cache.Address)
@@ -78,8 +78,8 @@ func (s *Server) createConfigServerCacheClient(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	reader := configserver.NewGRPCConfigReader(cc)
-	s.cacheClient = cache.NewConfigServerClient(reader)
+	client := configserver.NewGRPCConfigClient(cc)
+	s.cacheClient = cache.NewConfigServerClient(client)
 	log.Info("config-server cache client created")
 	return nil
 }
