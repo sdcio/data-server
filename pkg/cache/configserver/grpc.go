@@ -116,25 +116,35 @@ func documentFromEntry(e *config_read.ConfigEntry) *Document {
 	}
 }
 
-// Modify calls ConfigSnapshotService.Modify, mapping doc onto the wire
-// ConfigEntry shape — the inverse of documentFromEntry.
-func (r *GRPCConfigClient) Modify(ctx context.Context, target Target, doc *Document) error {
+// configEntryFromDocument maps a Document onto the wire config_read.ConfigEntry
+// shape, field for field — the inverse of documentFromEntry.
+func configEntryFromDocument(doc *Document) *config_read.ConfigEntry {
 	blobs := make([]*config_read.ConfigBlob, 0, len(doc.Config))
 	for _, b := range doc.Config {
 		blobs = append(blobs, &config_read.ConfigBlob{Path: b.Path, Value: b.Value})
 	}
+	return &config_read.ConfigEntry{
+		Name:           doc.Name,
+		Namespace:      doc.Namespace,
+		NonRevertive:   doc.NonRevertive,
+		Orphan:         doc.Orphan,
+		Priority:       doc.Priority,
+		SensitivePaths: doc.SensitivePaths,
+		Config:         blobs,
+	}
+}
+
+// Modify calls ConfigSnapshotService.Modify, mapping doc onto the wire
+// ConfigEntry shape via configEntryFromDocument. The payload crosses the
+// wire as plaintext, deliberately: ADR 0003's "encrypted payload" describes
+// the persisted TargetSnapshot record, not this RPC's bytes — config-server
+// encrypts on receipt (see config-server's fromConfigEntry), the same way
+// it already encrypts SensitiveConfig content it receives northbound.
+func (r *GRPCConfigClient) Modify(ctx context.Context, target Target, doc *Document) error {
 	_, err := r.client.Modify(ctx, &config_read.ModifyConfigRequest{
 		TargetNamespace: target.Namespace,
 		TargetName:      target.Name,
-		Config: &config_read.ConfigEntry{
-			Name:           doc.Name,
-			Namespace:      doc.Namespace,
-			NonRevertive:   doc.NonRevertive,
-			Orphan:         doc.Orphan,
-			Priority:       doc.Priority,
-			SensitivePaths: doc.SensitivePaths,
-			Config:         blobs,
-		},
+		Config:          configEntryFromDocument(doc),
 	})
 	return err
 }

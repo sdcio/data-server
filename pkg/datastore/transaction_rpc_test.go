@@ -13,6 +13,8 @@ import (
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/mocks/mockcacheclient"
 	"github.com/sdcio/data-server/mocks/mocktarget"
+	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/cache/configserver"
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/datastore/types"
@@ -30,6 +32,7 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestTransactionSet_PreviouslyApplied(t *testing.T) {
@@ -579,8 +582,157 @@ func TestTransactionRollback_RestoresDeletedIntent(t *testing.T) {
 	if len(modifyCalls) != 1 {
 		t.Fatalf("IntentModify call count after rollback = %d, want 1 (restore)", len(modifyCalls))
 	}
-	if got := modifyCalls[0].GetIntentName(); got != "intent1" {
+	restored := modifyCalls[0]
+	if got := restored.GetIntentName(); got != "intent1" {
 		t.Errorf("restored intent name = %q, want %q", got, "intent1")
+	}
+	if got := findLeafStringValue(t, restored.GetRoot(), "description"); got != "existing" {
+		t.Errorf("restored intent's description leaf = %q, want %q (the pre-delete content, not just the name)", got, "existing")
+	}
+}
+
+// findLeafStringValue depth-first searches el for a leaf named name and
+// returns its decoded string value, so rollback/restore tests can assert on
+// actual content rather than just the intent's name/priority.
+func findLeafStringValue(t *testing.T, el *tree_persist.TreeElement, name string) string {
+	t.Helper()
+	if el == nil {
+		return ""
+	}
+	if el.GetName() == name && len(el.GetLeafVariant()) > 0 {
+		tv := &sdcpb.TypedValue{}
+		if err := proto.Unmarshal(el.GetLeafVariant(), tv); err != nil {
+			t.Fatalf("unmarshal leaf %q: %v", name, err)
+		}
+		return tv.GetStringVal()
+	}
+	for _, c := range el.GetChilds() {
+		if v := findLeafStringValue(t, c, name); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// TestConfigServerBackend_DeleteApply_NoRehydration is the ghost-intent
+// regression test named directly in ticket 03's checklist: under
+// Cache.Type: config-server, a delete-apply must remove the last-applied
+// entry immediately, so the very next LoadAllButRunningIntents — the exact
+// call that rehydrated a deleted intent1 in the original bug — does not
+// bring it back. Unlike the other tests in this file, this one wires a real
+// *cache.ConfigServerCache over configserver.FakeLocalConfigClient (not a
+// generic mockcacheclient), so it exercises the actual seam this ticket
+// built, not just "some IntentWriter got called."
+func TestConfigServerBackend_DeleteApply_NoRehydration(t *testing.T) {
+	ctx := context.Background()
+
+	sc, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	scb := schemaClient.NewSchemaClientBound(schema, sc)
+
+	fakeClient := configserver.NewFakeLocalConfigClient()
+	const cacheName = "ns1.target1"
+	ccb := cache.NewCacheClientBound(cacheName, cache.NewConfigServerClient(fakeClient))
+	if err := ccb.InstanceCreate(ctx); err != nil {
+		t.Fatalf("InstanceCreate() error = %v", err)
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	sbi := mocktarget.NewMockTarget(ctrl)
+	sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).AnyTimes()
+
+	vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	tc := tree.NewTreeContext(scb, vpf)
+	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := syncTreeRoot.FinishInsertionPhase(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	ds := &Datastore{
+		config: &config.DatastoreConfig{
+			Validation: config.NewValidationConfig(),
+			Name:       "test-ds",
+		},
+		syncTreeMutex:      &sync.RWMutex{},
+		syncTree:           syncTreeRoot,
+		taskPool:           vpf,
+		cacheClient:        ccb,
+		sbi:                sbi,
+		dmutex:             &sync.Mutex{},
+		schemaClient:       scb,
+		sensitivePathIndex: treetypes.NewSensitivePathIndex(),
+	}
+	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
+
+	// Apply #1: create intent1 with real content.
+	intentJSON, err := ygot.EmitJSON(&sdcio_schema.Device{
+		Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+			"ethernet-1/1": {Name: ygot.String("ethernet-1/1"), Description: ygot.String("existing")},
+		},
+	}, &ygot.EmitJSONConfig{Format: ygot.RFC7951, SkipValidation: false})
+	if err != nil {
+		t.Fatalf("marshal intent content: %v", err)
+	}
+	tiCreate := types.NewTransactionIntent("intent1", 10)
+	updates, err := treetypes.ExpandAndConvertIntent(ctx, scb, "intent1", 10, []*sdcpb.Update{{
+		Path:  &sdcpb.Path{},
+		Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: []byte(intentJSON)}},
+	}}, time.Now().Unix())
+	if err != nil {
+		t.Fatalf("expand intent: %v", err)
+	}
+	tiCreate.AddUpdates(updates)
+	if _, err := ds.TransactionSet(ctx, "txn-create", []*types.TransactionIntent{tiCreate}, nil, 10*time.Second, false); err != nil {
+		t.Fatalf("TransactionSet() (create) error = %v", err)
+	}
+	if err := ds.transactionManager.Confirm("txn-create"); err != nil {
+		t.Fatalf("Confirm() (create) error = %v", err)
+	}
+
+	// Sanity: intent1 is now visible via the seam.
+	preRoot, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := preRoot.FinishInsertionPhase(ctx); err != nil {
+		t.Fatal(err)
+	}
+	names, err := ds.LoadAllButRunningIntents(ctx, preRoot)
+	if err != nil {
+		t.Fatalf("LoadAllButRunningIntents() (pre-delete) error = %v", err)
+	}
+	if diff := cmp.Diff([]string{"ns1.intent1"}, names); diff != "" {
+		t.Fatalf("LoadAllButRunningIntents() (pre-delete) mismatch (-want +got):\n%s", diff)
+	}
+
+	// Apply #2: delete intent1.
+	tiDelete := types.NewTransactionIntent("intent1", 10)
+	tiDelete.SetDeleteFlag()
+	if _, err := ds.TransactionSet(ctx, "txn-delete", []*types.TransactionIntent{tiDelete}, nil, 10*time.Second, false); err != nil {
+		t.Fatalf("TransactionSet() (delete) error = %v", err)
+	}
+
+	// The regression: the very next LoadAllButRunningIntents must not
+	// rehydrate intent1.
+	postRoot, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := postRoot.FinishInsertionPhase(ctx); err != nil {
+		t.Fatal(err)
+	}
+	names, err = ds.LoadAllButRunningIntents(ctx, postRoot)
+	if err != nil {
+		t.Fatalf("LoadAllButRunningIntents() (post-delete) error = %v", err)
+	}
+	if len(names) != 0 {
+		t.Errorf("LoadAllButRunningIntents() (post-delete) = %v, want empty — intent1 was rehydrated after delete-apply", names)
 	}
 }
 

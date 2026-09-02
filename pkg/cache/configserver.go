@@ -283,11 +283,13 @@ func (c *ConfigServerCache) InstanceIntentModify(ctx context.Context, cacheName 
 }
 
 // InstanceIntentDelete writes through the seam's Delete synchronously.
-// ignoreNonExisting is accepted for interface compatibility but is always a
-// no-op in practice: LocalConfigWriter.Delete is already idempotent on a
-// missing name (TargetSnapshot's membership model has no tombstone to
-// distinguish "already gone" from "never existed"), so there is no
-// non-idempotent behavior left to gate.
+// ignoreNonExisting is part of the IntentWriter signature but unused here:
+// LocalConfigWriter.Delete's current implementations (GRPCConfigClient,
+// FakeLocalConfigClient) are unconditionally idempotent on a missing name —
+// TargetSnapshot's membership model has no tombstone to distinguish
+// "already gone" from "never existed" — so there's nothing for this flag to
+// gate against today. A future LocalConfigWriter that needed to distinguish
+// the two would take ignoreNonExisting as a parameter on Delete itself.
 func (c *ConfigServerCache) InstanceIntentDelete(ctx context.Context, cacheName string, intentName string, ignoreNonExisting bool) error {
 	target, err := c.target(cacheName)
 	if err != nil {
