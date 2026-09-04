@@ -17,7 +17,6 @@ package netconf
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -130,9 +129,8 @@ func (t *ncTarget) internalGet(ctx context.Context, req *sdcpb.GetDataRequest) (
 	// execute the GetConfig rpc
 	ncResponse, err := t.driver.GetConfig(source, filterDoc)
 	if err != nil {
-		if strings.Contains(err.Error(), "EOF") {
-			_ = t.Close(ctx)
-			go t.reconnect(ctx)
+		if isTransportError(err) {
+			return nil, t.handleTransportError(ctx, err)
 		}
 		return nil, err
 	}
@@ -184,6 +182,16 @@ func (t *ncTarget) Status() *types.TargetStatus {
 		result.Status = sdcpb.TargetStatus_CONNECTED
 	}
 	return result
+}
+
+// handleTransportError closes the current connection and kicks off a
+// background reconnect, then wraps err in types.ErrNotConnected so the
+// caller's caller (ultimately the TransactionSet gRPC handler, via
+// translateInternalToGrpcError) can classify it as recoverable.
+func (t *ncTarget) handleTransportError(ctx context.Context, err error) error {
+	_ = t.Close(ctx)
+	go t.reconnect(ctx)
+	return fmt.Errorf("%s: %w: %w", t.name, types.ErrNotConnected, err)
 }
 
 func (t *ncTarget) Close(ctx context.Context) error {
@@ -261,10 +269,8 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 	resp, err := t.driver.EditConfig(commitDatastore, xdoc)
 	if err != nil {
 		log.Error(err, "failed during edit-config")
-		if strings.Contains(err.Error(), "EOF") {
-			_ = t.Close(ctx)
-			go t.reconnect(ctx)
-			return nil, err
+		if isTransportError(err) {
+			return nil, t.handleTransportError(ctx, err)
 		}
 
 		// candidate should discard on error
@@ -288,9 +294,8 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 		// commit the config
 		err = t.driver.Commit()
 		if err != nil {
-			if strings.Contains(err.Error(), "EOF") {
-				_ = t.Close(ctx)
-				go t.reconnect(ctx)
+			if isTransportError(err) {
+				return nil, t.handleTransportError(ctx, err)
 			}
 			return nil, err
 		}
