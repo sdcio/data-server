@@ -19,3 +19,11 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           version: v2.4
+          # golangci-lint-action defaults to `verify: true`, which runs
+          # `golangci-lint config verify` and fetches the JSON schema for
+          # .golangci.yml from https://golangci-lint.run over the network.
+          # That remote fetch is flaky in CI and has caused non-deterministic
+          # lint-job failures unrelated to the code/config
+          # (context deadline exceeded). golangci-lint run still validates
+          # the config at runtime, so disable the network-dependent check.
+          verify: false
