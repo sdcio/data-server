@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 02 — write this once the actual code/test changes exist, so the ADR describes what shipped rather than what was planned.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] New file `docs/adr/000N-cisco-ios-xr-json-ietf-only-live-lab-verified.md` (or similar slug; number picked at write time from the next available slot in `docs/adr/`).
 - [ ] Content per spec.md's "ADR" implementation decision: what was tested (local `containerlab cisco_c8000`/8201-32FH XR 7.10.1 instance, `clab-cisco-ixr01`), against which shapes (per-leaf vs. module-root, `origin: <module>` unprefixed vs. `origin: cisco_native` prefixed vs. no-origin prefixed, plain `json_val` vs. `json_ietf_val`, `PROTO` scalars, multi-module single-`SetRequest`, module-root delete, delete+update replace), and the pass/fail result for each (see spec.md's Further Notes for the full list).
@@ -13,3 +13,5 @@
 - [ ] Follow the "Why" / "Considered options" ADR shape already used by `docs/adr/0001-ios-xr-granular-gnmi-json-from-api-entry.md` and `0002-southbound-set-materialization-and-targetsource-retirement.md`.
 
 ## Comments
+
+- Landed on branch `ciscoiosxrd2`: recovered the previously-uncommitted ADR 0001 (`docs/adr/0001-ios-xr-granular-gnmi-json-from-api-entry.md`, found only as an untracked file in a sibling `sonic-device-profile` worktree — never committed anywhere) as a prerequisite commit, then added `docs/adr/0002-cisco-ios-xr-json-ietf-only-live-lab-verified.md` documenting the live-lab verification and the `JSON_IETF`-only restriction decision.
