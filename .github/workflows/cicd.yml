@@ -210,6 +210,10 @@ jobs:
           echo "certmanagerversion=$( curl -sL https://api.github.com/repos/cert-manager/cert-manager/releases/latest | jq '.name' )" >> $GITHUB_OUTPUT
 
   integration-tests:
+    # Dependabot and fork PRs do not receive repository secrets. Without
+    # SROS25_LICENSE, containerlab SR-SIM post-deploy fails NETCONF auth
+    # (`ssh: unable to authenticate`). Unit tests still run.
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
     needs: [latest-versions, pr-release, resolve-paired-refs]
     uses: sdcio/integration-tests/.github/workflows/single.yml@main
     with:
