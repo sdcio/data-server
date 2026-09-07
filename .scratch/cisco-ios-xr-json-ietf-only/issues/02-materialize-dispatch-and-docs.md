@@ -4,7 +4,7 @@
 
 **Blocked by:** None — independent of ticket 01, can be done in either order or in parallel.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] In `pkg/datastore/target/materialize/materialize.go`'s `BuildPlan`, narrow the `cisco-ios-xr` inner switch from `case gnmi.Encoding_JSON, gnmi.Encoding_JSON_IETF:` to `case gnmi.Encoding_JSON_IETF:` only.
 - [ ] Update `BuildPlan`'s doc comment bullet list: the line `"gnmi" with DeviceProfile "cisco-ios-xr" + json/json_ietf → GnmiSetPlan (per YANG module via permodule)"` becomes `"gnmi" with DeviceProfile "cisco-ios-xr" + json_ietf → GnmiSetPlan (per YANG module via permodule); json/proto rejected at config-load (see pkg/config)`.
@@ -14,3 +14,5 @@
 - [ ] `go test ./pkg/datastore/target/materialize/...` green.
 
 ## Comments
+
+- Landed on branch `ciscoiosxrd2`: narrowed `BuildPlan`'s `cisco-ios-xr` inner switch to `case gnmi.Encoding_JSON_IETF:` only (plain `JSON` now falls through to the generic single-root path, matching `PROTO`), updated the `BuildPlan` doc comment bullet, and added `TestBuildPlan_CiscoIOSXR_JSON_GenericPlan` in `materialize_test.go` asserting the generic-path shape. `go test ./...` green.

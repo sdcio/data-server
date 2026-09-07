@@ -44,7 +44,7 @@ import (
 //
 // Supported SBI types:
 //   - "gnmi"  with empty DeviceProfile  →  GnmiSetPlan (single root update)
-//   - "gnmi"  with DeviceProfile "cisco-ios-xr" + json/json_ietf  →  GnmiSetPlan (per YANG module via permodule)
+//   - "gnmi"  with DeviceProfile "cisco-ios-xr" + json_ietf  →  GnmiSetPlan (per YANG module via permodule); json/proto rejected at config-load (see pkg/config)
 //   - "gnmi"  with DeviceProfile "cisco-ios-xr" + proto  →  GnmiSetPlan (generic, single root update)
 //   - "netconf" with empty DeviceProfile  →  NetconfSetPlan
 //   - "netconf" with DeviceProfile "cisco-ios-xr"  →  NetconfSetPlan (profile accepted; no IOS-XR-specific shaping yet)
@@ -57,14 +57,17 @@ func BuildPlan(ctx context.Context, scb schemaClient.SchemaClientBound, sbi *con
 	if sbi.Type == "gnmi" && sbi.IsCiscoIOSXR() {
 		encoding := gnmi.Encoding(gnmiutils.ParseGnmiEncoding(sbi.GnmiOptions.Encoding))
 		switch encoding {
-		case gnmi.Encoding_JSON, gnmi.Encoding_JSON_IETF:
+		case gnmi.Encoding_JSON_IETF:
 			plan, err := permodule.Encode(ctx, scb, entry, encoding, replace)
 			if err != nil {
 				return targettypes.SouthboundSetPlan{}, err
 			}
 			return targettypes.SouthboundSetPlan{Gnmi: plan}, nil
 		}
-		// proto (and any other encoding) falls through to the generic gNMI path.
+		// proto and any other encoding fall through to the generic gNMI path.
+		// Plain JSON is unreachable via valid config (rejected at config-load,
+		// see pkg/config), but BuildPlan may still be called directly (e.g. in
+		// tests) with it, so it too falls through here.
 	}
 
 	switch sbi.Type {

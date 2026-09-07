@@ -151,6 +151,47 @@ func TestBuildPlan_CiscoIOSXR_Proto_GenericPlan(t *testing.T) {
 	}
 }
 
+// --- Cycle 3: IOS-XR + plain JSON → generic (non-split) GnmiSetPlan -----
+// JSON is unreachable via valid config (ticket 01 rejects it at config-load),
+// but BuildPlan may still be called directly (e.g. in tests), so it must fall
+// through to the generic single-root-update path rather than permodule.Encode.
+
+func TestBuildPlan_CiscoIOSXR_JSON_GenericPlan(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	root, scb := newTestRoot(t, mockCtrl)
+
+	upds := append(interfaceUpdates("ethernet-1/1", "uplink"), networkInstanceUpdates("default", "Default NI")...)
+	addAndFinish(t, root, upds, testhelper.FlagsNew)
+
+	sbi := &config.SBI{
+		Type:          "gnmi",
+		DeviceProfile: config.DeviceProfileCiscoIOSXR,
+		GnmiOptions:   &config.SBIGnmiOptions{Encoding: "JSON"},
+	}
+
+	plan, err := materialize.BuildPlan(context.Background(), scb, sbi, root.Entry, false)
+	if err != nil {
+		t.Fatalf("BuildPlan: unexpected error: %v", err)
+	}
+	if plan.Gnmi == nil {
+		t.Fatalf("BuildPlan: expected Gnmi plan, got nil")
+	}
+	// Generic path: a single root-level update, not per-module JSON blobs.
+	if len(plan.Gnmi.Updates) != 1 {
+		t.Fatalf("want 1 root-level Update (generic path), got %d", len(plan.Gnmi.Updates))
+	}
+	u := plan.Gnmi.Updates[0]
+	if len(u.GetPath().GetElem()) != 0 {
+		t.Errorf("generic plan must target the root path, got %v", u.GetPath().GetElem())
+	}
+	if u.GetPath().GetOrigin() != "" {
+		t.Errorf("generic plan must not set Path.Origin, got %q", u.GetPath().GetOrigin())
+	}
+	if u.GetValue().GetJsonVal() == nil {
+		t.Errorf("expected JsonVal, got nil")
+	}
+}
+
 // NETCONF accepts cisco-ios-xr profile for config consistency; materialization is
 // unchanged from the generic NETCONF path (no GnmiOptions required).
 func TestBuildPlan_CiscoIOSXR_Netconf_ReturnsNetconfSetPlan(t *testing.T) {

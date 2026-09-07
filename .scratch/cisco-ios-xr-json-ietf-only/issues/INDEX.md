@@ -12,7 +12,7 @@ branch with in-flight, unrelated WIP.
 | # | Ticket | Blocked by | Status |
 |---|--------|-----------|--------|
 | [01](01-config-validation-json-ietf-only.md) | Reject `cisco-ios-xr` + `PROTO`/`JSON` at config-load time | None | done |
-| [02](02-materialize-dispatch-and-docs.md) | Narrow `materialize.BuildPlan` dispatch to `JSON_IETF`; fix doc comments | None | ready-for-agent |
+| [02](02-materialize-dispatch-and-docs.md) | Narrow `materialize.BuildPlan` dispatch to `JSON_IETF`; fix doc comments | None | done |
 | [03](03-adr-live-lab-verification.md) | New ADR: live-lab verification + encoding-restriction decision | 01, 02 | ready-for-agent |
 | [04](04-issue-pr-reply.md) | Post follow-up comment on issue #483 / PR #442 with results | 01, 02, 03 | ready-for-agent |
 
