@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 02, 03 — the comment should describe landed work, not a plan.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] Draft comment referencing the specific probe results (see spec.md's Further Notes for the full list) in the same style as the earlier PR #442 comment (concrete `gnmic` commands + results, not just prose).
 - [ ] Link the new ADR (ticket 03) and the merged/landed commit(s) (tickets 01/02).
@@ -13,3 +13,5 @@
 - [ ] Post via `gh pr comment 442 -R sdcio/data-server` (and/or `gh issue comment 483 -R sdcio/data-server`, per whichever thread is more active by the time this ticket is worked).
 
 ## Comments
+
+- Posted follow-up on PR #442: https://github.com/sdcio/data-server/pull/442#issuecomment-5572611871 — summarizes the six-probe verification (including the correction that our own prior hypothesis about `permodule`'s origin shape was wrong — it works as-is), links ADRs 0001/0002 and commits `b5bc3e9`/`3d94d84`, flags the config-server#484 prerequisite, and asks the reporter to retest on their own XR 26.2.1. Issue #483 not cross-posted since its existing comments already redirect discussion to PR #442.
