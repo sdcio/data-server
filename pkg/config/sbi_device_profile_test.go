@@ -71,9 +71,16 @@ func TestSBI_validateSetDefaults_DeviceProfile_CiscoIOSXRGNMIJSONIsAccepted(t *t
 	}
 }
 
-func TestSBI_validateSetDefaults_DeviceProfile_CiscoIOSXRGNMIProtoIsAccepted(t *testing.T) {
+func TestSBI_validateSetDefaults_DeviceProfile_CiscoIOSXRGNMIProtoIsRejected(t *testing.T) {
 	sbi := validGNMISBI("proto", DeviceProfileCiscoIOSXR)
-	if err := sbi.validateSetDefaults(); err != nil {
-		t.Fatalf("unexpected error for cisco-ios-xr + gnmi + proto: %v", err)
+	if err := sbi.validateSetDefaults(); err == nil {
+		t.Fatal("expected error for cisco-ios-xr + gnmi + proto, got nil")
+	}
+}
+
+func TestSBI_validateSetDefaults_DeviceProfile_CiscoIOSXRGNMIPlainJSONIsRejected(t *testing.T) {
+	sbi := validGNMISBI("json", DeviceProfileCiscoIOSXR)
+	if err := sbi.validateSetDefaults(); err == nil {
+		t.Fatal("expected error for cisco-ios-xr + gnmi + json, got nil")
 	}
 }
