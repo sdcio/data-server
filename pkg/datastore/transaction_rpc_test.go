@@ -174,6 +174,7 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 				taskPool:      vpf,
 				cacheClient:   ccb,
 				sbi:           sbi,
+				sbiMutex:      &sync.RWMutex{},
 				dmutex:        &sync.Mutex{},
 				schemaClient:  scb,
 			}
