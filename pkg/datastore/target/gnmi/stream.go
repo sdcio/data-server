@@ -34,6 +34,7 @@ type StreamSync struct {
 	ctx          context.Context
 	config       *config.SyncProtocol
 	target       SyncTarget
+	targetName   string
 	cancel       context.CancelFunc
 	runningStore types.RunningStore
 	schemaClient dsutils.SchemaClientBound
@@ -47,7 +48,7 @@ type StreamSync struct {
 	notifSendTimeout time.Duration
 }
 
-func NewStreamSync(ctx context.Context, target SyncTarget, c *config.SyncProtocol, runningStore types.RunningStore, schemaClient dsutils.SchemaClientBound, vpoolFactory pool.VirtualPoolFactory) *StreamSync {
+func NewStreamSync(ctx context.Context, target SyncTarget, targetName string, c *config.SyncProtocol, runningStore types.RunningStore, schemaClient dsutils.SchemaClientBound, vpoolFactory pool.VirtualPoolFactory) *StreamSync {
 	ctx, cancel := context.WithCancel(ctx)
 
 	// add the sync name to the logger values
@@ -57,6 +58,7 @@ func NewStreamSync(ctx context.Context, target SyncTarget, c *config.SyncProtoco
 	return &StreamSync{
 		config:           c,
 		target:           target,
+		targetName:       targetName,
 		cancel:           cancel,
 		runningStore:     runningStore,
 		schemaClient:     schemaClient,
@@ -87,6 +89,7 @@ func (s *StreamSync) syncConfig() (*gnmi.SubscribeRequest, error) {
 	opts = append(opts,
 		gapi.EncodingCustom(utils.ParseGnmiEncoding(s.config.Encoding)),
 		gapi.SubscriptionListModeSTREAM(),
+		gapi.Target(s.targetName),
 		gapi.Subscription(subscriptionOpts...),
 		gapi.Extension(&gnmi_ext.Extension{
 			Ext: &gnmi_ext.Extension_ConfigSubscription{
