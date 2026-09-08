@@ -83,6 +83,8 @@ func evaluateMustStatements(ctx context.Context, e api.Entry, mustStatements []*
 		if !result || err != nil {
 			if err == nil {
 				err = fmt.Errorf("error path: %s, must-statement [%s] %s", e.SdcpbPath().ToXPath(false), must.Statement, must.Error)
+			} else {
+				err = fmt.Errorf("error path: %s, must-statement [%s]: %w", e.SdcpbPath().ToXPath(false), must.Statement, err)
 			}
 			if strings.Contains(err.Error(), "Stack underflow") {
 				log.Error(err, "stack underflow", "path", e.SdcpbPath().ToXPath(false), "must-expression", exprStr)

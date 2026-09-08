@@ -233,6 +233,20 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 			},
 		}, nil
 	case map[string]any:
+		// RFC 7951 top-level wrapping: some targets (e.g. SONiC translib) encode
+		// the value of a top-level container as a single module-qualified entry
+		// naming itself, e.g. a GET on .../sonic-srv6 returns
+		// {"sonic-srv6:sonic-srv6": {...actual content...}} instead of the bare
+		// content. Unwrap that self-reference so it is treated as this
+		// container's own value rather than an (unknown) child object.
+		if len(jv) == 1 {
+			selfQName := fmt.Sprintf("%s:%s", cs.Container.GetModuleName(), cs.Container.GetName())
+			for k, v := range jv {
+				if k == selfQName {
+					return c.ExpandContainerValue(ctx, p, v, cs)
+				}
+			}
+		}
 		upds := make([]*sdcpb.Update, 0)
 		// make sure all keys are present
 		// and append them to path

@@ -83,12 +83,14 @@ func BuildPlan(ctx context.Context, scb schemaClient.SchemaClientBound, sbi *con
 }
 
 // gnmiPlan wraps an encoder result into a SouthboundSetPlan, allowing callers
-// to pass (plan, err) return values through directly.
+// to pass (plan, err) return values through directly. See
+// targettypes.NewGnmiPlan for why a nil plan must still be normalized rather
+// than passed through as-is.
 func gnmiPlan(plan *targettypes.GnmiSetPlan, err error) (targettypes.SouthboundSetPlan, error) {
 	if err != nil {
 		return targettypes.SouthboundSetPlan{}, err
 	}
-	return targettypes.SouthboundSetPlan{Gnmi: plan}, nil
+	return targettypes.NewGnmiPlan(plan), nil
 }
 
 // buildGnmiPlan builds a GnmiSetPlan from the tree entry.

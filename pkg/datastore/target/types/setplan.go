@@ -52,3 +52,16 @@ func (p SouthboundSetPlan) GnmiPlan() (*GnmiSetPlan, bool) {
 func (p SouthboundSetPlan) NetconfPlan() (*NetconfSetPlan, bool) {
 	return p.Netconf, p.Netconf != nil
 }
+
+// NewGnmiPlan wraps a GnmiSetPlan into a SouthboundSetPlan, normalizing a nil
+// plan into an empty (non-nil) one. Encoders are allowed to return nil to
+// signal "nothing to apply" for a no-op transaction; without this
+// normalization that nil would flatten into a SouthboundSetPlan with neither
+// variant populated, which is indistinguishable from a plan built for the
+// wrong driver and would be rejected as such instead of treated as a no-op.
+func NewGnmiPlan(plan *GnmiSetPlan) SouthboundSetPlan {
+	if plan == nil {
+		plan = &GnmiSetPlan{}
+	}
+	return SouthboundSetPlan{Gnmi: plan}
+}
