@@ -103,7 +103,6 @@ func TestSBI_validateSetDefaults_DeviceProfile_UnaffectedProfilesAndEncodingsUnc
 	if err := validGNMISBI("proto", DeviceProfileNone).validateSetDefaults(); err != nil {
 		t.Fatalf("unexpected error for none + gnmi + proto: %v", err)
 	}
-	if err := validGNMISBI("json", DeviceProfileCiscoIOSXR).validateSetDefaults(); err != nil {
-		t.Fatalf("unexpected error for cisco-ios-xr + gnmi + json: %v", err)
-	}
+	// cisco-ios-xr + gnmi + json is now rejected (JSON_IETF-only, landed on
+	// ciscoiosxrd2) — see TestSBI_validateSetDefaults_DeviceProfile_CiscoIOSXRGNMIPlainJSONIsRejected.
 }
