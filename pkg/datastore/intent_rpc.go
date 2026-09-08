@@ -41,7 +41,8 @@ func (d *Datastore) applyIntent(ctx context.Context, entry treeapi.Entry, replac
 
 	var rsp *sdcpb.SetDataResponse
 
-	if d.sbi == nil {
+	sbi := d.getSBI()
+	if sbi == nil {
 		return nil, fmt.Errorf("%s is not connected", d.config.Name)
 	}
 
@@ -49,7 +50,7 @@ func (d *Datastore) applyIntent(ctx context.Context, entry treeapi.Entry, replac
 	if err != nil {
 		return nil, err
 	}
-	rsp, err = d.sbi.Set(ctx, plan)
+	rsp, err = sbi.Set(ctx, plan)
 	if err != nil {
 		return nil, err
 	}

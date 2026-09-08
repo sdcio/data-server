@@ -26,6 +26,7 @@ import (
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	gnmiutils "github.com/sdcio/data-server/pkg/datastore/target/gnmi/utils"
 	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/permodule"
+	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/sonic"
 	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/ops"
@@ -44,6 +45,7 @@ import (
 //
 // Supported SBI types:
 //   - "gnmi"  with empty DeviceProfile  →  GnmiSetPlan (single root update)
+//   - "gnmi"  with DeviceProfile "sonic"  →  GnmiSetPlan (parent-bound via sonic encoder)
 //   - "gnmi"  with DeviceProfile "cisco-ios-xr" + json_ietf  →  GnmiSetPlan (per YANG module via permodule); json/proto rejected at config-load (see pkg/config)
 //   - "gnmi"  with DeviceProfile "cisco-ios-xr" + proto  →  GnmiSetPlan (generic, single root update)
 //   - "netconf" with empty DeviceProfile  →  NetconfSetPlan
@@ -54,15 +56,15 @@ func BuildPlan(ctx context.Context, scb schemaClient.SchemaClientBound, sbi *con
 		// empty plan so the driver can decide what to do with it.
 		return targettypes.SouthboundSetPlan{}, nil
 	}
-	if sbi.Type == "gnmi" && sbi.IsCiscoIOSXR() {
+	if sbi.Type == config.SBITypeGnmi && sbi.DeviceProfile == config.DeviceProfileSonic {
+		return gnmiPlan(sonic.Encode(ctx, scb, entry, replace))
+	}
+
+	if sbi.Type == config.SBITypeGnmi && sbi.DeviceProfile == config.DeviceProfileCiscoIOSXR {
 		encoding := gnmi.Encoding(gnmiutils.ParseGnmiEncoding(sbi.GnmiOptions.Encoding))
 		switch encoding {
 		case gnmi.Encoding_JSON_IETF:
-			plan, err := permodule.Encode(ctx, scb, entry, encoding, replace)
-			if err != nil {
-				return targettypes.SouthboundSetPlan{}, err
-			}
-			return targettypes.SouthboundSetPlan{Gnmi: plan}, nil
+			return gnmiPlan(permodule.Encode(ctx, scb, entry, encoding, replace))
 		}
 		// proto and any other encoding fall through to the generic gNMI path.
 		// Plain JSON is unreachable via valid config (rejected at config-load,
@@ -71,13 +73,24 @@ func BuildPlan(ctx context.Context, scb schemaClient.SchemaClientBound, sbi *con
 	}
 
 	switch sbi.Type {
-	case "gnmi":
+	case config.SBITypeGnmi:
 		return buildGnmiPlan(ctx, sbi, entry, replace)
-	case "netconf":
+	case config.SBITypeNetconf:
 		return buildNetconfPlan(ctx, sbi, entry, replace)
 	default:
 		return targettypes.SouthboundSetPlan{}, fmt.Errorf("materialize: unknown SBI type: %q", sbi.Type)
 	}
+}
+
+// gnmiPlan wraps an encoder result into a SouthboundSetPlan, allowing callers
+// to pass (plan, err) return values through directly. See
+// targettypes.NewGnmiPlan for why a nil plan must still be normalized rather
+// than passed through as-is.
+func gnmiPlan(plan *targettypes.GnmiSetPlan, err error) (targettypes.SouthboundSetPlan, error) {
+	if err != nil {
+		return targettypes.SouthboundSetPlan{}, err
+	}
+	return targettypes.NewGnmiPlan(plan), nil
 }
 
 // buildGnmiPlan builds a GnmiSetPlan from the tree entry.

@@ -44,6 +44,9 @@ type Datastore struct {
 
 	cacheClient cache.CacheClientBound
 
+	// sbiMutex guards sbi, which is set once asynchronously after New() returns
+	// and then read concurrently from RPC handlers (e.g. ConnectionState).
+	sbiMutex *sync.RWMutex
 	// SBI target of this datastore
 	sbi target.Target
 
@@ -109,6 +112,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 		ctx:              ctx,
 		cfn:              cancel,
 		cacheClient:      ccb,
+		sbiMutex:         &sync.RWMutex{},
 		m:                &sync.RWMutex{},
 		dmutex:           &sync.Mutex{},
 		deviationClients: make(map[sdcpb.DataServer_WatchDeviationsServer]string),
@@ -165,9 +169,9 @@ CREATE:
 func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) error {
 	log := logf.FromContext(ctx)
 
-	var err error
-	d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, d, d.config.Sync.Config, d.taskPool, opts...)
+	sbi, err := target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, d, d.config.Sync.Config, d.taskPool, opts...)
 	if err == nil {
+		d.setSBI(sbi)
 		return nil
 	}
 
@@ -180,14 +184,29 @@ func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) err
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, d, d.config.Sync.Config, d.taskPool, opts...)
+			sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, d, d.config.Sync.Config, d.taskPool, opts...)
 			if err != nil {
 				log.Error(err, "failed to create DS target")
 				continue
 			}
+			d.setSBI(sbi)
 			return nil
 		}
 	}
+}
+
+// setSBI sets the SBI target under lock. Safe for concurrent use with getSBI.
+func (d *Datastore) setSBI(sbi target.Target) {
+	d.sbiMutex.Lock()
+	defer d.sbiMutex.Unlock()
+	d.sbi = sbi
+}
+
+// getSBI returns the current SBI target under lock. Safe for concurrent use with setSBI.
+func (d *Datastore) getSBI() target.Target {
+	d.sbiMutex.RLock()
+	defer d.sbiMutex.RUnlock()
+	return d.sbi
 }
 
 func (d *Datastore) Name() string {
@@ -207,10 +226,11 @@ func (d *Datastore) Delete(ctx context.Context) error {
 }
 
 func (d *Datastore) ConnectionState() *targettypes.TargetStatus {
-	if d.sbi == nil {
+	sbi := d.getSBI()
+	if sbi == nil {
 		return targettypes.NewTargetStatus(targettypes.TargetStatusNotConnected)
 	}
-	return d.sbi.Status()
+	return sbi.Status()
 }
 
 func (d *Datastore) Stop(ctx context.Context) error {
@@ -218,10 +238,11 @@ func (d *Datastore) Stop(ctx context.Context) error {
 		return nil
 	}
 	d.cfn()
-	if d.sbi == nil {
+	sbi := d.getSBI()
+	if sbi == nil {
 		return nil
 	}
-	err := d.sbi.Close(ctx)
+	err := sbi.Close(ctx)
 	if err != nil {
 		logf.DefaultLogger.Error(err, "datastore failed to close the target connection", "datastore-name", d.Name())
 	}

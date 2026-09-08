@@ -87,7 +87,10 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			var actual api.Entry = task.entry
 			var keyChild api.Entry
 
-			keys := task.entry.GetSchema().GetContainer().GetKeys()
+			// Copy before sorting: GetKeys() returns the schema's own slice, which is
+			// shared and read concurrently by other tasks/goroutines. Sorting it in
+			// place would race with those readers (and other sorters of the same schema).
+			keys := slices.Clone(task.entry.GetSchema().GetContainer().GetKeys())
 
 			slices.SortFunc(keys, func(a *sdcpb.LeafSchema, b *sdcpb.LeafSchema) int {
 				return strings.Compare(a.GetName(), b.GetName())

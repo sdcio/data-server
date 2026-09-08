@@ -25,6 +25,7 @@ import (
 	gtarget "github.com/openconfig/gnmic/pkg/api/target"
 	"github.com/openconfig/gnmic/pkg/api/types"
 	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/sonic"
 	gnmiutils "github.com/sdcio/data-server/pkg/datastore/target/gnmi/utils"
 	targetTypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/pool"
@@ -48,6 +49,10 @@ type gnmiTarget struct {
 	runningStore    targetTypes.RunningStore
 	schemaClient    dsutils.SchemaClientBound
 	taskpoolFactory pool.VirtualPoolFactory
+	// shapeGetRequest applies device-profile-specific adjustments to an
+	// outgoing gNMI GetRequest. Selected once in NewTarget from cfg.DeviceProfile;
+	// defaults to a no-op so Get never has to know profiles exist.
+	shapeGetRequest func(*gnmi.GetRequest)
 }
 
 func NewTarget(ctx context.Context, name string, cfg *config.SBI, runningStore targetTypes.RunningStore, schemaClient dsutils.SchemaClientBound, taskpoolFactory pool.VirtualPoolFactory, opts ...grpc.DialOption) (*gnmiTarget, error) {
@@ -78,6 +83,7 @@ func NewTarget(ctx context.Context, name string, cfg *config.SBI, runningStore t
 		runningStore:    runningStore,
 		schemaClient:    schemaClient,
 		taskpoolFactory: taskpoolFactory,
+		shapeGetRequest: getRequestShaperFor(cfg.DeviceProfile),
 	}
 
 	opts = append(opts, grpc.WithKeepaliveParams(keepalive.ClientParameters{
@@ -106,6 +112,17 @@ func NewTarget(ctx context.Context, name string, cfg *config.SBI, runningStore t
 	return gt, nil
 }
 
+// getRequestShaperFor returns the device-profile-specific GetRequest adapter
+// for profile, or a no-op for profiles with no Get-path behaviour.
+func getRequestShaperFor(profile config.DeviceProfile) func(*gnmi.GetRequest) {
+	switch profile {
+	case config.DeviceProfileSonic:
+		return sonic.ShapeGetRequest
+	default:
+		return func(*gnmi.GetRequest) {}
+	}
+}
+
 func (t *gnmiTarget) Subscribe(ctx context.Context, req *gnmi.SubscribeRequest, subscriptionName string) (chan *gnmi.SubscribeResponse, chan error) {
 	return t.target.SubscribeStreamChan(ctx, req, subscriptionName)
 }
@@ -118,6 +135,12 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 	gnmiReq := &gnmi.GetRequest{
 		Path: make([]*gnmi.Path, 0, len(req.GetPath())),
 	}
+
+	// check if the target name is set, then add the prefix field
+	if t.cfg.GnmiOptions.TargetName != "" {
+		gnmiReq.Prefix = &gnmi.Path{Target: t.cfg.GnmiOptions.TargetName}
+	}
+
 	for _, p := range req.GetPath() {
 		gnmiReq.Path = append(gnmiReq.Path, utils.ToGNMIPath(p))
 	}
@@ -127,6 +150,7 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 	if err != nil {
 		return nil, err
 	}
+	t.shapeGetRequest(gnmiReq)
 
 	// convert sdcpb encoding to gnmi encoding
 	gnmiReq.Encoding, err = gnmiutils.SdcpbEncodingToGNMIENcoding(req.Encoding)
@@ -238,14 +262,14 @@ func (t *gnmiTarget) AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) 
 	for _, sp := range sps {
 		switch sp.Mode {
 		case "once":
-			g = NewOnceSync(ctx, t, sp, t.runningStore, t.taskpoolFactory)
+			g = NewOnceSync(ctx, t, t.cfg.GnmiOptions.TargetName, sp, t.runningStore, t.taskpoolFactory)
 		case "get":
 			g, err = NewGetSync(ctx, t, sp, t.runningStore, t.schemaClient)
 			if err != nil {
 				return err
 			}
 		default:
-			g = NewStreamSync(ctx, t, sp, t.runningStore, t.schemaClient, t.taskpoolFactory)
+			g = NewStreamSync(ctx, t, t.cfg.GnmiOptions.TargetName, sp, t.runningStore, t.schemaClient, t.taskpoolFactory)
 		}
 		t.syncs[sp.Name] = g
 

@@ -24,6 +24,7 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/target/materialize"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -91,7 +92,7 @@ func TestBuildPlan_CiscoIOSXR_JsonIETF_PerModulePlan(t *testing.T) {
 	addAndFinish(t, root, upds, testhelper.FlagsNew)
 
 	sbi := &config.SBI{
-		Type:          "gnmi",
+		Type:          config.SBITypeGnmi,
 		DeviceProfile: config.DeviceProfileCiscoIOSXR,
 		GnmiOptions:   &config.SBIGnmiOptions{Encoding: "JSON_IETF"},
 	}
@@ -130,7 +131,7 @@ func TestBuildPlan_CiscoIOSXR_Proto_GenericPlan(t *testing.T) {
 	addAndFinish(t, root, interfaceUpdates("ethernet-1/1", "uplink"), testhelper.FlagsNew)
 
 	sbi := &config.SBI{
-		Type:          "gnmi",
+		Type:          config.SBITypeGnmi,
 		DeviceProfile: config.DeviceProfileCiscoIOSXR,
 		GnmiOptions:   &config.SBIGnmiOptions{Encoding: "PROTO"},
 	}
@@ -215,13 +216,114 @@ func TestBuildPlan_CiscoIOSXR_Netconf_ReturnsNetconfSetPlan(t *testing.T) {
 	}
 }
 
+// --- Cycle 3: Sonic + json_ietf → sonic-encoded GnmiSetPlan ---------------
+
+func TestBuildPlan_Sonic_JsonIETF_RoutesToSonicEncoder(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	root, scb := newTestRoot(t, mockCtrl)
+
+	addAndFinish(t, root, interfaceUpdates("ethernet-1/1", "uplink"), testhelper.FlagsNew)
+
+	sbi := &config.SBI{
+		Type:          config.SBITypeGnmi,
+		DeviceProfile: config.DeviceProfileSonic,
+		GnmiOptions:   &config.SBIGnmiOptions{Encoding: "JSON_IETF"},
+	}
+
+	plan, err := materialize.BuildPlan(context.Background(), scb, sbi, root.Entry, false)
+	if err != nil {
+		t.Fatalf("BuildPlan: unexpected error: %v", err)
+	}
+	if plan.Gnmi == nil {
+		t.Fatalf("BuildPlan: expected Gnmi plan, got nil")
+	}
+	if len(plan.Gnmi.Updates) == 0 {
+		t.Fatal("BuildPlan: expected at least one Update from sonic encoder, got none")
+	}
+	for _, u := range plan.Gnmi.Updates {
+		if u.GetPath().GetOrigin() != "sonic_yang" {
+			t.Errorf("sonic plan: expected Path.Origin %q, got %q", "sonic_yang", u.GetPath().GetOrigin())
+		}
+	}
+}
+
+// TestBuildPlan_Sonic_NoChanges_ReturnsEmptyGnmiPlan verifies that an
+// idempotent re-apply of a sonic-profile intent (no changed leaves, no
+// deletes) still yields a plan with a populated (but empty) Gnmi variant,
+// rather than an empty SouthboundSetPlan{} that would be rejected by the
+// gNMI target as belonging to the wrong driver.
+func TestBuildPlan_Sonic_NoChanges_ReturnsEmptyGnmiPlan(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	root, scb := newTestRoot(t, mockCtrl)
+	ctx := context.Background()
+
+	upd := interfaceUpdates("ethernet-1/1", "uplink")
+	if err := testhelper.AddToRoot(ctx, root.Entry, upd, testhelper.FlagsExisting,
+		consts.RunningIntentName, consts.RunningValuesPrio); err != nil {
+		t.Fatal(err)
+	}
+	if err := testhelper.AddToRoot(ctx, root.Entry, upd, testhelper.FlagsExisting, "owner1", 5); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.FinishInsertionPhase(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	sbi := &config.SBI{
+		Type:          config.SBITypeGnmi,
+		DeviceProfile: config.DeviceProfileSonic,
+		GnmiOptions:   &config.SBIGnmiOptions{Encoding: "JSON_IETF"},
+	}
+
+	plan, err := materialize.BuildPlan(ctx, scb, sbi, root.Entry, false)
+	if err != nil {
+		t.Fatalf("BuildPlan: unexpected error: %v", err)
+	}
+	if plan.Gnmi == nil {
+		t.Fatalf("BuildPlan: expected non-nil (possibly empty) Gnmi plan for no-op transaction, got nil")
+	}
+	if len(plan.Gnmi.Updates) != 0 || len(plan.Gnmi.Deletes) != 0 {
+		t.Fatalf("BuildPlan: expected empty plan, got %d updates and %d deletes", len(plan.Gnmi.Updates), len(plan.Gnmi.Deletes))
+	}
+	if _, ok := plan.NetconfPlan(); ok {
+		t.Fatalf("BuildPlan: expected no Netconf plan for a gNMI SBI")
+	}
+}
+
+// TestBuildPlan_NonSonic_NotAffectedBySonicBranch checks that a generic gNMI
+// profile still gets the standard single-root plan after the sonic branch lands.
+func TestBuildPlan_NonSonic_NotAffectedBySonicBranch(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	root, scb := newTestRoot(t, mockCtrl)
+
+	addAndFinish(t, root, interfaceUpdates("ethernet-1/1", "uplink"), testhelper.FlagsNew)
+
+	sbi := &config.SBI{
+		Type:        config.SBITypeGnmi,
+		GnmiOptions: &config.SBIGnmiOptions{Encoding: "PROTO"},
+	}
+
+	plan, err := materialize.BuildPlan(context.Background(), scb, sbi, root.Entry, false)
+	if err != nil {
+		t.Fatalf("BuildPlan: unexpected error: %v", err)
+	}
+	if plan.Gnmi == nil {
+		t.Fatalf("BuildPlan: expected Gnmi plan, got nil")
+	}
+	for _, u := range plan.Gnmi.Updates {
+		if u.GetPath().GetOrigin() != "" {
+			t.Errorf("generic plan must not set Path.Origin, got %q", u.GetPath().GetOrigin())
+		}
+	}
+}
+
 // --- Existing generic path tests -----------------------------------------
 
 func TestBuildPlan_GnmiSBI_ReturnsGnmiSetPlan(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	root, scb := newTestRoot(t, mockCtrl)
 	sbi := &config.SBI{
-		Type:        "gnmi",
+		Type:        config.SBITypeGnmi,
 		GnmiOptions: &config.SBIGnmiOptions{Encoding: "PROTO"},
 	}
 
@@ -251,6 +353,35 @@ func TestBuildPlan_NetconfSBI_ReturnsNetconfSetPlan(t *testing.T) {
 	}
 	if plan.Netconf == nil {
 		t.Errorf("BuildPlan: expected Netconf plan, got nil")
+	}
+	if plan.Gnmi != nil {
+		t.Errorf("BuildPlan: expected no Gnmi plan, got non-nil")
+	}
+}
+
+// TestBuildPlan_Netconf_NoChanges_StillReturnsNonNilPlan pins down an
+// invariant that buildNetconfPlan currently satisfies "for free" (it always
+// wraps a *NetconfSetPlan, even for an empty document): unlike the gNMI side
+// (see sonic.Encode / NewGnmiPlan), no NETCONF encoder today returns nil to
+// signal "nothing to apply". If a future NETCONF device-profile encoder
+// adopts that convention, it must be normalized the same way NewGnmiPlan
+// normalizes a nil GnmiSetPlan — otherwise it reproduces this bug class on
+// the NETCONF side.
+func TestBuildPlan_Netconf_NoChanges_StillReturnsNonNilPlan(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	root, scb := newTestRoot(t, mockCtrl)
+	sbi := &config.SBI{
+		Type:           "netconf",
+		NetconfOptions: &config.SBINetconfOptions{},
+	}
+
+	// root.Entry has no updates applied: this is the no-op case.
+	plan, err := materialize.BuildPlan(context.Background(), scb, sbi, root.Entry, false)
+	if err != nil {
+		t.Fatalf("BuildPlan: unexpected error: %v", err)
+	}
+	if plan.Netconf == nil {
+		t.Fatalf("BuildPlan: expected non-nil Netconf plan even for a no-op transaction, got nil")
 	}
 	if plan.Gnmi != nil {
 		t.Errorf("BuildPlan: expected no Gnmi plan, got non-nil")
