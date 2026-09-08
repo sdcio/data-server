@@ -154,6 +154,75 @@ func TestExpandUpdateContainerUnwrapsRFC7951SelfReference(t *testing.T) {
 	}
 }
 
+// TestExpandUpdateContainerDoesNotUnwrapLegitimateChildSharingTheContainersName
+// guards against a false-positive unwrap: some real (non-SONiC) schemas have
+// a container whose single currently-populated key happens to render as
+// "<moduleName>:<containerName>" purely because a genuine child field is
+// named identically to the parent container itself (a real, if unusual,
+// schema shape) — not because the target self-wrapped its response. Since
+// that key resolves as an actual schema member via getItem, it must be
+// processed as a normal field, not recursively unwrapped as a self-reference
+// (which would silently drop a path segment for every non-SONiC target that
+// happens to hit this naming coincidence).
+func TestExpandUpdateContainerDoesNotUnwrapLegitimateChildSharingTheContainersName(t *testing.T) {
+	containerSchema := &sdcpb.SchemaElem{
+		Schema: &sdcpb.SchemaElem_Container{
+			Container: &sdcpb.ContainerSchema{
+				Name:       "foo",
+				ModuleName: "m",
+				Fields: []*sdcpb.LeafSchema{
+					{Name: "foo", ModuleName: "m", Type: &sdcpb.SchemaLeafType{Type: "string", TypeName: "string"}},
+				},
+			},
+		},
+	}
+	fieldSchema := &sdcpb.SchemaElem{
+		Schema: &sdcpb.SchemaElem_Field{
+			Field: &sdcpb.LeafSchema{
+				Type: &sdcpb.SchemaLeafType{Type: "string", TypeName: "string"},
+			},
+		},
+	}
+
+	converter := NewConverter(&testSchemaClientBound{
+		getSchemaPathFn: func(_ context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+			elems := path.GetElem()
+			if len(elems) > 1 && elems[len(elems)-1].GetName() == "foo" {
+				return &sdcpb.GetSchemaResponse{Schema: fieldSchema}, nil
+			}
+			return &sdcpb.GetSchemaResponse{Schema: containerSchema}, nil
+		},
+	})
+
+	updates, err := converter.ExpandUpdate(context.Background(), &sdcpb.Update{
+		Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "foo"}}},
+		Value: &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_JsonIetfVal{JsonIetfVal: []byte(`{"m:foo":"bar"}`)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ExpandUpdate returned error: %v", err)
+	}
+	if len(updates) != 1 {
+		t.Fatalf("expected 1 update, got %d", len(updates))
+	}
+
+	gotPath := updates[0].GetPath()
+	wantElems := []string{"foo", "foo"}
+	if len(gotPath.GetElem()) != len(wantElems) {
+		t.Fatalf("expected path elems %v, got %v", wantElems, gotPath.GetElem())
+	}
+	for i, e := range gotPath.GetElem() {
+		if e.GetName() != wantElems[i] {
+			t.Fatalf("expected path elems %v, got %v", wantElems, gotPath.GetElem())
+		}
+	}
+	got := updates[0].GetValue().GetStringVal()
+	if got != "bar" {
+		t.Fatalf("expected value %q, got %q", "bar", got)
+	}
+}
+
 // TestExpandUpdatesBatchOfSelfWrappedContainers mirrors a single GET sync
 // that requests several distinct top-level SONiC containers in one
 // GetDataRequest (one gnmi.Update per path, all in the same batch). Each
