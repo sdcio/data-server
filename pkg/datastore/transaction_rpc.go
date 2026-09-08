@@ -68,6 +68,14 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 		return nil, err
 	}
 
+	if log.V(logger.VDebug).Enabled() {
+		paths := make([]string, 0, len(Updates))
+		for _, u := range Updates {
+			paths = append(paths, u.GetPath().ToXPath(false))
+		}
+		log.V(logger.VDebug).Info("expanded intent updates", "intent", req.GetIntent(), "count", len(Updates), "paths", paths)
+	}
+
 	// add the intent to the TransactionIntent
 	ti.AddUpdates(Updates)
 
@@ -262,6 +270,18 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 			err = root.AddUpdatesRecursive(ctx, intent.GetUpdates(), flag)
 			if err != nil {
 				return nil, err
+			}
+
+			if log.V(logger.VDebug).Enabled() {
+				insertedCount := len(ops.LeafsOfOwner(root.Entry, intent.GetName()))
+				log.V(logger.VDebug).Info("intent updates inserted into tree",
+					"intent", intent.GetName(),
+					"requested-updates", len(intent.GetUpdates()),
+					"leaves-in-tree-for-owner", insertedCount,
+					"non-revertive", intent.NonRevertive(),
+					"previously-applied", intent.GetPreviouslyApplied(),
+					"used-flag-existing", flag == flagExisting,
+				)
 			}
 
 			// add the explicit delete entries
