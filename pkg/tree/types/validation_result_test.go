@@ -5,70 +5,60 @@ import (
 	"testing"
 )
 
-// TestValidationResults_HasErrorsExcludingOwners covers ticket 05's safety
-// net: errors owned by an excluded intent name must not count towards
-// HasErrorsExcludingOwners, while errors owned by any non-excluded intent
-// still do.
-func TestValidationResults_HasErrorsExcludingOwners(t *testing.T) {
+func TestValidationResults_HasErrors(t *testing.T) {
 	tests := []struct {
 		name          string
 		results       ValidationResults
-		excludeOwners map[string]struct{}
 		wantHasErrors bool
 	}{
 		{
-			name:          "no results",
+			name:          "empty results",
 			results:       ValidationResults{},
-			excludeOwners: map[string]struct{}{},
 			wantHasErrors: false,
 		},
 		{
-			name: "error owned by excluded intent only",
+			name: "single intent with error",
 			results: func() ValidationResults {
 				v := ValidationResults{}
-				_ = v.AddEntry(NewValidationResultEntry("ghost", errors.New("dangling leafref"), ValidationResultEntryTypeError))
+				_ = v.AddEntry(NewValidationResultEntry("intent1", errors.New("mandatory leaf missing"), ValidationResultEntryTypeError))
 				return v
 			}(),
-			excludeOwners: map[string]struct{}{"ghost": {}},
+			wantHasErrors: true,
+		},
+		{
+			name: "single intent with warning only — not an error",
+			results: func() ValidationResults {
+				v := ValidationResults{}
+				_ = v.AddEntry(NewValidationResultEntry("intent1", errors.New("deviation observed"), ValidationResultEntryTypeWarning))
+				return v
+			}(),
 			wantHasErrors: false,
 		},
 		{
-			name: "error owned by non-excluded intent",
+			name: "multiple intents all with errors",
 			results: func() ValidationResults {
 				v := ValidationResults{}
-				_ = v.AddEntry(NewValidationResultEntry("customer", errors.New("mandatory leaf missing"), ValidationResultEntryTypeError))
+				_ = v.AddEntry(NewValidationResultEntry("intent1", errors.New("leafref broken"), ValidationResultEntryTypeError))
+				_ = v.AddEntry(NewValidationResultEntry("intent2", errors.New("mandatory missing"), ValidationResultEntryTypeError))
 				return v
 			}(),
-			excludeOwners: map[string]struct{}{"ghost": {}},
 			wantHasErrors: true,
 		},
 		{
-			name: "errors on both excluded and non-excluded intents",
+			name: "unknown-owner error blocks — not special-cased",
 			results: func() ValidationResults {
 				v := ValidationResults{}
-				_ = v.AddEntry(NewValidationResultEntry("ghost", errors.New("dangling leafref"), ValidationResultEntryTypeError))
-				_ = v.AddEntry(NewValidationResultEntry("customer", errors.New("mandatory leaf missing"), ValidationResultEntryTypeError))
+				_ = v.AddEntry(NewValidationResultEntry(UnknownOwner, errors.New("mandatory child [autonomous-system] does not exist"), ValidationResultEntryTypeError))
 				return v
 			}(),
-			excludeOwners: map[string]struct{}{"ghost": {}},
-			wantHasErrors: true,
-		},
-		{
-			name: "nil exclude set behaves like HasErrors",
-			results: func() ValidationResults {
-				v := ValidationResults{}
-				_ = v.AddEntry(NewValidationResultEntry("intent1", errors.New("boom"), ValidationResultEntryTypeError))
-				return v
-			}(),
-			excludeOwners: nil,
 			wantHasErrors: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.results.HasErrorsExcludingOwners(tt.excludeOwners); got != tt.wantHasErrors {
-				t.Errorf("HasErrorsExcludingOwners() = %v, want %v", got, tt.wantHasErrors)
+			if got := tt.results.HasErrors(); got != tt.wantHasErrors {
+				t.Errorf("HasErrors() = %v, want %v", got, tt.wantHasErrors)
 			}
 		})
 	}

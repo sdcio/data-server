@@ -213,21 +213,6 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 	return intentNames, nil
 }
 
-// loadAllOnlyIntentNames returns the subset of loadedIntentNames that are
-// not part of newIntents — i.e. intents present in the tree solely because
-// LoadAllButRunningIntents rehydrated them, not because this RPC is
-// operating on them.
-func loadAllOnlyIntentNames(loadedIntentNames []string, newIntents map[string]*types.TransactionIntent) map[string]struct{} {
-	result := make(map[string]struct{}, len(loadedIntentNames))
-	for _, name := range loadedIntentNames {
-		if _, inRPC := newIntents[name]; inRPC {
-			continue
-		}
-		result[name] = struct{}{}
-	}
-	return result
-}
-
 // lowlevelTransactionSet
 func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *types.Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
 	log := logger.FromContext(ctx)
@@ -239,8 +224,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		return nil, err
 	}
 
-	loadedIntentNames, err := d.LoadAllButRunningIntents(ctx, root)
-	if err != nil {
+	if _, err = d.LoadAllButRunningIntents(ctx, root); err != nil {
 		return nil, err
 	}
 
@@ -356,15 +340,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		result.Delete = append(result.Delete, u.SdcpbPath())
 	}
 
-	// Error out if validation failed, ignoring errors owned by intents that
-	// are only present via LoadAllButRunningIntents (ghosts left behind by
-	// stale last-applied state) and are not part of this RPC's own intents.
-	// This is a safety net only: ticket 03's apply-time last-applied writes
-	// are the primary fix for ghost intents existing at all; this guards
-	// against an unrelated RPC intent (e.g. a delete) hard-failing because
-	// of a ghost's validation error it has no part in.
-	loadAllOnlyOwners := loadAllOnlyIntentNames(loadedIntentNames, transaction.GetNewIntents())
-	if validationResult.HasErrorsExcludingOwners(loadAllOnlyOwners) {
+	if validationResult.HasErrors() {
 		return result, ErrValidation
 	}
 
