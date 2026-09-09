@@ -298,6 +298,16 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				// log.Debugf("handling field %s", item.Name)
 				np := proto.Clone(p).(*sdcpb.Path)
 				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item.Name})
+				// Fetch schema once; use it for the state check and value conversion.
+				schemaRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, np)
+				if err != nil {
+					return nil, err
+				}
+				// Skip state (config false) leaves — they must not enter the
+				// running-owner tree because they are read-only device data.
+				if schemaRsp.GetSchema().IsState() {
+					continue
+				}
 				upd := &sdcpb.Update{Path: np}
 				switch item.GetType().GetType() {
 				case "empty":
@@ -305,21 +315,25 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 						Value: &sdcpb.TypedValue_EmptyVal{},
 					}
 				default:
-					schemaRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, np)
-					if err != nil {
-						return nil, err
-					}
 					upd.Value, err = sdcpb.SchemaElemToTV(schemaRsp.GetSchema(), fmt.Sprintf("%v", v), 0)
 					if err != nil {
 						return nil, err
 					}
-
 				}
 				upds = append(upds, upd)
 			case *sdcpb.LeafListSchema: // leaflist
 				// log.Debugf("TODO: handling leafList %s", item.Name)
 				np := proto.Clone(p).(*sdcpb.Path)
 				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item.Name})
+
+				// Skip state leaf-lists.
+				llSchemaRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, np)
+				if err != nil {
+					return nil, err
+				}
+				if llSchemaRsp.GetSchema().IsState() {
+					continue
+				}
 
 				se := &sdcpb.SchemaElem{
 					Schema: &sdcpb.SchemaElem_Leaflist{
@@ -360,6 +374,10 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, np)
 				if err != nil {
 					return nil, err
+				}
+				// Skip entire state sub-trees (e.g. a "state" grouping container).
+				if rsp.GetSchema().IsState() {
+					continue
 				}
 				switch rsp := rsp.GetSchema().Schema.(type) {
 				case *sdcpb.SchemaElem_Container:
