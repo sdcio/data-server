@@ -379,9 +379,16 @@ func TestConfigServerCache_InstanceRunningGet_NotYetModified(t *testing.T) {
 		t.Fatalf("InstanceCreate() error = %v", err)
 	}
 
-	_, err := c.InstanceRunningGet(ctx, testCacheName)
-	if !errors.Is(err, ErrRunningNotFound) {
-		t.Fatalf("InstanceRunningGet() error = %v, want ErrRunningNotFound", err)
+	// InstanceCreate now seeds running with an empty-but-non-nil Intent, so
+	// InstanceRunningGet must return a valid (empty) ImportConfigAdapter rather
+	// than an error — replaceIntent's first-ever call on a fresh datastore must
+	// not hard-fail.
+	adapter, err := c.InstanceRunningGet(ctx, testCacheName)
+	if err != nil {
+		t.Fatalf("InstanceRunningGet() error = %v, want nil (empty adapter)", err)
+	}
+	if adapter == nil {
+		t.Fatal("InstanceRunningGet() returned nil adapter, want non-nil empty adapter")
 	}
 }
 

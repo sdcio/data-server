@@ -28,10 +28,6 @@ import (
 	"github.com/sdcio/sdc-protos/tree_persist"
 )
 
-// ErrRunningNotFound is returned by ConfigServerCache.InstanceRunningGet when
-// the instance exists but "running" was never modified yet.
-var ErrRunningNotFound = errors.New("configserver cache: running not found")
-
 // ConfigServerCache is the Cache.Type: config-server Client: real Intents
 // are read through and written to a configserver.LocalConfigClient seam over
 // the colocated config-server controller (ConfigSnapshotService) — this
@@ -59,7 +55,6 @@ func NewConfigServerCache(client configserver.LocalConfigClient) *ConfigServerCa
 		running: map[string]*tree_persist.Intent{},
 	}
 }
-
 // NewConfigServerClient returns a client-backed *ConfigServerCache as a
 // Client. ConfigServerCache satisfies IntentWriter directly now (Modify/
 // Delete write through the LocalConfigClient seam to config-server), so
@@ -107,7 +102,11 @@ func (c *ConfigServerCache) InstanceCreate(ctx context.Context, cacheInstanceNam
 	if _, exists := c.running[cacheInstanceName]; exists {
 		return fmt.Errorf("configserver cache: instance %q already exists", cacheInstanceName)
 	}
-	c.running[cacheInstanceName] = nil
+	// Seed with an empty-but-non-nil Intent so InstanceRunningGet returns an
+	// empty ImportConfigAdapter on the first call (before any writeBackSyncTree
+	// has run), rather than an error. replaceIntent — the only caller of
+	// RunningGet — would hard-fail on first-ever replace transactions otherwise.
+	c.running[cacheInstanceName] = &tree_persist.Intent{}
 	return nil
 }
 
@@ -247,9 +246,6 @@ func (c *ConfigServerCache) InstanceRunningGet(ctx context.Context, cacheName st
 	intent, exists := c.running[cacheName]
 	if !exists {
 		return nil, fmt.Errorf("configserver cache: instance %q does not exist", cacheName)
-	}
-	if intent == nil {
-		return nil, ErrRunningNotFound
 	}
 	return treeproto.NewProtoTreeImporter(intent), nil
 }
