@@ -372,18 +372,6 @@ func buildFixtureIntent(t *testing.T, scb schemaClient.SchemaClientBound, name s
 	return buildFixtureIntentWithValidation(t, scb, name, priority, device, false)
 }
 
-// buildFixtureIntentAllowInvalid is buildFixtureIntent, except it skips
-// ygot's own leafref validation on marshal. It exists for fixtures that
-// deliberately contain a dangling leafref (e.g. ghost-intent tests) — ygot's
-// validation is stricter than (and duplicates) what pkg/tree/ops/validation
-// exercises, and would otherwise reject such fixtures before the tree ever
-// sees them. Regular fixtures should keep using buildFixtureIntent so ygot's
-// own checks still catch accidentally-invalid test data.
-func buildFixtureIntentAllowInvalid(t *testing.T, scb schemaClient.SchemaClientBound, name string, priority int32, device *sdcio_schema.Device) *tree_persist.Intent {
-	t.Helper()
-	return buildFixtureIntentWithValidation(t, scb, name, priority, device, true)
-}
-
 func buildFixtureIntentWithValidation(t *testing.T, scb schemaClient.SchemaClientBound, name string, priority int32, device *sdcio_schema.Device, skipValidation bool) *tree_persist.Intent {
 	t.Helper()
 	ctx := context.Background()
