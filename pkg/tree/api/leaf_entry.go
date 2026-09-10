@@ -122,6 +122,28 @@ func (l *LeafEntry) MarkDelete(onlyIntended bool) {
 	l.IsNew = false
 }
 
+// ResetFlags resets the requested flags (delete, new, updated) if they are set.
+// It returns true if at least one flag was actually reset.
+func (l *LeafEntry) ResetFlags(deleteFlag bool, newFlag bool, updatedFlag bool) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	changed := false
+	if deleteFlag && l.Delete {
+		l.Delete = false
+		l.DeleteOnlyIntended = false
+		changed = true
+	}
+	if updatedFlag && l.IsUpdated {
+		l.IsUpdated = false
+		changed = true
+	}
+	if newFlag && l.IsNew {
+		l.IsNew = false
+		changed = true
+	}
+	return changed
+}
+
 // MarkExpliciteDelete indicate that the entry is to be explicitely deleted
 func (l *LeafEntry) MarkExpliciteDelete() {
 	l.mu.Lock()
