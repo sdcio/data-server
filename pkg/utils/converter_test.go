@@ -186,6 +186,92 @@ func TestExpandContainerValueSkipsStateLeaves(t *testing.T) {
 	}
 }
 
+// TestExpandContainerValueStripsIdentityrefModulePrefixFromPathKey verifies
+// that an identityref list key arriving via the gNMI *path* (rather than
+// nested in the JSON-IETF value) has its module prefix stripped exactly like
+// the JSON-value branch already does.
+//
+// This is the regression test for the SRL delete failure observed in CI:
+// device sync (GET) delivered the "afi-safi" list key already embedded in
+// the path as "srl_nokia-common:ipv4-unicast", while intents key the same
+// list entry as unprefixed "ipv4-unicast". Without stripping the prefix on
+// the path-key branch too, these resolved to two different tree nodes for
+// the same list entry: an intent-owned one (fully deleted with the intent)
+// and a running-only "ghost" one that was never cleaned up. The ghost node
+// kept the ancestor "bgp" container's mandatory-field validator alive after
+// the owning intent was deleted, blocking the delete transaction for the
+// full 15-minute CI retry window.
+func TestExpandContainerValueStripsIdentityrefModulePrefixFromPathKey(t *testing.T) {
+	schemaMap := map[string]*sdcpb.GetSchemaResponse{
+		"afi-safi": {
+			Schema: &sdcpb.SchemaElem{
+				Schema: &sdcpb.SchemaElem_Container{
+					Container: &sdcpb.ContainerSchema{
+						Name:   "afi-safi",
+						Keys:   []*sdcpb.LeafSchema{{Name: "afi-safi-name", Type: &sdcpb.SchemaLeafType{Type: "identityref"}}},
+						Fields: []*sdcpb.LeafSchema{{Name: "admin-state"}},
+					},
+				},
+			},
+		},
+		"afi-safi/admin-state": {
+			Schema: &sdcpb.SchemaElem{
+				Schema: &sdcpb.SchemaElem_Field{
+					Field: &sdcpb.LeafSchema{
+						Name: "admin-state",
+						Type: &sdcpb.SchemaLeafType{Type: "string", TypeName: "string"},
+					},
+				},
+			},
+		},
+	}
+
+	scb := &testSchemaClientBound{
+		getSchemaPathFn: func(_ context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+			key := ""
+			for i, pe := range path.GetElem() {
+				if i > 0 {
+					key += "/"
+				}
+				key += pe.GetName()
+			}
+			if rsp, ok := schemaMap[key]; ok {
+				return rsp, nil
+			}
+			return &sdcpb.GetSchemaResponse{Schema: &sdcpb.SchemaElem{}}, nil
+		},
+	}
+
+	body, err := json.Marshal(map[string]any{
+		"admin-state": "enable",
+	})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	converter := NewConverter(scb)
+	updates, err := converter.ExpandUpdate(context.Background(), &sdcpb.Update{
+		Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
+			{Name: "afi-safi", Key: map[string]string{"afi-safi-name": "srl_nokia-common:ipv4-unicast"}},
+		}},
+		Value: &sdcpb.TypedValue{
+			Value: &sdcpb.TypedValue_JsonIetfVal{JsonIetfVal: body},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ExpandUpdate returned error: %v", err)
+	}
+	if len(updates) != 1 {
+		t.Fatalf("expected 1 update, got %d", len(updates))
+	}
+
+	elems := updates[0].GetPath().GetElem()
+	got := elems[len(elems)-2].GetKey()["afi-safi-name"]
+	if got != "ipv4-unicast" {
+		t.Fatalf("expected module prefix stripped from path key, got %q", got)
+	}
+}
+
 func TestExpandUpdateFieldJSONUint64PreservesPrecision(t *testing.T) {
 	converter := NewConverter(&testSchemaClientBound{
 		getSchemaPathFn: func(context.Context, *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
