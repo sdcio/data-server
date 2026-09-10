@@ -118,8 +118,25 @@ func (j *JsonTreeImporterElement) GetElements() []importer.ImportConfigAdapterEl
 	return result
 }
 
+// GetKeyValue returns the string form of the underlying key value, normalised to the
+// bare identity name (no module prefix) for identityref types. This mirrors the XML and
+// proto importers, which already call GetTVValue + tv.ToString(). Without normalisation,
+// a JSON_IETF-encoded identityref value (e.g. "openconfig-policy-types:BGP") and a plain
+// JSON value for the same identity ("BGP") would be treated as different tree keys,
+// splitting one logical list entry into two.
+//
+// slt is optional: when nil, the raw value is stringified directly instead of calling
+// GetTVValue, whose underlying ConvertJsonValueToTv switches on slt.Type and would panic
+// on a nil slt.
 func (j *JsonTreeImporterElement) GetKeyValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (string, error) {
-	return fmt.Sprintf("%v", j.data), nil
+	if slt == nil {
+		return fmt.Sprintf("%v", j.data), nil
+	}
+	tv, err := j.GetTVValue(ctx, slt)
+	if err != nil {
+		return "", err
+	}
+	return tv.ToString(), nil
 }
 
 func (j *JsonTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error) {
