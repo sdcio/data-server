@@ -261,28 +261,33 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				continue
 			}
 			if v, ok := keysInPath[k.Name]; ok {
+				// identityref key values arriving via the gNMI path (rather
+				// than nested in the JSON-IETF value) can also carry a
+				// module prefix (e.g. "srl_nokia-common:ipv4-unicast").
+				// Strip it the same way the JSON-value branch above does,
+				// so a list entry keyed by an identityref resolves to the
+				// same tree node regardless of whether the key arrived via
+				// the path or the JSON body — otherwise sync-derived and
+				// intent-derived entries for the same key silently diverge
+				// into two sibling nodes.
+				if k.Type.Type == "identityref" {
+					if _, val, found := strings.Cut(v, ":"); found {
+						v = val
+					}
+				}
 				keySet[k.Name] = v
 				continue
 			}
 			return nil, fmt.Errorf("missing key %s in element %s", k.Name, cs.Container.GetName())
 		}
-		// handling keys in last element of the path or in the json value
-		for _, k := range cs.Container.GetKeys() {
-			if _, ok := jv[k.Name]; ok {
-				// log.Debugf("handling key %s", k.Name)
-				if _, ok := keysInPath[k.Name]; ok {
-					return nil, fmt.Errorf("key %q is present in both the path and JSON value", k.Name)
-				}
-				if p.GetElem()[len(p.GetElem())-1].Key == nil {
-					p.GetElem()[len(p.GetElem())-1].Key = make(map[string]string)
-				}
-				p.GetElem()[len(p.GetElem())-1].Key = keySet
-				continue
-			}
-			// if key is not in the value it must be set in the path
-			if _, ok := keysInPath[k.Name]; !ok {
-				return nil, fmt.Errorf("missing key %q from list %q", k.Name, cs.Container.Name)
-			}
+		// Write the (possibly module-prefix-stripped) keySet back onto the
+		// path's last element unconditionally — regardless of whether any
+		// individual key came from the JSON value or was already present in
+		// the path — so identityref stripping above always takes effect and
+		// every key ends up normalized in one place. All "present in both"/
+		// "missing" validation already happened while building keySet above.
+		if len(cs.Container.GetKeys()) > 0 {
+			p.GetElem()[len(p.GetElem())-1].Key = keySet
 		}
 		for k, v := range jv {
 			// TODO remove the statement_annotate again ...
