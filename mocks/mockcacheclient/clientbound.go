@@ -13,9 +13,276 @@ import (
 	context "context"
 	reflect "reflect"
 
+	importer "github.com/sdcio/data-server/pkg/tree/importer"
 	tree_persist "github.com/sdcio/sdc-protos/tree_persist"
 	gomock "go.uber.org/mock/gomock"
 )
+
+// MockBoundIntentReader is a mock of BoundIntentReader interface.
+type MockBoundIntentReader struct {
+	ctrl     *gomock.Controller
+	recorder *MockBoundIntentReaderMockRecorder
+	isgomock struct{}
+}
+
+// MockBoundIntentReaderMockRecorder is the mock recorder for MockBoundIntentReader.
+type MockBoundIntentReaderMockRecorder struct {
+	mock *MockBoundIntentReader
+}
+
+// NewMockBoundIntentReader creates a new mock instance.
+func NewMockBoundIntentReader(ctrl *gomock.Controller) *MockBoundIntentReader {
+	mock := &MockBoundIntentReader{ctrl: ctrl}
+	mock.recorder = &MockBoundIntentReaderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockBoundIntentReader) EXPECT() *MockBoundIntentReaderMockRecorder {
+	return m.recorder
+}
+
+// IntentExists mocks base method.
+func (m *MockBoundIntentReader) IntentExists(ctx context.Context, intentName string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IntentExists", ctx, intentName)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IntentExists indicates an expected call of IntentExists.
+func (mr *MockBoundIntentReaderMockRecorder) IntentExists(ctx, intentName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IntentExists", reflect.TypeOf((*MockBoundIntentReader)(nil).IntentExists), ctx, intentName)
+}
+
+// IntentGet mocks base method.
+func (m *MockBoundIntentReader) IntentGet(ctx context.Context, intentName string) (importer.ImportConfigAdapter, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IntentGet", ctx, intentName)
+	ret0, _ := ret[0].(importer.ImportConfigAdapter)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IntentGet indicates an expected call of IntentGet.
+func (mr *MockBoundIntentReaderMockRecorder) IntentGet(ctx, intentName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IntentGet", reflect.TypeOf((*MockBoundIntentReader)(nil).IntentGet), ctx, intentName)
+}
+
+// IntentGetAll mocks base method.
+func (m *MockBoundIntentReader) IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "IntentGetAll", ctx, excludeIntentNames, intentChan, errChan)
+}
+
+// IntentGetAll indicates an expected call of IntentGetAll.
+func (mr *MockBoundIntentReaderMockRecorder) IntentGetAll(ctx, excludeIntentNames, intentChan, errChan any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IntentGetAll", reflect.TypeOf((*MockBoundIntentReader)(nil).IntentGetAll), ctx, excludeIntentNames, intentChan, errChan)
+}
+
+// IntentsList mocks base method.
+func (m *MockBoundIntentReader) IntentsList(ctx context.Context) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IntentsList", ctx)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IntentsList indicates an expected call of IntentsList.
+func (mr *MockBoundIntentReaderMockRecorder) IntentsList(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IntentsList", reflect.TypeOf((*MockBoundIntentReader)(nil).IntentsList), ctx)
+}
+
+// MockBoundIntentWriter is a mock of BoundIntentWriter interface.
+type MockBoundIntentWriter struct {
+	ctrl     *gomock.Controller
+	recorder *MockBoundIntentWriterMockRecorder
+	isgomock struct{}
+}
+
+// MockBoundIntentWriterMockRecorder is the mock recorder for MockBoundIntentWriter.
+type MockBoundIntentWriterMockRecorder struct {
+	mock *MockBoundIntentWriter
+}
+
+// NewMockBoundIntentWriter creates a new mock instance.
+func NewMockBoundIntentWriter(ctrl *gomock.Controller) *MockBoundIntentWriter {
+	mock := &MockBoundIntentWriter{ctrl: ctrl}
+	mock.recorder = &MockBoundIntentWriterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockBoundIntentWriter) EXPECT() *MockBoundIntentWriterMockRecorder {
+	return m.recorder
+}
+
+// IntentDelete mocks base method.
+func (m *MockBoundIntentWriter) IntentDelete(ctx context.Context, intentName string, IgnoreNonExisting bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IntentDelete", ctx, intentName, IgnoreNonExisting)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// IntentDelete indicates an expected call of IntentDelete.
+func (mr *MockBoundIntentWriterMockRecorder) IntentDelete(ctx, intentName, IgnoreNonExisting any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IntentDelete", reflect.TypeOf((*MockBoundIntentWriter)(nil).IntentDelete), ctx, intentName, IgnoreNonExisting)
+}
+
+// IntentModify mocks base method.
+func (m *MockBoundIntentWriter) IntentModify(ctx context.Context, intent *tree_persist.Intent) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IntentModify", ctx, intent)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// IntentModify indicates an expected call of IntentModify.
+func (mr *MockBoundIntentWriterMockRecorder) IntentModify(ctx, intent any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IntentModify", reflect.TypeOf((*MockBoundIntentWriter)(nil).IntentModify), ctx, intent)
+}
+
+// MockBoundRunningStore is a mock of BoundRunningStore interface.
+type MockBoundRunningStore struct {
+	ctrl     *gomock.Controller
+	recorder *MockBoundRunningStoreMockRecorder
+	isgomock struct{}
+}
+
+// MockBoundRunningStoreMockRecorder is the mock recorder for MockBoundRunningStore.
+type MockBoundRunningStoreMockRecorder struct {
+	mock *MockBoundRunningStore
+}
+
+// NewMockBoundRunningStore creates a new mock instance.
+func NewMockBoundRunningStore(ctrl *gomock.Controller) *MockBoundRunningStore {
+	mock := &MockBoundRunningStore{ctrl: ctrl}
+	mock.recorder = &MockBoundRunningStoreMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockBoundRunningStore) EXPECT() *MockBoundRunningStoreMockRecorder {
+	return m.recorder
+}
+
+// RunningGet mocks base method.
+func (m *MockBoundRunningStore) RunningGet(ctx context.Context) (importer.ImportConfigAdapter, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RunningGet", ctx)
+	ret0, _ := ret[0].(importer.ImportConfigAdapter)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RunningGet indicates an expected call of RunningGet.
+func (mr *MockBoundRunningStoreMockRecorder) RunningGet(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunningGet", reflect.TypeOf((*MockBoundRunningStore)(nil).RunningGet), ctx)
+}
+
+// RunningModify mocks base method.
+func (m *MockBoundRunningStore) RunningModify(ctx context.Context, intent *tree_persist.Intent) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RunningModify", ctx, intent)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RunningModify indicates an expected call of RunningModify.
+func (mr *MockBoundRunningStoreMockRecorder) RunningModify(ctx, intent any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunningModify", reflect.TypeOf((*MockBoundRunningStore)(nil).RunningModify), ctx, intent)
+}
+
+// MockBoundInstanceLifecycle is a mock of BoundInstanceLifecycle interface.
+type MockBoundInstanceLifecycle struct {
+	ctrl     *gomock.Controller
+	recorder *MockBoundInstanceLifecycleMockRecorder
+	isgomock struct{}
+}
+
+// MockBoundInstanceLifecycleMockRecorder is the mock recorder for MockBoundInstanceLifecycle.
+type MockBoundInstanceLifecycleMockRecorder struct {
+	mock *MockBoundInstanceLifecycle
+}
+
+// NewMockBoundInstanceLifecycle creates a new mock instance.
+func NewMockBoundInstanceLifecycle(ctrl *gomock.Controller) *MockBoundInstanceLifecycle {
+	mock := &MockBoundInstanceLifecycle{ctrl: ctrl}
+	mock.recorder = &MockBoundInstanceLifecycleMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockBoundInstanceLifecycle) EXPECT() *MockBoundInstanceLifecycleMockRecorder {
+	return m.recorder
+}
+
+// InstanceClose mocks base method.
+func (m *MockBoundInstanceLifecycle) InstanceClose(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceClose", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstanceClose indicates an expected call of InstanceClose.
+func (mr *MockBoundInstanceLifecycleMockRecorder) InstanceClose(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceClose", reflect.TypeOf((*MockBoundInstanceLifecycle)(nil).InstanceClose), ctx)
+}
+
+// InstanceCreate mocks base method.
+func (m *MockBoundInstanceLifecycle) InstanceCreate(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceCreate", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstanceCreate indicates an expected call of InstanceCreate.
+func (mr *MockBoundInstanceLifecycleMockRecorder) InstanceCreate(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceCreate", reflect.TypeOf((*MockBoundInstanceLifecycle)(nil).InstanceCreate), ctx)
+}
+
+// InstanceDelete mocks base method.
+func (m *MockBoundInstanceLifecycle) InstanceDelete(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceDelete", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstanceDelete indicates an expected call of InstanceDelete.
+func (mr *MockBoundInstanceLifecycleMockRecorder) InstanceDelete(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceDelete", reflect.TypeOf((*MockBoundInstanceLifecycle)(nil).InstanceDelete), ctx)
+}
+
+// InstanceExists mocks base method.
+func (m *MockBoundInstanceLifecycle) InstanceExists(ctx context.Context) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceExists", ctx)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// InstanceExists indicates an expected call of InstanceExists.
+func (mr *MockBoundInstanceLifecycleMockRecorder) InstanceExists(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceExists", reflect.TypeOf((*MockBoundInstanceLifecycle)(nil).InstanceExists), ctx)
+}
 
 // MockCacheClientBound is a mock of CacheClientBound interface.
 type MockCacheClientBound struct {
@@ -127,10 +394,10 @@ func (mr *MockCacheClientBoundMockRecorder) IntentExists(ctx, intentName any) *g
 }
 
 // IntentGet mocks base method.
-func (m *MockCacheClientBound) IntentGet(ctx context.Context, intentName string) (*tree_persist.Intent, error) {
+func (m *MockCacheClientBound) IntentGet(ctx context.Context, intentName string) (importer.ImportConfigAdapter, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IntentGet", ctx, intentName)
-	ret0, _ := ret[0].(*tree_persist.Intent)
+	ret0, _ := ret[0].(importer.ImportConfigAdapter)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -142,7 +409,7 @@ func (mr *MockCacheClientBoundMockRecorder) IntentGet(ctx, intentName any) *gomo
 }
 
 // IntentGetAll mocks base method.
-func (m *MockCacheClientBound) IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+func (m *MockCacheClientBound) IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "IntentGetAll", ctx, excludeIntentNames, intentChan, errChan)
 }
@@ -180,4 +447,33 @@ func (m *MockCacheClientBound) IntentsList(ctx context.Context) ([]string, error
 func (mr *MockCacheClientBoundMockRecorder) IntentsList(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IntentsList", reflect.TypeOf((*MockCacheClientBound)(nil).IntentsList), ctx)
+}
+
+// RunningGet mocks base method.
+func (m *MockCacheClientBound) RunningGet(ctx context.Context) (importer.ImportConfigAdapter, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RunningGet", ctx)
+	ret0, _ := ret[0].(importer.ImportConfigAdapter)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RunningGet indicates an expected call of RunningGet.
+func (mr *MockCacheClientBoundMockRecorder) RunningGet(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunningGet", reflect.TypeOf((*MockCacheClientBound)(nil).RunningGet), ctx)
+}
+
+// RunningModify mocks base method.
+func (m *MockCacheClientBound) RunningModify(ctx context.Context, intent *tree_persist.Intent) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RunningModify", ctx, intent)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RunningModify indicates an expected call of RunningModify.
+func (mr *MockCacheClientBoundMockRecorder) RunningModify(ctx, intent any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunningModify", reflect.TypeOf((*MockCacheClientBound)(nil).RunningModify), ctx, intent)
 }

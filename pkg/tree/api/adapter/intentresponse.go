@@ -9,6 +9,13 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
+// IntentResponseAdapter wraps an api.Entry as a GetIntentResponse for GetIntent
+// handling. It carries intent metadata (name, priority, orphan and non-revertive
+// flags, explicit deletes) alongside the rendered tree. RenderOpts controls
+// sensitive-path redaction and is set by datastore.GetIntent: running uses the
+// cross-intent path-marker union; a regular intent uses that intent's own
+// markers only. Schema-defined sensitivity from the YANG extension is still
+// honored unconditionally via ShouldRedact.
 type IntentResponseAdapter struct {
 	Entry           api.Entry
 	IntentName      string

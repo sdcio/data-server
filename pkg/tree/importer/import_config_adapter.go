@@ -14,6 +14,8 @@ type ImportConfigAdapter interface {
 	GetName() string
 	GetPriority() int32
 	GetNonRevertive() bool
+	GetOrphan() bool
+	GetSensitivePaths() []*sdcpb.Path
 }
 
 type ImportConfigAdapterElement interface {
@@ -29,6 +31,9 @@ type ImportConfigAdapterElement interface {
 	// GetKeyValue can be called on Leafs or LeafList elements to retrieve the underlaying value
 	// When and were to expect a Leafs or LeafList is defined by the yang schema.
 	// The String value is typically used for the keys.
+	// For identityref types, implementations MUST return the bare identity name (no module
+	// prefix), regardless of encoding (e.g. plain JSON vs. JSON_IETF). This keeps tree lookups
+	// prefix-independent so the same identity value always resolves to the same tree key.
 	GetKeyValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (string, error)
 	// GetTVValue returns the TypedValue based value defined via the SchemaLeafType. Can also only be called on Leafs or LeafLists
 	GetTVValue(ctx context.Context, slt *sdcpb.SchemaLeafType) (*sdcpb.TypedValue, error)

@@ -17,20 +17,43 @@ package cache
 import (
 	"context"
 
+	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/sdc-protos/tree_persist"
 )
 
-type CacheClientBound interface {
-	InstanceCreate(ctx context.Context) error
-	InstanceDelete(ctx context.Context) error
-	InstanceExists(ctx context.Context) bool
+// BoundIntentReader is the bound-call equivalent of IntentReader.
+type BoundIntentReader interface {
 	IntentsList(ctx context.Context) ([]string, error)
-	IntentGet(ctx context.Context, intentName string) (*tree_persist.Intent, error)
+	IntentGet(ctx context.Context, intentName string) (importer.ImportConfigAdapter, error)
+	IntentExists(ctx context.Context, intentName string) (bool, error)
+	IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error)
+}
+
+// BoundIntentWriter is the bound-call equivalent of IntentWriter.
+type BoundIntentWriter interface {
 	IntentModify(ctx context.Context, intent *tree_persist.Intent) error
 	IntentDelete(ctx context.Context, intentName string, IgnoreNonExisting bool) error
-	IntentExists(ctx context.Context, intentName string) (bool, error)
-	IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error)
+}
+
+// BoundRunningStore is the bound-call equivalent of RunningStore.
+type BoundRunningStore interface {
+	RunningGet(ctx context.Context) (importer.ImportConfigAdapter, error)
+	RunningModify(ctx context.Context, intent *tree_persist.Intent) error
+}
+
+// BoundInstanceLifecycle is the bound-call equivalent of InstanceLifecycle.
+type BoundInstanceLifecycle interface {
+	InstanceCreate(ctx context.Context) error
+	InstanceDelete(ctx context.Context) error
 	InstanceClose(ctx context.Context) error
+	InstanceExists(ctx context.Context) bool
+}
+
+type CacheClientBound interface {
+	BoundIntentReader
+	BoundIntentWriter
+	BoundRunningStore
+	BoundInstanceLifecycle
 }
 
 type CacheClientBoundImpl struct {
@@ -60,7 +83,7 @@ func (c *CacheClientBoundImpl) InstanceExists(ctx context.Context) bool {
 func (c *CacheClientBoundImpl) IntentsList(ctx context.Context) ([]string, error) {
 	return c.cacheClient.InstanceIntentsList(ctx, c.cacheName)
 }
-func (c *CacheClientBoundImpl) IntentGet(ctx context.Context, intentName string) (*tree_persist.Intent, error) {
+func (c *CacheClientBoundImpl) IntentGet(ctx context.Context, intentName string) (importer.ImportConfigAdapter, error) {
 	return c.cacheClient.InstanceIntentGet(ctx, c.cacheName, intentName)
 }
 func (c *CacheClientBoundImpl) IntentModify(ctx context.Context, intent *tree_persist.Intent) error {
@@ -72,6 +95,12 @@ func (c *CacheClientBoundImpl) IntentDelete(ctx context.Context, intentName stri
 func (c *CacheClientBoundImpl) IntentExists(ctx context.Context, intentName string) (bool, error) {
 	return c.cacheClient.InstanceIntentExists(ctx, c.cacheName, intentName)
 }
-func (c *CacheClientBoundImpl) IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+func (c *CacheClientBoundImpl) IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
 	c.cacheClient.InstanceIntentGetAll(ctx, c.cacheName, excludeIntentNames, intentChan, errChan)
+}
+func (c *CacheClientBoundImpl) RunningGet(ctx context.Context) (importer.ImportConfigAdapter, error) {
+	return c.cacheClient.InstanceRunningGet(ctx, c.cacheName)
+}
+func (c *CacheClientBoundImpl) RunningModify(ctx context.Context, intent *tree_persist.Intent) error {
+	return c.cacheClient.InstanceRunningModify(ctx, c.cacheName, intent)
 }

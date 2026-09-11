@@ -24,7 +24,6 @@ import (
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	"github.com/sdcio/sdc-protos/tree_persist"
 	"go.uber.org/mock/gomock"
 )
 
@@ -145,7 +144,7 @@ func TestApplyToRunning(t *testing.T) {
 				ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
 				ccb.EXPECT().
 					IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
 						close(intentChan)
 						close(errChan)
 					}).AnyTimes()
@@ -255,7 +254,7 @@ func TestApplyToRunning(t *testing.T) {
 				ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
 				ccb.EXPECT().
 					IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
 						close(intentChan)
 						close(errChan)
 					}).AnyTimes()
@@ -367,7 +366,7 @@ func TestApplyToRunning(t *testing.T) {
 				ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
 				ccb.EXPECT().
 					IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
 						close(intentChan)
 						close(errChan)
 					}).AnyTimes()

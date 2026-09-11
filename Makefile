@@ -65,6 +65,7 @@ mocks-gen: mocks-rm ## Generate mocks for all the defined interfaces.
 	mockgen -package=mocktarget -source=pkg/datastore/target/target.go -destination=$(MOCKDIR)/mocktarget/target.go
 	mockgen -package=mockTreeEntry -source=pkg/tree/api/entry.go -destination=$(MOCKDIR)/mocktreeentry/entry.go
 	mockgen -package=mocksdcpbpath -source=pkg/tree/api/sdcpb_path.go -destination=$(MOCKDIR)/mocksdcpbpath/sdcpb_path.go
+	mockgen -package=mockconfigread -destination=$(MOCKDIR)/mockconfigread/client.go github.com/sdcio/sdc-protos/config_read ConfigSnapshotServiceClient
 
 .PHONY: mocks-rm
 mocks-rm: ## remove generated mocks

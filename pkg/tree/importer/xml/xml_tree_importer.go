@@ -36,6 +36,18 @@ func (x *XmlTreeImporter) GetNonRevertive() bool {
 	return x.nonRevertive
 }
 
+// GetOrphan always returns false: XmlTreeImporter is only used for synced
+// device state, never for real intents.
+func (x *XmlTreeImporter) GetOrphan() bool {
+	return false
+}
+
+// GetSensitivePaths always returns nil: XmlTreeImporter is only used for
+// synced device state, never for real intents.
+func (x *XmlTreeImporter) GetSensitivePaths() []*sdcpb.Path {
+	return nil
+}
+
 type XmlTreeImporterElement struct {
 	elem *etree.Element
 }

@@ -25,7 +25,6 @@ import (
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/api/adapter"
 	"github.com/sdcio/data-server/pkg/tree/consts"
-	"github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
@@ -87,9 +86,10 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string, exposeSens
 		return result, nil
 	}
 
-	// For a regular intent GET, sensitive-path redaction is scoped to that
-	// intent's own markers only.  Another intent's classification does not
-	// affect how this intent's data is presented (see ADR 0004).
+	// For a regular intent GET, intent path-marker redaction is scoped to this
+	// intent's own SensitivePaths only — another intent's markers do not apply
+	// (see ADR 0004). Schema-defined sensitivity (LeafSchema.Sensitive from the
+	// YANG extension) is still honored unconditionally via ShouldRedact.
 	root, err := tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, d.taskPool))
 	if err != nil {
 		return nil, err
@@ -99,9 +99,8 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string, exposeSens
 	if err != nil {
 		return nil, err
 	}
-	protoImporter := proto.NewProtoTreeImporter(tp)
 
-	_, err = root.ImportConfig(ctx, nil, protoImporter, types.NewUpdateInsertFlags(), d.taskPool)
+	_, err = root.ImportConfig(ctx, nil, tp, types.NewUpdateInsertFlags(), d.taskPool)
 	if err != nil {
 		return nil, err
 	}
@@ -116,11 +115,11 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string, exposeSens
 
 	result := &adapter.IntentResponseAdapter{
 		Entry:           root.Entry,
-		IntentName:      tp.GetIntentName(),
+		IntentName:      tp.GetName(),
 		Priority:        tp.GetPriority(),
 		Orphan:          tp.GetOrphan(),
 		NonRevertive:    tp.GetNonRevertive(),
-		ExplicitDeletes: tp.GetExplicitDeletes(),
+		ExplicitDeletes: tp.GetDeletes().ToPathSlice(),
 		RenderOpts: ops.RenderOpts{
 			IncludeSensitive: exposeSensitive,
 			SensitivePathSet: intentSensitivePaths,

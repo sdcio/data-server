@@ -128,13 +128,22 @@ type SyncProtocol struct {
 	Encoding string        `yaml:"encoding,omitempty" json:"encoding,omitempty"`
 }
 
+const (
+	cacheTypeLocal        = "local"
+	cacheTypeRemote       = "remote"
+	cacheTypeConfigServer = "config-server"
+)
+
 type CacheConfig struct {
-	// cache type: "local" or "remote"
+	// cache type: "local", "remote" or "config-server"
 	Type string `yaml:"type,omitempty" json:"type,omitempty"`
 	// Local cache attr
 	StoreType string `yaml:"store-type,omitempty" json:"store-type,omitempty"`
 	Dir       string `yaml:"dir,omitempty" json:"dir,omitempty"`
-	// Remote cache attr
+	// Remote cache attr; also doubles as the config-server cache attr:
+	// address of the colocated config-server controller's local
+	// ConfigReadService (see the ADR's "New cache.Client implementation"
+	// section).
 	Address string `yaml:"address,omitempty" json:"address,omitempty"`
 }
 
@@ -237,8 +246,11 @@ func (s *SyncProtocol) validateSetDefaults() error {
 }
 
 func (c *CacheConfig) validateSetDefaults() error {
+	if c.Type == "" {
+		c.Type = defaultCacheType
+	}
 	switch c.Type {
-	case "remote":
+	case cacheTypeRemote:
 		if c.Address == "" {
 			c.Address = defaultRemoteCacheAddress
 		}
@@ -246,16 +258,22 @@ func (c *CacheConfig) validateSetDefaults() error {
 		if err != nil {
 			return err
 		}
-	default:
-		if c.Type != defaultCacheType {
-			c.Type = defaultCacheType
-		}
+	case cacheTypeLocal:
 		if c.StoreType == "" {
 			c.StoreType = defaultStoreType
 		}
 		if c.Dir == "" {
 			c.Dir = defaultCacheDir
 		}
+	case cacheTypeConfigServer:
+		if c.Address == "" {
+			return errors.New("missing config-server cache address")
+		}
+		if _, _, err := net.SplitHostPort(c.Address); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unknown cache type: %q", c.Type)
 	}
 	return nil
 }
