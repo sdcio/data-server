@@ -222,20 +222,5 @@ jobs:
       # Keep this job on the cache-backend-compatible robot tests unless explicitly paired/overridden.
       integration_tests_ref: ${{ needs.resolve-paired-refs.outputs.inttest_ref == 'main' && 'config-server-cache-backend' || needs.resolve-paired-refs.outputs.inttest_ref }}
       cache_type: config-server
-      suites_to_run: 00-setup,01-crs,02-crud,03-deviations,05-cache-backend
-    secrets: inherit
-
-  integration-tests-sensitive-local:
-    name: integration-tests (sensitive, local cache)
-    needs: [latest-versions, pr-release, resolve-paired-refs]
-    uses: sdcio/integration-tests/.github/workflows/single.yml@config-server-cache-backend
-    with:
-      configserver_version: ${{ needs.resolve-paired-refs.outputs.configversion }}
-      dataserver_version: ${{ needs.pr-release.outputs.dataversion }}
-      schemaserver_version: ${{ needs.latest-versions.outputs.schemaversion }}
-      cache_version: ${{ needs.latest-versions.outputs.cacheversion }}
-      certmanager_version: ${{ needs.latest-versions.outputs.certmanagerversion }}
-      integration_tests_ref: ${{ needs.resolve-paired-refs.outputs.inttest_ref == 'main' && 'config-server-cache-backend' || needs.resolve-paired-refs.outputs.inttest_ref }}
-      cache_type: local
-      suites_to_run: 00-setup,01-crs,04-sensitive
+      suites_to_run: 00-setup,01-crs,02-crud,03-deviations,04-sensitive,05-cache-backend
     secrets: inherit
