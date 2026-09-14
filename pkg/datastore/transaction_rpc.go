@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/sdcio/data-server/pkg/cache"
@@ -31,37 +30,6 @@ var (
 	ErrValidation        = errors.New("validation error")
 	ErrNoIntentsProvided = errors.New("no intents provided")
 )
-
-const (
-	// absorb short lock races while still failing fast under sustained contention
-	lockRetryAttempts = 20
-	lockRetryInterval = 25 * time.Millisecond
-)
-
-func tryLockWithRetry(ctx context.Context, m *sync.Mutex, attempts int, retryInterval time.Duration) (bool, error) {
-	if attempts <= 0 {
-		attempts = 1
-	}
-	if retryInterval <= 0 {
-		retryInterval = lockRetryInterval
-	}
-	for i := 0; i < attempts; i++ {
-		if m.TryLock() {
-			return true, nil
-		}
-		if i == attempts-1 {
-			break
-		}
-		timer := time.NewTimer(retryInterval)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return false, ErrContextDone
-		case <-timer.C:
-		}
-	}
-	return false, nil
-}
 
 // SdcpbTransactionIntentToInternalTI converts sdcpb.TransactionIntent to types.TransactionIntent
 func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req *sdcpb.TransactionIntent) (*types.TransactionIntent, error) {
@@ -521,13 +489,8 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	transaction.SetTimeout(ctx, transactionTimeout)
 
 	if !dryRun {
-		// Retry briefly to absorb transient lock races between concurrent callers.
-		locked, err := tryLockWithRetry(ctx, d.dmutex, lockRetryAttempts, lockRetryInterval)
-		if err != nil {
-			log.Error(err, "transaction context canceled while waiting for lock")
-			return nil, err
-		}
-		if !locked {
+		// try locking the datastore if it is locked return the specific ErrDatastoreLocked error.
+		if !d.dmutex.TryLock() {
 			log.Error(ErrDatastoreLocked, "transaction abort")
 			return nil, ErrDatastoreLocked
 		}
@@ -626,11 +589,7 @@ func (d *Datastore) TransactionConfirm(ctx context.Context, transactionId string
 	log := logger.FromContext(ctx)
 	log.Info("transaction confirm")
 
-	locked, err := tryLockWithRetry(ctx, d.dmutex, lockRetryAttempts, lockRetryInterval)
-	if err != nil {
-		return err
-	}
-	if !locked {
+	if !d.dmutex.TryLock() {
 		return ErrDatastoreLocked
 	}
 	defer d.dmutex.Unlock()
@@ -642,11 +601,7 @@ func (d *Datastore) TransactionCancel(ctx context.Context, transactionId string)
 	log := logger.FromContext(ctx)
 	log.Info("transaction cancel")
 
-	locked, err := tryLockWithRetry(ctx, d.dmutex, lockRetryAttempts, lockRetryInterval)
-	if err != nil {
-		return err
-	}
-	if !locked {
+	if !d.dmutex.TryLock() {
 		return ErrDatastoreLocked
 	}
 	defer d.dmutex.Unlock()
