@@ -142,7 +142,7 @@ type CacheConfig struct {
 	Dir       string `yaml:"dir,omitempty" json:"dir,omitempty"`
 	// Remote cache attr; also doubles as the config-server cache attr:
 	// address of the colocated config-server controller's local
-	// ConfigReadService (see the ADR's "New cache.Client implementation"
+	// ConfigSnapshotService (see the ADR's "New cache.Client implementation"
 	// section).
 	Address string `yaml:"address,omitempty" json:"address,omitempty"`
 }

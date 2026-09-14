@@ -44,3 +44,8 @@ The mechanical, backend-agnostic shape `Client`'s read-side methods return:
 method returns this shape — including `InstanceRunningGet` — regardless of
 whether the underlying value is an `Intent` or `Running`, and regardless of
 how many concrete representations exist behind it for a given backend.
+
+**ConfigSnapshotService**:
+The canonical local gRPC seam name for config-server-backed intent reads and
+writes (`Get`/`List`/`Modify`/`Delete`) against `TargetSnapshot` data. _Avoid_:
+using the older `ConfigReadService` name for current behavior.
