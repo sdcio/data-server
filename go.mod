@@ -6,7 +6,7 @@ replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.2-2
 
 require (
 	github.com/AlekSi/pointer v1.2.0
-	github.com/beevik/etree v1.7.1
+	github.com/beevik/etree v1.8.0
 	github.com/go-logr/logr v1.4.4
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
