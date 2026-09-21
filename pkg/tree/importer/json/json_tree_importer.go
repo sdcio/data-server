@@ -74,14 +74,14 @@ func (j *JsonTreeImporterElement) GetElement(key string) importer.ImportConfigAd
 	case map[string]any:
 		// Exact match first.
 		if v, ok := d[key]; ok {
-			logf.DefaultLogger.V(logf.VTrace).Info("traversing element", "element", key)
+			// logf.DefaultLogger.V(logf.VTrace).Info("traversing element", "element", key)
 			return newJsonTreeImporterElement(key, v)
 		}
 		// Local-name fallback: find data key whose local part (after ":") matches.
 		for k, v := range d {
 			_, localName, found := strings.Cut(k, ":")
 			if found && localName == key {
-				logf.DefaultLogger.V(logf.VTrace).Info("traversing element by local-name", "element", key, "dataKey", k)
+				// logf.DefaultLogger.V(logf.VTrace).Info("traversing element by local-name", "element", key, "dataKey", k)
 				return newJsonTreeImporterElement(key, v)
 			}
 		}
@@ -102,7 +102,7 @@ func (j *JsonTreeImporterElement) GetElements() []importer.ImportConfigAdapterEl
 			if _, localName, found := strings.Cut(k, ":"); found {
 				name = localName
 			}
-			logf.DefaultLogger.V(logf.VTrace).Info("traversing element", "element", name, "dataKey", k)
+			// logf.DefaultLogger.V(logf.VTrace).Info("traversing element", "element", name, "dataKey", k)
 			switch subElem := v.(type) {
 			case []any:
 				for _, listElem := range subElem {

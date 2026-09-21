@@ -164,8 +164,8 @@ datastores: # this specifies MAIN datastores
   #     - .*tools.*
 
 # remote schema server
-schema-server:
-  address: localhost:55000
+# schema-server:
+#   address: localhost:55000
   # TLS config
   # tls:
   #   ca:
@@ -178,13 +178,13 @@ schema-server:
 # store-type: badgerdb
 # dir: ./cached/caches
 cache:
-  type: remote
+  type: config-server
   # store-type if type == local
   #store-type: badgerdb
   # local directory for caches if type == local
   # dir: "./cached/caches"
   # remote cache address, if type == remote
-  address: localhost:50100
+  address: 127.0.0.1:56010
 
 # expose a prometheus server with cpu, mem and grpc metrics
 prometheus:
@@ -201,3 +201,6 @@ validation-defaults:
     length: false
     range: false
     max-elements: false # Not yet implemented
+
+deviation-defaults:
+  interval: 5s
