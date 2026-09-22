@@ -68,11 +68,3 @@ Tree Entry).
 The canonical local gRPC seam name for config-server-backed intent reads and
 writes (`Get`/`List`/`Modify`/`Delete`) against `TargetSnapshot` data. _Avoid_:
 using the older `ConfigReadService` name for current behavior.
-
-**Namespaced name**:
-Under `Cache.Type: config-server` only, the `namespace.name` spelling (split on
-the first `.`) used for a Target's datastore identity and for an Intent's
-owner / Config identity. The local backend has no namespaces and does not use
-this spelling. _Avoid_: treating this as a `Client`-level concept; "GVKNSN" as
-the everyday term (wire/comment echo of config-server); implying the local
-cache understands dotted names.
