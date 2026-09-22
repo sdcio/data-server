@@ -22,8 +22,8 @@ import (
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/cache/configserver"
+	"github.com/sdcio/data-server/pkg/cache/configsnapshot"
 	"github.com/sdcio/data-server/pkg/tree/importer"
-	csimporter "github.com/sdcio/data-server/pkg/tree/importer/configserver"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/sdc-protos/tree_persist"
 )
@@ -172,7 +172,7 @@ func (c *ConfigServerCache) InstanceIntentGet(ctx context.Context, cacheName str
 	if err != nil {
 		return nil, err
 	}
-	return csimporter.NewImportAdapter(doc)
+	return configsnapshot.NewImportAdapter(doc)
 }
 
 // InstanceIntentExists calls Get and maps "not found" to (false, nil),
@@ -217,7 +217,7 @@ func (c *ConfigServerCache) InstanceIntentGetAll(ctx context.Context, cacheName 
 	}
 
 	for _, d := range docs {
-		adapter, err := csimporter.NewImportAdapter(d)
+		adapter, err := configsnapshot.NewImportAdapter(d)
 		if err != nil {
 			errChan <- err
 			return
@@ -255,7 +255,7 @@ func (c *ConfigServerCache) InstanceRunningModify(ctx context.Context, cacheName
 }
 
 // InstanceIntentModify flattens intent into a Document (see
-// configserver.DocumentFromIntent) and writes it through the seam
+// configsnapshot.DocumentFromIntent) and writes it through the seam
 // synchronously, at the same moment TransactionSet's apply loop calls it —
 // matching Cache.Type: local's write-at-apply timing so last-applied never
 // lags behind southbound apply.
@@ -265,7 +265,7 @@ func (c *ConfigServerCache) InstanceIntentModify(ctx context.Context, cacheName 
 		return err
 	}
 	name := lookupConfigName(target, intent.GetIntentName())
-	doc, err := configserver.DocumentFromIntent(target, name, intent)
+	doc, err := configsnapshot.DocumentFromIntent(target, name, intent)
 	if err != nil {
 		return err
 	}

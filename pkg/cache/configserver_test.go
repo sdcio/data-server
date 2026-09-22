@@ -440,6 +440,20 @@ func TestConfigServerCache_InstanceIntentModify_CreatesAndIsReadableBack(t *test
 	if adapter.GetPriority() != 5 {
 		t.Errorf("GetPriority() = %d, want 5", adapter.GetPriority())
 	}
+	if got := adapter.GetName(); got != testNamespace+".intent1" {
+		t.Errorf("GetName() = %q, want %q", got, testNamespace+".intent1")
+	}
+	hostname := adapter.GetElement("hostname")
+	if hostname == nil {
+		t.Fatal(`GetElement("hostname") = nil after Modify→Get, want tree content preserved`)
+	}
+	got, err := hostname.GetKeyValue(ctx, nil)
+	if err != nil {
+		t.Fatalf("hostname GetKeyValue: %v", err)
+	}
+	if got != "router1" {
+		t.Errorf("hostname = %q, want router1", got)
+	}
 }
 
 // TestConfigServerCache_InstanceIntentDelete_RemovesFromSeam is the

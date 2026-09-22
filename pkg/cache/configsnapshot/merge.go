@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package configserver
+package configsnapshot
 
 import (
 	"encoding/json"
 	"fmt"
 
-	csreader "github.com/sdcio/data-server/pkg/cache/configserver"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -30,7 +29,7 @@ import (
 // key leaves) inside a []any keyed by their element name, found-or-created
 // by matching keys so repeated blobs under the same list entry converge on
 // one map.
-func mergeConfigBlobs(blobs []*csreader.ConfigBlob) (map[string]any, error) {
+func mergeConfigBlobs(blobs []*ConfigBlob) (map[string]any, error) {
 	root := map[string]any{}
 	for _, b := range blobs {
 		p, err := sdcpb.ParsePath(b.Path)

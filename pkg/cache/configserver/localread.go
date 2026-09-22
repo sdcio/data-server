@@ -22,65 +22,30 @@
 // ConfigSnapshotService on config-server's colocated controller, defined in
 // sdc-protos and implemented here by GRPCConfigClient) — the backend can
 // still be fully unit-tested against the fake in this package.
+//
+// The Document-shaped DTO and Intent↔DTO↔ImportConfigAdapter codec live in
+// pkg/cache/configsnapshot; this package only owns the remote port.
 package configserver
 
 import (
 	"context"
 	"errors"
 
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/data-server/pkg/cache/configsnapshot"
 )
 
 // ErrNotFound is returned by LocalConfigReader.Get when no Document exists
 // for the given target/name pair.
 var ErrNotFound = errors.New("configserver: document not found")
 
-// Target scopes a Get/List call to a single southbound target, mirroring the
-// TargetNamespaceKey/TargetNameKey labels config-server's controller already
-// indexes Config resources by (see the ADR's "Scope note").
-type Target struct {
-	Namespace string
-	Name      string
-}
-
-// ConfigBlob is a single raw path + JSON value entry from a Document's
-// config payload — shaped so it parses cleanly into the same form
-// importer/json.JsonTreeImporter already consumes.
-type ConfigBlob struct {
-	Path string
-	// Value is the raw JSON encoding of the value at Path.
-	Value []byte
-}
-
-// Document is the seam's representation of one config-server Config (joined
-// with its SensitiveConfig, if any). It carries exactly the fields the ADR's
-// field-mapping table needs to build an importer.ImportConfigAdapter:
-// name, namespace, priority, non-revertive flag, orphan flag, sensitive
-// paths, and the raw config payload.
-type Document struct {
-	// Name is the Config resource's metadata.name — the lookup key
-	// ConfigSnapshotService uses against TargetSnapshot.Spec.Configs.
-	Name string
-	// Namespace is the Config's Kubernetes namespace, populated from
-	// ConfigEntry.Namespace. Together with Name it forms the owner string
-	// config-server uses on TransactionSet (config.GetGVKNSN).
-	Namespace      string
-	Priority       int32
-	NonRevertive   bool
-	Orphan         bool
-	SensitivePaths []*sdcpb.Path
-	Config         []*ConfigBlob
-}
-
-// IntentName is the owner name data-server and config-server share for a
-// Config: "<namespace>.<name>", matching config.GetGVKNSN. When Namespace is
-// empty the bare Name is returned, so incomplete fixtures stay usable.
-func (d *Document) IntentName() string {
-	if d.Namespace == "" {
-		return d.Name
-	}
-	return d.Namespace + "." + d.Name
-}
+// Target, ConfigBlob, and Document are the ConfigSnapshotService interchange
+// DTOs owned by configsnapshot. Aliased here so the LocalConfigClient
+// contract keeps a stable import path for port callers.
+type (
+	Target     = configsnapshot.Target
+	ConfigBlob = configsnapshot.ConfigBlob
+	Document   = configsnapshot.Document
+)
 
 // LocalConfigReader is the local-read seam a config-server-backed
 // cache.Client depends on: get one Document by name, list every Document

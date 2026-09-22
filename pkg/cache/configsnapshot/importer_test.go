@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package configserver
+package configsnapshot
 
 import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	csreader "github.com/sdcio/data-server/pkg/cache/configserver"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -31,14 +30,14 @@ func TestNewImportAdapter_FieldMapping(t *testing.T) {
 	sensitivePaths := []*sdcpb.Path{
 		{Elem: []*sdcpb.PathElem{{Name: "secret"}}},
 	}
-	doc := &csreader.Document{
+	doc := &Document{
 		Name:           "intent1",
 		Namespace:      "ns1",
 		Priority:       10,
 		NonRevertive:   true,
 		Orphan:         true,
 		SensitivePaths: sensitivePaths,
-		Config: []*csreader.ConfigBlob{
+		Config: []*ConfigBlob{
 			{Path: "/interface[name=eth0]/description", Value: []byte(`"uplink"`)},
 		},
 	}
@@ -81,7 +80,7 @@ func TestNewImportAdapter_FieldMapping(t *testing.T) {
 // fields (no orphan, no sensitive paths) round-trip as false/nil, per the
 // ADR — these aren't errors, just the steady-state case for most intents.
 func TestNewImportAdapter_DefaultsWithoutSeeding(t *testing.T) {
-	adapter, err := NewImportAdapter(&csreader.Document{Name: "intent1"})
+	adapter, err := NewImportAdapter(&Document{Name: "intent1"})
 	if err != nil {
 		t.Fatalf("NewImportAdapter() error = %v", err)
 	}
@@ -94,9 +93,9 @@ func TestNewImportAdapter_DefaultsWithoutSeeding(t *testing.T) {
 }
 
 func TestNewImportAdapter_InvalidConfigPropagatesError(t *testing.T) {
-	_, err := NewImportAdapter(&csreader.Document{
+	_, err := NewImportAdapter(&Document{
 		Name:   "intent1",
-		Config: []*csreader.ConfigBlob{{Path: "[invalid", Value: []byte(`1`)}},
+		Config: []*ConfigBlob{{Path: "[invalid", Value: []byte(`1`)}},
 	})
 	if err == nil {
 		t.Fatal("NewImportAdapter() expected error for invalid config, got nil")
@@ -104,7 +103,7 @@ func TestNewImportAdapter_InvalidConfigPropagatesError(t *testing.T) {
 }
 
 func TestNewImportAdapter_ImplementsInterface(t *testing.T) {
-	adapter, err := NewImportAdapter(&csreader.Document{Name: "intent1"})
+	adapter, err := NewImportAdapter(&Document{Name: "intent1"})
 	if err != nil {
 		t.Fatalf("NewImportAdapter() error = %v", err)
 	}
