@@ -64,9 +64,9 @@ func TestLocalCache_InstanceIntentGetRoundTrip(t *testing.T) {
 // TestLocalCache_RunningRoundTrip verifies InstanceRunningModify/InstanceRunningGet
 // are thin passthroughs to the same disk-backed store InstanceIntentGet/Modify use,
 // so the local backend's on-disk behavior for "running" is unchanged by the split.
-// InstanceRunningGet returns an importer.ImportConfigAdapter — the same mechanical
-// "ready for Tree.ImportConfig" shape InstanceIntentGet returns — rather than the
-// raw *tree_persist.Intent, so the assertions go through its accessors.
+// InstanceRunningGet returns an importer.ImportConfigAdapter (Intent reads return
+// IntentAdapter) rather than the raw *tree_persist.Intent, so the assertions go
+// through its accessors.
 func TestLocalCache_RunningRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	lc := newTestLocalCache(t)
@@ -129,7 +129,7 @@ func TestLocalCache_RunningExcludedFromIntentGetAll(t *testing.T) {
 		t.Fatalf("InstanceIntentModify: %v", err)
 	}
 
-	intentChan := make(chan importer.ImportConfigAdapter)
+	intentChan := make(chan importer.IntentAdapter)
 	errChan := make(chan error, 1)
 	go lc.InstanceIntentGetAll(ctx, cacheName, []string{consts.RunningIntentName}, intentChan, errChan)
 

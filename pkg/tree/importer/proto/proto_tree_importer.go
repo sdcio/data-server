@@ -111,6 +111,5 @@ func (p *ProtoTreeImporterElement) GetName() string {
 	return p.data.Name
 }
 
-// Function to ensure ProtoTreeImporter implements ImportConfigAdapter (optional)
-var _ importer.ImportConfigAdapter = (*ProtoTreeImporter)(nil)
+var _ importer.IntentAdapter = (*ProtoTreeImporter)(nil)
 var _ importer.ImportConfigAdapterElement = (*ProtoTreeImporterElement)(nil)
