@@ -32,7 +32,7 @@ func TestPopulateSensitivePathIndex_NarrowIntentReader(t *testing.T) {
 	reader := mockcacheclient.NewMockBoundIntentReader(ctrl)
 	reader.EXPECT().
 		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 			intentChan <- treeproto.NewProtoTreeImporter(withPaths)
 			intentChan <- treeproto.NewProtoTreeImporter(withoutPaths)
 			close(intentChan)

@@ -168,9 +168,9 @@ func forEachIntent(
 	ctx context.Context,
 	cc cache.BoundIntentReader,
 	exclude []string,
-	fn func(importer.ImportConfigAdapter) error,
+	fn func(importer.IntentAdapter) error,
 ) error {
-	intentChan := make(chan importer.ImportConfigAdapter)
+	intentChan := make(chan importer.IntentAdapter)
 	errChan := make(chan error, 1)
 	go cc.IntentGetAll(ctx, exclude, intentChan, errChan)
 	for errChan != nil || intentChan != nil {
@@ -201,7 +201,7 @@ func forEachIntent(
 func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.RootEntry) ([]string, error) {
 	log := logger.FromContext(ctx)
 	var intentNames []string
-	err := forEachIntent(ctx, d.cacheClient, []string{consts.RunningIntentName}, func(intent importer.ImportConfigAdapter) error {
+	err := forEachIntent(ctx, d.cacheClient, []string{consts.RunningIntentName}, func(intent importer.IntentAdapter) error {
 		log.V(logger.VDebug).Info("adding intent to tree", "intent", intent.GetName())
 		intentNames = append(intentNames, intent.GetName())
 		_, err := root.ImportConfig(ctx, nil, intent, treetypes.NewUpdateInsertFlags(), d.taskPool)
