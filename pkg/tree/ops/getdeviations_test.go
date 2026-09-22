@@ -88,7 +88,7 @@ func TestGetDeviations_SchemaSensitiveRedacted(t *testing.T) {
 	lv := leafDeviationEntry(tc, e, "secret-expected", "secret-current")
 	e.EXPECT().GetLeafVariants().Return(lv).AnyTimes()
 
-	deviations := collectDeviations(t, e, &ops.GetDeviationParams{RenderOpts: ops.RenderOpts{IncludeSensitive: false}})
+	deviations := collectDeviations(t, e, &ops.GetDeviationParams{RenderOpts: ops.RenderOptsNorthbound(false, nil)})
 
 	if len(deviations) == 0 {
 		t.Fatal("expected at least one deviation, got none")
@@ -127,7 +127,7 @@ func TestGetDeviations_ExposeSensitivePassthrough(t *testing.T) {
 	lv := leafDeviationEntry(tc, e, "raw-expected", "raw-current")
 	e.EXPECT().GetLeafVariants().Return(lv).AnyTimes()
 
-	deviations := collectDeviations(t, e, &ops.GetDeviationParams{RenderOpts: ops.RenderOpts{IncludeSensitive: true}})
+	deviations := collectDeviations(t, e, &ops.GetDeviationParams{RenderOpts: ops.RenderOptsNorthbound(true, nil)})
 
 	if len(deviations) == 0 {
 		t.Fatal("expected at least one deviation, got none")
@@ -152,8 +152,7 @@ func TestGetDeviations_IntentMarkerSensitiveRedacted(t *testing.T) {
 	}
 	leafPath := &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "marker-leaf"}}, IsRootBased: true}
 
-	sps := types.NewSensitivePathIndex()
-	sps.Add(leafPath)
+	sps := types.NewSensitivePaths(leafPath)
 	tc := &fakeTreeContext{}
 
 	e := mockTreeEntry.NewMockEntry(ctrl)
@@ -165,7 +164,7 @@ func TestGetDeviations_IntentMarkerSensitiveRedacted(t *testing.T) {
 	lv := leafDeviationEntry(tc, e, "marker-expected", "marker-current")
 	e.EXPECT().GetLeafVariants().Return(lv).AnyTimes()
 
-	deviations := collectDeviations(t, e, &ops.GetDeviationParams{RenderOpts: ops.RenderOpts{IncludeSensitive: false, SensitivePathSet: sps}})
+	deviations := collectDeviations(t, e, &ops.GetDeviationParams{RenderOpts: ops.RenderOptsNorthbound(false, sps)})
 
 	if len(deviations) == 0 {
 		t.Fatal("expected at least one deviation, got none")
@@ -205,7 +204,7 @@ func TestGetDeviations_NonSensitiveNotRedacted(t *testing.T) {
 	lv := leafDeviationEntry(tc, e, "plain-expected", "plain-current")
 	e.EXPECT().GetLeafVariants().Return(lv).AnyTimes()
 
-	deviations := collectDeviations(t, e, &ops.GetDeviationParams{RenderOpts: ops.RenderOpts{IncludeSensitive: false}})
+	deviations := collectDeviations(t, e, &ops.GetDeviationParams{RenderOpts: ops.RenderOptsNorthbound(false, nil)})
 
 	if len(deviations) == 0 {
 		t.Fatal("expected at least one deviation, got none")
