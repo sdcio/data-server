@@ -625,7 +625,7 @@ func findLeafStringValue(t *testing.T, el *tree_persist.TreeElement, name string
 // entry immediately, so the very next LoadAllButRunningIntents — the exact
 // call that rehydrated a deleted intent1 in the original bug — does not
 // bring it back. Unlike the other tests in this file, this one wires a real
-// *cache.ConfigServerCache over configserver.FakeLocalConfigClient (not a
+// *cache.ConfigServerCache over configserver.FakeConfigSnapshotClient (not a
 // generic mockcacheclient), so it exercises the actual seam this ticket
 // built, not just "some IntentWriter got called."
 func TestConfigServerBackend_DeleteApply_NoRehydration(t *testing.T) {
@@ -637,7 +637,7 @@ func TestConfigServerBackend_DeleteApply_NoRehydration(t *testing.T) {
 	}
 	scb := schemaClient.NewSchemaClientBound(schema, sc)
 
-	fakeClient := configserver.NewFakeLocalConfigClient()
+	fakeClient := configserver.NewFakeConfigSnapshotClient()
 	const cacheName = "ns1.target1"
 	ccb := cache.NewCacheClientBound(cacheName, cache.NewConfigServerCache(fakeClient))
 	if err := ccb.InstanceCreate(ctx); err != nil {

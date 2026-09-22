@@ -66,8 +66,14 @@ Tree Entry).
 
 **ConfigSnapshotService**:
 The canonical local gRPC seam name for config-server-backed intent reads and
-writes (`Get`/`List`/`Modify`/`Delete`) against `TargetSnapshot` data. _Avoid_:
-using the older `ConfigReadService` name for current behavior.
+writes (`Get`/`List`/`Modify`/`Delete`) against `TargetSnapshot` data.
+Data-server’s Go port over that wire is `ConfigSnapshotClient` (same four
+operations, Document-shaped) in `pkg/cache/configserver`, implemented by
+`GRPCConfigClient` and `FakeConfigSnapshotClient`. Distinct from the generated
+gRPC stub `ConfigSnapshotServiceClient`. _Avoid_: the older
+`ConfigReadService` name for current behavior; `LocalConfigClient` /
+`LocalConfigReader` / `LocalConfigWriter` (retired half-split names for the
+same port).
 
 **Namespaced name**:
 Under `Cache.Type: config-server` only, the `namespace.name` encoding that
