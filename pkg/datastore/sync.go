@@ -164,6 +164,16 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error 
 	}
 
 	if performApply {
+		// Skip Sync Revert's Southbound apply while a Northbound Transaction
+		// (or another set-path holder) owns dmutex. Acting on this cycle's
+		// possibly mid-flight device snapshot would race the in-flight Set;
+		// the next sync cycle reevaluates with a fresh GET.
+		if !d.dmutex.TryLock() {
+			log.V(logger.VDebug).Info("skipping revert after sync: datastore locked")
+			return nil
+		}
+		defer d.dmutex.Unlock()
+
 		log.Info("reverting after sync")
 		resp, err := d.applyIntent(ctx, adapter.NewEntryOutputAdapter(t.Entry))
 		if err != nil {

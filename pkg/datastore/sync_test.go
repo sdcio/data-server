@@ -12,6 +12,7 @@ import (
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/mocks/mockcacheclient"
 	"github.com/sdcio/data-server/mocks/mocktarget"
+	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/datastore/target"
 	"github.com/sdcio/data-server/pkg/pool"
@@ -19,6 +20,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
+	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -444,5 +446,110 @@ func TestApplyToRunning(t *testing.T) {
 				t.Errorf("mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+// performRevertFixture holds a Datastore wired so performRevert would
+// Southbound-apply (empty running, desired intent present) unless skipped.
+type performRevertFixture struct {
+	ds         *Datastore
+	revertTree *tree.RootEntry
+	sbi        *mocktarget.MockTarget
+	dmutex     *sync.Mutex
+}
+
+func newPerformRevertFixture(t *testing.T, ctrl *gomock.Controller) *performRevertFixture {
+	t.Helper()
+	ctx := context.Background()
+
+	sc, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	scb := schemaClient.NewSchemaClientBound(schema, sc)
+
+	fixtureDevice := &sdcio_schema.Device{
+		Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+			"ethernet-1/1": {
+				Name:        ygot.String("ethernet-1/1"),
+				Description: ygot.String("desired-by-intent"),
+			},
+		},
+	}
+	fixtureIntent := buildFixtureIntent(t, scb, "intent1", 10, fixtureDevice)
+
+	ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
+	ccb.EXPECT().
+		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+			intentChan <- treeproto.NewProtoTreeImporter(fixtureIntent)
+			close(intentChan)
+			close(errChan)
+		}).AnyTimes()
+
+	sbi := mocktarget.NewMockTarget(ctrl)
+	dmutex := &sync.Mutex{}
+	vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	tc := tree.NewTreeContext(scb, vpf)
+	runningRoot, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runningRoot.FinishInsertionPhase(ctx); err != nil {
+		t.Fatal(err)
+	}
+	revertTree, err := runningRoot.DeepCopy(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return &performRevertFixture{
+		sbi:        sbi,
+		dmutex:     dmutex,
+		revertTree: revertTree,
+		ds: &Datastore{
+			config: &config.DatastoreConfig{
+				Validation: config.NewValidationConfig(),
+				Name:       "test-ds",
+			},
+			syncTreeMutex: &sync.RWMutex{},
+			syncTree:      runningRoot,
+			taskPool:      vpf,
+			cacheClient:   ccb,
+			sbi:           sbi,
+			dmutex:        dmutex,
+			schemaClient:  scb,
+		},
+	}
+}
+
+// TestPerformRevert_SkipsSouthboundApplyWhenDatastoreLocked is the regression
+// for the sync-revert race: when a Northbound Transaction holds dmutex,
+// Sync Revert must not issue a concurrent Southbound apply from a possibly
+// mid-flight device snapshot.
+func TestPerformRevert_SkipsSouthboundApplyWhenDatastoreLocked(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	f := newPerformRevertFixture(t, ctrl)
+
+	f.dmutex.Lock()
+	t.Cleanup(f.dmutex.Unlock)
+	f.sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Times(0)
+
+	if err := f.ds.performRevert(context.Background(), f.revertTree); err != nil {
+		t.Fatalf("performRevert() error = %v, want nil (skip when locked)", err)
+	}
+}
+
+// TestPerformRevert_AppliesWhenDatastoreUnlocked is the positive control for
+// the sync-revert dmutex guard: with no Northbound Transaction holding the
+// lock, Sync Revert must still Southbound-apply when desired differs from running.
+func TestPerformRevert_AppliesWhenDatastoreUnlocked(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	f := newPerformRevertFixture(t, ctrl)
+
+	f.sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).Times(1)
+
+	if err := f.ds.performRevert(context.Background(), f.revertTree); err != nil {
+		t.Fatalf("performRevert() error = %v, want nil", err)
 	}
 }
