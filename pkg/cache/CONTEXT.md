@@ -68,3 +68,11 @@ Tree Entry).
 The canonical local gRPC seam name for config-server-backed intent reads and
 writes (`Get`/`List`/`Modify`/`Delete`) against `TargetSnapshot` data. _Avoid_:
 using the older `ConfigReadService` name for current behavior.
+
+**Namespaced name**:
+Under `Cache.Type: config-server` only, the `namespace.name` encoding that
+splits on the first `.` — Target datastore identity (`prod.srl1`) and Intent
+owner / Config identity (`prod.intent1`). Split and strip live next to
+`ConfigServerCache`; join lives on the Document DTO (`IntentName`). Not a
+`Client`-level concept; local cache has no namespaces. _Avoid_: treating it
+as a generic cache key format across backends.
