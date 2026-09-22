@@ -1,0 +1,23 @@
+# TargetConnectionProfile — Cisco IOS XR gNMI
+#
+# Key decisions (encoding / deviceProfile / TLS — live-lab verified against XRd):
+#   - encoding: JSON_IETF is the ONLY valid encoding for cisco-ios-xr + gNMI.
+#     PROTO and plain JSON are rejected at config-load time by the data-server.
+#   - deviceProfile: cisco-ios-xr activates the permodule materialization path
+#     (one gNMI Update per YANG module, Path.origin = module name).
+#   - insecure: false + skipVerify: true — XRd exposes TLS on 57400 but uses
+#     a self-signed cert; skip peer verification, keep TLS on the wire.
+apiVersion: inv.sdcio.dev/v1alpha1
+kind: TargetConnectionProfile
+metadata:
+  name: cisco-ixr-gnmi
+  namespace: default
+spec:
+  protocol: gnmi
+  port: 57400
+  encoding: JSON_IETF
+  deviceProfile: cisco-ios-xr
+  skipVerify: true
+  insecure: true    # XRd gNMI on 57400 is plaintext (no TLS); flip to false + skipVerify if you add a cert
+  connectRetry: 10s
+  timeout: 10s
