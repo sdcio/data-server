@@ -146,7 +146,7 @@ func TestApplyToRunning(t *testing.T) {
 				ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
 				ccb.EXPECT().
 					IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 						close(intentChan)
 						close(errChan)
 					}).AnyTimes()
@@ -256,7 +256,7 @@ func TestApplyToRunning(t *testing.T) {
 				ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
 				ccb.EXPECT().
 					IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 						close(intentChan)
 						close(errChan)
 					}).AnyTimes()
@@ -368,7 +368,7 @@ func TestApplyToRunning(t *testing.T) {
 				ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
 				ccb.EXPECT().
 					IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 						close(intentChan)
 						close(errChan)
 					}).AnyTimes()
@@ -481,7 +481,7 @@ func newPerformRevertFixture(t *testing.T, ctrl *gomock.Controller) *performReve
 	ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
 	ccb.EXPECT().
 		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 			intentChan <- treeproto.NewProtoTreeImporter(fixtureIntent)
 			close(intentChan)
 			close(errChan)

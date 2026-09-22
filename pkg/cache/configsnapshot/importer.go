@@ -24,20 +24,18 @@ import (
 
 // documentImporter adapts a Document — the ConfigSnapshotService DTO for one
 // config-server Config (joined with its SensitiveConfig) — into an
-// importer.ImportConfigAdapter, per the ADR's field-mapping table. Traversal
-// of the merged config payload is delegated to
-// importer/json.JsonTreeImporter, which already knows how to walk the
-// JSON_IETF-shaped map mergeConfigBlobs produces; only the two accessors
-// JsonTreeImporter always stubs out for its own (synced-device-data) use
-// case are overridden here, from Document fields the ADR maps them to.
+// importer.IntentAdapter, per the ADR's field-mapping table. Traversal of the
+// merged config payload is delegated to importer/json.JsonTreeImporter, which
+// already knows how to walk the JSON_IETF-shaped map mergeConfigBlobs produces;
+// Intent-only metadata (Orphan, SensitivePaths) comes from Document fields.
 type documentImporter struct {
 	*jsonimporter.JsonTreeImporter
 	orphan         bool
 	sensitivePaths []*sdcpb.Path
 }
 
-// NewImportAdapter builds the importer.ImportConfigAdapter for doc.
-func NewImportAdapter(doc *Document) (importer.ImportConfigAdapter, error) {
+// NewImportAdapter builds the importer.IntentAdapter for doc.
+func NewImportAdapter(doc *Document) (importer.IntentAdapter, error) {
 	root, err := mergeConfigBlobs(doc.Config)
 	if err != nil {
 		return nil, fmt.Errorf("configsnapshot: building config for %q: %w", doc.Name, err)
@@ -57,4 +55,4 @@ func (d *documentImporter) GetSensitivePaths() []*sdcpb.Path {
 	return d.sensitivePaths
 }
 
-var _ importer.ImportConfigAdapter = (*documentImporter)(nil)
+var _ importer.IntentAdapter = (*documentImporter)(nil)

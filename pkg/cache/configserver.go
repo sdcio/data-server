@@ -162,8 +162,8 @@ func (c *ConfigServerCache) InstanceIntentsList(ctx context.Context, cacheInstan
 }
 
 // InstanceIntentGet calls Get, wrapping the result in an
-// importer.ImportConfigAdapter per the ADR's field-mapping table.
-func (c *ConfigServerCache) InstanceIntentGet(ctx context.Context, cacheName string, intentName string) (importer.ImportConfigAdapter, error) {
+// importer.IntentAdapter per the ADR's field-mapping table.
+func (c *ConfigServerCache) InstanceIntentGet(ctx context.Context, cacheName string, intentName string) (importer.IntentAdapter, error) {
 	target, err := c.target(cacheName)
 	if err != nil {
 		return nil, err
@@ -200,7 +200,7 @@ func (c *ConfigServerCache) InstanceIntentExists(ctx context.Context, cacheName 
 // excludeIntentNames is accepted for interface compatibility but is always a
 // no-op in practice: config-server has no "running" Config resource, so it
 // can never appear in a List result to begin with.
-func (c *ConfigServerCache) InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+func (c *ConfigServerCache) InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 	defer close(intentChan)
 	defer close(errChan)
 

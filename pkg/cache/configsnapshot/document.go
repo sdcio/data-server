@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Package configsnapshot owns the last-applied Intent ↔ ConfigSnapshotService
-// DTO ↔ ImportConfigAdapter interchange: the Document-shaped wire form plus
+// DTO ↔ IntentAdapter interchange: the Document-shaped wire form plus
 // flatten, blob merge, and NewImportAdapter. Document is a Go DTO name only
 // — not a domain term (see pkg/cache/CONTEXT.md Last-applied).
 //
@@ -42,7 +42,7 @@ type ConfigBlob struct {
 
 // Document is the ConfigSnapshotService interchange representation of one
 // config-server Config (joined with its SensitiveConfig, if any). It carries
-// exactly the fields needed to build an importer.ImportConfigAdapter: name,
+// exactly the fields needed to build an importer.IntentAdapter: name,
 // namespace, priority, non-revertive flag, orphan flag, sensitive paths, and
 // the raw config payload.
 type Document struct {

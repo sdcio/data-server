@@ -24,7 +24,7 @@ import (
 )
 
 // TestNewImportAdapter_FieldMapping covers the ADR's field-mapping table end
-// to end: every ImportConfigAdapter accessor must reflect the Document field
+// to end: every IntentAdapter accessor must reflect the Document field
 // it's mapped from.
 func TestNewImportAdapter_FieldMapping(t *testing.T) {
 	sensitivePaths := []*sdcpb.Path{
@@ -107,5 +107,5 @@ func TestNewImportAdapter_ImplementsInterface(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewImportAdapter() error = %v", err)
 	}
-	var _ importer.ImportConfigAdapter = adapter //nolint:staticcheck // explicit interface assertion is the point of this test
+	var _ importer.IntentAdapter = adapter //nolint:staticcheck // explicit interface assertion is the point of this test
 }

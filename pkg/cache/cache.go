@@ -25,9 +25,9 @@ import (
 // it's the one capability every Cache.Type genuinely has data for.
 type IntentReader interface {
 	InstanceIntentsList(ctx context.Context, cacheInstanceName string) ([]string, error)
-	InstanceIntentGet(ctx context.Context, cacheName string, intentName string) (importer.ImportConfigAdapter, error)
+	InstanceIntentGet(ctx context.Context, cacheName string, intentName string) (importer.IntentAdapter, error)
 	InstanceIntentExists(ctx context.Context, cacheName string, intentName string) (bool, error)
-	InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error)
+	InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error)
 }
 
 // IntentWriter persists real Intents. Every current backend (LocalCache,

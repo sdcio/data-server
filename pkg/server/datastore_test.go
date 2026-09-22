@@ -51,7 +51,7 @@ func newTestServer(t *testing.T) *Server {
 	// populateSensitivePathIndex streams all intents at datastore startup.
 	mockCC.EXPECT().
 		InstanceIntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, _ string, _ []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+		DoAndReturn(func(_ context.Context, _ string, _ []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 			close(intentChan)
 			close(errChan)
 		}).

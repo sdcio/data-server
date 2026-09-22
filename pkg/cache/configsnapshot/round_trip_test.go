@@ -24,7 +24,7 @@ import (
 )
 
 // TestRoundTrip_IntentDocumentAdapter is the primary seam for this package:
-// Intent → Document → ImportConfigAdapter must preserve metadata and tree
+// Intent → Document → IntentAdapter must preserve metadata and tree
 // content that DocumentFromIntent and NewImportAdapter share.
 func TestRoundTrip_IntentDocumentAdapter(t *testing.T) {
 	sensitive := []*sdcpb.Path{{Elem: []*sdcpb.PathElem{{Name: "secret"}}}}

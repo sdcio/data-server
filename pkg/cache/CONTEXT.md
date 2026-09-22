@@ -40,14 +40,39 @@ family (own accessors, own storage, excluded from `InstanceIntentGetAll`)
 under every backend, because it was never config-server's data to begin with.
 _Avoid_: calling it an intent, "the running intent" as a `Client`-level type.
 
+**Orphan**:
+Deletion policy for an Intent: drop it from the intended store (stop
+managing it) without deleting the corresponding config on the device,
+leaving that config unmanaged. Wire `Orphan`, internal `onlyIntended` /
+`DeleteOnlyIntended`, and config-server `DeletionPolicy=orphan` are the
+same bit. _Avoid_: a second meaning for leaf-variant "orphan delete"
+(same policy); "orphan" for unowned tree nodes or "Intent not found".
+
 **ImportConfigAdapter**:
-The mechanical, backend-agnostic shape `Client`'s read-side methods return:
-"data ready to hand to `Tree.ImportConfig`." Every `Client.*Get`/`*GetAll`
-method returns this shape — including `InstanceRunningGet` — regardless of
-whether the underlying value is an `Intent` or `Running`, and regardless of
-how many concrete representations exist behind it for a given backend.
+The mechanical shape ready to hand to `Tree.ImportConfig` (tree walk plus
+import-needed metadata: name, priority, deletes, non-revertive). Returned
+directly by Running reads (`InstanceRunningGet`). Intent reads return
+`IntentAdapter`, which embeds this shape. _Avoid_: putting Orphan or path
+markers on this interface; those are Intent-only (see **IntentAdapter**).
+
+**IntentAdapter**:
+The `Client` Intent-read shape: an `ImportConfigAdapter` plus Intent-only
+metadata (Orphan, path markers / SensitivePaths). Returned by
+`InstanceIntentGet` / `InstanceIntentGetAll`. Implemented by proto- and
+Document-backed adapters; never by JSON/XML device/running importers.
+_Avoid_: `IntentDescriptor` for this type; conflating with
+`IntentResponseAdapter` (northbound GetIntent response that also carries a
+Tree Entry).
 
 **ConfigSnapshotService**:
 The canonical local gRPC seam name for config-server-backed intent reads and
 writes (`Get`/`List`/`Modify`/`Delete`) against `TargetSnapshot` data. _Avoid_:
 using the older `ConfigReadService` name for current behavior.
+
+**Namespaced name**:
+Under `Cache.Type: config-server` only, the `namespace.name` spelling (split on
+the first `.`) used for a Target's datastore identity and for an Intent's
+owner / Config identity. The local backend has no namespaces and does not use
+this spelling. _Avoid_: treating this as a `Client`-level concept; "GVKNSN" as
+the everyday term (wire/comment echo of config-server); implying the local
+cache understands dotted names.

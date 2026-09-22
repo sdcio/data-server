@@ -132,7 +132,7 @@ func TestBlameConfig_CrossIntentSensitivePathRedaction(t *testing.T) {
 			// LoadAllButRunningIntents streams via IntentGetAll (excludes running).
 			ccb.EXPECT().
 				IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-				DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+				DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 					intentChan <- treeproto.NewProtoTreeImporter(dataIntent)
 					intentChan <- treeproto.NewProtoTreeImporter(markerIntent)
 					close(intentChan)

@@ -143,7 +143,7 @@ func TestConfigServerCache_InstanceIntentGetAll(t *testing.T) {
 		&configserver.Document{Name: "intent2", Namespace: testNamespace, Priority: 2},
 	)
 
-	intentChan := make(chan importer.ImportConfigAdapter)
+	intentChan := make(chan importer.IntentAdapter)
 	errChan := make(chan error, 1)
 	go c.InstanceIntentGetAll(ctx, testCacheName, nil, intentChan, errChan)
 
@@ -163,7 +163,7 @@ func TestConfigServerCache_InstanceIntentGetAll_NoDocuments(t *testing.T) {
 	ctx := context.Background()
 	c, _ := newTestConfigServerCache(t)
 
-	intentChan := make(chan importer.ImportConfigAdapter)
+	intentChan := make(chan importer.IntentAdapter)
 	errChan := make(chan error, 1)
 	go c.InstanceIntentGetAll(ctx, testCacheName, nil, intentChan, errChan)
 
@@ -194,7 +194,7 @@ func TestConfigServerCache_InstanceIntentGetAll_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	intentChan := make(chan importer.ImportConfigAdapter)
+	intentChan := make(chan importer.IntentAdapter)
 	errChan := make(chan error, 1)
 	done := make(chan struct{})
 	go func() {
@@ -269,7 +269,7 @@ func TestConfigServerCache_InstanceIntentGetAll_MalformedDatastoreName(t *testin
 	c, _ := newTestConfigServerCache(t)
 	const malformed = "no-dot-here"
 
-	intentChan := make(chan importer.ImportConfigAdapter)
+	intentChan := make(chan importer.IntentAdapter)
 	errChan := make(chan error, 1)
 	go c.InstanceIntentGetAll(context.Background(), malformed, nil, intentChan, errChan)
 
@@ -332,9 +332,9 @@ func TestConfigServerCache_InstanceLifecycle(t *testing.T) {
 // / InstanceRunningModify work purely off the in-memory store, entirely
 // independent of the LocalConfigReader seam (which never sees "running" at
 // all under this backend). InstanceRunningGet returns an
-// importer.ImportConfigAdapter — the same mechanical shape InstanceIntentGet
-// returns — rather than the raw *tree_persist.Intent, so the assertions go
-// through its accessors.
+// importer.ImportConfigAdapter (Intent reads return IntentAdapter) rather
+// than the raw *tree_persist.Intent, so the assertions go through its
+// accessors.
 func TestConfigServerCache_RunningIndependentOfSeam(t *testing.T) {
 	ctx := context.Background()
 	c, reader := newTestConfigServerCache(t)
