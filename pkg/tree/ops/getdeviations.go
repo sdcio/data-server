@@ -60,7 +60,7 @@ func (dt *deviationTask) Run(ctx context.Context, submit func(pool.Task) error) 
 
 	if evalLeafvariants {
 		// calculate Deviation on the LeafVariants
-		dt.entry.GetLeafVariants().GetDeviations(ctx, dt.config.Ch, dt.isActiveCase, dt.config.IncludeSensitive, dt.config.SensitivePathSet)
+		dt.entry.GetLeafVariants().GetDeviations(ctx, dt.config.Ch, dt.isActiveCase, dt.config.ShouldRedact(dt.entry))
 	}
 
 	// iterate through all childs

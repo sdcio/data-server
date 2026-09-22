@@ -240,10 +240,7 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, opts
 		if e.GetParent() == nil || (opts.HonorNamespace && !namespaceIsEqual(e, e.GetParent())) {
 			ns = utils.GetNamespaceFromGetSchema(e.GetSchema())
 		}
-		value := le.Value()
-		if ShouldRedact(e, opts.IncludeSensitive, opts.SensitivePathSet) {
-			value = types.RedactedTypedValue
-		}
+		value := opts.TypedValue(e, le.Value())
 		// convert value to XML and add to parent
 		utils.TypedValueToXML(parent, value, e.PathName(), ns, opts.OnlyNewOrUpdated, opts.OperationWithNamespace, opts.UseOperationRemove)
 		return true, nil

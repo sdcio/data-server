@@ -247,7 +247,7 @@ func TestBlameConfigSensitiveRedaction(t *testing.T) {
 
 			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
 			bp := processors.NewBlameConfigProcessor(&processors.BlameConfigProcessorParams{
-				RenderOpts: ops.RenderOpts{IncludeSensitive: tt.exposeSensitive},
+				RenderOpts: ops.RenderOptsNorthbound(tt.exposeSensitive, nil),
 			})
 			got, err := bp.Run(ctx, root.Entry, sharedPool)
 			if err != nil {

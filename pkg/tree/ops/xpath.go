@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/sdcio/data-server/pkg/tree/api"
-	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/sdc-protos/sdcpb"
 )
 
@@ -15,10 +14,7 @@ func ToXPath(_ context.Context, e api.Entry, opts XPathRenderOpts) (*sdcpb.PathV
 	xpaths := make([]*sdcpb.PathValue, 0, len(lvs))
 
 	for _, lv := range lvs {
-		value := lv.Value()
-		if ShouldRedact(lv.GetEntry(), opts.IncludeSensitive, opts.SensitivePathSet) {
-			value = types.RedactedTypedValue
-		}
+		value := opts.TypedValue(lv.GetEntry(), lv.Value())
 		xpaths = append(xpaths, &sdcpb.PathValue{
 			Path:  lv.SdcpbPath(),
 			Value: value,

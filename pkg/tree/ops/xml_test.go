@@ -1173,7 +1173,7 @@ func TestToXML_SensitiveRedaction(t *testing.T) {
 			}
 
 			xmlDoc, err := ops.ToXML(ctx, root.Entry, ops.XMLRenderOpts{
-				RenderOpts: ops.RenderOpts{IncludeSensitive: tt.exposeSensitive},
+				RenderOpts: ops.RenderOptsNorthbound(tt.exposeSensitive, nil),
 			})
 			if err != nil {
 				t.Fatal(err)
