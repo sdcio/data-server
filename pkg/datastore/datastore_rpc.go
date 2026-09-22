@@ -262,10 +262,7 @@ func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults, exposeSens
 
 	bcp := processors.NewBlameConfigProcessor(&processors.BlameConfigProcessorParams{
 		IncludeDefaults: includeDefaults,
-		RenderOpts: ops.RenderOpts{
-			IncludeSensitive: exposeSensitive,
-			SensitivePathSet: d.sensitivePathIndex,
-		},
+		RenderOpts:      ops.RenderOptsNorthbound(exposeSensitive, d.sensitivePathIndex),
 	})
 	bte, err := bcp.Run(ctx, root.Entry, d.taskPool)
 	if err != nil {

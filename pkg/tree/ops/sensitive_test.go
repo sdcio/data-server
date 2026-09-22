@@ -15,7 +15,7 @@ type alwaysContains struct{}
 
 func (alwaysContains) Contains(*sdcpb.Path) bool { return true }
 
-func TestShouldRedact(t *testing.T) {
+func TestSensitiveRender_ShouldRedact(t *testing.T) {
 	somePath := &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "x"}}}
 
 	sensitiveLeaf := &sdcpb.SchemaElem{
@@ -33,12 +33,12 @@ func TestShouldRedact(t *testing.T) {
 		want             bool
 	}{
 		{
-			name:   "schema-sensitive leaf, IncludeSensitive=false → redact",
+			name:   "schema-sensitive leaf, include=false → redact",
 			schema: sensitiveLeaf,
 			want:   true,
 		},
 		{
-			name:             "schema-sensitive leaf, IncludeSensitive=true → reveal",
+			name:             "schema-sensitive leaf, include=true → reveal",
 			schema:           sensitiveLeaf,
 			includeSensitive: true,
 			want:             false,
@@ -68,13 +68,13 @@ func TestShouldRedact(t *testing.T) {
 			want:   false,
 		},
 		{
-			name:   "path in SensitivePathSet → redact",
+			name:   "path marker → redact",
 			schema: plainLeaf,
 			sps:    alwaysContains{},
 			want:   true,
 		},
 		{
-			name:             "path in SensitivePathSet, IncludeSensitive=true → reveal",
+			name:             "path marker, include=true → reveal",
 			schema:           plainLeaf,
 			sps:              alwaysContains{},
 			includeSensitive: true,
@@ -89,7 +89,7 @@ func TestShouldRedact(t *testing.T) {
 			e.EXPECT().GetSchema().Return(tt.schema)
 			e.EXPECT().SdcpbPath().Return(somePath)
 
-			got := ops.ShouldRedact(e, tt.includeSensitive, tt.sps)
+			got := ops.NewSensitiveRender(tt.includeSensitive, tt.sps).ShouldRedact(e)
 			if got != tt.want {
 				t.Errorf("ShouldRedact() = %v, want %v", got, tt.want)
 			}

@@ -452,7 +452,7 @@ func (lv *LeafVariants) DeleteByOwner(owner string) *LeafEntry {
 }
 
 
-func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, isActiveCase bool, includeSensitive bool, sps types.SensitivePathChecker) {
+func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, isActiveCase bool, shouldRedact bool) {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 
@@ -464,10 +464,8 @@ func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.Devi
 	// is valid for all entries
 	sdcpbPath := lv.parentEntry.SdcpbPath()
 
-	sensitive := types.ShouldRedact(includeSensitive, lv.parentEntry.GetSchema(), sdcpbPath, sps)
-
 	redact := func(v *sdcpb.TypedValue) *sdcpb.TypedValue {
-		if sensitive {
+		if shouldRedact {
 			return types.RedactedTypedValue
 		}
 		return v
