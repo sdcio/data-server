@@ -299,7 +299,7 @@ var _ types.RollbackInterface = &DatastoreRollbackAdapter{}
 // sensitive_paths into s. It is called once during Datastore startup, before
 // the first northbound read is served.
 func populateSensitivePathIndex(ctx context.Context, s *treetypes.SensitivePathIndex, cc cache.BoundIntentReader) error {
-	return forEachIntent(ctx, cc, []string{consts.RunningIntentName}, func(intent importer.ImportConfigAdapter) error {
+	return forEachIntent(ctx, cc, []string{consts.RunningIntentName}, func(intent importer.IntentAdapter) error {
 		if len(intent.GetSensitivePaths()) > 0 {
 			s.Set(intent.GetName(), intent.GetSensitivePaths())
 		}

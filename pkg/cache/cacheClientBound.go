@@ -24,9 +24,9 @@ import (
 // BoundIntentReader is the bound-call equivalent of IntentReader.
 type BoundIntentReader interface {
 	IntentsList(ctx context.Context) ([]string, error)
-	IntentGet(ctx context.Context, intentName string) (importer.ImportConfigAdapter, error)
+	IntentGet(ctx context.Context, intentName string) (importer.IntentAdapter, error)
 	IntentExists(ctx context.Context, intentName string) (bool, error)
-	IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error)
+	IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error)
 }
 
 // BoundIntentWriter is the bound-call equivalent of IntentWriter.
@@ -83,7 +83,7 @@ func (c *CacheClientBoundImpl) InstanceExists(ctx context.Context) bool {
 func (c *CacheClientBoundImpl) IntentsList(ctx context.Context) ([]string, error) {
 	return c.cacheClient.InstanceIntentsList(ctx, c.cacheName)
 }
-func (c *CacheClientBoundImpl) IntentGet(ctx context.Context, intentName string) (importer.ImportConfigAdapter, error) {
+func (c *CacheClientBoundImpl) IntentGet(ctx context.Context, intentName string) (importer.IntentAdapter, error) {
 	return c.cacheClient.InstanceIntentGet(ctx, c.cacheName, intentName)
 }
 func (c *CacheClientBoundImpl) IntentModify(ctx context.Context, intent *tree_persist.Intent) error {
@@ -95,7 +95,7 @@ func (c *CacheClientBoundImpl) IntentDelete(ctx context.Context, intentName stri
 func (c *CacheClientBoundImpl) IntentExists(ctx context.Context, intentName string) (bool, error) {
 	return c.cacheClient.InstanceIntentExists(ctx, c.cacheName, intentName)
 }
-func (c *CacheClientBoundImpl) IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+func (c *CacheClientBoundImpl) IntentGetAll(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 	c.cacheClient.InstanceIntentGetAll(ctx, c.cacheName, excludeIntentNames, intentChan, errChan)
 }
 func (c *CacheClientBoundImpl) RunningGet(ctx context.Context) (importer.ImportConfigAdapter, error) {

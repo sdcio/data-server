@@ -133,7 +133,7 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 			// Expect IntentGetAll (called by LoadAllButRunningIntents)
 			ccb.EXPECT().
 				IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-				DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+				DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 					close(intentChan)
 					close(errChan)
 				}).AnyTimes()
@@ -277,7 +277,7 @@ func TestTransactionSet_SensitivePathsPersisted(t *testing.T) {
 	ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
 	ccb.EXPECT().
 		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+		DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 			close(intentChan)
 			close(errChan)
 		}).AnyTimes()
@@ -374,7 +374,7 @@ func TestForEachIntent_NarrowIntentReader(t *testing.T) {
 	reader := mockcacheclient.NewMockBoundIntentReader(ctrl)
 	reader.EXPECT().
 		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 			intentChan <- treeproto.NewProtoTreeImporter(intentA)
 			intentChan <- treeproto.NewProtoTreeImporter(intentB)
 			close(intentChan)
@@ -382,7 +382,7 @@ func TestForEachIntent_NarrowIntentReader(t *testing.T) {
 		})
 
 	var gotNames []string
-	err := forEachIntent(ctx, reader, nil, func(intent importer.ImportConfigAdapter) error {
+	err := forEachIntent(ctx, reader, nil, func(intent importer.IntentAdapter) error {
 		gotNames = append(gotNames, intent.GetName())
 		return nil
 	})
@@ -409,13 +409,13 @@ func TestForEachIntent_PropagatesStreamError(t *testing.T) {
 	reader := mockcacheclient.NewMockBoundIntentReader(ctrl)
 	reader.EXPECT().
 		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.ImportConfigAdapter, errChan chan<- error) {
+		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 			errChan <- wantErr
 			close(intentChan)
 			close(errChan)
 		})
 
-	err := forEachIntent(ctx, reader, nil, func(importer.ImportConfigAdapter) error {
+	err := forEachIntent(ctx, reader, nil, func(importer.IntentAdapter) error {
 		t.Fatal("fn should not be called when the stream errors")
 		return nil
 	})
