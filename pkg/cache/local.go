@@ -50,10 +50,11 @@ type LocalCache struct {
 }
 
 // decodeIntent unmarshals the disk-backed store's raw bytes into a
-// *tree_persist.Intent and wraps it as an importer.ImportConfigAdapter — the
+// *tree_persist.Intent and wraps it as an importer.IntentAdapter — the
 // shared decode step every InstanceIntentGet/InstanceIntentGetAll/
-// InstanceRunningGet call site needs.
-func (l *LocalCache) decodeIntent(b []byte) (importer.ImportConfigAdapter, error) {
+// InstanceRunningGet call site needs. Running callers narrow to
+// ImportConfigAdapter at the RunningStore boundary.
+func (l *LocalCache) decodeIntent(b []byte) (importer.IntentAdapter, error) {
 	result := &tree_persist.Intent{}
 	if err := proto.Unmarshal(b, result); err != nil {
 		return nil, err
@@ -61,7 +62,7 @@ func (l *LocalCache) decodeIntent(b []byte) (importer.ImportConfigAdapter, error
 	return treeproto.NewProtoTreeImporter(result), nil
 }
 
-func (l *LocalCache) InstanceIntentGet(ctx context.Context, cacheName string, intentName string) (importer.ImportConfigAdapter, error) {
+func (l *LocalCache) InstanceIntentGet(ctx context.Context, cacheName string, intentName string) (importer.IntentAdapter, error) {
 	b, err := l.Cache.InstanceIntentGet(ctx, cacheName, intentName)
 	if err != nil {
 		return nil, err
@@ -69,7 +70,7 @@ func (l *LocalCache) InstanceIntentGet(ctx context.Context, cacheName string, in
 	return l.decodeIntent(b)
 }
 
-func (l *LocalCache) InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChanOrig chan<- importer.ImportConfigAdapter, errChanOrig chan<- error) {
+func (l *LocalCache) InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChanOrig chan<- importer.IntentAdapter, errChanOrig chan<- error) {
 	// create new channels
 	intentChan := make(chan *types.Intent, 5)
 	errChan := make(chan error, 1)
