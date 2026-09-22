@@ -120,10 +120,7 @@ func toJsonInternal(ctx context.Context, e api.Entry, opts RenderOpts, ietf bool
 		if le == nil {
 			return nil, nil
 		}
-		if ShouldRedact(e, opts.IncludeSensitive, opts.SensitivePathSet) {
-			return types.RedactedStringValue, nil
-		}
-		return utils.GetJsonValue(le.Value(), ietf)
+		return utils.GetJsonValue(opts.TypedValue(e, le.Value()), ietf)
 	}
 	return nil, fmt.Errorf("unable to convert to json (%s)", e.SdcpbPath().ToXPath(false))
 }

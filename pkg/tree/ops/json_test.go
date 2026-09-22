@@ -522,7 +522,7 @@ func TestToJsonSensitiveRedaction(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			jsonStruct, err := ops.ToJson(ctx, root.Entry, ops.RenderOpts{IncludeSensitive: tt.exposeSensitive})
+			jsonStruct, err := ops.ToJson(ctx, root.Entry, ops.RenderOptsNorthbound(tt.exposeSensitive, nil))
 			if err != nil {
 				t.Fatal(err)
 			}

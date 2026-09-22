@@ -77,19 +77,14 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string, exposeSens
 			Orphan:          false,
 			NonRevertive:    false,
 			ExplicitDeletes: nil,
-			RenderOpts: ops.RenderOpts{
-				IncludeSensitive: exposeSensitive,
-				SensitivePathSet: d.sensitivePathIndex,
-			},
+			RenderOpts:      ops.RenderOptsNorthbound(exposeSensitive, d.sensitivePathIndex),
 		}
 
 		return result, nil
 	}
 
-	// For a regular intent GET, intent path-marker redaction is scoped to this
-	// intent's own SensitivePaths only — another intent's markers do not apply.
-	// Schema-defined sensitivity (LeafSchema.Sensitive from the YANG extension)
-	// is still honored unconditionally via ShouldRedact.
+	// Northbound GetIntent always uses the Live Sensitive Path Index (always-union).
+	// Schema-defined sensitivity is still honored via SensitiveRender / ShouldRedact.
 	root, err := tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, d.taskPool))
 	if err != nil {
 		return nil, err
@@ -110,9 +105,6 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string, exposeSens
 		return nil, err
 	}
 
-	intentSensitivePaths := types.NewSensitivePathIndex()
-	intentSensitivePaths.Add(tp.GetSensitivePaths()...)
-
 	result := &adapter.IntentResponseAdapter{
 		Entry:           root.Entry,
 		IntentName:      tp.GetName(),
@@ -120,10 +112,7 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string, exposeSens
 		Orphan:          tp.GetOrphan(),
 		NonRevertive:    tp.GetNonRevertive(),
 		ExplicitDeletes: tp.GetDeletes().ToPathSlice(),
-		RenderOpts: ops.RenderOpts{
-			IncludeSensitive: exposeSensitive,
-			SensitivePathSet: intentSensitivePaths,
-		},
+		RenderOpts:      ops.RenderOptsNorthbound(exposeSensitive, d.sensitivePathIndex),
 	}
 	return result, nil
 }

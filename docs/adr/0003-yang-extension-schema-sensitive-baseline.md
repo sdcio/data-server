@@ -28,3 +28,15 @@ Leaves and leaf-lists that must never appear in plaintext over the northbound AP
 **Phase-2 composition.** A future intent path-slice approach (sensitive paths stored per-intent in cache) unions with this static baseline at render time. The extension point is `RenderOpts.SensitivePathSet map[string]bool`; render functions extend the condition to `ops.IsSensitive(e) || opts.SensitivePathSet[ops.KeyPrunedPath(e)]`. No structural changes to the ops or processor layers are needed.
 
 **Out of scope (this ADR).** `WatchDeviations` redaction — deferred; streaming flag threading is a distinct problem. Encrypt-at-rest — separate KMS concern. Per-instance sensitivity — list keys are stripped; all instances of a leaf type are treated uniformly.
+
+## Amendments
+
+**2026-09-22 — Phase-2 path markers, always-union, SensitiveRender, index split.**
+
+The original decision (schema baseline via `sdcio-ext:sensitive`) is unchanged. These amendments record what landed on top of that baseline:
+
+- **Path markers (Phase-2 done).** Intent-declared `sensitive_paths` contribute to a datastore-wide **Live Sensitive Path Index**. `types.ShouldRedact` is the single predicate: schema sensitivity OR path-marker membership, unless the caller opts in via include-sensitive.
+- **Always-union northbound.** GetIntent (named + Running), BlameConfig, and WatchDeviations always pass the live index — own-scope GetIntent snapshots are retired. Cross-intent markers redact on northbound output.
+- **WatchDeviations redacts.** Streaming deviations resolve redaction in the ops layer via `RenderOptsNorthbound(false, liveIndex)`; the earlier “deferred” note for WatchDeviations is superseded for value masking (streaming flag threading for an admin bypass remains separate if needed).
+- **Index split.** `SensitivePathIndex` is live-only (`Set`/`Delete`/`Contains`). Immutable `SensitivePaths` is the snapshot checker for tests/helpers. Presence-only `Add` is removed.
+- **Opaque `SensitiveRender`.** Redaction context (include flag + checker) lives in `ops.SensitiveRender`, embedded in `RenderOpts`. Callers use `RenderOptsNorthbound` / `RenderOptsRevealAll`; public `IncludeSensitive` / `SensitivePathSet` fields are gone. Formatters call `ShouldRedact` / `TypedValue` / `String` and do not invent `***`.
