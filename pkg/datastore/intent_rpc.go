@@ -87,9 +87,9 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string, exposeSens
 	}
 
 	// For a regular intent GET, intent path-marker redaction is scoped to this
-	// intent's own SensitivePaths only — another intent's markers do not apply
-	// (see ADR 0004). Schema-defined sensitivity (LeafSchema.Sensitive from the
-	// YANG extension) is still honored unconditionally via ShouldRedact.
+	// intent's own SensitivePaths only — another intent's markers do not apply.
+	// Schema-defined sensitivity (LeafSchema.Sensitive from the YANG extension)
+	// is still honored unconditionally via ShouldRedact.
 	root, err := tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, d.taskPool))
 	if err != nil {
 		return nil, err

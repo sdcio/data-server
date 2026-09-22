@@ -183,7 +183,7 @@ func TestBlameConfig_CrossIntentSensitivePathRedaction(t *testing.T) {
 // TestGetIntent_CrossIntentPathsDoNotRedact verifies the scoped semantics for
 // GetIntent(regular): another intent's sensitive_paths markers do NOT cause
 // redaction in the fetched intent's response. Only the fetched intent's own
-// markers apply (see ADR 0004).
+// markers apply.
 //
 // Acceptance criteria covered:
 //   - GetIntent(regular): cross-intent path markers are ignored

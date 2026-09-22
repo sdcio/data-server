@@ -79,7 +79,7 @@ func (s *Server) createConfigServerCacheClient(ctx context.Context) error {
 		return err
 	}
 	client := configserver.NewGRPCConfigClient(cc)
-	s.cacheClient = cache.NewConfigServerClient(client)
+	s.cacheClient = cache.NewConfigServerCache(client)
 	log.Info("config-server cache client created")
 	return nil
 }

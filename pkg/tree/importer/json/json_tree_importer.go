@@ -25,14 +25,16 @@ func (j *JsonTreeImporter) GetNonRevertive() bool {
 	return j.nonRevertive
 }
 
-// GetOrphan always returns false: JsonTreeImporter is only used for synced
-// device state, never for real intents.
+// GetOrphan always returns false: the default when JsonTreeImporter is used
+// alone for synced device state. Real-intent wrappers (e.g. configserver's
+// documentImporter) override this from Document fields.
 func (j *JsonTreeImporter) GetOrphan() bool {
 	return false
 }
 
-// GetSensitivePaths always returns nil: JsonTreeImporter is only used for
-// synced device state, never for real intents.
+// GetSensitivePaths always returns nil: the default when JsonTreeImporter is
+// used alone for synced device state. Real-intent wrappers (e.g.
+// configserver's documentImporter) override this from Document fields.
 func (j *JsonTreeImporter) GetSensitivePaths() []*sdcpb.Path {
 	return nil
 }
