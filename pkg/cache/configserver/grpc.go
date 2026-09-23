@@ -98,7 +98,7 @@ func (r *GRPCConfigClient) List(ctx context.Context, target Target) ([]*Document
 
 // documentFromEntry maps a config_read.ConfigEntry onto the seam's Document
 // shape, field for field — no further translation happens here, that's
-// NewImportAdapter's job.
+// configsnapshot.NewImportAdapter's job.
 func documentFromEntry(e *config_read.ConfigEntry) *Document {
 	blobs := e.GetConfig()
 	config := make([]*ConfigBlob, 0, len(blobs))
