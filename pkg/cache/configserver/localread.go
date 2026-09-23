@@ -58,7 +58,7 @@ type ConfigBlob struct {
 // paths, and the raw config payload.
 type Document struct {
 	// Name is the Config resource's metadata.name — the lookup key
-	// ConfigReadService uses against TargetSnapshot.Spec.Configs.
+	// ConfigSnapshotService uses against TargetSnapshot.Spec.Configs.
 	Name string
 	// Namespace is the Config's Kubernetes namespace, populated from
 	// ConfigEntry.Namespace. Together with Name it forms the owner string
