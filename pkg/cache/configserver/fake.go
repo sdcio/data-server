@@ -20,25 +20,27 @@ import (
 	"sync"
 )
 
-// FakeLocalConfigReader is an in-memory LocalConfigReader, seedable with test
-// fixtures. It stands in for the real config-server local-read transport in
-// unit tests, so the config-server-backed cache.Client can be built and fully
-// tested well before that transport exists.
-type FakeLocalConfigReader struct {
+// FakeLocalConfigClient is an in-memory LocalConfigClient, seedable with
+// test fixtures. It stands in for the real config-server local-read/write
+// transport in unit tests, so the config-server-backed cache.Client can be
+// built and fully tested against realistic read-after-write behavior
+// (Modify/Delete mutate the same map Get/List read from) without a live
+// config-server.
+type FakeLocalConfigClient struct {
 	mu   sync.RWMutex
 	docs map[Target]map[string]*Document
 }
 
-// NewFakeLocalConfigReader returns an empty FakeLocalConfigReader. Use Seed
+// NewFakeLocalConfigClient returns an empty FakeLocalConfigClient. Use Seed
 // to populate it with fixtures.
-func NewFakeLocalConfigReader() *FakeLocalConfigReader {
-	return &FakeLocalConfigReader{
+func NewFakeLocalConfigClient() *FakeLocalConfigClient {
+	return &FakeLocalConfigClient{
 		docs: map[Target]map[string]*Document{},
 	}
 }
 
 // Seed adds/replaces Documents for target, keyed by Document.Name.
-func (f *FakeLocalConfigReader) Seed(target Target, docs ...*Document) {
+func (f *FakeLocalConfigClient) Seed(target Target, docs ...*Document) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -53,13 +55,13 @@ func (f *FakeLocalConfigReader) Seed(target Target, docs ...*Document) {
 }
 
 // Reset removes every seeded Document for every target.
-func (f *FakeLocalConfigReader) Reset() {
+func (f *FakeLocalConfigClient) Reset() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.docs = map[Target]map[string]*Document{}
 }
 
-func (f *FakeLocalConfigReader) Get(ctx context.Context, target Target, name string) (*Document, error) {
+func (f *FakeLocalConfigClient) Get(ctx context.Context, target Target, name string) (*Document, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -74,7 +76,7 @@ func (f *FakeLocalConfigReader) Get(ctx context.Context, target Target, name str
 	return doc, nil
 }
 
-func (f *FakeLocalConfigReader) List(ctx context.Context, target Target) ([]*Document, error) {
+func (f *FakeLocalConfigClient) List(ctx context.Context, target Target) ([]*Document, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -88,4 +90,22 @@ func (f *FakeLocalConfigReader) List(ctx context.Context, target Target) ([]*Doc
 	return result, nil
 }
 
-var _ LocalConfigReader = (*FakeLocalConfigReader)(nil)
+// Modify is Seed for a single Document, under the LocalConfigWriter name —
+// same underlying map, so a Modify is immediately visible to Get/List, the
+// real-write behavior this fake exists to let tests exercise.
+func (f *FakeLocalConfigClient) Modify(ctx context.Context, target Target, doc *Document) error {
+	f.Seed(target, doc)
+	return nil
+}
+
+// Delete removes name from target's Documents. Deleting a name that isn't
+// (or is no longer) present is a no-op success, matching the real
+// ConfigSnapshotService.Delete contract (see LocalConfigWriter).
+func (f *FakeLocalConfigClient) Delete(ctx context.Context, target Target, name string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.docs[target], name)
+	return nil
+}
+
+var _ LocalConfigClient = (*FakeLocalConfigClient)(nil)

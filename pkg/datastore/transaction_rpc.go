@@ -390,7 +390,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		case errors.Is(err, ops.ErrorIntentNotPresent):
 			err = d.cacheClient.IntentDelete(ctx, intent.GetName(), intent.GetDeleteIgnoreNonExisting())
 			if err != nil {
-				log.Error(err, "failed deleting intent from store")
+				return nil, fmt.Errorf("failed deleting intent %q from store for %s: %w", intent.GetName(), d.Name(), err)
 			}
 			d.sensitivePathIndex.Delete(intent.GetName())
 			log.V(logger.VDebug).Info("delete intent from cache")
