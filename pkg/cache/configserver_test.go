@@ -401,9 +401,8 @@ func TestConfigServerCache_InstanceRunningGet_UnknownInstance(t *testing.T) {
 }
 
 // TestConfigServerCache_ImplementsClient verifies *ConfigServerCache
-// satisfies the full cache.Client directly — including IntentWriter, now
-// that Modify/Delete are real writes against the LocalConfigWriter seam
-// rather than the generic noopIntentWriter.
+// satisfies the full cache.Client directly — including IntentWriter, since
+// Modify/Delete are real writes against the LocalConfigWriter seam.
 func TestConfigServerCache_ImplementsClient(t *testing.T) {
 	c := NewConfigServerCache(configserver.NewFakeLocalConfigClient())
 	var _ Client = c
