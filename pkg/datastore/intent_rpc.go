@@ -113,7 +113,7 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string, exposeSens
 		Priority:        tp.GetPriority(),
 		Orphan:          tp.GetOrphan(),
 		NonRevertive:    tp.GetNonRevertive(),
-		ExplicitDeletes: tp.GetDeletes().ToPathSlice(),
+		ExplicitDeletes: tp.GetExplicitDeletes(),
 		RenderOpts:      ops.RenderOptsNorthbound(exposeSensitive, d.sensitivePathIndex),
 	}
 	return result, nil
