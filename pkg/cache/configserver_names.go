@@ -26,7 +26,7 @@ import (
 // name.
 var ErrMalformedDatastoreName = errors.New("configserver cache: malformed datastore name")
 
-// splitDatastoreName decodes a datastore name (e.g. "prod.srl1") into a
+// splitDatastoreName decodes a Namespaced name (e.g. "prod.srl1") into a
 // configserver.Target, mirroring config-server's own encoding
 // (storebackend.Key.String(), "<target namespace>.<target name>"). It splits
 // on the first '.' only, since a Kubernetes namespace is always a DNS-1123
@@ -39,4 +39,18 @@ func splitDatastoreName(cacheInstanceName string) (configserver.Target, error) {
 		return configserver.Target{}, ErrMalformedDatastoreName
 	}
 	return configserver.Target{Namespace: namespace, Name: name}, nil
+}
+
+// lookupConfigName maps an owner/intent Namespaced name onto the bare Config
+// resource name ConfigSnapshotService keys TargetSnapshot.Spec.Configs by.
+// GetGVKNSN names ("<namespace>.<name>") are stripped when the namespace
+// matches the target; a bare name is passed through unchanged so existing
+// Get callers keep working. An empty rest after a matching prefix
+// ("prod.") is also passed through unchanged.
+func lookupConfigName(target configserver.Target, intentName string) string {
+	prefix := target.Namespace + "."
+	if rest, ok := strings.CutPrefix(intentName, prefix); ok && rest != "" {
+		return rest
+	}
+	return intentName
 }

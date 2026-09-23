@@ -61,11 +61,18 @@ type Document struct {
 }
 
 // IntentName is the owner name data-server and config-server share for a
-// Config: "<namespace>.<name>", matching config.GetGVKNSN. When Namespace is
-// empty the bare Name is returned, so incomplete fixtures stay usable.
+// Config: a Namespaced name ("<namespace>.<name>"), matching
+// config.GetGVKNSN. When Namespace is empty the bare Name is returned, so
+// incomplete fixtures stay usable.
 func (d *Document) IntentName() string {
-	if d.Namespace == "" {
-		return d.Name
+	return namespacedName(d.Namespace, d.Name)
+}
+
+// namespacedName joins namespace and name with a single '.' (Namespaced name).
+// An empty namespace returns the bare name.
+func namespacedName(namespace, name string) string {
+	if namespace == "" {
+		return name
 	}
-	return d.Namespace + "." + d.Name
+	return namespace + "." + name
 }
