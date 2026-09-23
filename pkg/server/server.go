@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	_ "google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
+	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
 	"github.com/sdcio/data-server/pkg/cache"
@@ -200,6 +201,8 @@ func New(ctx context.Context, c *config.Config) (*Server, error) {
 	if s.config.GRPCServer.SchemaServer != nil && s.config.GRPCServer.SchemaServer.Enabled {
 		sdcpb.RegisterSchemaServerServer(s.srv, s)
 	}
+	// Enable grpcurl- and tooling-based introspection used by integration tests.
+	reflection.Register(s.srv)
 
 	return s, nil
 }
