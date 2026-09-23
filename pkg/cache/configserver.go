@@ -73,7 +73,7 @@ func (c *ConfigServerCache) target(cacheInstanceName string) (configserver.Targe
 }
 
 // lookupConfigName maps an owner/intent name onto the bare Config resource
-// name ConfigReadService keys TargetSnapshot.Spec.Configs by. GetGVKNSN
+// name ConfigSnapshotService keys TargetSnapshot.Spec.Configs by. GetGVKNSN
 // names ("<namespace>.<name>") are stripped when the namespace matches the
 // target; a bare name is passed through unchanged so existing Get callers
 // keep working.
