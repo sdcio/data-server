@@ -220,3 +220,86 @@ jobs:
       certmanager_version: ${{ needs.latest-versions.outputs.certmanagerversion }}
       integration_tests_ref: ${{ needs.resolve-paired-refs.outputs.inttest_ref }}
     secrets: inherit
+
+  # Records the resolved pairing/version inputs both integration jobs launched with, so a
+  # failure can be triaged from the artifact alone without re-deriving Pairs-with resolution.
+  run-manifest:
+    name: Record integration run manifest
+    runs-on: ubuntu-latest
+    needs: [latest-versions, pr-release, resolve-paired-refs]
+    steps:
+      - name: Build manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DATA_VERSION: ${{ needs.pr-release.outputs.dataversion }}
+          DATA_SERVER_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          CONFIG_VERSION_INPUT: ${{ needs.resolve-paired-refs.outputs.configversion }}
+          INTEGRATION_TESTS_REF_INPUT: ${{ needs.resolve-paired-refs.outputs.inttest_ref }}
+          SCHEMA_VERSION: ${{ needs.latest-versions.outputs.schemaversion }}
+          CACHE_VERSION: ${{ needs.latest-versions.outputs.cacheversion }}
+          CERTMANAGER_VERSION: ${{ needs.latest-versions.outputs.certmanagerversion }}
+          SUITES_TO_RUN: 00-setup,01-crs,02-crud,03-deviations,04-sensitive,05-cache-backend
+        run: |
+          set -euo pipefail
+
+          IT_REF="${INTEGRATION_TESTS_REF_INPUT}"
+          if [ "$IT_REF" = "main" ]; then
+            IT_REF="config-server-cache-backend"
+          fi
+
+          IT_SHA=$(gh api "repos/sdcio/integration-tests/commits/${IT_REF}" --jq '.sha')
+
+          CS_REF="${CONFIG_VERSION_INPUT}"
+          if [ "$CS_REF" = "main" ]; then
+            CS_SHA=$(gh api "repos/sdcio/config-server/commits/main" --jq '.sha')
+          else
+            CS_SHA="$CS_REF"
+          fi
+
+          cat > integration-run-manifest.txt <<EOF
+          run_id=${GITHUB_RUN_ID}
+          run_attempt=${GITHUB_RUN_ATTEMPT}
+          workflow=${GITHUB_WORKFLOW}
+          event=${GITHUB_EVENT_NAME}
+          branch=${GITHUB_REF_NAME}
+          data_server_image_tag=${DATA_VERSION}
+          data_server_sha=${DATA_SERVER_SHA}
+          config_server_ref=${CONFIG_VERSION_INPUT}
+          config_server_sha=${CS_SHA}
+          integration_tests_ref_resolved=${IT_REF}
+          integration_tests_sha=${IT_SHA}
+          schema_server_version=${SCHEMA_VERSION}
+          cache_version=${CACHE_VERSION}
+          cert_manager_version=${CERTMANAGER_VERSION}
+          cache_type=config-server
+          suites_to_run=${SUITES_TO_RUN}
+          EOF
+
+          echo "Integration run manifest:"
+          cat integration-run-manifest.txt
+
+      - name: Upload manifest artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: integration-run-manifest-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: integration-run-manifest.txt
+
+  # cache_type: config-server exercises the ConfigServerCache read+write path (tickets 05-07)
+  # against a real config-server deployment. Runs alongside, not instead of, the cache_type:
+  # local job above -- the two backends are independent deployments in separate integration-tests
+  # runs and aren't required to coexist in the same test run.
+  integration-tests-cache-backend:
+    name: integration-tests (config-server cache backend)
+    needs: [latest-versions, pr-release, resolve-paired-refs, run-manifest]
+    uses: sdcio/integration-tests/.github/workflows/single.yml@config-server-cache-backend
+    with:
+      configserver_version: ${{ needs.resolve-paired-refs.outputs.configversion }}
+      dataserver_version: ${{ needs.pr-release.outputs.dataversion }}
+      schemaserver_version: ${{ needs.latest-versions.outputs.schemaversion }}
+      cache_version: ${{ needs.latest-versions.outputs.cacheversion }}
+      certmanager_version: ${{ needs.latest-versions.outputs.certmanagerversion }}
+      # Keep this job on the cache-backend-compatible robot tests unless explicitly paired/overridden.
+      integration_tests_ref: ${{ needs.resolve-paired-refs.outputs.inttest_ref == 'main' && 'config-server-cache-backend' || needs.resolve-paired-refs.outputs.inttest_ref }}
+      cache_type: config-server
+      suites_to_run: 00-setup,01-crs,02-crud,03-deviations,04-sensitive,05-cache-backend
+    secrets: inherit
