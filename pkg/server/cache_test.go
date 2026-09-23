@@ -43,7 +43,6 @@ func TestCreateConfigServerCacheClient(t *testing.T) {
 	if _, ok := s.cacheClient.(cache.IntentReader); !ok {
 		t.Fatalf("cacheClient = %T, does not implement cache.IntentReader", s.cacheClient)
 	}
-	var _ cache.Client = s.cacheClient
 }
 
 // TestCreateConfigServerCacheClient_WritesAreNoOps verifies the config-server
