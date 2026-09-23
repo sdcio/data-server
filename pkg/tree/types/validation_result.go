@@ -8,6 +8,15 @@ import (
 	"sync"
 )
 
+// UnknownOwner is the intent name emitted by container-level validators
+// (mandatory child, must-statement on a container, leafref fallback) when no
+// single intent can be identified as the owner of the violation. Containers
+// have no leaf-variant of their own; the constraint failure is the result of
+// the interplay of multiple intents' leaves, so no single owner can be
+// named. Code that processes ValidationResults must handle this value
+// explicitly — it is intentional, not an error in attribution logic.
+const UnknownOwner = "unknown"
+
 // ValidationResults is map[string]*ValidationResultIntent so consider iterating via range
 type ValidationResults map[string]*ValidationResultIntent
 
