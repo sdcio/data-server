@@ -85,16 +85,9 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	log := logger.FromContext(ctx).WithValues("transaction-type", "replace")
 	ctx = logger.IntoContext(ctx, log)
 
-	// create a new TreeContext
-	tc := tree.NewTreeContext(d.schemaClient, d.taskPool)
-
-	// create a new TreeRoot to collect validate and hand to SBI.Set()
-	root, err := tree.NewTreeRoot(ctx, tc)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto), treetypes.NewUpdateInsertFlags(), d.taskPool)
+	// create a new TreeRoot, pre-loaded with the Running snapshot, to collect, validate and hand
+	// to SBI.Set()
+	root, err := d.newRunningSnapshotTreeRoot(ctx, runningProto)
 	if err != nil {
 		return nil, err
 	}
@@ -505,6 +498,18 @@ func (d *Datastore) replaceThenMerge(ctx context.Context, transaction *types.Tra
 // d.cacheClient.IntentGet(ctx, consts.RunningIntentName)) into the flat PathAndUpdate
 // representation used to populate Transaction.oldRunning.
 func (d *Datastore) runningSnapshotUpdates(ctx context.Context, runningProto *tree_persist.Intent) ([]*treetypes.PathAndUpdate, error) {
+	root, err := d.newRunningSnapshotTreeRoot(ctx, runningProto)
+	if err != nil {
+		return nil, err
+	}
+	les := ops.LeafsOfOwner(root.Entry, consts.RunningIntentName)
+	return les.ToPathAndUpdateSlice(), nil
+}
+
+// newRunningSnapshotTreeRoot builds a fresh TreeRoot with the given Running intent snapshot
+// imported into it. Shared by replaceIntent (which builds the replace target on top of it) and
+// runningSnapshotUpdates (which flattens it straight back out for oldRunning capture).
+func (d *Datastore) newRunningSnapshotTreeRoot(ctx context.Context, runningProto *tree_persist.Intent) (*tree.RootEntry, error) {
 	tc := tree.NewTreeContext(d.schemaClient, d.taskPool)
 	root, err := tree.NewTreeRoot(ctx, tc)
 	if err != nil {
@@ -514,8 +519,7 @@ func (d *Datastore) runningSnapshotUpdates(ctx context.Context, runningProto *tr
 	if err != nil {
 		return nil, err
 	}
-	les := ops.LeafsOfOwner(root.Entry, consts.RunningIntentName)
-	return les.ToPathAndUpdateSlice(), nil
+	return root, nil
 }
 
 func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, transactionIntents []*types.TransactionIntent, replaceIntent *types.TransactionIntent, transactionTimeout time.Duration, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
