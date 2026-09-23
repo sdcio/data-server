@@ -27,8 +27,10 @@ never lag behind what was actually applied — a deleted Intent must stop
 being last-applied at delete-apply time, not at some later, best-effort
 snapshot refresh, or the next `LoadAllButRunningIntents` can rehydrate config
 that was meant to be gone. _Avoid_: "confirmed" or "acknowledged" (collide
-with the separate `TransactionConfirm` RPC step) and "expected state" (says
-nothing about whether it's desired-or-applied).
+with the separate `TransactionConfirm` RPC step); "expected state" (says
+nothing about whether it's desired-or-applied); and "Document" as a domain
+concept (a branch-local Go DTO name for the ConfigSnapshotService
+interchange shape — not a term in this language).
 
 **Running**:
 The synced, on-device configuration state — produced and consumed entirely
