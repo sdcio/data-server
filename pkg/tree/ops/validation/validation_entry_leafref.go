@@ -218,7 +218,7 @@ func validateLeafRefs(ctx context.Context, e api.Entry, resultChan chan<- *types
 			generateOptionalWarning(e, lref, resultChan)
 			return
 		}
-		owner := "unknown"
+		owner := types.UnknownOwner
 		highest := e.GetLeafVariants().GetHighestPrecedence(false, false, false)
 		if highest != nil {
 			owner = highest.Owner()
@@ -253,7 +253,7 @@ func validateLeafRefs(ctx context.Context, e api.Entry, resultChan chan<- *types
 func generateOptionalWarning(s api.Entry, lref string, resultChan chan<- *types.ValidationResultEntry) {
 	lrefval := s.GetLeafVariants().GetHighestPrecedence(false, true, false)
 	if lrefval == nil {
-		resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("no leafvariant found for entry %s", s.SdcpbPath()), types.ValidationResultEntryTypeError)
+		resultChan <- types.NewValidationResultEntry(types.UnknownOwner, fmt.Errorf("no leafvariant found for entry %s", s.SdcpbPath()), types.ValidationResultEntryTypeError)
 		return
 	}
 	tvVal := lrefval.Value()
