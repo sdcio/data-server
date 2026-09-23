@@ -7,10 +7,28 @@ actually stores it.
 ## Language
 
 **Intent**:
-A named, prioritized piece of northbound-authored config, owned by whichever
-system is the sole writer for the active `Cache.Type` (config-server, or
-data-server itself under `local`). Read through the `Client.InstanceIntent*`
-family.
+A named, prioritized piece of northbound-authored config — the *desired*
+value. Authorship (who decides what an Intent's content should be) belongs
+to whichever system is the sole writer for the active `Cache.Type`
+(config-server, or data-server itself under `local`). Read through the
+`Client.InstanceIntent*` family. _Avoid_: using "Intent" when you mean
+last-applied — under `Cache.Type: config-server` these are two different
+values with two different owners (see **Last-applied** below).
+
+**Last-applied**:
+The value of a named Intent that this datastore last successfully pushed
+southbound — updated at the same moment `IntentModify`/`IntentDelete` run
+inside `TransactionSet`'s apply loop, for every `Cache.Type`, not gated on
+`TransactionConfirm`. Under `Cache.Type: local` this has always been true by
+construction (disk write happens at that exact call). Under
+`Cache.Type: config-server`, data-server writes this back into config-server
+so `Client.InstanceIntent*` reads (backed by `TargetSnapshot.Spec.Configs`)
+never lag behind what was actually applied — a deleted Intent must stop
+being last-applied at delete-apply time, not at some later, best-effort
+snapshot refresh, or the next `LoadAllButRunningIntents` can rehydrate config
+that was meant to be gone. _Avoid_: "confirmed" or "acknowledged" (collide
+with the separate `TransactionConfirm` RPC step) and "expected state" (says
+nothing about whether it's desired-or-applied).
 
 **Running**:
 The synced, on-device configuration state — produced and consumed entirely

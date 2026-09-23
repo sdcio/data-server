@@ -358,6 +358,190 @@ func TestTransactionSet_SensitivePathsPersisted(t *testing.T) {
 	}
 }
 
+// TestTransactionSet_IntentDeleteFailureHardFailsTransaction is the
+// regression test for the asymmetry ADR 0003 fixes: a failed IntentDelete
+// RPC must hard-fail the transaction the same way a failed IntentModify
+// already does, rather than being logged and swallowed — a swallowed
+// failure here leaves exactly the silent ghost last-applied entry this
+// whole fix exists to close.
+func TestTransactionSet_IntentDeleteFailureHardFailsTransaction(t *testing.T) {
+	ctx := context.Background()
+
+	sc, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	scb := schemaClient.NewSchemaClientBound(schema, sc)
+
+	fixtureDevice := &sdcio_schema.Device{
+		Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+			"ethernet-1/1": {
+				Name:        ygot.String("ethernet-1/1"),
+				Description: ygot.String("existing"),
+			},
+		},
+	}
+	fixtureIntent := buildFixtureIntent(t, scb, "intent1", 10, fixtureDevice)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	wantErr := errors.New("delete rpc failed")
+	ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
+	ccb.EXPECT().
+		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
+			intentChan <- treeproto.NewProtoTreeImporter(fixtureIntent)
+			close(intentChan)
+			close(errChan)
+		}).AnyTimes()
+	ccb.EXPECT().IntentDelete(gomock.Any(), "intent1", gomock.Any()).Return(wantErr)
+
+	sbi := mocktarget.NewMockTarget(ctrl)
+	sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).AnyTimes()
+
+	vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	tc := tree.NewTreeContext(scb, vpf)
+	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := syncTreeRoot.FinishInsertionPhase(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	ds := &Datastore{
+		config: &config.DatastoreConfig{
+			Validation: config.NewValidationConfig(),
+			Name:       "test-ds",
+		},
+		syncTreeMutex:      &sync.RWMutex{},
+		syncTree:           syncTreeRoot,
+		taskPool:           vpf,
+		cacheClient:        ccb,
+		sbi:                sbi,
+		dmutex:             &sync.Mutex{},
+		schemaClient:       scb,
+		sensitivePathIndex: treetypes.NewSensitivePathIndex(),
+	}
+	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
+
+	ti := types.NewTransactionIntent("intent1", 10)
+	ti.SetDeleteFlag()
+
+	_, err = ds.TransactionSet(ctx, "txn-delete-fail", []*types.TransactionIntent{ti}, nil, 10*time.Second, false)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("TransactionSet() error = %v, want wrapped %v", err, wantErr)
+	}
+}
+
+// TestTransactionRollback_RestoresDeletedIntent verifies a rollback (the
+// same path a timeout/cancel drives via TransactionManager.Cancel) re-runs
+// TransactionSet on the transaction's old intents, and that a deleted
+// intent's IntentModify call during that replay carries the pre-delete
+// content back — the "rollback restores it" half of ADR 0003, symmetric
+// with device-state rollback.
+func TestTransactionRollback_RestoresDeletedIntent(t *testing.T) {
+	ctx := context.Background()
+
+	sc, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	scb := schemaClient.NewSchemaClientBound(schema, sc)
+
+	fixtureDevice := &sdcio_schema.Device{
+		Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+			"ethernet-1/1": {
+				Name:        ygot.String("ethernet-1/1"),
+				Description: ygot.String("existing"),
+			},
+		},
+	}
+	fixtureIntent := buildFixtureIntent(t, scb, "intent1", 10, fixtureDevice)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	var deleteCalls int
+	var modifyCalls []*tree_persist.Intent
+	ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
+	ccb.EXPECT().
+		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
+			intentChan <- treeproto.NewProtoTreeImporter(fixtureIntent)
+			close(intentChan)
+			close(errChan)
+		}).AnyTimes()
+	ccb.EXPECT().
+		IntentDelete(gomock.Any(), "intent1", gomock.Any()).
+		DoAndReturn(func(context.Context, string, bool) error {
+			deleteCalls++
+			return nil
+		}).AnyTimes()
+	ccb.EXPECT().
+		IntentModify(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, intent *tree_persist.Intent) error {
+			modifyCalls = append(modifyCalls, intent)
+			return nil
+		}).AnyTimes()
+	ccb.EXPECT().RunningModify(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	sbi := mocktarget.NewMockTarget(ctrl)
+	sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).AnyTimes()
+
+	vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	tc := tree.NewTreeContext(scb, vpf)
+	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := syncTreeRoot.FinishInsertionPhase(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	ds := &Datastore{
+		config: &config.DatastoreConfig{
+			Validation: config.NewValidationConfig(),
+			Name:       "test-ds",
+		},
+		syncTreeMutex:      &sync.RWMutex{},
+		syncTree:           syncTreeRoot,
+		taskPool:           vpf,
+		cacheClient:        ccb,
+		sbi:                sbi,
+		dmutex:             &sync.Mutex{},
+		schemaClient:       scb,
+		sensitivePathIndex: treetypes.NewSensitivePathIndex(),
+	}
+	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
+
+	ti := types.NewTransactionIntent("intent1", 10)
+	ti.SetDeleteFlag()
+
+	_, err = ds.TransactionSet(ctx, "txn-rollback", []*types.TransactionIntent{ti}, nil, 10*time.Second, false)
+	if err != nil {
+		t.Fatalf("TransactionSet() (delete) error = %v", err)
+	}
+	if deleteCalls != 1 {
+		t.Fatalf("IntentDelete call count = %d, want 1", deleteCalls)
+	}
+	if len(modifyCalls) != 0 {
+		t.Fatalf("IntentModify call count after delete = %d, want 0", len(modifyCalls))
+	}
+
+	if err := ds.transactionManager.Cancel(ctx, "txn-rollback"); err != nil {
+		t.Fatalf("Cancel() (rollback) error = %v", err)
+	}
+
+	if len(modifyCalls) != 1 {
+		t.Fatalf("IntentModify call count after rollback = %d, want 1 (restore)", len(modifyCalls))
+	}
+	if got := modifyCalls[0].GetIntentName(); got != "intent1" {
+		t.Errorf("restored intent name = %q, want %q", got, "intent1")
+	}
+}
+
 // TestForEachIntent_NarrowIntentReader verifies forEachIntent streams every
 // intent from cc and invokes fn for each one. It is built against a
 // MockBoundIntentReader — not the full MockCacheClientBound — since
