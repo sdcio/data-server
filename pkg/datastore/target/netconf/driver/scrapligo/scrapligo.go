@@ -15,7 +15,9 @@
 package scrapligo
 
 import (
+	"errors"
 	"fmt"
+	"io"
 
 	"github.com/beevik/etree"
 	scraplinetconf "github.com/scrapli/scrapligo/driver/netconf"
@@ -25,6 +27,27 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore/target/netconf/types"
 )
+
+// normalizeTransportError translates scrapligo's own opaque connection-drop
+// sentinel (util.ErrConnectionError) into io.EOF.
+//
+// scrapligo's channel read loop swallows a real transport io.EOF/connection
+// drop and re-surfaces it as util.ErrConnectionError (see
+// scrapligo/channel/read.go and driver/netconf/rpc.go), so callers that only
+// understand the standard io/net error vocabulary would otherwise never
+// recognize a mid-flight transport drop. This keeps that scrapligo-specific
+// knowledge contained to this driver adapter, per the Driver interface
+// abstraction: everything on the other side of the Driver interface (nc.go)
+// stays driver-agnostic and only needs to know about io.EOF/net.Error.
+func normalizeTransportError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, util.ErrConnectionError) {
+		return fmt.Errorf("%w: %w", io.EOF, err)
+	}
+	return err
+}
 
 type ScrapligoNetconfTarget struct {
 	driver *scraplinetconf.Driver
@@ -95,7 +118,7 @@ func (snt *ScrapligoNetconfTarget) EditConfig(target string, config string) (*ty
 	// send the edit config rpc
 	resp, err := snt.driver.EditConfig(target, xdoc)
 	if err != nil {
-		return nil, err
+		return nil, normalizeTransportError(err)
 	}
 	if len(resp.ErrorMessages) > 0 {
 		return nil, resp.Failed
@@ -119,7 +142,7 @@ func (snt *ScrapligoNetconfTarget) GetConfig(source string, filter string) (*typ
 	// execute the GetConfig rpc
 	resp, err := snt.driver.GetConfig(source, filterDoc, options.WithNetconfForceSelfClosingTags())
 	if err != nil {
-		return nil, err
+		return nil, normalizeTransportError(err)
 	}
 	if resp.Failed != nil {
 		return nil, resp.Failed
@@ -151,7 +174,7 @@ func (snt *ScrapligoNetconfTarget) Commit() error {
 	// execute the Commit rpc
 	resp, err := snt.driver.Commit()
 	if err != nil {
-		return err
+		return normalizeTransportError(err)
 	}
 	if resp.Failed != nil {
 		return resp.Failed
