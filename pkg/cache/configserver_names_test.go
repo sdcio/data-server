@@ -73,3 +73,48 @@ func TestSplitDatastoreName(t *testing.T) {
 		})
 	}
 }
+
+func TestLookupConfigName(t *testing.T) {
+	target := configserver.Target{Namespace: "prod", Name: "srl1"}
+
+	tests := []struct {
+		name       string
+		intentName string
+		want       string
+	}{
+		{
+			name:       "prefix match",
+			intentName: "prod.intent1",
+			want:       "intent1",
+		},
+		{
+			name:       "prefix match with dots in rest",
+			intentName: "prod.rack1.intent1",
+			want:       "rack1.intent1",
+		},
+		{
+			name:       "bare pass-through",
+			intentName: "intent1",
+			want:       "intent1",
+		},
+		{
+			name:       "other namespace pass-through",
+			intentName: "other.intent1",
+			want:       "other.intent1",
+		},
+		{
+			name:       "empty rest",
+			intentName: "prod.",
+			want:       "prod.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := lookupConfigName(target, tt.intentName)
+			if got != tt.want {
+				t.Errorf("lookupConfigName(%+v, %q) = %q, want %q", target, tt.intentName, got, tt.want)
+			}
+		})
+	}
+}
