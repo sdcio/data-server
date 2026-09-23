@@ -78,8 +78,10 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 }
 
 // replaceIntent takes a Transaction and treats it as a replaceIntent, replacing the whole device configuration with the content of the given intent.
+// runningProto is the pre-fetched Running snapshot (fetched once, up front, by the caller) that
+// replaceIntent uses as the base onto which the replace content is applied.
 // returns the warnings as a []string and potential errors that happend during validation / from SBI Set()
-func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transaction) ([]string, error) {
+func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transaction, runningProto *tree_persist.Intent) ([]string, error) {
 	log := logger.FromContext(ctx).WithValues("transaction-type", "replace")
 	ctx = logger.IntoContext(ctx, log)
 
@@ -92,11 +94,6 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 		return nil, err
 	}
 
-	// store the actual / old running in the transaction
-	runningProto, err := d.cacheClient.IntentGet(ctx, consts.RunningIntentName)
-	if err != nil {
-		return nil, err
-	}
 	_, err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto), treetypes.NewUpdateInsertFlags(), d.taskPool)
 	if err != nil {
 		return nil, err
@@ -275,10 +272,6 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	}
 
 	log.V(logger.VDebug).Info("nonrevertive infos", "data", treeContext.NonRevertiveInfo().String())
-
-	les := ops.LeafsOfOwner(root.Entry, consts.RunningIntentName)
-
-	transaction.GetOldRunning().AddUpdates(les.ToPathAndUpdateSlice())
 
 	log.V(logger.VDebug).Info("transaction finish tree insertion phase")
 	// FinishInsertion Phase
@@ -459,6 +452,72 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates api.LeafVaria
 	return nil
 }
 
+// replaceThenMerge is the shared "replace-then-merge" orchestration used by both TransactionSet
+// and TransactionRollback (via DatastoreRollbackAdapter): it captures the pre-replace/pre-merge
+// Running snapshot exactly once, up front, applies the replace phase if the transaction carries a
+// .replace, and then runs the merge phase (lowlevelTransactionSet). Sharing this between the two
+// callers is what makes a rollback transaction's own .replace (see Transaction.GetRollbackTransaction)
+// actually take effect, instead of being silently dropped.
+func (d *Datastore) replaceThenMerge(ctx context.Context, transaction *types.Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
+	log := logger.FromContext(ctx)
+
+	// single up-front fetch of the Running intent. This is the one-shot pre-replace/pre-merge
+	// snapshot: it feeds both the oldRunning capture below and replaceIntent's own use of it,
+	// avoiding a TOCTOU gap between two separate fetches.
+	runningProto, err := d.cacheClient.IntentGet(ctx, consts.RunningIntentName)
+	if err != nil {
+		// Running may simply not have been persisted to the cache yet (e.g. the very first
+		// transaction ever on a freshly created datastore, before any writeBackSyncTree has run).
+		// Disambiguate that harmless case from a genuine fetch error.
+		exists, existsErr := d.cacheClient.IntentExists(ctx, consts.RunningIntentName)
+		if existsErr != nil {
+			return nil, existsErr
+		}
+		if exists {
+			return nil, err
+		}
+		runningProto = nil
+	}
+
+	// capture the pre-replace/pre-merge Running snapshot on the transaction, so that a
+	// GetRollbackTransaction() call later has something to revert a replace transaction to.
+	oldRunningUpdates, err := d.runningSnapshotUpdates(ctx, runningProto)
+	if err != nil {
+		return nil, err
+	}
+	transaction.GetOldRunning().AddUpdates(oldRunningUpdates)
+
+	// if a replace is set on the transaction, kick off the replace intent processing first
+	if transaction.GetReplace() != nil {
+		replaceWarn, err := d.replaceIntent(ctx, transaction, runningProto)
+		if err != nil {
+			log.Error(err, "error setting replace intent")
+			return nil, err
+		}
+		// TODO: do something with these warnings
+		_ = replaceWarn
+	}
+
+	return d.lowlevelTransactionSet(ctx, transaction, dryRun)
+}
+
+// runningSnapshotUpdates converts a Running intent snapshot (as returned by
+// d.cacheClient.IntentGet(ctx, consts.RunningIntentName)) into the flat PathAndUpdate
+// representation used to populate Transaction.oldRunning.
+func (d *Datastore) runningSnapshotUpdates(ctx context.Context, runningProto *tree_persist.Intent) ([]*treetypes.PathAndUpdate, error) {
+	tc := tree.NewTreeContext(d.schemaClient, d.taskPool)
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		return nil, err
+	}
+	_, err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto), treetypes.NewUpdateInsertFlags(), d.taskPool)
+	if err != nil {
+		return nil, err
+	}
+	les := ops.LeafsOfOwner(root.Entry, consts.RunningIntentName)
+	return les.ToPathAndUpdateSlice(), nil
+}
+
 func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, transactionIntents []*types.TransactionIntent, replaceIntent *types.TransactionIntent, transactionTimeout time.Duration, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
 	log := logger.FromContext(ctx)
 	var err error
@@ -506,24 +565,13 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	// add the replaceIntent to the transaction
 	transaction.SetReplace(replaceIntent)
 
-	// if replace intent is provided, kickoff the replace intent processing first
-	if transaction.GetReplace() != nil {
-		replaceWarn, err := d.replaceIntent(ctx, transaction)
-		if err != nil {
-			log.Error(err, "error setting replace intent")
-			return nil, err
-		}
-		// TODO: do something with these warnings
-		_ = replaceWarn
-	}
-
 	err = transaction.AddTransactionIntents(transactionIntents, types.TransactionIntentNew)
 	if err != nil {
 		log.Error(err, "error adding intents to transaction")
 		return nil, err
 	}
 
-	// no-op transaction
+	// no-op transaction. Evaluated before any replace/merge work runs.
 	if transaction.IsNoOp() {
 		// we expect a transaction confirm from the client
 		transactionGuard.Success()
@@ -532,7 +580,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 		}, nil
 	}
 
-	response, err := d.lowlevelTransactionSet(ctx, transaction, dryRun)
+	response, err := d.replaceThenMerge(ctx, transaction, dryRun)
 	// if it is a validation error, we need to send the response while not successing the transaction guard
 	// since validation errors are transported in the response itself, not in the seperate error
 	if errors.Is(err, ErrValidation) {
