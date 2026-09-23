@@ -51,10 +51,9 @@ func TestCreateConfigServerCacheClient(t *testing.T) {
 // config-server case composes a Client whose IntentModify/IntentDelete are
 // real writes reaching the GRPCConfigClient seam (see
 // pkg/cache/docs/adr/0003-config-server-write-path-real-last-applied-writes.md)
-// rather than the generic no-op writer other backends fall back to. It only
-// exercises the malformed-name fast path — asserting ErrMalformedDatastoreName
-// rather than the generic noop nil — since anything past that would need a
-// live config-server connection to answer.
+// rather than a no-op IntentWriter. It only exercises the malformed-name
+// fast path — asserting ErrMalformedDatastoreName rather than a silent nil —
+// since anything past that would need a live config-server connection to answer.
 func TestCreateConfigServerCacheClient_WritesReachTheClientSeam(t *testing.T) {
 	s := &Server{
 		config: &config.Config{

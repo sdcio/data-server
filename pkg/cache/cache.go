@@ -29,8 +29,11 @@ type IntentReader interface {
 	InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error)
 }
 
-// IntentWriter persists real Intents. A backend that does not own those
-// writes (config-server: kube-api writes them) composes noopIntentWriter.
+// IntentWriter persists real Intents. Every current backend (LocalCache,
+// ConfigServerCache) implements this directly. A future backend that
+// genuinely cannot own real-Intent writes would need an explicit no-op
+// composition at Server.createCacheClient so the type system makes that
+// lack of ownership visible.
 type IntentWriter interface {
 	InstanceIntentModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error
 	InstanceIntentDelete(ctx context.Context, cacheName string, intentName string, IgnoreNonExisting bool) error

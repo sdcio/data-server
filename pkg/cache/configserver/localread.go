@@ -13,14 +13,15 @@
 // limitations under the License.
 
 // Package configserver defines the seam between the config-server-backed
-// cache.Client and the outside world it reads real Intents from.
+// cache.Client and the outside world it reads and writes real Intents
+// through.
 //
-// LocalConfigReader is exactly what that backend needs: get one Document by
-// name, list every Document for a target. Nothing more. This decouples the
-// backend (built behind this interface) from the real cross-repo transport
-// (a unary gRPC service on config-server's colocated controller, defined in
-// sdc-protos and wired up in later tickets) — the backend can be built and
-// fully unit-tested against the fake in this package right now.
+// LocalConfigReader is exactly what that backend needs for reads: get one
+// Document by name, list every Document for a target. Nothing more. This
+// decouples the backend from the cross-repo transport (a unary gRPC
+// ConfigSnapshotService on config-server's colocated controller, defined in
+// sdc-protos and implemented here by GRPCConfigClient) — the backend can
+// still be fully unit-tested against the fake in this package.
 package configserver
 
 import (
