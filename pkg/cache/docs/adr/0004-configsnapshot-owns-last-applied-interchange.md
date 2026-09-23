@@ -8,7 +8,7 @@
 
 ADR 0003 made last-applied writes real under `Cache.Type: config-server`. The write path flattens `tree_persist.Intent` into the ConfigSnapshotService DTO (`Document` — a Go type name only, not a domain term; see `CONTEXT.md` Last-applied), and the read path merges that DTO back into an `ImportConfigAdapter`. Those two halves of one interchange lived in different packages (`pkg/cache/configserver` vs `pkg/tree/importer/configserver`), with a package cycle on the DTO and no single place to ask “what does a Modify round-trip look like?”
 
-**Decision:** own the interchange in `pkg/cache/configsnapshot` — `Target`, `Document`, `ConfigBlob`, `DocumentFromIntent`, blob merge, and `NewImportAdapter` as package functions. `pkg/cache/configserver` keeps only the remote port (`LocalConfigClient` / gRPC / fake) and imports the DTO from `configsnapshot`. `ConfigServerCache` only orchestrates (codec ↔ client). Delete `pkg/tree/importer/configserver` (no re-export shim). Prefer round-trip tests in `configsnapshot`, plus a Fake Modify→Get that asserts tree content.
+**Decision:** own the interchange in `pkg/cache/configsnapshot` — `Target`, `Document`, `ConfigBlob`, `DocumentFromIntent`, blob merge, and `NewImportAdapter` as package functions. `pkg/cache/configserver` keeps only the remote port (`ConfigSnapshotClient` / gRPC / fake) and imports the DTO from `configsnapshot`. `ConfigServerCache` only orchestrates (codec ↔ client). Delete `pkg/tree/importer/configserver` (no re-export shim). Prefer round-trip tests in `configsnapshot`, plus a Fake Modify→Get that asserts tree content.
 
 ## Considered options
 

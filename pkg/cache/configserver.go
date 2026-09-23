@@ -29,7 +29,7 @@ import (
 )
 
 // ConfigServerCache is the Cache.Type: config-server Client: real Intents
-// are read through and written to a configserver.LocalConfigClient seam over
+// are read through and written to a configserver.ConfigSnapshotClient port over
 // the colocated config-server controller (ConfigSnapshotService) — this
 // backend never persists its own copy of them, and Modify/Delete write
 // through synchronously at apply time, the same moment Cache.Type: local
@@ -37,9 +37,9 @@ import (
 // (see pkg/cache/docs/adr/0003-config-server-write-path-real-last-applied-writes.md).
 // "running" is unaffected by backend choice (see the ADR): it is kept in its
 // own independent in-memory, per-instance store, entirely separate from the
-// seam.
+// port.
 type ConfigServerCache struct {
-	client configserver.LocalConfigClient
+	client configserver.ConfigSnapshotClient
 
 	mu      sync.RWMutex
 	running map[string]*tree_persist.Intent
@@ -50,8 +50,8 @@ type ConfigServerCache struct {
 // cacheInstanceName it's given (see target), so a single ConfigServerCache
 // correctly serves datastores across multiple Kubernetes namespaces.
 // ConfigServerCache satisfies IntentWriter directly (Modify/Delete write
-// through the LocalConfigClient seam to config-server).
-func NewConfigServerCache(client configserver.LocalConfigClient) *ConfigServerCache {
+// through the ConfigSnapshotClient port to config-server).
+func NewConfigServerCache(client configserver.ConfigSnapshotClient) *ConfigServerCache {
 	return &ConfigServerCache{
 		client:  client,
 		running: map[string]*tree_persist.Intent{},
@@ -232,7 +232,7 @@ func (c *ConfigServerCache) InstanceIntentGetAll(ctx context.Context, cacheName 
 
 // InstanceRunningGet/InstanceRunningModify back "running" with its own
 // independent in-memory, per-instance store — entirely separate from the
-// seam, since "running" never touches config-server under any backend.
+// port, since "running" never touches config-server under any backend.
 
 func (c *ConfigServerCache) InstanceRunningGet(ctx context.Context, cacheName string) (importer.ImportConfigAdapter, error) {
 	c.mu.RLock()
@@ -255,7 +255,7 @@ func (c *ConfigServerCache) InstanceRunningModify(ctx context.Context, cacheName
 }
 
 // InstanceIntentModify flattens intent into a Document (see
-// configsnapshot.DocumentFromIntent) and writes it through the seam
+// configsnapshot.DocumentFromIntent) and writes it through the port
 // synchronously, at the same moment TransactionSet's apply loop calls it —
 // matching Cache.Type: local's write-at-apply timing so last-applied never
 // lags behind southbound apply.
@@ -272,13 +272,13 @@ func (c *ConfigServerCache) InstanceIntentModify(ctx context.Context, cacheName 
 	return c.client.Modify(ctx, target, doc)
 }
 
-// InstanceIntentDelete writes through the seam's Delete synchronously.
+// InstanceIntentDelete writes through the port's Delete synchronously.
 // ignoreNonExisting is part of the IntentWriter signature but unused here:
-// LocalConfigWriter.Delete's current implementations (GRPCConfigClient,
-// FakeLocalConfigClient) are unconditionally idempotent on a missing name —
+// ConfigSnapshotClient.Delete's current implementations (GRPCConfigClient,
+// FakeConfigSnapshotClient) are unconditionally idempotent on a missing name —
 // TargetSnapshot's membership model has no tombstone to distinguish
 // "already gone" from "never existed" — so there's nothing for this flag to
-// gate against today. A future LocalConfigWriter that needed to distinguish
+// gate against today. A future ConfigSnapshotClient that needed to distinguish
 // the two would take ignoreNonExisting as a parameter on Delete itself.
 func (c *ConfigServerCache) InstanceIntentDelete(ctx context.Context, cacheName string, intentName string, ignoreNonExisting bool) error {
 	target, err := c.target(cacheName)

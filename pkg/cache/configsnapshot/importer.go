@@ -36,13 +36,8 @@ type documentImporter struct {
 	sensitivePaths []*sdcpb.Path
 }
 
-<<<<<<<< HEAD:pkg/cache/configserver/importer.go
 // NewImportAdapter builds the importer.IntentAdapter for doc.
 func NewImportAdapter(doc *Document) (importer.IntentAdapter, error) {
-========
-// NewImportAdapter builds the importer.ImportConfigAdapter for doc.
-func NewImportAdapter(doc *Document) (importer.ImportConfigAdapter, error) {
->>>>>>>> 6f0d373 (Extract last-applied Document interchange into configsnapshot.):pkg/cache/configsnapshot/importer.go
 	root, err := mergeConfigBlobs(doc.Config)
 	if err != nil {
 		return nil, fmt.Errorf("configsnapshot: building config for %q: %w", doc.Name, err)

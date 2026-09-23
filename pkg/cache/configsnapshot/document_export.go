@@ -26,9 +26,9 @@ import (
 
 // DocumentFromIntent flattens a tree_persist.Intent — the schema-typed tree
 // ops.TreeExport produces for one owner's contribution at apply time — into
-// the same flat Document shape LocalConfigReader already returns for
-// reads, so LocalConfigWriter.Modify can send it as a ConfigSnapshotService
-// wire payload without a second, parallel field-mapping table.
+// the same flat Document shape ConfigSnapshotClient already returns for
+// reads, so Modify can send it as a ConfigSnapshotService wire payload
+// without a second, parallel field-mapping table.
 //
 // The whole tree collapses into a single ConfigBlob at path "/": each
 // TreeElement becomes a JSON object key, with same-named siblings — the
