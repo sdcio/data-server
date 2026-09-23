@@ -24,8 +24,8 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 )
 
-func TestFakeLocalConfigClient_GetNotFound(t *testing.T) {
-	f := NewFakeLocalConfigClient()
+func TestFakeConfigSnapshotClient_GetNotFound(t *testing.T) {
+	f := NewFakeConfigSnapshotClient()
 
 	_, err := f.Get(context.Background(), Target{Namespace: "ns1", Name: "target1"}, "missing")
 	if !errors.Is(err, ErrNotFound) {
@@ -33,8 +33,8 @@ func TestFakeLocalConfigClient_GetNotFound(t *testing.T) {
 	}
 }
 
-func TestFakeLocalConfigClient_GetNotFound_UnknownTarget(t *testing.T) {
-	f := NewFakeLocalConfigClient()
+func TestFakeConfigSnapshotClient_GetNotFound_UnknownTarget(t *testing.T) {
+	f := NewFakeConfigSnapshotClient()
 	f.Seed(Target{Namespace: "ns1", Name: "target1"}, &Document{Name: "intent1"})
 
 	_, err := f.Get(context.Background(), Target{Namespace: "ns1", Name: "other-target"}, "intent1")
@@ -43,8 +43,8 @@ func TestFakeLocalConfigClient_GetNotFound_UnknownTarget(t *testing.T) {
 	}
 }
 
-func TestFakeLocalConfigClient_SeedAndGet(t *testing.T) {
-	f := NewFakeLocalConfigClient()
+func TestFakeConfigSnapshotClient_SeedAndGet(t *testing.T) {
+	f := NewFakeConfigSnapshotClient()
 	target := Target{Namespace: "ns1", Name: "target1"}
 
 	want := &Document{
@@ -70,8 +70,8 @@ func TestFakeLocalConfigClient_SeedAndGet(t *testing.T) {
 	}
 }
 
-func TestFakeLocalConfigClient_List(t *testing.T) {
-	f := NewFakeLocalConfigClient()
+func TestFakeConfigSnapshotClient_List(t *testing.T) {
+	f := NewFakeConfigSnapshotClient()
 	target := Target{Namespace: "ns1", Name: "target1"}
 	other := Target{Namespace: "ns1", Name: "other-target"}
 
@@ -92,8 +92,8 @@ func TestFakeLocalConfigClient_List(t *testing.T) {
 	}
 }
 
-func TestFakeLocalConfigClient_ListEmptyForUnknownTarget(t *testing.T) {
-	f := NewFakeLocalConfigClient()
+func TestFakeConfigSnapshotClient_ListEmptyForUnknownTarget(t *testing.T) {
+	f := NewFakeConfigSnapshotClient()
 
 	got, err := f.List(context.Background(), Target{Namespace: "ns1", Name: "target1"})
 	if err != nil {
@@ -104,8 +104,8 @@ func TestFakeLocalConfigClient_ListEmptyForUnknownTarget(t *testing.T) {
 	}
 }
 
-func TestFakeLocalConfigClient_SeedReplacesByName(t *testing.T) {
-	f := NewFakeLocalConfigClient()
+func TestFakeConfigSnapshotClient_SeedReplacesByName(t *testing.T) {
+	f := NewFakeConfigSnapshotClient()
 	target := Target{Namespace: "ns1", Name: "target1"}
 
 	f.Seed(target, &Document{Name: "intent1", Priority: 1})
@@ -120,8 +120,8 @@ func TestFakeLocalConfigClient_SeedReplacesByName(t *testing.T) {
 	}
 }
 
-func TestFakeLocalConfigClient_Reset(t *testing.T) {
-	f := NewFakeLocalConfigClient()
+func TestFakeConfigSnapshotClient_Reset(t *testing.T) {
+	f := NewFakeConfigSnapshotClient()
 	target := Target{Namespace: "ns1", Name: "target1"}
 	f.Seed(target, &Document{Name: "intent1"})
 
@@ -133,11 +133,11 @@ func TestFakeLocalConfigClient_Reset(t *testing.T) {
 	}
 }
 
-// TestFakeLocalConfigClient_ModifyThenGet locks read-after-write: a Modify
+// TestFakeConfigSnapshotClient_ModifyThenGet locks read-after-write: a Modify
 // must be immediately visible to Get, the real-write behavior this fake
-// exists to let ConfigServerCache's writer be tested against.
-func TestFakeLocalConfigClient_ModifyThenGet(t *testing.T) {
-	f := NewFakeLocalConfigClient()
+// exists to let ConfigServerCache's IntentWriter path be tested against.
+func TestFakeConfigSnapshotClient_ModifyThenGet(t *testing.T) {
+	f := NewFakeConfigSnapshotClient()
 	target := Target{Namespace: "ns1", Name: "target1"}
 
 	if err := f.Modify(context.Background(), target, &Document{Name: "intent1", Priority: 5}); err != nil {
@@ -153,9 +153,9 @@ func TestFakeLocalConfigClient_ModifyThenGet(t *testing.T) {
 	}
 }
 
-// TestFakeLocalConfigClient_DeleteRemovesEntry locks read-after-delete.
-func TestFakeLocalConfigClient_DeleteRemovesEntry(t *testing.T) {
-	f := NewFakeLocalConfigClient()
+// TestFakeConfigSnapshotClient_DeleteRemovesEntry locks read-after-delete.
+func TestFakeConfigSnapshotClient_DeleteRemovesEntry(t *testing.T) {
+	f := NewFakeConfigSnapshotClient()
 	target := Target{Namespace: "ns1", Name: "target1"}
 	f.Seed(target, &Document{Name: "intent1"}, &Document{Name: "intent2"})
 
@@ -171,10 +171,10 @@ func TestFakeLocalConfigClient_DeleteRemovesEntry(t *testing.T) {
 	}
 }
 
-// TestFakeLocalConfigClient_DeleteMissingIsNoop locks idempotent-delete,
+// TestFakeConfigSnapshotClient_DeleteMissingIsNoop locks idempotent-delete,
 // matching the real ConfigSnapshotService.Delete contract.
-func TestFakeLocalConfigClient_DeleteMissingIsNoop(t *testing.T) {
-	f := NewFakeLocalConfigClient()
+func TestFakeConfigSnapshotClient_DeleteMissingIsNoop(t *testing.T) {
+	f := NewFakeConfigSnapshotClient()
 
 	if err := f.Delete(context.Background(), Target{Namespace: "ns1", Name: "target1"}, "missing"); err != nil {
 		t.Errorf("Delete() of missing entry: %v, want no-op success", err)
