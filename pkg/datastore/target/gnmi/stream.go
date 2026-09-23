@@ -195,7 +195,13 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, sy
 				defer syncRunning.Store(false)
 				if err := s.syncToRunning(treeToCommit, true); err != nil {
 					log.Error(err, "failed committing synctree to running")
+					return
 				}
+				// Running has now completed its first successful sync cycle
+				// from this mechanism. MarkSynced is idempotent, so this is
+				// safe even though buildTreeSyncWithDatastore may reach here
+				// again on reconnect/resubscribe.
+				s.runningStore.MarkSynced(s.config.Name)
 			}()
 		case <-tickerChan:
 			if syncRunning.Load() {

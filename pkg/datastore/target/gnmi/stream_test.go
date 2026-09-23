@@ -29,7 +29,8 @@ type fakeRunningStore struct {
 	firstStarted     chan struct{}
 	firstStartedOnce sync.Once
 
-	calls atomic.Int32
+	calls  atomic.Int32
+	synced sync.Map
 }
 
 func newFakeRunningStore(sc *schemaClientPkg.SchemaClientBoundImpl, vp pool.VirtualPoolFactory) *fakeRunningStore {
@@ -55,6 +56,15 @@ func (f *fakeRunningStore) ApplyToRunning(ctx context.Context, _ []*sdcpb.Path, 
 func (f *fakeRunningStore) NewEmptyTree(ctx context.Context) (*tree.RootEntry, error) {
 	tc := tree.NewTreeContext(f.sc, f.vp)
 	return tree.NewTreeRoot(ctx, tc)
+}
+
+func (f *fakeRunningStore) MarkSynced(name string) {
+	f.synced.Store(name, true)
+}
+
+func (f *fakeRunningStore) isSynced(name string) bool {
+	v, ok := f.synced.Load(name)
+	return ok && v.(bool)
 }
 
 // fakeSyncTarget implements SyncTarget with channels the test controls.
@@ -192,6 +202,66 @@ func TestBuildTreeSyncWithDatastore_PostSyncNotificationsNotDropped(t *testing.T
 	}
 }
 
+// TestBuildTreeSyncWithDatastore_MarksSyncedAfterFirstSyncResponse verifies
+// that the runningStore is marked Synced for this sync's name once the first
+// syncToRunning triggered by a gNMI SyncResponse completes successfully.
+func TestBuildTreeSyncWithDatastore_MarksSyncedAfterFirstSyncResponse(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	sc, schemaConf, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatalf("init schema: %v", err)
+	}
+	scb := schemaClientPkg.NewSchemaClientBound(schemaConf, sc)
+
+	sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	store := newFakeRunningStore(scb, sharedPool)
+	// no blocking needed for this test: unblock immediately
+	close(store.firstUnblock)
+
+	respChan := make(chan *gnmi.SubscribeResponse, 10)
+	target := &fakeSyncTarget{
+		respChan: respChan,
+		errChan:  make(chan error, 1),
+	}
+
+	const syncName = "test-sync"
+	ss := NewStreamSync(ctx, target, &config.SyncProtocol{
+		Name:  syncName,
+		Paths: []string{"/"},
+		Mode:  "on-change",
+	}, store, scb, sharedPool)
+
+	if err := ss.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() {
+		if err := ss.Stop(); err != nil {
+			t.Errorf("Stop: %v", err)
+		}
+	}()
+
+	if store.isSynced(syncName) {
+		t.Fatal("runningStore reports Synced before any SyncResponse was received")
+	}
+
+	respChan <- interfaceDescriptionNotif("ethernet-1/1", "pre-sync")
+	respChan <- syncRespMsg()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if store.isSynced(syncName) {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	if !store.isSynced(syncName) {
+		t.Errorf("runningStore.MarkSynced(%q) was not called after the first successful sync", syncName)
+	}
+}
+
 // TestBuildTreeSyncWithDatastore_NewEmptyTreeFailureExits verifies that
 // buildTreeSyncWithDatastore exits cleanly rather than panicking when
 // NewEmptyTree fails after the initial sync handoff.
@@ -261,4 +331,8 @@ func (f *failAfterFirstNewEmptyTree) NewEmptyTree(ctx context.Context) (*tree.Ro
 		return nil, context.DeadlineExceeded
 	}
 	return f.inner.NewEmptyTree(ctx)
+}
+
+func (f *failAfterFirstNewEmptyTree) MarkSynced(name string) {
+	f.inner.MarkSynced(name)
 }

@@ -29,6 +29,12 @@ var (
 	ErrContextDone       = errors.New("context is closed (done)")
 	ErrValidation        = errors.New("validation error")
 	ErrNoIntentsProvided = errors.New("no intents provided")
+	// ErrNotSynced is returned by TransactionSet when Running has not yet
+	// completed its first successful sync from the target. A pre-replace
+	// Running snapshot is only trustworthy once that has happened; see
+	// pkg/datastore/docs/adr/0001-replace-revert-via-oldrunning-gated-on-synced.md.
+	// Fail-fast: no blocking/waiting variant is provided.
+	ErrNotSynced = errors.New("running has not completed its initial sync from the target")
 )
 
 // SdcpbTransactionIntentToInternalTI converts sdcpb.TransactionIntent to types.TransactionIntent
@@ -508,6 +514,15 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 
 	// if replace intent is provided, kickoff the replace intent processing first
 	if transaction.GetReplace() != nil {
+		// Gate: a replace only makes sense once Running has actually synced
+		// from the device at least once. GetReplace() != nil here implies
+		// this transaction is never a no-op, so this check never rejects a
+		// genuinely no-op transaction.
+		if err := d.checkSynced(); err != nil {
+			log.Error(err, "transaction rejected")
+			return nil, err
+		}
+
 		replaceWarn, err := d.replaceIntent(ctx, transaction)
 		if err != nil {
 			log.Error(err, "error setting replace intent")
@@ -530,6 +545,14 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 		return &sdcpb.TransactionSetResponse{
 			Warnings: []string{"no intents provided"},
 		}, nil
+	}
+
+	// Gate: reaching here means the transaction is not a no-op (IsNoOp()
+	// already returned above otherwise), so it is always correct to require
+	// Synced before the merge phase runs.
+	if err := d.checkSynced(); err != nil {
+		log.Error(err, "transaction rejected")
+		return nil, err
 	}
 
 	response, err := d.lowlevelTransactionSet(ctx, transaction, dryRun)

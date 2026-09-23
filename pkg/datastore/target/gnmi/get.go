@@ -158,6 +158,7 @@ func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
 		log.Error(err, "failure importing synctree export into running")
 		return
 	}
+	s.runningStore.MarkSynced(s.config.Name)
 	log.V(logger.VDebug).Info("syncing done")
 }
 
