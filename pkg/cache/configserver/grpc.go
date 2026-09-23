@@ -24,13 +24,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// GRPCConfigClient implements LocalConfigClient over the real
+// GRPCConfigClient implements ConfigSnapshotClient over the real
 // config_read.ConfigSnapshotService, the localhost-bound gRPC surface
 // served from inside the colocated config-server controller.
 // Get/List/Modify/Delete are all one RPC service over one resource
-// (TargetSnapshot), so one generated client structurally satisfies both the
-// LocalConfigReader and LocalConfigWriter halves of the seam (see ADR
-// 0003's "Wire contract" section).
+// (TargetSnapshot), so one generated client structurally satisfies the
+// ConfigSnapshotClient port (see ADR 0003's "Wire contract" section).
 //
 // It takes a grpc.ClientConnInterface rather than dialing one itself,
 // mirroring pkg/schema.NewRemoteClient: dial address/credentials are the
@@ -41,7 +40,7 @@ type GRPCConfigClient struct {
 	client config_read.ConfigSnapshotServiceClient
 }
 
-// NewGRPCConfigClient returns a LocalConfigClient that calls the
+// NewGRPCConfigClient returns a ConfigSnapshotClient that calls the
 // ConfigSnapshotService over cc.
 func NewGRPCConfigClient(cc grpc.ClientConnInterface) *GRPCConfigClient {
 	return &GRPCConfigClient{client: config_read.NewConfigSnapshotServiceClient(cc)}
@@ -61,7 +60,7 @@ func Dial(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 }
 
 // Get calls ConfigSnapshotService.Get, mapping a NotFound gRPC status to
-// ErrNotFound per the LocalConfigReader contract; any other error
+// ErrNotFound per the ConfigSnapshotClient contract; any other error
 // propagates unwrapped.
 func (r *GRPCConfigClient) Get(ctx context.Context, target Target, name string) (*Document, error) {
 	rsp, err := r.client.Get(ctx, &config_read.GetConfigRequest{
@@ -96,7 +95,7 @@ func (r *GRPCConfigClient) List(ctx context.Context, target Target) ([]*Document
 	return docs, nil
 }
 
-// documentFromEntry maps a config_read.ConfigEntry onto the seam's Document
+// documentFromEntry maps a config_read.ConfigEntry onto the port's Document
 // shape, field for field — no further translation happens here, that's
 // configsnapshot.NewImportAdapter's job.
 func documentFromEntry(e *config_read.ConfigEntry) *Document {
@@ -161,4 +160,4 @@ func (r *GRPCConfigClient) Delete(ctx context.Context, target Target, name strin
 	return err
 }
 
-var _ LocalConfigClient = (*GRPCConfigClient)(nil)
+var _ ConfigSnapshotClient = (*GRPCConfigClient)(nil)

@@ -45,14 +45,14 @@ const (
 	testCacheName = testNamespace + "." + testTarget
 )
 
-func newTestConfigServerCache(t *testing.T) (*ConfigServerCache, *configserver.FakeLocalConfigClient) {
+func newTestConfigServerCache(t *testing.T) (*ConfigServerCache, *configserver.FakeConfigSnapshotClient) {
 	t.Helper()
-	client := configserver.NewFakeLocalConfigClient()
+	client := configserver.NewFakeConfigSnapshotClient()
 	return NewConfigServerCache(client), client
 }
 
 // TestConfigServerCache_InstanceIntentGet_FieldMapping verifies
-// InstanceIntentGet calls the seam's Get and wraps the result per the ADR's
+// InstanceIntentGet calls the port's Get and wraps the result per the ADR's
 // field-mapping table, covering it end to end against the fake.
 func TestConfigServerCache_InstanceIntentGet_FieldMapping(t *testing.T) {
 	ctx := context.Background()
@@ -330,8 +330,11 @@ func TestConfigServerCache_InstanceLifecycle(t *testing.T) {
 
 // TestConfigServerCache_RunningIndependentOfSeam verifies InstanceRunningGet
 // / InstanceRunningModify work purely off the in-memory store, entirely
-// independent of the LocalConfigReader seam (which never sees "running" at
-// all under this backend).
+// independent of the ConfigSnapshotClient port (which never sees "running" at
+// all under this backend). InstanceRunningGet returns an
+// importer.ImportConfigAdapter (Intent reads return IntentAdapter) rather
+// than the raw *tree_persist.Intent, so the assertions go through its
+// accessors.
 func TestConfigServerCache_RunningIndependentOfSeam(t *testing.T) {
 	ctx := context.Background()
 	c, reader := newTestConfigServerCache(t)
@@ -356,7 +359,7 @@ func TestConfigServerCache_RunningIndependentOfSeam(t *testing.T) {
 		t.Errorf("InstanceRunningGet().GetPriority() = %d, want %d", gotPriority, want.GetPriority())
 	}
 
-	// The seam was never seeded with anything and never asked for
+	// The port was never seeded with anything and never asked for
 	// "running" — List/Get must still be untouched (fake has no docs at
 	// all for this target).
 	docs, err := reader.List(ctx, configserver.Target{Namespace: testNamespace, Name: testTarget})
@@ -364,7 +367,7 @@ func TestConfigServerCache_RunningIndependentOfSeam(t *testing.T) {
 		t.Fatalf("reader.List() error = %v", err)
 	}
 	if len(docs) != 0 {
-		t.Errorf("reader.List() = %v, want empty (running never touches the seam)", docs)
+		t.Errorf("reader.List() = %v, want empty (running never touches the port)", docs)
 	}
 }
 
@@ -402,14 +405,14 @@ func TestConfigServerCache_InstanceRunningGet_UnknownInstance(t *testing.T) {
 
 // TestConfigServerCache_ImplementsClient verifies *ConfigServerCache
 // satisfies the full cache.Client directly — including IntentWriter, since
-// Modify/Delete are real writes against the LocalConfigWriter seam.
+// Modify/Delete are real writes against the ConfigSnapshotClient port.
 func TestConfigServerCache_ImplementsClient(t *testing.T) {
-	c := NewConfigServerCache(configserver.NewFakeLocalConfigClient())
+	c := NewConfigServerCache(configserver.NewFakeConfigSnapshotClient())
 	var _ Client = c
 }
 
 // TestConfigServerCache_InstanceIntentModify_CreatesAndIsReadableBack
-// covers the write-then-read round trip through the seam: a modified
+// covers the write-then-read round trip through the port: a modified
 // Intent must be readable back via InstanceIntentGet with the content that
 // was written, matching the ghost-intent regression's "last-applied
 // updates at apply time" contract.
@@ -456,7 +459,7 @@ func TestConfigServerCache_InstanceIntentModify_CreatesAndIsReadableBack(t *test
 
 // TestConfigServerCache_InstanceIntentDelete_RemovesFromSeam is the
 // regression test for the ghost-intent bug this ticket exists to fix:
-// deleting an intent must make it unreadable via the seam immediately, not
+// deleting an intent must make it unreadable via the port immediately, not
 // only after some later, unrelated reconcile.
 func TestConfigServerCache_InstanceIntentDelete_RemovesFromSeam(t *testing.T) {
 	ctx := context.Background()
