@@ -592,7 +592,7 @@ func TestConfigServerBackend_DeleteApply_NoRehydration(t *testing.T) {
 
 	fakeClient := configserver.NewFakeLocalConfigClient()
 	const cacheName = "ns1.target1"
-	ccb := cache.NewCacheClientBound(cacheName, cache.NewConfigServerClient(fakeClient))
+	ccb := cache.NewCacheClientBound(cacheName, cache.NewConfigServerCache(fakeClient))
 	if err := ccb.InstanceCreate(ctx); err != nil {
 		t.Fatalf("InstanceCreate() error = %v", err)
 	}

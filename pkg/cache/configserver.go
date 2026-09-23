@@ -48,20 +48,13 @@ type ConfigServerCache struct {
 // Every InstanceIntent* call derives its target namespace/name from the
 // cacheInstanceName it's given (see target), so a single ConfigServerCache
 // correctly serves datastores across multiple Kubernetes namespaces.
+// ConfigServerCache satisfies IntentWriter directly (Modify/Delete write
+// through the LocalConfigClient seam to config-server).
 func NewConfigServerCache(client configserver.LocalConfigClient) *ConfigServerCache {
 	return &ConfigServerCache{
 		client:  client,
 		running: map[string]*tree_persist.Intent{},
 	}
-}
-
-// NewConfigServerClient returns a client-backed *ConfigServerCache as a
-// Client. ConfigServerCache satisfies IntentWriter directly now (Modify/
-// Delete write through the LocalConfigClient seam to config-server), so
-// unlike other Cache.Type backends this needs no noopIntentWriter
-// composition.
-func NewConfigServerClient(client configserver.LocalConfigClient) Client {
-	return NewConfigServerCache(client)
 }
 
 // target derives the target namespace/name from cacheInstanceName, mirroring

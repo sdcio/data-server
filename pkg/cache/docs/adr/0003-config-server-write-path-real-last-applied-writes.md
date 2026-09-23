@@ -42,7 +42,7 @@ Keeping the old name while adding `Modify`/`Delete` to it was explicitly rejecte
 
 ## Consequences
 
-- `noopIntentWriter` (`pkg/cache/noop_intent_writer.go`) is no longer composed for `Cache.Type: config-server`. It remains available in `pkg/cache` for a genuinely read-only future backend to compose — the type itself isn't wrong, only its use here was.
+- `ConfigServerCache` implements `IntentWriter` directly (real `Modify`/`Delete` through the local seam). The earlier `noopIntentWriter` composition for this backend was removed; a future genuinely read-only backend would introduce its own no-op at `Server.createCacheClient` if needed.
 - Every consumer of last-applied state (`LoadAllButRunningIntents`, `calculateDeviations`, `BlameConfig`, `GetIntent`, `performRevert`, crash recovery) gets correct apply-time semantics with no call-site changes — they already read through `Client.InstanceIntent*`/`ConfigReadService`; only what's behind that read changed.
 - `pkg/cache/CONTEXT.md` gains the **Last-applied** term, distinct from **Intent** (desired/authored). See that file for the full definition.
 - This does not reopen ADR 0001's read-path decisions (the `ImportConfigAdapter` field mapping, the `"running"` split, `ExplicitDeletes`'s documented always-empty limitation) — those stand.

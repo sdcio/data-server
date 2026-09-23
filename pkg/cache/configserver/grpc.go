@@ -26,7 +26,7 @@ import (
 
 // GRPCConfigClient implements LocalConfigClient over the real
 // config_read.ConfigSnapshotService, the localhost-bound gRPC surface
-// ticket 07 serves from inside the colocated config-server controller.
+// served from inside the colocated config-server controller.
 // Get/List/Modify/Delete are all one RPC service over one resource
 // (TargetSnapshot), so one generated client structurally satisfies both the
 // LocalConfigReader and LocalConfigWriter halves of the seam (see ADR
@@ -150,8 +150,8 @@ func (r *GRPCConfigClient) Modify(ctx context.Context, target Target, doc *Docum
 }
 
 // Delete calls ConfigSnapshotService.Delete. The server side already treats
-// a missing key/snapshot as a no-op success (see the config-server ticket
-// 02 handler), so no NotFound mapping is needed here.
+// a missing key/snapshot as a no-op success, so no NotFound mapping is needed
+// here.
 func (r *GRPCConfigClient) Delete(ctx context.Context, target Target, name string) error {
 	_, err := r.client.Delete(ctx, &config_read.DeleteConfigRequest{
 		TargetNamespace: target.Namespace,
