@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package configserver
+package configsnapshot
 
 import (
 	"fmt"
@@ -22,8 +22,8 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-// documentImporter adapts a Document — the local-read seam's representation
-// of a config-server Config (joined with its SensitiveConfig) — into an
+// documentImporter adapts a Document — the ConfigSnapshotService DTO for one
+// config-server Config (joined with its SensitiveConfig) — into an
 // importer.ImportConfigAdapter, per the ADR's field-mapping table. Traversal
 // of the merged config payload is delegated to
 // importer/json.JsonTreeImporter, which already knows how to walk the
@@ -36,11 +36,16 @@ type documentImporter struct {
 	sensitivePaths []*sdcpb.Path
 }
 
+<<<<<<<< HEAD:pkg/cache/configserver/importer.go
 // NewImportAdapter builds the importer.IntentAdapter for doc.
 func NewImportAdapter(doc *Document) (importer.IntentAdapter, error) {
+========
+// NewImportAdapter builds the importer.ImportConfigAdapter for doc.
+func NewImportAdapter(doc *Document) (importer.ImportConfigAdapter, error) {
+>>>>>>>> 6f0d373 (Extract last-applied Document interchange into configsnapshot.):pkg/cache/configsnapshot/importer.go
 	root, err := mergeConfigBlobs(doc.Config)
 	if err != nil {
-		return nil, fmt.Errorf("configserver: building config for %q: %w", doc.Name, err)
+		return nil, fmt.Errorf("configsnapshot: building config for %q: %w", doc.Name, err)
 	}
 	return &documentImporter{
 		JsonTreeImporter: jsonimporter.NewJsonTreeImporter(root, doc.IntentName(), doc.Priority, doc.NonRevertive),
