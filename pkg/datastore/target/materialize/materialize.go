@@ -25,6 +25,7 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	gnmiutils "github.com/sdcio/data-server/pkg/datastore/target/gnmi/utils"
+	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/permodule"
 	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/ops"
@@ -44,7 +45,7 @@ import (
 // Supported SBI types:
 //   - "gnmi"  with empty DeviceProfile  →  GnmiSetPlan (single root update)
 //   - "gnmi"  with DeviceProfile "sonic"  →  error until SONiC NOS PR enables encoding
-//   - "gnmi"  with DeviceProfile "cisco-ios-xr"  →  error until Cisco NOS PR enables encoding
+//   - "gnmi"  with DeviceProfile "cisco-ios-xr" + JSON_IETF  →  GnmiSetPlan (per YANG module via permodule)
 //   - "netconf" with empty DeviceProfile  →  NetconfSetPlan
 //   - "netconf" with a non-generic DeviceProfile  →  error until the matching NOS PR
 func BuildPlan(ctx context.Context, scb schemaClient.SchemaClientBound, sbi *config.SBI, entry api.Entry, replace bool) (targettypes.SouthboundSetPlan, error) {
@@ -61,7 +62,7 @@ func BuildPlan(ctx context.Context, scb schemaClient.SchemaClientBound, sbi *con
 	case config.SBITypeNoop:
 		return targettypes.SouthboundSetPlan{}, nil
 	case config.SBITypeGnmi:
-		return buildGnmiPlan(ctx, sbi, entry, replace)
+		return buildGnmiPlan(ctx, scb, sbi, entry, replace)
 	case config.SBITypeNetconf:
 		return buildNetconfPlan(ctx, sbi, entry, replace)
 	default:
@@ -74,8 +75,18 @@ func BuildPlan(ctx context.Context, scb schemaClient.SchemaClientBound, sbi *con
 //   - JSON       → whole tree serialised as a single root-level JSON update
 //   - JSON_IETF  → whole tree serialised as a single root-level JSON_IETF update
 //   - PROTO (default) → individual leaf-level updates via ToProtoUpdates
-func buildGnmiPlan(ctx context.Context, sbi *config.SBI, entry api.Entry, replace bool) (targettypes.SouthboundSetPlan, error) {
+func buildGnmiPlan(ctx context.Context, scb schemaClient.SchemaClientBound, sbi *config.SBI, entry api.Entry, replace bool) (targettypes.SouthboundSetPlan, error) {
 	encoding := gnmi.Encoding(gnmiutils.ParseGnmiEncoding(sbi.GnmiOptions.Encoding))
+
+	if sbi.DeviceProfile == config.DeviceProfileCiscoIOSXR && encoding == gnmi.Encoding_JSON_IETF {
+		plan, err := permodule.Encode(ctx, scb, entry, encoding, replace)
+		if err != nil {
+			return targettypes.SouthboundSetPlan{}, err
+		}
+		return targettypes.SouthboundSetPlan{Gnmi: plan}, nil
+	}
+	// cisco-ios-xr + proto or plain JSON (unreachable via valid config) fall through
+	// to the generic single-root gNMI path.
 
 	updates, err := buildGnmiUpdates(ctx, entry, encoding)
 	if err != nil {

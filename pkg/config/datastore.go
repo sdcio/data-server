@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/sdcio/data-server/pkg/utils"
@@ -47,8 +48,9 @@ const (
 	// DeviceProfileNone selects generic southbound driver behaviour (no NOS-specific
 	// materialization). It is the zero value and serializes as omitted/empty in YAML/JSON.
 	DeviceProfileNone DeviceProfile = ""
-	// DeviceProfileCiscoIOSXR selects IOS-XR-specific southbound behaviour when
-	// enabled by the Cisco IOS-XR NOS PR.
+	// DeviceProfileCiscoIOSXR enables IOS-XR-specific gNMI materialization for
+	// type=gnmi. Only GnmiOptions.Encoding "JSON_IETF" is supported for this
+	// profile — "PROTO" and plain "JSON" are rejected at config-load time.
 	DeviceProfileCiscoIOSXR DeviceProfile = "cisco-ios-xr"
 	// DeviceProfileSonic selects SONiC translib-specific southbound behaviour when
 	// enabled by the SONiC NOS PR.
@@ -228,6 +230,10 @@ func (s *SBI) validateSetDefaults() error {
 	case sbiGNMI:
 		if s.GnmiOptions.Encoding == "" {
 			return errors.New("no encoding defined")
+		}
+		if s.DeviceProfile == DeviceProfileCiscoIOSXR && !strings.EqualFold(s.GnmiOptions.Encoding, "JSON_IETF") {
+			return fmt.Errorf("device-profile %q with sbi type %q requires gnmi-options.encoding %q, got %q",
+				DeviceProfileCiscoIOSXR, sbiGNMI, "JSON_IETF", s.GnmiOptions.Encoding)
 		}
 	default:
 		return fmt.Errorf("unknown sbi type: %q", s.Type)
