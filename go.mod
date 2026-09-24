@@ -13,6 +13,8 @@ replace github.com/openconfig/goyang => github.com/sdcio/goyang v1.6.2-2.0.20260
 // Local dev: swap the line below for `=> ../schema-server` when both repos are siblings.
 replace github.com/sdcio/schema-server => github.com/sdcio/schema-server v0.0.35-0.20260925171211-be513ede8dbb
 
+replace github.com/sdcio/sdc-protos v0.0.55 => github.com/sdcio/sdc-protos v0.0.55-0.20260828064538-40ed0bc26a71
+
 require (
 	github.com/AlekSi/pointer v1.2.0
 	github.com/beevik/etree v1.7.1

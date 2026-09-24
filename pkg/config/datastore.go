@@ -30,8 +30,29 @@ const (
 	sbiNETCONF = "netconf"
 	sbiGNMI    = "gnmi"
 
+	// SBITypeGnmi, SBITypeNetconf, SBITypeNoop are the valid values for SBI.Type.
+	SBITypeGnmi    = sbiGNMI
+	SBITypeNetconf = sbiNETCONF
+	SBITypeNoop    = sbiNOOP
+
 	ncCommitDatastoreRunning   = "running"
 	ncCommitDatastoreCandidate = "candidate"
+)
+
+// DeviceProfile selects NOS-specific southbound behaviour. Wire values are YAML/JSON 
+// string scalars. [DeviceProfileNone] is the default (omitted or empty in config).
+type DeviceProfile string
+
+const (
+	// DeviceProfileNone selects generic southbound driver behaviour (no NOS-specific
+	// materialization). It is the zero value and serializes as omitted/empty in YAML/JSON.
+	DeviceProfileNone DeviceProfile = ""
+	// DeviceProfileCiscoIOSXR selects IOS-XR-specific southbound behaviour when
+	// enabled by the Cisco IOS-XR NOS PR.
+	DeviceProfileCiscoIOSXR DeviceProfile = "cisco-ios-xr"
+	// DeviceProfileSonic selects SONiC translib-specific southbound behaviour when
+	// enabled by the SONiC NOS PR.
+	DeviceProfileSonic DeviceProfile = "sonic"
 )
 
 type DatastoreConfig struct {
@@ -89,6 +110,11 @@ type SBI struct {
 	ConnectRetry time.Duration `yaml:"connect-retry,omitempty" json:"connect-retry,omitempty"`
 	// Timeout
 	Timeout time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	// DeviceProfile selects NOS-specific southbound behaviour. Use the
+	// [DeviceProfile] constants ([DeviceProfileNone], [DeviceProfileCiscoIOSXR], or
+	// [DeviceProfileSonic]); unknown values are rejected when the datastore
+	// configuration is validated.
+	DeviceProfile DeviceProfile `yaml:"device-profile,omitempty" json:"device-profile,omitempty"`
 }
 
 type SBIGnmiOptions struct {
@@ -180,7 +206,12 @@ func (ds *DatastoreConfig) ValidateSetDefaults() error {
 	return nil
 }
 
+
 func (s *SBI) validateSetDefaults() error {
+	if err := ValidateDeviceProfileEnabled(s.DeviceProfile); err != nil {
+		return err
+	}
+
 	switch s.Type {
 	case sbiNOOP:
 		return nil

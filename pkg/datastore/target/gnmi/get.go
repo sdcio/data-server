@@ -16,6 +16,7 @@ import (
 	dsutils "github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type GetSync struct {
@@ -150,7 +151,8 @@ func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
 	}
 
 	if log := log.V(logger.VTrace); log.Enabled() {
-		log.Info("sync content", "data", dsutils.ProtoJSON(result))
+		data, _ := protojson.Marshal(result)
+		log.Info("sync content", "data", string(data))
 	}
 
 	err = s.runningStore.ApplyToRunning(s.ctx, s.paths, proto.NewProtoTreeImporter(result))

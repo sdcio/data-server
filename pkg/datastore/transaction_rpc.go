@@ -11,7 +11,6 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/api"
-	"github.com/sdcio/data-server/pkg/tree/api/adapter"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/ops"
@@ -22,6 +21,7 @@ import (
 	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var (
@@ -139,12 +139,8 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	warnings := validationResult.WarningsStr()
 	log.Info("transaction validation passed", "transaction-id", transaction.GetTransactionId(), "stats", validationStats.String())
 
-	// we use the TargetSourceReplace, that adjustes the tree results in a way
-	// that the whole config tree is getting replaced.
-	replaceRoot := types.NewTargetSourceReplace(adapter.NewEntryOutputAdapter(root.Entry))
-
-	// apply the resulting config to the device
-	dataResp, err := d.applyIntent(ctx, replaceRoot)
+	// apply the resulting config to the device (replace semantics)
+	dataResp, err := d.applyIntent(ctx, root.Entry, true)
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +359,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	}
 
 	// apply the resulting config to the device
-	dataResp, err := d.applyIntent(ctx, adapter.NewEntryOutputAdapter(root.Entry))
+	dataResp, err := d.applyIntent(ctx, root.Entry, false)
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +462,10 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates api.LeafVaria
 
 	// conditional trace logging
 	if log := log.V(logger.VTrace); log.Enabled() {
-		log.Info("writeback synctree", "content", utils.ProtoJSON(newRunningIntent))
+		json, err := protojson.MarshalOptions{Multiline: false}.Marshal(newRunningIntent)
+		if err == nil {
+			log.Info("writeback synctree", "content", string(json))
+		}
 	}
 
 	// write the synctree to disk

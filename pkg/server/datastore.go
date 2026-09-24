@@ -24,6 +24,7 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore"
 	"github.com/sdcio/data-server/pkg/utils"
+	"github.com/sdcio/logger"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc/codes"
@@ -76,6 +77,8 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 	log = log.WithValues(
 		"datastore-name", req.GetDatastoreName(),
 	)
+	ctx = logf.IntoContext(ctx, log)
+
 	log.Info("creating datastore",
 		"datastore-schema", utils.ProtoJSON(req.GetSchema()),
 		"datastore-target", utils.ProtoJSON(req.GetTarget()),
@@ -100,9 +103,10 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 
 	reqTarget := req.GetTarget()
 	sbi := &config.SBI{
-		Type:    reqTarget.GetType(),
-		Port:    reqTarget.GetPort(),
-		Address: reqTarget.GetAddress(),
+		Type:          reqTarget.GetType(),
+		Port:          reqTarget.GetPort(),
+		Address:       reqTarget.GetAddress(),
+		DeviceProfile: sdcpbDeviceProfileToConfig(reqTarget.GetDeviceProfile()),
 	}
 
 	switch strings.ToLower(reqTarget.GetType()) {
@@ -285,7 +289,7 @@ func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.
 
 	// add datastore name to log
 	log = log.WithValues("datastore-name", req.GetName()[0])
-	logf.IntoContext(ctx, log)
+	logger.IntoContext(ctx, log)
 
 	err = ds.WatchDeviations(req, stream)
 	if err != nil {
@@ -304,13 +308,15 @@ func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*
 		DatastoreName: ds.Config().Name,
 	}
 	rsp.Target = &sdcpb.Target{
-		Type:    ds.Config().SBI.Type,
-		Address: ds.Config().SBI.Address,
+		Type:          ds.Config().SBI.Type,
+		Address:       ds.Config().SBI.Address,
+		DeviceProfile: configDeviceProfileToSdcpb(ds.Config().SBI.DeviceProfile),
 	}
 	rsp.Intents, err = ds.IntentsList(ctx)
 	if err != nil {
 		return nil, err
 	}
+	// map datastore sbi conn state to sdcpb.TargetStatus
 	connState := ds.ConnectionState()
 	rsp.Target.Status = connState.Status
 	rsp.Target.StatusDetails = connState.Details
@@ -343,4 +349,26 @@ func (s *Server) BlameConfig(ctx context.Context, req *sdcpb.BlameConfigRequest)
 		ConfigTree: tree,
 	}, nil
 
+}
+
+func sdcpbDeviceProfileToConfig(p sdcpb.DeviceProfile) config.DeviceProfile {
+	switch p {
+	case sdcpb.DeviceProfile_DEVICE_PROFILE_CISCO_IOS_XR:
+		return config.DeviceProfileCiscoIOSXR
+	case sdcpb.DeviceProfile_DEVICE_PROFILE_SONIC:
+		return config.DeviceProfileSonic
+	default:
+		return config.DeviceProfileNone
+	}
+}
+
+func configDeviceProfileToSdcpb(p config.DeviceProfile) sdcpb.DeviceProfile {
+	switch p {
+	case config.DeviceProfileCiscoIOSXR:
+		return sdcpb.DeviceProfile_DEVICE_PROFILE_CISCO_IOS_XR
+	case config.DeviceProfileSonic:
+		return sdcpb.DeviceProfile_DEVICE_PROFILE_SONIC
+	default:
+		return sdcpb.DeviceProfile_DEVICE_PROFILE_GENERIC
+	}
 }
