@@ -114,6 +114,8 @@ func (s *NetconfSyncImpl) internalSync(req *sdcpb.GetDataRequest) error {
 		return err
 	}
 
+	importer = netconfScopedImportAdapter(importer)
+
 	if err := s.runningStore.ApplyToRunning(s.ctx, s.paths, importer); err != nil {
 		return err
 	}
