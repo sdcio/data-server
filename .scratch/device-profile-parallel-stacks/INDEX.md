@@ -12,7 +12,7 @@ Delivery: **device-profile base** → parallel **SONiC** and **Cisco** NOS PRs (
 | 01 | [Inventory legacy #442 / #480 commits](issues/01-inventory-legacy-442-480-commits.md) | — | done → [legacy-commit-inventory.md](legacy-commit-inventory.md) |
 | 02 | [Land generic correctness fixes on `main`](issues/02-land-generic-fixes-on-main.md) | 01 | done on branch → open PR [`ticket-02-generic-fixes`](issues/02-land-generic-fixes-on-main.md) |
 | 03 | [Device-profile base PR](issues/03-device-profile-base-pr.md) | 01; 02 merges to `main` (inventory) | done on branch → `device-profile-base` |
-| 04 | [config-server: `deviceProfile` on base stack](issues/04-config-server-device-profile-on-base.md) | 03 | ready-for-agent |
+| 04 | [config-server: `deviceProfile` on base stack](issues/04-config-server-device-profile-on-base.md) | 03 | done on branch → `device-profile-base` (config-server) |
 | 05 | [SONiC NOS PR](issues/05-sonic-nos-pr.md) | 03 | ready-for-agent |
 | 06 | [Cisco IOS-XR NOS PR (draft)](issues/06-cisco-ios-xr-nos-pr-draft.md) | 03 | ready-for-agent |
 | 07 | [Supersede legacy PRs #442 and #480](issues/07-supersede-legacy-prs-442-480.md) | 03, 05, 06 | ready-for-agent |
@@ -45,7 +45,9 @@ Tickets whose blockers are satisfied now:
 
 **In flight:** **03** — branch `device-profile-base` → PR to `main` (stacked on `ticket-02-generic-fixes` until **02** merges).
 
-After **03** completes: **04**, **05**, **06** in parallel.
+**In flight:** **04** — config-server branch `device-profile-base` → PR to `main` (pairs with data-server `device-profile-base`).
+
+After **03** completes: **05**, **06** in parallel ( **04** in flight on config-server).
 
 **In flight:** **02** — branch `ticket-02-generic-fixes` → PR to `main` (all inventory **main** rows; see [ticket 02](issues/02-land-generic-fixes-on-main.md)).
 
