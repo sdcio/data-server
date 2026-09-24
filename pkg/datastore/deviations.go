@@ -7,7 +7,6 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
-	"github.com/sdcio/logger"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc/codes"
@@ -180,7 +179,7 @@ type DeviationEntry interface {
 
 func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.DeviationEntry, error) {
 
-	log := logger.FromContext(ctx)
+	log := logf.FromContext(ctx)
 
 	d.syncTreeMutex.RLock()
 	deviationTree, err := d.syncTree.DeepCopy(ctx)
@@ -199,7 +198,7 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 		return nil, err
 	}
 
-	if log := log.V(logger.VTrace); log.Enabled() {
+	if log := log.V(logf.VTrace); log.Enabled() {
 		log.Info("deviation tree", "content", deviationTree.String())
 		log.Info("nonrevertive infos", "data", deviationTree.GetTreeContext().NonRevertiveInfo().String())
 	}

@@ -29,7 +29,6 @@ import (
 	targetTypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/utils"
-	dsutils "github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 
@@ -46,7 +45,7 @@ type gnmiTarget struct {
 	cfg             *config.SBI
 	syncs           map[string]GnmiSync
 	runningStore    targetTypes.RunningStore
-	schemaClient    dsutils.SchemaClientBound
+	schemaClient    utils.SchemaClientBound
 	taskpoolFactory pool.VirtualPoolFactory
 	// shapeGetRequest applies device-profile-specific adjustments to an
 	// outgoing gNMI GetRequest. Selected once in NewTarget from cfg.DeviceProfile;
@@ -54,7 +53,7 @@ type gnmiTarget struct {
 	shapeGetRequest func(*gnmi.GetRequest)
 }
 
-func NewTarget(ctx context.Context, name string, cfg *config.SBI, runningStore targetTypes.RunningStore, schemaClient dsutils.SchemaClientBound, taskpoolFactory pool.VirtualPoolFactory, opts ...grpc.DialOption) (*gnmiTarget, error) {
+func NewTarget(ctx context.Context, name string, cfg *config.SBI, runningStore targetTypes.RunningStore, schemaClient utils.SchemaClientBound, taskpoolFactory pool.VirtualPoolFactory, opts ...grpc.DialOption) (*gnmiTarget, error) {
 	tc := &types.TargetConfig{
 		Name:       name,
 		Address:    fmt.Sprintf("%s:%d", cfg.Address, cfg.Port),
