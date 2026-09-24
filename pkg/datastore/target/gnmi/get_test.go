@@ -65,7 +65,7 @@ func TestGetSync_syncConfig_UsesDataTypeConfig(t *testing.T) {
 	if err := gs.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	defer gs.Stop()
+	defer func() { _ = gs.Stop() }()
 
 	select {
 	case req := <-captured:
