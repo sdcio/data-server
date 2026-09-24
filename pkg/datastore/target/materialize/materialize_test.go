@@ -60,6 +60,17 @@ func interfaceUpdates(name, desc string) []*sdcpb.Update {
 	}}
 }
 
+// networkInstanceUpdates returns a single network-instance description update (module sdcio_model_ni).
+func networkInstanceUpdates(name, desc string) []*sdcpb.Update {
+	return []*sdcpb.Update{{
+		Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
+			{Name: "network-instance", Key: map[string]string{"name": name}},
+			{Name: "description"},
+		}},
+		Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: desc}},
+	}}
+}
+
 // addAndFinish inserts updates into the root and calls FinishInsertionPhase.
 func addAndFinish(t *testing.T, root *tree.RootEntry, updates []*sdcpb.Update, flags *types.UpdateInsertFlags) {
 	t.Helper()
