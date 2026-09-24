@@ -128,7 +128,7 @@ func TestBuildTreeSyncWithDatastore_PostSyncNotificationsNotDropped(t *testing.T
 		errChan:  make(chan error, 1),
 	}
 
-	ss := NewStreamSync(ctx, target, &config.SyncProtocol{
+	ss := NewStreamSync(ctx, target, "", &config.SyncProtocol{
 		Name:  "test",
 		Paths: []string{"/"},
 		Mode:  "on-change",
@@ -216,7 +216,7 @@ func TestBuildTreeSyncWithDatastore_NewEmptyTreeFailureExits(t *testing.T) {
 		errChan:  make(chan error, 1),
 	}
 
-	ss := NewStreamSync(ctx, target, &config.SyncProtocol{
+	ss := NewStreamSync(ctx, target, "", &config.SyncProtocol{
 		Name:  "test",
 		Paths: []string{"/"},
 		Mode:  "on-change",
