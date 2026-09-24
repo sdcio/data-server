@@ -6,15 +6,14 @@ import (
 	"sync"
 
 	"github.com/sdcio/data-server/pkg/tree"
-	"github.com/sdcio/data-server/pkg/tree/api/adapter"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/processors"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
-	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, importer importer.ImportConfigAdapter) error {
@@ -88,7 +87,10 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	if log := log.V(logger.VTrace); log.Enabled() {
 		treeExport, err := ops.TreeExport(d.syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio, false)
 		if err == nil {
-			log.Info("synctree after sync apply", "content", utils.ProtoJSON(treeExport))
+			json, err := protojson.MarshalOptions{Multiline: false}.Marshal(treeExport)
+			if err == nil {
+				log.Info("synctree after sync apply", "content", string(json))
+			}
 		}
 	}
 
@@ -162,9 +164,11 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error 
 
 	if performApply {
 		log.Info("reverting after sync")
-		resp, err := d.applyIntent(ctx, adapter.NewEntryOutputAdapter(t.Entry))
+		resp, err := d.applyIntent(ctx, t.Entry, false)
 		if err != nil {
-			log.Error(err, "failed applying deviations to running", "response", utils.ProtoJSON(resp))
+			respJ := protojson.MarshalOptions{Multiline: false}
+			respStr, _ := respJ.Marshal(resp)
+			log.Error(err, "failed applying deviations to running", "response", string(respStr))
 		}
 	}
 

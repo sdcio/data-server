@@ -71,8 +71,7 @@ func (s *NetconfSyncImpl) Start() error {
 	}
 
 	go func() {
-		err = s.internalSync(req)
-		if err != nil {
+		if err := s.internalSync(req); err != nil {
 			log.Error(err, "failed syncing")
 		}
 	}()

@@ -6,8 +6,8 @@
 
 **Blocked by:** 03 — Device-profile base PR; 05 — SONiC NOS PR; 06 — Cisco IOS-XR NOS PR (draft)
 
-**Status:** ready-for-agent
+**Status:** done — [supersession-record.md](../supersession-record.md)
 
-- [ ] Base, SONiC, and Cisco replacement PRs are open on the correct branches and bases
-- [ ] #442 and #480 closed with explicit supersession pointers to the new PRs
-- [ ] Parent issue #504 and spec remain the canonical plan reference
+- [x] Base, SONiC, and Cisco replacement PRs are open on the correct branches and bases ([#506](https://github.com/sdcio/data-server/pull/506), [#507](https://github.com/sdcio/data-server/pull/507), [#508](https://github.com/sdcio/data-server/pull/508); generic fixes [#505](https://github.com/sdcio/data-server/pull/505))
+- [x] #442 and #480 closed with explicit supersession pointers to the new PRs
+- [x] Parent issue #504 and spec remain the canonical plan reference
