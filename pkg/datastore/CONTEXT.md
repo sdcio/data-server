@@ -16,10 +16,23 @@ afterwards.
   `RunningStore.MarkSynced` for every sync entry it discards instead of
   starting anything.
 - For real targets, each sync mechanism (`StreamSync`, `GetSync`,
-  `NetconfSyncImpl`) calls `RunningStore.MarkSynced(name)` once it has
-  actually written to Running successfully for the first time — not merely
-  on receiving a signal/response from the device. `OnceSync` is excluded:
-  it never applies to Running today (pre-existing behavior, out of scope).
+  `NetconfSyncImpl`) calls `RunningStore.MarkSynced(name)` once
+  **`ApplyToRunning` succeeded** for that mechanism’s cycle — not merely
+  on receiving a signal/response from the device (for example, gNMI
+  `SyncResponse` alone is not enough until apply succeeds).
+- **Empty device snapshots** under configured sync paths count as successful
+  cycles when apply succeeds: the device and Running agree there is nothing
+  under that scope, and the Synced latch can close on factory-default
+  deployments.
+  - **Get** and **Netconf** (and **Once**, once implemented): *scoped refresh*
+    — `ApplyToRunning` with configured sync paths and a **nil importer** when
+    there is no Running content to import.
+  - **Stream** initial snapshot: *empty snapshot commit* — `ApplyToRunning`
+    with **nil paths** and a **nil importer** when the post-`SyncResponse`
+    export is empty (not path-scoped refresh). Ongoing stream ticker /
+    incremental commits are unchanged and do not call `MarkSynced`.
+- `OnceSync` remains **excluded** until Phase B: it does not apply to Running
+  or participate in Synced today.
 - The latch survives target reconnects: `AddSyncs` (and therefore sync
   object construction) only happens once, at target construction time, so
   there is nothing to re-arm on reconnect.
