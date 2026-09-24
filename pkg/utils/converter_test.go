@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
