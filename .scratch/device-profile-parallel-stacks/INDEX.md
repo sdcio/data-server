@@ -10,8 +10,8 @@ Delivery: **device-profile base** → parallel **SONiC** and **Cisco** NOS PRs (
 | # | Ticket | Blocked by | Status |
 |---|--------|------------|--------|
 | 01 | [Inventory legacy #442 / #480 commits](issues/01-inventory-legacy-442-480-commits.md) | — | done → [legacy-commit-inventory.md](legacy-commit-inventory.md) |
-| 02 | [Land generic correctness fixes on `main`](issues/02-land-generic-fixes-on-main.md) | 01 | ready-for-agent |
-| 03 | [Device-profile base PR](issues/03-device-profile-base-pr.md) | 01; 02 (if inventory requires) | ready-for-agent |
+| 02 | [Land generic correctness fixes on `main`](issues/02-land-generic-fixes-on-main.md) | 01 | done on branch → open PR [`ticket-02-generic-fixes`](issues/02-land-generic-fixes-on-main.md) |
+| 03 | [Device-profile base PR](issues/03-device-profile-base-pr.md) | 01; 02 merges to `main` (inventory) | ready-for-agent |
 | 04 | [config-server: `deviceProfile` on base stack](issues/04-config-server-device-profile-on-base.md) | 03 | ready-for-agent |
 | 05 | [SONiC NOS PR](issues/05-sonic-nos-pr.md) | 03 | ready-for-agent |
 | 06 | [Cisco IOS-XR NOS PR (draft)](issues/06-cisco-ios-xr-nos-pr-draft.md) | 03 | ready-for-agent |
@@ -43,8 +43,9 @@ flowchart TD
 
 Tickets whose blockers are satisfied now:
 
-- **02** — Land generic fixes on `main` (see [inventory](legacy-commit-inventory.md) **main** rows)
-- **03** — Device-profile base PR (inventory **base** rows + `df81f6f` split)
+- **03** — Device-profile base PR after **02** merges (inventory **base** rows + `df81f6f` split). Until then, stack work can proceed on `device-profile-base` with [precondition links](legacy-commit-inventory.md#precondition-links-ticket-02--05) to the **02** PR.
+
+**In flight:** **02** — branch `ticket-02-generic-fixes` → PR to `main` (all inventory **main** rows; see [ticket 02](issues/02-land-generic-fixes-on-main.md)).
 
 After **03** completes: **04**, **05**, **06** in parallel.
 
@@ -54,6 +55,7 @@ After **03**, **05**, and **06** PRs are open: **07**.
 
 | Branch | PR target |
 |--------|-----------|
+| `ticket-02-generic-fixes` | `main` (ticket **02**, generic fixes only) |
 | `device-profile-base` | `main` |
 | `sonic-device-profile` | base → `main` after base merges |
 | `cisco-ios-xr-gnmi` | base → `main` (draft until lab-ready) |
