@@ -6,7 +6,7 @@
 
 **Blocked by:** 01 — Inventory legacy #442 / #480 commits; 02 — Land generic fixes on `main` (only for items the inventory marks as required for base to build or review)
 
-**Status:** done on branch `device-profile-base`
+**Status:** open PR [#506](https://github.com/sdcio/data-server/pull/506) (`device-profile-base` → `ticket-02-generic-fixes`)
 
 - [x] Config validation and CreateDataStore reject `sonic` and `cisco-ios-xr` with deterministic **not enabled** errors; generic profile accepted
 - [x] gRPC enum round-trip for all three values without enabling NOS behavior

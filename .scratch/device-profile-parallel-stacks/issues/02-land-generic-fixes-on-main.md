@@ -6,7 +6,7 @@
 
 **Blocked by:** 01 — Inventory legacy #442 / #480 commits
 
-**Status:** implemented on branch `ticket-02-generic-fixes` — **open PR to `main`** (not merged yet)
+**Status:** open PR [#505](https://github.com/sdcio/data-server/pull/505) to `main` (not merged yet)
 
 - [x] Every inventory item tagged “generic fix to `main`” is either merged to `main` or has an open PR with a clear owner
 - [x] No SONiC-only or Cisco-only encoder behavior is smuggled in under generic-fix PRs
