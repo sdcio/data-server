@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sdcio/logger"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc"
@@ -249,8 +250,8 @@ func (d *Datastore) Stop(ctx context.Context) error {
 }
 
 func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdcpb.BlameTreeElement, error) {
-	log := logf.FromContext(ctx).WithName("BlameConfig")
-	ctx = logf.IntoContext(ctx, log)
+	log := logger.FromContext(ctx).WithName("BlameConfig")
+	ctx = logger.IntoContext(ctx, log)
 
 	// create a new TreeRoot by copying the syncTree
 	d.syncTreeMutex.RLock()
