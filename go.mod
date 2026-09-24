@@ -23,7 +23,7 @@ require (
 	github.com/scrapli/scrapligo v1.4.1
 	github.com/sdcio/cache v0.0.38
 	github.com/sdcio/logger v0.0.3
-	github.com/sdcio/schema-server v0.0.34
+	github.com/sdcio/schema-server v0.0.35-0.20260924132425-8521ed63d365
 	github.com/sdcio/sdc-protos v0.0.55
 	github.com/sdcio/yang-parser v0.0.12
 	github.com/spf13/cobra v1.10.2
@@ -45,7 +45,7 @@ require (
 	github.com/clipperhouse/uax29/v2 v2.6.0 // indirect
 	github.com/creack/pty v1.1.24 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/dgraph-io/badger/v4 v4.9.0 // indirect
+	github.com/dgraph-io/badger/v4 v4.9.6 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.2.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
