@@ -87,20 +87,139 @@ func TestBuildPlan_DisabledProfiles_ReturnNotEnabled(t *testing.T) {
 	root, scb := newTestRoot(t, mockCtrl)
 	addAndFinish(t, root, interfaceUpdates("ethernet-1/1", "uplink"), testhelper.FlagsNew)
 
-	profiles := []config.DeviceProfile{config.DeviceProfileSonic, config.DeviceProfileCiscoIOSXR}
-	for _, profile := range profiles {
-		sbi := &config.SBI{
-			Type:          config.SBITypeGnmi,
-			DeviceProfile: profile,
-			GnmiOptions:   &config.SBIGnmiOptions{Encoding: "JSON_IETF"},
+	sbi := &config.SBI{
+		Type:          config.SBITypeGnmi,
+		DeviceProfile: config.DeviceProfileSonic,
+		GnmiOptions:   &config.SBIGnmiOptions{Encoding: "JSON_IETF"},
+	}
+	_, err := materialize.BuildPlan(context.Background(), scb, sbi, root.Entry, false)
+	if err == nil {
+		t.Fatal("BuildPlan(sonic): expected error, got nil")
+	}
+	if !errors.Is(err, config.ErrDeviceProfileNotEnabled) {
+		t.Fatalf("BuildPlan(sonic): expected ErrDeviceProfileNotEnabled, got %v", err)
+	}
+}
+
+// --- Cisco IOS-XR gNMI materialization -----------------------------------
+
+func TestBuildPlan_CiscoIOSXR_JsonIETF_PerModulePlan(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	root, scb := newTestRoot(t, mockCtrl)
+
+	upds := append(interfaceUpdates("ethernet-1/1", "uplink"), networkInstanceUpdates("default", "Default NI")...)
+	addAndFinish(t, root, upds, testhelper.FlagsNew)
+
+	sbi := &config.SBI{
+		Type:          config.SBITypeGnmi,
+		DeviceProfile: config.DeviceProfileCiscoIOSXR,
+		GnmiOptions:   &config.SBIGnmiOptions{Encoding: "JSON_IETF"},
+	}
+
+	plan, err := materialize.BuildPlan(context.Background(), scb, sbi, root.Entry, false)
+	if err != nil {
+		t.Fatalf("BuildPlan: unexpected error: %v", err)
+	}
+	if plan.Gnmi == nil {
+		t.Fatalf("BuildPlan: expected Gnmi plan, got nil")
+	}
+	if len(plan.Gnmi.Updates) != 2 {
+		t.Fatalf("want 2 Updates (one per YANG module), got %d", len(plan.Gnmi.Updates))
+	}
+	origins := make(map[string]bool)
+	for _, u := range plan.Gnmi.Updates {
+		origins[u.GetPath().GetOrigin()] = true
+		if u.GetValue().GetJsonIetfVal() == nil {
+			t.Errorf("Update for %q: expected JsonIetfVal, got nil", u.GetPath().GetOrigin())
 		}
-		_, err := materialize.BuildPlan(context.Background(), scb, sbi, root.Entry, false)
-		if err == nil {
-			t.Fatalf("BuildPlan(%q): expected error, got nil", profile)
+	}
+	if !origins["sdcio_model_if"] {
+		t.Errorf("missing Update for module sdcio_model_if; origins: %v", origins)
+	}
+	if !origins["sdcio_model_ni"] {
+		t.Errorf("missing Update for module sdcio_model_ni; origins: %v", origins)
+	}
+}
+
+func TestBuildPlan_CiscoIOSXR_Proto_GenericPlan(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	root, scb := newTestRoot(t, mockCtrl)
+
+	addAndFinish(t, root, interfaceUpdates("ethernet-1/1", "uplink"), testhelper.FlagsNew)
+
+	sbi := &config.SBI{
+		Type:          config.SBITypeGnmi,
+		DeviceProfile: config.DeviceProfileCiscoIOSXR,
+		GnmiOptions:   &config.SBIGnmiOptions{Encoding: "PROTO"},
+	}
+
+	plan, err := materialize.BuildPlan(context.Background(), scb, sbi, root.Entry, false)
+	if err != nil {
+		t.Fatalf("BuildPlan: unexpected error: %v", err)
+	}
+	if plan.Gnmi == nil {
+		t.Fatalf("BuildPlan: expected Gnmi plan, got nil")
+	}
+	for _, u := range plan.Gnmi.Updates {
+		if u.GetPath().GetOrigin() != "" {
+			t.Errorf("proto plan must not set Path.Origin, got %q", u.GetPath().GetOrigin())
 		}
-		if !errors.Is(err, config.ErrDeviceProfileNotEnabled) {
-			t.Fatalf("BuildPlan(%q): expected ErrDeviceProfileNotEnabled, got %v", profile, err)
-		}
+	}
+}
+
+func TestBuildPlan_CiscoIOSXR_JSON_GenericPlan(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	root, scb := newTestRoot(t, mockCtrl)
+
+	upds := append(interfaceUpdates("ethernet-1/1", "uplink"), networkInstanceUpdates("default", "Default NI")...)
+	addAndFinish(t, root, upds, testhelper.FlagsNew)
+
+	sbi := &config.SBI{
+		Type:          config.SBITypeGnmi,
+		DeviceProfile: config.DeviceProfileCiscoIOSXR,
+		GnmiOptions:   &config.SBIGnmiOptions{Encoding: "JSON"},
+	}
+
+	plan, err := materialize.BuildPlan(context.Background(), scb, sbi, root.Entry, false)
+	if err != nil {
+		t.Fatalf("BuildPlan: unexpected error: %v", err)
+	}
+	if plan.Gnmi == nil {
+		t.Fatalf("BuildPlan: expected Gnmi plan, got nil")
+	}
+	if len(plan.Gnmi.Updates) != 1 {
+		t.Fatalf("want 1 root-level Update (generic path), got %d", len(plan.Gnmi.Updates))
+	}
+	u := plan.Gnmi.Updates[0]
+	if len(u.GetPath().GetElem()) != 0 {
+		t.Errorf("generic plan must target the root path, got %v", u.GetPath().GetElem())
+	}
+	if u.GetPath().GetOrigin() != "" {
+		t.Errorf("generic plan must not set Path.Origin, got %q", u.GetPath().GetOrigin())
+	}
+	if u.GetValue().GetJsonVal() == nil {
+		t.Errorf("expected JsonVal, got nil")
+	}
+}
+
+func TestBuildPlan_CiscoIOSXR_Netconf_ReturnsNetconfSetPlan(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	root, scb := newTestRoot(t, mockCtrl)
+	sbi := &config.SBI{
+		Type:           config.SBITypeNetconf,
+		DeviceProfile:  config.DeviceProfileCiscoIOSXR,
+		NetconfOptions: &config.SBINetconfOptions{},
+	}
+
+	plan, err := materialize.BuildPlan(context.Background(), scb, sbi, root.Entry, false)
+	if err != nil {
+		t.Fatalf("BuildPlan: unexpected error: %v", err)
+	}
+	if plan.Netconf == nil {
+		t.Errorf("BuildPlan: expected Netconf plan, got nil")
+	}
+	if plan.Gnmi != nil {
+		t.Errorf("BuildPlan: expected no Gnmi plan, got non-nil")
 	}
 }
 

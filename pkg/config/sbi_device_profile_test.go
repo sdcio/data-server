@@ -16,6 +16,7 @@ package config
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -39,14 +40,36 @@ func TestSBI_validateSetDefaults_DeviceProfile_UnknownProfileIsRejected(t *testi
 	}
 }
 
-func TestSBI_validateSetDefaults_DeviceProfile_CiscoIOSXRIsNotEnabled(t *testing.T) {
+func TestSBI_validateSetDefaults_DeviceProfile_CiscoIOSXRGnmiJsonIETFAccepted(t *testing.T) {
 	sbi := validGNMISBI("json_ietf", DeviceProfileCiscoIOSXR)
-	err := sbi.validateSetDefaults()
-	if err == nil {
-		t.Fatal("expected error for cisco-ios-xr on base branch, got nil")
+	if err := sbi.validateSetDefaults(); err != nil {
+		t.Fatalf("expected cisco-ios-xr + JSON_IETF to be accepted, got %v", err)
 	}
-	if !errors.Is(err, ErrDeviceProfileNotEnabled) {
-		t.Fatalf("expected ErrDeviceProfileNotEnabled, got %v", err)
+}
+
+func TestSBI_validateSetDefaults_DeviceProfile_CiscoIOSXRGnmiRejectsNonJsonIETF(t *testing.T) {
+	for _, enc := range []string{"json", "proto", "JSON"} {
+		sbi := validGNMISBI(enc, DeviceProfileCiscoIOSXR)
+		err := sbi.validateSetDefaults()
+		if err == nil {
+			t.Fatalf("expected error for cisco-ios-xr + gnmi + %q, got nil", enc)
+		}
+		if !strings.Contains(err.Error(), "JSON_IETF") {
+			t.Fatalf("expected JSON_IETF requirement in error, got %v", err)
+		}
+	}
+}
+
+func TestSBI_validateSetDefaults_DeviceProfile_CiscoIOSXRNetconfIsAccepted(t *testing.T) {
+	sbi := &SBI{
+		Type:          sbiNETCONF,
+		Address:       "192.0.2.1",
+		Port:          830,
+		DeviceProfile: DeviceProfileCiscoIOSXR,
+		NetconfOptions: &SBINetconfOptions{},
+	}
+	if err := sbi.validateSetDefaults(); err != nil {
+		t.Fatalf("expected cisco-ios-xr + netconf to be accepted, got %v", err)
 	}
 }
 
@@ -54,7 +77,7 @@ func TestSBI_validateSetDefaults_DeviceProfile_SonicIsNotEnabled(t *testing.T) {
 	sbi := validGNMISBI("JSON_IETF", DeviceProfileSonic)
 	err := sbi.validateSetDefaults()
 	if err == nil {
-		t.Fatal("expected error for sonic on base branch, got nil")
+		t.Fatal("expected error for sonic on cisco stack, got nil")
 	}
 	if !errors.Is(err, ErrDeviceProfileNotEnabled) {
 		t.Fatalf("expected ErrDeviceProfileNotEnabled, got %v", err)

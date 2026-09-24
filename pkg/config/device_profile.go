@@ -28,9 +28,9 @@ var ErrDeviceProfileNotEnabled = errors.New("device profile is not enabled")
 // corresponding NOS stack PR enables them.
 func ValidateDeviceProfileEnabled(profile DeviceProfile) error {
 	switch profile {
-	case DeviceProfileNone:
+	case DeviceProfileNone, DeviceProfileCiscoIOSXR:
 		return nil
-	case DeviceProfileSonic, DeviceProfileCiscoIOSXR:
+	case DeviceProfileSonic:
 		return fmt.Errorf("%w: %q", ErrDeviceProfileNotEnabled, profile)
 	default:
 		return fmt.Errorf("unknown device-profile: %q", profile)
