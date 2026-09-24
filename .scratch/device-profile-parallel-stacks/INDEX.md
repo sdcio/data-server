@@ -13,7 +13,7 @@ Delivery: **device-profile base** → parallel **SONiC** and **Cisco** NOS PRs (
 | 02 | [Land generic correctness fixes on `main`](issues/02-land-generic-fixes-on-main.md) | 01 | done on branch → open PR [`ticket-02-generic-fixes`](issues/02-land-generic-fixes-on-main.md) |
 | 03 | [Device-profile base PR](issues/03-device-profile-base-pr.md) | 01; 02 merges to `main` (inventory) | done on branch → `device-profile-base` |
 | 04 | [config-server: `deviceProfile` on base stack](issues/04-config-server-device-profile-on-base.md) | 03 | done on branch → `device-profile-base` (config-server) |
-| 05 | [SONiC NOS PR](issues/05-sonic-nos-pr.md) | 03 | ready-for-agent |
+| 05 | [SONiC NOS PR](issues/05-sonic-nos-pr.md) | 03 | done on branch → `sonic-device-profile` |
 | 06 | [Cisco IOS-XR NOS PR (draft)](issues/06-cisco-ios-xr-nos-pr-draft.md) | 03 | ready-for-agent |
 | 07 | [Supersede legacy PRs #442 and #480](issues/07-supersede-legacy-prs-442-480.md) | 03, 05, 06 | ready-for-agent |
 

@@ -25,6 +25,7 @@ import (
 	gtarget "github.com/openconfig/gnmic/pkg/api/target"
 	"github.com/openconfig/gnmic/pkg/api/types"
 	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/sonic"
 	gnmiutils "github.com/sdcio/data-server/pkg/datastore/target/gnmi/utils"
 	targetTypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/pool"
@@ -116,8 +117,7 @@ func NewTarget(ctx context.Context, name string, cfg *config.SBI, runningStore t
 func getRequestShaperFor(profile config.DeviceProfile) func(*gnmi.GetRequest) {
 	switch profile {
 	case config.DeviceProfileSonic:
-		// SONiC Get shaping is wired in the SONiC NOS PR; base keeps the seam as a no-op.
-		return func(*gnmi.GetRequest) {}
+		return sonic.ShapeGetRequest
 	default:
 		return func(*gnmi.GetRequest) {}
 	}

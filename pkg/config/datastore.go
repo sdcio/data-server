@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/sdcio/data-server/pkg/utils"
@@ -216,6 +217,9 @@ func (s *SBI) validateSetDefaults() error {
 	case sbiNOOP:
 		return nil
 	case sbiNETCONF:
+		if s.DeviceProfile == DeviceProfileSonic {
+			return fmt.Errorf("device-profile %q is only supported with sbi type %q", DeviceProfileSonic, sbiGNMI)
+		}
 		switch s.NetconfOptions.CommitDatastore {
 		case "":
 			s.NetconfOptions.CommitDatastore = ncCommitDatastoreCandidate
@@ -228,6 +232,9 @@ func (s *SBI) validateSetDefaults() error {
 	case sbiGNMI:
 		if s.GnmiOptions.Encoding == "" {
 			return errors.New("no encoding defined")
+		}
+		if s.DeviceProfile == DeviceProfileSonic && !strings.EqualFold(s.GnmiOptions.Encoding, "JSON_IETF") {
+			return fmt.Errorf("device-profile %q requires gnmi encoding JSON_IETF, got %q", s.DeviceProfile, s.GnmiOptions.Encoding)
 		}
 	default:
 		return fmt.Errorf("unknown sbi type: %q", s.Type)

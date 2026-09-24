@@ -50,14 +50,37 @@ func TestSBI_validateSetDefaults_DeviceProfile_CiscoIOSXRIsNotEnabled(t *testing
 	}
 }
 
-func TestSBI_validateSetDefaults_DeviceProfile_SonicIsNotEnabled(t *testing.T) {
+func TestSBI_validateSetDefaults_DeviceProfile_SonicGNMIJSONIETFIsAccepted(t *testing.T) {
 	sbi := validGNMISBI("JSON_IETF", DeviceProfileSonic)
-	err := sbi.validateSetDefaults()
-	if err == nil {
-		t.Fatal("expected error for sonic on base branch, got nil")
+	if err := sbi.validateSetDefaults(); err != nil {
+		t.Fatalf("unexpected error for sonic + gnmi + JSON_IETF: %v", err)
 	}
-	if !errors.Is(err, ErrDeviceProfileNotEnabled) {
-		t.Fatalf("expected ErrDeviceProfileNotEnabled, got %v", err)
+}
+
+func TestSBI_validateSetDefaults_DeviceProfile_SonicGNMIJSONIsRejected(t *testing.T) {
+	sbi := validGNMISBI("JSON", DeviceProfileSonic)
+	if err := sbi.validateSetDefaults(); err == nil {
+		t.Fatal("expected error for sonic + gnmi + JSON, got nil")
+	}
+}
+
+func TestSBI_validateSetDefaults_DeviceProfile_SonicGNMIProtoIsRejected(t *testing.T) {
+	sbi := validGNMISBI("PROTO", DeviceProfileSonic)
+	if err := sbi.validateSetDefaults(); err == nil {
+		t.Fatal("expected error for sonic + gnmi + PROTO, got nil")
+	}
+}
+
+func TestSBI_validateSetDefaults_DeviceProfile_SonicNetconfIsRejected(t *testing.T) {
+	sbi := &SBI{
+		Type:           sbiNETCONF,
+		Address:        "192.0.2.1",
+		Port:           830,
+		NetconfOptions: &SBINetconfOptions{},
+		DeviceProfile:  DeviceProfileSonic,
+	}
+	if err := sbi.validateSetDefaults(); err == nil {
+		t.Fatal("expected error for sonic + netconf, got nil")
 	}
 }
 

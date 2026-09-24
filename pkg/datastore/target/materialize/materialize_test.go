@@ -26,6 +26,7 @@ import (
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
@@ -87,20 +88,84 @@ func TestBuildPlan_DisabledProfiles_ReturnNotEnabled(t *testing.T) {
 	root, scb := newTestRoot(t, mockCtrl)
 	addAndFinish(t, root, interfaceUpdates("ethernet-1/1", "uplink"), testhelper.FlagsNew)
 
-	profiles := []config.DeviceProfile{config.DeviceProfileSonic, config.DeviceProfileCiscoIOSXR}
-	for _, profile := range profiles {
-		sbi := &config.SBI{
-			Type:          config.SBITypeGnmi,
-			DeviceProfile: profile,
-			GnmiOptions:   &config.SBIGnmiOptions{Encoding: "JSON_IETF"},
+	sbi := &config.SBI{
+		Type:          config.SBITypeGnmi,
+		DeviceProfile: config.DeviceProfileCiscoIOSXR,
+		GnmiOptions:   &config.SBIGnmiOptions{Encoding: "JSON_IETF"},
+	}
+	_, err := materialize.BuildPlan(context.Background(), scb, sbi, root.Entry, false)
+	if err == nil {
+		t.Fatal("BuildPlan(cisco-ios-xr): expected error, got nil")
+	}
+	if !errors.Is(err, config.ErrDeviceProfileNotEnabled) {
+		t.Fatalf("BuildPlan(cisco-ios-xr): expected ErrDeviceProfileNotEnabled, got %v", err)
+	}
+}
+
+func TestBuildPlan_Sonic_JsonIETF_RoutesToSonicEncoder(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	root, scb := newTestRoot(t, mockCtrl)
+
+	addAndFinish(t, root, interfaceUpdates("ethernet-1/1", "uplink"), testhelper.FlagsNew)
+
+	sbi := &config.SBI{
+		Type:          config.SBITypeGnmi,
+		DeviceProfile: config.DeviceProfileSonic,
+		GnmiOptions:   &config.SBIGnmiOptions{Encoding: "JSON_IETF"},
+	}
+
+	plan, err := materialize.BuildPlan(context.Background(), scb, sbi, root.Entry, false)
+	if err != nil {
+		t.Fatalf("BuildPlan: unexpected error: %v", err)
+	}
+	if plan.Gnmi == nil {
+		t.Fatalf("BuildPlan: expected Gnmi plan, got nil")
+	}
+	if len(plan.Gnmi.Updates) == 0 {
+		t.Fatal("BuildPlan: expected at least one Update from sonic encoder, got none")
+	}
+	for _, u := range plan.Gnmi.Updates {
+		if u.GetPath().GetOrigin() != "sonic_yang" {
+			t.Errorf("sonic plan: expected Path.Origin %q, got %q", "sonic_yang", u.GetPath().GetOrigin())
 		}
-		_, err := materialize.BuildPlan(context.Background(), scb, sbi, root.Entry, false)
-		if err == nil {
-			t.Fatalf("BuildPlan(%q): expected error, got nil", profile)
-		}
-		if !errors.Is(err, config.ErrDeviceProfileNotEnabled) {
-			t.Fatalf("BuildPlan(%q): expected ErrDeviceProfileNotEnabled, got %v", profile, err)
-		}
+	}
+}
+
+func TestBuildPlan_Sonic_NoChanges_ReturnsEmptyGnmiPlan(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	root, scb := newTestRoot(t, mockCtrl)
+	ctx := context.Background()
+
+	upd := interfaceUpdates("ethernet-1/1", "uplink")
+	if err := testhelper.AddToRoot(ctx, root.Entry, upd, testhelper.FlagsExisting,
+		consts.RunningIntentName, consts.RunningValuesPrio); err != nil {
+		t.Fatal(err)
+	}
+	if err := testhelper.AddToRoot(ctx, root.Entry, upd, testhelper.FlagsExisting, "owner1", 5); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.FinishInsertionPhase(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	sbi := &config.SBI{
+		Type:          config.SBITypeGnmi,
+		DeviceProfile: config.DeviceProfileSonic,
+		GnmiOptions:   &config.SBIGnmiOptions{Encoding: "JSON_IETF"},
+	}
+
+	plan, err := materialize.BuildPlan(ctx, scb, sbi, root.Entry, false)
+	if err != nil {
+		t.Fatalf("BuildPlan: unexpected error: %v", err)
+	}
+	if plan.Gnmi == nil {
+		t.Fatalf("BuildPlan: expected non-nil (possibly empty) Gnmi plan for no-op transaction, got nil")
+	}
+	if len(plan.Gnmi.Updates) != 0 || len(plan.Gnmi.Deletes) != 0 {
+		t.Fatalf("BuildPlan: expected empty plan, got %d updates and %d deletes", len(plan.Gnmi.Updates), len(plan.Gnmi.Deletes))
+	}
+	if _, ok := plan.NetconfPlan(); ok {
+		t.Fatalf("BuildPlan: expected no Netconf plan for a gNMI SBI")
 	}
 }
 

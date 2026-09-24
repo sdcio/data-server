@@ -33,6 +33,56 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+func gnmiCreateReq(dsName string, profile sdcpb.DeviceProfile, encoding string) *sdcpb.CreateDataStoreRequest {
+	req := noopCreateReq(dsName, "gnmi")
+	req.Target.Address = "192.0.2.1"
+	req.Target.Port = 57400
+	req.Target.DeviceProfile = profile
+	req.Target.ProtocolOptions = &sdcpb.Target_GnmiOpts{
+		GnmiOpts: &sdcpb.GnmiOptions{Encoding: encoding},
+	}
+	return req
+}
+
+// TestCreateDataStore_RejectsCiscoIOSXRDeviceProfile verifies that a known but
+// disabled NOS profile fails at config validation with the same error as YAML load.
+func TestCreateDataStore_RejectsCiscoIOSXRDeviceProfile(t *testing.T) {
+	s := newTestServer(t)
+
+	_, err := s.CreateDataStore(context.Background(), gnmiCreateReq("ds-cisco", sdcpb.DeviceProfile_DEVICE_PROFILE_CISCO_IOS_XR, "JSON_IETF"))
+	if err == nil {
+		t.Fatal("expected error for cisco-ios-xr device profile, got nil")
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected gRPC status, got %T: %v", err, err)
+	}
+	if st.Code() != codes.InvalidArgument {
+		t.Errorf("status code = %v, want %v", st.Code(), codes.InvalidArgument)
+	}
+	if !strings.Contains(st.Message(), "not enabled") {
+		t.Errorf("error %q should mention profile not enabled", st.Message())
+	}
+}
+
+// TestCreateDataStore_SonicProfilePassesConfigValidation verifies sonic enablement
+// clears ValidateSetDefaults; connection to the target may still fail afterward.
+func TestCreateDataStore_SonicProfilePassesConfigValidation(t *testing.T) {
+	s := newTestServer(t)
+
+	_, err := s.CreateDataStore(context.Background(), gnmiCreateReq("ds-sonic", sdcpb.DeviceProfile_DEVICE_PROFILE_SONIC, "JSON_IETF"))
+	if err == nil {
+		return
+	}
+	if strings.Contains(err.Error(), "invalid datastore config") && strings.Contains(err.Error(), "not enabled") {
+		t.Fatalf("sonic profile should be enabled at config boundary, got: %v", err)
+	}
+	st, ok := status.FromError(err)
+	if ok && st.Code() == codes.InvalidArgument && strings.Contains(st.Message(), "not enabled") {
+		t.Fatalf("sonic profile should be enabled at config boundary, got: %v", err)
+	}
+}
+
 // newTestServer builds the minimal Server needed to call CreateDataStore.
 // It wires a real in-memory schema client and a mock cache client that
 // reports the cache instance as already existing (so no blocking InstanceCreate
