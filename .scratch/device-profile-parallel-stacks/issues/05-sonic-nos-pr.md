@@ -6,9 +6,9 @@
 
 **Blocked by:** 03 — Device-profile base PR
 
-**Status:** ready-for-agent
+**Status:** done on branch `sonic-device-profile` (worktree `/home/mava/projects/data-server-sonic`)
 
-- [ ] Only `sonic` is enabled; `cisco-ios-xr` remains on the base stub
-- [ ] Set and Get behavior is isolated to SONiC packages and enabled dispatch arms
-- [ ] Config, server mapping, materialize routing, and encoder unit tests cover enablement and routing without live devices
+- [x] Only `sonic` is enabled; `cisco-ios-xr` remains on the base stub
+- [x] Set and Get behavior is isolated to SONiC packages and enabled dispatch arms
+- [x] Config, server mapping, materialize routing, and encoder unit tests cover enablement and routing without live devices
 - [ ] PR body lists precondition links to open generic-fix PRs on `main` if any remain

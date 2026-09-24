@@ -25,6 +25,7 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	gnmiutils "github.com/sdcio/data-server/pkg/datastore/target/gnmi/utils"
+	"github.com/sdcio/data-server/pkg/datastore/target/gnmi/sonic"
 	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/ops"
@@ -43,7 +44,7 @@ import (
 //
 // Supported SBI types:
 //   - "gnmi"  with empty DeviceProfile  →  GnmiSetPlan (single root update)
-//   - "gnmi"  with DeviceProfile "sonic"  →  error until SONiC NOS PR enables encoding
+//   - "gnmi"  with DeviceProfile "sonic"  →  GnmiSetPlan (parent-bound via sonic encoder)
 //   - "gnmi"  with DeviceProfile "cisco-ios-xr"  →  error until Cisco NOS PR enables encoding
 //   - "netconf" with empty DeviceProfile  →  NetconfSetPlan
 //   - "netconf" with a non-generic DeviceProfile  →  error until the matching NOS PR
@@ -57,6 +58,10 @@ func BuildPlan(ctx context.Context, scb schemaClient.SchemaClientBound, sbi *con
 		return targettypes.SouthboundSetPlan{}, err
 	}
 
+	if sbi.Type == config.SBITypeGnmi && sbi.DeviceProfile == config.DeviceProfileSonic {
+		return gnmiPlan(sonic.Encode(ctx, scb, entry, replace))
+	}
+
 	switch sbi.Type {
 	case config.SBITypeNoop:
 		return targettypes.SouthboundSetPlan{}, nil
@@ -67,6 +72,17 @@ func BuildPlan(ctx context.Context, scb schemaClient.SchemaClientBound, sbi *con
 	default:
 		return targettypes.SouthboundSetPlan{}, fmt.Errorf("materialize: unknown SBI type: %q", sbi.Type)
 	}
+}
+
+// gnmiPlan wraps an encoder result into a SouthboundSetPlan, allowing callers
+// to pass (plan, err) return values through directly. See
+// targettypes.NewGnmiPlan for why a nil plan must still be normalized rather
+// than passed through as-is.
+func gnmiPlan(plan *targettypes.GnmiSetPlan, err error) (targettypes.SouthboundSetPlan, error) {
+	if err != nil {
+		return targettypes.SouthboundSetPlan{}, err
+	}
+	return targettypes.NewGnmiPlan(plan), nil
 }
 
 // buildGnmiPlan builds a GnmiSetPlan from the tree entry.
