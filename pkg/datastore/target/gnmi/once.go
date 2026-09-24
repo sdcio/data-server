@@ -170,7 +170,6 @@ func (s *OnceSync) internalOnceCycle(subReq *gnmi.SubscribeRequest) {
 			case *gnmi.SubscribeResponse_Update:
 				s.applyNotificationUpdates(syncTree, r.Update)
 			case *gnmi.SubscribeResponse_SyncResponse:
-				gotSyncResponse = true
 				if err := applyScopedRefreshFromCycleTree(s.ctx, s.runningStore, syncTree, s.paths); err != nil {
 					log.Error(err, "failure applying sync cycle to running")
 					return
