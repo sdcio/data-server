@@ -48,7 +48,7 @@ func CheckAndCreateKeysAsLeafs(ctx context.Context, e api.Entry, intentName stri
 		}
 
 		for _, k := range keySorted {
-			child, entryExists := e.GetChildMap().GetEntry(k.Name)
+			child, entryExists := e.GetChildMap().GetEntry(api.LocalIdentity(k.Name))
 			// if the key Leaf exists continue with next key
 			if entryExists {
 				// if it exists, we need to check that the entry for the owner exists.

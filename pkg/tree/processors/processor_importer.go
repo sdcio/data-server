@@ -105,7 +105,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 				if err != nil {
 					return err
 				}
-				if keyChild, exists = actual.GetChildMap().GetEntry(kv); !exists {
+				if keyChild, exists = actual.GetChildMap().GetEntry(api.LocalIdentity(kv)); !exists {
 					keyChild, err = api.NewEntry(ctx, actual, kv, task.context.treeContext)
 					if err != nil {
 						return err
@@ -132,7 +132,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 
 		// submit each child
 		for _, childElt := range elems {
-			child, exists := task.entry.GetChildMap().GetEntry(childElt.GetName())
+			child, exists := task.entry.GetChildMap().GetEntry(api.LocalIdentity(childElt.GetName()))
 			if !exists {
 				var err error
 				child, err = api.NewEntry(ctx, task.entry, childElt.GetName(), task.context.treeContext)

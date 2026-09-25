@@ -47,7 +47,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 			sharedEntryAttributes: func() *sharedEntryAttributes {
 				result := &sharedEntryAttributes{
 					parent:       nil,
-					pathElemName: "",
+					identity: api.LocalIdentity(""),
 					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
@@ -95,7 +95,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// create root sharedEntryAttributes
 				result := &sharedEntryAttributes{
 					parent:       nil,
-					pathElemName: "",
+					identity: api.LocalIdentity(""),
 					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
@@ -106,7 +106,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// create /interface sharedEntryAttributes
 				interf := &sharedEntryAttributes{
 					parent:       result,
-					pathElemName: "interface",
+					identity: api.LocalIdentity("interface"),
 					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
@@ -160,7 +160,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// create root sharedEntryAttributes
 				result := &sharedEntryAttributes{
 					parent:       nil,
-					pathElemName: "",
+					identity: api.LocalIdentity(""),
 					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
@@ -171,7 +171,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// create /interface sharedEntryAttributes
 				interf := &sharedEntryAttributes{
 					parent:       result,
-					pathElemName: "interface",
+					identity: api.LocalIdentity("interface"),
 					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
@@ -204,7 +204,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// create /system sharedEntryAttributes
 				system := &sharedEntryAttributes{
 					parent:       result,
-					pathElemName: "system",
+					identity: api.LocalIdentity("system"),
 					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
@@ -258,7 +258,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// create root sharedEntryAttributes
 				result := &sharedEntryAttributes{
 					parent:       nil,
-					pathElemName: "",
+					identity: api.LocalIdentity(""),
 					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},
@@ -269,7 +269,7 @@ func TestRootEntry_TreeExport(t *testing.T) {
 				// create /interface sharedEntryAttributes
 				interf := &sharedEntryAttributes{
 					parent:       result,
-					pathElemName: "interface",
+					identity: api.LocalIdentity("interface"),
 					childs:       api.NewChildMap(),
 					schemaMutex:  sync.RWMutex{},
 					cacheMutex:   sync.Mutex{},

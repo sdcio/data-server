@@ -19,8 +19,8 @@ import (
 type sharedEntryAttributes struct {
 	// parent entry, nil for the root Entry
 	parent api.Entry
-	// pathElemName the path elements name the entry represents
-	pathElemName string
+	// identity module-aware node identity for ChildMap keys and path segments
+	identity api.NodeIdentity
 	// childs mutual exclusive with LeafVariants
 	childs *api.ChildMap
 	// leafVariants mutual exclusive with Childs
@@ -59,7 +59,7 @@ func NewEntry(ctx context.Context, parent api.Entry, pathElemName string, tc api
 func (s *sharedEntryAttributes) DeepCopy(tc api.TreeContext, parent api.Entry) (api.Entry, error) {
 	result := &sharedEntryAttributes{
 		parent:           parent,
-		pathElemName:     s.pathElemName,
+		identity:         s.identity,
 		childs:           api.NewChildMap(),
 		schema:           s.schema,
 		treeContext:      tc,
@@ -91,7 +91,7 @@ func (s *sharedEntryAttributes) GetChildMap() *api.ChildMap {
 func NewSharedEntryAttributes(ctx context.Context, parent api.Entry, pathElemName string, tc api.TreeContext) (*sharedEntryAttributes, error) {
 	s := &sharedEntryAttributes{
 		parent:       parent,
-		pathElemName: pathElemName,
+		identity:     api.LocalIdentity(pathElemName),
 		childs:       api.NewChildMap(),
 		treeContext:  tc,
 	}
@@ -213,7 +213,7 @@ func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 				return nil
 			}
 		}
-		path = ancesterschema.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(s.pathElemName, nil))
+		path = ancesterschema.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(s.identity.Local, nil))
 	}
 
 	if getSchema {
@@ -399,8 +399,12 @@ func (s *sharedEntryAttributes) RemainsToExist() bool {
 }
 
 // PathName returns the name of the Entry
+func (s *sharedEntryAttributes) Identity() api.NodeIdentity {
+	return s.identity
+}
+
 func (s *sharedEntryAttributes) PathName() string {
-	return s.pathElemName
+	return s.identity.Local
 }
 
 // String returns a string representation of the Entry
@@ -430,9 +434,9 @@ func (s *sharedEntryAttributes) ChoicesResolvers() api.ChoiceResolvers {
 
 func (s *sharedEntryAttributes) DeleteCanDeleteChilds(keepDefault bool) {
 	// otherwise check all
-	for childname, child := range s.childs.GetAll() {
+	for _, child := range s.childs.GetAll() {
 		if child.CanDeleteBranch(keepDefault) {
-			s.childs.DeleteChild(childname)
+			s.childs.DeleteChild(child.Identity())
 		}
 	}
 }
@@ -523,7 +527,7 @@ func (s *sharedEntryAttributes) populateChoiceCaseResolvers(_ context.Context) e
 			highestWODeleted := int32(math.MaxInt32)
 			highestWONew := int32(math.MaxInt32)
 
-			child, childExists := s.childs.GetEntry(elem)
+			child, childExists := s.childs.GetEntry(api.LocalIdentity(elem))
 			// set the value from the tree as well
 			if childExists {
 				valWDeleted := ops.GetHighestPrecedenceValueOfBranch(child, api.HighestPrecedenceFilterAll)
@@ -567,11 +571,11 @@ func (s *sharedEntryAttributes) GetChilds(d types.DescendMethod) api.EntryMap {
 		}
 		result := map[string]api.Entry{}
 		// optimization option: sort the slices and forward in parallel, lifts extra burden that the contains call holds.
-		for childName, child := range s.childs.GetAll() {
-			if slices.Contains(skipAttributesList, childName) {
+		for _, child := range s.childs.GetAll() {
+			if slices.Contains(skipAttributesList, child.PathName()) {
 				continue
 			}
-			result[childName] = child
+			result[child.Identity().MapKey()] = child
 		}
 		return result
 	}
@@ -581,7 +585,7 @@ func (s *sharedEntryAttributes) GetChilds(d types.DescendMethod) api.EntryMap {
 // StringIndent returns the sharedEntryAttributes in its string representation
 // The string is intented according to the nesting level in the yang model
 func (s *sharedEntryAttributes) StringIndent(result []string) []string {
-	result = append(result, strings.Repeat("  ", s.GetLevel())+s.pathElemName)
+	result = append(result, strings.Repeat("  ", s.GetLevel())+s.identity.Local)
 
 	// ranging over children and LeafVariants
 	// then should be mutual exclusive, either a node has children or LeafVariants
@@ -653,7 +657,7 @@ func (s *sharedEntryAttributes) SdcpbPath() *sdcpb.Path {
 		// If levelsUp=1, we're one level below the schema, so we use alphaKeys[0], etc.
 		keyName := alphaKeys[levelsUp-1]
 		// Set this entry's name as the value for the selected key in the parent's last element
-		newElems[len(newElems)-1].Key[keyName] = s.pathElemName
+		newElems[len(newElems)-1].Key[keyName] = s.identity.Local
 
 		// Construct the new path with the modified elements
 		path = &sdcpb.Path{
@@ -664,7 +668,7 @@ func (s *sharedEntryAttributes) SdcpbPath() *sdcpb.Path {
 		}
 	} else {
 		// For entries with schemas, simply append a new path element to the parent's path.
-		path = s.parent.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(s.pathElemName, nil))
+		path = s.parent.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(s.identity.Local, nil))
 	}
 	// populate cache
 	s.pathCache = path

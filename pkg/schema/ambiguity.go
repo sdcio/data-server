@@ -27,8 +27,11 @@ type RootNameAmbiguity struct {
 	Modules   []string
 }
 
+// RootAmbiguityRegistry is the root-level ambiguity set from GetSchemaDetailsResponse.exclude.
+type RootAmbiguityRegistry []RootNameAmbiguity
+
 // RootAmbiguitiesFromDetails reads the root ambiguity registry from GetSchemaDetailsResponse.exclude.
-func RootAmbiguitiesFromDetails(details *sdcpb.GetSchemaDetailsResponse) []RootNameAmbiguity {
+func RootAmbiguitiesFromDetails(details *sdcpb.GetSchemaDetailsResponse) RootAmbiguityRegistry {
 	if details == nil {
 		return nil
 	}
@@ -36,34 +39,39 @@ func RootAmbiguitiesFromDetails(details *sdcpb.GetSchemaDetailsResponse) []RootN
 }
 
 // ParseAmbiguityRegistryExclude parses machine-readable ambiguity entries encoded in schema-server exclude lines.
-func ParseAmbiguityRegistryExclude(exclude []string) []RootNameAmbiguity {
-	prefix := ssSchema.AmbiguousNameRegistryExcludePrefix
-	out := make([]RootNameAmbiguity, 0)
+func ParseAmbiguityRegistryExclude(exclude []string) RootAmbiguityRegistry {
+	out := make(RootAmbiguityRegistry, 0)
 	for _, entry := range exclude {
-		if !strings.HasPrefix(entry, prefix) {
-			continue
+		if amb, ok := parseRootAmbiguityExcludeEntry(entry); ok {
+			out = append(out, amb)
 		}
-		rest := strings.TrimPrefix(entry, prefix)
-		if !strings.HasPrefix(rest, "/") {
-			continue
-		}
-		rest = rest[1:]
-		localName, modsStr, ok := strings.Cut(rest, "=")
-		if !ok || localName == "" || modsStr == "" {
-			continue
-		}
-		mods := strings.Split(modsStr, ",")
-		out = append(out, RootNameAmbiguity{LocalName: localName, Modules: mods})
 	}
 	return out
 }
 
-// ModulesForAmbiguousRootLocal returns owning modules when localName is ambiguous at schema root.
-func ModulesForAmbiguousRootLocal(ambiguities []RootNameAmbiguity, localName string) []string {
-	for _, a := range ambiguities {
+// ModulesForRootLocal returns owning modules when localName is ambiguous at schema root.
+func (r RootAmbiguityRegistry) ModulesForRootLocal(localName string) []string {
+	for _, a := range r {
 		if a.LocalName == localName {
 			return a.Modules
 		}
 	}
 	return nil
+}
+
+func parseRootAmbiguityExcludeEntry(entry string) (RootNameAmbiguity, bool) {
+	prefix := ssSchema.AmbiguousNameRegistryExcludePrefix
+	if !strings.HasPrefix(entry, prefix) {
+		return RootNameAmbiguity{}, false
+	}
+	rest := strings.TrimPrefix(entry, prefix)
+	if !strings.HasPrefix(rest, "/") {
+		return RootNameAmbiguity{}, false
+	}
+	rest = rest[1:]
+	localName, modsStr, ok := strings.Cut(rest, "=")
+	if !ok || localName == "" || modsStr == "" {
+		return RootNameAmbiguity{}, false
+	}
+	return RootNameAmbiguity{LocalName: localName, Modules: strings.Split(modsStr, ",")}, true
 }

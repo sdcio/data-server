@@ -36,7 +36,9 @@ func NewEntry(ctx context.Context, parent Entry, pathElemName string, tc TreeCon
 
 // Entry is the primary Element of the Tree.
 type Entry interface {
-	// PathName returns the last Path element, the name of the Entry
+	// Identity returns module-aware node identity (canonical for ChildMap keys).
+	Identity() NodeIdentity
+	// PathName returns the YANG local name segment (same as Identity().Local).
 	PathName() string
 	// GetLevel returns the depth of the Entry in the tree
 	GetLevel() int

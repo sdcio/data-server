@@ -19,11 +19,11 @@ func TestParseAmbiguityRegistryExclude(t *testing.T) {
 	if amb[0].LocalName != "router" || len(amb[0].Modules) != 3 {
 		t.Fatalf("unexpected ambiguity: %+v", amb[0])
 	}
-	mods := ModulesForAmbiguousRootLocal(amb, "router")
+	mods := amb.ModulesForRootLocal("router")
 	if len(mods) != 3 || mods[0] != "mod-a" {
-		t.Fatalf("ModulesForAmbiguousRootLocal: %v", mods)
+		t.Fatalf("ModulesForRootLocal: %v", mods)
 	}
-	if ModulesForAmbiguousRootLocal(amb, "interfaces") != nil {
+	if amb.ModulesForRootLocal("interfaces") != nil {
 		t.Fatal("expected nil for unknown local name")
 	}
 }
