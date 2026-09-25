@@ -132,12 +132,13 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 
 		// submit each child
 		for _, childElt := range elems {
-			child, exists := task.entry.GetChildMap().GetEntry(api.LocalIdentity(childElt.GetName()))
+			childID := childElt.Identity()
+			child, exists := task.entry.GetChildMap().GetEntry(childID)
 			if !exists {
 				var err error
-				child, err = api.NewEntry(ctx, task.entry, api.LocalIdentity(childElt.GetName()), task.context.treeContext)
+				child, err = api.NewEntry(ctx, task.entry, childID, task.context.treeContext)
 				if err != nil {
-					return fmt.Errorf("error inserting %s at %s: %w", childElt.GetName(), task.entry.SdcpbPath().ToXPath(false), err)
+					return fmt.Errorf("error inserting %s at %s: %w", childID.MapKey(), task.entry.SdcpbPath().ToXPath(false), err)
 				}
 			}
 			// need to process Leaflist childs in this goroutine to avois reordering

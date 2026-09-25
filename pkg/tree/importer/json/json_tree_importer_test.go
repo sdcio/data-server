@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -77,7 +78,7 @@ func TestJsonTreeImporter_GetName(t *testing.T) {
 func TestJsonTreeImporter_GetElement(t *testing.T) {
 	imp := NewJsonTreeImporter(map[string]any{"foo": "bar"}, "owner1", 5, false)
 	got := imp.GetElement("foo")
-	want := &JsonTreeImporterElement{data: "bar", name: "foo"}
+	want := &JsonTreeImporterElement{data: "bar", identity: api.LocalIdentity("foo")}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("GetElement() = %v, want %v", got, want)
 	}
@@ -98,6 +99,10 @@ func TestJsonTreeImporter_GetElement_LocalNameFallback(t *testing.T) {
 	child := elem.GetElement("name")
 	if child == nil {
 		t.Fatal("GetElement(\"name\") returned nil; expected local-name fallback for \"openconfig-interfaces:name\"")
+	}
+	wantNameID := api.NodeIdentity{Local: "name", Module: "openconfig-interfaces"}
+	if child.Identity() != wantNameID {
+		t.Errorf("Identity() = %v, want %v", child.Identity(), wantNameID)
 	}
 	val, err := child.GetKeyValue(context.Background(), nil)
 	if err != nil {
@@ -130,10 +135,8 @@ func TestJsonTreeImporter_GetElements_NoPrefix(t *testing.T) {
 	}
 }
 
-// TestJsonTreeImporter_GetElements_StripsPrefix verifies that RFC 7951 module prefixes
-// (e.g. "openconfig-interfaces:interfaces") are stripped to the local name so the processor
-// can look the element up in the schema tree by bare name.
-func TestJsonTreeImporter_GetElements_StripsPrefix(t *testing.T) {
+// TestJsonTreeImporter_GetElements_ModuleQualifiedIdentity verifies RFC 7951 keys keep module on Identity.
+func TestJsonTreeImporter_GetElements_ModuleQualifiedIdentity(t *testing.T) {
 	data := map[string]any{
 		"openconfig-interfaces:interfaces": map[string]any{"description": "top"},
 	}
@@ -143,7 +146,34 @@ func TestJsonTreeImporter_GetElements_StripsPrefix(t *testing.T) {
 		t.Fatalf("GetElements() = %d elements, want 1", len(elems))
 	}
 	if got := elems[0].GetName(); got != "interfaces" {
-		t.Errorf("element name = %q, want %q", got, "interfaces")
+		t.Errorf("GetName() = %q, want %q", got, "interfaces")
+	}
+	wantID := api.NodeIdentity{Local: "interfaces", Module: "openconfig-interfaces"}
+	if got := elems[0].Identity(); got != wantID {
+		t.Errorf("Identity() = %v, want %v", got, wantID)
+	}
+}
+
+// TestJsonTreeImporter_GetElements_CollidingLocalNames returns distinct identities for two module:local keys.
+func TestJsonTreeImporter_GetElements_CollidingLocalNames(t *testing.T) {
+	data := map[string]any{
+		"mod-a:router": map[string]any{"foo": "a"},
+		"mod-b:router": map[string]any{"foo": "b"},
+	}
+	imp := NewJsonTreeImporter(data, "test", 1, false)
+	elems := imp.GetElements()
+	if len(elems) != 2 {
+		t.Fatalf("GetElements() = %d elements, want 2", len(elems))
+	}
+	keys := map[string]bool{}
+	for _, e := range elems {
+		keys[e.Identity().MapKey()] = true
+		if e.GetName() != "router" {
+			t.Errorf("GetName() = %q, want router", e.GetName())
+		}
+	}
+	if !keys["mod-a:router"] || !keys["mod-b:router"] {
+		t.Errorf("expected mod-a:router and mod-b:router identities, got %v", keys)
 	}
 }
 
@@ -252,7 +282,7 @@ func TestJsonTreeImporter_GetTVValue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			elem := &JsonTreeImporterElement{data: tt.data, name: "leaf"}
+			elem := &JsonTreeImporterElement{data: tt.data, identity: api.LocalIdentity("leaf")}
 			got, err := elem.GetTVValue(ctx, tt.slt)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetTVValue() error = %v, wantErr %v", err, tt.wantErr)

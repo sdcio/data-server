@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
@@ -97,6 +98,10 @@ func (p *ProtoTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.Sc
 }
 func (p *ProtoTreeImporterElement) GetName() string {
 	return p.data.Name
+}
+
+func (p *ProtoTreeImporterElement) Identity() api.NodeIdentity {
+	return api.LocalIdentity(p.GetName())
 }
 
 // Function to ensure ProtoTreeImporter implements ImportConfigAdapter (optional)
