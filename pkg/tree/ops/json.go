@@ -133,6 +133,9 @@ func jsonGetIetfPrefixConditional(key string, a api.Entry, b api.Entry, ietf boo
 	if !ietf {
 		return key
 	}
+	if id := a.Identity(); id.Module != "" {
+		return id.JSONIETFKey()
+	}
 	aModule := utils.GetSchemaElemModuleName(a.GetSchema())
 	if aModule == utils.GetSchemaElemModuleName(b.GetSchema()) {
 		return key

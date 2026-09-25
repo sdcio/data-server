@@ -32,6 +32,50 @@ func TestNodeIdentityFromPathElem(t *testing.T) {
 	}
 }
 
+func TestLookupChild_collidingLocalNames(t *testing.T) {
+	modA := api.NodeIdentity{Local: "router", Module: "mod-a"}
+	modB := api.NodeIdentity{Local: "router", Module: "mod-b"}
+	childs := map[string]api.Entry{
+		modA.MapKey(): nil,
+		modB.MapKey(): nil,
+	}
+
+	path := &sdcpb.Path{Origin: "mod-a", Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("router", nil)}}
+	_, ok := api.LookupChild(childs, path.Elem[0], path, 0)
+	if !ok {
+		t.Fatal("expected mod-a router via origin")
+	}
+
+	qualified := &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("mod-b:router", nil)}}
+	_, ok = api.LookupChild(childs, qualified.Elem[0], qualified, 0)
+	if !ok {
+		t.Fatal("expected mod-b router via qualified name")
+	}
+}
+
+func TestNodeIdentity_PersistName(t *testing.T) {
+	if api.LocalIdentity("iface").PersistName() != "iface" {
+		t.Fatal("local persist name")
+	}
+	id := api.NodeIdentity{Local: "router", Module: "mod-a"}
+	if id.PersistName() != "mod-a:router" {
+		t.Fatalf("PersistName() = %q", id.PersistName())
+	}
+}
+
+func TestNodeIdentity_MatchesPathElemPrefix(t *testing.T) {
+	id := api.NodeIdentity{Local: "router", Module: "mod-a"}
+	if !id.MatchesPathElemPrefix(sdcpb.NewPathElem("mod-a:rou", nil)) {
+		t.Fatal("expected prefix match on qualified partial")
+	}
+	if id.MatchesPathElemPrefix(sdcpb.NewPathElem("mod-b:router", nil)) {
+		t.Fatal("mod-b prefix must not match mod-a identity")
+	}
+	if !api.LocalIdentity("interface").MatchesPathElemPrefix(sdcpb.NewPathElem("int", nil)) {
+		t.Fatal("expected local prefix match")
+	}
+}
+
 func TestApplyModuleToSchemaLookupPath(t *testing.T) {
 	id := api.NodeIdentity{Local: "router", Module: "mod-a"}
 

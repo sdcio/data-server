@@ -25,6 +25,42 @@ func NodeIdentityFromPathElem(pe *sdcpb.PathElem, path *sdcpb.Path, elemIndex in
 	return id
 }
 
+// LookupChild resolves an active child for a path segment using NodeIdentity.
+func LookupChild(childs map[string]Entry, pe *sdcpb.PathElem, path *sdcpb.Path, elemIndex int) (Entry, bool) {
+	if pe == nil {
+		return nil, false
+	}
+	id := NodeIdentityFromPathElem(pe, path, elemIndex)
+	child, ok := childs[id.MapKey()]
+	return child, ok
+}
+
+// MatchesPathElemPrefix reports whether a partial path segment matches this identity.
+func (id NodeIdentity) MatchesPathElemPrefix(partial *sdcpb.PathElem) bool {
+	if partial == nil {
+		return true
+	}
+	partialID := ParseJSONIETFKey(partial.GetName())
+	if partialID.Module != "" {
+		if partialID.Local != "" && !strings.HasPrefix(id.Local, partialID.Local) {
+			return false
+		}
+		if !strings.HasPrefix(id.Module, partialID.Module) {
+			return false
+		}
+		return strings.HasPrefix(id.JSONIETFKey(), partial.GetName())
+	}
+	return strings.HasPrefix(id.Local, partial.GetName())
+}
+
+// PersistName returns the name used in tree_persist and similar exports (module:local when set).
+func (id NodeIdentity) PersistName() string {
+	if id.Module == "" {
+		return id.Local
+	}
+	return id.JSONIETFKey()
+}
+
 // ApplyModuleToSchemaLookupPath adjusts a schema lookup path for a module-qualified identity.
 func ApplyModuleToSchemaLookupPath(path *sdcpb.Path, id NodeIdentity, parentIsRoot bool) {
 	if path == nil || id.Module == "" {

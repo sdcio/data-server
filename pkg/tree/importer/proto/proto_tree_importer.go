@@ -101,7 +101,7 @@ func (p *ProtoTreeImporterElement) GetName() string {
 }
 
 func (p *ProtoTreeImporterElement) Identity() api.NodeIdentity {
-	return api.LocalIdentity(p.GetName())
+	return api.ParseJSONIETFKey(p.GetName())
 }
 
 // Function to ensure ProtoTreeImporter implements ImportConfigAdapter (optional)
