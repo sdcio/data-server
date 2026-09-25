@@ -2,11 +2,16 @@ module github.com/sdcio/data-server
 
 go 1.25.0
 
-replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.2-2
+// GY-1 (sdcio/goyang#5): augment-merge collision fix — keep both children instead of
+// silently dropping the losing one on name clash. Needed transitively for SS-2 below
+// (Go replace directives don't propagate through dependencies, so this must be pinned
+// here directly, not just in schema-server's own go.mod). Remove on release-stack.
+replace github.com/openconfig/goyang => github.com/sdcio/goyang v1.6.2-2.0.20260925142539-794212b03b40
 
-// SS-1 (schema-server#257): root sibling-module path resolution + ambiguity registry — remove on release-stack.
+// SS-1 (schema-server#257) + SS-2 (schema-server#258, augment-merge nested collisions):
+// pinned to SS-2's branch tip (based on SS-1) — remove on release-stack.
 // Local dev: swap the line below for `=> ../schema-server` when both repos are siblings.
-replace github.com/sdcio/schema-server => github.com/sdcio/schema-server v0.0.35-0.20260925080457-b1f8e753e729
+replace github.com/sdcio/schema-server => github.com/sdcio/schema-server v0.0.35-0.20260925171211-be513ede8dbb
 
 require (
 	github.com/AlekSi/pointer v1.2.0
@@ -27,7 +32,7 @@ require (
 	github.com/scrapli/scrapligo v1.4.1
 	github.com/sdcio/cache v0.0.38
 	github.com/sdcio/logger v0.0.3
-	github.com/sdcio/schema-server v0.0.35-0.20260925080457-b1f8e753e729
+	github.com/sdcio/schema-server v0.0.35-0.20260925171211-be513ede8dbb
 	github.com/sdcio/sdc-protos v0.0.55
 	github.com/sdcio/yang-parser v0.0.12
 	github.com/spf13/cobra v1.10.2
