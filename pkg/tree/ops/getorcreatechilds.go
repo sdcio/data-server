@@ -17,10 +17,11 @@ func GetOrCreateChilds(ctx context.Context, e api.Entry, path *sdcpb.Path) (api.
 	current := e
 	for i, pe := range path.Elem {
 		// Step 1: Find or create the child for the path element name
-		newCurrent, exists := current.GetChilds(types.DescendMethodAll)[pe.Name]
+		childID := api.NodeIdentityFromPathElem(pe, path, i)
+		newCurrent, exists := current.GetChildMap().GetEntry(childID)
 		if !exists {
 			var err error
-			child, err := api.NewEntry(ctx, current, pe.Name, e.GetTreeContext())
+			child, err := api.NewEntry(ctx, current, childID, e.GetTreeContext())
 			if err != nil {
 				return nil, err
 			}
@@ -39,10 +40,11 @@ func GetOrCreateChilds(ctx context.Context, e api.Entry, path *sdcpb.Path) (api.
 
 		// Step 2: For each key, find or create the key child
 		for _, key := range keys {
-			newCurrent, exists = current.GetChilds(types.DescendMethodAll)[pe.Key[key]]
+			keyID := api.LocalIdentity(pe.Key[key])
+			newCurrent, exists = current.GetChildMap().GetEntry(keyID)
 			if !exists {
 				var err error
-				keyChild, err := api.NewEntry(ctx, current, pe.Key[key], e.GetTreeContext())
+				keyChild, err := api.NewEntry(ctx, current, keyID, e.GetTreeContext())
 				if err != nil {
 					return nil, err
 				}
@@ -92,12 +94,21 @@ func AddUpdateRecursiveInternal(ctx context.Context, s api.Entry, path *sdcpb.Pa
 		return s, nil
 	}
 
+	pe := path.GetElem()[idx]
 	var e api.Entry
 	x := s
 	var exists bool
-	for name := range path.GetElem()[idx].PathElemNames() {
-		if e, exists = x.GetChilds(types.DescendMethodAll)[name]; !exists {
-			newE, err := api.NewEntry(ctx, x, name, s.GetTreeContext())
+	first := true
+	for name := range pe.PathElemNames() {
+		var id api.NodeIdentity
+		if first {
+			id = api.NodeIdentityFromPathElem(pe, path, idx)
+			first = false
+		} else {
+			id = api.LocalIdentity(name)
+		}
+		if e, exists = x.GetChildMap().GetEntry(id); !exists {
+			newE, err := api.NewEntry(ctx, x, id, s.GetTreeContext())
 			if err != nil {
 				return nil, err
 			}

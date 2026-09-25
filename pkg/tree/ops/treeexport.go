@@ -70,7 +70,7 @@ func treeExportLevel(e api.Entry, owner string) ([]*tree_persist.TreeElement, er
 			if len(childexport) > 1 {
 				return nil, fmt.Errorf("unexpected value")
 			}
-			childexport[0].Name = e.PathName()
+			childexport[0].Name = e.Identity().PersistName()
 
 			result = append(result, childexport...)
 		}
@@ -91,7 +91,7 @@ func treeExportLevel(e api.Entry, owner string) ([]*tree_persist.TreeElement, er
 		if lvResult != nil || len(childResults) > 0 {
 			return []*tree_persist.TreeElement{
 				{
-					Name:        e.PathName(),
+					Name:        e.Identity().PersistName(),
 					Childs:      childResults,
 					LeafVariant: lvResult,
 				},

@@ -24,6 +24,12 @@ import (
 	"github.com/sdcio/data-server/pkg/schema"
 )
 
+type rootAmbiguityCache struct {
+	registry schema.RootAmbiguityRegistry
+	err      error
+	ready    bool
+}
+
 const (
 	PATHSEP = "/"
 )
@@ -41,6 +47,9 @@ type SchemaClientBoundImpl struct {
 	schemaClient schema.Client
 
 	index sync.Map // string -> schemaIndexEntry
+
+	rootAmbiguityMu sync.Mutex
+	rootAmbiguity   rootAmbiguityCache
 }
 
 func NewSchemaClientBound(s *config.SchemaConfig, sc schema.Client) *SchemaClientBoundImpl {
@@ -123,6 +132,26 @@ func (scb *SchemaClientBoundImpl) getSchema() *sdcpb.Schema {
 		Version: scb.schema.Version,
 		Vendor:  scb.schema.Vendor,
 	}
+}
+
+// RootAmbiguityRegistry loads the root ambiguity set from GetSchemaDetails (cached).
+func (scb *SchemaClientBoundImpl) RootAmbiguityRegistry(ctx context.Context) (schema.RootAmbiguityRegistry, error) {
+	scb.rootAmbiguityMu.Lock()
+	defer scb.rootAmbiguityMu.Unlock()
+	if scb.rootAmbiguity.ready {
+		return scb.rootAmbiguity.registry, scb.rootAmbiguity.err
+	}
+	details, err := scb.schemaClient.GetSchemaDetails(ctx, &sdcpb.GetSchemaDetailsRequest{
+		Schema: scb.getSchema(),
+	})
+	if err != nil {
+		scb.rootAmbiguity.err = err
+		scb.rootAmbiguity.ready = true
+		return nil, err
+	}
+	scb.rootAmbiguity.registry = schema.RootAmbiguitiesFromDetails(details)
+	scb.rootAmbiguity.ready = true
+	return scb.rootAmbiguity.registry, nil
 }
 
 func (scb *SchemaClientBoundImpl) ToPath(ctx context.Context, path []string) (*sdcpb.Path, error) {

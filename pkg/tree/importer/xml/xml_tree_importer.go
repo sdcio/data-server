@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/beevik/etree"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -87,6 +88,10 @@ func (x *XmlTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.Sche
 
 func (x *XmlTreeImporterElement) GetName() string {
 	return x.elem.Tag
+}
+
+func (x *XmlTreeImporterElement) Identity() api.NodeIdentity {
+	return api.LocalIdentity(x.GetName())
 }
 
 // Function to ensure JsonTreeImporter implements ImportConfigAdapter (optional)

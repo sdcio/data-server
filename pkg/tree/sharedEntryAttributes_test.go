@@ -101,7 +101,7 @@ func Test_sharedEntryAttributes_DeepCopy(t *testing.T) {
 
 				var e api.Entry
 				e = &sharedEntryAttributes{
-					pathElemName:     "__root__",
+					identity:         api.LocalIdentity("__root__"),
 					childs:           api.NewChildMap(),
 					choicesResolvers: api.ChoiceResolvers{},
 					parent:           nil,

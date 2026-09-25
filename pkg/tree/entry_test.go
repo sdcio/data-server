@@ -1491,37 +1491,37 @@ func Test_Schema_Population(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	interf, err := NewSharedEntryAttributes(ctx, root.Entry, "interface", tc)
+	interf, err := NewSharedEntryAttributes(ctx, root.Entry, api.LocalIdentity("interface"), tc)
 	if err != nil {
 		t.Error(err)
 	}
 	expectNotNil(t, interf.schema, "/interface schema")
 
-	e00, err := NewSharedEntryAttributes(ctx, interf, "ethernet-1/1", tc)
+	e00, err := NewSharedEntryAttributes(ctx, interf, api.LocalIdentity("ethernet-1/1"), tc)
 	if err != nil {
 		t.Error(err)
 	}
 	expectNil(t, e00.schema, "/interface/ethernet-1/1 schema")
 
-	dk, err := NewSharedEntryAttributes(ctx, root.Entry, "doublekey", tc)
+	dk, err := NewSharedEntryAttributes(ctx, root.Entry, api.LocalIdentity("doublekey"), tc)
 	if err != nil {
 		t.Error(err)
 	}
 	expectNotNil(t, dk.schema, "/doublekey schema")
 
-	dkk1, err := NewSharedEntryAttributes(ctx, dk, "key1", tc)
+	dkk1, err := NewSharedEntryAttributes(ctx, dk, api.LocalIdentity("key1"), tc)
 	if err != nil {
 		t.Error(err)
 	}
 	expectNil(t, dkk1.schema, "/doublekey/key1 schema")
 
-	dkk2, err := NewSharedEntryAttributes(ctx, dkk1, "key2", tc)
+	dkk2, err := NewSharedEntryAttributes(ctx, dkk1, api.LocalIdentity("key2"), tc)
 	if err != nil {
 		t.Error(err)
 	}
 	expectNil(t, dkk2.schema, "/doublekey/key2 schema")
 
-	dkkv, err := NewSharedEntryAttributes(ctx, dkk2, "mandato", tc)
+	dkkv, err := NewSharedEntryAttributes(ctx, dkk2, api.LocalIdentity("mandato"), tc)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1546,37 +1546,37 @@ func Test_sharedEntryAttributes_SdcpbPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	interf, err := NewSharedEntryAttributes(ctx, root.Entry, "interface", tc)
+	interf, err := NewSharedEntryAttributes(ctx, root.Entry, api.LocalIdentity("interface"), tc)
 	if err != nil {
 		t.Error(err)
 	}
 
-	e00, err := NewSharedEntryAttributes(ctx, interf, "ethernet-1/1", tc)
+	e00, err := NewSharedEntryAttributes(ctx, interf, api.LocalIdentity("ethernet-1/1"), tc)
 	if err != nil {
 		t.Error(err)
 	}
 
-	e00desc, err := NewSharedEntryAttributes(ctx, e00, "description", tc)
+	e00desc, err := NewSharedEntryAttributes(ctx, e00, api.LocalIdentity("description"), tc)
 	if err != nil {
 		t.Error(err)
 	}
 
-	dk, err := NewSharedEntryAttributes(ctx, root.Entry, "doublekey", tc)
+	dk, err := NewSharedEntryAttributes(ctx, root.Entry, api.LocalIdentity("doublekey"), tc)
 	if err != nil {
 		t.Error(err)
 	}
 
-	dkk1, err := NewSharedEntryAttributes(ctx, dk, "key1", tc)
+	dkk1, err := NewSharedEntryAttributes(ctx, dk, api.LocalIdentity("key1"), tc)
 	if err != nil {
 		t.Error(err)
 	}
 
-	dkk2, err := NewSharedEntryAttributes(ctx, dkk1, "key2", tc)
+	dkk2, err := NewSharedEntryAttributes(ctx, dkk1, api.LocalIdentity("key2"), tc)
 	if err != nil {
 		t.Error(err)
 	}
 
-	dkkv, err := NewSharedEntryAttributes(ctx, dkk2, "mandato", tc)
+	dkkv, err := NewSharedEntryAttributes(ctx, dkk2, api.LocalIdentity("mandato"), tc)
 	if err != nil {
 		t.Error(err)
 	}
