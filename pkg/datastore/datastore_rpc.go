@@ -267,9 +267,11 @@ func NewDatastoreRollbackAdapter(d *Datastore) *DatastoreRollbackAdapter {
 	}
 }
 
-// TransactionRollback is adapted to the datastore.lowlevelTransactionSet() function
+// TransactionRollback is adapted to the datastore.replaceThenMerge() function, so that a
+// rollback transaction's .replace (set by Transaction.GetRollbackTransaction when the original
+// transaction was a replace) is honored, not silently dropped.
 func (dra *DatastoreRollbackAdapter) TransactionRollback(ctx context.Context, transaction *types.Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
-	return dra.d.lowlevelTransactionSet(ctx, transaction, dryRun)
+	return dra.d.replaceThenMerge(ctx, transaction, dryRun)
 }
 
 // Assure the types.RollbackInterface is implemented by the DatastoreRollbackAdapter
