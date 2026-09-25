@@ -3,6 +3,7 @@ package datastore
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"runtime"
 	"sync"
 	"testing"
@@ -18,7 +19,9 @@ import (
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/consts"
+	"github.com/sdcio/data-server/pkg/tree/importer"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
+	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/processors"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -130,13 +133,15 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 			// Expect IntentGetAll (called by LoadAllButRunningIntents)
 			ccb.EXPECT().
 				IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-				DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+				DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 					close(intentChan)
 					close(errChan)
 				}).AnyTimes()
 
 			// Expect IntentModify (called by TransactionSet to save intent)
 			ccb.EXPECT().IntentModify(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			// Expect RunningModify (called by writeBackSyncTree to persist running)
+			ccb.EXPECT().RunningModify(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 			// Setup Mock SBI
 			sbi := mocktarget.NewMockTarget(ctrl)
@@ -272,7 +277,7 @@ func TestTransactionSet_SensitivePathsPersisted(t *testing.T) {
 	ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
 	ccb.EXPECT().
 		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+		DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 			close(intentChan)
 			close(errChan)
 		}).AnyTimes()
@@ -284,6 +289,9 @@ func TestTransactionSet_SensitivePathsPersisted(t *testing.T) {
 			}
 			return nil
 		}).AnyTimes()
+	ccb.EXPECT().
+		RunningModify(gomock.Any(), gomock.Any()).
+		Return(nil).AnyTimes()
 
 	sbi := mocktarget.NewMockTarget(ctrl)
 	sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).AnyTimes()
@@ -347,6 +355,72 @@ func TestTransactionSet_SensitivePathsPersisted(t *testing.T) {
 	}
 	if diff := cmp.Diff(wantXPaths, gotXPaths); diff != "" {
 		t.Errorf("SensitivePaths mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestForEachIntent_NarrowIntentReader verifies forEachIntent streams every
+// intent from cc and invokes fn for each one. It is built against a
+// MockBoundIntentReader — not the full MockCacheClientBound — since
+// forEachIntent only ever reads real Intents. Satisfying this test with the
+// narrower mock is the seam for Issue 03's IntentReader split.
+func TestForEachIntent_NarrowIntentReader(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	intentA := &tree_persist.Intent{IntentName: "intent-a", Priority: 10}
+	intentB := &tree_persist.Intent{IntentName: "intent-b", Priority: 20}
+
+	reader := mockcacheclient.NewMockBoundIntentReader(ctrl)
+	reader.EXPECT().
+		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
+			intentChan <- treeproto.NewProtoTreeImporter(intentA)
+			intentChan <- treeproto.NewProtoTreeImporter(intentB)
+			close(intentChan)
+			close(errChan)
+		})
+
+	var gotNames []string
+	err := forEachIntent(ctx, reader, nil, func(intent importer.IntentAdapter) error {
+		gotNames = append(gotNames, intent.GetName())
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("forEachIntent() error = %v", err)
+	}
+
+	wantNames := []string{"intent-a", "intent-b"}
+	if diff := cmp.Diff(wantNames, gotNames); diff != "" {
+		t.Errorf("visited intent names mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestForEachIntent_PropagatesStreamError verifies forEachIntent returns the
+// first error received on the cache's error channel, again using only a
+// MockBoundIntentReader.
+func TestForEachIntent_PropagatesStreamError(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	wantErr := errors.New("boom")
+
+	reader := mockcacheclient.NewMockBoundIntentReader(ctrl)
+	reader.EXPECT().
+		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
+			errChan <- wantErr
+			close(intentChan)
+			close(errChan)
+		})
+
+	err := forEachIntent(ctx, reader, nil, func(importer.IntentAdapter) error {
+		t.Fatal("fn should not be called when the stream errors")
+		return nil
+	})
+	if !errors.Is(err, wantErr) {
+		t.Errorf("forEachIntent() error = %v, want %v", err, wantErr)
 	}
 }
 

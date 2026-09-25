@@ -14,7 +14,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/api/adapter"
 	"github.com/sdcio/data-server/pkg/tree/consts"
-	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
+	"github.com/sdcio/data-server/pkg/tree/importer"
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/ops/validation"
 	"github.com/sdcio/data-server/pkg/tree/processors"
@@ -22,7 +22,6 @@ import (
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	"github.com/sdcio/sdc-protos/tree_persist"
 )
 
 var (
@@ -97,11 +96,11 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	}
 
 	// store the actual / old running in the transaction
-	runningProto, err := d.cacheClient.IntentGet(ctx, consts.RunningIntentName)
+	runningIntent, err := d.cacheClient.RunningGet(ctx)
 	if err != nil {
 		return nil, err
 	}
-	_, err = root.ImportConfig(ctx, nil, treeproto.NewProtoTreeImporter(runningProto), treetypes.NewUpdateInsertFlags(), d.taskPool)
+	_, err = root.ImportConfig(ctx, nil, runningIntent, treetypes.NewUpdateInsertFlags(), d.taskPool)
 	if err != nil {
 		return nil, err
 	}
@@ -167,11 +166,11 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 // cache stream. Both channels are drained to completion before returning.
 func forEachIntent(
 	ctx context.Context,
-	cc cache.CacheClientBound,
+	cc cache.BoundIntentReader,
 	exclude []string,
-	fn func(*tree_persist.Intent) error,
+	fn func(importer.IntentAdapter) error,
 ) error {
-	intentChan := make(chan *tree_persist.Intent)
+	intentChan := make(chan importer.IntentAdapter)
 	errChan := make(chan error, 1)
 	go cc.IntentGetAll(ctx, exclude, intentChan, errChan)
 	for errChan != nil || intentChan != nil {
@@ -202,12 +201,10 @@ func forEachIntent(
 func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.RootEntry) ([]string, error) {
 	log := logger.FromContext(ctx)
 	var intentNames []string
-	err := forEachIntent(ctx, d.cacheClient, []string{consts.RunningIntentName}, func(intent *tree_persist.Intent) error {
-		log.V(logger.VDebug).Info("adding intent to tree", "intent", intent.GetIntentName())
-		log.V(logger.VTrace).Info("adding intent to tree", "intent", intent.GetIntentName(), "content", utils.ProtoJSON(intent))
-		intentNames = append(intentNames, intent.GetIntentName())
-		protoLoader := treeproto.NewProtoTreeImporter(intent)
-		_, err := root.ImportConfig(ctx, nil, protoLoader, treetypes.NewUpdateInsertFlags(), d.taskPool)
+	err := forEachIntent(ctx, d.cacheClient, []string{consts.RunningIntentName}, func(intent importer.IntentAdapter) error {
+		log.V(logger.VDebug).Info("adding intent to tree", "intent", intent.GetName())
+		intentNames = append(intentNames, intent.GetName())
+		_, err := root.ImportConfig(ctx, nil, intent, treetypes.NewUpdateInsertFlags(), d.taskPool)
 		return err
 	})
 	if err != nil {
@@ -469,7 +466,7 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates api.LeafVaria
 
 	// write the synctree to disk
 	if newRunningIntent != nil {
-		err = d.cacheClient.IntentModify(ctx, newRunningIntent)
+		err = d.cacheClient.RunningModify(ctx, newRunningIntent)
 		if err != nil {
 			return fmt.Errorf("failed updating the running store for %s: %w", d.Name(), err)
 		}
