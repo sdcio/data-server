@@ -156,7 +156,10 @@ type CacheConfig struct {
 	// Local cache attr
 	StoreType string `yaml:"store-type,omitempty" json:"store-type,omitempty"`
 	Dir       string `yaml:"dir,omitempty" json:"dir,omitempty"`
-	// Remote cache attr
+	// Remote cache attr; also doubles as the config-server cache attr:
+	// address of the colocated config-server controller's local
+	// ConfigReadService (see the ADR's "New cache.Client implementation"
+	// section).
 	Address string `yaml:"address,omitempty" json:"address,omitempty"`
 }
 
@@ -279,7 +282,12 @@ func (c *CacheConfig) validateSetDefaults() error {
 			c.Dir = defaultCacheDir
 		}
 	case cacheTypeConfigServer:
-		// no connection settings yet; added by a follow-up ticket.
+		if c.Address == "" {
+			return errors.New("missing config-server cache address")
+		}
+		if _, _, err := net.SplitHostPort(c.Address); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unknown cache type: %q", c.Type)
 	}
