@@ -195,7 +195,6 @@ func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 	// on the root element we cannot query the parent schema.
 	// hence skip this part if IsRoot
 	if !s.IsRoot() {
-
 		// we can and should skip schema retrieval if we have a
 		// terminal value that is a key value.
 		// to check for that, we query the parent for the schema even multiple levels up
