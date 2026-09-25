@@ -148,7 +148,7 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 					return false, nil
 				}
 				le := e.GetLeafVariants().GetHighestPrecedence(false, false, false)
-				if le == nil || onlyNewOrUpdated && !le.IsNew && !le.IsUpdated {
+				if le == nil || onlyNewOrUpdated && !le.GetNewFlag() && !le.GetUpdateFlag() {
 					return false, nil
 				}
 			}

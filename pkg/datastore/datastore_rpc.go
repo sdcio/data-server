@@ -58,7 +58,8 @@ type Datastore struct {
 	m                *sync.RWMutex
 	deviationClients map[sdcpb.DataServer_WatchDeviationsServer]string
 
-	// datastore mutex locks the whole datasore for further set operations
+	// dmutex serializes Datastore set-path work (TransactionSet/Confirm/Cancel
+	// and Sync Revert's southbound apply). Fail-fast TryLock; never block.
 	dmutex *sync.Mutex
 
 	// TransactionManager
