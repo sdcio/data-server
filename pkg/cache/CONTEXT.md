@@ -7,10 +7,30 @@ actually stores it.
 ## Language
 
 **Intent**:
-A named, prioritized piece of northbound-authored config, owned by whichever
-system is the sole writer for the active `Cache.Type` (config-server, or
-data-server itself under `local`). Read through the `Client.InstanceIntent*`
-family.
+A named, prioritized piece of northbound-authored config — the *desired*
+value. Authorship (who decides what an Intent's content should be) belongs
+to whichever system is the sole writer for the active `Cache.Type`
+(config-server, or data-server itself under `local`). Read through the
+`Client.InstanceIntent*` family. _Avoid_: using "Intent" when you mean
+last-applied — under `Cache.Type: config-server` these are two different
+values with two different owners (see **Last-applied** below).
+
+**Last-applied**:
+The value of a named Intent that this datastore last successfully pushed
+southbound — updated at the same moment `IntentModify`/`IntentDelete` run
+inside `TransactionSet`'s apply loop, for every `Cache.Type`, not gated on
+`TransactionConfirm`. Under `Cache.Type: local` this has always been true by
+construction (disk write happens at that exact call). Under
+`Cache.Type: config-server`, data-server writes this back into config-server
+so `Client.InstanceIntent*` reads (backed by `TargetSnapshot.Spec.Configs`)
+never lag behind what was actually applied — a deleted Intent must stop
+being last-applied at delete-apply time, not at some later, best-effort
+snapshot refresh, or the next `LoadAllButRunningIntents` can rehydrate config
+that was meant to be gone. _Avoid_: "confirmed" or "acknowledged" (collide
+with the separate `TransactionConfirm` RPC step); "expected state" (says
+nothing about whether it's desired-or-applied); and "Document" as a domain
+concept (a branch-local Go DTO name for the ConfigSnapshotService
+interchange shape — not a term in this language).
 
 **Running**:
 The synced, on-device configuration state — produced and consumed entirely
@@ -46,5 +66,19 @@ Tree Entry).
 
 **ConfigSnapshotService**:
 The canonical local gRPC seam name for config-server-backed intent reads and
-writes (`Get`/`List`/`Modify`/`Delete`) against `TargetSnapshot` data. _Avoid_:
-using the older `ConfigReadService` name for current behavior.
+writes (`Get`/`List`/`Modify`/`Delete`) against `TargetSnapshot` data.
+Data-server’s Go port over that wire is `ConfigSnapshotClient` (same four
+operations, Document-shaped) in `pkg/cache/configserver`, implemented by
+`GRPCConfigClient` and `FakeConfigSnapshotClient`. Distinct from the generated
+gRPC stub `ConfigSnapshotServiceClient`. _Avoid_: the older
+`ConfigReadService` name for current behavior; `LocalConfigClient` /
+`LocalConfigReader` / `LocalConfigWriter` (retired half-split names for the
+same port).
+
+**Namespaced name**:
+Under `Cache.Type: config-server` only, the `namespace.name` encoding that
+splits on the first `.` — Target datastore identity (`prod.srl1`) and Intent
+owner / Config identity (`prod.intent1`). Split and strip live next to
+`ConfigServerCache`; join lives on the Document DTO (`IntentName`). Not a
+`Client`-level concept; local cache has no namespaces. _Avoid_: treating it
+as a generic cache key format across backends.

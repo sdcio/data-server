@@ -25,7 +25,19 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
+	"google.golang.org/protobuf/proto"
 )
+
+// leafVariant marshals tv the same way TreeExport does (le.ValueAsBytes()),
+// so fixtures build TreeElements the way a real export would.
+func leafVariant(t *testing.T, tv *sdcpb.TypedValue) []byte {
+	t.Helper()
+	b, err := proto.Marshal(tv)
+	if err != nil {
+		t.Fatalf("marshal TypedValue: %v", err)
+	}
+	return b
+}
 
 const (
 	testNamespace = "ns1"
@@ -33,14 +45,14 @@ const (
 	testCacheName = testNamespace + "." + testTarget
 )
 
-func newTestConfigServerCache(t *testing.T) (*ConfigServerCache, *configserver.FakeLocalConfigReader) {
+func newTestConfigServerCache(t *testing.T) (*ConfigServerCache, *configserver.FakeConfigSnapshotClient) {
 	t.Helper()
-	reader := configserver.NewFakeLocalConfigReader()
-	return NewConfigServerCache(reader), reader
+	client := configserver.NewFakeConfigSnapshotClient()
+	return NewConfigServerCache(client), client
 }
 
 // TestConfigServerCache_InstanceIntentGet_FieldMapping verifies
-// InstanceIntentGet calls the seam's Get and wraps the result per the ADR's
+// InstanceIntentGet calls the port's Get and wraps the result per the ADR's
 // field-mapping table, covering it end to end against the fake.
 func TestConfigServerCache_InstanceIntentGet_FieldMapping(t *testing.T) {
 	ctx := context.Background()
@@ -227,31 +239,6 @@ func TestConfigServerCache_InstanceIntentExists(t *testing.T) {
 	}
 }
 
-// TestConfigServerCache_WritesAreNoOps verifies the full Client built by
-// NewConfigServerClient never errors, never panics, and never reaches the
-// seam on IntentWriter calls (the fake has no Modify/Delete methods at
-// all — only Get/List — so any attempt to use it that way wouldn't compile
-// in the first place). Real-Intent writes are composed in via
-// noopIntentWriter, not implemented directly on ConfigServerCache.
-func TestConfigServerCache_WritesAreNoOps(t *testing.T) {
-	ctx := context.Background()
-	reader := configserver.NewFakeLocalConfigReader()
-	c := NewConfigServerClient(reader)
-
-	if err := c.InstanceIntentModify(ctx, testCacheName, &tree_persist.Intent{IntentName: "intent1"}); err != nil {
-		t.Errorf("InstanceIntentModify() error = %v, want nil", err)
-	}
-	if err := c.InstanceIntentDelete(ctx, testCacheName, "intent1", false); err != nil {
-		t.Errorf("InstanceIntentDelete() error = %v, want nil", err)
-	}
-
-	// A write must not make the intent appear/disappear from the seam's
-	// perspective — this backend never touches it either way.
-	if _, err := c.InstanceIntentGet(ctx, testCacheName, "intent1"); !errors.Is(err, configserver.ErrNotFound) {
-		t.Errorf("InstanceIntentGet() error = %v, want ErrNotFound (write must be a no-op)", err)
-	}
-}
-
 // TestConfigServerCache_MalformedDatastoreName_ReadCallers verifies
 // InstanceIntentsList/InstanceIntentGet/InstanceIntentExists all surface
 // ErrMalformedDatastoreName as a normal returned error when the
@@ -343,8 +330,11 @@ func TestConfigServerCache_InstanceLifecycle(t *testing.T) {
 
 // TestConfigServerCache_RunningIndependentOfSeam verifies InstanceRunningGet
 // / InstanceRunningModify work purely off the in-memory store, entirely
-// independent of the LocalConfigReader seam (which never sees "running" at
-// all under this backend).
+// independent of the ConfigSnapshotClient port (which never sees "running" at
+// all under this backend). InstanceRunningGet returns an
+// importer.ImportConfigAdapter (Intent reads return IntentAdapter) rather
+// than the raw *tree_persist.Intent, so the assertions go through its
+// accessors.
 func TestConfigServerCache_RunningIndependentOfSeam(t *testing.T) {
 	ctx := context.Background()
 	c, reader := newTestConfigServerCache(t)
@@ -369,7 +359,7 @@ func TestConfigServerCache_RunningIndependentOfSeam(t *testing.T) {
 		t.Errorf("InstanceRunningGet().GetPriority() = %d, want %d", gotPriority, want.GetPriority())
 	}
 
-	// The seam was never seeded with anything and never asked for
+	// The port was never seeded with anything and never asked for
 	// "running" — List/Get must still be untouched (fake has no docs at
 	// all for this target).
 	docs, err := reader.List(ctx, configserver.Target{Namespace: testNamespace, Name: testTarget})
@@ -377,7 +367,7 @@ func TestConfigServerCache_RunningIndependentOfSeam(t *testing.T) {
 		t.Fatalf("reader.List() error = %v", err)
 	}
 	if len(docs) != 0 {
-		t.Errorf("reader.List() = %v, want empty (running never touches the seam)", docs)
+		t.Errorf("reader.List() = %v, want empty (running never touches the port)", docs)
 	}
 }
 
@@ -413,17 +403,113 @@ func TestConfigServerCache_InstanceRunningGet_UnknownInstance(t *testing.T) {
 	}
 }
 
-// TestConfigServerCache_ImplementsReaderCapabilities verifies
-// *ConfigServerCache satisfies IntentReader, RunningStore, and
-// InstanceLifecycle directly. It deliberately does not assert IntentWriter
-// here — there is no method left on the type to test for no-op behavior;
-// that behavior lives in noopIntentWriter, composed in at
-// Server.createCacheClient instead.
-func TestConfigServerCache_ImplementsReaderCapabilities(t *testing.T) {
-	c := NewConfigServerCache(configserver.NewFakeLocalConfigReader())
-	var (
-		_ IntentReader      = c
-		_ RunningStore      = c
-		_ InstanceLifecycle = c
-	)
+// TestConfigServerCache_ImplementsClient verifies *ConfigServerCache
+// satisfies the full cache.Client directly — including IntentWriter, since
+// Modify/Delete are real writes against the ConfigSnapshotClient port.
+func TestConfigServerCache_ImplementsClient(t *testing.T) {
+	c := NewConfigServerCache(configserver.NewFakeConfigSnapshotClient())
+	var _ Client = c
+}
+
+// TestConfigServerCache_InstanceIntentModify_CreatesAndIsReadableBack
+// covers the write-then-read round trip through the port: a modified
+// Intent must be readable back via InstanceIntentGet with the content that
+// was written, matching the ghost-intent regression's "last-applied
+// updates at apply time" contract.
+func TestConfigServerCache_InstanceIntentModify_CreatesAndIsReadableBack(t *testing.T) {
+	ctx := context.Background()
+	c, _ := newTestConfigServerCache(t)
+
+	intent := &tree_persist.Intent{
+		IntentName: testNamespace + ".intent1",
+		Priority:   5,
+		Root: &tree_persist.TreeElement{
+			Childs: []*tree_persist.TreeElement{
+				{Name: "hostname", LeafVariant: leafVariant(t, &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "router1"}})},
+			},
+		},
+	}
+
+	if err := c.InstanceIntentModify(ctx, testCacheName, intent); err != nil {
+		t.Fatalf("InstanceIntentModify() error = %v", err)
+	}
+
+	adapter, err := c.InstanceIntentGet(ctx, testCacheName, testNamespace+".intent1")
+	if err != nil {
+		t.Fatalf("InstanceIntentGet() after Modify: %v", err)
+	}
+	if adapter.GetPriority() != 5 {
+		t.Errorf("GetPriority() = %d, want 5", adapter.GetPriority())
+	}
+	if got := adapter.GetName(); got != testNamespace+".intent1" {
+		t.Errorf("GetName() = %q, want %q", got, testNamespace+".intent1")
+	}
+	hostname := adapter.GetElement("hostname")
+	if hostname == nil {
+		t.Fatal(`GetElement("hostname") = nil after Modify→Get, want tree content preserved`)
+	}
+	got, err := hostname.GetKeyValue(ctx, nil)
+	if err != nil {
+		t.Fatalf("hostname GetKeyValue: %v", err)
+	}
+	if got != "router1" {
+		t.Errorf("hostname = %q, want router1", got)
+	}
+}
+
+// TestConfigServerCache_InstanceIntentDelete_RemovesFromSeam is the
+// regression test for the ghost-intent bug this ticket exists to fix:
+// deleting an intent must make it unreadable via the port immediately, not
+// only after some later, unrelated reconcile.
+func TestConfigServerCache_InstanceIntentDelete_RemovesFromSeam(t *testing.T) {
+	ctx := context.Background()
+	c, reader := newTestConfigServerCache(t)
+	target := configserver.Target{Namespace: testNamespace, Name: testTarget}
+	reader.Seed(target, &configserver.Document{Name: "intent1", Namespace: testNamespace})
+
+	if err := c.InstanceIntentDelete(ctx, testCacheName, testNamespace+".intent1", false); err != nil {
+		t.Fatalf("InstanceIntentDelete() error = %v", err)
+	}
+
+	if _, err := c.InstanceIntentGet(ctx, testCacheName, testNamespace+".intent1"); !errors.Is(err, configserver.ErrNotFound) {
+		t.Errorf("InstanceIntentGet() after Delete: err = %v, want ErrNotFound", err)
+	}
+}
+
+// TestConfigServerCache_InstanceIntentDelete_MissingIsNoop matches the
+// ConfigSnapshotService.Delete contract: deleting an intent that was never
+// present is a no-op success under this backend regardless of
+// ignoreNonExisting — TargetSnapshot's membership model has no tombstone to
+// distinguish "already gone" from "never existed".
+func TestConfigServerCache_InstanceIntentDelete_MissingIsNoop(t *testing.T) {
+	ctx := context.Background()
+	c, _ := newTestConfigServerCache(t)
+
+	if err := c.InstanceIntentDelete(ctx, testCacheName, "missing", false); err != nil {
+		t.Errorf("InstanceIntentDelete() of missing intent: %v, want no-op success", err)
+	}
+}
+
+// TestConfigServerCache_InstanceIntentModify_MalformedDatastoreName and
+// TestConfigServerCache_InstanceIntentDelete_MalformedDatastoreName lock the
+// same ErrMalformedDatastoreName contract the read callers already have,
+// for the write callers.
+func TestConfigServerCache_InstanceIntentModify_MalformedDatastoreName(t *testing.T) {
+	ctx := context.Background()
+	c, _ := newTestConfigServerCache(t)
+
+	err := c.InstanceIntentModify(ctx, "no-dot-here", &tree_persist.Intent{IntentName: "intent1"})
+	if !errors.Is(err, ErrMalformedDatastoreName) {
+		t.Errorf("InstanceIntentModify() error = %v, want ErrMalformedDatastoreName", err)
+	}
+}
+
+func TestConfigServerCache_InstanceIntentDelete_MalformedDatastoreName(t *testing.T) {
+	ctx := context.Background()
+	c, _ := newTestConfigServerCache(t)
+
+	err := c.InstanceIntentDelete(ctx, "no-dot-here", "intent1", false)
+	if !errors.Is(err, ErrMalformedDatastoreName) {
+		t.Errorf("InstanceIntentDelete() error = %v, want ErrMalformedDatastoreName", err)
+	}
 }
