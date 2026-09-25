@@ -19,20 +19,29 @@ func NewEntryOutputAdapter(e api.Entry) *EntryOutputAdapter {
 	}
 }
 
+func southboundOpts(onlyNewOrUpdated bool) ops.RenderOpts {
+	return ops.RenderOptsRevealAll().WithOnlyNewOrUpdated(onlyNewOrUpdated)
+}
+
 func (t *EntryOutputAdapter) ToJson(ctx context.Context, onlyNewOrUpdated bool) (any, error) {
-	return ops.ToJson(ctx, t.entry, onlyNewOrUpdated)
+	return ops.ToJson(ctx, t.entry, southboundOpts(onlyNewOrUpdated))
 }
 
 func (t *EntryOutputAdapter) ToJsonIETF(ctx context.Context, onlyNewOrUpdated bool) (any, error) {
-	return ops.ToJsonIETF(ctx, t.entry, onlyNewOrUpdated)
+	return ops.ToJsonIETF(ctx, t.entry, southboundOpts(onlyNewOrUpdated))
 }
 
 func (t *EntryOutputAdapter) ToXML(ctx context.Context, onlyNewOrUpdated bool, honorNamespace bool, operationWithNamespace bool, useOperationRemove bool) (*etree.Document, error) {
-	return ops.ToXML(ctx, t.entry, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+	return ops.ToXML(ctx, t.entry, ops.XMLRenderOpts{
+		RenderOpts:             southboundOpts(onlyNewOrUpdated),
+		HonorNamespace:         honorNamespace,
+		OperationWithNamespace: operationWithNamespace,
+		UseOperationRemove:     useOperationRemove,
+	})
 }
 
 func (t *EntryOutputAdapter) ToProtoUpdates(ctx context.Context, onlyNewOrUpdated bool) ([]*sdcpb.Update, error) {
-	return ops.ToProtoUpdates(ctx, t.entry, onlyNewOrUpdated)
+	return ops.ToProtoUpdates(ctx, t.entry, southboundOpts(onlyNewOrUpdated))
 }
 
 func (t *EntryOutputAdapter) ToProtoDeletes(ctx context.Context) ([]*sdcpb.Path, error) {

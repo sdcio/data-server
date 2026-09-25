@@ -26,6 +26,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/api/adapter"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
@@ -58,8 +59,10 @@ func (d *Datastore) applyIntent(ctx context.Context, source targettypes.TargetSo
 	return rsp, nil
 }
 
-func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntentResponse, error) {
-	// serve running from synctree
+func (d *Datastore) GetIntent(ctx context.Context, intentName string, exposeSensitive bool) (GetIntentResponse, error) {
+	// serve running from synctree; sensitive paths are the cross-intent union
+	// (running has no own markers — its values may have been echoed back by
+	// the device verbatim, so any intent's classification must apply).
 	if intentName == consts.RunningIntentName {
 		d.syncTreeMutex.RLock()
 		defer d.syncTreeMutex.RUnlock()
@@ -75,12 +78,14 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntent
 			Orphan:          false,
 			NonRevertive:    false,
 			ExplicitDeletes: nil,
+			RenderOpts:      ops.RenderOptsNorthbound(exposeSensitive, d.sensitivePathIndex),
 		}
 
 		return result, nil
 	}
 
-	// otherwise consult cache
+	// Northbound GetIntent always uses the Live Sensitive Path Index (always-union).
+	// Schema-defined sensitivity is still honored via SensitiveRender / ShouldRedact.
 	root, err := tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, d.taskPool))
 	if err != nil {
 		return nil, err
@@ -109,6 +114,7 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntent
 		Orphan:          tp.GetOrphan(),
 		NonRevertive:    tp.GetNonRevertive(),
 		ExplicitDeletes: tp.GetExplicitDeletes(),
+		RenderOpts:      ops.RenderOptsNorthbound(exposeSensitive, d.sensitivePathIndex),
 	}
 	return result, nil
 }
