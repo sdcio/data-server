@@ -449,7 +449,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 			name: "simple add",
 			fields: fields{
 				sharedEntryAttributes: func(t *testing.T) *sharedEntryAttributes {
-					s, err := NewSharedEntryAttributes(ctx, nil, "", tc)
+					s, err := NewSharedEntryAttributes(ctx, nil, api.LocalIdentity(""), tc)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -489,7 +489,7 @@ func TestRootEntry_AddUpdatesRecursive(t *testing.T) {
 				flags: types.NewUpdateInsertFlags(),
 			},
 			want: func(t *testing.T) *RootEntry {
-				s, err := NewSharedEntryAttributes(ctx, nil, "", tc)
+				s, err := NewSharedEntryAttributes(ctx, nil, api.LocalIdentity(""), tc)
 				if err != nil {
 					t.Fatal(err)
 				}

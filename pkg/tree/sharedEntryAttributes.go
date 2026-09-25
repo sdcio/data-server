@@ -44,9 +44,9 @@ type sharedEntryAttributes struct {
 }
 
 // NewEntry constructor for Entries
-func NewEntry(ctx context.Context, parent api.Entry, pathElemName string, tc api.TreeContext) (api.Entry, error) {
+func NewEntry(ctx context.Context, parent api.Entry, id api.NodeIdentity, tc api.TreeContext) (api.Entry, error) {
 	// create a new sharedEntryAttributes instance
-	sea, err := NewSharedEntryAttributes(ctx, parent, pathElemName, tc)
+	sea, err := NewSharedEntryAttributes(ctx, parent, id, tc)
 	if err != nil {
 		return nil, err
 	}
@@ -88,10 +88,10 @@ func (s *sharedEntryAttributes) GetChildMap() *api.ChildMap {
 	return s.childs
 }
 
-func NewSharedEntryAttributes(ctx context.Context, parent api.Entry, pathElemName string, tc api.TreeContext) (*sharedEntryAttributes, error) {
+func NewSharedEntryAttributes(ctx context.Context, parent api.Entry, id api.NodeIdentity, tc api.TreeContext) (*sharedEntryAttributes, error) {
 	s := &sharedEntryAttributes{
 		parent:       parent,
-		identity:     api.LocalIdentity(pathElemName),
+		identity:     id,
 		childs:       api.NewChildMap(),
 		treeContext:  tc,
 	}
@@ -214,6 +214,7 @@ func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 			}
 		}
 		path = ancesterschema.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(s.identity.Local, nil))
+		api.ApplyModuleToSchemaLookupPath(path, s.identity, s.parent.IsRoot())
 	}
 
 	if getSchema {
@@ -225,6 +226,9 @@ func (s *sharedEntryAttributes) populateSchema(ctx context.Context) error {
 		s.schemaMutex.Lock()
 		defer s.schemaMutex.Unlock()
 		s.schema = schemaResp.GetSchema()
+		if err := api.ValidateIdentityMatchesSchema(s.identity, s.schema); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -669,6 +673,9 @@ func (s *sharedEntryAttributes) SdcpbPath() *sdcpb.Path {
 	} else {
 		// For entries with schemas, simply append a new path element to the parent's path.
 		path = s.parent.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(s.identity.Local, nil))
+		if s.identity.Module != "" && s.parent.IsRoot() {
+			path.Origin = s.identity.Module
+		}
 	}
 	// populate cache
 	s.pathCache = path

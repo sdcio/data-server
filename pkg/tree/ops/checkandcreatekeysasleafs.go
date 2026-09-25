@@ -68,7 +68,7 @@ func CheckAndCreateKeysAsLeafs(ctx context.Context, e api.Entry, intentName stri
 			}
 			if !entryExists {
 				// create a new entry
-				child, err = api.NewEntry(ctx, e, k.Name, e.GetTreeContext())
+				child, err = api.NewEntry(ctx, e, api.LocalIdentity(k.Name), e.GetTreeContext())
 
 				if err != nil {
 					return err

@@ -9,7 +9,7 @@ import (
 )
 
 // EntryFactory is a function type for creating new Entry instances
-type EntryFactory func(ctx context.Context, parent Entry, pathElemName string, tc TreeContext) (Entry, error)
+type EntryFactory func(ctx context.Context, parent Entry, id NodeIdentity, tc TreeContext) (Entry, error)
 
 var (
 	newEntryFunc EntryFactory
@@ -26,12 +26,12 @@ func RegisterEntryFactory(factory EntryFactory) {
 
 // NewEntry creates a new Entry instance as a child of the given parent
 // The parent's AddChild method is called to register the new entry
-func NewEntry(ctx context.Context, parent Entry, pathElemName string, tc TreeContext) (Entry, error) {
+func NewEntry(ctx context.Context, parent Entry, id NodeIdentity, tc TreeContext) (Entry, error) {
 	if newEntryFunc == nil {
 		return nil, fmt.Errorf("EntryFactory not registered")
 	}
 
-	return newEntryFunc(ctx, parent, pathElemName, tc)
+	return newEntryFunc(ctx, parent, id, tc)
 }
 
 // Entry is the primary Element of the Tree.

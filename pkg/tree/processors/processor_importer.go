@@ -106,7 +106,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 					return err
 				}
 				if keyChild, exists = actual.GetChildMap().GetEntry(api.LocalIdentity(kv)); !exists {
-					keyChild, err = api.NewEntry(ctx, actual, kv, task.context.treeContext)
+					keyChild, err = api.NewEntry(ctx, actual, api.LocalIdentity(kv), task.context.treeContext)
 					if err != nil {
 						return err
 					}
@@ -135,7 +135,7 @@ func (task importConfigTask) Run(ctx context.Context, submit func(pool.Task) err
 			child, exists := task.entry.GetChildMap().GetEntry(api.LocalIdentity(childElt.GetName()))
 			if !exists {
 				var err error
-				child, err = api.NewEntry(ctx, task.entry, childElt.GetName(), task.context.treeContext)
+				child, err = api.NewEntry(ctx, task.entry, api.LocalIdentity(childElt.GetName()), task.context.treeContext)
 				if err != nil {
 					return fmt.Errorf("error inserting %s at %s: %w", childElt.GetName(), task.entry.SdcpbPath().ToXPath(false), err)
 				}
