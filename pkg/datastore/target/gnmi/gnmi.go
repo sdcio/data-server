@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/AlekSi/pointer"
@@ -48,6 +47,10 @@ type gnmiTarget struct {
 	runningStore    targetTypes.RunningStore
 	schemaClient    utils.SchemaClientBound
 	taskpoolFactory pool.VirtualPoolFactory
+	// shapeGetRequest applies device-profile-specific adjustments to an
+	// outgoing gNMI GetRequest. Selected once in NewTarget from cfg.DeviceProfile;
+	// defaults to a no-op so Get never has to know profiles exist.
+	shapeGetRequest func(*gnmi.GetRequest)
 }
 
 func NewTarget(ctx context.Context, name string, cfg *config.SBI, runningStore targetTypes.RunningStore, schemaClient utils.SchemaClientBound, taskpoolFactory pool.VirtualPoolFactory, opts ...grpc.DialOption) (*gnmiTarget, error) {
@@ -78,6 +81,7 @@ func NewTarget(ctx context.Context, name string, cfg *config.SBI, runningStore t
 		runningStore:    runningStore,
 		schemaClient:    schemaClient,
 		taskpoolFactory: taskpoolFactory,
+		shapeGetRequest: getRequestShaperFor(cfg.DeviceProfile),
 	}
 
 	opts = append(opts, grpc.WithKeepaliveParams(keepalive.ClientParameters{
@@ -106,6 +110,18 @@ func NewTarget(ctx context.Context, name string, cfg *config.SBI, runningStore t
 	return gt, nil
 }
 
+// getRequestShaperFor returns the device-profile-specific GetRequest adapter
+// for profile, or a no-op for profiles with no Get-path behaviour.
+func getRequestShaperFor(profile config.DeviceProfile) func(*gnmi.GetRequest) {
+	switch profile {
+	case config.DeviceProfileSonic:
+		// SONiC Get shaping is wired in the SONiC NOS PR; base keeps the seam as a no-op.
+		return func(*gnmi.GetRequest) {}
+	default:
+		return func(*gnmi.GetRequest) {}
+	}
+}
+
 func (t *gnmiTarget) Subscribe(ctx context.Context, req *gnmi.SubscribeRequest, subscriptionName string) (chan *gnmi.SubscribeResponse, chan error) {
 	return t.target.SubscribeStreamChan(ctx, req, subscriptionName)
 }
@@ -118,6 +134,12 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 	gnmiReq := &gnmi.GetRequest{
 		Path: make([]*gnmi.Path, 0, len(req.GetPath())),
 	}
+
+	// check if the target name is set, then add the prefix field
+	if t.cfg.GnmiOptions.TargetName != "" {
+		gnmiReq.Prefix = &gnmi.Path{Target: t.cfg.GnmiOptions.TargetName}
+	}
+
 	for _, p := range req.GetPath() {
 		gnmiReq.Path = append(gnmiReq.Path, utils.ToGNMIPath(p))
 	}
@@ -127,6 +149,7 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 	if err != nil {
 		return nil, err
 	}
+	t.shapeGetRequest(gnmiReq)
 
 	// convert sdcpb encoding to gnmi encoding
 	gnmiReq.Encoding, err = gnmiutils.SdcpbEncodingToGNMIENcoding(req.Encoding)
@@ -152,61 +175,24 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 	return schemaRsp, nil
 }
 
-func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (*sdcpb.SetDataResponse, error) {
+// Set dispatches a pre-built SouthboundSetPlan to the gNMI target.
+// The plan must carry a GnmiSetPlan; encoding is done upstream by the
+// materialize layer.
+func (t *gnmiTarget) Set(ctx context.Context, plan targetTypes.SouthboundSetPlan) (*sdcpb.SetDataResponse, error) {
 	log := logf.FromContext(ctx).WithName("Set")
 	ctx = logf.IntoContext(ctx, log)
-
-	var upds []*sdcpb.Update
-	var deletes []*sdcpb.Path
-	var err error
 
 	if err := t.Status().Err(); err != nil {
 		return nil, err
 	}
 
-	// deletes from protos
-	deletes, err = source.ToProtoDeletes(ctx)
-	if err != nil {
-		return nil, err
+	gp, ok := plan.GnmiPlan()
+	if !ok {
+		return nil, fmt.Errorf("gnmi target received a non-gNMI SouthboundSetPlan")
 	}
 
-	switch strings.ToLower(t.cfg.GnmiOptions.Encoding) {
-	case "json":
-		jsonData, err := source.ToJson(ctx, true)
-		if err != nil {
-			return nil, err
-		}
-		if jsonData != nil {
-			jsonBytes, err := json.Marshal(jsonData)
-			if err != nil {
-				return nil, err
-			}
-			if len(jsonBytes) > 0 {
-				upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: jsonBytes}}}}
-			}
-		}
-
-	case "json_ietf":
-		jsonData, err := source.ToJsonIETF(ctx, true)
-		if err != nil {
-			return nil, err
-		}
-		if jsonData != nil {
-			jsonBytes, err := json.Marshal(jsonData)
-			if err != nil {
-				return nil, err
-			}
-			if len(jsonBytes) > 0 {
-				upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonIetfVal{JsonIetfVal: jsonBytes}}}}
-			}
-		}
-
-	case "proto":
-		upds, err = source.ToProtoUpdates(ctx, true)
-		if err != nil {
-			return nil, err
-		}
-	}
+	upds := gp.Updates
+	deletes := gp.Deletes
 
 	if len(deletes) == 0 && len(upds) == 0 {
 		return &sdcpb.SetDataResponse{}, nil
@@ -275,14 +261,14 @@ func (t *gnmiTarget) AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) 
 	for _, sp := range sps {
 		switch sp.Mode {
 		case "once":
-			g = NewOnceSync(ctx, t, sp, t.runningStore, t.taskpoolFactory)
+			g = NewOnceSync(ctx, t, t.cfg.GnmiOptions.TargetName, sp, t.runningStore, t.taskpoolFactory)
 		case "get":
 			g, err = NewGetSync(ctx, t, sp, t.runningStore, t.schemaClient)
 			if err != nil {
 				return err
 			}
 		default:
-			g = NewStreamSync(ctx, t, sp, t.runningStore, t.schemaClient, t.taskpoolFactory)
+			g = NewStreamSync(ctx, t, t.cfg.GnmiOptions.TargetName, sp, t.runningStore, t.schemaClient, t.taskpoolFactory)
 		}
 		t.syncs[sp.Name] = g
 

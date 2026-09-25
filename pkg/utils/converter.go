@@ -233,6 +233,31 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 			},
 		}, nil
 	case map[string]any:
+		// RFC 7951 top-level wrapping: some targets (e.g. SONiC translib) encode
+		// the value of a top-level container as a single module-qualified entry
+		// naming itself, e.g. a GET on .../sonic-srv6 returns
+		// {"sonic-srv6:sonic-srv6": {...actual content...}} instead of the bare
+		// content. Unwrap that self-reference so it is treated as this
+		// container's own value rather than an (unknown) child object.
+		//
+		// Only do this when the single key does NOT already resolve as a real
+		// schema-defined member (field, leaf-list, child container, or key) of
+		// this container via getItem — a container never lists itself as one of
+		// its own children, so a true self-reference is guaranteed to fail that
+		// lookup. This keeps the unwrap scoped to the exact translib quirk it
+		// was added for, without a device-profile/vendor check here: any target
+		// whose single remaining populated key legitimately resolves as a real
+		// child (the common case for every non-SONiC vendor) is left untouched.
+		if len(jv) == 1 {
+			selfQName := fmt.Sprintf("%s:%s", cs.Container.GetModuleName(), cs.Container.GetName())
+			for k, v := range jv {
+				if k == selfQName {
+					if _, ok := getItem(ctx, k, cs, c.schemaClientBound); !ok {
+						return c.ExpandContainerValue(ctx, p, v, cs)
+					}
+				}
+			}
+		}
 		upds := make([]*sdcpb.Update, 0)
 		// make sure all keys are present
 		// and append them to path
@@ -527,10 +552,18 @@ func getChild(ctx context.Context, name string, cs *sdcpb.SchemaElem_Container, 
 			log.Error(err, "failed to get schema object", "local", id.local, "module", id.module)
 			return "", false
 		}
-		if _, ok := rsp.GetSchema().Schema.(*sdcpb.SchemaElem_Container); ok {
+		// __root__ does not inline fields; its children are module names.
+		// A top-level leaf or leaf-list is only visible via this lookup.
+		switch schema := rsp.GetSchema().GetSchema().(type) {
+		case *sdcpb.SchemaElem_Container:
 			return id.local, true
+		case *sdcpb.SchemaElem_Field:
+			return schema.Field, true
+		case *sdcpb.SchemaElem_Leaflist:
+			return schema.Leaflist, true
+		default:
+			return "", false
 		}
-		return "", false
 	}
 
 	searchNames := []string{name}

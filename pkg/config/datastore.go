@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/sdcio/data-server/pkg/utils"
@@ -30,8 +31,30 @@ const (
 	sbiNETCONF = "netconf"
 	sbiGNMI    = "gnmi"
 
+	// SBITypeGnmi, SBITypeNetconf, SBITypeNoop are the valid values for SBI.Type.
+	SBITypeGnmi    = sbiGNMI
+	SBITypeNetconf = sbiNETCONF
+	SBITypeNoop    = sbiNOOP
+
 	ncCommitDatastoreRunning   = "running"
 	ncCommitDatastoreCandidate = "candidate"
+)
+
+// DeviceProfile selects NOS-specific southbound behaviour. Wire values are YAML/JSON 
+// string scalars. [DeviceProfileNone] is the default (omitted or empty in config).
+type DeviceProfile string
+
+const (
+	// DeviceProfileNone selects generic southbound driver behaviour (no NOS-specific
+	// materialization). It is the zero value and serializes as omitted/empty in YAML/JSON.
+	DeviceProfileNone DeviceProfile = ""
+	// DeviceProfileCiscoIOSXR enables IOS-XR-specific gNMI materialization for
+	// type=gnmi. Only GnmiOptions.Encoding "JSON_IETF" is supported for this
+	// profile — "PROTO" and plain "JSON" are rejected at config-load time.
+	DeviceProfileCiscoIOSXR DeviceProfile = "cisco-ios-xr"
+	// DeviceProfileSonic selects SONiC translib-specific southbound behaviour when
+	// enabled by the SONiC NOS PR.
+	DeviceProfileSonic DeviceProfile = "sonic"
 )
 
 type DatastoreConfig struct {
@@ -89,6 +112,11 @@ type SBI struct {
 	ConnectRetry time.Duration `yaml:"connect-retry,omitempty" json:"connect-retry,omitempty"`
 	// Timeout
 	Timeout time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	// DeviceProfile selects NOS-specific southbound behaviour. Use the
+	// [DeviceProfile] constants ([DeviceProfileNone], [DeviceProfileCiscoIOSXR], or
+	// [DeviceProfileSonic]); unknown values are rejected when the datastore
+	// configuration is validated.
+	DeviceProfile DeviceProfile `yaml:"device-profile,omitempty" json:"device-profile,omitempty"`
 }
 
 type SBIGnmiOptions struct {
@@ -180,7 +208,12 @@ func (ds *DatastoreConfig) ValidateSetDefaults() error {
 	return nil
 }
 
+
 func (s *SBI) validateSetDefaults() error {
+	if err := ValidateDeviceProfileEnabled(s.DeviceProfile); err != nil {
+		return err
+	}
+
 	switch s.Type {
 	case sbiNOOP:
 		return nil
@@ -197,6 +230,10 @@ func (s *SBI) validateSetDefaults() error {
 	case sbiGNMI:
 		if s.GnmiOptions.Encoding == "" {
 			return errors.New("no encoding defined")
+		}
+		if s.DeviceProfile == DeviceProfileCiscoIOSXR && !strings.EqualFold(s.GnmiOptions.Encoding, "JSON_IETF") {
+			return fmt.Errorf("device-profile %q with sbi type %q requires gnmi-options.encoding %q, got %q",
+				DeviceProfileCiscoIOSXR, sbiGNMI, "JSON_IETF", s.GnmiOptions.Encoding)
 		}
 	default:
 		return fmt.Errorf("unknown sbi type: %q", s.Type)
