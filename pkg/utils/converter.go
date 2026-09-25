@@ -527,10 +527,18 @@ func getChild(ctx context.Context, name string, cs *sdcpb.SchemaElem_Container, 
 			log.Error(err, "failed to get schema object", "local", id.local, "module", id.module)
 			return "", false
 		}
-		if _, ok := rsp.GetSchema().Schema.(*sdcpb.SchemaElem_Container); ok {
+		// __root__ does not inline fields; its children are module names.
+		// A top-level leaf or leaf-list is only visible via this lookup.
+		switch schema := rsp.GetSchema().GetSchema().(type) {
+		case *sdcpb.SchemaElem_Container:
 			return id.local, true
+		case *sdcpb.SchemaElem_Field:
+			return schema.Field, true
+		case *sdcpb.SchemaElem_Leaflist:
+			return schema.Leaflist, true
+		default:
+			return "", false
 		}
-		return "", false
 	}
 
 	searchNames := []string{name}

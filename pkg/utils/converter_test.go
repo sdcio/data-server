@@ -117,6 +117,59 @@ func TestGetChildRootUsesModuleQualifiedSchemaLookup(t *testing.T) {
 	}
 }
 
+func TestGetChildRootReturnsFieldAndLeaflist(t *testing.T) {
+	scb := &testSchemaClientBound{
+		getSchemaPathFn: func(_ context.Context, path *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+			name := ""
+			if len(path.GetElem()) > 0 {
+				name = path.GetElem()[0].GetName()
+			}
+			switch name {
+			case "patterntest":
+				return &sdcpb.GetSchemaResponse{
+					Schema: &sdcpb.SchemaElem{
+						Schema: &sdcpb.SchemaElem_Field{
+							Field: &sdcpb.LeafSchema{Name: "patterntest", ModuleName: "sdcio_model"},
+						},
+					},
+				}, nil
+			case "tags":
+				return &sdcpb.GetSchemaResponse{
+					Schema: &sdcpb.SchemaElem{
+						Schema: &sdcpb.SchemaElem_Leaflist{
+							Leaflist: &sdcpb.LeafListSchema{Name: "tags", ModuleName: "sdcio_model"},
+						},
+					},
+				}, nil
+			default:
+				t.Fatalf("unexpected lookup %v", path)
+				return nil, nil
+			}
+		},
+	}
+	rootCS := &sdcpb.SchemaElem_Container{
+		Container: &sdcpb.ContainerSchema{Name: "__root__"},
+	}
+
+	child, ok := getChild(context.Background(), "patterntest", rootCS, scb)
+	if !ok {
+		t.Fatal("getChild(patterntest) not found")
+	}
+	field, ok := child.(*sdcpb.LeafSchema)
+	if !ok || field.GetName() != "patterntest" {
+		t.Fatalf("patterntest: got %#v", child)
+	}
+
+	child, ok = getChild(context.Background(), "sdcio_model:tags", rootCS, scb)
+	if !ok {
+		t.Fatal("getChild(sdcio_model:tags) not found")
+	}
+	lfl, ok := child.(*sdcpb.LeafListSchema)
+	if !ok || lfl.GetName() != "tags" {
+		t.Fatalf("tags: got %#v", child)
+	}
+}
+
 func TestExpandContainerValueRootChildSetsOriginOnUpdatePath(t *testing.T) {
 	const wantOrigin = "mod-a"
 	scb := &testSchemaClientBound{
