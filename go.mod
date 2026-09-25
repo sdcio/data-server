@@ -5,7 +5,8 @@ go 1.25.0
 replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.2-2
 
 // SS-1 (schema-server#257): root sibling-module path resolution + ambiguity registry — remove on release-stack.
-replace github.com/sdcio/schema-server v0.0.34 => ../schema-server
+// Local dev: swap the line below for `=> ../schema-server` when both repos are siblings.
+replace github.com/sdcio/schema-server => github.com/sdcio/schema-server v0.0.35-0.20260925080457-b1f8e753e729
 
 require (
 	github.com/AlekSi/pointer v1.2.0
@@ -26,7 +27,7 @@ require (
 	github.com/scrapli/scrapligo v1.4.1
 	github.com/sdcio/cache v0.0.38
 	github.com/sdcio/logger v0.0.3
-	github.com/sdcio/schema-server v0.0.34
+	github.com/sdcio/schema-server v0.0.35-0.20260925080457-b1f8e753e729
 	github.com/sdcio/sdc-protos v0.0.55
 	github.com/sdcio/yang-parser v0.0.12
 	github.com/spf13/cobra v1.10.2
