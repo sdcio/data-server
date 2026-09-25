@@ -249,7 +249,9 @@ func mergeDeletes(
 //   - For schema-attached entries (api.Entry with GetSchema() != nil) the
 //     module is read directly via GetSchemaElemModuleName.
 //   - For path-only entries (DeleteEntryImpl, no schema attached) the module
-//     is resolved by fetching the schema for the first path element via scb.
+//     is resolved by fetching the schema for the first path element. The
+//     lookup carries Path.Origin, or the module parsed from a module:local
+//     first element, so an ambiguous root name is not resolved bare.
 func resolveDeleteOrigin(ctx context.Context, scb schemaClient.SchemaClientBound, del treetypes.DeleteEntry) (string, error) {
 	// Schema-attached: the entry already carries the schema element.
 	if e, ok := del.(api.Entry); ok && e.GetSchema() != nil {
@@ -261,10 +263,25 @@ func resolveDeleteOrigin(ctx context.Context, scb schemaClient.SchemaClientBound
 	if len(path.GetElem()) == 0 || scb == nil {
 		return "", nil
 	}
-	firstElem := &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: path.GetElem()[0].GetName()}}}
-	rsp, err := scb.GetSchemaSdcpbPath(ctx, firstElem)
+	lookup := deleteOriginLookupPath(path)
+	rsp, err := scb.GetSchemaSdcpbPath(ctx, lookup)
 	if err != nil {
 		return "", fmt.Errorf("permodule: schema lookup for delete path %v: %w", path, err)
 	}
 	return utils.GetSchemaElemModuleName(rsp.GetSchema()), nil
+}
+
+// deleteOriginLookupPath builds the schema lookup for a path-only delete.
+// Root identity comes from Path.Origin when set, otherwise from a
+// module:local first element (RFC 7951). The element name sent to
+// schema-server is the bare local name.
+func deleteOriginLookupPath(path *sdcpb.Path) *sdcpb.Path {
+	first := path.GetElem()[0]
+	id := api.ParseJSONIETFKey(first.GetName())
+	if id.Module == "" {
+		id.Module = path.GetOrigin()
+	}
+	lookup := &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: id.Local}}}
+	api.ApplyModuleToSchemaLookupPath(lookup, id, true)
+	return lookup
 }
