@@ -183,15 +183,18 @@ func TestJsonTreeImporter_GetKeyValue(t *testing.T) {
 	tests := []struct {
 		name    string
 		data    any
+		slt     *sdcpb.SchemaLeafType
 		wantVal string
 	}{
-		{"string", "bar", "bar"},
-		{"int", 5, "5"},
+		{"string_no_type", "bar", nil, "bar"},
+		{"int_no_type", 5, nil, "5"},
+		{"string_typed", "bar", &sdcpb.SchemaLeafType{Type: "string"}, "bar"},
+		{"int32_typed", int32(5), &sdcpb.SchemaLeafType{Type: "int32"}, "5"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			elem := newJsonTreeImporterElement("x", tt.data)
-			got, err := elem.GetKeyValue(context.Background(), nil)
+			got, err := elem.GetKeyValue(context.Background(), tt.slt)
 			if err != nil {
 				t.Fatalf("GetKeyValue() error: %v", err)
 			}
@@ -199,6 +202,42 @@ func TestJsonTreeImporter_GetKeyValue(t *testing.T) {
 				t.Errorf("GetKeyValue() = %q, want %q", got, tt.wantVal)
 			}
 		})
+	}
+}
+
+// TestJsonTreeImporter_GetKeyValue_IdentityrefNormalizesToBareName verifies that
+// GetKeyValue strips the module prefix from a JSON_IETF-encoded identityref key value
+// (e.g. "openconfig-policy-types:BGP"), returning the bare identity name ("BGP") — the
+// same value a plain-JSON payload ("BGP") or the XML/proto importers would produce.
+// Without this, JSON_IETF-imported and bare-imported list entries for the same identity
+// end up stored under different tree keys, splitting one logical entry into two.
+func TestJsonTreeImporter_GetKeyValue_IdentityrefNormalizesToBareName(t *testing.T) {
+	slt := &sdcpb.SchemaLeafType{
+		Type:                "identityref",
+		IdentityPrefixesMap: map[string]string{"BGP": "oc-pol-types"},
+		ModulePrefixMap:     map[string]string{"BGP": "openconfig-policy-types"},
+	}
+
+	prefixed := newJsonTreeImporterElement("afi-safi-name", "openconfig-policy-types:BGP")
+	bare := newJsonTreeImporterElement("afi-safi-name", "BGP")
+
+	gotPrefixed, err := prefixed.GetKeyValue(context.Background(), slt)
+	if err != nil {
+		t.Fatalf("GetKeyValue() (prefixed) error: %v", err)
+	}
+	gotBare, err := bare.GetKeyValue(context.Background(), slt)
+	if err != nil {
+		t.Fatalf("GetKeyValue() (bare) error: %v", err)
+	}
+
+	if gotPrefixed != "BGP" {
+		t.Errorf("GetKeyValue() (JSON_IETF prefixed) = %q, want %q", gotPrefixed, "BGP")
+	}
+	if gotBare != "BGP" {
+		t.Errorf("GetKeyValue() (plain JSON bare) = %q, want %q", gotBare, "BGP")
+	}
+	if gotPrefixed != gotBare {
+		t.Errorf("prefixed and bare identityref keys diverged: %q != %q", gotPrefixed, gotBare)
 	}
 }
 
