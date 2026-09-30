@@ -152,7 +152,7 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error 
 
 	// if no deletes, check if we have updates
 	if !performApply {
-		updList, err := ops.ToProtoUpdates(ctx, t.Entry, true)
+		updList, err := ops.ToProtoUpdates(ctx, t.Entry, ops.RenderOptsRevealAll().WithOnlyNewOrUpdated(true))
 		if err != nil {
 			return err
 		}
