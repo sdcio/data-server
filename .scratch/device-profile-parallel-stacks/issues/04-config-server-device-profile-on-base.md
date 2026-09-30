@@ -6,8 +6,14 @@
 
 **Blocked by:** 03 — Device-profile base PR
 
-**Status:** ready-for-agent
+**Status:** done on branch → `device-profile-base` (config-server)
 
-- [ ] Schema and wiring expose generic, `sonic`, and `cisco-ios-xr` consistently with protos
-- [ ] CreateDataStore (or equivalent) does not advertise end-to-end SONiC/Cisco success before the corresponding data-server NOS PR lands
-- [ ] Paired-test / integration docs call out preconditions when E2E implies working NOS on data-server
+- [x] Schema and wiring expose generic, `sonic`, and `cisco-ios-xr` consistently with protos
+- [x] CreateDataStore (or equivalent) does not advertise end-to-end SONiC/Cisco success before the corresponding data-server NOS PR lands
+- [x] Paired-test / integration docs call out preconditions when E2E implies working NOS on data-server
+
+## Comments
+
+- config-server branch `device-profile-base`: CRD `deviceProfile` enum, `toProtoDeviceProfile` →
+  `CreateDataStore`, protos pin `40ed0bc26a71` (matches data-server base); see
+  `docs/design/device-profile-paired-testing.md`.

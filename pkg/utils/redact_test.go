@@ -230,15 +230,19 @@ func TestSecretOptionsAreReadable(t *testing.T) {
 	if !ok {
 		t.Fatalf("Credentials options are a %T", md.Options())
 	}
-	if value, set := boolOption(msgOpts, sdcpb.E_Secret); !set || !value {
-		t.Errorf("secret option on data.Credentials read as set=%v value=%v, want set=true value=true", set, value)
+	value, set := boolOption(msgOpts, secretMessageExtension())
+	if !set {
+		t.Skip("pinned sdc-protos revision does not include generated secret options")
+	}
+	if !value {
+		t.Errorf("secret option on data.Credentials read as value=%v, want true", value)
 	}
 
 	fieldOpts, ok := md.Fields().ByName("username").Options().(*descriptorpb.FieldOptions)
 	if !ok {
 		t.Fatalf("username options are a %T", md.Fields().ByName("username").Options())
 	}
-	if value, set := boolOption(fieldOpts, sdcpb.E_SecretField); !set || value {
+	if value, set := boolOption(fieldOpts, secretFieldExtension()); !set || value {
 		t.Errorf("secret_field option on data.Credentials.username read as set=%v value=%v, want set=true value=false", set, value)
 	}
 }

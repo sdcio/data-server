@@ -6,12 +6,12 @@
 
 **Blocked by:** 01 — Inventory legacy #442 / #480 commits; 02 — Land generic fixes on `main` (only for items the inventory marks as required for base to build or review)
 
-**Status:** ready-for-agent
+**Status:** open PR [#506](https://github.com/sdcio/data-server/pull/506) (`device-profile-base` → `ticket-02-generic-fixes`)
 
-- [ ] Config validation and CreateDataStore reject `sonic` and `cisco-ios-xr` with deterministic **not enabled** errors; generic profile accepted
-- [ ] gRPC enum round-trip for all three values without enabling NOS behavior
-- [ ] `BuildPlan` (or equivalent): generic gNMI/NETCONF unchanged; disabled profile arms error without calling NOS packages (absent on this branch)
-- [ ] No NOS encoder packages in this PR; no vendor profile checks scattered outside sanctioned dispatch entry points
-- [ ] Protos pin in `go.mod` matches the #120 commit that includes **both** `DEVICE_PROFILE_SONIC` and `DEVICE_PROFILE_CISCO_IOS_XR`
-- [ ] Boundary tests at config validation, gRPC mapping, and materialize dispatch mirror the spec’s primary test seams
-- [ ] ADR narrative extended for materialization and per-profile Get/Set dispatch points
+- [x] Config validation and CreateDataStore reject `sonic` and `cisco-ios-xr` with deterministic **not enabled** errors; generic profile accepted
+- [x] gRPC enum round-trip for all three values without enabling NOS behavior
+- [x] `BuildPlan` (or equivalent): generic gNMI/NETCONF unchanged; disabled profile arms error without calling NOS packages (absent on this branch)
+- [x] No NOS encoder packages in this PR; no vendor profile checks scattered outside sanctioned dispatch entry points
+- [x] Protos pin in `go.mod` matches the #120 commit that includes **both** `DEVICE_PROFILE_SONIC` and `DEVICE_PROFILE_CISCO_IOS_XR`
+- [x] Boundary tests at config validation, gRPC mapping, and materialize dispatch mirror the spec’s primary test seams
+- [x] ADR narrative extended for materialization and per-profile Get/Set dispatch points
