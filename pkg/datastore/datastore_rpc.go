@@ -19,6 +19,7 @@ import (
 	"errors"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	logf "github.com/sdcio/logger"
@@ -69,6 +70,13 @@ type Datastore struct {
 	syncTreeMutex *sync.RWMutex
 
 	taskPool *pool.SharedTaskPool
+
+	// Synced tracks, per configured sync name, whether that sync mechanism
+	// has completed its first successful cycle writing to Running. See
+	// MarkSynced / Synced.
+	syncedMu    sync.Mutex
+	syncedNames map[string]bool
+	synced      atomic.Bool
 }
 
 // New creates a new datastore, its schema server client and initializes the SBI target
@@ -116,6 +124,10 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 		taskPool:         pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)),
 	}
 	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
+
+	// seed the per-sync-name Synced tracking state from the configured
+	// Sync.Config; zero configured syncs is trivially Synced.
+	ds.ensureSyncedInit()
 
 	// create cache instance if needed
 	// this is a blocking call

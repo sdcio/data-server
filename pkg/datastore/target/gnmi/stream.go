@@ -193,9 +193,15 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, sy
 			syncRunning.Store(true)
 			go func() {
 				defer syncRunning.Store(false)
-				if err := s.syncToRunning(treeToCommit, true); err != nil {
+				if err := s.syncToRunning(treeToCommit, true, true); err != nil {
 					log.Error(err, "failed committing synctree to running")
+					return
 				}
+				// Running has now completed its first successful sync cycle
+				// from this mechanism. MarkSynced is idempotent, so this is
+				// safe even though buildTreeSyncWithDatastore may reach here
+				// again on reconnect/resubscribe.
+				s.runningStore.MarkSynced(s.config.Name)
 			}()
 		case <-tickerChan:
 			if syncRunning.Load() {
@@ -211,7 +217,7 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, sy
 			syncRunning.Store(true)
 			go func() {
 				defer syncRunning.Store(false)
-				if err := s.syncToRunning(treeToCommit, true); err != nil {
+				if err := s.syncToRunning(treeToCommit, true, false); err != nil {
 					log.Error(err, "failed committing synctree to running")
 				}
 			}()
@@ -277,7 +283,7 @@ func (s *StreamSync) gnmiSubscribe(subReq *gnmi.SubscribeRequest, updChan chan<-
 // syncToRunning exports syncTree and applies it to Running. It is called from
 // background goroutines spawned by buildTreeSyncWithDatastore; the caller owns
 // syncTree exclusively and no mutex is needed.
-func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, logCount bool) error {
+func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, logCount bool, initialSnapshotCommit bool) error {
 	log := logger.FromContext(s.ctx)
 
 	startTime := time.Now()
@@ -286,6 +292,9 @@ func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, logCount bool) erro
 	if err != nil {
 		if errors.Is(err, ops.ErrorIntentNotPresent) {
 			log.Info("sync no config changes")
+			if initialSnapshotCommit {
+				return s.runningStore.ApplyToRunning(s.ctx, nil, nil)
+			}
 			return nil
 		}
 		log.Error(err, "sync tree export error")

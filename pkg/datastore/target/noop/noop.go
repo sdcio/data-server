@@ -26,18 +26,27 @@ import (
 )
 
 type noopTarget struct {
-	name string
+	name         string
+	runningStore types.RunningStore
 }
 
-func NewNoopTarget(_ context.Context, name string) (*noopTarget, error) {
+func NewNoopTarget(_ context.Context, name string, runningStore types.RunningStore) (*noopTarget, error) {
 	nt := &noopTarget{
-		name: name,
+		name:         name,
+		runningStore: runningStore,
 	}
 	return nt, nil
 }
 
+// AddSyncs discards every configured sync entry: the noop target never talks
+// to a device, so there is nothing to actually sync. Each discarded entry
+// immediately satisfies that entry's Synced gate on the RunningStore, since a
+// noop-backed datastore has no device sync to wait for.
 func (t *noopTarget) AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) error {
 	logf.FromContext(ctx).V(1).Info("AddSyncs: discarding sync config (noop target)", "count", len(sps))
+	for _, sp := range sps {
+		t.runningStore.MarkSynced(sp.Name)
+	}
 	return nil
 }
 
