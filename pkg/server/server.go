@@ -40,6 +40,7 @@ import (
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore"
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/schema"
 )
 
@@ -60,7 +61,11 @@ type Server struct {
 	datastores *DatastoreMap
 
 	schemaClient schema.Client
-	cacheClient  cache.Client
+	// schemaRegistry pools schema-bound instances across datastores that
+	// share the same schema identity (name, vendor, version). It is
+	// constructed once schemaClient is known, see createSchemaClient.
+	schemaRegistry *schemaClient.Registry
+	cacheClient    cache.Client
 
 	gnmiOpts []grpc.DialOption
 }
@@ -288,7 +293,7 @@ func (s *Server) createInitialDatastores(ctx context.Context) {
 		go func(dsCfg *config.DatastoreConfig) {
 			defer wg.Done()
 			// TODO: propagate error
-			ds, err := datastore.New(ctx, dsCfg, s.schemaClient, s.cacheClient, s.gnmiOpts...)
+			ds, err := datastore.New(ctx, dsCfg, s.schemaRegistry, s.cacheClient, s.gnmiOpts...)
 			if err != nil {
 				log.Error(err, "failed to create datastore")
 			}

@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/schema"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
@@ -44,6 +45,10 @@ func (s *Server) createSchemaClient(ctx context.Context) {
 		// remote schema store
 		s.createRemoteSchemaClient(ctx)
 	}
+	// pool schema-bound instances per schema identity (name, vendor,
+	// version), shared and refcounted across every datastore using that
+	// identity, on top of whichever schema.Client was just constructed.
+	s.schemaRegistry = schemaClient.NewRegistry(s.schemaClient)
 }
 
 func (s *Server) createLocalSchemaStore(ctx context.Context) {
@@ -130,7 +135,7 @@ SCHEMA_CONNECT:
 	}
 
 	log.Info("connected to schema server")
-	s.schemaClient = schema.NewRemoteClient(cc, s.config.SchemaServer.Cache)
+	s.schemaClient = schema.NewRemoteClient(cc)
 }
 
 func (s *Server) GetSchema(ctx context.Context, req *sdcpb.GetSchemaRequest) (*sdcpb.GetSchemaResponse, error) {

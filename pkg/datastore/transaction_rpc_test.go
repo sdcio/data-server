@@ -35,7 +35,7 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scb := schemaClient.NewSchemaClientBound(schema, sc)
+	scb := schemaClient.NewRegistry(sc).GetOrCreate(schema)
 
 	// Setup Running Config Data
 	runningDevice := &sdcio_schema.Device{

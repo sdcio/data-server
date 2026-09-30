@@ -24,6 +24,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/sdcio/data-server/mocks/mockcacheclient"
 	"github.com/sdcio/data-server/pkg/config"
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	logf "github.com/sdcio/logger"
@@ -57,10 +58,11 @@ func newTestServer(t *testing.T) *Server {
 	t.Cleanup(cancel)
 
 	return &Server{
-		datastores:   NewDatastoreMap(),
-		schemaClient: sc,
-		cacheClient:  mockCC,
-		ctx:          ctx,
+		datastores:     NewDatastoreMap(),
+		schemaClient:   sc,
+		schemaRegistry: schemaClient.NewRegistry(sc),
+		cacheClient:    mockCC,
+		ctx:            ctx,
 		config: &config.Config{
 			Validation: config.NewValidationConfig(),
 			Deviation:  &config.DeviationConfig{},

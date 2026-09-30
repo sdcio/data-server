@@ -21,9 +21,6 @@ const (
 	defaultMaxRecvMsgSize = 4 * 1024 * 1024
 	defaultRPCTimeout     = 30 * time.Minute
 
-	defaultRemoteSchemaServerCacheTTL      = 300 * time.Second
-	defaultRemoteSchemaServerCacheCapacity = 1000
-
 	defaultNCPort             = 830
 	defaultCacheType          = "local"
 	defaultRemoteCacheAddress = "localhost:50100"
