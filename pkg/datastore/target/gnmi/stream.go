@@ -376,7 +376,7 @@ func (t *notificationProcessorTask) Run(ctx context.Context, _ func(pool.Task) e
 	deletes := sdcpb.NewPathSet()
 	if len(t.item.GetDelete()) > 0 {
 		for _, del := range t.item.GetDelete() {
-			deletes.AddPath(dsutils.FromGNMIPath(t.item.GetPrefix(), del).StripPathElemPrefixPath())
+			deletes.AddPath(dsutils.StripGNMIPathPrefixes(dsutils.FromGNMIPath(t.item.GetPrefix(), del)))
 		}
 	}
 

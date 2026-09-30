@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -39,14 +40,18 @@ func NewJsonTreeImporter(d any, intentName string, priority int32, nonRevertive 
 }
 
 type JsonTreeImporterElement struct {
-	data any
-	name string
+	data     any
+	identity api.NodeIdentity
 }
 
-func newJsonTreeImporterElement(name string, d any) *JsonTreeImporterElement {
+func newJsonTreeImporterElement(dataKey string, d any) *JsonTreeImporterElement {
+	id := api.ParseJSONIETFKey(dataKey)
+	if dataKey == "root" {
+		id = api.LocalIdentity("root")
+	}
 	return &JsonTreeImporterElement{
-		data: d,
-		name: name,
+		data:     d,
+		identity: id,
 	}
 }
 
@@ -70,7 +75,7 @@ func (j *JsonTreeImporterElement) GetElement(key string) importer.ImportConfigAd
 			_, localName, found := strings.Cut(k, ":")
 			if found && localName == key {
 				logf.DefaultLogger.V(logf.VTrace).Info("traversing element by local-name", "element", key, "dataKey", k)
-				return newJsonTreeImporterElement(key, v)
+				return newJsonTreeImporterElement(k, v)
 			}
 		}
 	}
@@ -78,26 +83,21 @@ func (j *JsonTreeImporterElement) GetElement(key string) importer.ImportConfigAd
 }
 
 // GetElements returns all child elements at this level.
-// Module prefixes in keys are stripped to local names so the processor can look them up
-// in the schema tree by bare name. Plain JSON keys (no ":") are passed through unchanged.
+// Module prefixes in JSON keys are preserved in Identity(); GetName() is the YANG local name.
 func (j *JsonTreeImporterElement) GetElements() []importer.ImportConfigAdapterElement {
 	var result []importer.ImportConfigAdapterElement
 	switch d := j.data.(type) {
 	case map[string]any:
 		result = make([]importer.ImportConfigAdapterElement, 0, len(d))
 		for k, v := range d {
-			name := k
-			if _, localName, found := strings.Cut(k, ":"); found {
-				name = localName
-			}
-			logf.DefaultLogger.V(logf.VTrace).Info("traversing element", "element", name, "dataKey", k)
+			logf.DefaultLogger.V(logf.VTrace).Info("traversing element", "element", api.ParseJSONIETFKey(k).Local, "dataKey", k)
 			switch subElem := v.(type) {
 			case []any:
 				for _, listElem := range subElem {
-					result = append(result, newJsonTreeImporterElement(name, listElem))
+					result = append(result, newJsonTreeImporterElement(k, listElem))
 				}
 			default:
-				result = append(result, newJsonTreeImporterElement(name, v))
+				result = append(result, newJsonTreeImporterElement(k, v))
 			}
 		}
 	default:
@@ -132,7 +132,11 @@ func (j *JsonTreeImporterElement) GetTVValue(ctx context.Context, slt *sdcpb.Sch
 }
 
 func (j *JsonTreeImporterElement) GetName() string {
-	return j.name
+	return j.identity.Local
+}
+
+func (j *JsonTreeImporterElement) Identity() api.NodeIdentity {
+	return j.identity
 }
 
 var _ importer.ImportConfigAdapter = (*JsonTreeImporter)(nil)

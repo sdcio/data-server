@@ -68,16 +68,16 @@ func deleteBranchInternal(ctx context.Context, e api.Entry, owner string) error 
 	e.GetLeafVariants().DeleteByOwner(owner)
 
 	// recurse the call
-	for childName, child := range e.GetChildMap().GetAll() {
+	for _, child := range e.GetChildMap().GetAll() {
 		if child == nil {
-			return fmt.Errorf("%w: child %q in map is nil under %s", ErrDeleteBranchNilEntry, childName, e.SdcpbPath().ToXPath(false))
+			return fmt.Errorf("%w: child in map is nil under %s", ErrDeleteBranchNilEntry, e.SdcpbPath().ToXPath(false))
 		}
 		err := DeleteBranch(ctx, child, nil, owner)
 		if err != nil {
 			return err
 		}
 		if child.CanDeleteBranch(false) {
-			e.GetChildMap().DeleteChild(childName)
+			e.GetChildMap().DeleteChild(child.Identity())
 		}
 	}
 	return nil

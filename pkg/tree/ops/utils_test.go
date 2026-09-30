@@ -51,7 +51,7 @@ func TestToJson_ListEntryKeyWithoutLeafVariant(t *testing.T) {
 		}
 		// Attach the "name" key leaf entry structurally, without ever adding a
 		// LeafVariant to it.
-		if _, err := api.NewEntry(ctx, keyNode, "name", tc); err != nil {
+		if _, err := api.NewEntry(ctx, keyNode, api.LocalIdentity("name"), tc); err != nil {
 			t.Fatal(err)
 		}
 	}
