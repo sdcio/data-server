@@ -153,29 +153,13 @@ func (c *Config) validateSetDefaults() error {
 }
 
 type RemoteSchemaServer struct {
-	Address string             `yaml:"address,omitempty" json:"address,omitempty"`
-	TLS     *TLS               `yaml:"tls,omitempty" json:"tls,omitempty"`
-	Cache   *RemoteSchemaCache `yaml:"cache,omitempty" json:"cache,omitempty"`
-}
-
-type RemoteSchemaCache struct {
-	TTL             time.Duration `yaml:"ttl,omitempty" json:"ttl,omitempty"`
-	Capacity        uint64        `yaml:"capacity,omitempty" json:"capacity,omitempty"`
-	WithDescription bool          `yaml:"with-description,omitempty" json:"with-description,omitempty"`
-	RefreshOnHit    bool          `yaml:"refresh-on-hit,omitempty" json:"refresh-on-hit,omitempty"`
+	Address string `yaml:"address,omitempty" json:"address,omitempty"`
+	TLS     *TLS   `yaml:"tls,omitempty" json:"tls,omitempty"`
 }
 
 func (r *RemoteSchemaServer) validateSetDefaults() error {
 	if r.Address == "" {
 		return fmt.Errorf("missing remote schema server address")
-	}
-	if r.Cache != nil {
-		if r.Cache.TTL <= 0 {
-			r.Cache.TTL = defaultRemoteSchemaServerCacheTTL
-		}
-		if r.Cache.Capacity == 0 {
-			r.Cache.Capacity = defaultRemoteSchemaServerCacheCapacity
-		}
 	}
 	return nil
 }

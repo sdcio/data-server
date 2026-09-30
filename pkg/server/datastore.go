@@ -207,7 +207,7 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 	ds, err := datastore.New(
 		s.ctx,
 		dsConfig,
-		s.schemaClient,
+		s.schemaRegistry,
 		s.cacheClient,
 		s.gnmiOpts...)
 	if err != nil {

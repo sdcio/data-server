@@ -32,7 +32,6 @@ import (
 	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/pool"
-	"github.com/sdcio/data-server/pkg/schema"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/processors"
 )
@@ -46,9 +45,15 @@ type Datastore struct {
 	// SBI target of this datastore
 	sbi target.Target
 
-	// schema server client
-	// schemaClient sdcpb.SchemaServerClient
-	schemaClient schemaClient.SchemaClientBound
+	// schemaClient is the datastore's hold on the pooled, refcounted
+	// schema-bound instance acquired from the schema client registry. It is
+	// stored with its concrete *schemaClient.Handle type (rather than the
+	// bare SchemaClientBound interface) so Close is directly callable
+	// without a type assertion, while still satisfying SchemaClientBound for
+	// every read-only consumer (tree context, target, converter, ...). It is
+	// released in Delete, not in Stop: shutdown and explicit datastore
+	// deletion are distinct, non-overlapping teardown paths.
+	schemaClient *schemaClient.Handle
 
 	ctx context.Context
 	// stop cancel func
@@ -73,7 +78,7 @@ type Datastore struct {
 
 // New creates a new datastore, its schema server client and initializes the SBI target
 // func New(c *config.DatastoreConfig, schemaServer *config.RemoteSchemaServer) *Datastore {
-func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc cache.Client, opts ...grpc.DialOption) (*Datastore, error) {
+func New(ctx context.Context, c *config.DatastoreConfig, registry *schemaClient.Registry, cc cache.Client, opts ...grpc.DialOption) (*Datastore, error) {
 
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -92,10 +97,11 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 		"sbi-port", c.SBI.Port,
 	)
 
-	scb := schemaClient.NewSchemaClientBound(c.Schema, sc)
-	tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	schemaHandle := registry.GetOrCreate(c.Schema)
+	tc := tree.NewTreeContext(schemaHandle, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
 	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
 	if err != nil {
+		schemaHandle.Close()
 		cancel()
 		return nil, err
 	}
@@ -104,7 +110,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 
 	ds := &Datastore{
 		config:           c,
-		schemaClient:     scb,
+		schemaClient:     schemaHandle,
 		ctx:              ctx,
 		cfn:              cancel,
 		cacheClient:      ccb,
@@ -202,6 +208,9 @@ func (d *Datastore) Config() *config.DatastoreConfig {
 }
 
 func (d *Datastore) Delete(ctx context.Context) error {
+	if d.schemaClient != nil {
+		d.schemaClient.Close()
+	}
 	return d.cacheClient.InstanceDelete(ctx)
 }
 
