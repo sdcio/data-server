@@ -34,14 +34,27 @@ func NavigateSdcpbPath(ctx context.Context, e api.Entry, path *sdcpb.Path) (api.
 		return NavigateSdcpbPath(ctx, e, path.CopyAndRemoveFirstPathElem())
 	case "..":
 		var entry api.Entry
-		entry = e.GetParent()
-		// we need to skip key levels in the tree
-		// if the next path element is again .. we need to skip key values that are present in the tree
-		// If it is a sub-entry instead, we need to stay in the brach that is defined by the key values
-		// hence only delegate the call to the parent
-
 		if len(pathElems) > 1 && pathElems[1].Name == ".." {
+			// Consecutive `..` steps: skip to the first ancestor that carries a YANG
+			// schema (i.e. the list's key-level node). The recursive call will then
+			// handle the next `..` step from that node.
 			entry, _ = GetFirstAncestorWithSchema(e)
+		} else if e.GetSchema() == nil {
+			// KEY-VALUE nodes (schema == nil) are internal tree artifacts that hold
+			// key-discriminator values for list instances but carry no YANG schema.
+			// In YANG/XPath, `..` means the *YANG-level* parent, which for a list
+			// instance is the container that holds the list — not the key-level
+			// intermediary node used by SDCIO's tree. Skip all key-value levels via
+			// GetFirstAncestorWithSchema (which lands at the key-level node), then
+			// take one more step up to reach the actual YANG parent.
+			keyLevel, _ := GetFirstAncestorWithSchema(e)
+			if keyLevel != nil {
+				entry = keyLevel.GetParent()
+			}
+		} else {
+			// Schema-bearing node (container, leaf, or the list's key-level node itself):
+			// the immediate parent is the correct YANG-level parent.
+			entry = e.GetParent()
 		}
 		if entry == nil {
 			return nil, fmt.Errorf("%w: parent is nil at %q", ErrNavigateSdcpbPathNotFound, path.ToXPath(false))
