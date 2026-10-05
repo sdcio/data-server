@@ -137,11 +137,16 @@ func (d DeviationsStats) LogValue() map[string]map[string]int {
 	return stats
 }
 
+// SendDeviations reads deviation entries from ch and forwards them to all
+// active deviation clients. Sensitivity redaction is applied upstream in the
+// ops layer (GetDeviations via RenderOptsNorthbound), so no masking is done
+// here.
 func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.DeviationEntry, deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer) {
 	log := logf.FromContext(ctx)
 	deviationsStats := make(DeviationsStats)
 	for deviation := range ch {
 		deviationsStats.Add(deviation)
+
 		for clientIdentifier, dc := range deviationClients {
 			if dc.Context().Err() != nil {
 				continue
@@ -211,7 +216,12 @@ func (d *Datastore) calculateDeviations(ctx context.Context) (<-chan *treetypes.
 			deviationChan <- treetypes.NewDeviationEntry(n, treetypes.DeviationReasonIntentExists, nil)
 		}
 
-		err := ops.GetDeviations(ctx, deviationTree.Entry, &ops.GetDeviationParams{Ch: deviationChan}, d.taskPool)
+		// Redaction is applied in the ops layer via RenderOptsNorthbound so that
+		// sensitive values never leave the tree as plaintext.
+		err := ops.GetDeviations(ctx, deviationTree.Entry, &ops.GetDeviationParams{
+			Ch:         deviationChan,
+			RenderOpts: ops.RenderOptsNorthbound(false, d.sensitivePathIndex),
+		}, d.taskPool)
 		if err != nil {
 			log.Error(err, "failed to run deviation processor")
 		}

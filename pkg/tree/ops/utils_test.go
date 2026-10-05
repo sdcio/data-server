@@ -61,7 +61,7 @@ func TestToJson_ListEntryKeyWithoutLeafVariant(t *testing.T) {
 	}
 
 	// Must not panic.
-	if _, err := ops.ToJson(ctx, root.Entry, false); err != nil {
+	if _, err := ops.ToJson(ctx, root.Entry, ops.RenderOpts{}); err != nil {
 		t.Fatalf("ToJson() returned unexpected error: %v", err)
 	}
 }
