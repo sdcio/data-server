@@ -7,13 +7,22 @@ import (
 )
 
 // ImportConfigAdapter is used by the ImportConfig() of the Tree. It allows to import hierarchically organized config data into the tree with little overhead.
-// implementation for JSON and XML do exist.
+// Implementation for JSON and XML exist (device/running data). Intent reads use IntentAdapter.
 type ImportConfigAdapter interface {
 	ImportConfigAdapterElement
 	GetDeletes() *sdcpb.PathSet
 	GetName() string
 	GetPriority() int32
 	GetNonRevertive() bool
+}
+
+// IntentAdapter is the Client Intent-read shape: ImportConfigAdapter plus
+// Intent-only metadata (Orphan, path markers / SensitivePaths). Implemented by
+// proto- and Document-backed adapters; never by JSON/XML device/running importers.
+type IntentAdapter interface {
+	ImportConfigAdapter
+	GetOrphan() bool
+	GetSensitivePaths() []*sdcpb.Path
 }
 
 type ImportConfigAdapterElement interface {
