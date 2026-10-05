@@ -209,19 +209,7 @@ jobs:
           echo "cacheversion=$( curl -sL https://api.github.com/repos/sdcio/cache/releases/latest | jq '.name' )" >> $GITHUB_OUTPUT
           echo "certmanagerversion=$( curl -sL https://api.github.com/repos/cert-manager/cert-manager/releases/latest | jq '.name' )" >> $GITHUB_OUTPUT
 
-  integration-tests:
-    needs: [latest-versions, pr-release, resolve-paired-refs]
-    uses: sdcio/integration-tests/.github/workflows/single.yml@main
-    with:
-      configserver_version: ${{ needs.resolve-paired-refs.outputs.configversion }}
-      dataserver_version: ${{ needs.pr-release.outputs.dataversion }}
-      schemaserver_version: ${{ needs.latest-versions.outputs.schemaversion }}
-      cache_version: ${{ needs.latest-versions.outputs.cacheversion }}
-      certmanager_version: ${{ needs.latest-versions.outputs.certmanagerversion }}
-      integration_tests_ref: ${{ needs.resolve-paired-refs.outputs.inttest_ref }}
-    secrets: inherit
-
-  # Records the resolved pairing/version inputs both integration jobs launched with, so a
+  # Records the resolved pairing/version inputs the integration job launched with, so a
   # failure can be triaged from the artifact alone without re-deriving Pairs-with resolution.
   run-manifest:
     name: Record integration run manifest
@@ -285,9 +273,9 @@ jobs:
           path: integration-run-manifest.txt
 
   # cache_type: config-server exercises the ConfigServerCache read+write path (tickets 05-07)
-  # against a real config-server deployment. Runs alongside, not instead of, the cache_type:
-  # local job above -- the two backends are independent deployments in separate integration-tests
-  # runs and aren't required to coexist in the same test run.
+  # against a real config-server deployment. Cache.Type: local is not run in CI: it is a
+  # standalone deployment model (different snapshot handling) and was never meant to share a
+  # cluster with config-server — see 01b93e2 / ticket 02-integration-tests-remove-local-cache-job.
   integration-tests-cache-backend:
     name: integration-tests (config-server cache backend)
     needs: [latest-versions, pr-release, resolve-paired-refs, run-manifest]
