@@ -25,6 +25,12 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	lockStart := time.Now()
 	d.syncTreeMutex.Lock()
 	syncTreeUnlock := sync.OnceFunc(d.syncTreeMutex.Unlock)
+	releaseWriteLock := func() {
+		syncTreeUnlock()
+		if d.syncTreeLockHoldReporter != nil {
+			d.syncTreeLockHoldReporter(time.Since(lockStart))
+		}
+	}
 
 	defer syncTreeUnlock()
 
@@ -127,41 +133,32 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	needDriftRevert := runningChanged || d.outstandingDriftRevert.Load()
 
 	if !needDriftRevert {
-		syncTreeUnlock()
-		if d.syncTreeLockHoldReporter != nil {
-			d.syncTreeLockHoldReporter(time.Since(lockStart))
-		}
+		releaseWriteLock()
 		return nil
 	}
 
-	// create a deep copy of the sync tree for revert operation
+	// Hold the write lock only for the mutate. Copy under a read lock so the
+	// snapshot stays consistent without blocking other readers for the copy.
+	releaseWriteLock()
+
+	d.syncTreeMutex.RLock()
 	syncTreeCopy, err := d.syncTree.DeepCopy(ctx)
+	d.syncTreeMutex.RUnlock()
 	if err != nil {
+		d.outstandingDriftRevert.Store(true)
 		return err
 	}
 
-	// release the sync tree lock early, it is no longer needed
-	syncTreeUnlock()
-	if d.syncTreeLockHoldReporter != nil {
-		d.syncTreeLockHoldReporter(time.Since(lockStart))
-	}
-
-	// perform the revert operation to apply changes to the device
 	// TODO: this should probably be executed in a separate goroutine
-	performApply, revertErr := d.performRevert(ctx, syncTreeCopy)
+	_, revertErr := d.performRevert(ctx, syncTreeCopy)
 	// outstandingDriftRevert: set on any incomplete revert (prep or target apply) so the
 	// next steady sync still enters drift revert when Running no longer changes; cleared only
 	// after revert succeeds or we determine no target apply is needed.
 	if revertErr != nil {
 		d.outstandingDriftRevert.Store(true)
-		if !performApply {
-			// Preparation failed before Set; fail the sync (no MarkSynced) but keep the marker.
-			return revertErr
-		}
-		return nil
+		return revertErr
 	}
 	d.outstandingDriftRevert.Store(false)
-
 	return nil
 
 }
@@ -193,7 +190,6 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) (perfo
 		return false, err
 	}
 
-	// if we have deletes, we need to perform an apply
 	performApply = len(del) > 0
 
 	// if no deletes, check if we have updates
@@ -202,7 +198,6 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) (perfo
 		if err != nil {
 			return false, err
 		}
-		// if the update list is non-empty, we need to perform an apply
 		performApply = len(updList) > 0
 	}
 
