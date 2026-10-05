@@ -42,7 +42,7 @@ func validateMustStatements(ctx context.Context, e api.Entry, resultChan chan<- 
 		lexer.Parse()
 		prog, err := lexer.CreateProgram(exprStr)
 		if err != nil {
-			owner := "unknown"
+			owner := types.UnknownOwner
 			highest := e.GetLeafVariants().GetHighestPrecedence(false, false, false)
 			if highest != nil {
 				owner = highest.Owner()
@@ -67,7 +67,7 @@ func validateMustStatements(ctx context.Context, e api.Entry, resultChan chan<- 
 				log.Error(err, "stack underflow", "path", e.SdcpbPath().ToXPath(false), "must-expression", exprStr)
 				continue
 			}
-			owner := "unknown"
+			owner := types.UnknownOwner
 
 			// must statement might be assigned on a container, hence we might not have any LeafVariants
 			leafVariants := e.GetLeafVariants()
