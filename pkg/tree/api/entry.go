@@ -105,8 +105,8 @@ func HighestPrecedenceFilterAll(le *LeafEntry) bool {
 	return true
 }
 func HighestPrecedenceFilterWithoutNew(le *LeafEntry) bool {
-	return !le.IsNew
+	return !le.GetNewFlag()
 }
 func HighestPrecedenceFilterWithoutDeleted(le *LeafEntry) bool {
-	return !le.Delete
+	return !le.GetDeleteFlag()
 }
