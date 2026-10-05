@@ -68,6 +68,9 @@ type Datastore struct {
 	syncTree      *tree.RootEntry
 	syncTreeMutex *sync.RWMutex
 
+	// syncTreeLockHoldReporter is set by sync benchmarks to record ApplyToRunning lock hold time.
+	syncTreeLockHoldReporter func(time.Duration)
+
 	taskPool *pool.SharedTaskPool
 }
 
