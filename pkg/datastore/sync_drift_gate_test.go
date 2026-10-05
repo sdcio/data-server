@@ -185,32 +185,45 @@ func TestDriftRevertCoarseGate(t *testing.T) {
 		}
 	})
 
-	t.Run("failed drift revert retries on next steady sync", func(t *testing.T) {
-		var calls atomic.Int32
-		ctrl := gomock.NewController(t)
-		sbi := mocktarget.NewMockTarget(ctrl)
-		sbi.EXPECT().Set(gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, targettypes.TargetSource) (*sdcpb.SetDataResponse, error) {
-			if calls.Add(1) == 1 {
-				return nil, errors.New("target unreachable")
-			}
-			return &sdcpb.SetDataResponse{}, nil
-		}).Times(2)
+	t.Run("failed drift revert is returned to caller and retried", func(t *testing.T) {
+		for _, tc := range []struct {
+			name string
+			err  error
+		}{
+			{name: "device unreachable", err: errors.New("target unreachable")},
+			{name: "edit rejected", err: errors.New("edit rejected")},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				var calls atomic.Int32
+				ctrl := gomock.NewController(t)
+				sbi := mocktarget.NewMockTarget(ctrl)
+				sbi.EXPECT().Set(gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, targettypes.TargetSource) (*sdcpb.SetDataResponse, error) {
+					if calls.Add(1) == 1 {
+						return nil, tc.err
+					}
+					return &sdcpb.SetDataResponse{}, nil
+				}).Times(2)
 
-		drifted := driftGateDeviceWithDesc("wrong-on-device")
+				drifted := driftGateDeviceWithDesc("wrong-on-device")
 
-		ds := driftGateDatastore(t, ctrl, scb, driftGatePopulateRunning(t, ctx, scb, tp, base), sbi, intent)
-		if err := ds.ApplyToRunning(ctx, []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(drifted, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
-			t.Fatal(err)
-		}
-		if !ds.outstandingDriftRevert.Load() {
-			t.Fatal("expected outstanding drift revert after failed apply")
-		}
-		// Steady device state (still wrong vs intent) but no further Running change.
-		if err := ds.ApplyToRunning(ctx, []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(drifted, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
-			t.Fatal(err)
-		}
-		if ds.outstandingDriftRevert.Load() {
-			t.Fatal("expected outstanding marker cleared after successful retry")
+				ds := driftGateDatastore(t, ctrl, scb, driftGatePopulateRunning(t, ctx, scb, tp, base), sbi, intent)
+				err := ds.ApplyToRunning(ctx, []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(drifted, consts.RunningIntentName, consts.RunningValuesPrio, false))
+				if err == nil {
+					t.Fatal("expected failed drift revert to be returned to the sync caller")
+				}
+				if !errors.Is(err, tc.err) {
+					t.Fatalf("ApplyToRunning error %v does not wrap %v", err, tc.err)
+				}
+				if !ds.outstandingDriftRevert.Load() {
+					t.Fatal("expected outstanding drift revert after failed apply")
+				}
+				if err := ds.ApplyToRunning(ctx, []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(drifted, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+					t.Fatal(err)
+				}
+				if ds.outstandingDriftRevert.Load() {
+					t.Fatal("expected outstanding marker cleared after successful retry")
+				}
+			})
 		}
 	})
 
@@ -226,8 +239,8 @@ func TestDriftRevertCoarseGate(t *testing.T) {
 		drifted := driftGateDeviceWithDesc("wrong-on-device")
 
 		ds := driftGateDatastore(t, ctrl, scb, driftGatePopulateRunning(t, ctx, scb, tp, base), sbi, intent)
-		if err := ds.ApplyToRunning(ctx, []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(drifted, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
-			t.Fatal(err)
+		if err := ds.ApplyToRunning(ctx, []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(drifted, consts.RunningIntentName, consts.RunningValuesPrio, false)); err == nil {
+			t.Fatal("expected failed drift revert to be returned to the sync caller")
 		}
 
 		var wg sync.WaitGroup

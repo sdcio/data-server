@@ -25,6 +25,12 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	lockStart := time.Now()
 	d.syncTreeMutex.Lock()
 	syncTreeUnlock := sync.OnceFunc(d.syncTreeMutex.Unlock)
+	releaseWriteLock := func() {
+		syncTreeUnlock()
+		if d.syncTreeLockHoldReporter != nil {
+			d.syncTreeLockHoldReporter(time.Since(lockStart))
+		}
+	}
 
 	defer syncTreeUnlock()
 
@@ -114,37 +120,26 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	}
 
 	if !needDriftRevert {
-		syncTreeUnlock()
-		if d.syncTreeLockHoldReporter != nil {
-			d.syncTreeLockHoldReporter(time.Since(lockStart))
-		}
+		releaseWriteLock()
 		return nil
 	}
 
-	// create a deep copy of the sync tree for revert operation
+	// Hold the write lock only for the mutate. Copy under a read lock so the
+	// snapshot stays consistent without blocking other readers for the copy.
+	releaseWriteLock()
+
+	d.syncTreeMutex.RLock()
 	syncTreeCopy, err := d.syncTree.DeepCopy(ctx)
+	d.syncTreeMutex.RUnlock()
+	if err == nil {
+		// TODO: this should probably be executed in a separate goroutine
+		err = d.performRevert(ctx, syncTreeCopy)
+	}
 	if err != nil {
+		d.outstandingDriftRevert.Store(true)
 		return err
 	}
-
-	// release the sync tree lock early, it is no longer needed
-	syncTreeUnlock()
-	if d.syncTreeLockHoldReporter != nil {
-		d.syncTreeLockHoldReporter(time.Since(lockStart))
-	}
-
-	// perform the revert operation to apply changes to the device
-	// TODO: this should probably be executed in a separate goroutine
-	performApply, revertErr := d.performRevert(ctx, syncTreeCopy)
-	if revertErr != nil && !performApply {
-		return revertErr
-	}
-	if performApply && revertErr != nil {
-		d.outstandingDriftRevert.Store(true)
-	} else {
-		d.outstandingDriftRevert.Store(false)
-	}
-
+	d.outstandingDriftRevert.Store(false)
 	return nil
 
 }
@@ -158,46 +153,44 @@ func (d *Datastore) NewEmptyTree(ctx context.Context) (*tree.RootEntry, error) {
 	return newTree, nil
 }
 
-func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) (performApply bool, err error) {
+func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error {
 	log := logger.FromContext(ctx)
-	_, err = d.LoadAllButRunningIntents(ctx, t)
+	_, err := d.LoadAllButRunningIntents(ctx, t)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	err = t.FinishInsertionPhase(ctx)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	// TODO: optimize by checking only paths that where covered by the syncconfig
 	del, err := t.GetDeletes(true)
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	// if we have deletes, we need to perform an apply
-	performApply = len(del) > 0
+	performApply := len(del) > 0
 
 	// if no deletes, check if we have updates
 	if !performApply {
 		updList, err := ops.ToProtoUpdates(ctx, t.Entry, true)
 		if err != nil {
-			return false, err
+			return err
 		}
-		// if the update list is non-empty, we need to perform an apply
 		performApply = len(updList) > 0
 	}
 
 	if !performApply {
-		return false, nil
+		return nil
 	}
 
 	log.Info("reverting after sync")
 	resp, applyErr := d.applyIntent(ctx, adapter.NewEntryOutputAdapter(t.Entry))
 	if applyErr != nil {
 		log.Error(applyErr, "failed applying deviations to running", "response", utils.ProtoJSON(resp))
-		return true, applyErr
+		return applyErr
 	}
-	return true, nil
+	return nil
 }
