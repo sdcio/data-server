@@ -75,6 +75,9 @@ type Entry interface {
 	CanDelete() bool
 	GetChildMap() *ChildMap
 	GetChilds(types.DescendMethod) EntryMap
+	// GetChild looks up a single child by name without copying the sibling map.
+	// DescendMethodActiveChilds honours the choice skip list.
+	GetChild(name string, method types.DescendMethod) (Entry, bool)
 
 	// // DeleteBranch Deletes from the tree, all elements of the PathSlice defined branch of the given owner
 	// DeleteBranch(ctx context.Context, path *sdcpb.Path, owner string) (err error)
