@@ -68,6 +68,22 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 		importChanged = importStats.Changed()
 	}
 
+	changedPaths := ops.CollectRunningSyncChangedPaths(d.syncTree.Entry)
+	revertScopes := ops.RevertScopesFromChangedPaths(changedPaths)
+	var revertSnapshot *tree.RootEntry
+	if len(revertScopes) > 0 || d.outstandingDriftRevert.Load() {
+		scopesForSnapshot := revertScopes
+		if len(scopesForSnapshot) == 0 {
+			scopesForSnapshot = ops.RevertScopesFromChangedPaths(d.driftRevertPathsSnapshot())
+		}
+		if len(scopesForSnapshot) > 0 {
+			snap, snapErr := buildPartialRevertTree(ctx, d.syncTree, scopesForSnapshot)
+			if snapErr == nil {
+				revertSnapshot = snap
+			}
+		}
+	}
+
 	// run remove deleted processor to clean up entries marked as deleted by owner
 	rdp := processors.NewRemoveDeletedProcessor(&processors.RemoveDeletedProcessorParams{Owner: consts.RunningIntentName})
 	err := rdp.Run(d.syncTree.Entry, d.taskPool)
@@ -139,7 +155,8 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	releaseWriteLock()
 
 	d.syncTreeMutex.RLock()
-	syncTreeCopy, err := d.syncTree.DeepCopy(ctx)
+	// TODO: this should probably be executed in a separate goroutine
+	err = d.performChangedPathRevert(ctx, d.syncTree, changedPaths, revertScopes, revertSnapshot)
 	d.syncTreeMutex.RUnlock()
 	if err != nil {
 		d.outstandingDriftRevert.Store(true)

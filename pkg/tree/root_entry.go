@@ -160,6 +160,7 @@ func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 			entry, err := ops.NavigateSdcpbPath(ctx, r.Entry, path)
 			if err != nil {
 				log.Error(nil, "Applying explicit delete - path not found, skipping", "severity", "WARN", "path", path.ToXPath(false))
+				continue
 			}
 			edp := processors.NewExplicitDeleteProcessor(&processors.ExplicitDeleteTaskParams{Owner: deletePathPrio.GetOwner(), Priority: deletePathPrio.GetPrio()})
 			err = edp.Run(ctx, entry, r.GetTreeContext().PoolFactory())
