@@ -61,7 +61,7 @@ func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemaC
 			return nil, err
 		}
 	case targetTypeNOOP:
-		t, err = noop.NewNoopTarget(ctx, name)
+		t, err = noop.NewNoopTarget(ctx, name, runningStore)
 		if err != nil {
 			return nil, err
 		}

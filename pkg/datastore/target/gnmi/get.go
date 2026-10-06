@@ -10,7 +10,6 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/consts"
-	"github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	dsutils "github.com/sdcio/data-server/pkg/utils"
@@ -143,21 +142,18 @@ func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
 		return
 	}
 
-	result, err := ops.TreeExport(s.syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio, false)
-	if err != nil {
-		log.Error(err, "failure exporting synctree")
-		return
-	}
-
 	if log := log.V(logger.VTrace); log.Enabled() {
-		log.Info("sync content", "data", dsutils.ProtoJSON(result))
+		if result, err := ops.TreeExport(s.syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio, false); err == nil {
+			log.Info("sync content", "data", dsutils.ProtoJSON(result))
+		}
 	}
 
-	err = s.runningStore.ApplyToRunning(s.ctx, s.paths, proto.NewProtoTreeImporter(result))
+	err = applyScopedRefreshFromCycleTree(s.ctx, s.runningStore, s.syncTree, s.paths)
 	if err != nil {
-		log.Error(err, "failure importing synctree export into running")
+		log.Error(err, "failure applying sync cycle to running")
 		return
 	}
+	s.runningStore.MarkSynced(s.config.Name)
 	log.V(logger.VDebug).Info("syncing done")
 }
 
