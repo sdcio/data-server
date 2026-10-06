@@ -72,21 +72,6 @@ func filterTreeElement(el *tree_persist.TreeElement, scopes []*sdcpb.Path, prefi
 	return nil
 }
 
-func subtreeOverlapsScopes(prefix *sdcpb.Path, scopes []*sdcpb.Path) bool {
-	if len(scopes) == 0 {
-		return true
-	}
-	for _, scope := range scopes {
-		if scope == nil {
-			continue
-		}
-		if prefix.SharesPrefix(scope) || scope.SharesPrefix(prefix) || pathPrefixMatches(prefix, scope) || pathPrefixMatches(scope, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
 func scopeSelectsChildAt(prefix *sdcpb.Path, scopes []*sdcpb.Path, child *tree_persist.TreeElement) bool {
 	childName := child.GetName()
 	if len(scopes) == 0 {
@@ -113,19 +98,6 @@ func scopeSelectsChildAt(prefix *sdcpb.Path, scopes []*sdcpb.Path, child *tree_p
 		}
 	}
 	return false
-}
-
-func pathPrefixMatches(prefix, path *sdcpb.Path) bool {
-	pa, pb := prefix.GetElem(), path.GetElem()
-	if len(pa) > len(pb) {
-		return false
-	}
-	for i := range pa {
-		if pa[i].GetName() != pb[i].GetName() {
-			return false
-		}
-	}
-	return true
 }
 
 // keysMatch reports whether a list entry element carries the given key values.
