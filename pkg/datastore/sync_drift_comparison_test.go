@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"context"
+	"encoding/json"
 	"runtime"
 	"testing"
 
@@ -107,5 +108,62 @@ func TestDriftRevertChangedPathComparison(t *testing.T) {
 		if calls != 2 {
 			t.Fatalf("expected target called on each changed drift sync, got %d", calls)
 		}
+	})
+}
+
+func driftChoiceDevice(t *testing.T, c *sdcio_schema.SdcioModel_Choices) any {
+	t.Helper()
+	s, err := ygot.EmitJSON(&sdcio_schema.Device{Choices: c}, &ygot.EmitJSONConfig{Format: ygot.RFC7951, SkipValidation: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v any
+	if err := json.Unmarshal([]byte(s), &v); err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+func TestDriftRevertChoiceCase(t *testing.T) {
+	ctx := context.Background()
+	sc, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	scb := schemaClient.NewSchemaClientBound(schema, sc)
+	tp := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+
+	case1 := func(elem string) *sdcio_schema.SdcioModel_Choices {
+		return &sdcio_schema.SdcioModel_Choices{Case1: &sdcio_schema.SdcioModel_Choices_Case1{
+			CaseElem: &sdcio_schema.SdcioModel_Choices_Case1_CaseElem{Elem: ygot.String(elem)},
+		}}
+	}
+	intended := driftChoiceDevice(t, case1("intended"))
+	intent := driftGateIntentExport(t, ctx, tp, scb, intended)
+
+	run := func(t *testing.T, device any, wantSet int) {
+		t.Helper()
+		ctrl := gomock.NewController(t)
+		sbi := mocktarget.NewMockTarget(ctrl)
+		call := sbi.EXPECT().Set(gomock.Any(), gomock.Any())
+		if wantSet > 0 {
+			call.Return(&sdcpb.SetDataResponse{}, nil).Times(wantSet)
+		} else {
+			call.Times(0)
+		}
+		ds := driftGateDatastore(t, ctrl, scb, driftGatePopulateRunning(t, ctx, scb, tp, intended), sbi, intent)
+		if err := ds.ApplyToRunning(ctx, []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(device, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("value changed inside active case is reverted", func(t *testing.T) {
+		run(t, driftChoiceDevice(t, case1("wrong")), 1)
+	})
+	t.Run("switching to the other case by hand is reverted to the intended case", func(t *testing.T) {
+		run(t, driftChoiceDevice(t, &sdcio_schema.SdcioModel_Choices{Case2: &sdcio_schema.SdcioModel_Choices_Case2{Log: ygot.Bool(true)}}), 1)
+	})
+	t.Run("change matching intended case does not call target", func(t *testing.T) {
+		run(t, driftChoiceDevice(t, case1("intended")), 0)
 	})
 }
