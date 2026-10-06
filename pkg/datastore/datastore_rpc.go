@@ -75,6 +75,10 @@ type Datastore struct {
 	// outstandingDriftRevert is set when a drift revert is needed or failed; cleared after a successful revert apply.
 	outstandingDriftRevert atomic.Bool
 
+	// driftRevertPaths remembers paths last evaluated for revert (for outstanding retries).
+	driftRevertPathsMu sync.Mutex
+	driftRevertPaths   []*sdcpb.Path
+
 	taskPool *pool.SharedTaskPool
 }
 
