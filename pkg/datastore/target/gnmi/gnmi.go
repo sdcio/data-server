@@ -275,7 +275,10 @@ func (t *gnmiTarget) AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) 
 	for _, sp := range sps {
 		switch sp.Mode {
 		case "once":
-			g = NewOnceSync(ctx, t, sp, t.runningStore, t.taskpoolFactory)
+			g, err = NewOnceSync(ctx, t, sp, t.runningStore, t.schemaClient, t.taskpoolFactory)
+			if err != nil {
+				return err
+			}
 		case "get":
 			g, err = NewGetSync(ctx, t, sp, t.runningStore, t.schemaClient)
 			if err != nil {
