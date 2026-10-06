@@ -2,7 +2,7 @@
 
 **What to build:** A delete-path intent is held as coverage (owner, priority, path) in the tree context instead of one synthetic explicit-delete entry per covered leaf. Precedence treats the covering delete as a virtual variant with identical semantics, and every place that asks whether the highest variant is an explicit delete sees it. Tree debug output prints one marker on the covered branch (owner, priority, "explicit delete, covers subtree") with an optional expanded per-leaf mode. A delete-path pointing at a path not in the tree is skipped with a warning. The list of created explicit-delete entries is replaced by a count.
 
-**Blocked by:** 01 — Benchmark suite and lock-hold metric; 07 — Characterise delete-path owner-variant behaviour
+**Blocked by:** 07 — Characterise delete-path owner-variant behaviour
 
 **Status:** done
 
