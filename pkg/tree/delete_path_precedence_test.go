@@ -42,7 +42,7 @@ func TestDeletePathPrecedence(t *testing.T) {
 		wantOwnerPriority           int32
 		wantOwnerValue              string
 		wantHighestIsExplicitDelete bool
-		wantDelete                  bool
+		wantDeviceDelete            bool
 	}{
 		{
 			// The owner already has a real variant at priority 50. Finish-insertion
@@ -64,7 +64,7 @@ func TestDeletePathPrecedence(t *testing.T) {
 			wantOwnerPriority:           50,
 			wantOwnerValue:              "owner-desc",
 			wantHighestIsExplicitDelete: true,
-			wantDelete:                  true,
+			wantDeviceDelete:            true,
 		},
 		{
 			name: "delete-path wins over Running",
@@ -79,7 +79,7 @@ func TestDeletePathPrecedence(t *testing.T) {
 			wantOwnerPriority:           deletePrioJustAboveRunning,
 			wantOwnerValue:              "",
 			wantHighestIsExplicitDelete: true,
-			wantDelete:                  true,
+			wantDeviceDelete:            true,
 		},
 		{
 			name: "delete-path wins over defaults",
@@ -95,7 +95,7 @@ func TestDeletePathPrecedence(t *testing.T) {
 			wantOwnerPriority:           deletePrioJustAboveRunning,
 			wantOwnerValue:              "",
 			wantHighestIsExplicitDelete: true,
-			wantDelete:                  true,
+			wantDeviceDelete:            true,
 		},
 		{
 			name: "delete-path without Running does not issue a device delete",
@@ -110,7 +110,7 @@ func TestDeletePathPrecedence(t *testing.T) {
 			wantOwnerPriority:           deletePrioJustAboveRunning,
 			wantOwnerValue:              "",
 			wantHighestIsExplicitDelete: true,
-			wantDelete:                  false,
+			wantDeviceDelete:            false,
 		},
 		{
 			name: "other intent real value wins over delete-path",
@@ -126,7 +126,7 @@ func TestDeletePathPrecedence(t *testing.T) {
 			wantOwnerPriority:           deletePrioJustAboveRunning,
 			wantOwnerValue:              "",
 			wantHighestIsExplicitDelete: false,
-			wantDelete:                  false,
+			wantDeviceDelete:            false,
 		},
 	}
 
@@ -151,7 +151,12 @@ func TestDeletePathPrecedence(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			highestIncludingExplicitDelete := leafAt(ops.GetHighestPrecedence(root.Entry, false, true, true), deletePathDescXPath)
+			const (
+				onlyNewOrUpdated      = false
+				includeDefaults       = true
+				includeExplicitDelete = true
+			)
+			highestIncludingExplicitDelete := leafAt(ops.GetHighestPrecedence(root.Entry, onlyNewOrUpdated, includeDefaults, includeExplicitDelete), deletePathDescXPath)
 			if highestIncludingExplicitDelete == nil {
 				t.Fatalf("no highest-precedence variant at %s", deletePathDescXPath)
 			}
@@ -192,8 +197,8 @@ func TestDeletePathPrecedence(t *testing.T) {
 
 			gotDeletes := deleteXPaths(t, root)
 			hasDelete := slices.Contains(gotDeletes, deletePathDescXPath)
-			if hasDelete != tt.wantDelete {
-				t.Errorf("deletes contain %s = %v, want %v; deletes = %v", deletePathDescXPath, hasDelete, tt.wantDelete, gotDeletes)
+			if hasDelete != tt.wantDeviceDelete {
+				t.Errorf("device deletes contain %s = %v, want %v; deletes = %v", deletePathDescXPath, hasDelete, tt.wantDeviceDelete, gotDeletes)
 			}
 		})
 	}
