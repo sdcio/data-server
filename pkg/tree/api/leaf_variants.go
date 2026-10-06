@@ -79,7 +79,7 @@ func (lv *LeafVariants) CanDeleteBranch(keepDefault bool) bool {
 	}
 
 	highest := lv.GetHighestPrecedence(false, false, true)
-	if highest != nil && highest.IsExplicitDelete {
+	if highest != nil && highest.GetExplicitDeleteFlag() {
 		return true
 	}
 
@@ -152,14 +152,14 @@ func (lv *LeafVariants) CanDelete() bool {
 
 	// check if highest is explicit delete
 	highest := lv.GetHighestPrecedence(false, false, true)
-	if highest != nil && highest.IsExplicitDelete {
+	if highest != nil && highest.GetExplicitDeleteFlag() {
 		return true
 	}
 
 	// go through all variants
 	for _, l := range lv.les {
 		// if the LeafVariant is not owned by running or default
-		if l.Owner() != treeconsts.RunningIntentName && l.Owner() != treeconsts.DefaultsIntentName && !l.IsExplicitDelete {
+		if l.Owner() != treeconsts.RunningIntentName && l.Owner() != treeconsts.DefaultsIntentName && !l.GetExplicitDeleteFlag() {
 			// then we need to check that it remains, so not Delete Flag set or DeleteOnylIntended Flags set [which results in not doing a delete towards the device]
 			if l.GetDeleteOnlyIntendedFlag() || !l.GetDeleteFlag() {
 				// then this entry should not be deleted
@@ -183,7 +183,7 @@ func (lv *LeafVariants) ShouldDelete() bool {
 
 	// check if highest is explicit delete
 	highest := lv.GetHighestPrecedence(false, false, true)
-	if highest != nil && highest.IsExplicitDelete && lv.GetRunning() != nil {
+	if highest != nil && highest.GetExplicitDeleteFlag() && lv.GetRunning() != nil {
 		return true
 	}
 
@@ -221,7 +221,7 @@ func (lv *LeafVariants) RemainsToExist() bool {
 
 	highest := lv.GetHighestPrecedence(false, false, true)
 
-	if highest == nil || highest.IsExplicitDelete {
+	if highest == nil || highest.GetExplicitDeleteFlag() {
 		return false
 	}
 
@@ -345,7 +345,7 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 		}
 	}
 
-	if highest == nil || highest.IsExplicitDelete && !includeExplicitDelete {
+	if highest == nil || highest.GetExplicitDeleteFlag() && !includeExplicitDelete {
 		return nil
 	}
 
@@ -431,17 +431,7 @@ func (lv *LeafVariants) ResetFlags(deleteFlag bool, newFlag bool, updatedFlag bo
 	count := 0
 
 	for _, le := range lv.les {
-		if deleteFlag && le.Delete {
-			le.Delete = false
-			le.DeleteOnlyIntended = false
-			count++
-		}
-		if updatedFlag && le.IsUpdated {
-			le.IsUpdated = false
-			count++
-		}
-		if newFlag && le.IsNew {
-			le.IsNew = false
+		if le.ResetFlags(deleteFlag, newFlag, updatedFlag) {
 			count++
 		}
 	}
