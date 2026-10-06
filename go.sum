@@ -183,8 +183,8 @@ github.com/prometheus/procfs v0.21.1/go.mod h1:aB55Cww9pdSJVHk0hUf0inxWyyjPogFIj
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
-github.com/scrapli/scrapligo v1.4.1 h1:D0lg2xusZKbKnzy9l0yT7ly/D2rgqab12yZvEXNim0U=
-github.com/scrapli/scrapligo v1.4.1/go.mod h1:pOWxVyPsQRrWTrkoSSDg05tjOqtWfLffAZtAsCc0w3M=
+github.com/scrapli/scrapligo v1.4.2 h1:Dj5suvaxn2pARMVLbLKP2YJ+a3yTMOTJEQOzNKQdjCQ=
+github.com/scrapli/scrapligo v1.4.2/go.mod h1:pOWxVyPsQRrWTrkoSSDg05tjOqtWfLffAZtAsCc0w3M=
 github.com/sdcio/cache v0.0.38 h1:8meykZC/DAgzKI+R3GtZvTs0/OXWRCeNN5mxVKG0Ba8=
 github.com/sdcio/cache v0.0.38/go.mod h1:PHJd4pTmfFZBLdPohtXJAVBNmAKhhKdZHTi3MejGrk0=
 github.com/sdcio/logger v0.0.3 h1:IFUbObObGry+S8lHGwOQKKRxJSuOphgRU/hxVhOdMOM=
