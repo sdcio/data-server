@@ -19,6 +19,7 @@ import (
 	"errors"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	logf "github.com/sdcio/logger"
@@ -70,6 +71,9 @@ type Datastore struct {
 
 	// syncTreeLockHoldReporter is set by sync benchmarks to record ApplyToRunning lock hold time.
 	syncTreeLockHoldReporter func(time.Duration)
+
+	// outstandingDriftRevert is set when a drift revert is needed or failed; cleared after a successful revert apply.
+	outstandingDriftRevert atomic.Bool
 
 	taskPool *pool.SharedTaskPool
 }

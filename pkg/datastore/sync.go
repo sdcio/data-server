@@ -54,12 +54,14 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 		}
 	}
 
+	var importChanged bool
 	// import new config if provided
 	if importer != nil {
-		_, err := d.syncTree.ImportConfig(ctx, &sdcpb.Path{}, importer, treetypes.NewUpdateInsertFlags(), d.taskPool)
+		importStats, err := d.syncTree.ImportConfig(ctx, &sdcpb.Path{}, importer, treetypes.NewUpdateInsertFlags(), d.taskPool)
 		if err != nil {
 			return err
 		}
+		importChanged = importStats.Changed()
 	}
 
 	// run remove deleted processor to clean up entries marked as deleted by owner
@@ -69,6 +71,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 		return err
 	}
 
+	var emptiedBranches int64
 	// delete entries that have zero-length leaf variant entries after remove deleted processing
 	for _, e := range rdp.GetZeroLengthLeafVariantEntries() {
 		if e == nil {
@@ -84,7 +87,15 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 		if err := ops.DeleteBranch(ctx, p, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(e.PathName(), nil)}}, consts.RunningIntentName); err != nil {
 			return err
 		}
+		emptiedBranches++
 	}
+
+	runningChanged := ops.RunningChangedDuringSync(d.syncTree.Entry, ops.RunningSyncChangeInput{
+		ImportChanged:      importChanged,
+		RemovedLeafCount:   rdp.GetDeleteStatsCount(),
+		EmptiedBranchCount: emptiedBranches,
+	})
+	needDriftRevert := runningChanged || d.outstandingDriftRevert.Load()
 
 	// conditional trace logging
 	if log := log.V(logger.VTrace); log.Enabled() {
@@ -102,6 +113,14 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 		return err
 	}
 
+	if !needDriftRevert {
+		syncTreeUnlock()
+		if d.syncTreeLockHoldReporter != nil {
+			d.syncTreeLockHoldReporter(time.Since(lockStart))
+		}
+		return nil
+	}
+
 	// create a deep copy of the sync tree for revert operation
 	syncTreeCopy, err := d.syncTree.DeepCopy(ctx)
 	if err != nil {
@@ -116,9 +135,14 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 
 	// perform the revert operation to apply changes to the device
 	// TODO: this should probably be executed in a separate goroutine
-	err = d.performRevert(ctx, syncTreeCopy)
-	if err != nil {
-		return err
+	performApply, revertErr := d.performRevert(ctx, syncTreeCopy)
+	if revertErr != nil && !performApply {
+		return revertErr
+	}
+	if performApply && revertErr != nil {
+		d.outstandingDriftRevert.Store(true)
+	} else {
+		d.outstandingDriftRevert.Store(false)
 	}
 
 	return nil
@@ -134,44 +158,46 @@ func (d *Datastore) NewEmptyTree(ctx context.Context) (*tree.RootEntry, error) {
 	return newTree, nil
 }
 
-func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error {
+func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) (performApply bool, err error) {
 	log := logger.FromContext(ctx)
-	_, err := d.LoadAllButRunningIntents(ctx, t)
+	_, err = d.LoadAllButRunningIntents(ctx, t)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	err = t.FinishInsertionPhase(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// TODO: optimize by checking only paths that where covered by the syncconfig
 	del, err := t.GetDeletes(true)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// if we have deletes, we need to perform an apply
-	performApply := len(del) > 0
+	performApply = len(del) > 0
 
 	// if no deletes, check if we have updates
 	if !performApply {
 		updList, err := ops.ToProtoUpdates(ctx, t.Entry, true)
 		if err != nil {
-			return err
+			return false, err
 		}
 		// if the update list is non-empty, we need to perform an apply
 		performApply = len(updList) > 0
 	}
 
-	if performApply {
-		log.Info("reverting after sync")
-		resp, err := d.applyIntent(ctx, adapter.NewEntryOutputAdapter(t.Entry))
-		if err != nil {
-			log.Error(err, "failed applying deviations to running", "response", utils.ProtoJSON(resp))
-		}
+	if !performApply {
+		return false, nil
 	}
 
-	return nil
+	log.Info("reverting after sync")
+	resp, applyErr := d.applyIntent(ctx, adapter.NewEntryOutputAdapter(t.Entry))
+	if applyErr != nil {
+		log.Error(applyErr, "failed applying deviations to running", "response", utils.ProtoJSON(resp))
+		return true, applyErr
+	}
+	return true, nil
 }
