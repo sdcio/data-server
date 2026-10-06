@@ -39,14 +39,18 @@ func TestDeletePathPrecedence(t *testing.T) {
 		deletePrio                  int32
 		wantHighestOwner            string
 		wantHighestValue            string
+		wantOwnerPriority           int32
+		wantOwnerValue              string
 		wantHighestIsExplicitDelete bool
 		wantDelete                  bool
 	}{
 		{
-			// Same owner already has a real variant: it is converted in place to
-			// an explicit delete and keeps that owner's priority, so it still
-			// outranks a weaker real intent at the same leaf.
-			name: "owner has real variant at same leaf — converted to explicit delete",
+			// The owner already has a real variant at priority 50. Finish-insertion
+			// converts that variant in place: the value stays "owner-desc" and the
+			// priority stays 50. The delete-path priority (200) is not written onto
+			// it, so the converted variant still outranks the other intent at 100.
+			// Applying 200 instead would lose to that other intent.
+			name: "owner has real variant at same leaf — converted in place, priority and value kept",
 			load: func(t *testing.T, root *RootEntry) {
 				t.Helper()
 				mustLoadIfaceDesc(t, ctx, root, consts.RunningIntentName, consts.RunningValuesPrio, "running-desc", testhelper.FlagsExisting)
@@ -54,9 +58,11 @@ func TestDeletePathPrecedence(t *testing.T) {
 				mustLoadIfaceDesc(t, ctx, root, otherOwner, 100, "other-desc", testhelper.FlagsNew)
 			},
 			deleteOwner:                 deleteOwner,
-			deletePrio:                  50,
+			deletePrio:                  200,
 			wantHighestOwner:            deleteOwner,
 			wantHighestValue:            "owner-desc",
+			wantOwnerPriority:           50,
+			wantOwnerValue:              "owner-desc",
 			wantHighestIsExplicitDelete: true,
 			wantDelete:                  true,
 		},
@@ -70,6 +76,8 @@ func TestDeletePathPrecedence(t *testing.T) {
 			deletePrio:                  deletePrioJustAboveRunning,
 			wantHighestOwner:            deleteOwner,
 			wantHighestValue:            "",
+			wantOwnerPriority:           deletePrioJustAboveRunning,
+			wantOwnerValue:              "",
 			wantHighestIsExplicitDelete: true,
 			wantDelete:                  true,
 		},
@@ -84,6 +92,8 @@ func TestDeletePathPrecedence(t *testing.T) {
 			deletePrio:                  deletePrioJustAboveRunning,
 			wantHighestOwner:            deleteOwner,
 			wantHighestValue:            "",
+			wantOwnerPriority:           deletePrioJustAboveRunning,
+			wantOwnerValue:              "",
 			wantHighestIsExplicitDelete: true,
 			wantDelete:                  true,
 		},
@@ -97,6 +107,8 @@ func TestDeletePathPrecedence(t *testing.T) {
 			deletePrio:                  deletePrioJustAboveRunning,
 			wantHighestOwner:            deleteOwner,
 			wantHighestValue:            "",
+			wantOwnerPriority:           deletePrioJustAboveRunning,
+			wantOwnerValue:              "",
 			wantHighestIsExplicitDelete: true,
 			wantDelete:                  false,
 		},
@@ -111,6 +123,8 @@ func TestDeletePathPrecedence(t *testing.T) {
 			deletePrio:                  deletePrioJustAboveRunning,
 			wantHighestOwner:            otherOwner,
 			wantHighestValue:            "intended-desc",
+			wantOwnerPriority:           deletePrioJustAboveRunning,
+			wantOwnerValue:              "",
 			wantHighestIsExplicitDelete: false,
 			wantDelete:                  false,
 		},
@@ -149,6 +163,20 @@ func TestDeletePathPrecedence(t *testing.T) {
 			}
 			if highestIncludingExplicitDelete.GetExplicitDeleteFlag() != tt.wantHighestIsExplicitDelete {
 				t.Errorf("highest IsExplicitDelete = %v, want %v", highestIncludingExplicitDelete.GetExplicitDeleteFlag(), tt.wantHighestIsExplicitDelete)
+			}
+
+			ownerLeaf := leafAt(ops.LeafsOfOwner(root.Entry, tt.deleteOwner), deletePathDescXPath)
+			if ownerLeaf == nil {
+				t.Fatalf("delete owner has no variant at %s", deletePathDescXPath)
+			}
+			if ownerLeaf.Priority() != tt.wantOwnerPriority {
+				t.Errorf("delete owner priority = %d, want %d", ownerLeaf.Priority(), tt.wantOwnerPriority)
+			}
+			if got := ownerLeaf.Value().GetStringVal(); got != tt.wantOwnerValue {
+				t.Errorf("delete owner value = %q, want %q", got, tt.wantOwnerValue)
+			}
+			if !ownerLeaf.GetExplicitDeleteFlag() {
+				t.Errorf("delete owner variant at %s is not an explicit delete", deletePathDescXPath)
 			}
 
 			effective := leafAt(root.GetHighestPrecedence(false), deletePathDescXPath)
