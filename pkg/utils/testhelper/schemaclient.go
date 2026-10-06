@@ -1,6 +1,7 @@
 package testhelper
 
 import (
+	"context"
 	"os"
 	"path"
 	"runtime"
@@ -47,7 +48,7 @@ func InitSDCIOSchema() (dataschema.Client, *dConfig.SchemaConfig, error) {
 	}
 
 	// init new schema definition to be read by the schema component
-	schema, err := schema.NewSchema(sc)
+	schema, err := schema.NewSchema(context.Background(), sc)
 	if err != nil {
 		return nil, nil, err
 	}

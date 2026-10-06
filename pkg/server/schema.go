@@ -76,19 +76,20 @@ func (s *Server) createLocalSchemaStore(ctx context.Context) {
 				Vendor:  sCfg.Vendor,
 				Version: sCfg.Version,
 			}
-			log = log.WithValues("schema", sck)
+			schemaLog := log.WithValues("schema", sck)
+			loadCtx := logf.IntoContext(ctx, schemaLog)
 			if store.HasSchema(sck) {
-				log.Info("schema already exists in the store, not reloading it")
+				schemaLog.Info("schema already exists in the store, not reloading it")
 				return
 			}
-			sc, err := schemaServerSchema.NewSchema(sCfg)
+			sc, err := schemaServerSchema.NewSchema(loadCtx, sCfg)
 			if err != nil {
-				log.Error(err, "schema parsing failed")
+				schemaLog.Error(err, "schema parsing failed")
 				return
 			}
 			err = store.AddSchema(sc)
 			if err != nil {
-				log.Error(err, "failed to add schema to the store")
+				schemaLog.Error(err, "failed to add schema to the store")
 				return
 			}
 		}(sCfg, store)
