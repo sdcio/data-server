@@ -26,11 +26,11 @@ func GetListChilds(e api.Entry) ([]api.Entry, error) {
 	// Collect descendants level-by-level through key hierarchy
 	for range keys {
 		// Cache children and calculate total count
-		childrenList := make([]api.EntryMap, len(current))
+		childrenList := make([][]api.Entry, len(current))
 		totalChildren := 0
 		// Iterate current level, collect children and count total
 		for i, entry := range current {
-			children := entry.GetChilds(types.DescendMethodAll)
+			children := entry.SnapshotChilds(types.DescendMethodAll)
 			childrenList[i] = children
 			totalChildren += len(children)
 		}

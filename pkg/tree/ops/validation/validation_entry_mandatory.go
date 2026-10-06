@@ -74,7 +74,7 @@ func validateMandatoryWithKeys(ctx context.Context, e api.Entry, level int, attr
 	}
 	// need to step down the tree until we're beyond the key levels to check the mandatory attributes, if level is > 0, we are still in the key levels
 	if level > 0 {
-		for _, c := range e.GetChilds(types.DescendMethodActiveChilds) {
+		for _, c := range e.SnapshotChilds(types.DescendMethodActiveChilds) {
 			validateMandatoryWithKeys(ctx, c, level-1, attributes, choiceName, resultChan)
 		}
 		return

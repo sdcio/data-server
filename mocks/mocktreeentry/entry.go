@@ -228,6 +228,20 @@ func (mr *MockEntryMockRecorder) GetChilds(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetChilds", reflect.TypeOf((*MockEntry)(nil).GetChilds), arg0)
 }
 
+// SnapshotChilds mocks base method.
+func (m *MockEntry) SnapshotChilds(arg0 types.DescendMethod) []api.Entry {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SnapshotChilds", arg0)
+	ret0, _ := ret[0].([]api.Entry)
+	return ret0
+}
+
+// SnapshotChilds indicates an expected call of SnapshotChilds.
+func (mr *MockEntryMockRecorder) SnapshotChilds(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SnapshotChilds", reflect.TypeOf((*MockEntry)(nil).SnapshotChilds), arg0)
+}
+
 // GetDeletes mocks base method.
 func (m *MockEntry) GetDeletes(entries types.DeleteEntriesList, aggregatePaths bool) (types.DeleteEntriesList, error) {
 	m.ctrl.T.Helper()

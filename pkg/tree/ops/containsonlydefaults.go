@@ -19,14 +19,14 @@ func ContainsOnlyDefaults(e api.Entry) bool {
 	}
 
 	// if the amount of childs is higher than the amount of childs with defaults, it can't be only defaults
-	childs := e.GetChilds(types.DescendMethodAll)
+	childs := e.SnapshotChilds(types.DescendMethodAll)
 	if len(childs) > len(contSchema.ChildsWithDefaults) {
 		return false
 	}
 
 	// check if all childs are in the list of childs with defaults, and that they only have a leafvariant with owner defaults
-	for k, v := range childs {
-		if !slices.Contains(contSchema.ChildsWithDefaults, k) {
+	for _, v := range childs {
+		if !slices.Contains(contSchema.ChildsWithDefaults, v.PathName()) {
 			return false
 		}
 		le := v.GetLeafVariants().GetHighestPrecedence(false, true, false)

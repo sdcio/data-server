@@ -67,7 +67,8 @@ func deleteBranchInternal(ctx context.Context, e api.Entry, owner string) error 
 	// delete possibly existing leafvariants for the owner
 	e.GetLeafVariants().DeleteByOwner(owner)
 
-	// recurse the call
+	// Copy first. DeleteChild takes the write lock, so this loop must not
+	// run while the child map's read lock is held.
 	for childName, child := range e.GetChildMap().GetAll() {
 		if child == nil {
 			return fmt.Errorf("%w: child %q in map is nil under %s", ErrDeleteBranchNilEntry, childName, e.SdcpbPath().ToXPath(false))

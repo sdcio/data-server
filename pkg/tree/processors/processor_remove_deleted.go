@@ -120,7 +120,7 @@ func (t *removeDeletedTask) Run(ctx context.Context, submit func(pool.Task) erro
 	}
 
 	// Process children recursively
-	for _, c := range t.e.GetChilds(types.DescendMethodAll) {
+	for _, c := range t.e.SnapshotChilds(types.DescendMethodAll) {
 		childTask := newRemoveDeletedTask(t.context, c, t.e.GetSchema().GetContainer() == nil)
 		// Submit may fail if pool is closed or fail-fast error occurred
 		if err := submit(childTask); err != nil {

@@ -150,13 +150,13 @@ func completePathName(ctx context.Context, entry api.Entry, toCompletePath *sdcp
 	if err != nil {
 		return nil
 	}
-	childs := entry.GetChilds(types.DescendMethodActiveChilds)
+	childs := entry.SnapshotChilds(types.DescendMethodActiveChilds)
 
 	var resultEntries []api.Entry
 	doAdd := true
-	for k, v := range childs {
+	for _, v := range childs {
 		if incompleteLastElem != nil {
-			doAdd = strings.HasPrefix(k, incompleteLastElem.Name)
+			doAdd = strings.HasPrefix(v.PathName(), incompleteLastElem.Name)
 		}
 		if doAdd {
 			resultEntries = append(resultEntries, v)

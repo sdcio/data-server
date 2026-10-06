@@ -47,7 +47,7 @@ func (dt *deviationTask) Run(ctx context.Context, submit func(pool.Task) error) 
 	evalLeafvariants := true
 
 	// get all active childs
-	activeChilds := dt.entry.GetChilds(types.DescendMethodActiveChilds)
+	activeChilds := dt.entry.SnapshotChilds(types.DescendMethodActiveChilds)
 
 	// if s is a presence container but has active childs, it should not be treated as a presence
 	// container, hence the leafvariants should not be processed. For presence container with
@@ -61,11 +61,18 @@ func (dt *deviationTask) Run(ctx context.Context, submit func(pool.Task) error) 
 		dt.entry.GetLeafVariants().GetDeviations(ctx, dt.config.Ch, dt.isActiveCase)
 	}
 
-	// iterate through all childs
-	for cName, c := range dt.entry.GetChildMap().GetAll() {
-		// check if c is a active child (choice / case)
-		_, isActiveChild := activeChilds[cName]
-		// recurse the call
+	// Walk every child. Choice cases that lost are still visited, but not as the active case.
+	// Activity is by child name, matching the previous map lookup.
+	allChilds := dt.entry.SnapshotChilds(types.DescendMethodAll)
+	if len(allChilds) == 0 {
+		return nil
+	}
+	activeNames := make(map[string]struct{}, len(activeChilds))
+	for _, c := range activeChilds {
+		activeNames[c.PathName()] = struct{}{}
+	}
+	for _, c := range allChilds {
+		_, isActiveChild := activeNames[c.PathName()]
 		_ = submit(newDeviationTask(c, dt.config, isActiveChild))
 	}
 	return nil

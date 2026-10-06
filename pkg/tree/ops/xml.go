@@ -44,12 +44,7 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 		// if the entry remains so exist, we need to add it to the xml doc
 		overallDoAdd := false
 
-		childs := e.GetChilds(types.DescendMethodActiveChilds)
-
-		keys := make([]string, 0, len(childs))
-		for k := range childs {
-			keys = append(keys, k)
-		}
+		childs := e.SnapshotChilds(types.DescendMethodActiveChilds)
 
 		// Perform ordering of attributes
 		schemaParent, _ := GetFirstAncestorWithSchema(e)
@@ -57,13 +52,13 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 			return false, fmt.Errorf("no ancestor has schema for %v", e)
 		}
 		schemaKeys := GetSchemaKeys(schemaParent)
-		slices.SortFunc(keys, func(a, b string) int {
-			aIdx := slices.Index(schemaKeys, a)
-			bIdx := slices.Index(schemaKeys, b)
+		slices.SortFunc(childs, func(a, b api.Entry) int {
+			aIdx := slices.Index(schemaKeys, a.PathName())
+			bIdx := slices.Index(schemaKeys, b.PathName())
 			switch {
 			case aIdx == -1 && bIdx == -1:
 				// if neither are keys, sort them against each other
-				return cmp.Compare(a, b)
+				return cmp.Compare(a.PathName(), b.PathName())
 			case aIdx == -1:
 				return 1
 			case bIdx == -1:
@@ -74,10 +69,10 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 		})
 
 		// go through the ordered list of attributes and create the child elements
-		for _, k := range keys {
+		for _, child := range childs {
 			// recurse the call
 			// no additional element is created, since we're on a key level, so add to parent element
-			doAdd, err := toXmlInternal(ctx, childs[k], parent, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
+			doAdd, err := toXmlInternal(ctx, child, parent, onlyNewOrUpdated, honorNamespace, operationWithNamespace, useOperationRemove)
 			if err != nil {
 				return false, err
 			}

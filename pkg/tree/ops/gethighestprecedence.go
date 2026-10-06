@@ -20,7 +20,7 @@ func getHighestPrecedenceInternal(s api.Entry, result api.LeafVariantSlice, only
 	}
 
 	// continue with childs. Childs are part of choices, process only the "active" (highes precedence) childs
-	for _, c := range s.GetChilds(types.DescendMethodActiveChilds) {
+	for _, c := range s.SnapshotChilds(types.DescendMethodActiveChilds) {
 		result = getHighestPrecedenceInternal(c, result, onlyNewOrUpdated, includeDefaults, includeExplicitDelete)
 	}
 	return result

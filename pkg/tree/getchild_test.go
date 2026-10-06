@@ -3,6 +3,7 @@ package tree
 import (
 	"context"
 	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
@@ -101,6 +102,15 @@ func TestGetChildHonoursChoiceSkipList(t *testing.T) {
 	if case2Active {
 		t.Fatal("lower-priority case2 should be skipped by the choice skip list")
 	}
+
+	activeNames := childNames(choices.SnapshotChilds(types.DescendMethodActiveChilds))
+	allNames := childNames(choices.SnapshotChilds(types.DescendMethodAll))
+	if !slices.Contains(allNames, "case1") || !slices.Contains(allNames, "case2") {
+		t.Fatalf("SnapshotChilds(All) = %v, want case1 and case2", allNames)
+	}
+	if !slices.Contains(activeNames, "case1") || slices.Contains(activeNames, "case2") {
+		t.Fatalf("SnapshotChilds(ActiveChilds) = %v, want case1 only", activeNames)
+	}
 }
 
 func TestLeafGetChildsDoesNotAllocate(t *testing.T) {
@@ -141,5 +151,15 @@ func TestLeafGetChildsDoesNotAllocate(t *testing.T) {
 	})
 	if allocs != 0 {
 		t.Fatalf("leaf GetChilds allocated %.2f times per run, want 0", allocs)
+	}
+
+	allocs = testing.AllocsPerRun(1000, func() {
+		got := leaf.SnapshotChilds(types.DescendMethodAll)
+		if len(got) != 0 {
+			t.Fatalf("leaf SnapshotChilds len = %d, want 0", len(got))
+		}
+	})
+	if allocs != 0 {
+		t.Fatalf("leaf SnapshotChilds allocated %.2f times per run, want 0", allocs)
 	}
 }
