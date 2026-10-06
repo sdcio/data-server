@@ -34,6 +34,8 @@ type sharedEntryAttributes struct {
 
 	treeContext api.TreeContext
 
+	deletePathCoverages []*api.DeletePathPrio
+
 	// state cache
 	cacheMutex        sync.Mutex
 	cacheShouldDelete *bool
@@ -57,16 +59,23 @@ func NewEntry(ctx context.Context, parent api.Entry, pathElemName string, tc api
 }
 
 func (s *sharedEntryAttributes) DeepCopy(tc api.TreeContext, parent api.Entry) (api.Entry, error) {
+	deletePathCoverages := make([]*api.DeletePathPrio, 0, len(s.deletePathCoverages))
+	for _, coverage := range s.deletePathCoverages {
+		if copiedCoverage := tc.DeletePathCoverage().Get(coverage.GetOwner()); copiedCoverage != nil {
+			deletePathCoverages = append(deletePathCoverages, copiedCoverage)
+		}
+	}
 	result := &sharedEntryAttributes{
-		parent:           parent,
-		pathElemName:     s.pathElemName,
-		childs:           api.NewChildMap(),
-		schema:           s.schema,
-		treeContext:      tc,
-		choicesResolvers: s.choicesResolvers.DeepCopy(),
-		schemaMutex:      sync.RWMutex{},
-		cacheMutex:       sync.Mutex{},
-		level:            s.level,
+		parent:              parent,
+		pathElemName:        s.pathElemName,
+		childs:              api.NewChildMap(),
+		schema:              s.schema,
+		treeContext:         tc,
+		choicesResolvers:    s.choicesResolvers.DeepCopy(),
+		deletePathCoverages: deletePathCoverages,
+		schemaMutex:         sync.RWMutex{},
+		cacheMutex:          sync.Mutex{},
+		level:               s.level,
 	}
 
 	// copy childs
@@ -117,6 +126,14 @@ func NewSharedEntryAttributes(ctx context.Context, parent api.Entry, pathElemNam
 
 func (s *sharedEntryAttributes) GetTreeContext() api.TreeContext {
 	return s.treeContext
+}
+
+func (s *sharedEntryAttributes) GetDeletePathCoverages() []*api.DeletePathPrio {
+	return s.deletePathCoverages
+}
+
+func (s *sharedEntryAttributes) SetDeletePathCoverages(coverages []*api.DeletePathPrio) {
+	s.deletePathCoverages = coverages
 }
 
 // loadDefaults helper to populate defaults on the initializiation of the sharedEntryAttribute
@@ -581,7 +598,12 @@ func (s *sharedEntryAttributes) GetChilds(d types.DescendMethod) api.EntryMap {
 // StringIndent returns the sharedEntryAttributes in its string representation
 // The string is intented according to the nesting level in the yang model
 func (s *sharedEntryAttributes) StringIndent(result []string) []string {
-	result = append(result, strings.Repeat("  ", s.GetLevel())+s.pathElemName)
+	indent := strings.Repeat("  ", s.GetLevel())
+	result = append(result, indent+s.pathElemName)
+	for _, coverage := range s.deletePathCoverages {
+		result = append(result, fmt.Sprintf("%s -> Owner: %s, Priority: %d, explicit delete, covers subtree",
+			indent, coverage.GetOwner(), coverage.GetPrio()))
+	}
 
 	// ranging over children and LeafVariants
 	// then should be mutual exclusive, either a node has children or LeafVariants
@@ -591,7 +613,7 @@ func (s *sharedEntryAttributes) StringIndent(result []string) []string {
 	}
 	// range over LeafVariants
 	for l := range s.leafVariants.Items() {
-		result = append(result, fmt.Sprintf("%s -> %s", strings.Repeat("  ", s.GetLevel()), l.String()))
+		result = append(result, fmt.Sprintf("%s -> %s", indent, l.String()))
 	}
 	return result
 }

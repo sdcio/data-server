@@ -1,9 +1,12 @@
 package tree
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/openconfig/ygot/ygot"
@@ -15,6 +18,7 @@ import (
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/sdc-protos/tree_persist"
 	"go.uber.org/mock/gomock"
 )
 
@@ -202,6 +206,113 @@ func TestDeletePathPrecedence(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDeletePathCoverageDebugOutput(t *testing.T) {
+	ctx := context.Background()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := NewTreeRoot(ctx, NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustLoadIfaceDesc(t, ctx, root, consts.RunningIntentName, consts.RunningValuesPrio, "running-desc", testhelper.FlagsExisting)
+
+	withoutCoverage := root.String()
+	root.GetTreeContext().ExplicitDeletes().Add("delete-owner", consts.RunningValuesPrio-1, sdcpb.NewPathSet().AddPath(&sdcpb.Path{
+		Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("interface", nil)},
+	}))
+	if err := root.FinishInsertionPhase(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	marker := "Owner: delete-owner, Priority: " + fmt.Sprint(consts.RunningValuesPrio-1) + ", explicit delete, covers subtree"
+	if got := strings.Count(root.String(), marker); got != 1 {
+		t.Fatalf("coverage marker count = %d, want 1\n%s", got, root.String())
+	}
+	if strings.Contains(withoutCoverage, "CoversSubtree") {
+		t.Fatalf("tree without delete-path coverage contains a coverage marker:\n%s", withoutCoverage)
+	}
+
+	expanded := root.StringExpanded()
+	if got := strings.Count(expanded, "Owner: delete-owner"); got <= 1 {
+		t.Fatalf("expanded output does not show effective leaf coverage:\n%s", expanded)
+	}
+}
+
+func TestDeletePathCoverageMissingPathIsSkipped(t *testing.T) {
+	ctx := context.Background()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := NewTreeRoot(ctx, NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root.GetTreeContext().ExplicitDeletes().Add("delete-owner", consts.RunningValuesPrio-1, sdcpb.NewPathSet().AddPath(&sdcpb.Path{
+		Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("does-not-exist", nil)},
+	}))
+
+	if err := root.FinishInsertionPhase(ctx); err != nil {
+		t.Fatalf("FinishInsertionPhase() with missing delete path returned error: %v", err)
+	}
+}
+
+func TestDeletePathCoverageIsUsedByTreeExport(t *testing.T) {
+	ctx := context.Background()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := NewTreeRoot(ctx, NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustLoadIfaceDesc(t, ctx, root, "delete-owner", 50, "owner-desc", testhelper.FlagsNew)
+	root.GetTreeContext().ExplicitDeletes().Add("delete-owner", 200, sdcpb.NewPathSet().AddPath(&sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("description", nil),
+		},
+	}))
+	if err := root.FinishInsertionPhase(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	exported, err := ops.TreeExport(root.Entry, "delete-owner", 50, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if treeElementContainsValue(exported.GetRoot(), []byte("owner-desc")) {
+		t.Fatal("tree export retained the same-owner value covered by a delete path")
+	}
+}
+
+func treeElementContainsValue(element *tree_persist.TreeElement, value []byte) bool {
+	if element == nil {
+		return false
+	}
+	if bytes.Equal(element.GetLeafVariant(), value) {
+		return true
+	}
+	for _, child := range element.GetChilds() {
+		if treeElementContainsValue(child, value) {
+			return true
+		}
+	}
+	return false
 }
 
 func mustLoadIfaceDesc(t *testing.T, ctx context.Context, root *RootEntry, owner string, prio int32, desc string, flags *types.UpdateInsertFlags) {

@@ -17,7 +17,6 @@ The agent should:
 
 ## Frontier (ready to start)
 
-- [08 — Lazy delete-path coverage](issues/08-lazy-delete-path-coverage.md)
 - [09 — Snapshot-slice walkers](issues/09-snapshot-slice-walkers.md)
 - [10 — Decide on gNMI direct apply / tree-to-tree import](issues/10-decide-gnmi-direct-apply.md)
 
@@ -36,7 +35,7 @@ None.
 | 05 | [Drift revert failure visibility + copy out of lock](issues/05-drift-revert-failure-visibility-and-copy-out-of-lock.md) | 04 | done | [x] |
 | 06 | [Changed-path Drift comparison](issues/06-changed-path-drift-comparison.md) | 05 | done | [x] |
 | 07 | [Characterise delete-path owner-variant behaviour](issues/07-characterise-delete-path-owner-variant.md) | — | done | [x] |
-| 08 | [Lazy delete-path coverage](issues/08-lazy-delete-path-coverage.md) | 01, 07 | ready-for-agent | [ ] |
+| 08 | [Lazy delete-path coverage](issues/08-lazy-delete-path-coverage.md) | 01, 07 | done | [x] |
 | 09 | [Snapshot-slice walkers](issues/09-snapshot-slice-walkers.md) | 02 | ready-for-agent | [ ] |
 | 10 | [Decide on gNMI direct apply / tree-to-tree import](issues/10-decide-gnmi-direct-apply.md) | 02 | ready-for-agent | [ ] |
 

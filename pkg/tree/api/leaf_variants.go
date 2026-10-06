@@ -63,6 +63,71 @@ func (lv *LeafVariants) Items() iter.Seq[*LeafEntry] {
 	}
 }
 
+// EffectiveItems returns the stored variants plus any covering delete-path
+// intents as virtual explicit-delete variants.
+func (lv *LeafVariants) EffectiveItems() LeafVariantSlice {
+	lv.lesMutex.RLock()
+	defer lv.lesMutex.RUnlock()
+	return append(LeafVariantSlice(nil), lv.effectiveItemsLocked()...)
+}
+
+func (lv *LeafVariants) effectiveItemsLocked() LeafVariantSlice {
+	if lv.parentEntry == nil || lv.tc == nil || lv.tc.DeletePathCoverage().Empty() || !EntryHoldsLeafVariants(lv.parentEntry) {
+		return lv.les
+	}
+	result := append(LeafVariantSlice(nil), lv.les...)
+
+	for branch := lv.parentEntry; branch != nil; branch = branch.GetParent() {
+		for _, coverage := range branch.GetDeletePathCoverages() {
+			replaced := false
+			for idx, stored := range result {
+				if stored.Owner() != coverage.GetOwner() {
+					continue
+				}
+				virtual := stored.DeepCopy(lv.parentEntry)
+				virtual.MarkExpliciteDelete()
+				result[idx] = virtual
+				replaced = true
+				break
+			}
+			if !replaced {
+				result = append(result, NewLeafEntry(
+					types.NewUpdate(lv.parentEntry, &sdcpb.TypedValue{}, coverage.GetPrio(), coverage.GetOwner(), 0),
+					types.NewUpdateInsertFlags().SetExplicitDeleteFlag(),
+					lv.parentEntry,
+				))
+			}
+		}
+	}
+	return result
+}
+
+func EntryHoldsLeafVariants(entry Entry) bool {
+	schema := entry.GetSchema()
+	if schema == nil {
+		return false
+	}
+	switch typed := schema.GetSchema().(type) {
+	case *sdcpb.SchemaElem_Field, *sdcpb.SchemaElem_Leaflist:
+		return true
+	case *sdcpb.SchemaElem_Container:
+		return typed.Container.GetIsPresence()
+	default:
+		return false
+	}
+}
+
+func (lv *LeafVariants) GetEffectiveByOwner(owner string) *LeafEntry {
+	lv.lesMutex.RLock()
+	defer lv.lesMutex.RUnlock()
+	for _, entry := range lv.effectiveItemsLocked() {
+		if entry.Owner() == owner {
+			return entry
+		}
+	}
+	return nil
+}
+
 func (lv *LeafVariants) Length() int {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
@@ -72,9 +137,10 @@ func (lv *LeafVariants) Length() int {
 func (lv *LeafVariants) CanDeleteBranch(keepDefault bool) bool {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
+	entries := lv.effectiveItemsLocked()
 
 	// only procede if we have leave variants
-	if len(lv.les) == 0 {
+	if len(entries) == 0 {
 		return true
 	}
 
@@ -84,7 +150,7 @@ func (lv *LeafVariants) CanDeleteBranch(keepDefault bool) bool {
 	}
 
 	// go through all variants
-	for _, l := range lv.les {
+	for _, l := range entries {
 		// if the LeafVariant is not owned by running or default
 		if l.Owner() != treeconsts.DefaultsIntentName || keepDefault {
 			// then we need to check that it remains, so not Delete Flag set or DeleteOnylIntended Flags set [which results in not doing a delete towards the device]
@@ -112,19 +178,16 @@ func (lv *LeafVariants) RemoveDeletedByOwner(owner string) *LeafEntry {
 }
 
 // checkOnlyRunningAndMaybeDefault checks if only running and maybe default LeafVariants exist
-func (lv *LeafVariants) checkOnlyRunningAndMaybeDefault() bool {
-	lv.lesMutex.RLock()
-	defer lv.lesMutex.RUnlock()
-
-	if len(lv.les) == 1 && lv.les[0].Owner() == treeconsts.RunningIntentName {
+func checkOnlyRunningAndMaybeDefault(entries LeafVariantSlice) bool {
+	if len(entries) == 1 && entries[0].Owner() == treeconsts.RunningIntentName {
 		return true
 	}
 
 	// check if only running and default exist
 	hasRunning := false
 	hasDefault := false
-	if len(lv.les) == 2 {
-		for _, l := range lv.les {
+	if len(entries) == 2 {
+		for _, l := range entries {
 			switch l.Owner() {
 			case treeconsts.RunningIntentName:
 				hasRunning = true
@@ -140,13 +203,14 @@ func (lv *LeafVariants) checkOnlyRunningAndMaybeDefault() bool {
 func (lv *LeafVariants) CanDelete() bool {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
+	entries := lv.effectiveItemsLocked()
 	// only procede if we have leave variants
-	if len(lv.les) == 0 {
+	if len(entries) == 0 {
 		return true
 	}
 
 	// if we have runnig and only running (or default in addition) we should not delete
-	if lv.checkOnlyRunningAndMaybeDefault() {
+	if checkOnlyRunningAndMaybeDefault(entries) {
 		return false
 	}
 
@@ -157,7 +221,7 @@ func (lv *LeafVariants) CanDelete() bool {
 	}
 
 	// go through all variants
-	for _, l := range lv.les {
+	for _, l := range entries {
 		// if the LeafVariant is not owned by running or default
 		if l.Owner() != treeconsts.RunningIntentName && l.Owner() != treeconsts.DefaultsIntentName && !l.IsExplicitDelete {
 			// then we need to check that it remains, so not Delete Flag set or DeleteOnylIntended Flags set [which results in not doing a delete towards the device]
@@ -176,8 +240,9 @@ func (lv *LeafVariants) CanDelete() bool {
 func (lv *LeafVariants) ShouldDelete() bool {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
+	entries := lv.effectiveItemsLocked()
 	// only procede if we have leave variants
-	if len(lv.les) == 0 {
+	if len(entries) == 0 {
 		return false
 	}
 
@@ -194,7 +259,7 @@ func (lv *LeafVariants) ShouldDelete() bool {
 
 	foundOtherThenRunningAndDefault := false
 	// go through all variants
-	for _, l := range lv.les {
+	for _, l := range entries {
 		// if an entry exists that is not owned by running or default,
 		if l.Owner() == treeconsts.RunningIntentName || l.Owner() == treeconsts.DefaultsIntentName {
 			continue
@@ -214,8 +279,9 @@ func (lv *LeafVariants) ShouldDelete() bool {
 func (lv *LeafVariants) RemainsToExist() bool {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
+	entries := lv.effectiveItemsLocked()
 	// only procede if we have leave variants
-	if len(lv.les) == 0 {
+	if len(entries) == 0 {
 		return false
 	}
 
@@ -228,7 +294,7 @@ func (lv *LeafVariants) RemainsToExist() bool {
 	defaultOrRunningExists := false
 	deleteExists := false
 	// go through all variants
-	for _, l := range lv.les {
+	for _, l := range entries {
 		if l.Owner() == treeconsts.RunningIntentName || l.Owner() == treeconsts.DefaultsIntentName {
 			defaultOrRunningExists = true
 			continue
@@ -254,12 +320,57 @@ func (lv *LeafVariants) GetHighestPrecedenceValue(filter HighestPrecedenceFilter
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 	result := int32(math.MaxInt32)
+	coverageApplies := lv.parentEntry != nil && EntryHoldsLeafVariants(lv.parentEntry)
+
 	for _, e := range lv.les {
-		if filter(e) && e.Owner() != treeconsts.DefaultsIntentName && e.Priority() < result {
+		covered := coverageApplies && lv.ownerCoveredLocked(e.Owner())
+		if filter == HighestPrecedenceFilterWithoutDeleted && (covered || e.Delete) {
+			continue
+		}
+		if filter == HighestPrecedenceFilterWithoutNew && !covered && e.IsNew {
+			continue
+		}
+		if e.Owner() != treeconsts.DefaultsIntentName && e.Priority() < result {
 			result = e.Priority()
 		}
 	}
+
+	if filter != HighestPrecedenceFilterWithoutDeleted && coverageApplies {
+		for branch := lv.parentEntry; branch != nil; branch = branch.GetParent() {
+			for _, coverage := range branch.GetDeletePathCoverages() {
+				if coverage.GetOwner() == treeconsts.DefaultsIntentName || lv.hasStoredOwnerLocked(coverage.GetOwner()) {
+					continue
+				}
+				if coverage.GetPrio() < result {
+					result = coverage.GetPrio()
+				}
+			}
+		}
+	}
 	return result
+}
+
+func (lv *LeafVariants) ownerCoveredLocked(owner string) bool {
+	if lv.parentEntry == nil {
+		return false
+	}
+	for branch := lv.parentEntry; branch != nil; branch = branch.GetParent() {
+		for _, coverage := range branch.GetDeletePathCoverages() {
+			if coverage.GetOwner() == owner {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (lv *LeafVariants) hasStoredOwnerLocked(owner string) bool {
+	for _, stored := range lv.les {
+		if stored.Owner() == owner {
+			return true
+		}
+	}
+	return false
 }
 
 func (lv *LeafVariants) DeepCopy(tc TreeContext, parent Entry) *LeafVariants {
@@ -312,7 +423,8 @@ func (lv *LeafVariants) GetRunning() *LeafEntry {
 func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefaults bool, includeExplicitDelete bool) *LeafEntry {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
-	if len(lv.les) == 0 {
+	entries := lv.effectiveItemsLocked()
+	if len(entries) == 0 {
 		return nil
 	}
 	if onlyNewOrUpdated && lv.CanDelete() {
@@ -324,7 +436,7 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 	// the second highests is the backup in case the highest is marked for deletion
 	// so this is not actually the second highest always, but the next candidate
 	var secondHighest *LeafEntry
-	for _, e := range lv.les {
+	for _, e := range entries {
 		// first entry set result to it
 		// if it is not marked for deletion
 		if highest == nil {
@@ -464,8 +576,9 @@ func (lv *LeafVariants) DeleteByOwner(owner string) *LeafEntry {
 func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, isActiveCase bool) {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
+	entries := lv.effectiveItemsLocked()
 
-	if len(lv.les) == 0 {
+	if len(entries) == 0 {
 		return
 	}
 
@@ -475,7 +588,7 @@ func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.Devi
 
 	// we are part of an inactive case of a choice
 	if !isActiveCase {
-		for _, le := range lv.les {
+		for _, le := range entries {
 			ch <- types.NewDeviationEntry(le.Owner(), types.DeviationReasonOverruled, sdcpbPath).SetExpectedValue(le.Value())
 		}
 		return
@@ -484,8 +597,8 @@ func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.Devi
 	var running *LeafEntry
 	var highest *LeafEntry
 
-	overruled := make([]*types.DeviationEntry, 0, len(lv.les))
-	for _, le := range lv.les {
+	overruled := make([]*types.DeviationEntry, 0, len(entries))
+	for _, le := range entries {
 		// Defaults should be skipped
 		if le.Owner() == treeconsts.DefaultsIntentName {
 			continue

@@ -43,7 +43,7 @@ func treeExportLevel(e api.Entry, owner string) ([]*tree_persist.TreeElement, er
 	var childResults []*tree_persist.TreeElement
 	var err error
 
-	le := e.GetLeafVariants().GetByOwner(owner)
+	le := e.GetLeafVariants().GetEffectiveByOwner(owner)
 
 	if le != nil && !le.Delete {
 		lvResult, err = le.ValueAsBytes()

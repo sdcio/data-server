@@ -10,5 +10,8 @@ type TreeContext interface {
 	SchemaClient() schemaClient.SchemaClientBound
 	DeepCopy() TreeContext
 	ExplicitDeletes() *DeletePathSet
+	DeletePathCoverage() *DeletePathSet
+	ResetDeletePathCoverage()
+	SetDeletePathCoverage(*DeletePathSet)
 	NonRevertiveInfo() NonRevertiveInfos
 }

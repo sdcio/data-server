@@ -10,7 +10,7 @@ import (
 // It takes an additional result parameter that is used to accumulate the results during the recursive traversal. Since that LeafVariantSlice might grow during the traversal,
 // it is returned as a new slice to ensure that the changes are reflected in the caller.
 func getByOwnerInternal(e api.Entry, owner string, result api.LeafVariantSlice, f ...api.LeafEntryFilter) api.LeafVariantSlice {
-	lv := e.GetLeafVariants().GetByOwner(owner)
+	lv := e.GetLeafVariants().GetEffectiveByOwner(owner)
 	add := true
 	if lv != nil {
 		for _, filter := range f {

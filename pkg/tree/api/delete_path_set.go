@@ -25,6 +25,10 @@ func (dp *DeletePathSet) DeepCopy() *DeletePathSet {
 	return result
 }
 
+func (dp *DeletePathSet) Empty() bool {
+	return dp == nil || len(dp.data) == 0
+}
+
 func (dp *DeletePathSet) Remove(intentName string) *sdcpb.PathSet {
 	if data, exists := dp.data[intentName]; exists {
 		result := data.GetPathSet()
@@ -46,12 +50,20 @@ func (dp *DeletePathSet) Add(intentName string, prio int32, pathset *sdcpb.PathS
 	dpp.paths.Join(pathset)
 }
 
+func (dp *DeletePathSet) AddPath(intentName string, prio int32, path *sdcpb.Path) {
+	dp.Add(intentName, prio, sdcpb.NewPathSet().AddPath(path))
+}
+
 func (dp *DeletePathSet) GetByIntentName(intentName string) *sdcpb.PathSet {
 	data, exists := dp.data[intentName]
 	if exists {
 		return data.paths
 	}
 	return sdcpb.NewPathSet()
+}
+
+func (dp *DeletePathSet) Get(intentName string) *DeletePathPrio {
+	return dp.data[intentName]
 }
 
 func (dp *DeletePathSet) Items() iter.Seq[*DeletePathPrio] {

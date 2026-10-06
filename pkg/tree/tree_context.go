@@ -10,6 +10,7 @@ type TreeContext struct {
 	schemaClient     schemaClient.SchemaClientBound
 	nonRevertiveInfo api.NonRevertiveInfos
 	explicitDeletes  *api.DeletePathSet
+	deleteCoverage   *api.DeletePathSet
 	poolFactory      pool.VirtualPoolFactory
 }
 
@@ -18,6 +19,7 @@ func NewTreeContext(sc schemaClient.SchemaClientBound, poolFactory pool.VirtualP
 		schemaClient:     sc,
 		nonRevertiveInfo: api.NewNonRevertiveInfos(),
 		explicitDeletes:  api.NewDeletePaths(),
+		deleteCoverage:   api.NewDeletePaths(),
 		poolFactory:      poolFactory,
 	}
 }
@@ -31,6 +33,7 @@ func (t *TreeContext) DeepCopy() api.TreeContext {
 
 	tc.nonRevertiveInfo = t.nonRevertiveInfo.DeepCopy()
 	tc.explicitDeletes = t.explicitDeletes.DeepCopy()
+	tc.deleteCoverage = t.deleteCoverage.DeepCopy()
 	return tc
 }
 
@@ -44,6 +47,21 @@ func (t *TreeContext) SchemaClient() schemaClient.SchemaClientBound {
 
 func (t *TreeContext) ExplicitDeletes() *api.DeletePathSet {
 	return t.explicitDeletes
+}
+
+func (t *TreeContext) DeletePathCoverage() *api.DeletePathSet {
+	if t.deleteCoverage == nil {
+		return api.NewDeletePaths()
+	}
+	return t.deleteCoverage
+}
+
+func (t *TreeContext) ResetDeletePathCoverage() {
+	t.deleteCoverage = api.NewDeletePaths()
+}
+
+func (t *TreeContext) SetDeletePathCoverage(coverage *api.DeletePathSet) {
+	t.deleteCoverage = coverage
 }
 
 func (t *TreeContext) NonRevertiveInfo() api.NonRevertiveInfos {

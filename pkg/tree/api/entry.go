@@ -88,6 +88,8 @@ type Entry interface {
 	// GetTreeContext returns the TreeContext of the Entry, which holds global information about the tree
 	// and is used for certain operations that require access to this global information.
 	GetTreeContext() TreeContext
+	GetDeletePathCoverages() []*DeletePathPrio
+	SetDeletePathCoverages([]*DeletePathPrio)
 	// ChoicesResolvers returns the choice case resolvers for the entry, if any
 	ChoicesResolvers() ChoiceResolvers
 }
@@ -99,14 +101,10 @@ const (
 	DescendMethodActiveChilds
 )
 
-type HighestPrecedenceFilter func(le *LeafEntry) bool
+type HighestPrecedenceFilter uint8
 
-func HighestPrecedenceFilterAll(le *LeafEntry) bool {
-	return true
-}
-func HighestPrecedenceFilterWithoutNew(le *LeafEntry) bool {
-	return !le.IsNew
-}
-func HighestPrecedenceFilterWithoutDeleted(le *LeafEntry) bool {
-	return !le.Delete
-}
+const (
+	HighestPrecedenceFilterAll HighestPrecedenceFilter = iota
+	HighestPrecedenceFilterWithoutNew
+	HighestPrecedenceFilterWithoutDeleted
+)

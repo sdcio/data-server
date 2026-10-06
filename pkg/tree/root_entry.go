@@ -12,7 +12,6 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/tree/types"
-	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -89,9 +88,36 @@ func (r *RootEntry) SetNonRevertiveIntent(intentName string, nonRevertive bool) 
 
 // String returns the string representation of the Tree.
 func (r *RootEntry) String() string {
-	s := []string{}
-	s = r.StringIndent(s)
+	s := r.StringIndent(nil)
 	return strings.Join(s, "\n")
+}
+
+// StringExpanded returns debug output with delete-path coverage expanded into
+// its effective per-leaf explicit-delete variants.
+func (r *RootEntry) StringExpanded() string {
+	return strings.Join(r.stringIndentExpanded(nil), "\n")
+}
+
+func (r *RootEntry) stringIndentExpanded(result []string) []string {
+	var walk func(api.Entry, []string) []string
+	walk = func(entry api.Entry, lines []string) []string {
+		indent := strings.Repeat("  ", entry.GetLevel())
+		lines = append(lines, indent+entry.PathName())
+
+		for _, coverage := range entry.GetDeletePathCoverages() {
+			lines = append(lines, fmt.Sprintf("%s -> Owner: %s, Priority: %d, explicit delete, covers subtree",
+				indent, coverage.GetOwner(), coverage.GetPrio()))
+		}
+		for _, child := range entry.GetChildMap().GetAllSorted() {
+			lines = walk(child, lines)
+		}
+
+		for _, leaf := range entry.GetLeafVariants().EffectiveItems() {
+			lines = append(lines, fmt.Sprintf("%s -> %s", indent, leaf.String()))
+		}
+		return lines
+	}
+	return walk(r.Entry, result)
 }
 
 // GetUpdatesForOwner returns the updates that have been calculated for the given intent / owner
@@ -150,31 +176,47 @@ func (r *RootEntry) DeleteBranchPaths(ctx context.Context, deletes types.DeleteE
 
 func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 	log := logf.FromContext(ctx)
-	edpsc := processors.ExplicitDeleteProcessorStatCollection{}
+	coverageCount := map[string]int{}
+	for oldCoverage := range r.GetTreeContext().DeletePathCoverage().Items() {
+		for path := range oldCoverage.PathItems() {
+			if entry, err := ops.NavigateSdcpbPath(ctx, r.Entry, path); err == nil {
+				entry.SetDeletePathCoverages(nil)
+			}
+		}
+	}
+	r.GetTreeContext().ResetDeletePathCoverage()
+	coverage := api.NewDeletePaths()
 
-	// apply the explicit deletes
+	// Validate and retain explicit deletes as branch coverage. Effective
+	// per-leaf variants are evaluated lazily by LeafVariants.
 	for deletePathPrio := range r.GetTreeContext().ExplicitDeletes().Items() {
 		for path := range deletePathPrio.PathItems() {
-			// set the priority
-			// navigate to the stated path
-			entry, err := ops.NavigateSdcpbPath(ctx, r.Entry, path)
+			_, err := ops.NavigateSdcpbPath(ctx, r.Entry, path)
 			if err != nil {
 				log.Error(nil, "Applying explicit delete - path not found, skipping", "severity", "WARN", "path", path.ToXPath(false))
+				continue
 			}
-			edp := processors.NewExplicitDeleteProcessor(&processors.ExplicitDeleteTaskParams{Owner: deletePathPrio.GetOwner(), Priority: deletePathPrio.GetPrio()})
-			err = edp.Run(ctx, entry, r.GetTreeContext().PoolFactory())
+			coverage.AddPath(deletePathPrio.GetOwner(), deletePathPrio.GetPrio(), path)
+			coverageCount[deletePathPrio.GetOwner()]++
+		}
+	}
+	r.GetTreeContext().SetDeletePathCoverage(coverage)
+	for deletePathPrio := range coverage.Items() {
+		for path := range deletePathPrio.PathItems() {
+			entry, err := ops.NavigateSdcpbPath(ctx, r.Entry, path)
 			if err != nil {
 				return err
 			}
-			edpsc[deletePathPrio.GetOwner()] = edp
+			entry.SetDeletePathCoverages(append(entry.GetDeletePathCoverages(), deletePathPrio))
 		}
 	}
-	// conditional logging
-	if edpsc.ContainsEntries() {
-		log.V(logf.VDebug).Info("ExplicitDeletes added", "explicit-deletes", utils.MapToString(edpsc.Stats(), ", ", func(k string, v int) string {
-			return fmt.Sprintf("%s=%d", k, v)
-		}))
+	if err := r.Entry.FinishInsertionPhase(ctx); err != nil {
+		return err
 	}
 
-	return r.Entry.FinishInsertionPhase(ctx)
+	if len(coverageCount) > 0 {
+		log.V(logf.VDebug).Info("Explicit delete coverage added", "explicit-delete-paths", coverageCount)
+	}
+
+	return nil
 }
