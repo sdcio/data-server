@@ -17,7 +17,7 @@ The agent should:
 
 ## Frontier (ready to start)
 
-- [05 — Drift revert failure visibility + copy out of lock](issues/05-drift-revert-failure-visibility-and-copy-out-of-lock.md)
+- [06 — Changed-path Drift comparison](issues/06-changed-path-drift-comparison.md)
 - [07 — Characterise delete-path owner-variant behaviour](issues/07-characterise-delete-path-owner-variant.md)
 - [09 — Snapshot-slice walkers](issues/09-snapshot-slice-walkers.md)
 - [10 — Decide on gNMI direct apply / tree-to-tree import](issues/10-decide-gnmi-direct-apply.md)
@@ -26,7 +26,6 @@ The agent should:
 
 | # | Blocked by |
 |---|------------|
-| 06 | 05 |
 | 08 | 01, 07 |
 
 ## All tickets
@@ -37,7 +36,7 @@ The agent should:
 | 02 | [Direct child lookups, empty-children fast path, `-race` in CI](issues/02-direct-child-lookups-and-race-ci.md) | 01 | done | [x] |
 | 03 | [Touched-entry scoping of remove-deleted and reset-flags](issues/03-touched-entry-cleanup-scoping.md) | 01 | do-not-ship | [x] |
 | 04 | [Coarse Drift revert gate + Outstanding drift revert marker](issues/04-coarse-drift-revert-gate.md) | 02 | done | [x] |
-| 05 | [Drift revert failure visibility + copy out of lock](issues/05-drift-revert-failure-visibility-and-copy-out-of-lock.md) | 04 | ready-for-agent | [ ] |
+| 05 | [Drift revert failure visibility + copy out of lock](issues/05-drift-revert-failure-visibility-and-copy-out-of-lock.md) | 04 | done | [x] |
 | 06 | [Changed-path Drift comparison](issues/06-changed-path-drift-comparison.md) | 05 | ready-for-agent | [ ] |
 | 07 | [Characterise delete-path owner-variant behaviour](issues/07-characterise-delete-path-owner-variant.md) | — | ready-for-agent | [ ] |
 | 08 | [Lazy delete-path coverage](issues/08-lazy-delete-path-coverage.md) | 01, 07 | ready-for-agent | [ ] |
