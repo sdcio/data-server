@@ -26,3 +26,4 @@ clab-*
 tests/robot/*-yang-models/
 .idea/
 .golangci-lint-cache/
+.scratch/*

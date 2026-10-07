@@ -79,11 +79,14 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 			continue
 		}
 		p := e.GetParent()
+
+		// root guard check to avoid recursing beyond the root
 		if p == nil {
 			log.V(logger.VDebug).Info("skipping zero-length leaf-variant branch cleanup: entry has no parent (sync tree root)",
 				"path", e.SdcpbPath().ToXPath(false))
 			continue
 		}
+		
 		if err := ops.DeleteBranch(ctx, p, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(e.PathName(), nil)}}, consts.RunningIntentName); err != nil {
 			return err
 		}
@@ -136,14 +139,18 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	// perform the revert operation to apply changes to the device
 	// TODO: this should probably be executed in a separate goroutine
 	performApply, revertErr := d.performRevert(ctx, syncTreeCopy)
-	if revertErr != nil && !performApply {
-		return revertErr
-	}
-	if performApply && revertErr != nil {
+	// outstandingDriftRevert: set on any incomplete revert (prep or target apply) so the
+	// next steady sync still enters drift revert when Running no longer changes; cleared only
+	// after revert succeeds or we determine no target apply is needed.
+	if revertErr != nil {
 		d.outstandingDriftRevert.Store(true)
-	} else {
-		d.outstandingDriftRevert.Store(false)
+		if !performApply {
+			// Preparation failed before Set; fail the sync (no MarkSynced) but keep the marker.
+			return revertErr
+		}
+		return nil
 	}
+	d.outstandingDriftRevert.Store(false)
 
 	return nil
 
