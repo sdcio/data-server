@@ -93,13 +93,6 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 		emptiedBranches++
 	}
 
-	runningChanged := ops.RunningChangedDuringSync(d.syncTree.Entry, ops.RunningSyncChangeInput{
-		ImportChanged:      importChanged,
-		RemovedLeafCount:   rdp.GetDeleteStatsCount(),
-		EmptiedBranchCount: emptiedBranches,
-	})
-	needDriftRevert := runningChanged || d.outstandingDriftRevert.Load()
-
 	// conditional trace logging
 	if log := log.V(logger.VTrace); log.Enabled() {
 		treeExport, err := ops.TreeExport(d.syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio, false)
@@ -115,6 +108,23 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	if err != nil {
 		return err
 	}
+
+	// Did the sync change running? Removed entries are gone from the tree, so each
+	// kind of change is reported through a counter rather than a tree walk:
+	//   - importChanged: import added or updated running leaves.
+	//   - removed leaves: running leaves removed by the remove-deleted processor.
+	//   - emptied branches: subtrees deleted via DeleteBranch. RemoveDeleted stops at
+	//     the first deletable node and does not count the leaves below it.
+	//   - reset flags: new/update/delete flags still set before reset-flags ran, which
+	//     covers changes that leave only a flag (presence containers and leaf-lists
+	//     inserted without ImportStats, delete flags kept where DeleteBranch is
+	//     skipped at the sync-tree root). The sync tree holds only running and
+	//     defaults, and defaults carry no flags, so these all belong to running.
+	runningChanged := importChanged ||
+		rdp.GetDeleteStatsCount() > 0 ||
+		emptiedBranches > 0 ||
+		rfp.GetAdjustedFlagsCount() > 0
+	needDriftRevert := runningChanged || d.outstandingDriftRevert.Load()
 
 	if !needDriftRevert {
 		syncTreeUnlock()

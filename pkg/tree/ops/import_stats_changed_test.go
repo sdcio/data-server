@@ -12,14 +12,13 @@ import (
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
-	"github.com/sdcio/data-server/pkg/tree/ops"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-func TestRunningChangedDuringSync(t *testing.T) {
+func TestImportStatsChanged(t *testing.T) {
 	ctx := context.Background()
 	sc, schema, err := testhelper.InitSDCIOSchema()
 	if err != nil {
@@ -60,13 +59,13 @@ func TestRunningChangedDuringSync(t *testing.T) {
 	}
 
 	firstStats := importRunning(v)
-	if !ops.RunningChangedDuringSync(root.Entry, ops.RunningSyncChangeInput{ImportChanged: firstStats.Changed()}) {
-		t.Fatal("first import stats should count as running changed")
+	if !firstStats.Changed() {
+		t.Fatal("first import stats should report changed")
 	}
 
 	secondStats := importRunning(v)
-	if ops.RunningChangedDuringSync(root.Entry, ops.RunningSyncChangeInput{ImportChanged: secondStats.Changed()}) {
-		t.Fatal("identical re-import should not count as running changed")
+	if secondStats.Changed() {
+		t.Fatal("identical re-import should not report changed")
 	}
 
 	conf.Interface["ethernet-1/1"].Description = ygot.String("updated")
@@ -79,11 +78,7 @@ func TestRunningChangedDuringSync(t *testing.T) {
 		t.Fatal(err)
 	}
 	updatedStats := importRunning(updated)
-	if !ops.RunningChangedDuringSync(root.Entry, ops.RunningSyncChangeInput{ImportChanged: updatedStats.Changed()}) {
-		t.Fatal("updated leaf import stats should count as running changed")
-	}
-
-	if !ops.RunningChangedDuringSync(root.Entry, ops.RunningSyncChangeInput{RemovedLeafCount: 1}) {
-		t.Fatal("removed leaf count should count as running changed")
+	if !updatedStats.Changed() {
+		t.Fatal("updated leaf import stats should report changed")
 	}
 }
