@@ -106,7 +106,8 @@ func (d *Datastore) performFullTreeRevert(ctx context.Context, syncRoot *tree.Ro
 	if err != nil {
 		return err
 	}
-	return d.performRevert(ctx, syncTreeCopy)
+	_, err = d.performRevert(ctx, syncTreeCopy)
+	return err
 }
 
 func buildPartialRevertTree(ctx context.Context, syncRoot *tree.RootEntry, scopes []*sdcpb.Path) (*tree.RootEntry, error) {

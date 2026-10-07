@@ -158,19 +158,12 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	// TODO: this should probably be executed in a separate goroutine
 	err = d.performChangedPathRevert(ctx, d.syncTree, changedPaths, revertScopes, revertSnapshot)
 	d.syncTreeMutex.RUnlock()
-	if err != nil {
-		d.outstandingDriftRevert.Store(true)
-		return err
-	}
-
-	// TODO: this should probably be executed in a separate goroutine
-	_, revertErr := d.performRevert(ctx, syncTreeCopy)
 	// outstandingDriftRevert: set on any incomplete revert (prep or target apply) so the
 	// next steady sync still enters drift revert when Running no longer changes; cleared only
 	// after revert succeeds or we determine no target apply is needed.
-	if revertErr != nil {
+	if err != nil {
 		d.outstandingDriftRevert.Store(true)
-		return revertErr
+		return err
 	}
 	d.outstandingDriftRevert.Store(false)
 	return nil
