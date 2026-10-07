@@ -58,7 +58,7 @@ func getAggregatedDeletes(e api.Entry, deletes []types.DeleteEntry, aggregatePat
 			deletes = append(deletes, e)
 		} else {
 			// otherwise continue with deletion on the childs.
-			for _, c := range e.GetChildMap().GetAll() {
+			for _, c := range e.SnapshotChilds(types.DescendMethodAll) {
 				deletes, err = getDeletesInternal(c, deletes, aggregatePaths)
 				if err != nil {
 					return nil, err
@@ -82,7 +82,7 @@ func getRegularDeletes(e api.Entry, deletes types.DeleteEntriesList, aggregate b
 		deletes = append(deletes, types.NewDeleteEntryImpl(e.SdcpbPath().CopyPathAddElem(sdcpb.NewPathElem(elem, nil))))
 	}
 
-	for _, c := range e.GetChildMap().GetAll() {
+	for _, c := range e.SnapshotChilds(types.DescendMethodAll) {
 		deletes, err = getDeletesInternal(c, deletes, aggregate)
 		if err != nil {
 			return nil, err

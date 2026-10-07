@@ -2,6 +2,7 @@ package api
 
 import (
 	"maps"
+	"slices"
 	"sort"
 	"sync"
 )
@@ -91,6 +92,30 @@ func (c *ChildMap) ForEach(fn func(name string, e Entry)) {
 	for name, child := range c.c {
 		fn(name, child)
 	}
+}
+
+// Snapshot copies children into a slice under the read lock.
+// Names in skip are omitted. The lock is released before the caller ranges
+// the slice, so a later delete (write lock) cannot deadlock against the walk.
+// An empty child map returns nil without allocating.
+func (c *ChildMap) Snapshot(skip []string) []Entry {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if len(c.c) == 0 {
+		return nil
+	}
+
+	result := make([]Entry, 0, len(c.c))
+	for name, child := range c.c {
+		if len(skip) > 0 && slices.Contains(skip, name) {
+			continue
+		}
+		result = append(result, child)
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 // GetAll returns a copy of the map of all entries in the child map.

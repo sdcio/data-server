@@ -85,7 +85,7 @@ func (t *explicitDeleteTask) Run(ctx context.Context, submit func(pool.Task) err
 	}
 
 	// trigger the execution on all childs
-	for _, c := range t.entry.GetChilds(types.DescendMethodAll) {
+	for _, c := range t.entry.SnapshotChilds(types.DescendMethodAll) {
 		err := submit(newExplicitDeleteTask(c, t.context))
 		if err != nil {
 			return err

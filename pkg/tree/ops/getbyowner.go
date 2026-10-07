@@ -26,7 +26,7 @@ func getByOwnerInternal(e api.Entry, owner string, result api.LeafVariantSlice, 
 	}
 
 	// continue with childs
-	for _, c := range e.GetChilds(types.DescendMethodAll) {
+	for _, c := range e.SnapshotChilds(types.DescendMethodAll) {
 		result = getByOwnerInternal(c, owner, result, f...)
 	}
 	return result

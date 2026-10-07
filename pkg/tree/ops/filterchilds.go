@@ -28,18 +28,14 @@ func FilterChilds(s api.Entry, keys map[string]string) ([]api.Entry, error) {
 		if keyVal, exists := keys[key]; exists {
 			// Filter: find children matching the specific key value
 			for _, entry := range currentEntries {
-				children := entry.GetChilds(types.DescendMethodAll)
-				if matchEntry, found := children[keyVal]; found {
+				if matchEntry, found := entry.GetChild(keyVal, types.DescendMethodAll); found {
 					nextEntries = append(nextEntries, matchEntry)
 				}
 			}
 		} else {
 			// Wildcard: collect all children
 			for _, entry := range currentEntries {
-				children := entry.GetChilds(types.DescendMethodAll)
-				for _, child := range children {
-					nextEntries = append(nextEntries, child)
-				}
+				nextEntries = append(nextEntries, entry.SnapshotChilds(types.DescendMethodAll)...)
 			}
 		}
 

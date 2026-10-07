@@ -38,9 +38,8 @@ func validateMinMaxElements(_ context.Context, e api.Entry, resultChan chan<- *t
 
 	ownersSet := map[string]struct{}{}
 	for _, child := range childs {
-		childAttributes := child.GetChilds(types.DescendMethodActiveChilds)
 		keyName := contSchema.GetKeys()[0].GetName()
-		if keyAttr, ok := childAttributes[keyName]; ok {
+		if keyAttr, ok := child.GetChild(keyName, types.DescendMethodActiveChilds); ok {
 			highestPrec := ops.GetHighestPrecedence(keyAttr, false, false, false)
 			if len(highestPrec) > 0 {
 				owner := highestPrec[0].Owner()

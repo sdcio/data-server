@@ -71,7 +71,7 @@ func (x ownerDeleteMarkerTask) Run(ctx context.Context, submit func(pool.Task) e
 		x.matches.Append(le)
 	}
 	// Process children recursively
-	for _, c := range x.e.GetChilds(types.DescendMethodAll) {
+	for _, c := range x.e.SnapshotChilds(types.DescendMethodAll) {
 		// Submit may fail if pool is closed or fail-fast error occurred
 		if err := submit(newOwnerDeleteMarkerTask(x.context, c, x.matches)); err != nil {
 			return err

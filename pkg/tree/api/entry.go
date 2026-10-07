@@ -77,6 +77,11 @@ type Entry interface {
 	// GetChilds returns direct children of this entry. method applies YANG choice-case
 	// filtering only; see types.DescendMethod.
 	GetChilds(types.DescendMethod) EntryMap
+	// SnapshotChilds returns direct children as a slice copied under the read lock.
+	// Walkers that only read range the slice. The lock is released before
+	// iteration, so deleting a child cannot deadlock against the walk.
+	// method applies choice-case filtering only; see types.DescendMethod.
+	SnapshotChilds(types.DescendMethod) []Entry
 	// GetChild returns one direct child by name without copying the sibling map.
 	// method applies choice-case filtering only, not recursion depth; see types.DescendMethod.
 	GetChild(name string, method types.DescendMethod) (Entry, bool)

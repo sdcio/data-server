@@ -103,7 +103,7 @@ func (t *resetFlagsTask) Run(ctx context.Context, submit func(pool.Task) error) 
 	t.context.adjustedFlagsCount.Add(int64(count))
 
 	// Process children recursively
-	for _, c := range t.e.GetChilds(types.DescendMethodAll) {
+	for _, c := range t.e.SnapshotChilds(types.DescendMethodAll) {
 		// Submit may fail if pool is closed or fail-fast error occurred
 		if err := submit(newResetFlagsTask(t.context, c)); err != nil {
 			return err

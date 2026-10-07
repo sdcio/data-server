@@ -70,7 +70,7 @@ func (s *sharedEntryAttributes) DeepCopy(tc api.TreeContext, parent api.Entry) (
 	}
 
 	// copy childs
-	for _, v := range s.childs.GetAll() {
+	for _, v := range s.SnapshotChilds(types.DescendMethodAll) {
 		vCopy, err := v.DeepCopy(tc, result)
 		if err != nil {
 			return nil, err
@@ -290,7 +290,7 @@ func (s *sharedEntryAttributes) CanDelete() bool {
 	}
 
 	// handle containers
-	for _, c := range s.GetChilds(types.DescendMethodActiveChilds) {
+	for _, c := range s.SnapshotChilds(types.DescendMethodActiveChilds) {
 		canDelete := c.CanDelete()
 		if !canDelete {
 			s.cacheCanDelete = utils.BoolPtr(false)
@@ -311,7 +311,7 @@ func (s *sharedEntryAttributes) CanDeleteBranch(keepDefault bool) bool {
 	}
 
 	// handle containers
-	for _, c := range s.childs.GetAll() {
+	for _, c := range s.SnapshotChilds(types.DescendMethodAll) {
 		canDelete := c.CanDeleteBranch(keepDefault)
 		if !canDelete {
 			return false
@@ -337,7 +337,7 @@ func (s *sharedEntryAttributes) ShouldDelete() bool {
 	// but a real delete should only be added if there is at least one shouldDelete() == true
 	shouldDelete := false
 
-	activeChilds := s.GetChilds(types.DescendMethodActiveChilds)
+	activeChilds := s.SnapshotChilds(types.DescendMethodActiveChilds)
 	// if we have no active childs, we can and should delete.
 	if len(s.choicesResolvers) > 0 && len(activeChilds) == 0 {
 		canDelete = true
@@ -384,7 +384,7 @@ func (s *sharedEntryAttributes) RemainsToExist() bool {
 
 	// handle containers
 	childsRemain := false
-	for _, c := range s.GetChilds(types.DescendMethodActiveChilds) {
+	for _, c := range s.SnapshotChilds(types.DescendMethodActiveChilds) {
 		childsRemain = c.RemainsToExist()
 		if childsRemain {
 			break
@@ -429,7 +429,8 @@ func (s *sharedEntryAttributes) ChoicesResolvers() api.ChoiceResolvers {
 }
 
 func (s *sharedEntryAttributes) DeleteCanDeleteChilds(keepDefault bool) {
-	// otherwise check all
+	// Copy first. DeleteChild takes the write lock, so this loop must not
+	// run while the child map's read lock is held.
 	for childname, child := range s.childs.GetAll() {
 		if child.CanDeleteBranch(keepDefault) {
 			s.childs.DeleteChild(childname)
@@ -488,7 +489,7 @@ func (s *sharedEntryAttributes) FinishInsertionPhase(ctx context.Context) error 
 
 	// recurse the call to all (active) entries within the tree.
 	// Thereby already using the choiceCaseResolver via filterActiveChoiceCaseChilds()
-	for _, child := range s.GetChilds(types.DescendMethodActiveChilds) {
+	for _, child := range s.SnapshotChilds(types.DescendMethodActiveChilds) {
 		err = child.FinishInsertionPhase(ctx)
 		if err != nil {
 			return err
@@ -550,50 +551,60 @@ func (s *sharedEntryAttributes) populateChoiceCaseResolvers(_ context.Context) e
 	return nil
 }
 
-func (s *sharedEntryAttributes) GetChild(name string, d types.DescendMethod) (api.Entry, bool) {
+// childSkip reports child names to omit for this descend method.
+// ok is false when the descend method is not recognised.
+func (s *sharedEntryAttributes) childSkip(d types.DescendMethod) ([]string, bool) {
 	if s.schema == nil || d == types.DescendMethodAll {
-		return s.childs.GetEntry(name)
+		return nil, true
 	}
 	if d == types.DescendMethodActiveChilds {
-		skipAttributesList := s.choicesResolvers.GetSkipElements()
-		if len(skipAttributesList) > 0 && slices.Contains(skipAttributesList, name) {
-			return nil, false
-		}
-		return s.childs.GetEntry(name)
+		return s.choicesResolvers.GetSkipElements(), true
 	}
 	return nil, false
 }
 
-func (s *sharedEntryAttributes) GetChilds(d types.DescendMethod) api.EntryMap {
-	if s.schema == nil {
-		return s.childs.GetAll()
+func (s *sharedEntryAttributes) GetChild(name string, d types.DescendMethod) (api.Entry, bool) {
+	skip, ok := s.childSkip(d)
+	if !ok {
+		return nil, false
 	}
+	if len(skip) > 0 && slices.Contains(skip, name) {
+		return nil, false
+	}
+	return s.childs.GetEntry(name)
+}
 
-	switch d {
-	case types.DescendMethodAll:
-		return s.childs.GetAll()
-	case types.DescendMethodActiveChilds:
-		skipAttributesList := s.choicesResolvers.GetSkipElements()
-		// if there are no items that should be skipped, take a shortcut
-		// and simply return all childs straight away
-		if len(skipAttributesList) == 0 {
-			return s.childs.GetAll()
-		}
-		all := s.childs.GetAll()
-		if len(all) == 0 {
-			return all
-		}
-		result := make(map[string]api.Entry, len(all))
-		// optimization option: sort the slices and forward in parallel, lifts extra burden that the contains call holds.
-		for childName, child := range all {
-			if slices.Contains(skipAttributesList, childName) {
-				continue
-			}
-			result[childName] = child
-		}
-		return result
+func (s *sharedEntryAttributes) SnapshotChilds(d types.DescendMethod) []api.Entry {
+	skip, ok := s.childSkip(d)
+	if !ok {
+		return nil
 	}
-	return nil
+	return s.childs.Snapshot(skip)
+}
+
+func (s *sharedEntryAttributes) GetChilds(d types.DescendMethod) api.EntryMap {
+	skip, ok := s.childSkip(d)
+	if !ok {
+		return nil
+	}
+	// if there are no items that should be skipped, take a shortcut
+	// and simply return all childs straight away
+	if len(skip) == 0 {
+		return s.childs.GetAll()
+	}
+	all := s.childs.GetAll()
+	if len(all) == 0 {
+		return all
+	}
+	result := make(map[string]api.Entry, len(all))
+	// optimization option: sort the slices and forward in parallel, lifts extra burden that the contains call holds.
+	for childName, child := range all {
+		if slices.Contains(skip, childName) {
+			continue
+		}
+		result[childName] = child
+	}
+	return result
 }
 
 // StringIndent returns the sharedEntryAttributes in its string representation

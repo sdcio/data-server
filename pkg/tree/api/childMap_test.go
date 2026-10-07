@@ -141,6 +141,19 @@ func TestChildMapGetAllEmptyDoesNotAllocate(t *testing.T) {
 	}
 }
 
+func TestChildMapSnapshotEmptyDoesNotAllocate(t *testing.T) {
+	c := api.NewChildMap()
+	allocs := testing.AllocsPerRun(1000, func() {
+		got := c.Snapshot(nil)
+		if len(got) != 0 {
+			t.Fatalf("Snapshot() len = %d, want 0", len(got))
+		}
+	})
+	if allocs != 0 {
+		t.Fatalf("Snapshot() on empty ChildMap allocated %.2f times per run, want 0", allocs)
+	}
+}
+
 func TestChildMapGetAllSortedEmptyDoesNotAllocate(t *testing.T) {
 	c := api.NewChildMap()
 	allocs := testing.AllocsPerRun(1000, func() {

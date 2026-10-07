@@ -38,7 +38,8 @@ func toJsonInternal(ctx context.Context, e api.Entry, onlyNewOrUpdated bool, iet
 		// ancestor is a list with keys.
 		result := map[string]any{}
 
-		for key, c := range e.GetChilds(types.DescendMethodActiveChilds) {
+		for _, c := range e.SnapshotChilds(types.DescendMethodActiveChilds) {
+			key := c.PathName()
 			ancest, _ := GetFirstAncestorWithSchema(e)
 			prefixedKey := jsonGetIetfPrefixConditional(key, c, ancest, ietf)
 			// recurse the call
@@ -98,7 +99,8 @@ func toJsonInternal(ctx context.Context, e api.Entry, onlyNewOrUpdated bool, iet
 		default:
 			// otherwise this is a map
 			result := map[string]any{}
-			for key, c := range e.GetChilds(types.DescendMethodActiveChilds) {
+			for _, c := range e.SnapshotChilds(types.DescendMethodActiveChilds) {
+				key := c.PathName()
 				prefixedKey := jsonGetIetfPrefixConditional(key, c, e, ietf)
 				js, err := toJsonInternal(ctx, c, onlyNewOrUpdated, ietf)
 				if err != nil {

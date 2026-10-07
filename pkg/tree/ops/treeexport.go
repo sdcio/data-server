@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/sdcio/data-server/pkg/tree/api"
+	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/sdc-protos/tree_persist"
 )
 
@@ -78,7 +79,7 @@ func treeExportLevel(e api.Entry, owner string) ([]*tree_persist.TreeElement, er
 			return result, nil
 		}
 	} else {
-		for _, c := range e.GetChildMap().GetAll() {
+		for _, c := range e.SnapshotChilds(types.DescendMethodAll) {
 			childExport, err := treeExportLevel(c, owner)
 			if err != nil {
 				return nil, err

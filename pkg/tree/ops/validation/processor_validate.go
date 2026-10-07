@@ -59,7 +59,7 @@ func (t *validateTask) Run(ctx context.Context, submit func(pool.Task) error) er
 	if t.e.RemainsToExist() {
 		validateLevel(ctx, t.e, t.parameters.resultChan, t.parameters.stats, t.parameters.validators)
 
-		for _, c := range t.e.GetChilds(types.DescendMethodActiveChilds) {
+		for _, c := range t.e.SnapshotChilds(types.DescendMethodActiveChilds) {
 			_ = submit(newValidateTask(c, t.parameters))
 		}
 	}

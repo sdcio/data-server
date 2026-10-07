@@ -1,8 +1,10 @@
 package processors
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/api"
@@ -109,9 +111,11 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 		}
 	}
 
-	childs := t.selfEntry.GetChilds(types.DescendMethodActiveChilds)
-	for _, childKey := range childs.SortedKeys() {
-		childEntry := childs[childKey]
+	childs := t.selfEntry.SnapshotChilds(types.DescendMethodActiveChilds)
+	slices.SortFunc(childs, func(a, b api.Entry) int {
+		return cmp.Compare(a.PathName(), b.PathName())
+	})
+	for _, childEntry := range childs {
 		childHighestLe := childEntry.GetLeafVariants().GetHighestPrecedence(false, true, true)
 		if childHighestLe != nil {
 			if childHighestLe.Owner() == consts.DefaultsIntentName && !t.context.IncludeDefaults {
