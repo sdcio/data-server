@@ -24,15 +24,13 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 
 	lockStart := time.Now()
 	d.syncTreeMutex.Lock()
-	syncTreeUnlock := sync.OnceFunc(d.syncTreeMutex.Unlock)
-	releaseWriteLock := func() {
-		syncTreeUnlock()
+	releaseWriteLock := sync.OnceFunc(func() {
+		d.syncTreeMutex.Unlock()
 		if d.syncTreeLockHoldReporter != nil {
 			d.syncTreeLockHoldReporter(time.Since(lockStart))
 		}
-	}
-
-	defer syncTreeUnlock()
+	})
+	defer releaseWriteLock()
 
 	// create a virtual task pool for delete operations
 	for _, delete := range deletes {
@@ -133,7 +131,6 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 	needDriftRevert := runningChanged || d.outstandingDriftRevert.Load()
 
 	if !needDriftRevert {
-		releaseWriteLock()
 		return nil
 	}
 
