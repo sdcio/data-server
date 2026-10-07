@@ -25,6 +25,19 @@ func (c ChoiceResolvers) GetDeletes() []string {
 	return result
 }
 
+// HasElement returns true if the named element belongs to a case of any of the choices.
+func (c ChoiceResolvers) HasElement(name string) bool {
+	for _, r := range c {
+		if r == nil {
+			continue
+		}
+		if _, ok := r.elementToCaseMapping[name]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 func (c ChoiceResolvers) DeepCopy() ChoiceResolvers {
 	if c == nil {
 		return nil

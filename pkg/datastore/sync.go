@@ -68,19 +68,18 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 		importChanged = importStats.Changed()
 	}
 
-	changedPaths := ops.CollectRunningSyncChangedPaths(d.syncTree.Entry)
-	revertScopes := ops.RevertScopesFromChangedPaths(changedPaths)
+	// Collect the revert scopes of the touched entries and snapshot them before the processors below run:
+	// they remove the entries marked as deleted and reset the flags, hence destroy this information.
+	scopes := ops.CollectRunningSyncRevertScopes(d.syncTree.Entry)
+	// A sync that touched nothing but follows an unfinished revert retries the scopes of that revert.
+	if ops.PathSetIsEmpty(scopes) {
+		scopes = d.driftRevert.Pending()
+	}
 	var revertSnapshot *tree.RootEntry
-	if len(revertScopes) > 0 || d.outstandingDriftRevert.Load() {
-		scopesForSnapshot := revertScopes
-		if len(scopesForSnapshot) == 0 {
-			scopesForSnapshot = ops.RevertScopesFromChangedPaths(d.driftRevertPathsSnapshot())
-		}
-		if len(scopesForSnapshot) > 0 {
-			snap, snapErr := buildPartialRevertTree(ctx, d.syncTree, scopesForSnapshot)
-			if snapErr == nil {
-				revertSnapshot = snap
-			}
+	if !ops.PathSetIsEmpty(scopes) && !ops.ScopesCoverTree(scopes) {
+		snap, snapErr := buildPartialRevertTree(ctx, d.syncTree, scopes.ToPathSlice())
+		if snapErr == nil {
+			revertSnapshot = snap
 		}
 	}
 
@@ -144,7 +143,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 		rdp.GetDeleteStatsCount() > 0 ||
 		emptiedBranches > 0 ||
 		rfp.GetAdjustedFlagsCount() > 0
-	needDriftRevert := runningChanged || d.outstandingDriftRevert.Load()
+	needDriftRevert := runningChanged || d.driftRevert.Outstanding()
 
 	if !needDriftRevert {
 		return nil
@@ -156,16 +155,16 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 
 	d.syncTreeMutex.RLock()
 	// TODO: this should probably be executed in a separate goroutine
-	err = d.performChangedPathRevert(ctx, d.syncTree, changedPaths, revertScopes, revertSnapshot)
+	err = d.performChangedPathRevert(ctx, d.syncTree, scopes, revertSnapshot)
 	d.syncTreeMutex.RUnlock()
-	// outstandingDriftRevert: set on any incomplete revert (prep or target apply) so the
+	// driftRevert outstanding marker: set on any incomplete revert (prep or target apply) so the
 	// next steady sync still enters drift revert when Running no longer changes; cleared only
 	// after revert succeeds or we determine no target apply is needed.
 	if err != nil {
-		d.outstandingDriftRevert.Store(true)
+		d.driftRevert.Fail()
 		return err
 	}
-	d.outstandingDriftRevert.Store(false)
+	d.driftRevert.Done()
 	return nil
 
 }

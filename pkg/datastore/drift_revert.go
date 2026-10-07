@@ -18,45 +18,18 @@ import (
 	"github.com/sdcio/sdc-protos/tree_persist"
 )
 
-func (d *Datastore) setDriftRevertPaths(paths []*sdcpb.Path) {
-	d.driftRevertPathsMu.Lock()
-	defer d.driftRevertPathsMu.Unlock()
-	d.driftRevertPaths = clonePaths(paths)
-}
-
-func (d *Datastore) driftRevertPathsSnapshot() []*sdcpb.Path {
-	d.driftRevertPathsMu.Lock()
-	defer d.driftRevertPathsMu.Unlock()
-	return clonePaths(d.driftRevertPaths)
-}
-
-func clonePaths(in []*sdcpb.Path) []*sdcpb.Path {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]*sdcpb.Path, len(in))
-	for i, p := range in {
-		if p != nil {
-			out[i] = p.DeepCopy()
-		}
-	}
-	return out
-}
-
-func (d *Datastore) performChangedPathRevert(ctx context.Context, syncRoot *tree.RootEntry, changedPaths, revertScopes []*sdcpb.Path, revertSnapshot *tree.RootEntry) error {
+// performChangedPathRevert reverts Drift within the given scopes. Without scopes the whole sync tree is checked.
+func (d *Datastore) performChangedPathRevert(ctx context.Context, syncRoot *tree.RootEntry, scopeSet *sdcpb.PathSet, revertSnapshot *tree.RootEntry) error {
 	log := logger.FromContext(ctx)
 
-	revertPaths := changedPaths
-	scopes := revertScopes
-	if len(revertPaths) == 0 {
-		revertPaths = d.driftRevertPathsSnapshot()
-		scopes = ops.RevertScopesFromChangedPaths(revertPaths)
-	}
-	if len(revertPaths) == 0 {
+	if ops.PathSetIsEmpty(scopeSet) || ops.ScopesCoverTree(scopeSet) {
+		// Forget older scopes, so that a retry after a failure checks the whole tree as well.
+		d.driftRevert.Begin(nil)
 		return d.performFullTreeRevert(ctx, syncRoot)
 	}
+	scopes := scopeSet.ToPathSlice()
 
-	d.setDriftRevertPaths(revertPaths)
+	d.driftRevert.Begin(scopeSet)
 
 	revertTree := revertSnapshot
 	var err error
@@ -87,7 +60,6 @@ func (d *Datastore) performChangedPathRevert(ctx context.Context, syncRoot *tree
 		performApply = len(updList) > 0
 	}
 	if !performApply {
-		d.setDriftRevertPaths(nil)
 		return nil
 	}
 
@@ -97,7 +69,6 @@ func (d *Datastore) performChangedPathRevert(ctx context.Context, syncRoot *tree
 		log.Error(applyErr, "failed applying deviations to running", "response", utils.ProtoJSON(resp))
 		return applyErr
 	}
-	d.setDriftRevertPaths(nil)
 	return nil
 }
 

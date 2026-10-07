@@ -214,13 +214,13 @@ func TestDriftRevertCoarseGate(t *testing.T) {
 				if !errors.Is(err, tc.err) {
 					t.Fatalf("ApplyToRunning error %v does not wrap %v", err, tc.err)
 				}
-				if !ds.outstandingDriftRevert.Load() {
+				if !ds.driftRevert.Outstanding() {
 					t.Fatal("expected outstanding drift revert after failed apply")
 				}
 				if err := ds.ApplyToRunning(ctx, []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(drifted, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
 					t.Fatal(err)
 				}
-				if ds.outstandingDriftRevert.Load() {
+				if ds.driftRevert.Outstanding() {
 					t.Fatal("expected outstanding marker cleared after successful retry")
 				}
 			})
@@ -252,7 +252,7 @@ func TestDriftRevertCoarseGate(t *testing.T) {
 			}()
 		}
 		wg.Wait()
-		if !ds.outstandingDriftRevert.Load() {
+		if !ds.driftRevert.Outstanding() {
 			t.Fatal("outstanding drift revert marker must remain set after concurrent failures")
 		}
 	})

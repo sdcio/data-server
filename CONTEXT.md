@@ -28,7 +28,10 @@ Pushing the intended state back to the device to correct Drift. Only triggered b
 A reported (not corrected) difference between intents and Running, streamed to `WatchDeviations` clients. Reporting only; never causes a Drift revert.
 
 **Outstanding drift revert**:
-A per-datastore, in-memory marker that a Drift revert is still owed: set when a Sync detects a change that may be Drift or when a Drift revert fails, cleared only when the Drift revert succeeds. Not persisted; a restart starts with a full first Sync, which re-evaluates everything.
+A per-datastore, in-memory marker that a Drift revert is still owed: set when a Drift revert fails (preparing it or applying it to the device), cleared only when the Drift revert succeeds. Not persisted; a restart starts with a full first Sync, which re-evaluates everything.
 
 **Touched entries**:
 The entries whose flags a Sync set or changed (marked deleted, newly created, updated, or restored from a delete mark). Post-sync clean-up work is limited to these.
+
+**Revert scope**:
+The part of the tree a Drift revert loads and compares for one Touched entry: the entry's parent (the entry itself if it is a top level entry, the list entry for a key level entry that does not carry all keys yet). If the scope is an element of a case, it is widened to the entry that owns the choice, since the other cases compete with it. Scopes are collected before the Sync removes entries marked deleted, so removed entries are covered too. Scopes are not pruned against each other. The root as a scope means the whole tree is checked.

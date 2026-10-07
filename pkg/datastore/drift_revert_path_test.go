@@ -3,6 +3,8 @@ package datastore
 import (
 	"context"
 	"runtime"
+	"slices"
+	"sort"
 	"testing"
 
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
@@ -29,11 +31,10 @@ func TestDriftRevertScopePathsNavigate(t *testing.T) {
 	if _, err := base.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(drifted, consts.RunningIntentName, consts.RunningValuesPrio, false), treetypes.NewUpdateInsertFlags(), tp); err != nil {
 		t.Fatal(err)
 	}
-	changed := ops.CollectRunningSyncChangedPaths(base.Entry)
-	if len(changed) == 0 {
-		t.Fatal("expected changed paths")
+	scopes := ops.CollectRunningSyncRevertScopes(base.Entry).ToPathSlice()
+	if len(scopes) == 0 {
+		t.Fatal("expected revert scopes")
 	}
-	scopes := ops.RevertScopesFromChangedPaths(changed)
 	for _, scope := range scopes {
 		if _, err := ops.NavigateSdcpbPath(ctx, base.Entry, scope); err != nil {
 			t.Fatalf("scope %v navigate: %v", scope.ToXPath(false), err)
@@ -66,6 +67,65 @@ func TestDriftRevertScopePathsNavigate(t *testing.T) {
 	}
 }
 
+// TestDriftRevertOverlappingScopes checks that scopes that lie below one another, which are not pruned,
+// yield the same revert as the outer scope alone.
+func TestDriftRevertOverlappingScopes(t *testing.T) {
+	ctx := context.Background()
+	sc, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	scb := schemaClient.NewSchemaClientBound(schema, sc)
+	tp := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	intent := driftGateIntentExport(t, ctx, tp, scb, driftGateDevice())
+
+	updates := func(scopes ...string) []string {
+		base := driftGatePopulateRunning(t, ctx, scb, tp, driftGateDevice())
+		drifted := driftGateDeviceWithDesc("wrong-on-device")
+		if _, err := base.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(drifted, consts.RunningIntentName, consts.RunningValuesPrio, false), treetypes.NewUpdateInsertFlags(), tp); err != nil {
+			t.Fatal(err)
+		}
+		var paths []*sdcpb.Path
+		for _, s := range scopes {
+			p, err := sdcpb.ParsePath(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			paths = append(paths, &sdcpb.Path{Elem: p.GetElem()})
+		}
+		revertTree, err := buildPartialRevertTree(ctx, base, paths)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ds := driftGateDatastore(t, gomock.NewController(t), scb, base, nil, intent)
+		if err := ds.loadIntentsForScopes(ctx, revertTree, paths); err != nil {
+			t.Fatal(err)
+		}
+		if err := revertTree.FinishInsertionPhase(ctx); err != nil {
+			t.Fatal(err)
+		}
+		upd, err := ops.ToProtoUpdates(ctx, revertTree.Entry, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, u := range upd {
+			got = append(got, u.GetPath().ToXPath(false))
+		}
+		sort.Strings(got)
+		return got
+	}
+
+	outer := updates("/interface[name=ethernet-1/1]")
+	if len(outer) == 0 {
+		t.Fatal("expected drift updates from the outer scope")
+	}
+	both := updates("/interface[name=ethernet-1/1]", "/interface[name=ethernet-1/1]/description")
+	if !slices.Equal(outer, both) {
+		t.Fatalf("overlapping scopes changed the revert: outer %v, both %v", outer, both)
+	}
+}
+
 func TestDriftRevertNonRevertivePartialCompare(t *testing.T) {
 	ctx := context.Background()
 	sc, schema, err := testhelper.InitSDCIOSchema()
@@ -79,7 +139,7 @@ func TestDriftRevertNonRevertivePartialCompare(t *testing.T) {
 	if _, err := base.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(drifted, consts.RunningIntentName, consts.RunningValuesPrio, false), treetypes.NewUpdateInsertFlags(), tp); err != nil {
 		t.Fatal(err)
 	}
-	scopes := ops.RevertScopesFromChangedPaths(ops.CollectRunningSyncChangedPaths(base.Entry))
+	scopes := ops.CollectRunningSyncRevertScopes(base.Entry).ToPathSlice()
 	intent := driftGateIntentExport(t, ctx, tp, scb, driftGateDevice())
 	intent.NonRevertive = true
 	revertTree, err := buildPartialRevertTree(ctx, base, scopes)
