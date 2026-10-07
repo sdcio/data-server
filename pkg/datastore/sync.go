@@ -107,7 +107,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 			continue
 		}
 		
-		if err := ops.DeleteBranch(ctx, p, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(e.PathName(), nil)}}, consts.RunningIntentName); err != nil {
+		if err := ops.DeleteBranchEntry(ctx, e, consts.RunningIntentName); err != nil {
 			return err
 		}
 		emptiedBranches++

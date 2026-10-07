@@ -110,7 +110,8 @@ func (t *removeDeletedTask) Run(ctx context.Context, submit func(pool.Task) erro
 		// increment the delete stats count
 		t.context.deleteStatsCount.Add(1)
 	}
-	if t.e.CanDeleteBranch(t.keepDefaults) {
+	// the root is never removed as a branch, its entries are handled one by one
+	if !t.e.IsRoot() && t.e.CanDeleteBranch(t.keepDefaults) {
 		func() {
 			t.context.zeroLeafEntryElementsLock.Lock()
 			defer t.context.zeroLeafEntryElementsLock.Unlock()

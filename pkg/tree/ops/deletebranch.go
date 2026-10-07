@@ -36,7 +36,19 @@ func DeleteBranch(ctx context.Context, e api.Entry, path *sdcpb.Path, owner stri
 	if entry == nil {
 		return nil
 	}
-	err = DeleteBranch(ctx, entry, nil, owner)
+	return DeleteBranchEntry(ctx, entry, owner)
+}
+
+// DeleteBranchEntry deletes the leaf variants of the owner from the given entry and everything below it,
+// and removes the entry itself, and then possibly dangling parents, if nothing remains.
+//
+// In contrast to DeleteBranch with a path it does not navigate to the entry first. Navigating only follows
+// the active cases of a choice, hence a branch that is part of an inactive case is not found by its path.
+func DeleteBranchEntry(ctx context.Context, entry api.Entry, owner string) error {
+	if entry == nil {
+		return fmt.Errorf("%w: callers must pass a non-nil entry", ErrDeleteBranchNilEntry)
+	}
+	err := deleteBranchInternal(ctx, entry, owner)
 	if err != nil {
 		return err
 	}
