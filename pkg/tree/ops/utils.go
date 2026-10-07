@@ -11,11 +11,11 @@ func getListEntrySortFunc(parent api.Entry) func(a, b api.Entry) int {
 		keys := GetSchemaKeys(parent)
 		var cmpResult int
 		for _, v := range keys {
-			achild, exists := a.GetChilds(types.DescendMethodAll)[v]
+			achild, exists := a.GetChild(v, types.DescendMethodAll)
 			if !exists {
 				return 0
 			}
-			bchild, exists := b.GetChilds(types.DescendMethodAll)[v]
+			bchild, exists := b.GetChild(v, types.DescendMethodAll)
 			if !exists {
 				return 0
 			}

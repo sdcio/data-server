@@ -74,7 +74,12 @@ type Entry interface {
 	//    - shouldDelete() returns false, because no explicit delete should be issued for them.
 	CanDelete() bool
 	GetChildMap() *ChildMap
+	// GetChilds returns direct children of this entry. method applies YANG choice-case
+	// filtering only; see types.DescendMethod.
 	GetChilds(types.DescendMethod) EntryMap
+	// GetChild returns one direct child by name without copying the sibling map.
+	// method applies choice-case filtering only, not recursion depth; see types.DescendMethod.
+	GetChild(name string, method types.DescendMethod) (Entry, bool)
 
 	// // DeleteBranch Deletes from the tree, all elements of the PathSlice defined branch of the given owner
 	// DeleteBranch(ctx context.Context, path *sdcpb.Path, owner string) (err error)
@@ -92,6 +97,7 @@ type Entry interface {
 	ChoicesResolvers() ChoiceResolvers
 }
 
+// Deprecated: use types.DescendMethod and constants in pkg/tree/types.
 type DescendMethod int
 
 const (
