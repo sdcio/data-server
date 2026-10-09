@@ -20,6 +20,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/processors"
+	"github.com/sdcio/data-server/pkg/tree/sensitive"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -179,7 +180,7 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 				sbi:                sbi,
 				dmutex:             &sync.Mutex{},
 				schemaClient:       scb,
-				sensitivePathIndex: treetypes.NewSensitivePathIndex(),
+				sensitivePathIndex: sensitive.NewPathIndex(),
 			}
 			ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
 
@@ -311,7 +312,7 @@ func TestTransactionSet_SensitivePathsPersisted(t *testing.T) {
 		sbi:                sbi,
 		dmutex:             &sync.Mutex{},
 		schemaClient:       scb,
-		sensitivePathIndex: treetypes.NewSensitivePathIndex(),
+		sensitivePathIndex: sensitive.NewPathIndex(),
 	}
 	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
 

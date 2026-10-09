@@ -14,7 +14,7 @@ import (
 // flags, explicit deletes) alongside the rendered tree. RenderOpts is set by
 // datastore.GetIntent via RenderOptsNorthbound with the Live Sensitive Path
 // Index (always-union for named intents and Running). Schema-defined
-// sensitivity is still honored via SensitiveRender / types.ShouldRedact.
+// sensitivity is still honored via sensitive.Render.
 type IntentResponseAdapter struct {
 	Entry           api.Entry
 	IntentName      string

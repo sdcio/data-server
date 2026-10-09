@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	mockTreeEntry "github.com/sdcio/data-server/mocks/mocktreeentry"
+	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/api"
-	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	. "github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/ops"
+	"github.com/sdcio/data-server/pkg/tree/sensitive"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"go.uber.org/mock/gomock"
@@ -152,7 +153,8 @@ func TestGetDeviations_IntentMarkerSensitiveRedacted(t *testing.T) {
 	}
 	leafPath := &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "marker-leaf"}}, IsRootBased: true}
 
-	sps := types.NewSensitivePaths(leafPath)
+	sps := sensitive.NewPathIndex()
+	sps.Set("marker-intent", []*sdcpb.Path{leafPath})
 	tc := &fakeTreeContext{}
 
 	e := mockTreeEntry.NewMockEntry(ctrl)
