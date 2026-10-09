@@ -183,7 +183,7 @@ func forEachIntent(
 			}
 			return err
 		case <-ctx.Done():
-			return fmt.Errorf("context closed while iterating intents")
+			return fmt.Errorf("aborted iterating intents: %w", ctx.Err())
 		case intent, ok := <-intentChan:
 			if !ok {
 				intentChan = nil
