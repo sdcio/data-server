@@ -23,27 +23,27 @@ _Avoid_: "sensitive path set" as a second concept name when you mean the
 live index or a checker; "own markers" as northbound scope policy (retired —
 northbound always uses the live union).
 
-**Live Sensitive Path Index**:
+**Live Sensitive Path Index** (`sensitive.PathIndex`):
 The datastore-wide, incrementally maintained union of all Intents' path
 markers. The sole path-marker source for northbound redaction (GetIntent,
-including Running, BlameConfig, WatchDeviations).
+including Running, BlameConfig, WatchDeviations). Consumed through the
+`sensitive.PathChecker` interface.
 _Avoid_: rebuilding the union at read time; mixing snapshot/`Add` presence
-mode into this index.
+mode into this index; a second immutable checker implementation (the former
+`SensitivePaths` was removed — tests use a `PathIndex`).
 
-**Snapshot Sensitive Paths** (`SensitivePaths`):
-An immutable `SensitivePathChecker` built from a fixed path slice. Used for
-tests and non-datastore helpers — never as the northbound path-marker source.
-_Avoid_: `Add` on the live index; calling this "the index."
-
-**Sensitive Render** (`SensitiveRender`):
-The single tree-owned northbound redaction context: expose/include-sensitive
-flag plus a path-marker checker, resolving a leaf to redacted-or-real before
-formatters run. Embedded in `RenderOpts` so callers use constructors
-(`RenderOptsNorthbound`, `RenderOptsRevealAll`) instead of setting include /
-path-marker fields.
-_Avoid_: each formatter re-implementing `if sensitive → "***"`; datastore
-RPCs hand-assembling include / path-marker fields on `RenderOpts`.
+**Sensitive Render** (`sensitive.Render`):
+The single northbound redaction context: include-sensitive flag plus a
+path-marker checker, resolving a leaf to redacted-or-real before formatters
+run. Lives in `pkg/tree/sensitive`, below both `api` and `ops`, so render,
+blame and deviation code all redact through the same type. Embedded in
+`ops.RenderOpts`; callers use `ops.RenderOptsNorthbound` /
+`ops.RenderOptsRevealAll` (or `sensitive.NewRender` / `sensitive.RevealAll`)
+instead of setting include / path-marker fields.
+_Avoid_: each formatter re-implementing `if sensitive → "***"`; passing a
+pre-computed `shouldRedact bool` down the tree; datastore RPCs hand-assembling
+include / path-marker fields on `RenderOpts`.
 
 **Redaction sentinel**:
 The substituted northbound value for a redacted leaf (`***` /
-`RedactedTypedValue`). Formatters must not invent their own placeholder.
+`sensitive.RedactedTypedValue`). Formatters must not invent their own placeholder.

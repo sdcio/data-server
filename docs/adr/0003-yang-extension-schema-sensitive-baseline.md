@@ -40,3 +40,11 @@ The original decision (schema baseline via `sdcio-ext:sensitive`) is unchanged. 
 - **WatchDeviations redacts.** Streaming deviations resolve redaction in the ops layer via `RenderOptsNorthbound(false, liveIndex)`; the earlier “deferred” note for WatchDeviations is superseded for value masking (streaming flag threading for an admin bypass remains separate if needed).
 - **Index split.** `SensitivePathIndex` is live-only (`Set`/`Delete`/`Contains`). Immutable `SensitivePaths` is the snapshot checker for tests/helpers. Presence-only `Add` is removed.
 - **Opaque `SensitiveRender`.** Redaction context (include flag + checker) lives in `ops.SensitiveRender`, embedded in `RenderOpts`. Callers use `RenderOptsNorthbound` / `RenderOptsRevealAll`; public `IncludeSensitive` / `SensitivePathSet` fields are gone. Formatters call `ShouldRedact` / `TypedValue` / `String` and do not invent `***`.
+
+**2026-10-09 — Single `pkg/tree/sensitive` package; options structs at the datastore boundary (PR #493 review).**
+
+- **One redaction mechanism.** The sentinel, the live index and the render context moved from `pkg/tree/types` and `pkg/tree/ops` into `pkg/tree/sensitive` (`Render`, `PathIndex`, `PathChecker`, `RedactedStringValue`, `RedactedTypedValue`). `api` cannot import `ops`, which is why `LeafVariants.GetDeviations` previously took a pre-computed `shouldRedact bool` and duplicated the redact closure. It now takes a `sensitive.Render` and resolves redaction against its own parent entry. `types.ShouldRedact` is folded into `Render.ShouldRedact`, which takes an entry-like `sensitive.Leaf` (satisfied by `api.Entry`).
+- **`SensitivePaths` removed.** The immutable snapshot checker had no production users; tests use `PathIndex`. `PathChecker` stays as the seam, and a nil checker still means "no markers".
+- **Not done: redacting in the leaf accessor.** Making `LeafEntry` accessors return already-redacted values (so a consumer cannot forget to redact) was considered and deferred; it would change the accessor surface just migrated in #492.
+- **Datastore RPC options.** `GetIntent` and `BlameConfig` take an options struct and not positional bools; the datastore builds the `sensitive.Render` internally, so callers never assemble it.
+
