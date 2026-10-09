@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	treeconsts "github.com/sdcio/data-server/pkg/tree/consts"
+	"github.com/sdcio/data-server/pkg/tree/sensitive"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
@@ -452,7 +453,7 @@ func (lv *LeafVariants) DeleteByOwner(owner string) *LeafEntry {
 }
 
 
-func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, isActiveCase bool, shouldRedact bool) {
+func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.DeviationEntry, isActiveCase bool, render sensitive.Render) {
 	lv.lesMutex.RLock()
 	defer lv.lesMutex.RUnlock()
 
@@ -465,10 +466,7 @@ func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.Devi
 	sdcpbPath := lv.parentEntry.SdcpbPath()
 
 	redact := func(v *sdcpb.TypedValue) *sdcpb.TypedValue {
-		if shouldRedact {
-			return types.RedactedTypedValue
-		}
-		return v
+		return render.TypedValue(lv.parentEntry, v)
 	}
 
 	// we are part of an inactive case of a choice

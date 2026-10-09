@@ -37,7 +37,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/processors"
-	treetypes "github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/data-server/pkg/tree/sensitive"
 	tree_persist "github.com/sdcio/sdc-protos/tree_persist"
 )
 
@@ -75,7 +75,7 @@ type Datastore struct {
 
 	// sensitivePathIndex is the in-memory reverse index of sensitive paths.
 	// It is populated at startup and updated on every intent write or delete.
-	sensitivePathIndex *treetypes.SensitivePathIndex
+	sensitivePathIndex *sensitive.PathIndex
 
 	taskPool *pool.SharedTaskPool
 }
@@ -122,7 +122,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 		deviationClients:   make(map[sdcpb.DataServer_WatchDeviationsServer]string),
 		syncTree:           syncTreeRoot,
 		syncTreeMutex:      &sync.RWMutex{},
-		sensitivePathIndex: treetypes.NewSensitivePathIndex(),
+		sensitivePathIndex: sensitive.NewPathIndex(),
 		taskPool:           pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)),
 	}
 	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
@@ -297,7 +297,7 @@ var _ types.RollbackInterface = &DatastoreRollbackAdapter{}
 // populateSensitivePathIndex scans all intents in cache and loads their
 // sensitive_paths into s. It is called once during Datastore startup, before
 // the first northbound read is served.
-func populateSensitivePathIndex(ctx context.Context, s *treetypes.SensitivePathIndex, cc cache.CacheClientBound) error {
+func populateSensitivePathIndex(ctx context.Context, s *sensitive.PathIndex, cc cache.CacheClientBound) error {
 	return forEachIntent(ctx, cc, nil, func(intent *tree_persist.Intent) error {
 		if len(intent.GetSensitivePaths()) > 0 {
 			s.Set(intent.GetIntentName(), intent.GetSensitivePaths())

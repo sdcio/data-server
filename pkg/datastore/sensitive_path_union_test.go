@@ -14,6 +14,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/ops"
+	"github.com/sdcio/data-server/pkg/tree/sensitive"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -137,10 +138,10 @@ func TestBlameConfig_CrossIntentSensitivePathRedaction(t *testing.T) {
 					close(errChan)
 				})
 
-			// Pre-populate the index with marker-intent's sensitive paths —
-			// BlameConfig reads the union from the index.
-		idx := treetypes.NewSensitivePathIndex()
-		idx.Set("marker-intent", markerIntent.GetSensitivePaths())
+				// Pre-populate the index with marker-intent's sensitive paths —
+				// BlameConfig reads the union from the index.
+			idx := sensitive.NewPathIndex()
+			idx.Set("marker-intent", markerIntent.GetSensitivePaths())
 
 			syncTree := buildEmptySyncTree(t, ctx, scb)
 			ds := &Datastore{
@@ -230,7 +231,7 @@ func TestGetIntent_CrossIntentPathsRedact(t *testing.T) {
 				Return(dataIntent, nil)
 
 			// Live index has marker-intent's paths; always-union applies them.
-			idx := treetypes.NewSensitivePathIndex()
+			idx := sensitive.NewPathIndex()
 			idx.Set("marker-intent", markerSensitivePaths)
 
 			syncTree := buildEmptySyncTree(t, ctx, scb)
@@ -313,7 +314,7 @@ func TestGetIntent_OwnSensitivePaths_Redacted(t *testing.T) {
 				Return(dataIntent, nil)
 
 			syncTree := buildEmptySyncTree(t, ctx, scb)
-			idx := treetypes.NewSensitivePathIndex()
+			idx := sensitive.NewPathIndex()
 			idx.Set("data-intent", ownSensitivePaths)
 			ds := &Datastore{
 				config:             &config.DatastoreConfig{Name: "test-ds", Validation: config.NewValidationConfig()},
@@ -381,7 +382,7 @@ func TestGetIntent_NoSensitivePaths_NoRedaction(t *testing.T) {
 		taskPool:           pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)),
 		cacheClient:        ccb,
 		schemaClient:       scb,
-		sensitivePathIndex: treetypes.NewSensitivePathIndex(),
+		sensitivePathIndex: sensitive.NewPathIndex(),
 	}
 
 	resp, err := ds.GetIntent(ctx, "data-intent", false)
@@ -421,7 +422,7 @@ func TestGetIntent_RunningIntent_CrossIntentRedaction(t *testing.T) {
 
 	// marker-intent marks /patterntest sensitive — pre-loaded into index.
 	markerSensitivePaths := []*sdcpb.Path{{Elem: []*sdcpb.PathElem{{Name: "patterntest"}}, IsRootBased: true}}
-	idx := treetypes.NewSensitivePathIndex()
+	idx := sensitive.NewPathIndex()
 	idx.Set("marker-intent", markerSensitivePaths)
 
 	// Build syncTree with a running value for patterntest.

@@ -85,7 +85,7 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string, exposeSens
 	}
 
 	// Northbound GetIntent always uses the Live Sensitive Path Index (always-union).
-	// Schema-defined sensitivity is still honored via SensitiveRender / ShouldRedact.
+	// Schema-defined sensitivity is still honored via sensitive.Render.
 	root, err := tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, d.taskPool))
 	if err != nil {
 		return nil, err

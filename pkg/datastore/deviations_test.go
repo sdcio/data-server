@@ -9,13 +9,14 @@ import (
 	"github.com/openconfig/ygot/ygot"
 	"github.com/sdcio/data-server/mocks/mockcacheclient"
 	"github.com/sdcio/data-server/pkg/config"
-	"github.com/sdcio/data-server/pkg/pool"
 	schemaClientPkg "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	"github.com/sdcio/data-server/pkg/pool"
+	"github.com/sdcio/data-server/pkg/tree/sensitive"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
-	tree_persist "github.com/sdcio/sdc-protos/tree_persist"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	tree_persist "github.com/sdcio/sdc-protos/tree_persist"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc/metadata"
 )
@@ -140,7 +141,7 @@ func TestWatchDeviations_SensitivePathMasking(t *testing.T) {
 		})
 
 	// Pre-populate index with marker-intent's sensitive paths.
-	idx := treetypes.NewSensitivePathIndex()
+	idx := sensitive.NewPathIndex()
 	idx.Set("marker-intent", markerIntent.GetSensitivePaths())
 
 	// Empty sync tree → running device has no patterntest → triggers deviation.
