@@ -25,8 +25,6 @@ func NewBlameConfigProcessor(params *BlameConfigProcessorParams) *BlameConfigPro
 
 type BlameConfigProcessorParams struct {
 	IncludeDefaults bool
-	// RenderOpts carries SensitiveRender shared with all other northbound
-	// render operations — build via RenderOptsNorthbound / RenderOptsRevealAll.
 	ops.RenderOpts
 }
 
