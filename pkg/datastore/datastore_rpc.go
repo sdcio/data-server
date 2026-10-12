@@ -73,8 +73,7 @@ type Datastore struct {
 	syncTree      *tree.RootEntry
 	syncTreeMutex *sync.RWMutex
 
-	// sensitivePathIndex is the in-memory reverse index of sensitive paths.
-	// It is populated at startup and updated on every intent write or delete.
+	// Live union of intent sensitive_paths markers; updated on intent writes.
 	sensitivePathIndex *sensitive.PathIndex
 
 	taskPool *pool.SharedTaskPool
@@ -254,7 +253,6 @@ func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults, exposeSens
 	if err != nil {
 		return nil, err
 	}
-	// load all intents into the tree for blame; sensitive paths come from the index.
 	_, err = d.LoadAllButRunningIntents(ctx, root)
 	if err != nil {
 		return nil, err
@@ -294,9 +292,8 @@ func (dra *DatastoreRollbackAdapter) TransactionRollback(ctx context.Context, tr
 // Assure the types.RollbackInterface is implemented by the DatastoreRollbackAdapter
 var _ types.RollbackInterface = &DatastoreRollbackAdapter{}
 
-// populateSensitivePathIndex scans all intents in cache and loads their
-// sensitive_paths into s. It is called once during Datastore startup, before
-// the first northbound read is served.
+// populateSensitivePathIndex loads every cached intent's sensitive_paths into s
+// once at datastore startup, before the first northbound read.
 func populateSensitivePathIndex(ctx context.Context, s *sensitive.PathIndex, cc cache.CacheClientBound) error {
 	return forEachIntent(ctx, cc, nil, func(intent *tree_persist.Intent) error {
 		if len(intent.GetSensitivePaths()) > 0 {

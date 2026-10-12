@@ -10,6 +10,8 @@ import (
 )
 
 
+// GetDeviationParams configures deviation collection on a finished tree.
+// Redaction uses the embedded RenderOpts (typically RenderOptsNorthbound).
 type GetDeviationParams struct {
 	Ch chan<- *types.DeviationEntry
 	RenderOpts

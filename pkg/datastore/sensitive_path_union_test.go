@@ -79,15 +79,9 @@ func buildEmptySyncTree(t *testing.T, ctx context.Context, scb schemaClient.Sche
 	return root
 }
 
-// TestBlameConfig_CrossIntentSensitivePathRedaction verifies the cross-intent
-// rule for BlameConfig: if any intent marks /patterntest in its sensitive_paths,
-// BlameConfig redacts the value even when the schema does not mark that leaf
-// sensitive and even when the owning intent did not declare it sensitive.
-//
-// Acceptance criteria covered:
-//   - BlameConfig: cross-intent sensitive path causes "***" redaction
-//   - include_sensitive=true bypasses path-marker redaction
-//   - Intent with no sensitive_paths contributes nothing to union
+// TestBlameConfig_CrossIntentSensitivePathRedaction: when another intent marks
+// /patterntest sensitive, BlameConfig redacts even if the schema and owning
+// intent do not — include_sensitive reveals the real value.
 func TestBlameConfig_CrossIntentSensitivePathRedaction(t *testing.T) {
 	ctx := context.Background()
 
@@ -138,8 +132,6 @@ func TestBlameConfig_CrossIntentSensitivePathRedaction(t *testing.T) {
 					close(errChan)
 				})
 
-				// Pre-populate the index with marker-intent's sensitive paths —
-				// BlameConfig reads the union from the index.
 			idx := sensitive.NewPathIndex()
 			idx.Set("marker-intent", markerIntent.GetSensitivePaths())
 
@@ -179,12 +171,8 @@ func TestBlameConfig_CrossIntentSensitivePathRedaction(t *testing.T) {
 	}
 }
 
-// TestGetIntent_CrossIntentPathsRedact verifies always-union: another intent's
-// sensitive_paths markers DO cause redaction in the fetched intent's response.
-//
-// Acceptance criteria covered:
-//   - GetIntent(regular): cross-intent path markers redact when include_sensitive=false
-//   - include_sensitive=true reveals the real value
+// TestGetIntent_CrossIntentPathsRedact: another intent's path markers in the
+// live index redact GetIntent output for a named intent when include_sensitive=false.
 func TestGetIntent_CrossIntentPathsRedact(t *testing.T) {
 	ctx := context.Background()
 
@@ -199,7 +187,6 @@ func TestGetIntent_CrossIntentPathsRedact(t *testing.T) {
 	dataDevice := &sdcio_schema.Device{Patterntest: ygot.String("secret-value")}
 	dataIntent := buildTestIntent(t, ctx, scb, dataDevice, "data-intent", 10, nil)
 
-	// marker-intent marks the path sensitive; always-union applies it to data-intent.
 	markerSensitivePaths := []*sdcpb.Path{{Elem: []*sdcpb.PathElem{{Name: "patterntest"}}, IsRootBased: true}}
 
 	tests := []struct {
@@ -230,7 +217,6 @@ func TestGetIntent_CrossIntentPathsRedact(t *testing.T) {
 				IntentGet(gomock.Any(), "data-intent").
 				Return(dataIntent, nil)
 
-			// Live index has marker-intent's paths; always-union applies them.
 			idx := sensitive.NewPathIndex()
 			idx.Set("marker-intent", markerSensitivePaths)
 

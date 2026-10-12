@@ -59,10 +59,10 @@ func (d *Datastore) applyIntent(ctx context.Context, source targettypes.TargetSo
 	return rsp, nil
 }
 
+// GetIntent renders a named intent or the running sync tree for northbound export.
+// Redaction uses RenderOptsNorthbound with the live sensitive path index (all
+// intents' path markers) and schema-based sensitivity; running has no own markers.
 func (d *Datastore) GetIntent(ctx context.Context, intentName string, exposeSensitive bool) (GetIntentResponse, error) {
-	// serve running from synctree; sensitive paths are the cross-intent union
-	// (running has no own markers — its values may have been echoed back by
-	// the device verbatim, so any intent's classification must apply).
 	if intentName == consts.RunningIntentName {
 		d.syncTreeMutex.RLock()
 		defer d.syncTreeMutex.RUnlock()
@@ -84,8 +84,6 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string, exposeSens
 		return result, nil
 	}
 
-	// Northbound GetIntent always uses the Live Sensitive Path Index (always-union).
-	// Schema-defined sensitivity is still honored via sensitive.Render.
 	root, err := tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, d.taskPool))
 	if err != nil {
 		return nil, err

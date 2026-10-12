@@ -19,9 +19,8 @@ type TransactionIntent struct {
 	previouslyApplied       bool
 	// revertPaths paths that are meant to be reverted. This is used for non-revertive intents.
 	revertPaths []*sdcpb.Path
-	// sensitivePaths schema paths (key-free) identifying leaves whose values
-	// must be redacted in northbound responses. Absence is treated as an empty
-	// slice (non-sensitive).
+	// Key-free schema paths whose leaf values must be redacted northbound when
+	// marked here; nil or empty means no path-marker redaction for this intent.
 	sensitivePaths []*sdcpb.Path
 }
 

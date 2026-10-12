@@ -314,11 +314,8 @@ func xmlAddKeyElements(s api.Entry, parent *etree.Element) {
 
 func xmlAddAllChildValues(ctx context.Context, s api.Entry, parent *etree.Element, opts XMLRenderOpts) error {
 	parent.Child = make([]etree.Token, 0)
-	// NETCONF replace semantics: the device replaces the entire list entry with exactly what is
-	// sent. If only changed children were included (OnlyNewOrUpdated=true), the device would
-	// treat the absent children as deletions. Override to false so every child is emitted,
-	// regardless of whether it changed. All other opts (namespace, sensitive-path filtering, …)
-	// are preserved from the caller.
+	// NETCONF list replace sends the full list entry; force OnlyNewOrUpdated off
+	// so unchanged siblings are still emitted and not deleted on the device.
 	allOpts := opts
 	allOpts.OnlyNewOrUpdated = false
 	_, err := toXmlInternal(ctx, s, parent, allOpts)
