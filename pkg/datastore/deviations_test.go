@@ -106,13 +106,8 @@ func TestSendDeviations_PassthroughUnredacted(t *testing.T) {
 	}
 }
 
-// TestWatchDeviations_SensitivePathMasking is the integration acceptance test
-// for Issue 05.
-//
-// Scenario: one intent sets "patterntest" to "running-secret"; a second (marker)
-// intent marks /patterntest in its sensitive_paths. The sync tree has no value
-// for patterntest, so the deviation engine sees a mismatch. Both ExpectedValue
-// and CurrentValue in the emitted deviation must be "***".
+// TestWatchDeviations_SensitivePathMasking: cross-intent path markers redact
+// ExpectedValue and CurrentValue in streamed deviations when include_sensitive=false.
 func TestWatchDeviations_SensitivePathMasking(t *testing.T) {
 	ctx := context.Background()
 

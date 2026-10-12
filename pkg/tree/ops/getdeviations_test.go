@@ -68,9 +68,8 @@ func collectDeviations(t *testing.T, entry api.Entry, params *ops.GetDeviationPa
 	return result
 }
 
-// TestGetDeviations_SchemaSensitiveRedacted is the tracer bullet.
-// IncludeSensitive=false must replace both expected and current values with "***"
-// when the leaf's schema marks it sensitive.
+// TestGetDeviations_SchemaSensitiveRedacted: schema-sensitive leaves emit "***"
+// for expected and current when include_sensitive=false.
 func TestGetDeviations_SchemaSensitiveRedacted(t *testing.T) {
 	ctrl := gomock.NewController(t)
 

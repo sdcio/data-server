@@ -27,8 +27,7 @@ func ToJsonIETF(ctx context.Context, e api.Entry, opts RenderOpts) (any, error) 
 	return result, err
 }
 
-// toJsonInternal returns the Branch of the tree as a struct that can be marshalled as JSON.
-// If the ietf parameter is set to true, JSON_IETF encoding is used.
+// toJsonInternal builds the JSON-shaped tree branch. ietf selects JSON_IETF encoding.
 func toJsonInternal(ctx context.Context, e api.Entry, opts RenderOpts, ietf bool) (any, error) {
 	switch e.GetSchema().GetSchema().(type) {
 	case nil:

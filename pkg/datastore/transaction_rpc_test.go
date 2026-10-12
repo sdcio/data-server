@@ -231,9 +231,8 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 	}
 }
 
-// TestTransactionSet_SensitivePathsPersisted verifies that sensitive_paths set
-// on a TransactionIntent are written to the tree_persist.Intent passed to
-// IntentModify (the cache write). This is the tracer bullet for Issue 03.
+// TestTransactionSet_SensitivePathsPersisted: sensitive_paths on TransactionIntent
+// are persisted on the tree_persist.Intent written by IntentModify.
 func TestTransactionSet_SensitivePathsPersisted(t *testing.T) {
 	ctx := context.Background()
 
