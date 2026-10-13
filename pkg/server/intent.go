@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/sdcio/data-server/pkg/datastore"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -67,7 +68,12 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
 
-	rsp, err := ds.GetIntent(ctx, req.GetIntent(), req.GetIncludeSensitive())
+	rsp, err := ds.GetIntent(ctx, datastore.GetIntentOpts{
+		IntentName: req.GetIntent(),
+		NorthboundSensitivityOpts: datastore.NorthboundSensitivityOpts{
+			IncludeSensitive: req.GetIncludeSensitive(),
+		},
+	})
 	if err != nil {
 		return nil, err
 	}
