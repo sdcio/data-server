@@ -44,7 +44,7 @@ func (f *FakeLocalConfigReader) Seed(target Target, docs ...*Document) {
 
 	byName, ok := f.docs[target]
 	if !ok {
-		byName = map[string]*Document{}
+		byName = make(map[string]*Document, len(docs))
 		f.docs[target] = byName
 	}
 	for _, d := range docs {
