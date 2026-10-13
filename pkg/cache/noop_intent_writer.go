@@ -20,14 +20,8 @@ import (
 	"github.com/sdcio/sdc-protos/tree_persist"
 )
 
-// noopIntentWriter is a generic IntentWriter for backends that don't own
-// real-Intent writes (e.g. config-server, where kube-api is the sole
-// writer). It is composed into a full Client at the one legitimate
-// type-switch point, Server.createCacheClient, rather than living as
-// no-op-shaped methods inside the read-only backend's own type — that keeps
-// the backend's type signature honest about what it can actually do, and
-// gives any future read-only backend a name to compose instead of writing
-// its own no-op boilerplate.
+// noopIntentWriter is an IntentWriter whose modify and delete always succeed.
+// Read-only backends compose it when another system owns real-Intent writes.
 type noopIntentWriter struct{}
 
 func (noopIntentWriter) InstanceIntentModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error {

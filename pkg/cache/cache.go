@@ -21,8 +21,7 @@ import (
 	"github.com/sdcio/sdc-protos/tree_persist"
 )
 
-// IntentReader reads real Intents. Every backend implements this directly —
-// it's the one capability every Cache.Type genuinely has data for.
+// IntentReader reads real Intents. Every cache backend implements it.
 type IntentReader interface {
 	InstanceIntentsList(ctx context.Context, cacheInstanceName string) ([]string, error)
 	InstanceIntentGet(ctx context.Context, cacheName string, intentName string) (importer.IntentAdapter, error)
@@ -30,30 +29,24 @@ type IntentReader interface {
 	InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error)
 }
 
-// IntentWriter persists real Intents. Backends that don't own real-Intent
-// writes (e.g. config-server, where kube-api owns them) compose a no-op
-// implementation instead of implementing this directly, so the type system
-// makes that lack of ownership visible.
+// IntentWriter persists real Intents. A backend that does not own those
+// writes (config-server: kube-api writes them) composes noopIntentWriter.
 type IntentWriter interface {
 	InstanceIntentModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error
 	InstanceIntentDelete(ctx context.Context, cacheName string, intentName string, IgnoreNonExisting bool) error
 }
 
-// RunningStore reads/writes "running": split out of the generic Intent
-// surface, independent of Cache.Type. LocalCache keeps its existing
-// disk-backed store for it (unchanged on-disk behavior); other backends may
-// back it however they see fit (e.g. purely in-memory), since it's never
-// config-server's data to begin with.
+// RunningStore reads and writes "running", the synced device-state intent.
+// It is independent of Cache.Type: LocalCache keeps it on disk; other
+// backends may keep it in memory.
 type RunningStore interface {
 	InstanceRunningGet(ctx context.Context, cacheName string) (importer.ImportConfigAdapter, error)
 	InstanceRunningModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error
 }
 
-// InstanceLifecycle creates/destroys/enumerates cache instances. Under
-// ConfigServerCache this only ever governs its in-memory running store — it
-// has no relationship to whether real-Intent data exists for a target under
-// that backend, unlike LocalCache where it governs the one shared disk store
-// underlying everything.
+// InstanceLifecycle creates, closes, and enumerates cache instances.
+// On a config-server backend this covers only the in-memory running store,
+// not whether real Intent data exists for a target.
 type InstanceLifecycle interface {
 	InstanceCreate(ctx context.Context, cacheInstanceName string) error
 	InstanceDelete(ctx context.Context, cacheInstanceName string) error
@@ -62,6 +55,8 @@ type InstanceLifecycle interface {
 	InstancesList(ctx context.Context) []string
 }
 
+// Client is a full cache backend: intent read and write, running, and
+// instance lifecycle.
 type Client interface {
 	IntentReader
 	IntentWriter

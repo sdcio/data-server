@@ -23,10 +23,7 @@ import (
 
 var _ IntentWriter = noopIntentWriter{}
 
-// TestNoopIntentWriter_AlwaysNil verifies InstanceIntentModify/
-// InstanceIntentDelete return nil unconditionally, regardless of input —
-// there is no backend to fail against, so there is no error path to
-// exercise.
+// TestNoopIntentWriter_AlwaysNil: modify and delete succeed for any input.
 func TestNoopIntentWriter_AlwaysNil(t *testing.T) {
 	w := noopIntentWriter{}
 	ctx := context.Background()

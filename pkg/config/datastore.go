@@ -279,7 +279,7 @@ func (c *CacheConfig) validateSetDefaults() error {
 			c.Dir = defaultCacheDir
 		}
 	case cacheTypeConfigServer:
-		// no connection settings yet; added by a follow-up ticket.
+		// Known type; CacheConfig has no defaults for it.
 	default:
 		return fmt.Errorf("unknown cache type: %q", c.Type)
 	}

@@ -14,10 +14,7 @@
 
 package cache
 
-// Compile-time assertions that the capability interfaces compose back into
-// Client with no change to its method surface, and that *LocalCache keeps
-// satisfying Client (and, by extension, all four capabilities) with zero
-// code changes.
+// *LocalCache satisfies Client and each capability.
 var (
 	_ Client = (*LocalCache)(nil)
 
@@ -27,9 +24,8 @@ var (
 	_ InstanceLifecycle = (*LocalCache)(nil)
 )
 
-// composedClient documents that Client is exactly the sum of the four
-// capabilities — nothing more, nothing less — from the perspective of any
-// caller assembling one from the parts.
+// composedClient is Client as the four capabilities, so a value assembled
+// from those parts still satisfies Client.
 type composedClient interface {
 	IntentReader
 	IntentWriter
@@ -40,9 +36,7 @@ type composedClient interface {
 var _ Client = composedClient(nil)
 var _ composedClient = Client(nil)
 
-// Same compile-time shape check for the bound side: CacheClientBoundImpl
-// already implements every method needed, so it should keep satisfying
-// CacheClientBound and each bound capability with zero code changes.
+// *CacheClientBoundImpl satisfies CacheClientBound and each bound capability.
 var (
 	_ CacheClientBound = (*CacheClientBoundImpl)(nil)
 

@@ -24,9 +24,8 @@ func newTestLocalCache(t *testing.T) *LocalCache {
 	return lc
 }
 
-// TestLocalCache_InstanceIntentGetRoundTrip verifies InstanceIntentModify/InstanceIntentGet
-// round-trip a *tree_persist.Intent through the disk-backed store — a regression check
-// pinning current decode behavior before extracting it into a shared helper.
+// TestLocalCache_InstanceIntentGetRoundTrip: InstanceIntentModify then
+// InstanceIntentGet returns the stored intent name and priority.
 func TestLocalCache_InstanceIntentGetRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	lc := newTestLocalCache(t)
@@ -61,12 +60,8 @@ func TestLocalCache_InstanceIntentGetRoundTrip(t *testing.T) {
 	}
 }
 
-// TestLocalCache_RunningRoundTrip verifies InstanceRunningModify/InstanceRunningGet
-// are thin passthroughs to the same disk-backed store InstanceIntentGet/Modify use,
-// so the local backend's on-disk behavior for "running" is unchanged by the split.
-// InstanceRunningGet returns an importer.ImportConfigAdapter (Intent reads return
-// IntentAdapter) rather than the raw *tree_persist.Intent, so the assertions go
-// through its accessors.
+// TestLocalCache_RunningRoundTrip: InstanceRunningModify then InstanceRunningGet
+// returns the running intent through ImportConfigAdapter.
 func TestLocalCache_RunningRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	lc := newTestLocalCache(t)
@@ -101,10 +96,8 @@ func TestLocalCache_RunningRoundTrip(t *testing.T) {
 	}
 }
 
-// TestLocalCache_RunningExcludedFromIntentGetAll verifies that once callers ask
-// for real intents via InstanceIntentGetAll with running explicitly excluded (the
-// pattern every real call site now uses), "running" never shows up, even though
-// LocalCache still persists it in the same underlying disk-backed store.
+// TestLocalCache_RunningExcludedFromIntentGetAll: excluding the running intent
+// name keeps it out of InstanceIntentGetAll, even though it shares the disk store.
 func TestLocalCache_RunningExcludedFromIntentGetAll(t *testing.T) {
 	ctx := context.Background()
 	lc := newTestLocalCache(t)

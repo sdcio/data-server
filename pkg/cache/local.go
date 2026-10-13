@@ -49,11 +49,8 @@ type LocalCache struct {
 	*cache.Cache
 }
 
-// decodeIntent unmarshals the disk-backed store's raw bytes into a
-// *tree_persist.Intent and wraps it as an importer.IntentAdapter — the
-// shared decode step every InstanceIntentGet/InstanceIntentGetAll/
-// InstanceRunningGet call site needs. Running callers narrow to
-// ImportConfigAdapter at the RunningStore boundary.
+// decodeIntent unmarshals stored bytes into an IntentAdapter.
+// Running reads use the same bytes and narrow the result to ImportConfigAdapter.
 func (l *LocalCache) decodeIntent(b []byte) (importer.IntentAdapter, error) {
 	result := &tree_persist.Intent{}
 	if err := proto.Unmarshal(b, result); err != nil {
@@ -114,10 +111,7 @@ func (l *LocalCache) InstanceIntentModify(ctx context.Context, cacheName string,
 	return l.Cache.InstanceIntentModify(ctx, cacheName, intent.GetIntentName(), b)
 }
 
-// InstanceRunningGet and InstanceRunningModify are thin passthroughs to the same
-// disk-backed mechanism InstanceIntentGet/InstanceIntentModify already use, so the
-// local backend's on-disk behavior for "running" is unchanged by the split — it
-// simply becomes unreachable via the intent-name-keyed InstanceIntent* surface.
+// InstanceRunningGet loads "running" from the disk store under the running intent name.
 func (l *LocalCache) InstanceRunningGet(ctx context.Context, cacheName string) (importer.ImportConfigAdapter, error) {
 	b, err := l.Cache.InstanceIntentGet(ctx, cacheName, consts.RunningIntentName)
 	if err != nil {
@@ -126,6 +120,7 @@ func (l *LocalCache) InstanceRunningGet(ctx context.Context, cacheName string) (
 	return l.decodeIntent(b)
 }
 
+// InstanceRunningModify stores "running" on disk under the running intent name.
 func (l *LocalCache) InstanceRunningModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error {
 	b, err := proto.Marshal(intent)
 	if err != nil {
