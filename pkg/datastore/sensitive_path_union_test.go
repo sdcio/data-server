@@ -236,7 +236,7 @@ func TestGetIntent_CrossIntentPathsRedact(t *testing.T) {
 			}
 
 			resp, err := ds.GetIntent(ctx, GetIntentOpts{
-				IntentName: "data-intent",
+				IntentName:                "data-intent",
 				NorthboundSensitivityOpts: NorthboundSensitivityOpts{IncludeSensitive: tt.exposeSensitive},
 			})
 			if err != nil {
@@ -320,7 +320,7 @@ func TestGetIntent_OwnSensitivePaths_Redacted(t *testing.T) {
 			}
 
 			resp, err := ds.GetIntent(ctx, GetIntentOpts{
-				IntentName: "data-intent",
+				IntentName:                "data-intent",
 				NorthboundSensitivityOpts: NorthboundSensitivityOpts{IncludeSensitive: tt.exposeSensitive},
 			})
 			if err != nil {

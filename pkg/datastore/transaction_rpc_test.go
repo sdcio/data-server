@@ -365,11 +365,8 @@ func TestTransactionSet_SensitivePathsPersisted(t *testing.T) {
 	}
 }
 
-// TestForEachIntent_NarrowIntentReader verifies forEachIntent streams every
-// intent from cc and invokes fn for each one. It is built against a
-// MockBoundIntentReader — not the full MockCacheClientBound — since
-// forEachIntent only ever reads real Intents. Satisfying this test with the
-// narrower mock is the seam for Issue 03's IntentReader split.
+// TestForEachIntent_NarrowIntentReader: forEachIntent visits every intent
+// from a BoundIntentReader.
 func TestForEachIntent_NarrowIntentReader(t *testing.T) {
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
@@ -403,9 +400,8 @@ func TestForEachIntent_NarrowIntentReader(t *testing.T) {
 	}
 }
 
-// TestForEachIntent_PropagatesStreamError verifies forEachIntent returns the
-// first error received on the cache's error channel, again using only a
-// MockBoundIntentReader.
+// TestForEachIntent_PropagatesStreamError: forEachIntent returns the first
+// error from the cache stream and does not call fn.
 func TestForEachIntent_PropagatesStreamError(t *testing.T) {
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)

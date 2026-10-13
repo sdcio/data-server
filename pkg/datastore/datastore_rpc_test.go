@@ -7,17 +7,15 @@ import (
 	"github.com/sdcio/data-server/mocks/mockcacheclient"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	treeproto "github.com/sdcio/data-server/pkg/tree/importer/proto"
-	treetypes "github.com/sdcio/data-server/pkg/tree/types"
+	"github.com/sdcio/data-server/pkg/tree/sensitive"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/sdc-protos/tree_persist"
 	"go.uber.org/mock/gomock"
 )
 
-// TestPopulateSensitivePathIndex_NarrowIntentReader verifies
-// populateSensitivePathIndex loads sensitive_paths from every intent that
-// declares them, skipping intents with none. It is built against a
-// MockBoundIntentReader — not the full MockCacheClientBound — since
-// populateSensitivePathIndex only ever reads real Intents via forEachIntent.
+// TestPopulateSensitivePathIndex_NarrowIntentReader loads sensitive paths from
+// intents that declare them and skips intents with none. The reader is a
+// BoundIntentReader; the index only needs intent reads.
 func TestPopulateSensitivePathIndex_NarrowIntentReader(t *testing.T) {
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
@@ -39,7 +37,7 @@ func TestPopulateSensitivePathIndex_NarrowIntentReader(t *testing.T) {
 			close(errChan)
 		})
 
-	s := treetypes.NewSensitivePathIndex()
+	s := sensitive.NewPathIndex()
 	if err := populateSensitivePathIndex(ctx, s, reader); err != nil {
 		t.Fatalf("populateSensitivePathIndex() error = %v", err)
 	}
