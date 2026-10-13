@@ -242,7 +242,7 @@ func (d *Datastore) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults, exposeSensitive bool) (*sdcpb.BlameTreeElement, error) {
+func (d *Datastore) BlameConfig(ctx context.Context, opts BlameConfigOpts) (*sdcpb.BlameTreeElement, error) {
 	log := logf.FromContext(ctx).WithName("BlameConfig")
 	ctx = logf.IntoContext(ctx, log)
 
@@ -259,8 +259,8 @@ func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults, exposeSens
 	}
 
 	bcp := processors.NewBlameConfigProcessor(&processors.BlameConfigProcessorParams{
-		IncludeDefaults: includeDefaults,
-		RenderOpts:      ops.RenderOptsNorthbound(exposeSensitive, d.sensitivePathIndex),
+		IncludeDefaults: opts.IncludeDefaults,
+		RenderOpts:      ops.RenderOptsNorthbound(opts.IncludeSensitive, d.sensitivePathIndex),
 	})
 	bte, err := bcp.Run(ctx, root.Entry, d.taskPool)
 	if err != nil {

@@ -62,8 +62,11 @@ func (d *Datastore) applyIntent(ctx context.Context, source targettypes.TargetSo
 // GetIntent renders a named intent or the running sync tree for northbound export.
 // Redaction uses RenderOptsNorthbound with the live sensitive path index (all
 // intents' path markers) and schema-based sensitivity; running has no own markers.
-func (d *Datastore) GetIntent(ctx context.Context, intentName string, exposeSensitive bool) (GetIntentResponse, error) {
-	if intentName == consts.RunningIntentName {
+func (d *Datastore) GetIntent(ctx context.Context, opts GetIntentOpts) (GetIntentResponse, error) {
+	if opts.IntentName == "" {
+		return nil, fmt.Errorf("missing intent name")
+	}
+	if opts.IntentName == consts.RunningIntentName {
 		d.syncTreeMutex.RLock()
 		defer d.syncTreeMutex.RUnlock()
 		err := d.syncTree.FinishInsertionPhase(ctx)
@@ -78,7 +81,7 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string, exposeSens
 			Orphan:          false,
 			NonRevertive:    false,
 			ExplicitDeletes: nil,
-			RenderOpts:      ops.RenderOptsNorthbound(exposeSensitive, d.sensitivePathIndex),
+			RenderOpts:      ops.RenderOptsNorthbound(opts.IncludeSensitive, d.sensitivePathIndex),
 		}
 
 		return result, nil
@@ -89,7 +92,7 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string, exposeSens
 		return nil, err
 	}
 
-	tp, err := d.cacheClient.IntentGet(ctx, intentName)
+	tp, err := d.cacheClient.IntentGet(ctx, opts.IntentName)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +115,7 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string, exposeSens
 		Orphan:          tp.GetOrphan(),
 		NonRevertive:    tp.GetNonRevertive(),
 		ExplicitDeletes: tp.GetExplicitDeletes(),
-		RenderOpts:      ops.RenderOptsNorthbound(exposeSensitive, d.sensitivePathIndex),
+		RenderOpts:      ops.RenderOptsNorthbound(opts.IncludeSensitive, d.sensitivePathIndex),
 	}
 	return result, nil
 }

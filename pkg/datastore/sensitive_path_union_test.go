@@ -146,7 +146,9 @@ func TestBlameConfig_CrossIntentSensitivePathRedaction(t *testing.T) {
 				sensitivePathIndex: idx,
 			}
 
-			bte, err := ds.BlameConfig(ctx, false, tt.exposeSensitive)
+			bte, err := ds.BlameConfig(ctx, BlameConfigOpts{
+				NorthboundSensitivityOpts: NorthboundSensitivityOpts{IncludeSensitive: tt.exposeSensitive},
+			})
 			if err != nil {
 				t.Fatalf("BlameConfig() error: %v", err)
 			}
@@ -231,7 +233,10 @@ func TestGetIntent_CrossIntentPathsRedact(t *testing.T) {
 				sensitivePathIndex: idx,
 			}
 
-			resp, err := ds.GetIntent(ctx, "data-intent", tt.exposeSensitive)
+			resp, err := ds.GetIntent(ctx, GetIntentOpts{
+				IntentName: "data-intent",
+				NorthboundSensitivityOpts: NorthboundSensitivityOpts{IncludeSensitive: tt.exposeSensitive},
+			})
 			if err != nil {
 				t.Fatalf("GetIntent() error: %v", err)
 			}
@@ -312,7 +317,10 @@ func TestGetIntent_OwnSensitivePaths_Redacted(t *testing.T) {
 				sensitivePathIndex: idx,
 			}
 
-			resp, err := ds.GetIntent(ctx, "data-intent", tt.exposeSensitive)
+			resp, err := ds.GetIntent(ctx, GetIntentOpts{
+				IntentName: "data-intent",
+				NorthboundSensitivityOpts: NorthboundSensitivityOpts{IncludeSensitive: tt.exposeSensitive},
+			})
 			if err != nil {
 				t.Fatalf("GetIntent() error: %v", err)
 			}
@@ -371,7 +379,7 @@ func TestGetIntent_NoSensitivePaths_NoRedaction(t *testing.T) {
 		sensitivePathIndex: sensitive.NewPathIndex(),
 	}
 
-	resp, err := ds.GetIntent(ctx, "data-intent", false)
+	resp, err := ds.GetIntent(ctx, GetIntentOpts{IntentName: "data-intent"})
 	if err != nil {
 		t.Fatalf("GetIntent() error: %v", err)
 	}
@@ -443,7 +451,7 @@ func TestGetIntent_RunningIntent_CrossIntentRedaction(t *testing.T) {
 		sensitivePathIndex: idx,
 	}
 
-	resp, err := ds.GetIntent(ctx, consts.RunningIntentName, false)
+	resp, err := ds.GetIntent(ctx, GetIntentOpts{IntentName: consts.RunningIntentName})
 	if err != nil {
 		t.Fatalf("GetIntent(running) error: %v", err)
 	}
