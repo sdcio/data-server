@@ -204,10 +204,14 @@ jobs:
       - name: Set env vars
         id: latest-versions
         run: |
-          echo "schemaversion=$( curl -sL https://api.github.com/repos/sdcio/schema-server/releases/latest | jq '.name' )" >> $GITHUB_OUTPUT
-          echo "dataversion=$( curl -sL https://api.github.com/repos/sdcio/data-server/releases/latest | jq '.name' )" >> $GITHUB_OUTPUT
-          echo "cacheversion=$( curl -sL https://api.github.com/repos/sdcio/cache/releases/latest | jq '.name' )" >> $GITHUB_OUTPUT
-          echo "certmanagerversion=$( curl -sL https://api.github.com/repos/cert-manager/cert-manager/releases/latest | jq '.name' )" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          latest_release_name() {
+            curl -sfL "$1" | jq -er '.name'
+          }
+          echo "schemaversion=$(latest_release_name https://api.github.com/repos/sdcio/schema-server/releases/latest)" >> "$GITHUB_OUTPUT"
+          echo "dataversion=$(latest_release_name https://api.github.com/repos/sdcio/data-server/releases/latest)" >> "$GITHUB_OUTPUT"
+          echo "cacheversion=$(latest_release_name https://api.github.com/repos/sdcio/cache/releases/latest)" >> "$GITHUB_OUTPUT"
+          echo "certmanagerversion=$(latest_release_name https://api.github.com/repos/cert-manager/cert-manager/releases/latest)" >> "$GITHUB_OUTPUT"
 
   integration-tests:
     needs: [latest-versions, pr-release, resolve-paired-refs]
@@ -219,4 +223,19 @@ jobs:
       cache_version: ${{ needs.latest-versions.outputs.cacheversion }}
       certmanager_version: ${{ needs.latest-versions.outputs.certmanagerversion }}
       integration_tests_ref: ${{ needs.resolve-paired-refs.outputs.inttest_ref }}
+    secrets: inherit
+
+  integration-tests-cache-backend:
+    name: integration-tests (config-server cache backend)
+    needs: [latest-versions, pr-release, resolve-paired-refs]
+    uses: sdcio/integration-tests/.github/workflows/single.yml@main
+    with:
+      configserver_version: ${{ needs.resolve-paired-refs.outputs.configversion }}
+      dataserver_version: ${{ needs.pr-release.outputs.dataversion }}
+      schemaserver_version: ${{ needs.latest-versions.outputs.schemaversion }}
+      cache_version: ${{ needs.latest-versions.outputs.cacheversion }}
+      certmanager_version: ${{ needs.latest-versions.outputs.certmanagerversion }}
+      integration_tests_ref: ${{ needs.resolve-paired-refs.outputs.inttest_ref }}
+      cache_type: config-server
+      suites_to_run: 00-setup,01-crs,05-cache-backend
     secrets: inherit
