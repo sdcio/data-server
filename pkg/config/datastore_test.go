@@ -138,14 +138,27 @@ func TestCacheConfigValidateSetDefaults(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "config-server type survives unchanged",
-			in:   &CacheConfig{Type: "config-server"},
+			name:    "config-server type requires an address",
+			in:      &CacheConfig{Type: "config-server"},
+			wantErr: true,
+		},
+		{
+			name:    "config-server type rejects an invalid address",
+			in:      &CacheConfig{Type: "config-server", Address: "not-a-valid-address"},
+			wantErr: true,
+		},
+		{
+			name: "config-server type keeps explicit connection settings",
+			in:   &CacheConfig{Type: "config-server", Address: "localhost:50051"},
 			check: func(t *testing.T, c *CacheConfig) {
 				if c.Type != "config-server" {
 					t.Errorf("Type = %q, want %q", c.Type, "config-server")
 				}
-				if c.StoreType != "" || c.Dir != "" || c.Address != "" {
-					t.Errorf("expected no defaults to be applied for config-server type, got %+v", c)
+				if c.Address != "localhost:50051" {
+					t.Errorf("Address = %q, want %q", c.Address, "localhost:50051")
+				}
+				if c.StoreType != "" || c.Dir != "" {
+					t.Errorf("expected no local-cache defaults to be applied for config-server type, got %+v", c)
 				}
 			},
 		},
