@@ -778,7 +778,7 @@ func TestConfigServerBackend_DeleteApply_NoRehydration(t *testing.T) {
 		sbi:                sbi,
 		dmutex:             &sync.Mutex{},
 		schemaClient:       scb,
-		sensitivePathIndex: treetypes.NewSensitivePathIndex(),
+		sensitivePathIndex: sensitive.NewPathIndex(),
 	}
 	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
 
