@@ -204,7 +204,9 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 	var intentNames []string
 	err := forEachIntent(ctx, d.cacheClient, []string{consts.RunningIntentName}, func(intent *tree_persist.Intent) error {
 		log.V(logger.VDebug).Info("adding intent to tree", "intent", intent.GetIntentName())
-		log.V(logger.VTrace).Info("adding intent to tree", "intent", intent.GetIntentName(), "content", utils.ProtoJSON(intent))
+		if log := log.V(logger.VTrace); log.Enabled() {
+			log.Info("adding intent to tree", "intent", intent.GetIntentName(), "content", utils.ProtoJSON(intent))
+		}
 		intentNames = append(intentNames, intent.GetIntentName())
 		protoLoader := treeproto.NewProtoTreeImporter(intent)
 		_, err := root.ImportConfig(ctx, nil, protoLoader, treetypes.NewUpdateInsertFlags(), d.taskPool)

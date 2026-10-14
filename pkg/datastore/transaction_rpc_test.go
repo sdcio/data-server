@@ -227,6 +227,10 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 			if hasUpdates != tt.expectUpdates {
 				t.Errorf("Expected updates: %v, got: %v (count: %d)\nUpdates: %v", tt.expectUpdates, hasUpdates, len(resp.GetUpdate()), resp.GetUpdate())
 			}
+
+			if err := ds.TransactionConfirm(ctx, transactionId); err != nil {
+				t.Fatalf("TransactionConfirm failed: %v", err)
+			}
 		})
 	}
 }
@@ -332,6 +336,9 @@ func TestTransactionSet_SensitivePathsPersisted(t *testing.T) {
 	_, err = ds.TransactionSet(ctx, "txn-sensitive", []*types.TransactionIntent{ti}, nil, 10*time.Second, false)
 	if err != nil {
 		t.Fatalf("TransactionSet failed: %v", err)
+	}
+	if err := ds.TransactionConfirm(ctx, "txn-sensitive"); err != nil {
+		t.Fatalf("TransactionConfirm failed: %v", err)
 	}
 
 	if capturedIntent == nil {
