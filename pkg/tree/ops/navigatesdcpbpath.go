@@ -16,6 +16,10 @@ import (
 var ErrNavigateSdcpbPathNotFound = errors.New("path not found in tree")
 
 func NavigateSdcpbPath(ctx context.Context, e api.Entry, path *sdcpb.Path) (api.Entry, error) {
+	return navigateSdcpbPath(ctx, e, path, 0)
+}
+
+func navigateSdcpbPath(ctx context.Context, e api.Entry, path *sdcpb.Path, elemIndex int) (api.Entry, error) {
 	if e == nil {
 		return nil, fmt.Errorf("%w: nil entry", ErrNavigateSdcpbPathNotFound)
 	}
@@ -26,12 +30,12 @@ func NavigateSdcpbPath(ctx context.Context, e api.Entry, path *sdcpb.Path) (api.
 	}
 
 	if path.IsRootBased {
-		return NavigateSdcpbPath(ctx, GetRoot(e), path.DeepCopy().SetIsRootBased(false))
+		return navigateSdcpbPath(ctx, GetRoot(e), path.DeepCopy().SetIsRootBased(false), 0)
 	}
 
 	switch pathElems[0].Name {
 	case ".":
-		return NavigateSdcpbPath(ctx, e, path.CopyAndRemoveFirstPathElem())
+		return navigateSdcpbPath(ctx, e, path.CopyAndRemoveFirstPathElem(), elemIndex+1)
 	case "..":
 		var entry api.Entry
 		entry = e.GetParent()
@@ -46,9 +50,9 @@ func NavigateSdcpbPath(ctx context.Context, e api.Entry, path *sdcpb.Path) (api.
 		if entry == nil {
 			return nil, fmt.Errorf("%w: parent is nil at %q", ErrNavigateSdcpbPathNotFound, path.ToXPath(false))
 		}
-		return NavigateSdcpbPath(ctx, entry, path.CopyAndRemoveFirstPathElem())
+		return navigateSdcpbPath(ctx, entry, path.CopyAndRemoveFirstPathElem(), elemIndex+1)
 	default:
-		child, exists := e.GetChilds(types.DescendMethodActiveChilds)[pathElems[0].Name]
+		child, exists := api.LookupChild(e.GetChilds(types.DescendMethodActiveChilds), pathElems[0], path, elemIndex)
 		if !exists {
 			pth := &sdcpb.Path{Elem: pathElems}
 			return nil, fmt.Errorf("%w: reached %v but child %v does not exist", ErrNavigateSdcpbPathNotFound, e.SdcpbPath().ToXPath(false), pth.ToXPath(false))
@@ -56,12 +60,12 @@ func NavigateSdcpbPath(ctx context.Context, e api.Entry, path *sdcpb.Path) (api.
 
 		for v := range pathElems[0].PathElemNamesKeysOnly() {
 			// make sure to only skip the first element
-			child, err = NavigateSdcpbPath(ctx, child, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(v, nil)}})
+			child, err = navigateSdcpbPath(ctx, child, &sdcpb.Path{Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(v, nil)}}, 0)
 			if err != nil {
 				return nil, err
 			}
 		}
 
-		return NavigateSdcpbPath(ctx, child, path.CopyAndRemoveFirstPathElem())
+		return navigateSdcpbPath(ctx, child, path.CopyAndRemoveFirstPathElem(), elemIndex+1)
 	}
 }

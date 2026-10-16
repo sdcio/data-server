@@ -28,18 +28,18 @@ func NewChildMapWithEntries(entries map[string]Entry) *ChildMap {
 	return c
 }
 
-func (c *ChildMap) DeleteChilds(names []string) {
+func (c *ChildMap) DeleteChilds(ids []NodeIdentity) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for _, name := range names {
-		delete(c.c, name)
+	for _, id := range ids {
+		delete(c.c, id.MapKey())
 	}
 }
 
-func (c *ChildMap) DeleteChild(name string) {
+func (c *ChildMap) DeleteChild(id NodeIdentity) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.c, name)
+	delete(c.c, id.MapKey())
 }
 
 // AddOrGet adds the entry if no entry with the same path name exists.
@@ -48,7 +48,7 @@ func (c *ChildMap) DeleteChild(name string) {
 func (c *ChildMap) AddOrGet(e Entry) Entry {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	k := e.PathName()
+	k := e.Identity().MapKey()
 	if existing, ok := c.c[k]; ok {
 		return existing
 	}
@@ -56,10 +56,10 @@ func (c *ChildMap) AddOrGet(e Entry) Entry {
 	return e
 }
 
-func (c *ChildMap) GetEntry(s string) (e Entry, exists bool) {
+func (c *ChildMap) GetEntry(id NodeIdentity) (e Entry, exists bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	e, exists = c.c[s]
+	e, exists = c.c[id.MapKey()]
 	return e, exists
 }
 

@@ -24,7 +24,7 @@ type RootEntry struct {
 
 // NewTreeRoot Instantiate a new Tree Root element.
 func NewTreeRoot(ctx context.Context, tc api.TreeContext) (*RootEntry, error) {
-	sea, err := NewSharedEntryAttributes(ctx, nil, "", tc)
+	sea, err := NewSharedEntryAttributes(ctx, nil, api.LocalIdentity(""), tc)
 	if err != nil {
 		return nil, err
 	}

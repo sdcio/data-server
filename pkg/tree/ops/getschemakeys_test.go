@@ -7,6 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	"go.uber.org/mock/gomock"
@@ -28,7 +29,7 @@ func TestGetSchemaKeysOrders(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	doublekeyList, err := tree.NewSharedEntryAttributes(ctx, root.Entry, "doublekey", tc)
+	doublekeyList, err := tree.NewSharedEntryAttributes(ctx, root.Entry, api.LocalIdentity("doublekey"), tc)
 	if err != nil {
 		t.Fatal(err)
 	}

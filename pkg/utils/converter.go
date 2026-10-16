@@ -48,8 +48,30 @@ func (c *Converter) ExpandUpdates(ctx context.Context, updates []*sdcpb.Update) 
 func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {
 	log := logger.FromContext(ctx)
 	upds := make([]*sdcpb.Update, 0)
-	rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, upd.GetPath())
+
+	var jsonDecoded any
+	var hasJSON bool
+	if upd.GetValue() != nil {
+		switch upd.GetValue().Value.(type) {
+		case *sdcpb.TypedValue_JsonIetfVal, *sdcpb.TypedValue_JsonVal:
+			var err error
+			jsonDecoded, err = decodeUpdateJSON(upd)
+			if err != nil {
+				return nil, err
+			}
+			hasJSON = true
+			if m, ok := jsonDecoded.(map[string]any); ok {
+				if err := anchorRootModuleFromJSONIETF(upd.GetPath(), m); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	lookupPath := PathForSchemaLookup(upd.GetPath())
+	rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, lookupPath)
 	if err != nil {
+		LogIngressExpandFailure(ctx, upd, jsonDecoded, err)
 		return nil, err
 	}
 
@@ -81,7 +103,7 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 
 					// adjust path
 					newUpd.Path.Elem = append(newUpd.Path.Elem, &sdcpb.PathElem{Name: k})
-					rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, newUpd.GetPath())
+					rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, PathForSchemaLookup(newUpd.GetPath()))
 					if err != nil {
 						return nil, err
 					}
@@ -97,24 +119,25 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 			return nil, nil
 		}
 		var v any
-		var err error
-		var jsonDecoder *json.Decoder
-		switch upd.GetValue().Value.(type) {
-		case *sdcpb.TypedValue_JsonIetfVal:
-			jsonDecoder = json.NewDecoder(bytes.NewReader(upd.GetValue().GetJsonIetfVal()))
-		case *sdcpb.TypedValue_JsonVal:
-			jsonDecoder = json.NewDecoder(bytes.NewReader(upd.GetValue().GetJsonVal()))
-		default:
-			return []*sdcpb.Update{upd}, nil
+		if hasJSON {
+			v = jsonDecoded
+		} else {
+			var err error
+			var jsonDecoder *json.Decoder
+			switch upd.GetValue().Value.(type) {
+			case *sdcpb.TypedValue_JsonIetfVal:
+				jsonDecoder = json.NewDecoder(bytes.NewReader(upd.GetValue().GetJsonIetfVal()))
+			case *sdcpb.TypedValue_JsonVal:
+				jsonDecoder = json.NewDecoder(bytes.NewReader(upd.GetValue().GetJsonVal()))
+			default:
+				return []*sdcpb.Update{upd}, nil
+			}
+			jsonDecoder.UseNumber()
+			err = jsonDecoder.Decode(&v)
+			if err != nil {
+				return nil, err
+			}
 		}
-		// don't decode into float64 but keep as a string
-		// this solves issues created by reading long integers
-		jsonDecoder.UseNumber()
-		err = jsonDecoder.Decode(&v)
-		if err != nil {
-			return nil, err
-		}
-		// log.Debugf("update has jsonVal: %T, %v\n", v, v)
 		rs, err := c.ExpandContainerValue(ctx, upd.GetPath(), v, rsp)
 		if err != nil {
 			return nil, err
@@ -304,7 +327,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				np := proto.Clone(p).(*sdcpb.Path)
 				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item.Name})
 				// Fetch schema once; use it for the state check and value conversion.
-				schemaRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, np)
+				schemaRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, PathForSchemaLookup(np))
 				if err != nil {
 					return nil, err
 				}
@@ -332,7 +355,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item.Name})
 
 				// Skip state leaf-lists.
-				llSchemaRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, np)
+				llSchemaRsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, PathForSchemaLookup(np))
 				if err != nil {
 					return nil, err
 				}
@@ -374,9 +397,8 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 
 			case string: // child container
 				// log.Debugf("handling child container %s", item)
-				np := proto.Clone(p).(*sdcpb.Path)
-				np.Elem = append(np.Elem, &sdcpb.PathElem{Name: item})
-				rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, np)
+				np := pathForChildContainer(p, cs, k, item)
+				rsp, err := c.schemaClientBound.GetSchemaSdcpbPath(ctx, PathForSchemaLookup(np))
 				if err != nil {
 					return nil, err
 				}
@@ -487,39 +509,89 @@ func getLeafList(s string, cs *sdcpb.SchemaElem_Container) (*sdcpb.LeafListSchem
 	return nil, false
 }
 
+func pathForChildContainer(p *sdcpb.Path, cs *sdcpb.SchemaElem_Container, jsonKey, localName string) *sdcpb.Path {
+	np := proto.Clone(p).(*sdcpb.Path)
+	id := parseJSONIETFKey(jsonKey)
+	if id.local == "" {
+		id.local = localName
+	}
+	np.Elem = append(np.Elem, &sdcpb.PathElem{Name: id.local})
+	applyModuleToSchemaLookupPath(np, id, cs.Container.GetName() == "__root__")
+	return np
+}
+
+// jsonIETFChildIdentity mirrors tree/api.NodeIdentity for JSON_IETF keys (utils cannot import api: import cycle).
+type jsonIETFChildIdentity struct {
+	local  string
+	module string
+}
+
+func parseJSONIETFKey(key string) jsonIETFChildIdentity {
+	if key == "" {
+		return jsonIETFChildIdentity{}
+	}
+	module, local, ok := strings.Cut(key, ":")
+	if !ok {
+		return jsonIETFChildIdentity{local: key}
+	}
+	return jsonIETFChildIdentity{local: local, module: module}
+}
+
+// applyModuleToSchemaLookupPath mirrors tree/api.ApplyModuleToSchemaLookupPath.
+func applyModuleToSchemaLookupPath(path *sdcpb.Path, id jsonIETFChildIdentity, parentIsRoot bool) {
+	if path == nil || id.module == "" {
+		return
+	}
+	elems := path.GetElem()
+	if len(elems) == 0 {
+		return
+	}
+	if parentIsRoot {
+		path.Origin = id.module
+		return
+	}
+	last := elems[len(elems)-1]
+	if !strings.Contains(last.GetName(), ":") {
+		last.Name = id.module + ":" + id.local
+	}
+}
+
 func getChild(ctx context.Context, name string, cs *sdcpb.SchemaElem_Container, scb SchemaClientBound) (any, bool) {
 	log := logger.FromContext(ctx)
+
+	if cs.Container.Name == "__root__" {
+		id := parseJSONIETFKey(name)
+		if id.local == "" {
+			return "", false
+		}
+		lookupPath := &sdcpb.Path{
+			Elem: []*sdcpb.PathElem{sdcpb.NewPathElem(id.local, nil)},
+		}
+		applyModuleToSchemaLookupPath(lookupPath, id, true)
+		rsp, err := scb.GetSchemaSdcpbPath(ctx, lookupPath)
+		if err != nil {
+			log.Error(err, "failed to get schema object", "local", id.local, "module", id.module)
+			return "", false
+		}
+		// __root__ does not inline fields; its children are module names.
+		// A top-level leaf or leaf-list is only visible via this lookup.
+		switch schema := rsp.GetSchema().GetSchema().(type) {
+		case *sdcpb.SchemaElem_Container:
+			return id.local, true
+		case *sdcpb.SchemaElem_Field:
+			return schema.Field, true
+		case *sdcpb.SchemaElem_Leaflist:
+			return schema.Leaflist, true
+		default:
+			return "", false
+		}
+	}
 
 	searchNames := []string{name}
 	if i := strings.Index(name, ":"); i >= 0 {
 		searchNames = append(searchNames, name[i+1:])
 	}
-
 	for _, s := range searchNames {
-		if cs.Container.Name == "__root__" {
-			for _, c := range cs.Container.GetChildren() {
-				rsp, err := scb.GetSchemaSdcpbPath(ctx, &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: c}}})
-				if err != nil {
-					log.Error(err, "failed to get schema object", "schema-object", c)
-					return "", false
-				}
-				switch rsp := rsp.GetSchema().Schema.(type) {
-				case *sdcpb.SchemaElem_Container:
-					for _, child := range rsp.Container.GetChildren() {
-						if child == s {
-							return child, true
-						}
-					}
-					for _, field := range rsp.Container.GetFields() {
-						if field.Name == s {
-							return field, true
-						}
-					}
-				default:
-					continue
-				}
-			}
-		}
 		for _, c := range cs.Container.GetChildren() {
 			if c == s {
 				return c, true

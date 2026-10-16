@@ -44,7 +44,7 @@ func getAggregatedDeletes(e api.Entry, deletes []types.DeleteEntry, aggregatePat
 		doAggregateDelete := true
 		// check the keys for deletion
 		for _, n := range keys {
-			c, exists := e.GetChildMap().GetEntry(n)
+			c, exists := e.GetChildMap().GetEntry(api.LocalIdentity(n))
 			// these keys should always exist, so for now we do not catch the non existing key case
 			if exists && !c.ShouldDelete() {
 				// if not all the keys are marked for deletion, we need to revert to regular deletion

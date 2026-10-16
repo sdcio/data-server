@@ -737,7 +737,7 @@ func TestToXML_ImporterPreservesMultiKeyOrder(t *testing.T) {
 	}
 
 	jsonConfAny := map[string]any{
-		"sdcio_model:ipv6": map[string]any{
+		"ipv6": map[string]any{
 			"static-route": []any{
 				map[string]any{
 					"owner":       "owner-up",

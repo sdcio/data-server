@@ -17,6 +17,7 @@ package utils
 import (
 	"context"
 	"reflect"
+	"strings"
 
 	"github.com/openconfig/gnmi/proto/gnmi"
 	logf "github.com/sdcio/logger"
@@ -33,17 +34,34 @@ func ToSchemaNotification(ctx context.Context, n *gnmi.Notification) *sdcpb.Noti
 		Delete:    make([]*sdcpb.Path, 0, len(n.GetDelete())),
 	}
 	for _, del := range n.GetDelete() {
-		sn.Delete = append(sn.Delete, FromGNMIPath(n.GetPrefix(), del).StripPathElemPrefixPath())
+		sn.Delete = append(sn.Delete, StripGNMIPathPrefixes(FromGNMIPath(n.GetPrefix(), del)))
 	}
 	for idx, upd := range n.GetUpdate() {
 		_ = idx
 		scUpd := &sdcpb.Update{
-			Path:  FromGNMIPath(n.GetPrefix(), upd.GetPath()).StripPathElemPrefixPath(),
+			Path:  StripGNMIPathPrefixes(FromGNMIPath(n.GetPrefix(), upd.GetPath())),
 			Value: FromGNMITypedValue(ctx, upd.GetVal()),
 		}
 		sn.Update = append(sn.Update, scUpd)
 	}
 	return sn
+}
+
+// StripGNMIPathPrefixes removes YANG module prefixes from path element names (and
+// keys) for tree storage. When the first element is module:local and Path.Origin
+// is empty, the module moves to Origin so schema-server can disambiguate
+// colliding root containers.
+func StripGNMIPathPrefixes(p *sdcpb.Path) *sdcpb.Path {
+	if p == nil {
+		return nil
+	}
+	if len(p.GetElem()) > 0 && p.GetOrigin() == "" {
+		if mod, local, ok := strings.Cut(p.GetElem()[0].GetName(), ":"); ok && mod != "" && local != "" {
+			p.Origin = mod
+			p.Elem[0].Name = local
+		}
+	}
+	return p.StripPathElemPrefixPath()
 }
 
 func FromGNMIPath(pre, p *gnmi.Path) *sdcpb.Path {

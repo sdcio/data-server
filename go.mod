@@ -2,7 +2,16 @@ module github.com/sdcio/data-server
 
 go 1.25.0
 
-replace github.com/openconfig/goyang v1.6.0 => github.com/sdcio/goyang v1.6.2-2
+// GY-1 (sdcio/goyang#5): augment-merge collision fix — keep both children instead of
+// silently dropping the losing one on name clash. Needed transitively for SS-2 below
+// (Go replace directives don't propagate through dependencies, so this must be pinned
+// here directly, not just in schema-server's own go.mod). Remove on release-stack.
+replace github.com/openconfig/goyang => github.com/sdcio/goyang v1.6.2-2.0.20260925142539-794212b03b40
+
+// SS-1 (schema-server#257) + SS-2 (schema-server#258, augment-merge nested collisions):
+// pinned to SS-2's branch tip (based on SS-1) — remove on release-stack.
+// Local dev: swap the line below for `=> ../schema-server` when both repos are siblings.
+replace github.com/sdcio/schema-server => github.com/sdcio/schema-server v0.0.35-0.20260925171211-be513ede8dbb
 
 require (
 	github.com/AlekSi/pointer v1.2.0
@@ -23,7 +32,7 @@ require (
 	github.com/scrapli/scrapligo v1.4.1
 	github.com/sdcio/cache v0.0.38
 	github.com/sdcio/logger v0.0.3
-	github.com/sdcio/schema-server v0.0.34
+	github.com/sdcio/schema-server v0.0.35-0.20260925171211-be513ede8dbb
 	github.com/sdcio/sdc-protos v0.0.55
 	github.com/sdcio/yang-parser v0.0.12
 	github.com/spf13/cobra v1.10.2
@@ -45,7 +54,7 @@ require (
 	github.com/clipperhouse/uax29/v2 v2.6.0 // indirect
 	github.com/creack/pty v1.1.24 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/dgraph-io/badger/v4 v4.9.0 // indirect
+	github.com/dgraph-io/badger/v4 v4.9.6 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.2.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
@@ -85,7 +94,7 @@ require (
 	github.com/prometheus/common v0.70.1 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/sirikothe/gotextfsm v1.0.1-0.20200816110946-6aa2cfd355e4 // indirect
-	github.com/sirupsen/logrus v1.9.4 // indirect
+	github.com/sirupsen/logrus v1.10.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.44.0 // indirect

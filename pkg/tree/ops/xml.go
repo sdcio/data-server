@@ -187,7 +187,7 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 					newElem = parent
 				}
 				// recurse the call to all the children
-				child, exists := e.GetChildMap().GetEntry(k)
+				child, exists := e.GetChildMap().GetEntry(api.LocalIdentity(k))
 				if !exists {
 					return false, fmt.Errorf("child %s does not exist for %s", k, e.SdcpbPath().ToXPath(false))
 				}
