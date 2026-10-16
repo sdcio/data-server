@@ -29,7 +29,6 @@ func NewTransaction(id string, tm *TransactionManager) *Transaction {
 		newIntents:         map[string]*TransactionIntent{},
 		oldIntents:         map[string]*TransactionIntent{},
 		oldRunning:         NewTransactionIntent(consts.RunningIntentName, 600),
-		replace:            NewTransactionIntent(consts.ReplaceIntentName, consts.ReplaceValuesPrio),
 	}
 }
 
@@ -90,12 +89,21 @@ func (t *Transaction) IntentCount() int {
 	return len(t.newIntents)
 }
 
+// GetRollbackTransaction builds the Transaction that undoes t. It always replays t's oldIntents
+// (the pre-transaction content of every intent t touched). If t was a replace transaction, it
+// additionally sets the rollback's .replace to t's pre-replace Running snapshot (oldRunning), so
+// that a timed-out/canceled replace is actually reverted on the device, not just a silent no-op.
 func (t *Transaction) GetRollbackTransaction() *Transaction {
 	t.timer.Stop()
 	tr := NewTransaction(t.GetTransactionId()+" - Rollback", t.transactionManager)
 	for _, v := range t.oldIntents {
 		_ = tr.AddTransactionIntent(v, TransactionIntentNew)
 	}
+	var rollbackReplace *TransactionIntent
+	if t.GetReplace() != nil {
+		rollbackReplace = t.GetOldRunning()
+	}
+	tr.SetReplace(rollbackReplace)
 	tr.isRollback = true
 	return tr
 }
