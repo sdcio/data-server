@@ -31,39 +31,12 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-// fakeTargetSource is a minimal types.TargetSource used to drive setToDevice
-// without needing a real datastore tree.
-type fakeTargetSource struct {
-	doc *etree.Document
-}
-
-func newFakeTargetSource() *fakeTargetSource {
+func newFakeNetconfPlan() *types.NetconfSetPlan {
 	doc := etree.NewDocument()
 	if err := doc.ReadFromString("<interface><name>eth0</name></interface>"); err != nil {
 		panic(err)
 	}
-	return &fakeTargetSource{doc: doc}
-}
-
-func (f *fakeTargetSource) ToJson(_ context.Context, _ bool) (any, error) { return nil, nil }
-func (f *fakeTargetSource) ToJsonIETF(_ context.Context, _ bool) (any, error) {
-	return nil, nil
-}
-
-func (f *fakeTargetSource) ToXML(_ context.Context, _, _, _, _ bool) (*etree.Document, error) {
-	return f.doc, nil
-}
-
-func (f *fakeTargetSource) ToProtoUpdates(_ context.Context, _ bool) ([]*sdcpb.Update, error) {
-	return nil, nil
-}
-
-func (f *fakeTargetSource) ToProtoDeletes(_ context.Context) ([]*sdcpb.Path, error) {
-	return nil, nil
-}
-
-func (f *fakeTargetSource) ContainsChanges(_ context.Context) (bool, error) {
-	return true, nil
+	return &types.NetconfSetPlan{Doc: doc}
 }
 
 // testSBIConfig returns a minimal SBI config good enough to let a background
@@ -155,7 +128,7 @@ func Test_ncTarget_setToDevice_EditConfig_TransportError(t *testing.T) {
 		sbiConfig: testSBIConfig(),
 	}
 
-	_, err := tr.setToDevice(context.Background(), "candidate", newFakeTargetSource())
+	_, err := tr.setToDevice(context.Background(), "candidate", newFakeNetconfPlan())
 	if !errors.Is(err, types.ErrNotConnected) {
 		t.Errorf("expected errors.Is(err, types.ErrNotConnected), got %v", err)
 	}
@@ -180,7 +153,7 @@ func Test_ncTarget_setToDevice_EditConfig_NonTransportError_DiscardsCandidate(t 
 		sbiConfig: testSBIConfig(),
 	}
 
-	_, err := tr.setToDevice(context.Background(), "candidate", newFakeTargetSource())
+	_, err := tr.setToDevice(context.Background(), "candidate", newFakeNetconfPlan())
 	if !errors.Is(err, nonTransportErr) {
 		t.Errorf("expected the original error to be returned unwrapped, got %v", err)
 	}
@@ -204,7 +177,7 @@ func Test_ncTarget_setToDevice_Commit_TransportError(t *testing.T) {
 		sbiConfig: testSBIConfig(),
 	}
 
-	_, err := tr.setToDevice(context.Background(), "candidate", newFakeTargetSource())
+	_, err := tr.setToDevice(context.Background(), "candidate", newFakeNetconfPlan())
 	if !errors.Is(err, types.ErrNotConnected) {
 		t.Errorf("expected errors.Is(err, types.ErrNotConnected), got %v", err)
 	}
