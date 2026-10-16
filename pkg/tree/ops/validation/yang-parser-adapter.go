@@ -77,6 +77,18 @@ func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
 	// if y.e is anything else then a container
 	lv := y.e.GetLeafVariants().GetHighestPrecedence(false, true, false)
 	if lv == nil {
+		// A leaf-list must always report as a DatumSliceDatum (never a
+		// Nodeset), matching the populated case below (valueToDatum's
+		// TypedValue_LeaflistVal branch), even when unset. Leaf-list
+		// items have no per-item node identity in this adapter, so an
+		// empty NodesetDatum here would make the xpath engine treat an
+		// unset leaf-list's predicate (e.g. leaflist[text()='x']) as a
+		// list-key equality instead of a value comparison, ultimately
+		// producing a bare Bool that count() can't consume ("Fn 'count'
+		// takes NODESET, not BOOL as arg 0").
+		if y.e.GetSchema().GetLeaflist() != nil {
+			return xpath.NewDatumSliceDatum(nil), nil
+		}
 		return xpath.NewNodesetDatum([]xutils.XpathNode{}), nil
 	}
 	return y.valueToDatum(lv.Value()), nil

@@ -45,11 +45,12 @@ func (d *Datastore) applyIntent(ctx context.Context, source targettypes.TargetSo
 		return &sdcpb.SetDataResponse{}, nil
 	}
 
-	if d.sbi == nil {
+	sbi := d.getSBI()
+	if sbi == nil {
 		return nil, fmt.Errorf("%s: %w", d.config.Name, targettypes.ErrNotConnected)
 	}
 
-	rsp, err = d.sbi.Set(ctx, source)
+	rsp, err = sbi.Set(ctx, source)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", d.config.Name, err)
 	}
