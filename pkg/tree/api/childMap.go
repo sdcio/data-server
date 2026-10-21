@@ -66,10 +66,17 @@ func (c *ChildMap) GetEntry(s string) (e Entry, exists bool) {
 func (c *ChildMap) GetAllSorted() []Entry {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	if len(c.c) == 0 {
+		return nil
+	}
 
-	childNames := c.SortedKeys()
-	result := make([]Entry, 0, len(c.c))
-	// range over children
+	childNames := make([]string, 0, len(c.c))
+	for childName := range c.c {
+		childNames = append(childNames, childName)
+	}
+	sort.Strings(childNames)
+
+	result := make([]Entry, 0, len(childNames))
 	for _, childName := range childNames {
 		result = append(result, c.c[childName])
 	}
@@ -86,10 +93,14 @@ func (c *ChildMap) ForEach(fn func(name string, e Entry)) {
 	}
 }
 
-// GetAll returns a copy of the map of all entries in the child map
+// GetAll returns a copy of the map of all entries in the child map.
+// An entry with no children returns nil without allocating.
 func (c *ChildMap) GetAll() map[string]Entry {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	if len(c.c) == 0 {
+		return nil
+	}
 
 	result := make(map[string]Entry, len(c.c))
 	maps.Copy(result, c.c)
@@ -100,8 +111,11 @@ func (c *ChildMap) GetAll() map[string]Entry {
 func (c *ChildMap) GetKeys() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	if len(c.c) == 0 {
+		return nil
+	}
 
-	result := make([]string, 0, c.Length())
+	result := make([]string, 0, len(c.c))
 	for k := range c.c {
 		result = append(result, k)
 	}

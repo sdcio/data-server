@@ -86,7 +86,7 @@ func validateMandatoryWithKeys(ctx context.Context, e api.Entry, level int, attr
 	// iterate over the attributes make sure any of these exists
 	for _, attr := range attributes {
 		// first check if the mandatory value is set via the intent, e.g. part of the tree already
-		v, existsInTree = e.GetChilds(types.DescendMethodActiveChilds)[attr]
+		v, existsInTree = e.GetChild(attr, types.DescendMethodActiveChilds)
 		// if exists and remains to Exist
 		if existsInTree && v.RemainsToExist() {
 			// set success to true and break the loop

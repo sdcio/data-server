@@ -186,18 +186,18 @@ func (mr *MockEntryMockRecorder) FinishInsertionPhase(ctx any) *gomock.Call {
 }
 
 // GetChild mocks base method.
-func (m *MockEntry) GetChild(name string) (api.Entry, bool) {
+func (m *MockEntry) GetChild(name string, method types.DescendMethod) (api.Entry, bool) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetChild", name)
+	ret := m.ctrl.Call(m, "GetChild", name, method)
 	ret0, _ := ret[0].(api.Entry)
 	ret1, _ := ret[1].(bool)
 	return ret0, ret1
 }
 
 // GetChild indicates an expected call of GetChild.
-func (mr *MockEntryMockRecorder) GetChild(name any) *gomock.Call {
+func (mr *MockEntryMockRecorder) GetChild(name, method any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetChild", reflect.TypeOf((*MockEntry)(nil).GetChild), name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetChild", reflect.TypeOf((*MockEntry)(nil).GetChild), name, method)
 }
 
 // GetChildMap mocks base method.

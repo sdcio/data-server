@@ -550,6 +550,20 @@ func (s *sharedEntryAttributes) populateChoiceCaseResolvers(_ context.Context) e
 	return nil
 }
 
+func (s *sharedEntryAttributes) GetChild(name string, d types.DescendMethod) (api.Entry, bool) {
+	if s.schema == nil || d == types.DescendMethodAll {
+		return s.childs.GetEntry(name)
+	}
+	if d == types.DescendMethodActiveChilds {
+		skipAttributesList := s.choicesResolvers.GetSkipElements()
+		if len(skipAttributesList) > 0 && slices.Contains(skipAttributesList, name) {
+			return nil, false
+		}
+		return s.childs.GetEntry(name)
+	}
+	return nil, false
+}
+
 func (s *sharedEntryAttributes) GetChilds(d types.DescendMethod) api.EntryMap {
 	if s.schema == nil {
 		return s.childs.GetAll()
@@ -565,9 +579,13 @@ func (s *sharedEntryAttributes) GetChilds(d types.DescendMethod) api.EntryMap {
 		if len(skipAttributesList) == 0 {
 			return s.childs.GetAll()
 		}
-		result := map[string]api.Entry{}
+		all := s.childs.GetAll()
+		if len(all) == 0 {
+			return all
+		}
+		result := make(map[string]api.Entry, len(all))
 		// optimization option: sort the slices and forward in parallel, lifts extra burden that the contains call holds.
-		for childName, child := range s.childs.GetAll() {
+		for childName, child := range all {
 			if slices.Contains(skipAttributesList, childName) {
 				continue
 			}
