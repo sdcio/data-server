@@ -99,11 +99,11 @@ func validateMandatoryWithKeys(ctx context.Context, e api.Entry, level int, attr
 	if !success {
 		// if it is not a choice
 		if choiceName == "" {
-			resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory child %s does not exist, path: %s", attributes, e.SdcpbPath().ToXPath(false)), types.ValidationResultEntryTypeError)
+			resultChan <- types.NewValidationResultEntry(types.UnknownOwner, fmt.Errorf("error mandatory child %s does not exist, path: %s", attributes, e.SdcpbPath().ToXPath(false)), types.ValidationResultEntryTypeError)
 			return
 		}
 		// if it is a mandatory choice
-		resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error mandatory choice %s [attributes: %s] does not exist, path: %s", choiceName, attributes, e.SdcpbPath().ToXPath(false)), types.ValidationResultEntryTypeError)
+		resultChan <- types.NewValidationResultEntry(types.UnknownOwner, fmt.Errorf("error mandatory choice %s [attributes: %s] does not exist, path: %s", choiceName, attributes, e.SdcpbPath().ToXPath(false)), types.ValidationResultEntryTypeError)
 		return
 	}
 }
