@@ -92,18 +92,18 @@ func (mr *MockTargetMockRecorder) Get(ctx, req any) *gomock.Call {
 }
 
 // Set mocks base method.
-func (m *MockTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
+func (m *MockTarget) Set(ctx context.Context, plan types.SouthboundSetPlan) (*sdcpb.SetDataResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Set", ctx, source)
+	ret := m.ctrl.Call(m, "Set", ctx, plan)
 	ret0, _ := ret[0].(*sdcpb.SetDataResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Set indicates an expected call of Set.
-func (mr *MockTargetMockRecorder) Set(ctx, source any) *gomock.Call {
+func (mr *MockTargetMockRecorder) Set(ctx, plan any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockTarget)(nil).Set), ctx, source)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockTarget)(nil).Set), ctx, plan)
 }
 
 // Status mocks base method.

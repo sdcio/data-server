@@ -22,7 +22,6 @@ import (
 	"reflect"
 	"sync"
 
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protopath"
@@ -146,13 +145,26 @@ func redactField(m protoreflect.Message, fd protoreflect.FieldDescriptor) {
 	}
 }
 
-// isSecret reports whether the proto marks fd as secret
+// isSecret reports whether the proto marks fd as secret.
 func isSecret(fd protoreflect.FieldDescriptor) bool {
-	if secret, set := boolOption(fd.Options(), sdcpb.E_SecretField); set {
+	if secret, set := boolOption(fd.Options(), secretFieldExtension()); set {
 		return secret
 	}
-	secret, _ := boolOption(fd.ContainingMessage().Options(), sdcpb.E_Secret)
-	return secret
+	if secret, set := boolOption(fd.ContainingMessage().Options(), secretMessageExtension()); set && secret {
+		return true
+	}
+	return wellKnownSecretField(fd.FullName())
+}
+
+// wellKnownSecretField covers stable credential fields when the pinned
+// sdc-protos revision predates generated secret options (device-profile base pin).
+func wellKnownSecretField(name protoreflect.FullName) bool {
+	switch name {
+	case "data.Credentials.password", "data.Credentials.token", "data.TLS.key":
+		return true
+	default:
+		return false
+	}
 }
 
 // boolOption reads an optional bool option from a descriptor
