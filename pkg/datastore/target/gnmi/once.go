@@ -17,13 +17,14 @@ import (
 type OnceSync struct {
 	config       *config.SyncProtocol
 	target       SyncTarget
+	targetName   string
 	cancel       context.CancelFunc
 	runningStore types.RunningStore
 	ctx          context.Context
 	vpoolFactory pool.VirtualPoolFactory
 }
 
-func NewOnceSync(ctx context.Context, target SyncTarget, c *config.SyncProtocol, runningStore types.RunningStore, vpoolFactory pool.VirtualPoolFactory) *OnceSync {
+func NewOnceSync(ctx context.Context, target SyncTarget, targetName string, c *config.SyncProtocol, runningStore types.RunningStore, vpoolFactory pool.VirtualPoolFactory) *OnceSync {
 	ctx, cancel := context.WithCancel(ctx)
 	// add the sync name to the logger values
 	log := logger.FromContext(ctx).WithValues("sync", c.Name)
@@ -32,6 +33,7 @@ func NewOnceSync(ctx context.Context, target SyncTarget, c *config.SyncProtocol,
 	return &OnceSync{
 		config:       c,
 		target:       target,
+		targetName:   targetName,
 		cancel:       cancel,
 		runningStore: runningStore,
 		vpoolFactory: vpoolFactory,
@@ -52,6 +54,7 @@ func (s *OnceSync) syncConfig() (*gnmi.SubscribeRequest, error) {
 	opts = append(opts,
 		gapi.EncodingCustom(utils.ParseGnmiEncoding(s.config.Encoding)),
 		gapi.SubscriptionListModeONCE(),
+		gapi.Target(s.targetName),
 		gapi.Subscription(subscriptionOpts...),
 		gapi.Extension(&gnmi_ext.Extension{
 			Ext: &gnmi_ext.Extension_ConfigSubscription{

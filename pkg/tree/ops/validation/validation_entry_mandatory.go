@@ -65,21 +65,19 @@ func validateMandatory(ctx context.Context, e api.Entry, resultChan chan<- *type
 	}
 }
 
-// validateMandatoryWithKeys steps down the tree, passing the key levels and checking the existence of the mandatory.
+// validateMandatoryWithKeys steps down the tree, passing the key levels and checking the existence of the mandatory,
+// once actually at instance level.
 // attributes is a string slice, it will be checked that at least of the the given attributes is defined
 // !Not checking all of these are defined (call multiple times with single entry in attributes for that matter)!
 func validateMandatoryWithKeys(ctx context.Context, e api.Entry, level int, attributes []string, choiceName string, resultChan chan<- *types.ValidationResultEntry) {
-	if e.ShouldDelete() {
-		return
-	}
-	// need to step down the tree until we're beyond the key levels to check the mandatory attributes, if level is > 0, we are still in the key levels
-	if level > 0 {
-		for _, c := range e.GetChilds(types.DescendMethodActiveChilds) {
-			validateMandatoryWithKeys(ctx, c, level-1, attributes, choiceName, resultChan)
-		}
-		return
-	}
+	descendKeyLevels(e, level, func(instance api.Entry) {
+		validateMandatoryOnInstance(ctx, instance, attributes, choiceName, resultChan)
+	})
+}
 
+// validateMandatoryOnInstance checks the existence of the mandatory attribute(s) on a resolved
+// list instance (or on a non-list container, where it is invoked directly with level 0).
+func validateMandatoryOnInstance(ctx context.Context, e api.Entry, attributes []string, choiceName string, resultChan chan<- *types.ValidationResultEntry) {
 	success := false
 	existsInTree := false
 	var v api.Entry

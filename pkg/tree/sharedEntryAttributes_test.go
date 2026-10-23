@@ -824,6 +824,122 @@ func Test_sharedEntryAttributes_MustCountDoubleKey(t *testing.T) {
 	}
 }
 
+// Test_sharedEntryAttributes_MustSiblingFields covers a must-statement declared directly on a
+// list, referencing sibling leaf fields of the same instance (as opposed to a count()-style
+// must referencing the list as a whole). Such a must-statement must only be evaluated once per
+// list instance, never against the list's key-level node itself (which has no sibling leaves as
+// children, since its children are the keyed instances).
+func Test_sharedEntryAttributes_MustSiblingFields(t *testing.T) {
+	tests := []struct {
+		name           string
+		ygotDevice     func() ygot.GoStruct
+		expectedErrors int
+	}{
+		{
+			name: "Pass - val1 + val2 <= 128",
+			ygotDevice: func() ygot.GoStruct {
+				d := &sdcio_schema.Device{
+					MustSibling: &sdcio_schema.SdcioModel_MustSibling{
+						Server: map[string]*sdcio_schema.SdcioModel_MustSibling_Server{
+							"one": {
+								KeyAttr: ygot.String("one"),
+								Val1:    ygot.Uint8(32),
+								Val2:    ygot.Uint8(16),
+							},
+						},
+					},
+				}
+				return d
+			},
+			expectedErrors: 0,
+		},
+		{
+			name: "Fail - val1 + val2 > 128",
+			ygotDevice: func() ygot.GoStruct {
+				d := &sdcio_schema.Device{
+					MustSibling: &sdcio_schema.SdcioModel_MustSibling{
+						Server: map[string]*sdcio_schema.SdcioModel_MustSibling_Server{
+							"one": {
+								KeyAttr: ygot.String("one"),
+								Val1:    ygot.Uint8(200),
+								Val2:    ygot.Uint8(100),
+							},
+						},
+					},
+				}
+				return d
+			},
+			expectedErrors: 1,
+		},
+	}
+	for _, tt := range tests {
+
+		owner1 := "owner1"
+
+		t.Run(tt.name, func(t *testing.T) {
+			// create a gomock controller
+			controller := gomock.NewController(t)
+			defer controller.Finish()
+
+			ctx := context.Background()
+
+			sc, schema, err := testhelper.InitSDCIOSchema()
+			if err != nil {
+				t.Fatal(err)
+			}
+			scb := schemaClient.NewSchemaClientBound(schema, sc)
+			tc := NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+
+			root, err := NewTreeRoot(ctx, tc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			jconfStr, err := ygot.EmitJSON(tt.ygotDevice(), &ygot.EmitJSONConfig{
+				Format:         ygot.RFC7951,
+				SkipValidation: true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var jsonConfAny any
+			err = json.Unmarshal([]byte(jconfStr), &jsonConfAny)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			newFlag := types.NewUpdateInsertFlags()
+
+			vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+			_, err = root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(jsonConfAny, owner1, 500, false), newFlag, vpf)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = root.FinishInsertionPhase(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			fmt.Println(root.String())
+
+			valConfig := validationConfig.DeepCopy()
+			valConfig.DisabledValidators.DisableAll()
+			valConfig.DisabledValidators.MustStatement = false
+			sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+
+			result, _ := validation.Validate(ctx, root.Entry, valConfig, sharedPool)
+
+			t.Log(strings.Join(result.ErrorsStr(), "\n"))
+
+			if len(result.ErrorsStr()) != tt.expectedErrors {
+				t.Fatalf("expected %d, got %d errors on Must-Sibling-Fields check", tt.expectedErrors, len(result.ErrorsStr()))
+			}
+		})
+	}
+}
+
 func Test_sharedEntryAttributes_getOrCreateChilds(t *testing.T) {
 	ctx := context.TODO()
 
