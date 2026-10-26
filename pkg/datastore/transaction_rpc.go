@@ -265,7 +265,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 
 		// store the old intent content in the transaction as the old intent.
-		err = transaction.AddIntentContent(intent.GetName(), types.TransactionIntentOld, priority, oldIntentContent, oldExplicitDeletes)
+		err = transaction.AddIntentContent(intent.GetName(), types.TransactionIntentOld, priority, oldIntentContent, oldExplicitDeletes, d.sensitivePathIndex.PathsFor(intent.GetName()))
 		if err != nil {
 			return nil, err
 		}

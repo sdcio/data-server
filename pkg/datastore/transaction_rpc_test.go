@@ -357,6 +357,150 @@ func TestTransactionSet_SensitivePathsPersisted(t *testing.T) {
 	}
 }
 
+// TestTransactionCancel_RestoresSensitivePathMarkers: cancel after a second
+// TransactionSet must not leave path markers cleared when the rolled-back
+// transaction tried to change or drop sensitive_paths.
+func TestTransactionCancel_RestoresSensitivePathMarkers(t *testing.T) {
+	ctx := context.Background()
+
+	sc, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	scb := schemaClient.NewSchemaClientBound(schema, sc)
+
+	intentDevice := &sdcio_schema.Device{
+		Interface: map[string]*sdcio_schema.SdcioModel_Interface{
+			"ethernet-1/1": {
+				Name:        ygot.String("ethernet-1/1"),
+				Description: ygot.String("sensitive-test"),
+			},
+		},
+	}
+	intentJSON, err := ygot.EmitJSON(intentDevice, &ygot.EmitJSONConfig{
+		Format:         ygot.RFC7951,
+		SkipValidation: false,
+	})
+	if err != nil {
+		t.Fatalf("failed to marshal intent: %v", err)
+	}
+
+	oldPaths := []*sdcpb.Path{
+		{Elem: []*sdcpb.PathElem{{Name: "interface"}, {Name: "description"}}, IsRootBased: true},
+	}
+	newPaths := []*sdcpb.Path{
+		{Elem: []*sdcpb.PathElem{{Name: "bgp"}, {Name: "neighbors"}, {Name: "auth-password"}}, IsRootBased: true},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	var modifyCalls [][]*sdcpb.Path
+	var cachedIntent *tree_persist.Intent
+	ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
+	ccb.EXPECT().
+		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+			if cachedIntent != nil {
+				intentChan <- cachedIntent
+			}
+			close(intentChan)
+			close(errChan)
+		}).AnyTimes()
+	ccb.EXPECT().
+		IntentModify(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, intent *tree_persist.Intent) error {
+			if intent.GetIntentName() == "intent-sensitive" {
+				modifyCalls = append(modifyCalls, intent.GetSensitivePaths())
+				cachedIntent = intent
+			}
+			return nil
+		}).AnyTimes()
+
+	sbi := mocktarget.NewMockTarget(ctrl)
+	sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).AnyTimes()
+
+	vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	tc := tree.NewTreeContext(scb, vpf)
+	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := syncTreeRoot.FinishInsertionPhase(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	ds := &Datastore{
+		config: &config.DatastoreConfig{
+			Validation: config.NewValidationConfig(),
+			Name:       "test-ds",
+		},
+		syncTreeMutex:      &sync.RWMutex{},
+		syncTree:           syncTreeRoot,
+		taskPool:           vpf,
+		cacheClient:        ccb,
+		sbi:                sbi,
+		dmutex:             &sync.Mutex{},
+		schemaClient:       scb,
+		sensitivePathIndex: sensitive.NewPathIndex(),
+	}
+	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
+
+	buildTI := func(paths []*sdcpb.Path) *types.TransactionIntent {
+		ti := types.NewTransactionIntent("intent-sensitive", 10)
+		ti.SetSensitivePaths(paths)
+		updates, err := treetypes.ExpandAndConvertIntent(ctx, scb, "intent-sensitive", 10, []*sdcpb.Update{{
+			Path: &sdcpb.Path{},
+			Value: &sdcpb.TypedValue{
+				Value: &sdcpb.TypedValue_JsonVal{JsonVal: []byte(intentJSON)},
+			},
+		}}, time.Now().Unix())
+		if err != nil {
+			t.Fatalf("failed to expand intent: %v", err)
+		}
+		ti.AddUpdates(updates)
+		return ti
+	}
+
+	_, err = ds.TransactionSet(ctx, "txn-1", []*types.TransactionIntent{buildTI(oldPaths)}, nil, 10*time.Second, false)
+	if err != nil {
+		t.Fatalf("first TransactionSet failed: %v", err)
+	}
+	if err := ds.TransactionConfirm(ctx, "txn-1"); err != nil {
+		t.Fatalf("first TransactionConfirm failed: %v", err)
+	}
+
+	_, err = ds.TransactionSet(ctx, "txn-2", []*types.TransactionIntent{buildTI(newPaths)}, nil, 10*time.Second, false)
+	if err != nil {
+		t.Fatalf("second TransactionSet failed: %v", err)
+	}
+	if err := ds.TransactionCancel(ctx, "txn-2"); err != nil {
+		t.Fatalf("TransactionCancel failed: %v", err)
+	}
+
+	wantXPaths := []string{oldPaths[0].ToXPath(true)}
+	gotIndex := pathSliceToXPaths(ds.sensitivePathIndex.PathsFor("intent-sensitive"))
+	if diff := cmp.Diff(wantXPaths, gotIndex); diff != "" {
+		t.Errorf("PathIndex after cancel (-want +got):\n%s", diff)
+	}
+
+	if len(modifyCalls) < 2 {
+		t.Fatalf("expected at least 2 IntentModify calls, got %d", len(modifyCalls))
+	}
+	gotRollback := pathSliceToXPaths(modifyCalls[len(modifyCalls)-1])
+	if diff := cmp.Diff(wantXPaths, gotRollback); diff != "" {
+		t.Errorf("IntentModify on rollback (-want +got):\n%s", diff)
+	}
+}
+
+func pathSliceToXPaths(paths []*sdcpb.Path) []string {
+	out := make([]string, 0, len(paths))
+	for _, p := range paths {
+		out = append(out, p.ToXPath(true))
+	}
+	return out
+}
+
 // TestSdcpbTransactionIntentToInternalTI_SensitivePaths verifies that
 // sensitive_paths schema.Path values are passed through to the internal
 // TransactionIntent unchanged.

@@ -19,13 +19,17 @@ var _ PathChecker = (*PathIndex)(nil)
 // The map value tracks which intents own each path so Delete can surgically
 // remove only that intent's contribution.
 type PathIndex struct {
-	mu    sync.RWMutex
-	index map[string][]string // key-pruned XPath → intent names
+	mu       sync.RWMutex
+	index    map[string][]string   // key-pruned XPath → intent names
+	byIntent map[string][]*sdcpb.Path // intent name → path markers last Set for that intent
 }
 
 // NewPathIndex returns a ready-to-use, empty PathIndex.
 func NewPathIndex() *PathIndex {
-	return &PathIndex{index: make(map[string][]string)}
+	return &PathIndex{
+		index:    make(map[string][]string),
+		byIntent: make(map[string][]*sdcpb.Path),
+	}
 }
 
 // Set replaces the sensitive paths contributed by intentName with paths.
@@ -35,13 +39,24 @@ func (s *PathIndex) Set(intentName string, paths []*sdcpb.Path) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.removeLocked(intentName)
+	if len(paths) == 0 {
+		delete(s.byIntent, intentName)
+		return
+	}
+	stored := make([]*sdcpb.Path, 0, len(paths))
 	for _, p := range paths {
 		if p == nil {
 			continue
 		}
 		key := p.ToXPath(true)
 		s.index[key] = append(s.index[key], intentName)
+		stored = append(stored, p)
 	}
+	if len(stored) == 0 {
+		delete(s.byIntent, intentName)
+		return
+	}
+	s.byIntent[intentName] = stored
 }
 
 // Delete removes all sensitive-path contributions from intentName.
@@ -50,6 +65,22 @@ func (s *PathIndex) Delete(intentName string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.removeLocked(intentName)
+	delete(s.byIntent, intentName)
+}
+
+// PathsFor returns the path markers last contributed by intentName via Set.
+// The slice is a copy; nil means none. Safe to call on a nil receiver.
+func (s *PathIndex) PathsFor(intentName string) []*sdcpb.Path {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	src := s.byIntent[intentName]
+	if len(src) == 0 {
+		return nil
+	}
+	return append([]*sdcpb.Path(nil), src...)
 }
 
 // removeLocked removes intentName from every entry in the index.

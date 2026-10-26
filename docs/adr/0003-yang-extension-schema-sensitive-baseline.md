@@ -48,3 +48,9 @@ The original decision (schema baseline via `sdcio-ext:sensitive`) is unchanged. 
 - **Not done: redacting in the leaf accessor.** Making `LeafEntry` accessors return already-redacted values (so a consumer cannot forget to redact) was considered and deferred; it would change the accessor surface just migrated in #492.
 - **Datastore RPC options.** `GetIntent` and `BlameConfig` on `*Datastore` take `GetIntentOpts` / `BlameConfigOpts` in `package datastore` (shared embedded `NorthboundSensitivityOpts` with `IncludeSensitive`, matching proto). Server maps gRPC requests into these structs; tests call the same API. Empty `IntentName` is rejected; zero `IncludeSensitive` means redact. The datastore builds `sensitive.Render` via `RenderOptsNorthbound` internally — callers never assemble it.
 
+**2026-10-26 — Transaction rollback restores path markers (PR #493 review).**
+
+- **Snapshot at capture.** When `TransactionSet` records `TransactionIntentOld`, it snapshots path markers from the Live Sensitive Path Index (`PathIndex.PathsFor`) at the same moment as updates and explicit deletes — before this transaction writes cache or index.
+- **Rollback applies the snapshot.** `TransactionCancel` and confirm-timeout rollback replay that snapshot into `intent.sensitive_paths` and `PathIndex.Set`, so marker-only redaction is not cleared by a rolled-back transaction.
+- **Source of truth at capture.** The index is authoritative for the snapshot; cache and index are kept aligned on successful `IntentModify`. Replace transactions are out of scope (different rollback model).
+
