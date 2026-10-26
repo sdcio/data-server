@@ -33,6 +33,24 @@ func TestPathIndex_DeleteRemovesIntentPaths(t *testing.T) {
 	if idx.Contains(mustParsePath(t, "/ospf/auth-key")) {
 		t.Error("Contains() = true after Delete, want false")
 	}
+	if idx.PathsFor("my-intent") != nil {
+		t.Error("PathsFor() after Delete should be nil")
+	}
+}
+
+func TestPathIndex_PathsForReturnsSnapshot(t *testing.T) {
+	idx := sensitive.NewPathIndex()
+	path := mustParsePath(t, "/ospf/auth-key")
+	idx.Set("my-intent", []*sdcpb.Path{path})
+
+	got := idx.PathsFor("my-intent")
+	if len(got) != 1 || got[0].ToXPath(true) != path.ToXPath(true) {
+		t.Fatalf("PathsFor() = %v, want one path %q", got, path.ToXPath(true))
+	}
+	got[0] = mustParsePath(t, "/other")
+	if idx.PathsFor("my-intent")[0].ToXPath(true) != path.ToXPath(true) {
+		t.Error("PathsFor() must return a copy; mutating the slice must not change the index")
+	}
 }
 
 func TestPathIndex_DeleteKeepsSharedPath(t *testing.T) {
