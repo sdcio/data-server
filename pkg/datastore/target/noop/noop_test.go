@@ -16,6 +16,7 @@ package noop_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/beevik/etree"
@@ -25,7 +26,40 @@ import (
 
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore/target/noop"
+	"github.com/sdcio/data-server/pkg/tree"
+	treeimporter "github.com/sdcio/data-server/pkg/tree/importer"
 )
+
+// fakeRunningStore is a minimal types.RunningStore recording every name
+// passed to MarkSynced.
+type fakeRunningStore struct {
+	mu     sync.Mutex
+	synced map[string]bool
+}
+
+func newFakeRunningStore() *fakeRunningStore {
+	return &fakeRunningStore{synced: make(map[string]bool)}
+}
+
+func (f *fakeRunningStore) ApplyToRunning(_ context.Context, _ []*sdcpb.Path, _ treeimporter.ImportConfigAdapter) error {
+	return nil
+}
+
+func (f *fakeRunningStore) NewEmptyTree(_ context.Context) (*tree.RootEntry, error) {
+	return nil, nil
+}
+
+func (f *fakeRunningStore) MarkSynced(name string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.synced[name] = true
+}
+
+func (f *fakeRunningStore) isSynced(name string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.synced[name]
+}
 
 // stubSource is a minimal TargetSource that returns pre-configured updates and
 // deletes. All other methods are stubs that return zero values.
@@ -71,7 +105,7 @@ func ctxWithCapture(cap *infoCapture) context.Context {
 // TestAddSyncs_ZeroEntries_ReturnsNil verifies that AddSyncs called with no
 // entries returns nil.
 func TestAddSyncs_ZeroEntries_ReturnsNil(t *testing.T) {
-	tgt, err := noop.NewNoopTarget(context.Background(), "ds-noop")
+	tgt, err := noop.NewNoopTarget(context.Background(), "ds-noop", newFakeRunningStore())
 	if err != nil {
 		t.Fatalf("NewNoopTarget: %v", err)
 	}
@@ -84,7 +118,7 @@ func TestAddSyncs_ZeroEntries_ReturnsNil(t *testing.T) {
 // TestAddSyncs_MultipleEntries_ReturnsNil verifies that AddSyncs called with
 // one or more SyncProtocol entries always returns nil.
 func TestAddSyncs_MultipleEntries_ReturnsNil(t *testing.T) {
-	tgt, err := noop.NewNoopTarget(context.Background(), "ds-noop")
+	tgt, err := noop.NewNoopTarget(context.Background(), "ds-noop", newFakeRunningStore())
 	if err != nil {
 		t.Fatalf("NewNoopTarget: %v", err)
 	}
@@ -98,13 +132,38 @@ func TestAddSyncs_MultipleEntries_ReturnsNil(t *testing.T) {
 	}
 }
 
+// TestAddSyncs_MarksEveryEntrySynced verifies that AddSyncs calls
+// MarkSynced on the RunningStore for every discarded sync entry, which is
+// what immediately satisfies the Synced gate for noop-backed datastores.
+func TestAddSyncs_MarksEveryEntrySynced(t *testing.T) {
+	store := newFakeRunningStore()
+	tgt, err := noop.NewNoopTarget(context.Background(), "ds-noop", store)
+	if err != nil {
+		t.Fatalf("NewNoopTarget: %v", err)
+	}
+
+	syncs := []*config.SyncProtocol{
+		{Name: "s1", Protocol: "gnmi"},
+		{Name: "s2", Protocol: "netconf"},
+	}
+	if err := tgt.AddSyncs(context.Background(), syncs...); err != nil {
+		t.Fatalf("AddSyncs(%d entries) error = %v, want nil", len(syncs), err)
+	}
+
+	for _, sp := range syncs {
+		if !store.isSynced(sp.Name) {
+			t.Errorf("MarkSynced not called for sync %q", sp.Name)
+		}
+	}
+}
+
 // TestAddSyncs_NoInfoLogPerEntry verifies that AddSyncs does NOT emit an
 // Info-level log line for each sync entry it receives.  The current
 // implementation logs each marshalled entry at Info, which is noisy in CI and
 // implies meaningful processing; the fixed implementation silently discards
 // them.
 func TestAddSyncs_NoInfoLogPerEntry(t *testing.T) {
-	tgt, err := noop.NewNoopTarget(context.Background(), "ds-noop")
+	tgt, err := noop.NewNoopTarget(context.Background(), "ds-noop", newFakeRunningStore())
 	if err != nil {
 		t.Fatalf("NewNoopTarget: %v", err)
 	}
@@ -128,7 +187,7 @@ func TestAddSyncs_NoInfoLogPerEntry(t *testing.T) {
 // TestStatus_ReturnsConnected verifies that a freshly-created noop target
 // reports itself as connected.
 func TestStatus_ReturnsConnected(t *testing.T) {
-	tgt, err := noop.NewNoopTarget(context.Background(), "ds-noop")
+	tgt, err := noop.NewNoopTarget(context.Background(), "ds-noop", newFakeRunningStore())
 	if err != nil {
 		t.Fatalf("NewNoopTarget: %v", err)
 	}
@@ -144,7 +203,7 @@ func TestStatus_ReturnsConnected(t *testing.T) {
 
 // TestClose_ReturnsNil verifies that Close always returns nil.
 func TestClose_ReturnsNil(t *testing.T) {
-	tgt, err := noop.NewNoopTarget(context.Background(), "ds-noop")
+	tgt, err := noop.NewNoopTarget(context.Background(), "ds-noop", newFakeRunningStore())
 	if err != nil {
 		t.Fatalf("NewNoopTarget: %v", err)
 	}
@@ -158,7 +217,7 @@ func TestClose_ReturnsNil(t *testing.T) {
 // Notification for each requested path, and that each notification carries a
 // non-zero timestamp.
 func TestGet_ReturnsOneNotificationPerPath(t *testing.T) {
-	tgt, err := noop.NewNoopTarget(context.Background(), "ds-noop")
+	tgt, err := noop.NewNoopTarget(context.Background(), "ds-noop", newFakeRunningStore())
 	if err != nil {
 		t.Fatalf("NewNoopTarget: %v", err)
 	}
@@ -188,7 +247,7 @@ func TestGet_ReturnsOneNotificationPerPath(t *testing.T) {
 // UpdateResult per update (Op=UPDATE) and one per delete (Op=DELETE), in that
 // order.
 func TestSet_ReturnsCorrectUpdateResultOps(t *testing.T) {
-	tgt, err := noop.NewNoopTarget(context.Background(), "ds-noop")
+	tgt, err := noop.NewNoopTarget(context.Background(), "ds-noop", newFakeRunningStore())
 	if err != nil {
 		t.Fatalf("NewNoopTarget: %v", err)
 	}

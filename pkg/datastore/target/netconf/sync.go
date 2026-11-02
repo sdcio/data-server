@@ -114,7 +114,13 @@ func (s *NetconfSyncImpl) internalSync(req *sdcpb.GetDataRequest) error {
 		return err
 	}
 
-	return s.runningStore.ApplyToRunning(s.ctx, s.paths, importer)
+	importer = netconfScopedImportAdapter(importer)
+
+	if err := s.runningStore.ApplyToRunning(s.ctx, s.paths, importer); err != nil {
+		return err
+	}
+	s.runningStore.MarkSynced(s.config.Name)
+	return nil
 }
 
 func (s *NetconfSyncImpl) Stop() error {
