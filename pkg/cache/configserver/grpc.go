@@ -24,23 +24,26 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// GRPCConfigReader implements LocalConfigReader over the real
-// config_read.ConfigReadService, the localhost-bound gRPC surface ticket 07
-// serves from inside the colocated config-server controller.
+// GRPCConfigClient implements ConfigSnapshotClient over the real
+// config_read.ConfigSnapshotService, the localhost-bound gRPC surface
+// served from inside the colocated config-server controller.
+// Get/List/Modify/Delete are all one RPC service over one resource
+// (TargetSnapshot), so one generated client structurally satisfies the
+// ConfigSnapshotClient port (see ADR 0003's "Wire contract" section).
 //
 // It takes a grpc.ClientConnInterface rather than dialing one itself,
 // mirroring pkg/schema.NewRemoteClient: dial address/credentials are the
 // caller's concern (Dial below is one convenience constructor for the
 // localhost/insecure case this service is always deployed as), so nothing
 // here is hardcoded.
-type GRPCConfigReader struct {
-	client config_read.ConfigReadServiceClient
+type GRPCConfigClient struct {
+	client config_read.ConfigSnapshotServiceClient
 }
 
-// NewGRPCConfigReader returns a LocalConfigReader that calls the
-// ConfigReadService over cc.
-func NewGRPCConfigReader(cc grpc.ClientConnInterface) *GRPCConfigReader {
-	return &GRPCConfigReader{client: config_read.NewConfigReadServiceClient(cc)}
+// NewGRPCConfigClient returns a ConfigSnapshotClient that calls the
+// ConfigSnapshotService over cc.
+func NewGRPCConfigClient(cc grpc.ClientConnInterface) *GRPCConfigClient {
+	return &GRPCConfigClient{client: config_read.NewConfigSnapshotServiceClient(cc)}
 }
 
 // Dial establishes an insecure gRPC connection to address, the shape every
@@ -56,10 +59,10 @@ func Dial(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	return grpc.NewClient(address, dialOpts...)
 }
 
-// Get calls ConfigReadService.Get, mapping a NotFound gRPC status to
-// ErrNotFound per the LocalConfigReader contract; any other error
+// Get calls ConfigSnapshotService.Get, mapping a NotFound gRPC status to
+// ErrNotFound per the ConfigSnapshotClient contract; any other error
 // propagates unwrapped.
-func (r *GRPCConfigReader) Get(ctx context.Context, target Target, name string) (*Document, error) {
+func (r *GRPCConfigClient) Get(ctx context.Context, target Target, name string) (*Document, error) {
 	rsp, err := r.client.Get(ctx, &config_read.GetConfigRequest{
 		TargetNamespace: target.Namespace,
 		TargetName:      target.Name,
@@ -74,9 +77,9 @@ func (r *GRPCConfigReader) Get(ctx context.Context, target Target, name string) 
 	return documentFromEntry(rsp.GetConfig()), nil
 }
 
-// List calls ConfigReadService.List, mapping every returned ConfigEntry into
-// a Document.
-func (r *GRPCConfigReader) List(ctx context.Context, target Target) ([]*Document, error) {
+// List calls ConfigSnapshotService.List, mapping every returned ConfigEntry
+// into a Document.
+func (r *GRPCConfigClient) List(ctx context.Context, target Target) ([]*Document, error) {
 	rsp, err := r.client.List(ctx, &config_read.ListConfigRequest{
 		TargetNamespace: target.Namespace,
 		TargetName:      target.Name,
@@ -92,9 +95,9 @@ func (r *GRPCConfigReader) List(ctx context.Context, target Target) ([]*Document
 	return docs, nil
 }
 
-// documentFromEntry maps a config_read.ConfigEntry onto the seam's Document
+// documentFromEntry maps a config_read.ConfigEntry onto the port's Document
 // shape, field for field — no further translation happens here, that's
-// NewImportAdapter's job.
+// configsnapshot.NewImportAdapter's job.
 func documentFromEntry(e *config_read.ConfigEntry) *Document {
 	blobs := e.GetConfig()
 	config := make([]*ConfigBlob, 0, len(blobs))
@@ -112,4 +115,49 @@ func documentFromEntry(e *config_read.ConfigEntry) *Document {
 	}
 }
 
-var _ LocalConfigReader = (*GRPCConfigReader)(nil)
+// configEntryFromDocument maps a Document onto the wire config_read.ConfigEntry
+// shape, field for field — the inverse of documentFromEntry.
+func configEntryFromDocument(doc *Document) *config_read.ConfigEntry {
+	blobs := make([]*config_read.ConfigBlob, 0, len(doc.Config))
+	for _, b := range doc.Config {
+		blobs = append(blobs, &config_read.ConfigBlob{Path: b.Path, Value: b.Value})
+	}
+	return &config_read.ConfigEntry{
+		Name:           doc.Name,
+		Namespace:      doc.Namespace,
+		NonRevertive:   doc.NonRevertive,
+		Orphan:         doc.Orphan,
+		Priority:       doc.Priority,
+		SensitivePaths: doc.SensitivePaths,
+		Config:         blobs,
+	}
+}
+
+// Modify calls ConfigSnapshotService.Modify, mapping doc onto the wire
+// ConfigEntry shape via configEntryFromDocument. The payload crosses the
+// wire as plaintext, deliberately: ADR 0003's "encrypted payload" describes
+// the persisted TargetSnapshot record, not this RPC's bytes — config-server
+// encrypts on receipt (see config-server's fromConfigEntry), the same way
+// it already encrypts SensitiveConfig content it receives northbound.
+func (r *GRPCConfigClient) Modify(ctx context.Context, target Target, doc *Document) error {
+	_, err := r.client.Modify(ctx, &config_read.ModifyConfigRequest{
+		TargetNamespace: target.Namespace,
+		TargetName:      target.Name,
+		Config:          configEntryFromDocument(doc),
+	})
+	return err
+}
+
+// Delete calls ConfigSnapshotService.Delete. The server side already treats
+// a missing key/snapshot as a no-op success, so no NotFound mapping is needed
+// here.
+func (r *GRPCConfigClient) Delete(ctx context.Context, target Target, name string) error {
+	_, err := r.client.Delete(ctx, &config_read.DeleteConfigRequest{
+		TargetNamespace: target.Namespace,
+		TargetName:      target.Name,
+		Name:            name,
+	})
+	return err
+}
+
+var _ ConfigSnapshotClient = (*GRPCConfigClient)(nil)

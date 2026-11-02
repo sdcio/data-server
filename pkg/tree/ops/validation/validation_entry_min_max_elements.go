@@ -25,7 +25,7 @@ func validateMinMaxElements(_ context.Context, e api.Entry, resultChan chan<- *t
 	// get all the childs, skipping the key levels
 	childs, err := ops.GetListChilds(e)
 	if err != nil {
-		resultChan <- types.NewValidationResultEntry("unknown", fmt.Errorf("error getting childs for min/max-elements check %v", err), types.ValidationResultEntryTypeError)
+		resultChan <- types.NewValidationResultEntry(types.UnknownOwner, fmt.Errorf("error getting childs for min/max-elements check %v", err), types.ValidationResultEntryTypeError)
 	}
 
 	intMin := int(contSchema.GetMinElements())

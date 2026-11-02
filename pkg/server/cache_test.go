@@ -16,10 +16,12 @@ package server
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/config"
+	"github.com/sdcio/sdc-protos/tree_persist"
 )
 
 func TestCreateConfigServerCacheClient(t *testing.T) {
@@ -45,12 +47,14 @@ func TestCreateConfigServerCacheClient(t *testing.T) {
 	}
 }
 
-// TestCreateConfigServerCacheClient_WritesAreNoOps verifies the config-server
-// case composes a Client whose IntentModify/IntentDelete behavior is the
-// generic no-op (noopIntentWriter) — reachable without ever going through
-// the read seam (configserver.LocalConfigReader), since a real backend would
-// need network/reader wiring to answer at all.
-func TestCreateConfigServerCacheClient_WritesAreNoOps(t *testing.T) {
+// TestCreateConfigServerCacheClient_WritesReachTheClientSeam verifies the
+// config-server case composes a Client whose IntentModify/IntentDelete are
+// real writes reaching the GRPCConfigClient seam (see
+// pkg/cache/docs/adr/0003-config-server-write-path-real-last-applied-writes.md)
+// rather than a no-op IntentWriter. It only exercises the malformed-name
+// fast path — asserting ErrMalformedDatastoreName rather than a silent nil —
+// since anything past that would need a live config-server connection to answer.
+func TestCreateConfigServerCacheClient_WritesReachTheClientSeam(t *testing.T) {
 	s := &Server{
 		config: &config.Config{
 			Cache: &config.CacheConfig{
@@ -64,10 +68,12 @@ func TestCreateConfigServerCacheClient_WritesAreNoOps(t *testing.T) {
 		t.Fatalf("createConfigServerCacheClient() error = %v", err)
 	}
 
-	if err := s.cacheClient.InstanceIntentModify(context.Background(), "ns1.target1", nil); err != nil {
-		t.Errorf("InstanceIntentModify() error = %v, want nil", err)
+	ctx := context.Background()
+	const malformed = "no-dot-here"
+	if err := s.cacheClient.InstanceIntentModify(ctx, malformed, &tree_persist.Intent{IntentName: "any-intent"}); !errors.Is(err, cache.ErrMalformedDatastoreName) {
+		t.Errorf("InstanceIntentModify() error = %v, want ErrMalformedDatastoreName", err)
 	}
-	if err := s.cacheClient.InstanceIntentDelete(context.Background(), "ns1.target1", "intent1", false); err != nil {
-		t.Errorf("InstanceIntentDelete() error = %v, want nil", err)
+	if err := s.cacheClient.InstanceIntentDelete(ctx, malformed, "any-intent", false); !errors.Is(err, cache.ErrMalformedDatastoreName) {
+		t.Errorf("InstanceIntentDelete() error = %v, want ErrMalformedDatastoreName", err)
 	}
 }
