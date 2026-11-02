@@ -1,7 +1,9 @@
 package api_test
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/sdcio/data-server/pkg/tree/api"
 )
@@ -123,5 +125,60 @@ func Test_childMap_DeleteChild(t *testing.T) {
 				t.Errorf("expected %d elements got %d", tt.expectedLength, c.Length())
 			}
 		})
+	}
+}
+
+func TestChildMapGetAllEmptyDoesNotAllocate(t *testing.T) {
+	c := api.NewChildMap()
+	allocs := testing.AllocsPerRun(1000, func() {
+		got := c.GetAll()
+		if len(got) != 0 {
+			t.Fatalf("GetAll() len = %d, want 0", len(got))
+		}
+	})
+	if allocs != 0 {
+		t.Fatalf("GetAll() on empty ChildMap allocated %.2f times per run, want 0", allocs)
+	}
+}
+
+func TestChildMapGetAllSortedEmptyDoesNotAllocate(t *testing.T) {
+	c := api.NewChildMap()
+	allocs := testing.AllocsPerRun(1000, func() {
+		got := c.GetAllSorted()
+		if len(got) != 0 {
+			t.Fatalf("GetAllSorted() len = %d, want 0", len(got))
+		}
+	})
+	if allocs != 0 {
+		t.Fatalf("GetAllSorted() on empty ChildMap allocated %.2f times per run, want 0", allocs)
+	}
+}
+
+func TestChildMapGetAllSortedDoesNotDeadlockWithConcurrentDelete(t *testing.T) {
+	entries := make(map[string]api.Entry, 256)
+	for i := 0; i < 256; i++ {
+		entries[fmt.Sprintf("%04d", i)] = nil
+	}
+	c := api.NewChildMapWithEntries(entries)
+
+	done := make(chan struct{})
+	go func() {
+		for i := 0; i < 5000; i++ {
+			_ = c.GetAllSorted()
+			_ = c.GetKeys()
+			_ = c.SortedKeys()
+		}
+		close(done)
+	}()
+	go func() {
+		for i := 0; i < 256; i++ {
+			c.DeleteChild(fmt.Sprintf("%04d", i))
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(15 * time.Second):
+		t.Fatal("deadlock: child-map key listing nested a read lock while a writer waited")
 	}
 }

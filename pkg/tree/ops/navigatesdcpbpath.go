@@ -48,7 +48,7 @@ func NavigateSdcpbPath(ctx context.Context, e api.Entry, path *sdcpb.Path) (api.
 		}
 		return NavigateSdcpbPath(ctx, entry, path.CopyAndRemoveFirstPathElem())
 	default:
-		child, exists := e.GetChilds(types.DescendMethodActiveChilds)[pathElems[0].Name]
+		child, exists := e.GetChild(pathElems[0].Name, types.DescendMethodActiveChilds)
 		if !exists {
 			pth := &sdcpb.Path{Elem: pathElems}
 			return nil, fmt.Errorf("%w: reached %v but child %v does not exist", ErrNavigateSdcpbPathNotFound, e.SdcpbPath().ToXPath(false), pth.ToXPath(false))

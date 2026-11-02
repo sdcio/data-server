@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/api/adapter"
@@ -21,6 +22,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 
 	log := logger.FromContext(ctx)
 
+	lockStart := time.Now()
 	d.syncTreeMutex.Lock()
 	syncTreeUnlock := sync.OnceFunc(d.syncTreeMutex.Unlock)
 
@@ -108,6 +110,9 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 
 	// release the sync tree lock early, it is no longer needed
 	syncTreeUnlock()
+	if d.syncTreeLockHoldReporter != nil {
+		d.syncTreeLockHoldReporter(time.Since(lockStart))
+	}
 
 	// perform the revert operation to apply changes to the device
 	// TODO: this should probably be executed in a separate goroutine

@@ -88,8 +88,8 @@ func completeKey(ctx context.Context, entry api.Entry, toCompletePath *sdcpb.Pat
 	}
 	result := []string{}
 	for _, e := range childs {
-		em := e.GetChilds(types.DescendMethodActiveChilds)
-		lv := em[attrName].GetLeafVariants().GetHighestPrecedence(false, true, false)
+		child, _ := e.GetChild(attrName, types.DescendMethodActiveChilds)
+		lv := child.GetLeafVariants().GetHighestPrecedence(false, true, false)
 
 		elemVal := lv.Update.Value().ToString()
 		if !strings.HasPrefix(elemVal, attrVal) {
