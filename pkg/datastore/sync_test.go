@@ -20,6 +20,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
+	protoImporter "github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -147,7 +148,7 @@ func TestApplyToRunning(t *testing.T) {
 				ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
 				ccb.EXPECT().
 					IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 						close(intentChan)
 						close(errChan)
 					}).AnyTimes()
@@ -257,7 +258,7 @@ func TestApplyToRunning(t *testing.T) {
 				ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
 				ccb.EXPECT().
 					IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 						close(intentChan)
 						close(errChan)
 					}).AnyTimes()
@@ -369,7 +370,7 @@ func TestApplyToRunning(t *testing.T) {
 				ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
 				ccb.EXPECT().
 					IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+					DoAndReturn(func(ctx context.Context, excludeIntentNames []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
 						close(intentChan)
 						close(errChan)
 					}).AnyTimes()
@@ -521,8 +522,8 @@ func newPerformRevertFixture(t *testing.T, ctrl *gomock.Controller) *performReve
 	ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
 	ccb.EXPECT().
 		IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
-			intentChan <- fixtureIntent
+		DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- importer.IntentAdapter, errChan chan<- error) {
+			intentChan <- protoImporter.NewProtoTreeImporter(fixtureIntent)
 			close(intentChan)
 			close(errChan)
 		}).AnyTimes()

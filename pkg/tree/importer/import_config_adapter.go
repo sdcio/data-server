@@ -6,14 +6,24 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-// ImportConfigAdapter is used by the ImportConfig() of the Tree. It allows to import hierarchically organized config data into the tree with little overhead.
-// implementation for JSON and XML do exist.
+// ImportConfigAdapter feeds Tree.ImportConfig with hierarchical config.
+// JSON and XML implement it for device and running data. Intent-only
+// metadata (Orphan, SensitivePaths) lives on IntentAdapter.
 type ImportConfigAdapter interface {
 	ImportConfigAdapterElement
 	GetDeletes() *sdcpb.PathSet
 	GetName() string
 	GetPriority() int32
 	GetNonRevertive() bool
+}
+
+// IntentAdapter is an ImportConfigAdapter plus intent-only metadata:
+// Orphan and SensitivePaths. Proto-backed intent reads implement it.
+// JSON and XML device and running importers do not.
+type IntentAdapter interface {
+	ImportConfigAdapter
+	GetOrphan() bool
+	GetSensitivePaths() []*sdcpb.Path
 }
 
 type ImportConfigAdapterElement interface {
