@@ -140,7 +140,8 @@ func (t *Transaction) AddTransactionIntent(ti *TransactionIntent, tit Transactio
 }
 
 // AddIntentContent add the content of an intent. If the intent did not exist, add the name of the intent and content == nil.
-func (t *Transaction) AddIntentContent(name string, tit TransactionIntentType, priority int32, content []*treetypes.PathAndUpdate, explicitDeletes *sdcpb.PathSet) error {
+// sensitivePaths is the pre-transaction path-marker snapshot for rollback (may be nil).
+func (t *Transaction) AddIntentContent(name string, tit TransactionIntentType, priority int32, content []*treetypes.PathAndUpdate, explicitDeletes *sdcpb.PathSet, sensitivePaths []*sdcpb.Path) error {
 	dstMap := t.getTransactionIntentTypeMap(tit)
 	_, exists := dstMap[name]
 	if exists {
@@ -151,6 +152,7 @@ func (t *Transaction) AddIntentContent(name string, tit TransactionIntentType, p
 
 	ti.AddUpdates(content)
 	ti.AddExplicitDeletes(explicitDeletes.ToPathSlice())
+	ti.SetSensitivePaths(sensitivePaths)
 	return nil
 }
 

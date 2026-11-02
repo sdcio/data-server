@@ -19,6 +19,9 @@ type TransactionIntent struct {
 	previouslyApplied       bool
 	// revertPaths paths that are meant to be reverted. This is used for non-revertive intents.
 	revertPaths []*sdcpb.Path
+	// Key-free schema paths whose leaf values must be redacted northbound when
+	// marked here; nil or empty means no path-marker redaction for this intent.
+	sensitivePaths []*sdcpb.Path
 }
 
 func NewTransactionIntent(name string, priority int32) *TransactionIntent {
@@ -115,4 +118,12 @@ func (ti *TransactionIntent) GetRevertPaths() []*sdcpb.Path {
 
 func (ti *TransactionIntent) AddRevertPaths(p ...*sdcpb.Path) {
 	ti.revertPaths = append(ti.revertPaths, p...)
+}
+
+func (ti *TransactionIntent) SetSensitivePaths(paths []*sdcpb.Path) {
+	ti.sensitivePaths = paths
+}
+
+func (ti *TransactionIntent) GetSensitivePaths() []*sdcpb.Path {
+	return ti.sensitivePaths
 }

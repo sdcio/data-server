@@ -26,6 +26,7 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/api/adapter"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
+	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
@@ -58,9 +59,14 @@ func (d *Datastore) applyIntent(ctx context.Context, source targettypes.TargetSo
 	return rsp, nil
 }
 
-func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntentResponse, error) {
-	// serve running from synctree
-	if intentName == consts.RunningIntentName {
+// GetIntent renders a named intent or the running sync tree for northbound export.
+// Redaction uses RenderOptsNorthbound with the live sensitive path index (all
+// intents' path markers) and schema-based sensitivity; running has no own markers.
+func (d *Datastore) GetIntent(ctx context.Context, opts GetIntentOpts) (GetIntentResponse, error) {
+	if opts.IntentName == "" {
+		return nil, fmt.Errorf("missing intent name")
+	}
+	if opts.IntentName == consts.RunningIntentName {
 		d.syncTreeMutex.RLock()
 		defer d.syncTreeMutex.RUnlock()
 		err := d.syncTree.FinishInsertionPhase(ctx)
@@ -75,18 +81,18 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntent
 			Orphan:          false,
 			NonRevertive:    false,
 			ExplicitDeletes: nil,
+			RenderOpts:      ops.RenderOptsNorthbound(opts.IncludeSensitive, d.sensitivePathIndex),
 		}
 
 		return result, nil
 	}
 
-	// otherwise consult cache
 	root, err := tree.NewTreeRoot(ctx, tree.NewTreeContext(d.schemaClient, d.taskPool))
 	if err != nil {
 		return nil, err
 	}
 
-	tp, err := d.cacheClient.IntentGet(ctx, intentName)
+	tp, err := d.cacheClient.IntentGet(ctx, opts.IntentName)
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +115,7 @@ func (d *Datastore) GetIntent(ctx context.Context, intentName string) (GetIntent
 		Orphan:          tp.GetOrphan(),
 		NonRevertive:    tp.GetNonRevertive(),
 		ExplicitDeletes: tp.GetExplicitDeletes(),
+		RenderOpts:      ops.RenderOptsNorthbound(opts.IncludeSensitive, d.sensitivePathIndex),
 	}
 	return result, nil
 }

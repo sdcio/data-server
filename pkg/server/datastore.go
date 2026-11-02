@@ -334,7 +334,12 @@ func (s *Server) BlameConfig(ctx context.Context, req *sdcpb.BlameConfigRequest)
 		return nil, err
 	}
 
-	tree, err := ds.BlameConfig(ctx, req.GetIncludeDefaults())
+	tree, err := ds.BlameConfig(ctx, datastore.BlameConfigOpts{
+		IncludeDefaults: req.GetIncludeDefaults(),
+		NorthboundSensitivityOpts: datastore.NorthboundSensitivityOpts{
+			IncludeSensitive: req.GetIncludeSensitive(),
+		},
+	})
 	if err != nil {
 		return nil, err
 	}

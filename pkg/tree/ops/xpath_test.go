@@ -39,7 +39,7 @@ func TestToXPath_FromConfig1(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pvs, err := ops.ToXPath(ctx, root.Entry, false, false)
+	pvs, err := ops.ToXPath(ctx, root.Entry, ops.XPathRenderOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,12 +113,12 @@ func TestToXPath_OnlyNewOrUpdated_WithSameNewAndExistingConfig1(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	onlyNewOrUpdated, err := ops.ToXPath(ctx, root.Entry, true, false)
+	onlyNewOrUpdated, err := ops.ToXPath(ctx, root.Entry, ops.XPathRenderOpts{RenderOpts: ops.RenderOpts{OnlyNewOrUpdated: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	allValues, err := ops.ToXPath(ctx, root.Entry, false, false)
+	allValues, err := ops.ToXPath(ctx, root.Entry, ops.XPathRenderOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
