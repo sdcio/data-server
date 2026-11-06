@@ -70,6 +70,7 @@ func New(ctx context.Context, cfg *config.Config, opts ...Option) (*Core, error)
 // Start initialises the schema store, the cache and the configured datastores,
 // then marks the Core ready. It returns when initialisation finished or failed
 // and only the first call does work; a failure is also reported by WaitReady.
+// Any configured datastore that cannot be created fails Start.
 func (c *Core) Start(ctx context.Context) error {
 	c.startOnce.Do(func() {
 		c.readyErr = c.start(ctx)
@@ -128,31 +129,39 @@ func (c *Core) start(ctx context.Context) error {
 		return fmt.Errorf("core init: %w", err)
 	}
 
-	c.createInitialDatastores(ctx)
+	if err := c.createInitialDatastores(ctx); err != nil {
+		return fmt.Errorf("core init: %w", err)
+	}
 	log.Info("data-server ready")
 	return nil
 }
 
-func (c *Core) createInitialDatastores(ctx context.Context) {
+// createInitialDatastores creates the datastores listed in the config and
+// returns the joined errors of those that failed.
+func (c *Core) createInitialDatastores(ctx context.Context) error {
 	log := logf.FromContext(ctx)
 	var wg sync.WaitGroup
-	for _, dsCfg := range c.cfg.Datastores {
+	errs := make([]error, len(c.cfg.Datastores))
+	for i, dsCfg := range c.cfg.Datastores {
 		dsCfg.Validation = c.cfg.Validation.DeepCopy()
 		wg.Add(1)
-		go func(dsCfg *config.DatastoreConfig) {
+		go func(i int, dsCfg *config.DatastoreConfig) {
 			defer wg.Done()
 			ds, err := datastore.New(c.ctx, dsCfg, c.schemaClient, c.cacheClient, c.dialOpts...)
+			if err == nil {
+				err = c.addDatastore(ds)
+			}
 			if err != nil {
-				log.Error(err, "failed to create datastore", "datastore-name", dsCfg.Name)
-				return
+				errs[i] = fmt.Errorf("datastore %s: %w", dsCfg.Name, err)
 			}
-			if err := c.addDatastore(ds); err != nil {
-				log.Error(err, "failed to add datastore", "datastore-name", dsCfg.Name)
-			}
-		}(dsCfg)
+		}(i, dsCfg)
 	}
 	wg.Wait()
+	if err := errors.Join(errs...); err != nil {
+		return err
+	}
 	log.Info("configured datastores initialized")
+	return nil
 }
 
 func (c *Core) addDatastore(ds *datastore.Datastore) error {

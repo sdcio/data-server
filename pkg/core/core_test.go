@@ -141,3 +141,19 @@ func TestStartAfterStopFails(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestStartFailsWhenInitialDatastoreFails(t *testing.T) {
+	cfg := newTestConfig(t)
+	cfg.Datastores[0].Schema.Name = "missing"
+	c, err := New(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Stop(context.Background()) })
+	if err := c.Start(context.Background()); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := c.WaitReady(context.Background()); err == nil {
+		t.Fatal("WaitReady should report the failure")
+	}
+}
