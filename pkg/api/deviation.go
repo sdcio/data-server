@@ -1,6 +1,10 @@
 package api
 
-// DeviationKind classifies a DeviationEvent.
+import sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+
+// DeviationKind classifies a DeviationEvent: Start opens a deviation stream
+// for a datastore, Update reports a changed deviation, End closes the stream
+// normally and Clear drops all deviations previously reported for the intent.
 type DeviationKind int
 
 const (
@@ -23,9 +27,9 @@ const (
 
 // DeviationEntry is one deviating path with its expected and current values.
 type DeviationEntry struct {
-	Path     string
-	Expected string
-	Current  string
+	Path     *sdcpb.Path
+	Expected *sdcpb.TypedValue
+	Current  *sdcpb.TypedValue
 }
 
 // DeviationEvent is emitted by a deviation watch. Intent, Reason and Entries
