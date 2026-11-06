@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/sdcio/data-server/pkg/api"
 	"github.com/sdcio/data-server/pkg/cache"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore"
@@ -23,8 +24,8 @@ type Core struct {
 	cfg      *config.Config
 	dialOpts []grpc.DialOption
 
-	ctx context.Context
-	cfn context.CancelFunc
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	startOnce sync.Once
 	stopOnce  sync.Once
@@ -56,7 +57,7 @@ func New(ctx context.Context, cfg *config.Config, opts ...Option) (*Core, error)
 	c := &Core{
 		cfg:        cfg,
 		ctx:        ctx,
-		cfn:        cancel,
+		cancel:     cancel,
 		ready:      make(chan struct{}),
 		datastores: map[string]*datastore.Datastore{},
 	}
@@ -89,7 +90,9 @@ func (c *Core) WaitReady(ctx context.Context) error {
 	}
 }
 
-// Stop stops all datastores and cancels the Core's context. It is idempotent.
+// Stop stops all datastores and cancels the Core's context. It is idempotent
+// and always returns nil: datastore stop errors are discarded. A Start after
+// Stop fails with context.Canceled.
 func (c *Core) Stop(ctx context.Context) error {
 	c.stopOnce.Do(func() {
 		c.mu.Lock()
@@ -97,13 +100,17 @@ func (c *Core) Stop(ctx context.Context) error {
 		for _, ds := range c.datastores {
 			_ = ds.Stop(ctx)
 		}
-		c.cfn()
+		c.cancel()
 	})
 	return nil
 }
 
 func (c *Core) start(ctx context.Context) error {
-	log := logf.FromContext(ctx)
+	if err := c.ctx.Err(); err != nil {
+		return err
+	}
+	log := logf.FromContext(ctx).WithName("data-server")
+	ctx = logf.IntoContext(ctx, log)
 
 	var wg sync.WaitGroup
 	var schemaErr, cacheErr error
@@ -158,12 +165,17 @@ func (c *Core) addDatastore(ds *datastore.Datastore) error {
 	return nil
 }
 
+// getDatastore fails with api.ErrInvalidArgument for an empty name and
+// api.ErrUnknownDatastore when the name is not registered.
 func (c *Core) getDatastore(name string) (*datastore.Datastore, error) {
+	if name == "" {
+		return nil, fmt.Errorf("%w: missing datastore name", api.ErrInvalidArgument)
+	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	ds, ok := c.datastores[name]
 	if !ok {
-		return nil, fmt.Errorf("%w %s", errUnknownDatastore, name)
+		return nil, fmt.Errorf("%w %s", api.ErrUnknownDatastore, name)
 	}
 	return ds, nil
 }

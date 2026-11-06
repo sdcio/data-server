@@ -130,3 +130,14 @@ func TestWaitReadyHonoursContext(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestStartAfterStopFails(t *testing.T) {
+	c, err := New(context.Background(), newTestConfig(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = c.Stop(context.Background())
+	if err := c.Start(context.Background()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("got %v", err)
+	}
+}

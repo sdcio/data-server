@@ -2,25 +2,20 @@ package core
 
 import (
 	"context"
-	"fmt"
 	"strings"
-	"time"
 
 	"github.com/sdcio/data-server/pkg/api"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore"
+	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-var errUnknownDatastore = api.ErrUnknownDatastore
-
-// GetDataStore returns the observed state of the named datastore. It fails
-// with api.ErrInvalidArgument for an empty name and api.ErrUnknownDatastore
-// when no such datastore exists.
+// GetDataStore returns the observed state of the named datastore, with
+// credentials in the effective spec redacted. It fails with
+// api.ErrInvalidArgument for an empty name and api.ErrUnknownDatastore when no
+// such datastore exists.
 func (c *Core) GetDataStore(ctx context.Context, name string) (*api.DatastoreInfo, error) {
-	if name == "" {
-		return nil, fmt.Errorf("%w: missing datastore name", api.ErrInvalidArgument)
-	}
 	ds, err := c.getDatastore(name)
 	if err != nil {
 		return nil, err
@@ -29,12 +24,9 @@ func (c *Core) GetDataStore(ctx context.Context, name string) (*api.DatastoreInf
 }
 
 // WatchDeviations returns a channel of deviation events for the named
-// datastore. The channel closes when ctx is done or the Core stops. Events are
-// not produced yet; the datastore deviation feed is wired in a later step.
+// datastore. The channel closes when ctx is done or the Core stops. It never
+// emits events: no deviation producer feeds it.
 func (c *Core) WatchDeviations(ctx context.Context, name string) (<-chan api.DeviationEvent, error) {
-	if name == "" {
-		return nil, fmt.Errorf("%w: missing datastore name", api.ErrInvalidArgument)
-	}
 	if _, err := c.getDatastore(name); err != nil {
 		return nil, err
 	}
@@ -98,7 +90,7 @@ func specFromConfig(dc *config.DatastoreConfig) api.DatastoreSpec {
 				Target:   &api.Target{Type: api.TargetType(strings.ToLower(sp.Protocol)), ProtocolOptions: api.ProtocolOptions{GNMI: gnmiSyncOptions(sp)}},
 				Paths:    sp.Paths,
 				Mode:     syncMode(sp.Mode),
-				Interval: uint64(sp.Interval / time.Nanosecond),
+				Interval: uint64(sp.Interval),
 			})
 		}
 	}
@@ -132,7 +124,7 @@ func targetFromSBI(s *config.SBI) api.Target {
 		Port:    s.Port,
 	}
 	if s.Credentials != nil {
-		t.Credentials = &api.Credentials{Username: s.Credentials.Username, Password: s.Credentials.Password, Token: s.Credentials.Token}
+		t.Credentials = &api.Credentials{Username: s.Credentials.Username, Password: redact(s.Credentials.Password), Token: redact(s.Credentials.Token)}
 	}
 	if s.TLS != nil {
 		t.TLS = &api.TLS{CA: s.TLS.CA, Cert: s.TLS.Cert, Key: s.TLS.Key, SkipVerify: s.TLS.SkipVerify}
@@ -141,16 +133,23 @@ func targetFromSBI(s *config.SBI) api.Target {
 		t.ProtocolOptions.GNMI = &api.GNMIOptions{Encoding: s.GnmiOptions.Encoding, TargetName: s.GnmiOptions.TargetName}
 	}
 	if o := s.NetconfOptions; o != nil {
-		cc := api.CommitCandidateCandidate
+		commit := api.CommitCandidateCandidate
 		if o.CommitDatastore == "running" {
-			cc = api.CommitCandidateRunning
+			commit = api.CommitCandidateRunning
 		}
 		t.ProtocolOptions.Netconf = &api.NetconfOptions{
 			IncludeNs:          o.IncludeNS,
 			OperationWithNs:    o.OperationWithNamespace,
 			UseOperationRemove: o.UseOperationRemove,
-			CommitCandidate:    cc,
+			CommitCandidate:    commit,
 		}
 	}
 	return t
+}
+
+func redact(v string) string {
+	if v == "" {
+		return ""
+	}
+	return utils.Redacted
 }
