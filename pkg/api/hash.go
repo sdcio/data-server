@@ -24,10 +24,7 @@ func ComputeCreateDSHash(spec DatastoreSpec, extra ...string) string {
 	for i := range spec.Sync.Configs {
 		c := &spec.Sync.Configs[i]
 		w.str(c.Name)
-		if c.Target == nil {
-			w.bool(false)
-		} else {
-			w.bool(true)
+		if w.present(c.Target != nil) {
 			w.target(c.Target)
 		}
 		w.i64(int64(len(c.Paths)))
@@ -68,38 +65,32 @@ func (w hashWriter) bool(v bool) {
 	w.h.Write([]byte{0})
 }
 
+// present writes a presence marker and returns ok, so nil and zero values hash apart.
+func (w hashWriter) present(ok bool) bool {
+	w.bool(ok)
+	return ok
+}
+
 func (w hashWriter) target(t *Target) {
 	w.str(string(t.Type))
 	w.str(t.Address)
 	w.i64(int64(t.Port))
-	if t.Credentials == nil {
-		w.bool(false)
-	} else {
-		w.bool(true)
+	if w.present(t.Credentials != nil) {
 		w.str(t.Credentials.Username)
 		w.str(t.Credentials.Password)
 		w.str(t.Credentials.Token)
 	}
-	if t.TLS == nil {
-		w.bool(false)
-	} else {
-		w.bool(true)
+	if w.present(t.TLS != nil) {
 		w.str(t.TLS.CA)
 		w.str(t.TLS.Cert)
 		w.str(t.TLS.Key)
 		w.bool(t.TLS.SkipVerify)
 	}
-	if g := t.ProtocolOptions.GNMI; g == nil {
-		w.bool(false)
-	} else {
-		w.bool(true)
+	if g := t.ProtocolOptions.GNMI; w.present(g != nil) {
 		w.str(g.Encoding)
 		w.str(g.TargetName)
 	}
-	if n := t.ProtocolOptions.Netconf; n == nil {
-		w.bool(false)
-	} else {
-		w.bool(true)
+	if n := t.ProtocolOptions.Netconf; w.present(n != nil) {
 		w.bool(n.IncludeNs)
 		w.bool(n.OperationWithNs)
 		w.bool(n.UseOperationRemove)

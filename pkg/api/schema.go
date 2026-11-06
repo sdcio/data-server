@@ -26,3 +26,8 @@ type CreateSchemaSpec struct {
 	Directories []string
 	Excludes    []string
 }
+
+// DeleteSchemaSpec identifies the schema to delete.
+type DeleteSchemaSpec struct {
+	Schema SchemaRef
+}

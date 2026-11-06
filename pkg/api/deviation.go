@@ -1,6 +1,8 @@
 package api
 
-// DeviationKind classifies a DeviationEvent.
+// DeviationKind classifies a DeviationEvent: Start opens a deviation stream
+// for a datastore, Update reports a changed deviation, End closes the stream
+// normally and Clear drops all deviations previously reported for the intent.
 type DeviationKind int
 
 const (
