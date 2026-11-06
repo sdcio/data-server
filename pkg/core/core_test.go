@@ -20,14 +20,14 @@ func newTestConfig(t *testing.T) *config.Config {
 	cfg.SchemaStore = &schemaConfig.SchemaStoreConfig{
 		Type: schemaConfig.StoreTypeMemory,
 		Schemas: []*schemaConfig.SchemaConfig{{
-			Name: "s", Vendor: "v", Version: "1",
-			Files: []string{"../../tests/schema/sdcio_model_if.yang"},
+			Name: "", Vendor: "v", Version: "1",
+			Files: []string{"../../tests/schema/sdcio_model.yang"}, Directories: []string{"../../tests/schema"},
 		}},
 	}
 	cfg.Cache = &config.CacheConfig{Type: "local", StoreType: "badgerdbsharded", Dir: t.TempDir()}
 	cfg.Datastores = []*config.DatastoreConfig{{
 		Name:   "ds1",
-		Schema: &config.SchemaConfig{Name: "s", Vendor: "v", Version: "1"},
+		Schema: &config.SchemaConfig{Name: "", Vendor: "v", Version: "1"},
 		SBI:    &config.SBI{Type: "noop"},
 		Sync:   &config.Sync{},
 	}}

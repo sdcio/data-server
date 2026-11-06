@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	pubapi "github.com/sdcio/data-server/pkg/api"
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/api"
@@ -25,7 +26,7 @@ import (
 )
 
 var (
-	ErrDatastoreLocked   = errors.New("datastore is locked, other action is ongoing")
+	ErrDatastoreLocked   = pubapi.ErrDatastoreLocked
 	ErrContextDone       = errors.New("context is closed (done)")
 	ErrValidation        = errors.New("validation error")
 	ErrNoIntentsProvided = errors.New("no intents provided")

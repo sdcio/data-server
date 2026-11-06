@@ -23,27 +23,6 @@ func (c *Core) GetDataStore(ctx context.Context, name string) (*api.DatastoreInf
 	return datastoreInfo(ctx, ds)
 }
 
-// WatchDeviations returns a channel of deviation events for the named
-// datastore. The channel closes when ctx is done or the Core stops. It never
-// emits events: no deviation producer feeds it.
-func (c *Core) WatchDeviations(ctx context.Context, name string) (<-chan api.DeviationEvent, error) {
-	if _, err := c.getDatastore(name); err != nil {
-		return nil, err
-	}
-	ch := make(chan api.DeviationEvent, deviationBuffer)
-	go func() {
-		defer close(ch)
-		select {
-		case <-ctx.Done():
-		case <-c.ctx.Done():
-		}
-	}()
-	return ch, nil
-}
-
-// deviationBuffer is the fixed capacity of a deviation watch channel.
-const deviationBuffer = 8
-
 func datastoreInfo(ctx context.Context, ds *datastore.Datastore) (*api.DatastoreInfo, error) {
 	intents, err := ds.IntentsList(ctx)
 	if err != nil {

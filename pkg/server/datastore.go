@@ -284,11 +284,7 @@ func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.
 	log = log.WithValues("datastore-name", req.GetName()[0])
 	logf.IntoContext(ctx, log)
 
-	err = ds.WatchDeviations(req, stream)
-	if err != nil {
-		log.Error(err, "failed to watch deviations")
-		return err
-	}
+	ds.AddDeviationClient(peerName, stream)
 	<-stream.Context().Done()
 	log.Error(stream.Context().Err(), "stream context done", "severity", "WARN")
 	ds.StopDeviationsWatch(stream)

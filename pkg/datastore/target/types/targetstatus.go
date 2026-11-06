@@ -1,15 +1,15 @@
 package types
 
 import (
-	"errors"
 	"fmt"
 
+	"github.com/sdcio/data-server/pkg/api"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 // ErrNotConnected indicates the southbound interface (device connection) of a
 // datastore is not established
-var ErrNotConnected = errors.New("not connected")
+var ErrNotConnected = api.ErrNotConnected
 
 // TargetStatus is the southbound connection state of a target. The zero value
 // is sdcpb.TargetStatus_UNKNOWN

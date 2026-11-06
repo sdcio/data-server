@@ -10,35 +10,41 @@ import (
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/peer"
 	status "google.golang.org/grpc/status"
 )
 
-func (d *Datastore) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.DataServer_WatchDeviationsServer) error {
-	log := logf.FromContext(d.ctx)
-
-	ctx := stream.Context()
-	p, ok := peer.FromContext(ctx)
-	if !ok {
-		return status.Errorf(codes.InvalidArgument, "missing peer info")
-	}
-	peerAddr := p.Addr.String()
-
-	d.m.Lock()
-	defer d.m.Unlock()
-	d.deviationClients[stream] = peerAddr
-
-	log.Info("new deviation client", "client", peerAddr)
-	return nil
+// DeviationSink receives the deviation responses of one watcher. Send may
+// block; the deviation producer of the datastore waits for it. Context ends
+// the watch.
+type DeviationSink interface {
+	Context() context.Context
+	Send(*sdcpb.WatchDeviationResponse) error
 }
 
-func (d *Datastore) StopDeviationsWatch(stream sdcpb.DataServer_WatchDeviationsServer) {
+// AddDeviationClient registers sink under the identifier client, which is used
+// for logging and must be unique among the datastore's sinks.
+func (d *Datastore) AddDeviationClient(client string, sink DeviationSink) {
 	log := logf.FromContext(d.ctx)
 	d.m.Lock()
 	defer d.m.Unlock()
-	peer := d.deviationClients[stream]
-	delete(d.deviationClients, stream)
-	log.Info("deviation client removed", "peer", peer)
+	d.deviationClients[sink] = client
+
+	log.Info("new deviation client", "client", client)
+}
+
+// StopDeviationsWatch unregisters sink.
+func (d *Datastore) StopDeviationsWatch(sink DeviationSink) {
+	log := logf.FromContext(d.ctx)
+	d.m.Lock()
+	defer d.m.Unlock()
+	client := d.deviationClients[sink]
+	delete(d.deviationClients, sink)
+	log.Info("deviation client removed", "peer", client)
+}
+
+// Done is closed when the datastore is stopped.
+func (d *Datastore) Done() <-chan struct{} {
+	return d.ctx.Done()
 }
 
 func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig) {
@@ -59,7 +65,7 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 		case <-ticker.C:
 			log.V(logf.VDebug).Info("deviation calc run - start")
 
-			deviationClients := map[string]sdcpb.DataServer_WatchDeviationsServer{}
+			deviationClients := map[string]DeviationSink{}
 			deviationClientNames := make([]string, 0, len(d.deviationClients))
 
 			// encap in func to use defer for the lock
@@ -137,7 +143,22 @@ func (d DeviationsStats) LogValue() map[string]map[string]int {
 	return stats
 }
 
-func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.DeviationEntry, deviationClients map[string]sdcpb.DataServer_WatchDeviationsServer) {
+func sdcpbDeviationReason(r treetypes.DeviationReason) sdcpb.DeviationReason {
+	switch r {
+	case treetypes.DeviationReasonUnhandled:
+		return sdcpb.DeviationReason_UNHANDLED
+	case treetypes.DeviationReasonNotApplied:
+		return sdcpb.DeviationReason_NOT_APPLIED
+	case treetypes.DeviationReasonOverruled:
+		return sdcpb.DeviationReason_OVERRULED
+	case treetypes.DeviationReasonIntentExists:
+		return sdcpb.DeviationReason_INTENT_EXISTS
+	default:
+		return sdcpb.DeviationReason_DR_UNKNOWN
+	}
+}
+
+func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.DeviationEntry, deviationClients map[string]DeviationSink) {
 	log := logf.FromContext(ctx)
 	deviationsStats := make(DeviationsStats)
 	for deviation := range ch {
@@ -151,7 +172,7 @@ func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.Dev
 				Name:          d.config.Name,
 				Intent:        deviation.IntentName(),
 				Event:         sdcpb.DeviationEvent_UPDATE,
-				Reason:        sdcpb.DeviationReason(deviation.Reason()),
+				Reason:        sdcpbDeviationReason(deviation.Reason()),
 				Path:          deviation.Path(),
 				ExpectedValue: deviation.ExpectedValue(),
 				CurrentValue:  deviation.CurrentValue(),
