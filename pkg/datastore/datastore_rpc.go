@@ -56,7 +56,7 @@ type Datastore struct {
 
 	// keeps track of clients watching deviation updates
 	m                *sync.RWMutex
-	deviationClients map[sdcpb.DataServer_WatchDeviationsServer]string
+	deviationClients map[DeviationSink]string
 
 	// dmutex serializes Datastore set-path work (TransactionSet/Confirm/Cancel
 	// and Sync Revert's southbound apply). Fail-fast TryLock; never block.
@@ -111,7 +111,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 		cacheClient:      ccb,
 		m:                &sync.RWMutex{},
 		dmutex:           &sync.Mutex{},
-		deviationClients: make(map[sdcpb.DataServer_WatchDeviationsServer]string),
+		deviationClients: make(map[DeviationSink]string),
 		syncTree:         syncTreeRoot,
 		syncTreeMutex:    &sync.RWMutex{},
 		taskPool:         pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)),
