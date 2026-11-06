@@ -45,6 +45,8 @@ func (c *Core) createSchemaClient(ctx context.Context) error {
 	return c.createRemoteSchemaClient(ctx)
 }
 
+// createLocalSchemaStore fails only when the store cannot be opened; a schema
+// that fails to parse or add is logged and skipped.
 func (c *Core) createLocalSchemaStore(ctx context.Context) error {
 	log := logf.FromContext(ctx)
 	var store schemaStore.Store
@@ -67,9 +69,9 @@ func (c *Core) createLocalSchemaStore(ctx context.Context) error {
 		wg.Add(1)
 		go func(sCfg *schemaConfig.SchemaConfig) {
 			defer wg.Done()
-			sck := schemaStore.SchemaKey{Name: sCfg.Name, Vendor: sCfg.Vendor, Version: sCfg.Version}
-			log := log.WithValues("schema", sck)
-			if store.HasSchema(sck) {
+			key := schemaStore.SchemaKey{Name: sCfg.Name, Vendor: sCfg.Vendor, Version: sCfg.Version}
+			log := log.WithValues("schema", key)
+			if store.HasSchema(key) {
 				log.Info("schema already exists in the store, not reloading it")
 				return
 			}
