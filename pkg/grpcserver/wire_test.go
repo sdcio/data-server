@@ -20,8 +20,6 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 )
 
-const ifPath = "/interface[name=ethernet-1/1]"
-
 func testConfig(t *testing.T) *config.Config {
 	t.Helper()
 	cfg, err := config.New("")
