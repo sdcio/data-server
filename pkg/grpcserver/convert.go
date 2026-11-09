@@ -64,7 +64,7 @@ func target(t *sdcpb.Target) (api.Target, error) {
 		}
 	case "gnmi":
 		g := t.GetGnmiOpts()
-		out.ProtocolOptions.GNMI = &api.GNMIOptions{Encoding: g.GetEncoding(), TargetName: g.GetTargetName()}
+		out.ProtocolOptions.GNMI = &api.GNMIOptions{Encoding: api.GNMIEncoding(g.GetEncoding()), TargetName: g.GetTargetName()}
 	case "noop":
 	default:
 		return api.Target{}, status.Errorf(codes.InvalidArgument, "unknown targetconnection protocol type %q", t.GetType())
@@ -79,13 +79,13 @@ func target(t *sdcpb.Target) (api.Target, error) {
 }
 
 func syncConfig(s *sdcpb.Sync) (api.Sync, error) {
-	out := api.Sync{Validate: s.GetValidate(), Buffer: s.GetBuffer(), WriteWorkers: s.GetWriteWorkers()}
+	out := api.Sync{}
 	for _, ps := range s.GetConfig() {
 		typ := ps.GetTarget().GetType()
 		tgt := api.Target{Type: api.TargetType(typ)}
 		switch strings.ToLower(typ) {
 		case "gnmi":
-			tgt.ProtocolOptions.GNMI = &api.GNMIOptions{Encoding: ps.GetTarget().GetGnmiOpts().GetEncoding()}
+			tgt.ProtocolOptions.GNMI = &api.GNMIOptions{Encoding: api.GNMIEncoding(ps.GetTarget().GetGnmiOpts().GetEncoding())}
 		case "netconf":
 		default:
 			return api.Sync{}, status.Errorf(codes.InvalidArgument, "unknown targetsync protocol: %q", typ)
