@@ -22,6 +22,7 @@ func ComputeCreateDSHash(spec DatastoreSpec, extra ...string) string {
 	w := hashWriter{h: sha256.New()}
 	w.str(spec.Name)
 	w.target(&spec.Target)
+	w.str(spec.Schema.Name)
 	w.str(spec.Schema.Vendor)
 	w.str(spec.Schema.Version)
 	w.i64(int64(len(spec.Sync.Configs)))

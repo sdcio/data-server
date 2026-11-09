@@ -42,7 +42,7 @@ func TestHashStable(t *testing.T) {
 
 // Golden value pins the canonical form: changing it forces every datastore to be recreated.
 func TestHashGolden(t *testing.T) {
-	const want = "1c70111729aba574666d8c49f61cc5a7708f6e13d7005e9064b235847194abb7"
+	const want = "e0c6cb63852532e19f41e1e9224371160f4d1f9f65b95f36296589c4fe1d7b48"
 	if got := ComputeCreateDSHash(fullSpec()); got != want {
 		t.Fatalf("hash = %s, want %s", got, want)
 	}
