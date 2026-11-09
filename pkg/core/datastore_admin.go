@@ -92,10 +92,7 @@ func (c *Core) datastoreConfig(spec api.DatastoreSpec) (*config.DatastoreConfig,
 		Deviation:  c.cfg.Deviation.DeepCopy(),
 	}
 	dsCfg.Sync = &config.Sync{
-		Validate:     spec.Sync.Validate,
-		Buffer:       spec.Sync.Buffer,
-		WriteWorkers: spec.Sync.WriteWorkers,
-		Config:       make([]*config.SyncProtocol, 0, len(spec.Sync.Configs)),
+		Config: make([]*config.SyncProtocol, 0, len(spec.Sync.Configs)),
 	}
 	for i := range spec.Sync.Configs {
 		sp, err := syncProtocol(&spec.Sync.Configs[i])
@@ -134,7 +131,7 @@ func sbiFromTarget(t *api.Target) (*config.SBI, error) {
 		if g == nil {
 			g = &api.GNMIOptions{}
 		}
-		sbi.GnmiOptions = &config.SBIGnmiOptions{Encoding: g.Encoding, TargetName: g.TargetName}
+		sbi.GnmiOptions = &config.SBIGnmiOptions{Encoding: string(g.Encoding), TargetName: g.TargetName}
 	case "noop":
 	default:
 		return nil, fmt.Errorf("%w: unknown target connection protocol type %q", api.ErrInvalidArgument, t.Type)
@@ -165,7 +162,7 @@ func syncProtocol(sc *api.SyncConfig) (*config.SyncProtocol, error) {
 	case "gnmi":
 		sp.Mode = syncModeName(sc.Mode)
 		if gnmi != nil {
-			sp.Encoding = gnmi.Encoding
+			sp.Encoding = string(gnmi.Encoding)
 		}
 	case "netconf":
 	default:
