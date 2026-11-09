@@ -16,7 +16,7 @@ func (c *Core) GetSchemaDetails(ctx context.Context, ref api.SchemaRef) (*api.Sc
 		return nil, err
 	}
 	return &api.SchemaInfo{
-		Schema:      api.SchemaRef{Vendor: rsp.GetSchema().GetVendor(), Version: rsp.GetSchema().GetVersion()},
+		Schema:      api.SchemaRef{Name: rsp.GetSchema().GetName(), Vendor: rsp.GetSchema().GetVendor(), Version: rsp.GetSchema().GetVersion()},
 		State:       schemaState(rsp.GetSchema().GetStatus()),
 		Files:       rsp.GetFile(),
 		Directories: rsp.GetDirectory(),
@@ -44,7 +44,7 @@ func (c *Core) DeleteSchema(ctx context.Context, spec api.DeleteSchemaSpec) erro
 }
 
 func toSdcpbSchema(ref api.SchemaRef) *sdcpb.Schema {
-	return &sdcpb.Schema{Vendor: ref.Vendor, Version: ref.Version}
+	return &sdcpb.Schema{Name: ref.Name, Vendor: ref.Vendor, Version: ref.Version}
 }
 
 func schemaState(s sdcpb.SchemaStatus) api.SchemaState {

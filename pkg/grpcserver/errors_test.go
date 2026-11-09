@@ -1,6 +1,7 @@
 package grpcserver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -12,53 +13,53 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func TestTranslateLockedOrNotConnected(t *testing.T) {
+func TestTransactionError(t *testing.T) {
+	plain := errors.New("boom")
 	cases := map[string]struct {
-		err      error
-		wantNil  bool
-		wantSame bool
-		wantCode codes.Code
+		err  error
+		code codes.Code // codes.OK means not a status error
+		msg  string
 	}{
-		"nil": {err: nil, wantNil: true},
-		"datastore locked -> Aborted": {err: datastore.ErrDatastoreLocked, wantCode: codes.Aborted},
-		"not connected -> Unavailable": {err: targettypes.ErrNotConnected, wantCode: codes.Unavailable},
-		"wrapped not connected -> Unavailable": {
-			err:      fmt.Errorf("some.datastore: %w", targettypes.ErrNotConnected),
-			wantCode: codes.Unavailable,
-		},
-		"other error -> passthrough": {err: errors.New("boom"), wantSame: true},
+		"unknown datastore":     {err: fmt.Errorf("%w ds", api.ErrUnknownDatastore), code: codes.NotFound, msg: "unknown datastore ds"},
+		"locked":                {err: datastore.ErrDatastoreLocked, code: codes.Aborted},
+		"wrapped locked":        {err: fmt.Errorf("x: %w", api.ErrDatastoreLocked), code: codes.Aborted},
+		"not connected":         {err: targettypes.ErrNotConnected, code: codes.Unavailable},
+		"wrapped not connected": {err: fmt.Errorf("ds: %w", targettypes.ErrNotConnected), code: codes.Unavailable},
+		"resource exhausted":    {err: fmt.Errorf("x: %w", api.ErrResourceExhausted), code: codes.ResourceExhausted},
+		"deadline exceeded":     {err: fmt.Errorf("x: %w", context.DeadlineExceeded), code: codes.DeadlineExceeded},
+		"invalid stays untyped": {err: fmt.Errorf("%w: priority too high", api.ErrInvalidArgument), msg: "priority too high"},
+		"other passes through":  {err: plain, msg: "boom"},
 	}
-
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got := translateLockedOrNotConnected(tc.err)
-			if tc.wantNil {
-				if got != nil {
-					t.Fatalf("expected nil, got %v", got)
+			got := transactionError(tc.err)
+			st, isStatus := status.FromError(got)
+			if tc.code == codes.OK {
+				if isStatus {
+					t.Fatalf("want untyped error, got status %v", st)
 				}
-				return
+			} else if !isStatus || st.Code() != tc.code {
+				t.Fatalf("got %v, want code %v", got, tc.code)
 			}
-			if tc.wantSame {
-				if got != tc.err {
-					t.Fatalf("expected passthrough, got %v", got)
-				}
-				return
+			if tc.msg != "" && !isStatus && got.Error() != tc.msg {
+				t.Fatalf("message %q, want %q", got.Error(), tc.msg)
 			}
-			st, ok := status.FromError(got)
-			if !ok {
-				t.Fatalf("expected gRPC status, got %v", got)
-			}
-			if st.Code() != tc.wantCode {
-				t.Fatalf("code %v, want %v", st.Code(), tc.wantCode)
+			if tc.msg != "" && isStatus && st.Message() != tc.msg {
+				t.Fatalf("message %q, want %q", st.Message(), tc.msg)
 			}
 		})
 	}
+	if transactionError(nil) != nil {
+		t.Fatal("nil must stay nil")
+	}
+	if got := transactionError(plain); got != plain {
+		t.Fatal("untyped error must pass through unchanged")
+	}
 }
 
-func TestStatusNotFound(t *testing.T) {
-	err := statusNotFound(fmt.Errorf("%w ds1", api.ErrUnknownDatastore))
-	st, ok := status.FromError(err)
-	if !ok || st.Code() != codes.NotFound {
-		t.Fatalf("got %v", err)
+func TestInvalidArgumentTrimsSentinel(t *testing.T) {
+	st, _ := status.FromError(invalidArgument(fmt.Errorf("%w: datastore x already exists", api.ErrInvalidArgument)))
+	if st.Code() != codes.InvalidArgument || st.Message() != "datastore x already exists" {
+		t.Fatalf("got %v", st)
 	}
 }

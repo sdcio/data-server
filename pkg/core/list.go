@@ -42,3 +42,9 @@ func (c *Core) ListIntents(ctx context.Context, datastore string) ([]string, err
 func (c *Core) SchemaClient() schema.Client {
 	return c.schemaClient
 }
+
+// DatastoreExists reports whether a datastore with this name is registered.
+func (c *Core) DatastoreExists(name string) bool {
+	_, err := c.getDatastore(name)
+	return err == nil
+}
