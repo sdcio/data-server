@@ -39,7 +39,7 @@ func datastoreInfo(ctx context.Context, ds *datastore.Datastore) (*api.Datastore
 func specFromConfig(dc *config.DatastoreConfig) api.DatastoreSpec {
 	spec := api.DatastoreSpec{Name: dc.Name}
 	if dc.Schema != nil {
-		spec.Schema = api.SchemaRef{Vendor: dc.Schema.Vendor, Version: dc.Schema.Version}
+		spec.Schema = api.SchemaRef{Name: dc.Schema.Name, Vendor: dc.Schema.Vendor, Version: dc.Schema.Version}
 	}
 	if dc.SBI != nil {
 		spec.Target = targetFromSBI(dc.SBI)

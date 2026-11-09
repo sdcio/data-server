@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"net/http"
 	_ "net/http/pprof"
@@ -78,7 +79,7 @@ func main() {
 		}
 	}
 
-	log := logr.FromSlogHandler(slog.NewJSONHandler(output, slogOpts)).WithName("data-server")
+	log := logr.FromSlogHandler(slog.NewJSONHandler(output, slogOpts))
 	logf.SetDefaultLogger(log)
 	ctx := logf.IntoContext(context.Background(), log)
 
@@ -104,7 +105,6 @@ func main() {
 	log.Info("read config", "config", string(b))
 
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 	setupCloseHandler(log, cancel)
 
 	core, srv, err := grpcserver.New(ctx, cfg)
@@ -114,17 +114,23 @@ func main() {
 	}
 
 	go func() {
+		// WaitReady inside Run reports the same error
 		if err := core.Start(ctx); err != nil {
 			log.Error(err, "core failed to start")
-			cancel()
 		}
 	}()
 
-	if err := srv.Run(ctx); err != nil && ctx.Err() == nil {
-		log.Error(err, "gRPC server exited")
+	runErr := srv.Run(ctx)
+
+	// the signal context is already cancelled, so stop on a fresh one
+	stopCtx, stopCancel := context.WithTimeout(logf.IntoContext(context.Background(), log), 30*time.Second)
+	srv.Stop()
+	_ = core.Stop(stopCtx)
+	stopCancel()
+	if runErr != nil {
+		log.Error(runErr, "data-server failed")
 		os.Exit(1)
 	}
-	_ = core.Stop(ctx)
 	log.Info("data-server stopped")
 }
 

@@ -3,13 +3,11 @@ package grpcserver
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"net/http"
 	"sync/atomic"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
@@ -23,19 +21,28 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	_ "google.golang.org/grpc/encoding/gzip"
+	_ "google.golang.org/grpc/encoding/gzip" // installs the gzip compressor
 	"google.golang.org/grpc/status"
 )
 
-// Server serves DataServer and SchemaServer RPCs against a Core.
+const (
+	retryMin = time.Second
+	retryMax = 10 * time.Second
+)
+
+// Server exposes a core.Core as the sdcpb DataServer and, when enabled in the
+// config, SchemaServer services. The caller starts the core (core.Start) and
+// then calls Run, which blocks until ctx ends or serving fails for good. Stop
+// is idempotent and does not stop the core.
 type Server struct {
 	cfg  *config.Config
 	core *core.Core
 
+	// ready flips once the core is ready; unary RPCs fail with Unavailable before.
 	ready atomic.Bool
 
-	ctx context.Context
-	cfn context.CancelFunc
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	srv *grpc.Server
 	sdcpb.UnimplementedDataServerServer
@@ -43,25 +50,28 @@ type Server struct {
 
 	router *mux.Router
 	reg    *prometheus.Registry
+
+	// listen opens the listener; tests replace it with an in-memory one.
+	listen func() (net.Listener, error)
 }
 
-// New constructs a Core (with gNMI Prometheus client interceptors when
-// configured) and a gRPC Server sharing the same configuration.
+// New builds the core and the gRPC server around it. When Prometheus is
+// configured the core's gNMI client connections carry client metrics. The
+// core's lifetime follows ctx; the server's own resources follow Stop.
 func New(ctx context.Context, cfg *config.Config) (*core.Core, *Server, error) {
-	ctx, cancel := context.WithCancel(ctx)
+	srvCtx, cancel := context.WithCancel(ctx)
 	s := &Server{
 		cfg:    cfg,
-		ctx:    ctx,
-		cfn:    cancel,
+		ctx:    srvCtx,
+		cancel: cancel,
 		router: mux.NewRouter(),
 		reg:    prometheus.NewRegistry(),
+		listen: func() (net.Listener, error) { return net.Listen("tcp", cfg.GRPCServer.Address) },
 	}
 
-	opts := []grpc.ServerOption{grpc.MaxRecvMsgSize(cfg.GRPCServer.MaxRecvMsgSize)}
 	var dialOpts []grpc.DialOption
-
-	unaryInterceptors := []grpc.UnaryServerInterceptor{s.readyInterceptor, s.timeoutInterceptor, contextLoggingInterceptor(ctx)}
-	streamInterceptors := []grpc.StreamServerInterceptor{contextLoggingStreamInterceptor(ctx)}
+	unary := []grpc.UnaryServerInterceptor{s.readyInterceptor, s.timeoutInterceptor, loggingUnaryInterceptor(srvCtx)}
+	stream := []grpc.StreamServerInterceptor{loggingStreamInterceptor(srvCtx)}
 
 	if cfg.Prometheus != nil {
 		clientMetrics := grpc_prometheus.NewClientMetrics()
@@ -72,18 +82,18 @@ func New(ctx context.Context, cfg *config.Config) (*core.Core, *Server, error) {
 		s.reg.MustRegister(clientMetrics)
 
 		serverMetrics := grpc_prometheus.NewServerMetrics()
-		unaryInterceptors = append(unaryInterceptors, serverMetrics.UnaryServerInterceptor())
-		streamInterceptors = append(streamInterceptors, serverMetrics.StreamServerInterceptor())
+		unary = append(unary, serverMetrics.UnaryServerInterceptor())
+		stream = append(stream, serverMetrics.StreamServerInterceptor())
 		s.reg.MustRegister(serverMetrics)
 	}
 
-	opts = append(opts,
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)),
-		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(streamInterceptors...)),
-	)
-
+	opts := []grpc.ServerOption{
+		grpc.MaxRecvMsgSize(cfg.GRPCServer.MaxRecvMsgSize),
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unary...)),
+		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(stream...)),
+	}
 	if cfg.GRPCServer.TLS != nil {
-		tlsCfg, err := cfg.GRPCServer.TLS.NewConfig(ctx)
+		tlsCfg, err := cfg.GRPCServer.TLS.NewConfig(srvCtx)
 		if err != nil {
 			cancel()
 			return nil, nil, err
@@ -106,9 +116,9 @@ func New(ctx context.Context, cfg *config.Config) (*core.Core, *Server, error) {
 	return c, s, nil
 }
 
-// Run listens, marks ready when the core is up, then blocks in Serve until stop
-// or error. The listener is opened before the core is ready; unary RPCs return
-// Unavailable until WaitReady succeeds. Listen failures are retried until ctx ends.
+// Run serves until ctx ends, Stop is called, or the core fails to become
+// ready, which it returns. The listener opens immediately, before the core is
+// ready. Listen and serve errors are retried with a growing delay.
 func (s *Server) Run(ctx context.Context) error {
 	log := logf.FromContext(ctx).WithName("grpc")
 
@@ -116,43 +126,49 @@ func (s *Server) Run(ctx context.Context) error {
 		go s.serveMetrics(ctx)
 	}
 
+	readyErr := make(chan error, 1)
 	go func() {
 		if err := s.core.WaitReady(ctx); err != nil {
-			log.Error(err, "core did not become ready")
+			if ctx.Err() == nil {
+				readyErr <- err
+				s.srv.Stop()
+			}
 			return
 		}
 		s.ready.Store(true)
-		log.Info("gRPC adapter ready")
+		log.Info("gRPC server ready")
 	}()
-
 	go func() {
 		<-ctx.Done()
-		s.Stop()
+		s.srv.Stop()
 	}()
 
-	for ctx.Err() == nil {
-		l, err := net.Listen("tcp", s.cfg.GRPCServer.Address)
-		if err != nil {
-			log.Error(err, "listen failed, retrying")
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(time.Second):
-				continue
-			}
+	delay := retryMin
+	for {
+		l, err := s.listen()
+		if err == nil {
+			log.Info("starting gRPC server", "address", s.cfg.GRPCServer.Address)
+			err = s.srv.Serve(l)
 		}
-		log.Info("starting gRPC server", "address", s.cfg.GRPCServer.Address)
-		err = s.srv.Serve(l)
-		if ctx.Err() != nil || errors.Is(err, grpc.ErrServerStopped) {
+		select {
+		case rerr := <-readyErr:
+			return rerr
+		default:
+		}
+		if err == nil || errors.Is(err, grpc.ErrServerStopped) || ctx.Err() != nil {
 			return nil
 		}
-		return err
+		log.Error(err, "gRPC listen/serve failed, retrying", "retry-in", delay.String())
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(delay):
+		}
+		delay = min(delay*2, retryMax)
 	}
-	return ctx.Err()
 }
 
 func (s *Server) serveMetrics(ctx context.Context) {
-	log := logf.FromContext(ctx)
 	s.router.Handle("/metrics", promhttp.HandlerFor(s.reg, promhttp.HandlerOpts{}))
 	s.reg.MustRegister(collectors.NewGoCollector())
 	s.reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
@@ -162,65 +178,30 @@ func (s *Server) serveMetrics(ctx context.Context) {
 		ReadTimeout:  time.Minute,
 		WriteTimeout: time.Minute,
 	}
-	if err := srv.ListenAndServe(); err != nil && ctx.Err() == nil {
-		log.Error(err, "metrics server stopped")
+	go func() {
+		<-ctx.Done()
+		_ = srv.Close()
+	}()
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		logf.FromContext(ctx).Error(err, "HTTP server stopped")
 	}
 }
 
-// Stop stops the gRPC server.
+// Stop stops the gRPC server and releases its resources. The core keeps running.
 func (s *Server) Stop() {
-	if s.srv != nil {
-		s.srv.Stop()
-	}
-	s.cfn()
+	s.srv.Stop()
+	s.cancel()
 }
 
-func (s *Server) readyInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func (s *Server) readyInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	if !s.ready.Load() {
 		return nil, status.Error(codes.Unavailable, "not ready")
 	}
 	return handler(ctx, req)
 }
 
-func (s *Server) timeoutInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func (s *Server) timeoutInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.cfg.GRPCServer.RPCTimeout)
 	defer cancel()
 	return handler(ctx, req)
-}
-
-func contextLoggingInterceptor(logCtx context.Context) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		uuidString := uuid.New().String()
-		log := logf.FromContext(logCtx).WithValues("grpc-request-uuid", uuidString)
-		ctx = logf.IntoContext(ctx, log)
-		return handler(ctx, req)
-	}
-}
-
-func contextLoggingStreamInterceptor(logCtx context.Context) grpc.StreamServerInterceptor {
-	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		uuidString := uuid.New().String()
-		log := logf.FromContext(logCtx).WithValues("grpc-request-uuid", uuidString)
-		wss := grpc_middleware.WrapServerStream(ss)
-		wss.WrappedContext = logf.IntoContext(wss.WrappedContext, log)
-		return handler(srv, wss)
-	}
-}
-
-func transactionMissingName() error {
-	return status.Error(codes.InvalidArgument, "missing datastore name")
-}
-
-func schemaClientOrError(s *Server) error {
-	if s.core.SchemaClient() == nil {
-		return status.Error(codes.Unavailable, "not ready")
-	}
-	return nil
-}
-
-func unexpectedSchemaError(err error) error {
-	if err == nil {
-		return nil
-	}
-	return fmt.Errorf("schema call: %w", err)
 }

@@ -137,8 +137,10 @@ type Target struct {
 	ProtocolOptions ProtocolOptions
 }
 
-// SchemaRef identifies a schema by vendor and version.
+// SchemaRef identifies a schema by vendor and version. Name is optional and
+// empty for the usual single-name schema.
 type SchemaRef struct {
+	Name    string
 	Vendor  string
 	Version string
 }
