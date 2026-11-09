@@ -13,6 +13,7 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore"
 	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"google.golang.org/protobuf/encoding/prototext"
 )
 
 const ifPath = "/interface[name=ethernet-1/1]"
@@ -373,5 +374,23 @@ func TestDeviationWatcherSendUnblocksOnCancel(t *testing.T) {
 	w.close()
 	if err := w.Send(sdcpbEvent(sdcpb.DeviationEvent_UPDATE)); err == nil {
 		t.Fatal("send after close must fail")
+	}
+}
+
+func TestToDeviationEventEntryText(t *testing.T) {
+	rsp := &sdcpb.WatchDeviationResponse{
+		Event:         sdcpb.DeviationEvent_UPDATE,
+		ExpectedValue: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "a"}},
+	}
+	e := toDeviationEvent(rsp).Entries[0]
+	var tv sdcpb.TypedValue
+	if err := prototext.Unmarshal([]byte(e.ExpectedText), &tv); err != nil {
+		t.Fatalf("ExpectedText is not prototext: %v", err)
+	}
+	if tv.GetStringVal() != "a" {
+		t.Fatalf("round trip mismatch: %v", &tv)
+	}
+	if e.CurrentText != "" {
+		t.Fatalf("absent value must be empty, got %q", e.CurrentText)
 	}
 }

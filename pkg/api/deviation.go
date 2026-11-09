@@ -24,10 +24,15 @@ const (
 )
 
 // DeviationEntry is one deviating path with its expected and current values.
+// Expected and Current are display strings; ExpectedText and CurrentText carry
+// the same values in the stable text encoding that stored deviations use. An
+// absent value is empty in both forms.
 type DeviationEntry struct {
-	Path     string
-	Expected string
-	Current  string
+	Path         string
+	Expected     string
+	Current      string
+	ExpectedText string
+	CurrentText  string
 }
 
 // DeviationEvent is emitted by a deviation watch. Intent, Reason and Entries

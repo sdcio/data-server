@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"google.golang.org/protobuf/encoding/prototext"
+
 	"github.com/sdcio/data-server/pkg/api"
 	"github.com/sdcio/data-server/pkg/datastore"
 	"github.com/sdcio/data-server/pkg/datastore/types"
@@ -148,4 +150,16 @@ func valueString(tv *sdcpb.TypedValue) string {
 		return ""
 	}
 	return tv.ToString()
+}
+
+// valueText encodes a typed value as prototext; nil encodes as empty.
+func valueText(tv *sdcpb.TypedValue) string {
+	if tv == nil {
+		return ""
+	}
+	b, err := prototext.Marshal(tv)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }

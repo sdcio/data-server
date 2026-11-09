@@ -145,6 +145,9 @@ func toDeviationEvent(rsp *sdcpb.WatchDeviationResponse) api.DeviationEvent {
 			Path:     rsp.GetPath().ToXPath(false),
 			Expected: valueString(rsp.GetExpectedValue()),
 			Current:  valueString(rsp.GetCurrentValue()),
+
+			ExpectedText: valueText(rsp.GetExpectedValue()),
+			CurrentText:  valueText(rsp.GetCurrentValue()),
 		}}
 	}
 	return ev
