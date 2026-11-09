@@ -166,10 +166,7 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 	}
 	if req.GetSync() != nil {
 		dsConfig.Sync = &config.Sync{
-			Validate:     req.GetSync().GetValidate(),
-			Buffer:       req.GetSync().GetBuffer(),
-			WriteWorkers: req.GetSync().GetWriteWorkers(),
-			Config:       make([]*config.SyncProtocol, 0, len(req.GetSync().GetConfig())),
+			Config: make([]*config.SyncProtocol, 0, len(req.GetSync().GetConfig())),
 		}
 		for _, pSync := range req.GetSync().GetConfig() {
 			gnSyncConfig := &config.SyncProtocol{
