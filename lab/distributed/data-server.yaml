@@ -39,7 +39,6 @@ datastores: # this creates MAIN datastores
       tls:
         skip-verify: true
     sync:
-      validate: false
       gnmi:
         - name: config
           paths:
@@ -67,7 +66,6 @@ datastores: # this creates MAIN datastores
       tls:
         skip-verify: true
     sync:
-      validate: false
       gnmi:
         - name: config
           paths:
@@ -94,7 +92,6 @@ datastores: # this creates MAIN datastores
       tls:
         skip-verify: true
     sync:
-      validate: false
       gnmi:
         - name: config
           paths:
@@ -121,7 +118,6 @@ datastores: # this creates MAIN datastores
         password: admin
       # include-ns: true
     sync:
-      validate: false
       gnmi:
         - name: config
           paths:
@@ -149,7 +145,6 @@ datastores: # this creates MAIN datastores
         password: admin
       # include-ns: true
     sync:
-      validate: false
       gnmi:
         - name: config
           paths:

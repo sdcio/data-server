@@ -1,5 +1,10 @@
 package api
 
+import (
+	"fmt"
+	"strings"
+)
+
 // TargetType names the southbound protocol of a datastore target.
 type TargetType string
 
@@ -40,9 +45,30 @@ const (
 	CommitCandidateRunning
 )
 
+// GNMIEncoding names a gNMI value encoding, spelled as in the gNMI spec.
+type GNMIEncoding string
+
+const (
+	GNMIEncodingJSON     GNMIEncoding = "JSON"
+	GNMIEncodingBytes    GNMIEncoding = "BYTES"
+	GNMIEncodingProto    GNMIEncoding = "PROTO"
+	GNMIEncodingASCII    GNMIEncoding = "ASCII"
+	GNMIEncodingJSONIETF GNMIEncoding = "JSON_IETF"
+)
+
+// ParseGNMIEncoding resolves a case-insensitive encoding name. Unknown names,
+// including numeric values, are rejected.
+func ParseGNMIEncoding(s string) (GNMIEncoding, error) {
+	switch e := GNMIEncoding(strings.ToUpper(s)); e {
+	case GNMIEncodingJSON, GNMIEncodingBytes, GNMIEncodingProto, GNMIEncodingASCII, GNMIEncodingJSONIETF:
+		return e, nil
+	}
+	return "", fmt.Errorf("unknown gnmi encoding %q", s)
+}
+
 // GNMIOptions are the gNMI-specific protocol options.
 type GNMIOptions struct {
-	Encoding   string
+	Encoding   GNMIEncoding
 	TargetName string
 }
 
@@ -98,10 +124,7 @@ type SyncConfig struct {
 
 // Sync is the datastore sync strategy.
 type Sync struct {
-	Validate     bool
-	Buffer       int64
-	WriteWorkers int64
-	Configs      []SyncConfig
+	Configs []SyncConfig
 }
 
 // DatastoreSpec is the desired state used to create a datastore.
