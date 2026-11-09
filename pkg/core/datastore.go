@@ -79,11 +79,6 @@ func specFromConfig(dc *config.DatastoreConfig) api.DatastoreSpec {
 		spec.Target = targetFromSBI(dc.SBI)
 	}
 	if dc.Sync != nil {
-		spec.Sync = api.Sync{
-			Validate:     dc.Sync.Validate,
-			Buffer:       dc.Sync.Buffer,
-			WriteWorkers: dc.Sync.WriteWorkers,
-		}
 		for _, sp := range dc.Sync.Config {
 			spec.Sync.Configs = append(spec.Sync.Configs, api.SyncConfig{
 				Name:     sp.Name,
@@ -101,7 +96,7 @@ func gnmiSyncOptions(sp *config.SyncProtocol) *api.GNMIOptions {
 	if !strings.EqualFold(sp.Protocol, "gnmi") {
 		return nil
 	}
-	return &api.GNMIOptions{Encoding: sp.Encoding}
+	return &api.GNMIOptions{Encoding: api.GNMIEncoding(sp.Encoding)}
 }
 
 func syncMode(m string) api.SyncMode {
@@ -130,7 +125,7 @@ func targetFromSBI(s *config.SBI) api.Target {
 		t.TLS = &api.TLS{CA: s.TLS.CA, Cert: s.TLS.Cert, Key: s.TLS.Key, SkipVerify: s.TLS.SkipVerify}
 	}
 	if s.GnmiOptions != nil {
-		t.ProtocolOptions.GNMI = &api.GNMIOptions{Encoding: s.GnmiOptions.Encoding, TargetName: s.GnmiOptions.TargetName}
+		t.ProtocolOptions.GNMI = &api.GNMIOptions{Encoding: api.GNMIEncoding(s.GnmiOptions.Encoding), TargetName: s.GnmiOptions.TargetName}
 	}
 	if o := s.NetconfOptions; o != nil {
 		commit := api.CommitCandidateCandidate
