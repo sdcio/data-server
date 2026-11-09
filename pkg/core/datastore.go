@@ -52,7 +52,7 @@ func connectionState(s sdcpb.TargetStatus) api.ConnectionState {
 func specFromConfig(dc *config.DatastoreConfig) api.DatastoreSpec {
 	spec := api.DatastoreSpec{Name: dc.Name}
 	if dc.Schema != nil {
-		spec.Schema = api.SchemaRef{Vendor: dc.Schema.Vendor, Version: dc.Schema.Version}
+		spec.Schema = api.SchemaRef{Name: dc.Schema.Name, Vendor: dc.Schema.Vendor, Version: dc.Schema.Version}
 	}
 	if dc.SBI != nil {
 		spec.Target = targetFromSBI(dc.SBI)
@@ -93,7 +93,7 @@ func syncMode(m string) api.SyncMode {
 
 func targetFromSBI(s *config.SBI) api.Target {
 	t := api.Target{
-		Type:    api.TargetType(strings.ToLower(s.Type)),
+		Type:    api.TargetType(s.Type),
 		Address: s.Address,
 		Port:    s.Port,
 	}

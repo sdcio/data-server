@@ -3,89 +3,82 @@ package grpcserver
 import (
 	"context"
 
+	"github.com/go-logr/logr"
 	"github.com/sdcio/data-server/pkg/api"
-	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
-func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRequest) (*sdcpb.TransactionSetResponse, error) {
-	log := logf.FromContext(ctx).WithName("TransactionSet").WithName("transaction").WithValues(
+type txRequest interface {
+	proto.Message
+	GetTransactionId() string
+	GetDatastoreName() string
+}
+
+// beginTx starts a transaction RPC: it installs the transaction logger and
+// returns the transaction reference, failing with InvalidArgument when the
+// datastore name is missing.
+func beginTx(ctx context.Context, op string, req txRequest) (context.Context, logr.Logger, api.TxRef, error) {
+	log := logf.FromContext(ctx).WithName(op).WithName("transaction").WithValues(
 		"transaction-id", req.GetTransactionId(),
 		"datastore-name", req.GetDatastoreName(),
 	)
-	ctx = logf.IntoContext(ctx, log)
-	log.Info("TransactionSet",
-		"transaction-dry-run", req.GetDryRun(),
-		"transaction-timeout", req.GetTimeout(),
-		"transaction-peer", originFromContext(ctx),
-	)
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.ProtoJSON(req))
-
+	ctx, log = beginWith(ctx, log, req)
+	log.Info(op, "transaction-peer", originFromContext(ctx))
 	if req.GetDatastoreName() == "" {
-		return nil, transactionMissingName()
+		return ctx, log, api.TxRef{}, status.Error(codes.InvalidArgument, "missing datastore name")
 	}
+	return ctx, log, api.TxRef{Datastore: req.GetDatastoreName(), ID: req.GetTransactionId()}, nil
+}
+
+func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRequest) (*sdcpb.TransactionSetResponse, error) {
+	ctx, log, ref, err := beginTx(ctx, "TransactionSet", req)
+	if err != nil {
+		return nil, err
+	}
+	log.Info("transaction options", "transaction-dry-run", req.GetDryRun(), "transaction-timeout", req.GetTimeout())
 
 	intents := make([]api.Intent, 0, len(req.GetIntents()))
 	for _, pb := range req.GetIntents() {
-		in, err := intentFromSdcpb(pb)
+		in, err := intent(pb)
 		if err != nil {
 			return nil, err
 		}
 		intents = append(intents, in)
 	}
-
-	opts := setOptionsFromRequest(req, originFromContext(ctx))
-	res, err := s.core.TransactionSet(ctx, api.TxRef{Datastore: req.GetDatastoreName(), ID: req.GetTransactionId()}, opts, intents)
+	opts, err := setOptions(req, originFromContext(ctx))
 	if err != nil {
-		if mapped := statusNotFound(err); mapped != err {
-			return nil, mapped
-		}
-		return nil, translateLockedOrNotConnected(err)
+		return nil, err
 	}
-	return transactionResultToSdcpb(res), nil
+
+	res, err := s.core.TransactionSet(ctx, ref, opts, intents)
+	if err != nil {
+		return nil, transactionError(err)
+	}
+	return transactionResponse(res)
 }
 
 func (s *Server) TransactionConfirm(ctx context.Context, req *sdcpb.TransactionConfirmRequest) (*sdcpb.TransactionConfirmResponse, error) {
-	log := logf.FromContext(ctx).WithName("TransactionConfirm").WithName("transaction").WithValues(
-		"transaction-id", req.GetTransactionId(),
-		"datastore-name", req.GetDatastoreName(),
-	)
-	ctx = logf.IntoContext(ctx, log)
-	log.Info("TransactionConfirm", "transaction-peer", originFromContext(ctx))
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.ProtoJSON(req))
-
-	if req.GetDatastoreName() == "" {
-		return nil, transactionMissingName()
-	}
-	err := s.core.TransactionConfirm(ctx, api.TxRef{Datastore: req.GetDatastoreName(), ID: req.GetTransactionId()}, originFromContext(ctx))
+	ctx, _, ref, err := beginTx(ctx, "TransactionConfirm", req)
 	if err != nil {
-		if mapped := statusNotFound(err); mapped != err {
-			return nil, mapped
-		}
-		return nil, translateLockedOrNotConnected(err)
+		return nil, err
+	}
+	if err := s.core.TransactionConfirm(ctx, ref, originFromContext(ctx)); err != nil {
+		return nil, transactionError(err)
 	}
 	return &sdcpb.TransactionConfirmResponse{}, nil
 }
 
 func (s *Server) TransactionCancel(ctx context.Context, req *sdcpb.TransactionCancelRequest) (*sdcpb.TransactionCancelResponse, error) {
-	log := logf.FromContext(ctx).WithName("TransactionCancel").WithName("transaction").WithValues(
-		"transaction-id", req.GetTransactionId(),
-		"datastore-name", req.GetDatastoreName(),
-	)
-	ctx = logf.IntoContext(ctx, log)
-	log.Info("TransactionCancel", "transaction-peer", originFromContext(ctx))
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.ProtoJSON(req))
-
-	if req.GetDatastoreName() == "" {
-		return nil, transactionMissingName()
-	}
-	err := s.core.TransactionCancel(ctx, api.TxRef{Datastore: req.GetDatastoreName(), ID: req.GetTransactionId()}, originFromContext(ctx))
+	ctx, _, ref, err := beginTx(ctx, "TransactionCancel", req)
 	if err != nil {
-		if mapped := statusNotFound(err); mapped != err {
-			return nil, mapped
-		}
-		return nil, translateLockedOrNotConnected(err)
+		return nil, err
+	}
+	if err := s.core.TransactionCancel(ctx, ref, originFromContext(ctx)); err != nil {
+		return nil, transactionError(err)
 	}
 	return &sdcpb.TransactionCancelResponse{}, nil
 }

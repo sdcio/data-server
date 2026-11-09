@@ -84,6 +84,7 @@ func (c *Core) datastoreConfig(spec api.DatastoreSpec) (*config.DatastoreConfig,
 	dsCfg := &config.DatastoreConfig{
 		Name: spec.Name,
 		Schema: &config.SchemaConfig{
+			Name:    spec.Schema.Name,
 			Vendor:  spec.Schema.Vendor,
 			Version: spec.Schema.Version,
 		},

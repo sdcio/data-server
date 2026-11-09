@@ -5,38 +5,34 @@ import (
 	"strings"
 
 	"github.com/sdcio/data-server/pkg/api"
-	"github.com/sdcio/data-server/pkg/utils"
-	logf "github.com/sdcio/logger"
+	"github.com/sdcio/data-server/pkg/schema"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
-func (s *Server) GetSchemaDetails(ctx context.Context, req *sdcpb.GetSchemaDetailsRequest) (*sdcpb.GetSchemaDetailsResponse, error) {
-	log := logf.FromContext(ctx).WithName("GetSchemaDetails").WithValues(
-		"schema-vendor", req.GetSchema().GetVendor(),
-		"schema-version", req.GetSchema().GetVersion(),
-	)
-	ctx = logf.IntoContext(ctx, log)
-	log.Info("GetSchemaDetails")
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.ProtoJSON(req))
+// Unary schema RPCs run behind the ready gate, so the core's schema client is
+// set; the streaming RPCs are not gated and use streamSchema instead.
 
-	info, err := s.core.GetSchemaDetails(ctx, api.SchemaRef{Vendor: req.GetSchema().GetVendor(), Version: req.GetSchema().GetVersion()})
+func schemaValues(s *sdcpb.Schema) []any {
+	return []any{"schema-name", s.GetName(), "schema-vendor", s.GetVendor(), "schema-version", s.GetVersion()}
+}
+
+func (s *Server) GetSchemaDetails(ctx context.Context, req *sdcpb.GetSchemaDetailsRequest) (*sdcpb.GetSchemaDetailsResponse, error) {
+	ctx, log := begin(ctx, "GetSchemaDetails", req, schemaValues(req.GetSchema())...)
+	log.Info("GetSchemaDetails")
+	info, err := s.core.GetSchemaDetails(ctx, schemaRef(req.GetSchema()))
 	if err != nil {
 		return nil, err
 	}
-	return schemaDetailsToSdcpb(info), nil
+	return schemaDetails(info), nil
 }
 
 func (s *Server) CreateSchema(ctx context.Context, req *sdcpb.CreateSchemaRequest) (*sdcpb.CreateSchemaResponse, error) {
-	log := logf.FromContext(ctx).WithName("CreateSchema").WithValues(
-		"schema-vendor", req.GetSchema().GetVendor(),
-		"schema-version", req.GetSchema().GetVersion(),
-	)
-	ctx = logf.IntoContext(ctx, log)
+	ctx, log := begin(ctx, "CreateSchema", req, schemaValues(req.GetSchema())...)
 	log.Info("CreateSchema")
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.ProtoJSON(req))
-
 	err := s.core.CreateSchema(ctx, api.CreateSchemaSpec{
-		Schema:      api.SchemaRef{Vendor: req.GetSchema().GetVendor(), Version: req.GetSchema().GetVersion()},
+		Schema:      schemaRef(req.GetSchema()),
 		Files:       req.GetFile(),
 		Directories: req.GetDirectory(),
 		Excludes:    req.GetExclude(),
@@ -48,73 +44,67 @@ func (s *Server) CreateSchema(ctx context.Context, req *sdcpb.CreateSchemaReques
 }
 
 func (s *Server) DeleteSchema(ctx context.Context, req *sdcpb.DeleteSchemaRequest) (*sdcpb.DeleteSchemaResponse, error) {
-	log := logf.FromContext(ctx).WithName("DeleteSchema").WithValues(
-		"schema-vendor", req.GetSchema().GetVendor(),
-		"schema-version", req.GetSchema().GetVersion(),
-	)
-	ctx = logf.IntoContext(ctx, log)
+	ctx, log := begin(ctx, "DeleteSchema", req, schemaValues(req.GetSchema())...)
 	log.Info("DeleteSchema")
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.ProtoJSON(req))
-
-	if err := s.core.DeleteSchema(ctx, api.DeleteSchemaSpec{Schema: api.SchemaRef{Vendor: req.GetSchema().GetVendor(), Version: req.GetSchema().GetVersion()}}); err != nil {
+	if err := s.core.DeleteSchema(ctx, api.DeleteSchemaSpec{Schema: schemaRef(req.GetSchema())}); err != nil {
 		return nil, err
 	}
 	return &sdcpb.DeleteSchemaResponse{}, nil
 }
 
 func (s *Server) GetSchema(ctx context.Context, req *sdcpb.GetSchemaRequest) (*sdcpb.GetSchemaResponse, error) {
-	if err := schemaClientOrError(s); err != nil {
-		return nil, err
-	}
-	log := logf.FromContext(ctx).WithName("GetSchema")
-	ctx = logf.IntoContext(ctx, log)
+	ctx, log := begin(ctx, "GetSchema", req, schemaValues(req.GetSchema())...)
+	log.Info("GetSchema",
+		"schema-path", req.GetPath().String(),
+		"schema-validate-keys", req.GetValidateKeys(),
+		"schema-with-description", req.GetWithDescription(),
+	)
 	return s.core.SchemaClient().GetSchema(ctx, req)
 }
 
 func (s *Server) ListSchema(ctx context.Context, req *sdcpb.ListSchemaRequest) (*sdcpb.ListSchemaResponse, error) {
-	if err := schemaClientOrError(s); err != nil {
-		return nil, err
-	}
-	log := logf.FromContext(ctx).WithName("ListSchema")
-	ctx = logf.IntoContext(ctx, log)
-	log.V(logf.VDebug).Info("received request", "raw-request", utils.ProtoJSON(req))
+	ctx, _ = begin(ctx, "ListSchema", req)
 	return s.core.SchemaClient().ListSchema(ctx, req)
 }
 
 func (s *Server) ReloadSchema(ctx context.Context, req *sdcpb.ReloadSchemaRequest) (*sdcpb.ReloadSchemaResponse, error) {
-	if err := schemaClientOrError(s); err != nil {
-		return nil, err
-	}
-	log := logf.FromContext(ctx).WithName("ReloadSchema")
-	ctx = logf.IntoContext(ctx, log)
+	ctx, log := begin(ctx, "ReloadSchema", req, schemaValues(req.GetSchema())...)
+	log.Info("ReloadSchema")
 	return s.core.SchemaClient().ReloadSchema(ctx, req)
 }
 
 func (s *Server) ToPath(ctx context.Context, req *sdcpb.ToPathRequest) (*sdcpb.ToPathResponse, error) {
-	if err := schemaClientOrError(s); err != nil {
-		return nil, err
-	}
-	log := logf.FromContext(ctx).WithName("ToPath")
-	ctx = logf.IntoContext(ctx, log)
+	ctx, log := begin(ctx, "ToPath", req, schemaValues(req.GetSchema())...)
 	log.Info("ToPath", "path-elements", strings.Join(req.GetPathElement(), ","))
 	return s.core.SchemaClient().ToPath(ctx, req)
 }
 
 func (s *Server) ExpandPath(ctx context.Context, req *sdcpb.ExpandPathRequest) (*sdcpb.ExpandPathResponse, error) {
-	if err := schemaClientOrError(s); err != nil {
-		return nil, err
-	}
-	log := logf.FromContext(ctx).WithName("ExpandPath")
-	ctx = logf.IntoContext(ctx, log)
+	ctx, log := begin(ctx, "ExpandPath", req, schemaValues(req.GetSchema())...)
+	log.Info("ExpandPath",
+		"schema-path", req.GetPath().String(),
+		"schema-datatype", req.GetDataType().String(),
+		"schema-is-xpath", req.GetXpath(),
+	)
 	return s.core.SchemaClient().ExpandPath(ctx, req)
 }
 
+// streamSchema returns the schema client, or Unavailable while the core is
+// still starting.
+func (s *Server) streamSchema() (schema.Client, error) {
+	c := s.core.SchemaClient()
+	if c == nil || !s.ready.Load() {
+		return nil, status.Error(codes.Unavailable, "not ready")
+	}
+	return c, nil
+}
+
 func (s *Server) UploadSchema(stream sdcpb.SchemaServer_UploadSchemaServer) error {
-	if err := schemaClientOrError(s); err != nil {
+	sc, err := s.streamSchema()
+	if err != nil {
 		return err
 	}
-	ctx := stream.Context()
-	client, err := s.core.SchemaClient().UploadSchema(ctx)
+	up, err := sc.UploadSchema(stream.Context())
 	if err != nil {
 		return err
 	}
@@ -123,18 +113,24 @@ func (s *Server) UploadSchema(stream sdcpb.SchemaServer_UploadSchemaServer) erro
 		if err != nil {
 			return err
 		}
-		if err := client.Send(msg); err != nil {
+		if err := up.Send(msg); err != nil {
 			return err
 		}
 	}
 }
 
 func (s *Server) GetSchemaElements(req *sdcpb.GetSchemaRequest, stream sdcpb.SchemaServer_GetSchemaElementsServer) error {
-	if err := schemaClientOrError(s); err != nil {
+	sc, err := s.streamSchema()
+	if err != nil {
 		return err
 	}
-	ctx := stream.Context()
-	ch, err := s.core.SchemaClient().GetSchemaElements(ctx, req)
+	ctx, log := begin(stream.Context(), "GetSchemaElements", req, schemaValues(req.GetSchema())...)
+	log.Info("GetSchemaElements",
+		"schema-path", req.GetPath().String(),
+		"schema-validate-keys", req.GetValidateKeys(),
+		"schema-with-description", req.GetWithDescription(),
+	)
+	ch, err := sc.GetSchemaElements(ctx, req)
 	if err != nil {
 		return err
 	}

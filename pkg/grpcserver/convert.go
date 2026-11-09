@@ -1,104 +1,60 @@
 package grpcserver
 
 import (
+	"errors"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
 	"github.com/sdcio/data-server/pkg/api"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
-func protoUnmarshal(b []byte, m proto.Message) error {
-	return proto.Unmarshal(b, m)
+func schemaRef(s *sdcpb.Schema) api.SchemaRef {
+	return api.SchemaRef{Name: s.GetName(), Vendor: s.GetVendor(), Version: s.GetVersion()}
 }
 
-func datastoreSpecFromCreate(req *sdcpb.CreateDataStoreRequest) (api.DatastoreSpec, error) {
-	name := req.GetDatastoreName()
-	if len(name) == 0 {
-		return api.DatastoreSpec{}, fmt.Errorf("%w: missing datastore name attribute", api.ErrInvalidArgument)
-	}
-	if len(name) > math.MaxUint16 {
-		return api.DatastoreSpec{}, fmt.Errorf("%w: datastore name attribute too long", api.ErrInvalidArgument)
-	}
-	target, err := targetFromSdcpb(req.GetTarget())
+func sdcpbSchema(r api.SchemaRef) *sdcpb.Schema {
+	return &sdcpb.Schema{Name: r.Name, Vendor: r.Vendor, Version: r.Version}
+}
+
+func stringValue(s string) *sdcpb.TypedValue {
+	return &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: s}}
+}
+
+// datastoreSpec converts the target, schema and sync of a create request. The
+// returned errors are gRPC statuses carrying the messages clients already see.
+func datastoreSpec(req *sdcpb.CreateDataStoreRequest) (api.DatastoreSpec, error) {
+	target, err := target(req.GetTarget())
 	if err != nil {
 		return api.DatastoreSpec{}, err
 	}
-	spec := api.DatastoreSpec{
-		Name:   name,
-		Target: target,
-		Schema: schemaRefFromSdcpb(req.GetSchema()),
-	}
+	spec := api.DatastoreSpec{Name: req.GetDatastoreName(), Target: target, Schema: schemaRef(req.GetSchema())}
 	if req.GetSync() != nil {
-		sync, err := syncFromSdcpb(req.GetSync())
-		if err != nil {
+		if spec.Sync, err = syncConfig(req.GetSync()); err != nil {
 			return api.DatastoreSpec{}, err
 		}
-		spec.Sync = sync
 	}
 	return spec, nil
 }
 
-func schemaRefFromSdcpb(s *sdcpb.Schema) api.SchemaRef {
-	if s == nil {
-		return api.SchemaRef{}
-	}
-	return api.SchemaRef{Vendor: s.GetVendor(), Version: s.GetVersion()}
-}
-
-func syncFromSdcpb(s *sdcpb.Sync) (api.Sync, error) {
-	out := api.Sync{
-		Validate:     s.GetValidate(),
-		Buffer:       s.GetBuffer(),
-		WriteWorkers: s.GetWriteWorkers(),
-	}
-	for _, pSync := range s.GetConfig() {
-		tgt, err := targetFromSdcpb(pSync.GetTarget())
-		if err != nil {
-			return api.Sync{}, err
-		}
-		out.Configs = append(out.Configs, api.SyncConfig{
-			Name:     pSync.GetName(),
-			Target:   &tgt,
-			Paths:    pSync.GetPath(),
-			Mode:     syncModeFromSdcpb(pSync.GetMode()),
-			Interval: pSync.GetInterval(),
-		})
-	}
-	return out, nil
-}
-
-func syncModeFromSdcpb(m sdcpb.SyncMode) api.SyncMode {
-	switch m {
-	case sdcpb.SyncMode_SM_SAMPLE:
-		return api.SyncModeSample
-	case sdcpb.SyncMode_SM_ONCE:
-		return api.SyncModeOnce
-	case sdcpb.SyncMode_SM_GET:
-		return api.SyncModeGet
-	default:
-		return api.SyncModeOnChange
-	}
-}
-
-func targetFromSdcpb(t *sdcpb.Target) (api.Target, error) {
-	if t == nil {
-		return api.Target{}, fmt.Errorf("%w: missing target", api.ErrInvalidArgument)
-	}
-	out := api.Target{
-		Type:    api.TargetType(strings.ToLower(t.GetType())),
-		Address: t.GetAddress(),
-		Port:    t.GetPort(),
-	}
+func target(t *sdcpb.Target) (api.Target, error) {
+	out := api.Target{Type: api.TargetType(t.GetType()), Address: t.GetAddress(), Port: t.GetPort()}
 	switch strings.ToLower(t.GetType()) {
 	case "netconf":
 		nc := t.GetNetconfOpts()
-		commit := api.CommitCandidateCandidate
-		if nc != nil && nc.GetCommitCandidate() == sdcpb.CommitCandidate_COMMIT_RUNNING {
+		var commit api.CommitCandidate
+		switch nc.GetCommitCandidate() {
+		case sdcpb.CommitCandidate_COMMIT_CANDIDATE:
+			commit = api.CommitCandidateCandidate
+		case sdcpb.CommitCandidate_COMMIT_RUNNING:
 			commit = api.CommitCandidateRunning
+		default:
+			return api.Target{}, fmt.Errorf("unknown commitDatastore: %v", nc.GetCommitCandidate())
 		}
 		out.ProtocolOptions.Netconf = &api.NetconfOptions{
 			IncludeNs:          nc.GetIncludeNs(),
@@ -111,37 +67,68 @@ func targetFromSdcpb(t *sdcpb.Target) (api.Target, error) {
 		out.ProtocolOptions.GNMI = &api.GNMIOptions{Encoding: g.GetEncoding(), TargetName: g.GetTargetName()}
 	case "noop":
 	default:
-		return api.Target{}, fmt.Errorf("%w: unknown targetconnection protocol type %q", api.ErrInvalidArgument, t.GetType())
+		return api.Target{}, status.Errorf(codes.InvalidArgument, "unknown targetconnection protocol type %q", t.GetType())
 	}
 	if tls := t.GetTls(); tls != nil {
 		out.TLS = &api.TLS{CA: tls.GetCa(), Cert: tls.GetCert(), Key: tls.GetKey(), SkipVerify: tls.GetSkipVerify()}
 	}
-	if creds := t.GetCredentials(); creds != nil {
-		out.Credentials = &api.Credentials{Username: creds.GetUsername(), Password: creds.GetPassword(), Token: creds.GetToken()}
+	if c := t.GetCredentials(); c != nil {
+		out.Credentials = &api.Credentials{Username: c.GetUsername(), Password: c.GetPassword(), Token: c.GetToken()}
 	}
 	return out, nil
 }
 
-func datastoreInfoToSdcpb(info *api.DatastoreInfo) (*sdcpb.GetDataStoreResponse, error) {
-	rsp := &sdcpb.GetDataStoreResponse{
+func syncConfig(s *sdcpb.Sync) (api.Sync, error) {
+	out := api.Sync{Validate: s.GetValidate(), Buffer: s.GetBuffer(), WriteWorkers: s.GetWriteWorkers()}
+	for _, ps := range s.GetConfig() {
+		typ := ps.GetTarget().GetType()
+		tgt := api.Target{Type: api.TargetType(typ)}
+		switch strings.ToLower(typ) {
+		case "gnmi":
+			tgt.ProtocolOptions.GNMI = &api.GNMIOptions{Encoding: ps.GetTarget().GetGnmiOpts().GetEncoding()}
+		case "netconf":
+		default:
+			return api.Sync{}, status.Errorf(codes.InvalidArgument, "unknown targetsync protocol: %q", typ)
+		}
+		out.Configs = append(out.Configs, api.SyncConfig{
+			Name:     ps.GetName(),
+			Target:   &tgt,
+			Paths:    ps.GetPath(),
+			Mode:     syncMode(ps.GetMode()),
+			Interval: ps.GetInterval(),
+		})
+	}
+	return out, nil
+}
+
+func syncMode(m sdcpb.SyncMode) api.SyncMode {
+	switch m {
+	case sdcpb.SyncMode_SM_SAMPLE:
+		return api.SyncModeSample
+	case sdcpb.SyncMode_SM_ONCE:
+		return api.SyncModeOnce
+	case sdcpb.SyncMode_SM_GET:
+		return api.SyncModeGet
+	default:
+		return api.SyncModeOnChange
+	}
+}
+
+func datastoreResponse(info *api.DatastoreInfo) *sdcpb.GetDataStoreResponse {
+	return &sdcpb.GetDataStoreResponse{
 		DatastoreName: info.Name,
 		Intents:       info.Intents,
 		Target: &sdcpb.Target{
-			Type:           string(info.Spec.Target.Type),
-			Address:        info.Spec.Target.Address,
-			Port:           info.Spec.Target.Port,
-			Status:         targetStatusToSdcpb(info.ConnectionState),
-			StatusDetails:  info.StatusDetails,
+			Type:          string(info.Spec.Target.Type),
+			Address:       info.Spec.Target.Address,
+			Status:        targetStatus(info.ConnectionState),
+			StatusDetails: info.StatusDetails,
 		},
-		Schema: &sdcpb.Schema{
-			Vendor:  info.Spec.Schema.Vendor,
-			Version: info.Spec.Schema.Version,
-		},
+		Schema: sdcpbSchema(info.Spec.Schema),
 	}
-	return rsp, nil
 }
 
-func targetStatusToSdcpb(s api.ConnectionState) sdcpb.TargetStatus {
+func targetStatus(s api.ConnectionState) sdcpb.TargetStatus {
 	switch s {
 	case api.ConnectionConnected:
 		return sdcpb.TargetStatus_CONNECTED
@@ -152,12 +139,12 @@ func targetStatusToSdcpb(s api.ConnectionState) sdcpb.TargetStatus {
 	}
 }
 
-func intentFromSdcpb(pb *sdcpb.TransactionIntent) (api.Intent, error) {
-	if pb == nil {
-		return api.Intent{}, fmt.Errorf("%w: nil intent", api.ErrInvalidArgument)
-	}
+// intent converts a transaction intent. The running intent is always an
+// update carrying only explicit deletes, whatever its delete flag says.
+func intent(pb *sdcpb.TransactionIntent) (api.Intent, error) {
 	in := api.Intent{Name: pb.GetIntent()}
-	if pb.GetDelete() {
+	running := pb.GetPriority() == consts.RunningValuesPrio || pb.GetIntent() == consts.RunningIntentName
+	if pb.GetDelete() && !running {
 		in.Spec.Delete = &api.Delete{IgnoreNoExist: pb.GetDeleteIgnoreNoExist(), Orphan: pb.GetOrphan()}
 		return in, nil
 	}
@@ -169,49 +156,58 @@ func intentFromSdcpb(pb *sdcpb.TransactionIntent) (api.Intent, error) {
 	for _, d := range pb.GetDeletes() {
 		u.Deletes = append(u.Deletes, d.ToXPath(false))
 	}
-	for _, d := range pb.GetRevertPaths() {
-		u.RevertPaths = append(u.RevertPaths, d.ToXPath(false))
+	for _, p := range pb.GetRevertPaths() {
+		u.RevertPaths = append(u.RevertPaths, p.ToXPath(false))
 	}
 	for _, upd := range pb.GetUpdate() {
-		path := ""
-		if upd.GetPath() != nil {
-			path = upd.GetPath().ToXPath(false)
+		tv := upd.GetValue()
+		if _, ok := tv.GetValue().(*sdcpb.TypedValue_JsonVal); !ok {
+			return api.Intent{}, status.Errorf(codes.InvalidArgument, "intent %q: only json_val update values are supported", pb.GetIntent())
 		}
-		var content []byte
-		if tv := upd.GetValue(); tv != nil {
-			content = tv.GetJsonVal()
-		}
-		u.Entries = append(u.Entries, api.UpdateEntry{Path: path, Content: content})
+		u.Entries = append(u.Entries, api.UpdateEntry{Path: upd.GetPath().ToXPath(false), Content: tv.GetJsonVal()})
 	}
 	in.Spec.Update = u
 	return in, nil
 }
 
-func transactionResultToSdcpb(res *api.TransactionResult) *sdcpb.TransactionSetResponse {
-	if res == nil {
-		return &sdcpb.TransactionSetResponse{}
+func setOptions(req *sdcpb.TransactionSetRequest, origin api.Origin) (api.SetOptions, error) {
+	opts := api.SetOptions{DryRun: req.GetDryRun(), Origin: origin}
+	if req.Timeout != nil {
+		opts.Timeout = time.Duration(*req.Timeout) * time.Second
 	}
-	out := &sdcpb.TransactionSetResponse{Warnings: res.Warnings}
+	if req.GetReplaceIntent() != nil {
+		rep, err := intent(req.GetReplaceIntent())
+		if err != nil {
+			return api.SetOptions{}, err
+		}
+		opts.Replace = &rep
+	}
+	return opts, nil
+}
+
+func transactionResponse(res *api.TransactionResult) (*sdcpb.TransactionSetResponse, error) {
+	out := &sdcpb.TransactionSetResponse{
+		Warnings: res.Warnings,
+		Intents:  make(map[string]*sdcpb.TransactionSetResponseIntent, len(res.Intents)),
+	}
+	var errs []error
 	for _, u := range res.Updates {
-		path, _ := sdcpb.ParsePath(u.Path)
-		out.Update = append(out.Update, &sdcpb.Update{
-			Path:  path,
-			Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: u.Value}},
-		})
+		p, err := sdcpb.ParsePath(u.Path)
+		errs = append(errs, err)
+		out.Update = append(out.Update, &sdcpb.Update{Path: p, Value: stringValue(u.Value)})
 	}
 	for _, d := range res.Deletes {
-		if path, err := sdcpb.ParsePath(d); err == nil {
-			out.Delete = append(out.Delete, path)
-		}
+		p, err := sdcpb.ParsePath(d)
+		errs = append(errs, err)
+		out.Delete = append(out.Delete, p)
 	}
-	out.Intents = make(map[string]*sdcpb.TransactionSetResponseIntent, len(res.Intents))
 	for name, iv := range res.Intents {
 		out.Intents[name] = &sdcpb.TransactionSetResponseIntent{Warnings: iv.Warnings, Errors: iv.Errors}
 	}
-	return out
+	return out, errors.Join(errs...)
 }
 
-func intentFormatFromSdcpb(f sdcpb.Format) (api.Format, error) {
+func intentFormat(f sdcpb.Format) (api.Format, error) {
 	switch f {
 	case sdcpb.Format_Intent_Format_JSON:
 		return api.FormatJSON, nil
@@ -224,56 +220,56 @@ func intentFormatFromSdcpb(f sdcpb.Format) (api.Format, error) {
 	case sdcpb.Format_Intent_Format_XPATH:
 		return api.FormatXPath, nil
 	default:
-		return 0, fmt.Errorf("%w: unknown format", api.ErrInvalidArgument)
+		return 0, errors.New("unknown format")
 	}
 }
 
-func intentResultToSdcpb(req *sdcpb.GetIntentRequest, res *api.IntentResult) (*sdcpb.GetIntentResponse, error) {
+func intentResponse(req *sdcpb.GetIntentRequest, res *api.IntentResult) (*sdcpb.GetIntentResponse, error) {
 	out := &sdcpb.GetIntentResponse{
 		DatastoreName: req.GetDatastoreName(),
 		Format:        req.GetFormat(),
-		IntentName:    res.Name,
+		IntentName:    req.GetIntent(),
 		Orphan:        res.Orphan,
 		Priority:      res.Priority,
 		NonRevertive:  res.NonRevertive,
-		Deletes:       make([]*sdcpb.Path, 0, len(res.Deletes)),
 	}
 	for _, d := range res.Deletes {
-		if p, err := sdcpb.ParsePath(d); err == nil {
-			out.Deletes = append(out.Deletes, p)
-		}
-	}
-	switch req.GetFormat() {
-	case sdcpb.Format_Intent_Format_PROTO:
-		var intent sdcpb.Intent
-		if err := protoUnmarshal(res.Content, &intent); err != nil {
+		p, err := sdcpb.ParsePath(d)
+		if err != nil {
 			return nil, err
 		}
-		out.Intent = &sdcpb.GetIntentResponse_Proto{Proto: &intent}
-	default:
-		out.Intent = &sdcpb.GetIntentResponse_Blob{Blob: res.Content}
+		out.Deletes = append(out.Deletes, p)
 	}
+	if res.Format == api.FormatProto {
+		var in sdcpb.Intent
+		if err := proto.Unmarshal(res.Content, &in); err != nil {
+			return nil, err
+		}
+		out.Intent = &sdcpb.GetIntentResponse_Proto{Proto: &in}
+		return out, nil
+	}
+	out.Intent = &sdcpb.GetIntentResponse_Blob{Blob: res.Content}
 	return out, nil
 }
 
-func blameNodeToSdcpb(n *api.BlameNode) *sdcpb.BlameTreeElement {
+func blameTree(n *api.BlameNode) *sdcpb.BlameTreeElement {
 	if n == nil {
 		return nil
 	}
-	e := &sdcpb.BlameTreeElement{
-		Name:           n.Name,
-		Owner:          n.Owner,
-		Value:          &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: n.Value}},
-		DeviationValue: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: n.DeviationValue}},
-		KeyName:        n.KeyName,
+	e := &sdcpb.BlameTreeElement{Name: n.Name, Owner: n.Owner, KeyName: n.KeyName}
+	if n.Value != "" {
+		e.Value = stringValue(n.Value)
+	}
+	if n.DeviationValue != "" {
+		e.DeviationValue = stringValue(n.DeviationValue)
 	}
 	for _, ch := range n.Children {
-		e.Childs = append(e.Childs, blameNodeToSdcpb(ch))
+		e.Childs = append(e.Childs, blameTree(ch))
 	}
 	return e
 }
 
-func schemaDetailsToSdcpb(info *api.SchemaInfo) *sdcpb.GetSchemaDetailsResponse {
+func schemaDetails(info *api.SchemaInfo) *sdcpb.GetSchemaDetailsResponse {
 	st := sdcpb.SchemaStatus_OK
 	switch info.State {
 	case api.SchemaReloading:
@@ -283,20 +279,13 @@ func schemaDetailsToSdcpb(info *api.SchemaInfo) *sdcpb.GetSchemaDetailsResponse 
 	case api.SchemaFailed:
 		st = sdcpb.SchemaStatus_FAILED
 	}
-	return &sdcpb.GetSchemaDetailsResponse{
-		Schema:    &sdcpb.Schema{Vendor: info.Schema.Vendor, Version: info.Schema.Version, Status: st},
-		File:      info.Files,
-		Directory: info.Directories,
-		Exclude:   info.Excludes,
-	}
+	s := sdcpbSchema(info.Schema)
+	s.Status = st
+	return &sdcpb.GetSchemaDetailsResponse{Schema: s, File: info.Files, Directory: info.Directories, Exclude: info.Excludes}
 }
 
-func deviationEventToSdcpb(ev api.DeviationEvent) *sdcpb.WatchDeviationResponse {
-	rsp := &sdcpb.WatchDeviationResponse{
-		Name:   ev.Datastore,
-		Intent: ev.Intent,
-		Reason: sdcpb.DeviationReason(ev.Reason),
-	}
+func deviationResponse(ev api.DeviationEvent) *sdcpb.WatchDeviationResponse {
+	rsp := &sdcpb.WatchDeviationResponse{Name: ev.Datastore, Intent: ev.Intent, Reason: sdcpb.DeviationReason(ev.Reason)}
 	switch ev.Kind {
 	case api.DeviationStart:
 		rsp.Event = sdcpb.DeviationEvent_START
@@ -308,25 +297,10 @@ func deviationEventToSdcpb(ev api.DeviationEvent) *sdcpb.WatchDeviationResponse 
 		rsp.Event = sdcpb.DeviationEvent_UPDATE
 		if len(ev.Entries) > 0 {
 			ent := ev.Entries[0]
-			if p, err := sdcpb.ParsePath(ent.Path); err == nil {
-				rsp.Path = p
-			}
-			rsp.ExpectedValue = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: ent.Expected}}
-			rsp.CurrentValue = &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: ent.Current}}
+			rsp.Path, _ = sdcpb.ParsePath(ent.Path)
+			rsp.ExpectedValue = stringValue(ent.Expected)
+			rsp.CurrentValue = stringValue(ent.Current)
 		}
 	}
 	return rsp
-}
-
-func setOptionsFromRequest(req *sdcpb.TransactionSetRequest, origin api.Origin) api.SetOptions {
-	opts := api.SetOptions{DryRun: req.GetDryRun(), Origin: origin}
-	if req.Timeout != nil {
-		opts.Timeout = time.Duration(*req.Timeout) * time.Second
-	}
-	if req.GetReplaceIntent() != nil {
-		if rep, err := intentFromSdcpb(req.GetReplaceIntent()); err == nil {
-			opts.Replace = &rep
-		}
-	}
-	return opts
 }
