@@ -103,10 +103,11 @@ func TestHashNilVersusEmpty(t *testing.T) {
 func TestHashExtra(t *testing.T) {
 	s := fullSpec()
 	base := ComputeCreateDSHash(s)
-	if ComputeCreateDSHash(s, "1") == base {
+	withExtra := ComputeCreateDSHash(s, "1")
+	if withExtra == base {
 		t.Fatal("extra ignored")
 	}
-	if ComputeCreateDSHash(s, "1") != ComputeCreateDSHash(s, "1") {
+	if withExtra != ComputeCreateDSHash(s, "1") {
 		t.Fatal("extra unstable")
 	}
 	if ComputeCreateDSHash(s, "a", "b") == ComputeCreateDSHash(s, "ab") {
