@@ -32,48 +32,120 @@ var (
 	ErrNoIntentsProvided = errors.New("no intents provided")
 )
 
+// intentParams is the transport-neutral description of one transaction intent.
+type intentParams struct {
+	name                string
+	priority            int32
+	delete              bool
+	orphan              bool
+	deleteIgnoreNoExist bool
+	previouslyApplied   bool
+	nonRevertive        bool
+	revertPaths         []*sdcpb.Path
+	deletes             []*sdcpb.Path
+	updates             []*sdcpb.Update
+}
+
 // SdcpbTransactionIntentToInternalTI converts sdcpb.TransactionIntent to types.TransactionIntent
 func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req *sdcpb.TransactionIntent) (*types.TransactionIntent, error) {
-	log := logger.FromContext(ctx)
-	// create a new TransactionIntent with the given name and priority
-	ti := types.NewTransactionIntent(req.GetIntent(), req.GetPriority())
+	return d.buildTransactionIntent(ctx, intentParams{
+		name:                req.GetIntent(),
+		priority:            req.GetPriority(),
+		delete:              req.GetDelete(),
+		orphan:              req.GetOrphan(),
+		deleteIgnoreNoExist: req.GetDeleteIgnoreNoExist(),
+		previouslyApplied:   req.GetPreviouslyApplied(),
+		nonRevertive:        req.GetNonRevertive(),
+		revertPaths:         req.GetRevertPaths(),
+		deletes:             req.GetDeletes(),
+		updates:             req.GetUpdate(),
+	})
+}
 
-	// setting the provided flags in the TransactionIntent
-	if req.GetDelete() {
-		ti.SetDeleteFlag()
-	}
-	if req.GetOrphan() {
-		ti.SetDeleteOnlyIntendedFlag()
-	}
-
-	if req.GetDeleteIgnoreNoExist() {
-		ti.SetDeleteIgnoreNonExisting()
-	}
-	if req.GetPreviouslyApplied() {
-		ti.SetPreviouslyApplied()
-	}
-
-	if req.GetNonRevertive() {
-		ti.SetNonRevertive()
-	}
-	if len(req.GetRevertPaths()) > 0 {
-		if !req.GetNonRevertive() {
-			log.Error(fmt.Errorf("revert paths provided without non-revertive flag set for intent %s", req.GetIntent()), "severity", "WARN")
-		} else {
-			ti.AddRevertPaths(req.GetRevertPaths()...)
+// IntentToInternalTI converts a pubapi.Intent to types.TransactionIntent. It
+// fails with pubapi.ErrInvalidArgument when the intent sets both update and
+// delete or contains a path that does not parse.
+func (d *Datastore) IntentToInternalTI(ctx context.Context, in *pubapi.Intent) (*types.TransactionIntent, error) {
+	p := intentParams{name: in.Name}
+	switch {
+	case in.Spec.Update != nil && in.Spec.Delete != nil:
+		return nil, fmt.Errorf("%w: intent %q sets both update and delete", pubapi.ErrInvalidArgument, in.Name)
+	case in.Spec.Delete != nil:
+		p.delete = true
+		p.deleteIgnoreNoExist = in.Spec.Delete.IgnoreNoExist
+		p.orphan = in.Spec.Delete.Orphan
+	case in.Spec.Update != nil:
+		u := in.Spec.Update
+		var err error
+		p.priority = u.Priority
+		p.nonRevertive = u.NonRevertive
+		p.previouslyApplied = u.PreviouslyApplied
+		if p.deletes, err = parsePaths(in.Name, u.Deletes); err != nil {
+			return nil, err
+		}
+		if p.revertPaths, err = parsePaths(in.Name, u.RevertPaths); err != nil {
+			return nil, err
+		}
+		for _, e := range u.Entries {
+			path, err := sdcpb.ParsePath(e.Path)
+			if err != nil {
+				return nil, fmt.Errorf("%w: intent %q path %q: %v", pubapi.ErrInvalidArgument, in.Name, e.Path, err)
+			}
+			p.updates = append(p.updates, &sdcpb.Update{
+				Path:  path,
+				Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: e.Content}},
+			})
 		}
 	}
-	// convert the sdcpb.updates to tree.UpdateSlice
-	Updates, err := treetypes.ExpandAndConvertIntent(ctx, d.schemaClient, req.GetIntent(), req.GetPriority(), req.GetUpdate(), time.Now().Unix())
+	return d.buildTransactionIntent(ctx, p)
+}
+
+func parsePaths(intent string, paths []string) ([]*sdcpb.Path, error) {
+	out := make([]*sdcpb.Path, 0, len(paths))
+	for _, s := range paths {
+		path, err := sdcpb.ParsePath(s)
+		if err != nil {
+			return nil, fmt.Errorf("%w: intent %q path %q: %v", pubapi.ErrInvalidArgument, intent, s, err)
+		}
+		out = append(out, path)
+	}
+	return out, nil
+}
+
+// buildTransactionIntent expands the updates against the schema and applies the flags.
+func (d *Datastore) buildTransactionIntent(ctx context.Context, p intentParams) (*types.TransactionIntent, error) {
+	log := logger.FromContext(ctx)
+	ti := types.NewTransactionIntent(p.name, p.priority)
+
+	if p.delete {
+		ti.SetDeleteFlag()
+	}
+	if p.orphan {
+		ti.SetDeleteOnlyIntendedFlag()
+	}
+	if p.deleteIgnoreNoExist {
+		ti.SetDeleteIgnoreNonExisting()
+	}
+	if p.previouslyApplied {
+		ti.SetPreviouslyApplied()
+	}
+	if p.nonRevertive {
+		ti.SetNonRevertive()
+	}
+	if len(p.revertPaths) > 0 {
+		if !p.nonRevertive {
+			log.Error(fmt.Errorf("revert paths provided without non-revertive flag set for intent %s", p.name), "severity", "WARN")
+		} else {
+			ti.AddRevertPaths(p.revertPaths...)
+		}
+	}
+
+	updates, err := treetypes.ExpandAndConvertIntent(ctx, d.schemaClient, p.name, p.priority, p.updates, time.Now().Unix())
 	if err != nil {
 		return nil, err
 	}
-
-	// add the intent to the TransactionIntent
-	ti.AddUpdates(Updates)
-
-	// add the deletes
-	ti.AddExplicitDeletes(req.Deletes)
+	ti.AddUpdates(updates)
+	ti.AddExplicitDeletes(p.deletes)
 
 	return ti, nil
 }

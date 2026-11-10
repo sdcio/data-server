@@ -38,16 +38,16 @@ func (c *Core) TransactionSet(ctx context.Context, ref api.TxRef, opts api.SetOp
 			// only explicit deletes may target the running intent
 			ti = types.NewTransactionIntent(consts.RevertRunningName, consts.RevertRunningPrio)
 			if in.Spec.Update != nil {
-				ti.AddExplicitDeletes(deletePaths(in.Spec.Update.Deletes))
+				deletes, err := parsePaths(in.Name, in.Spec.Update.Deletes)
+				if err != nil {
+					return nil, err
+				}
+				ti.AddExplicitDeletes(deletes)
 			}
 		case in.Spec.Update != nil && in.Spec.Update.Priority > consts.UserSettableMax:
 			return nil, fmt.Errorf("%w: user settable priority not allowed above %d", api.ErrInvalidArgument, consts.UserSettableMax)
 		default:
-			pb, err := toSdcpbIntent(in)
-			if err != nil {
-				return nil, err
-			}
-			if ti, err = ds.SdcpbTransactionIntentToInternalTI(ctx, pb); err != nil {
+			if ti, err = ds.IntentToInternalTI(ctx, in); err != nil {
 				return nil, err
 			}
 		}
@@ -56,13 +56,15 @@ func (c *Core) TransactionSet(ctx context.Context, ref api.TxRef, opts api.SetOp
 
 	var replace *types.TransactionIntent
 	if opts.Replace != nil {
-		pb, err := toSdcpbIntent(opts.Replace)
-		if err != nil {
-			return nil, err
+		in := api.Intent{Name: consts.ReplaceIntentName}
+		if opts.Replace.Spec.Update != nil {
+			u := *opts.Replace.Spec.Update
+			u.Priority = consts.ReplaceValuesPrio
+			in.Spec.Update = &u
+		} else {
+			in.Spec.Update = &api.Update{Priority: consts.ReplaceValuesPrio}
 		}
-		pb.Priority = consts.ReplaceValuesPrio
-		pb.Intent = consts.ReplaceIntentName
-		if replace, err = ds.SdcpbTransactionIntentToInternalTI(ctx, pb); err != nil {
+		if replace, err = ds.IntentToInternalTI(ctx, &in); err != nil {
 			return nil, err
 		}
 	}
@@ -111,45 +113,17 @@ func (c *Core) txContext(ctx context.Context, op string, ref api.TxRef, origin a
 	return logf.IntoContext(ctx, log), ds, nil
 }
 
-func toSdcpbIntent(in *api.Intent) (*sdcpb.TransactionIntent, error) {
-	pb := &sdcpb.TransactionIntent{Intent: in.Name}
-	switch {
-	case in.Spec.Update != nil && in.Spec.Delete != nil:
-		return nil, fmt.Errorf("%w: intent %q sets both update and delete", api.ErrInvalidArgument, in.Name)
-	case in.Spec.Delete != nil:
-		pb.Delete = true
-		pb.DeleteIgnoreNoExist = in.Spec.Delete.IgnoreNoExist
-		pb.Orphan = in.Spec.Delete.Orphan
-	case in.Spec.Update != nil:
-		u := in.Spec.Update
-		pb.Priority = u.Priority
-		pb.NonRevertive = u.NonRevertive
-		pb.PreviouslyApplied = u.PreviouslyApplied
-		pb.Deletes = deletePaths(u.Deletes)
-		pb.RevertPaths = deletePaths(u.RevertPaths)
-		for _, e := range u.Entries {
-			path, err := sdcpb.ParsePath(e.Path)
-			if err != nil {
-				return nil, fmt.Errorf("%w: intent %q path %q: %v", api.ErrInvalidArgument, in.Name, e.Path, err)
-			}
-			pb.Update = append(pb.Update, &sdcpb.Update{
-				Path:  path,
-				Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: e.Content}},
-			})
-		}
-	}
-	return pb, nil
-}
-
-// deletePaths parses xpath strings; entries that do not parse are skipped.
-func deletePaths(paths []string) []*sdcpb.Path {
+// parsePaths parses xpath strings, failing with api.ErrInvalidArgument on the first that does not parse.
+func parsePaths(intent string, paths []string) ([]*sdcpb.Path, error) {
 	out := make([]*sdcpb.Path, 0, len(paths))
-	for _, p := range paths {
-		if path, err := sdcpb.ParsePath(p); err == nil {
-			out = append(out, path)
+	for _, s := range paths {
+		path, err := sdcpb.ParsePath(s)
+		if err != nil {
+			return nil, fmt.Errorf("%w: intent %q path %q: %v", api.ErrInvalidArgument, intent, s, err)
 		}
+		out = append(out, path)
 	}
-	return out
+	return out, nil
 }
 
 func toTransactionResult(rsp *sdcpb.TransactionSetResponse) *api.TransactionResult {
@@ -158,7 +132,7 @@ func toTransactionResult(rsp *sdcpb.TransactionSetResponse) *api.TransactionResu
 		Intents:  make(map[string]api.IntentValidation, len(rsp.GetIntents())),
 	}
 	for _, u := range rsp.GetUpdate() {
-		res.Updates = append(res.Updates, api.PathValue{Path: u.GetPath().ToXPath(false), Value: valueString(u.GetValue())})
+		res.Updates = append(res.Updates, api.PathValue{Path: u.GetPath().ToXPath(false), Value: u.GetValue().ToString()})
 	}
 	for _, d := range rsp.GetDelete() {
 		res.Deletes = append(res.Deletes, d.ToXPath(false))
@@ -167,11 +141,4 @@ func toTransactionResult(rsp *sdcpb.TransactionSetResponse) *api.TransactionResu
 		res.Intents[name] = api.IntentValidation{Warnings: iv.GetWarnings(), Errors: iv.GetErrors()}
 	}
 	return res
-}
-
-func valueString(tv *sdcpb.TypedValue) string {
-	if tv == nil {
-		return ""
-	}
-	return tv.ToString()
 }
