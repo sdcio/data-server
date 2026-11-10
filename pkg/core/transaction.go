@@ -132,7 +132,7 @@ func toTransactionResult(rsp *sdcpb.TransactionSetResponse) *api.TransactionResu
 		Intents:  make(map[string]api.IntentValidation, len(rsp.GetIntents())),
 	}
 	for _, u := range rsp.GetUpdate() {
-		res.Updates = append(res.Updates, api.PathValue{Path: u.GetPath().ToXPath(false), Value: u.GetValue().ToString()})
+		res.Updates = append(res.Updates, api.PathValue{Path: u.GetPath().ToXPath(false), Value: valueString(u.GetValue())})
 	}
 	for _, d := range rsp.GetDelete() {
 		res.Deletes = append(res.Deletes, d.ToXPath(false))
@@ -141,4 +141,11 @@ func toTransactionResult(rsp *sdcpb.TransactionSetResponse) *api.TransactionResu
 		res.Intents[name] = api.IntentValidation{Warnings: iv.GetWarnings(), Errors: iv.GetErrors()}
 	}
 	return res
+}
+
+func valueString(tv *sdcpb.TypedValue) string {
+	if tv == nil {
+		return ""
+	}
+	return tv.ToString()
 }
