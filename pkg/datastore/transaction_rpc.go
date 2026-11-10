@@ -64,7 +64,7 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 
 // IntentToInternalTI converts a pubapi.Intent to types.TransactionIntent. It
 // fails with pubapi.ErrInvalidArgument when the intent sets both update and
-// delete or contains a path that does not parse.
+// delete.
 func (d *Datastore) IntentToInternalTI(ctx context.Context, in *pubapi.Intent) (*types.TransactionIntent, error) {
 	p := intentParams{name: in.Name}
 	switch {
@@ -76,31 +76,14 @@ func (d *Datastore) IntentToInternalTI(ctx context.Context, in *pubapi.Intent) (
 		p.orphan = in.Spec.Delete.Orphan
 	case in.Spec.Update != nil:
 		u := in.Spec.Update
-		var err error
 		p.priority = u.Priority
 		p.nonRevertive = u.NonRevertive
 		p.previouslyApplied = u.PreviouslyApplied
-		if p.deletes, err = parsePaths(in.Name, u.Deletes); err != nil {
-			return nil, err
-		}
-		if p.revertPaths, err = parsePaths(in.Name, u.RevertPaths); err != nil {
-			return nil, err
-		}
+		p.deletes = u.Deletes
+		p.revertPaths = u.RevertPaths
 		p.updates = u.Updates
 	}
 	return d.buildTransactionIntent(ctx, p)
-}
-
-func parsePaths(intent string, paths []string) ([]*sdcpb.Path, error) {
-	out := make([]*sdcpb.Path, 0, len(paths))
-	for _, s := range paths {
-		path, err := sdcpb.ParsePath(s)
-		if err != nil {
-			return nil, fmt.Errorf("%w: intent %q path %q: %v", pubapi.ErrInvalidArgument, intent, s, err)
-		}
-		out = append(out, path)
-	}
-	return out, nil
 }
 
 // buildTransactionIntent expands the updates against the schema and applies the flags.

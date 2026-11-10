@@ -15,17 +15,13 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
-const ifPath = "/interface[name=ethernet-1/1]"
+var ifPath = mustPath("/interface[name=ethernet-1/1]")
 
 func ifIntent(name, descr string) api.Intent {
-	path, err := sdcpb.ParsePath(ifPath)
-	if err != nil {
-		panic(err)
-	}
 	return api.Intent{Name: name, Spec: api.IntentSpec{Update: &api.Update{
 		Priority: 10,
 		Updates: []*sdcpb.Update{{
-			Path:  path,
+			Path:  ifPath,
 			Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: []byte(`{"description":"` + descr + `"}`)}},
 		}},
 	}}}
@@ -381,4 +377,12 @@ func TestDeviationWatcherSendUnblocksOnCancel(t *testing.T) {
 	if err := w.Send(sdcpbEvent(sdcpb.DeviationEvent_UPDATE)); err == nil {
 		t.Fatal("send after close must fail")
 	}
+}
+
+func mustPath(xpath string) *sdcpb.Path {
+	p, err := sdcpb.ParsePath(xpath)
+	if err != nil {
+		panic(err)
+	}
+	return p
 }

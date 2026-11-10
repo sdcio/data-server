@@ -29,11 +29,11 @@ func TestIntentToInternalTI(t *testing.T) {
 				NonRevertive:      true,
 				PreviouslyApplied: true,
 				Updates: []*sdcpb.Update{{
-					Path:  &sdcpb.Path{},
+					Path:  mustPath("/"),
 					Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: content}},
 				}},
-				Deletes:     []string{"/interface[name=ethernet-1/2]"},
-				RevertPaths: []string{"/interface[name=ethernet-1/1]"},
+				Deletes:     []*sdcpb.Path{mustPath("/interface[name=ethernet-1/2]")},
+				RevertPaths: []*sdcpb.Path{mustPath("/interface[name=ethernet-1/1]")},
 			}},
 		})
 		if err != nil {
@@ -75,7 +75,7 @@ func TestIntentToInternalTI(t *testing.T) {
 	t.Run("revert paths without non-revertive are ignored", func(t *testing.T) {
 		ti, err := ds.IntentToInternalTI(ctx, &pubapi.Intent{
 			Name: "i3",
-			Spec: pubapi.IntentSpec{Update: &pubapi.Update{RevertPaths: []string{"/interface[name=ethernet-1/1]"}}},
+			Spec: pubapi.IntentSpec{Update: &pubapi.Update{RevertPaths: []*sdcpb.Path{mustPath("/interface[name=ethernet-1/1]")}}},
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -87,8 +87,6 @@ func TestIntentToInternalTI(t *testing.T) {
 
 	invalid := map[string]pubapi.Intent{
 		"both update and delete": {Name: "x", Spec: pubapi.IntentSpec{Update: &pubapi.Update{}, Delete: &pubapi.Delete{}}},
-		"bad delete path":        {Name: "x", Spec: pubapi.IntentSpec{Update: &pubapi.Update{Deletes: []string{"/interface[name="}}}},
-		"bad revert path":        {Name: "x", Spec: pubapi.IntentSpec{Update: &pubapi.Update{RevertPaths: []string{"/interface[name="}}}},
 	}
 	for name, in := range invalid {
 		t.Run(name, func(t *testing.T) {
@@ -98,4 +96,12 @@ func TestIntentToInternalTI(t *testing.T) {
 			}
 		})
 	}
+}
+
+func mustPath(xpath string) *sdcpb.Path {
+	p, err := sdcpb.ParsePath(xpath)
+	if err != nil {
+		panic(err)
+	}
+	return p
 }

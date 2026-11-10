@@ -48,9 +48,9 @@ type Update struct {
 	// typed leaf values; other value types are taken as given.
 	Updates []*sdcpb.Update
 	// Deletes are paths removed explicitly on behalf of the intent.
-	Deletes []string
+	Deletes []*sdcpb.Path
 	// RevertPaths limits reverting to these paths for a non-revertive intent.
-	RevertPaths []string
+	RevertPaths []*sdcpb.Path
 	// NonRevertive leaves device-side changes in place instead of reverting them.
 	NonRevertive bool
 	// PreviouslyApplied marks a non-revertive intent that was applied before.
@@ -92,7 +92,7 @@ type IntentResult struct {
 	Priority     int32
 	Orphan       bool
 	NonRevertive bool
-	Deletes      []string
+	Deletes      []*sdcpb.Path
 	Format       Format
 	Content      []byte
 }
@@ -103,28 +103,28 @@ type IntentValidation struct {
 	Errors   []string
 }
 
-// PathValue is a path with its value in display form.
+// PathValue is a path with its typed value.
 type PathValue struct {
-	Path  string
-	Value string
+	Path  *sdcpb.Path
+	Value *sdcpb.TypedValue
 }
 
 // TransactionResult is the outcome of a transaction set. Validation failures
 // are reported in Intents, not as an error.
 type TransactionResult struct {
 	Updates  []PathValue
-	Deletes  []string
+	Deletes  []*sdcpb.Path
 	Intents  map[string]IntentValidation
 	Warnings []string
 }
 
 // BlameNode is one level of the blame tree: which intent owns the value below
-// a path. Values are in display form.
+// a path. Values keep their original type.
 type BlameNode struct {
 	Name           string
 	Owner          string
-	Value          string
-	DeviationValue string
+	Value          *sdcpb.TypedValue
+	DeviationValue *sdcpb.TypedValue
 	// KeyName is set when the level is the key level of a list.
 	KeyName  string
 	Children []*BlameNode

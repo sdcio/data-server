@@ -45,7 +45,7 @@ func (c *Core) GetIntent(ctx context.Context, req api.IntentRequest) (*api.Inten
 		Format:       req.Format,
 	}
 	for _, d := range rsp.GetExplicitDeletes() {
-		res.Deletes = append(res.Deletes, d.ToXPath(false))
+		res.Deletes = append(res.Deletes, d)
 	}
 
 	switch req.Format {
@@ -111,8 +111,8 @@ func toBlameNode(e *sdcpb.BlameTreeElement) *api.BlameNode {
 	n := &api.BlameNode{
 		Name:           e.GetName(),
 		Owner:          e.GetOwner(),
-		Value:          e.GetValue().ToString(),
-		DeviationValue: e.GetDeviationValue().ToString(),
+		Value:          e.GetValue(),
+		DeviationValue: e.GetDeviationValue(),
 		KeyName:        e.GetKeyName(),
 	}
 	for _, ch := range e.GetChilds() {

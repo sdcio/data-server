@@ -38,11 +38,7 @@ func (c *Core) TransactionSet(ctx context.Context, ref api.TxRef, opts api.SetOp
 			// only explicit deletes may target the running intent
 			ti = types.NewTransactionIntent(consts.RevertRunningName, consts.RevertRunningPrio)
 			if in.Spec.Update != nil {
-				deletes, err := parsePaths(in.Name, in.Spec.Update.Deletes)
-				if err != nil {
-					return nil, err
-				}
-				ti.AddExplicitDeletes(deletes)
+				ti.AddExplicitDeletes(in.Spec.Update.Deletes)
 			}
 		case in.Spec.Update != nil && in.Spec.Update.Priority > consts.UserSettableMax:
 			return nil, fmt.Errorf("%w: user settable priority not allowed above %d", api.ErrInvalidArgument, consts.UserSettableMax)
@@ -113,29 +109,16 @@ func (c *Core) txContext(ctx context.Context, op string, ref api.TxRef, origin a
 	return logf.IntoContext(ctx, log), ds, nil
 }
 
-// parsePaths parses xpath strings, failing with api.ErrInvalidArgument on the first that does not parse.
-func parsePaths(intent string, paths []string) ([]*sdcpb.Path, error) {
-	out := make([]*sdcpb.Path, 0, len(paths))
-	for _, s := range paths {
-		path, err := sdcpb.ParsePath(s)
-		if err != nil {
-			return nil, fmt.Errorf("%w: intent %q path %q: %v", api.ErrInvalidArgument, intent, s, err)
-		}
-		out = append(out, path)
-	}
-	return out, nil
-}
-
 func toTransactionResult(rsp *sdcpb.TransactionSetResponse) *api.TransactionResult {
 	res := &api.TransactionResult{
 		Warnings: rsp.GetWarnings(),
 		Intents:  make(map[string]api.IntentValidation, len(rsp.GetIntents())),
 	}
 	for _, u := range rsp.GetUpdate() {
-		res.Updates = append(res.Updates, api.PathValue{Path: u.GetPath().ToXPath(false), Value: u.GetValue().ToString()})
+		res.Updates = append(res.Updates, api.PathValue{Path: u.GetPath(), Value: u.GetValue()})
 	}
 	for _, d := range rsp.GetDelete() {
-		res.Deletes = append(res.Deletes, d.ToXPath(false))
+		res.Deletes = append(res.Deletes, d)
 	}
 	for name, iv := range rsp.GetIntents() {
 		res.Intents[name] = api.IntentValidation{Warnings: iv.GetWarnings(), Errors: iv.GetErrors()}
