@@ -111,8 +111,8 @@ func toBlameNode(e *sdcpb.BlameTreeElement) *api.BlameNode {
 	n := &api.BlameNode{
 		Name:           e.GetName(),
 		Owner:          e.GetOwner(),
-		Value:          valueString(e.GetValue()),
-		DeviationValue: valueString(e.GetDeviationValue()),
+		Value:          e.GetValue().ToString(),
+		DeviationValue: e.GetDeviationValue().ToString(),
 		KeyName:        e.GetKeyName(),
 	}
 	for _, ch := range e.GetChilds() {
