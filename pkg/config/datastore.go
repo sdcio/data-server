@@ -32,8 +32,8 @@ const (
 	sbiNETCONF = "netconf"
 	sbiGNMI    = "gnmi"
 
-	ncCommitDatastoreRunning   = "running"
-	ncCommitDatastoreCandidate = "candidate"
+	NcCommitDatastoreRunning   = "running"
+	NcCommitDatastoreCandidate = "candidate"
 )
 
 type DatastoreConfig struct {
@@ -189,12 +189,12 @@ func (s *SBI) validateSetDefaults() error {
 	case sbiNETCONF:
 		switch s.NetconfOptions.CommitDatastore {
 		case "":
-			s.NetconfOptions.CommitDatastore = ncCommitDatastoreCandidate
-		case ncCommitDatastoreRunning:
-		case ncCommitDatastoreCandidate:
+			s.NetconfOptions.CommitDatastore = NcCommitDatastoreCandidate
+		case NcCommitDatastoreRunning:
+		case NcCommitDatastoreCandidate:
 		default:
 			return fmt.Errorf("unknown commit-datastore: %s. Must be one of %s, %s",
-				s.NetconfOptions.CommitDatastore, ncCommitDatastoreCandidate, ncCommitDatastoreRunning)
+				s.NetconfOptions.CommitDatastore, NcCommitDatastoreCandidate, NcCommitDatastoreRunning)
 		}
 	case sbiGNMI:
 		if s.GnmiOptions.Encoding == "" {

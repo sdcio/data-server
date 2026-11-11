@@ -165,7 +165,7 @@ func (t *ncTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.S
 	}
 
 	switch t.sbiConfig.NetconfOptions.CommitDatastore {
-	case "running", "candidate":
+	case config.NcCommitDatastoreRunning, config.NcCommitDatastoreCandidate:
 		return t.setToDevice(ctx, t.sbiConfig.NetconfOptions.CommitDatastore, source)
 	}
 	// should not get here if the config validation happened.
@@ -274,7 +274,7 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 		}
 
 		// candidate should discard on error
-		if commitDatastore == "candidate" {
+		if commitDatastore == config.NcCommitDatastoreCandidate {
 			err2 := t.driver.Discard()
 			if err2 != nil {
 				// log failed discard
@@ -289,7 +289,7 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 	}
 
 	// candidate stores need to commit the changes to running
-	if commitDatastore == "candidate" {
+	if commitDatastore == config.NcCommitDatastoreCandidate {
 		log.Info("committing changes on target")
 		// commit the config
 		err = t.driver.Commit()

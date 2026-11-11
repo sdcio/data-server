@@ -108,11 +108,11 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 	switch strings.ToLower(reqTarget.GetType()) {
 	case "netconf":
 		netconfOpts := reqTarget.GetNetconfOpts()
-		commitDatastore := "candidate"
+		commitDatastore := config.NcCommitDatastoreCandidate
 		switch netconfOpts.GetCommitCandidate() {
 		case sdcpb.CommitCandidate_COMMIT_CANDIDATE:
 		case sdcpb.CommitCandidate_COMMIT_RUNNING:
-			commitDatastore = "running"
+			commitDatastore = config.NcCommitDatastoreRunning
 		default:
 			log.Error(nil, "unknown commitDatastore", "datastore", netconfOpts.GetCommitCandidate())
 			return nil, fmt.Errorf("unknown commitDatastore: %v", netconfOpts.GetCommitCandidate())
