@@ -3,7 +3,7 @@ package api
 import "testing"
 
 func TestParseGNMIEncoding(t *testing.T) {
-	for in, want := range map[string]GNMIEncoding{"json_ietf": GNMIEncodingJSONIETF, "JSON": GNMIEncodingJSON, "Proto": GNMIEncodingProto} {
+	for in, want := range map[string]GNMIEncoding{"json_ietf": GNMIEncodingJSONIETF, "JSON": GNMIEncodingJSON, "Proto": GNMIEncodingProto, "config": GNMIEncodingConfig} {
 		if got, err := ParseGNMIEncoding(in); err != nil || got != want {
 			t.Errorf("%q: got %q, %v", in, got, err)
 		}

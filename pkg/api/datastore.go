@@ -54,13 +54,15 @@ const (
 	GNMIEncodingProto    GNMIEncoding = "PROTO"
 	GNMIEncodingASCII    GNMIEncoding = "ASCII"
 	GNMIEncodingJSONIETF GNMIEncoding = "JSON_IETF"
+	// GNMIEncodingConfig is the vendor-specific CONFIG encoding, sent as gNMI encoding 45.
+	GNMIEncodingConfig GNMIEncoding = "CONFIG"
 )
 
 // ParseGNMIEncoding resolves a case-insensitive encoding name. Unknown names,
 // including numeric values, are rejected.
 func ParseGNMIEncoding(s string) (GNMIEncoding, error) {
 	switch e := GNMIEncoding(strings.ToUpper(s)); e {
-	case GNMIEncodingJSON, GNMIEncodingBytes, GNMIEncodingProto, GNMIEncodingASCII, GNMIEncodingJSONIETF:
+	case GNMIEncodingJSON, GNMIEncodingBytes, GNMIEncodingProto, GNMIEncodingASCII, GNMIEncodingJSONIETF, GNMIEncodingConfig:
 		return e, nil
 	}
 	return "", fmt.Errorf("unknown gnmi encoding %q", s)

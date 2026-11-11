@@ -1,6 +1,10 @@
 package api
 
-import "time"
+import (
+	"time"
+
+	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+)
 
 // Origin identifies the requester of an operation for logging and audit. It is
 // optional; the gRPC adapter fills it from the peer and in-process callers set
@@ -37,8 +41,9 @@ type Intent struct {
 // Update creates or replaces an intent.
 type Update struct {
 	Priority int32
-	// Content is the intent body, JSON encoded.
-	Content []byte
+	// Updates are the intent body. A JSON value expands below its path into
+	// typed leaf values; other value types are taken as given.
+	Updates []*sdcpb.Update
 	// NonRevertive leaves device-side changes in place instead of reverting them.
 	NonRevertive bool
 	// PreviouslyApplied marks a non-revertive intent that was applied before.

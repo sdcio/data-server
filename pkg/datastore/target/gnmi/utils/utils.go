@@ -37,7 +37,13 @@ func SdcpbEncodingToGNMIENcoding(x sdcpb.Encoding) (gnmi.Encoding, error) {
 	return 9999, fmt.Errorf("unable to convert sdcpb encoding %s to gnmi encoding", x)
 }
 
+// configEncoding is the vendor-specific gNMI encoding value behind the CONFIG name.
+const configEncoding = 45
+
 func ParseGnmiEncoding(e string) int {
+	if strings.EqualFold(e, "CONFIG") {
+		return configEncoding
+	}
 	enc, ok := gnmi.Encoding_value[strings.ToUpper(e)]
 	if ok {
 		return int(enc)
@@ -50,6 +56,9 @@ func ParseGnmiEncoding(e string) int {
 }
 
 func ParseSdcpbEncoding(e string) int {
+	if strings.EqualFold(e, "CONFIG") {
+		return configEncoding
+	}
 	enc, ok := sdcpb.Encoding_value[strings.ToUpper(e)]
 	if ok {
 		return int(enc)
