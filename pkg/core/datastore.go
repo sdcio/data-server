@@ -129,7 +129,7 @@ func targetFromSBI(s *config.SBI) api.Target {
 	}
 	if o := s.NetconfOptions; o != nil {
 		commit := api.CommitCandidateCandidate
-		if o.CommitDatastore == "running" {
+		if o.CommitDatastore == config.NcCommitDatastoreRunning {
 			commit = api.CommitCandidateRunning
 		}
 		t.ProtocolOptions.Netconf = &api.NetconfOptions{
