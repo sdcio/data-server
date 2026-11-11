@@ -103,16 +103,10 @@ type IntentValidation struct {
 	Errors   []string
 }
 
-// PathValue is a path with its typed value.
-type PathValue struct {
-	Path  *sdcpb.Path
-	Value *sdcpb.TypedValue
-}
-
 // TransactionResult is the outcome of a transaction set. Validation failures
 // are reported in Intents, not as an error.
 type TransactionResult struct {
-	Updates  []PathValue
+	Updates  []*sdcpb.Update
 	Deletes  []*sdcpb.Path
 	Intents  map[string]IntentValidation
 	Warnings []string

@@ -114,9 +114,7 @@ func toTransactionResult(rsp *sdcpb.TransactionSetResponse) *api.TransactionResu
 		Warnings: rsp.GetWarnings(),
 		Intents:  make(map[string]api.IntentValidation, len(rsp.GetIntents())),
 	}
-	for _, u := range rsp.GetUpdate() {
-		res.Updates = append(res.Updates, api.PathValue{Path: u.GetPath(), Value: u.GetValue()})
-	}
+	res.Updates = append(res.Updates, rsp.GetUpdate()...)
 	for _, d := range rsp.GetDelete() {
 		res.Deletes = append(res.Deletes, d)
 	}
