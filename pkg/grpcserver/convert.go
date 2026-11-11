@@ -283,12 +283,9 @@ func deviationResponse(ev api.DeviationEvent) *sdcpb.WatchDeviationResponse {
 		rsp.Event = sdcpb.DeviationEvent_CLEAR
 	default:
 		rsp.Event = sdcpb.DeviationEvent_UPDATE
-		if len(ev.Entries) > 0 {
-			ent := ev.Entries[0]
-			rsp.Path = ent.Path
-			rsp.ExpectedValue = ent.Expected
-			rsp.CurrentValue = ent.Current
-		}
+		rsp.Path = ev.Path
+		rsp.ExpectedValue = ev.Expected
+		rsp.CurrentValue = ev.Current
 	}
 	return rsp
 }
