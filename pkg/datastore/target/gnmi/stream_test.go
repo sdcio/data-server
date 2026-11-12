@@ -2,6 +2,7 @@ package gnmi
 
 import (
 	"context"
+	"errors"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -30,6 +31,17 @@ type fakeRunningStore struct {
 	firstStartedOnce sync.Once
 
 	calls atomic.Int32
+
+	mu          sync.Mutex
+	deletesSeen [][]*sdcpb.Path
+	importSeen  []bool
+}
+
+// applied returns a snapshot of the deletes and importer-presence of every completed ApplyToRunning call.
+func (f *fakeRunningStore) applied() ([][]*sdcpb.Path, []bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([][]*sdcpb.Path(nil), f.deletesSeen...), append([]bool(nil), f.importSeen...)
 }
 
 func newFakeRunningStore(sc *schemaClientPkg.SchemaClientBoundImpl, vp pool.VirtualPoolFactory) *fakeRunningStore {
@@ -41,13 +53,17 @@ func newFakeRunningStore(sc *schemaClientPkg.SchemaClientBoundImpl, vp pool.Virt
 	}
 }
 
-func (f *fakeRunningStore) ApplyToRunning(ctx context.Context, _ []*sdcpb.Path, _ treeimporter.ImportConfigAdapter) error {
+func (f *fakeRunningStore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, imp treeimporter.ImportConfigAdapter) error {
 	f.firstStartedOnce.Do(func() { close(f.firstStarted) })
 	select {
 	case <-f.firstUnblock:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+	f.mu.Lock()
+	f.deletesSeen = append(f.deletesSeen, deletes)
+	f.importSeen = append(f.importSeen, imp != nil)
+	f.mu.Unlock()
 	f.calls.Add(1)
 	return nil
 }
@@ -261,4 +277,117 @@ func (f *failAfterFirstNewEmptyTree) NewEmptyTree(ctx context.Context) (*tree.Ro
 		return nil, context.DeadlineExceeded
 	}
 	return f.inner.NewEmptyTree(ctx)
+}
+
+// newStreamSyncForTest wires a StreamSync to a fake target and running store
+// and returns the pieces a test needs to drive it. firstUnblock is already
+// closed so ApplyToRunning never stalls.
+func newStreamSyncForTest(t *testing.T, ctx context.Context, paths []string) (*StreamSync, *fakeSyncTarget, *fakeRunningStore) {
+	t.Helper()
+
+	sc, schemaConf, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatalf("init schema: %v", err)
+	}
+	scb := schemaClientPkg.NewSchemaClientBound(schemaConf, sc)
+	sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+
+	store := newFakeRunningStore(scb, sharedPool)
+	close(store.firstUnblock)
+
+	target := &fakeSyncTarget{
+		respChan: make(chan *gnmi.SubscribeResponse, 20),
+		errChan:  make(chan error, 1),
+	}
+
+	ss := NewStreamSync(ctx, target, &config.SyncProtocol{
+		Name:  "test",
+		Paths: paths,
+		Mode:  "on-change",
+	}, store, scb, sharedPool)
+
+	if err := ss.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := ss.Stop(); err != nil {
+			t.Errorf("Stop: %v", err)
+		}
+	})
+	return ss, target, store
+}
+
+func waitForApplyCalls(t *testing.T, store *fakeRunningStore, want int32) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if store.calls.Load() >= want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("ApplyToRunning called %d time(s); want >= %d", store.calls.Load(), want)
+}
+
+// TestGnmiSubscribe_StreamErrorKeepsSyncAlive verifies that an error reported
+// by the target's subscription (which retries on its own) does not end the
+// sync: notifications delivered after the error are still committed.
+func TestGnmiSubscribe_StreamErrorKeepsSyncAlive(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	_, target, store := newStreamSyncForTest(t, ctx, []string{"/interface"})
+
+	target.errChan <- errors.New("rpc error: code = Unavailable desc = connection closed")
+	target.respChan <- interfaceDescriptionNotif("ethernet-1/1", "after-restart")
+	target.respChan <- syncRespMsg()
+
+	waitForApplyCalls(t, store, 1)
+}
+
+// TestStreamSync_ResubscribeReplacesSyncedPaths verifies that the initial sync
+// following a stream error replaces the configured sync paths in running
+// (so config lost on the device is not retained), while the very first sync
+// only merges.
+func TestStreamSync_ResubscribeReplacesSyncedPaths(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	_, target, store := newStreamSyncForTest(t, ctx, []string{"/interface"})
+
+	// first sync: merge only
+	target.respChan <- interfaceDescriptionNotif("ethernet-1/1", "initial")
+	target.respChan <- syncRespMsg()
+	waitForApplyCalls(t, store, 1)
+
+	// device restarts and comes back with empty config
+	target.errChan <- errors.New("rpc error: code = Unavailable")
+	target.respChan <- syncRespMsg()
+	waitForApplyCalls(t, store, 2)
+
+	// device restarts again and comes back with config
+	target.errChan <- errors.New("rpc error: code = Unavailable")
+	target.respChan <- interfaceDescriptionNotif("ethernet-1/1", "again")
+	target.respChan <- syncRespMsg()
+	waitForApplyCalls(t, store, 3)
+
+	deletes, imported := store.applied()
+	if len(deletes) != 3 {
+		t.Fatalf("got %d ApplyToRunning calls, want 3", len(deletes))
+	}
+
+	if len(deletes[0]) != 0 || !imported[0] {
+		t.Errorf("first sync: deletes=%v import=%v, want no deletes and an import", deletes[0], imported[0])
+	}
+	for i := 1; i <= 2; i++ {
+		if len(deletes[i]) != 1 || deletes[i][0].ToXPath(false) != "/interface" {
+			t.Errorf("resync %d: deletes=%v, want [/interface]", i, deletes[i])
+		}
+	}
+	if imported[1] {
+		t.Errorf("resync with empty device config must not import anything")
+	}
+	if !imported[2] {
+		t.Errorf("resync with device config must import it")
+	}
 }
