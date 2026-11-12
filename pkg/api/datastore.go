@@ -11,7 +11,31 @@ type TargetType string
 const (
 	TargetTypeGNMI    TargetType = "gnmi"
 	TargetTypeNetconf TargetType = "netconf"
+	TargetTypeNoop    TargetType = "noop"
 )
+
+// ParseTargetType resolves a case-insensitive target type name.
+func ParseTargetType(s string) (TargetType, error) {
+	switch t := TargetType(strings.ToLower(s)); t {
+	case TargetTypeGNMI, TargetTypeNetconf, TargetTypeNoop:
+		return t, nil
+	}
+	return "", fmt.Errorf("unknown target type %q", s)
+}
+
+// UnmarshalText resolves the name on decode; empty text stays unset.
+func (t *TargetType) UnmarshalText(b []byte) error {
+	if len(b) == 0 {
+		*t = ""
+		return nil
+	}
+	v, err := ParseTargetType(string(b))
+	if err != nil {
+		return err
+	}
+	*t = v
+	return nil
+}
 
 // ConnectionState reports the southbound connection state of a datastore.
 type ConnectionState int
@@ -66,6 +90,21 @@ func ParseGNMIEncoding(s string) (GNMIEncoding, error) {
 		return e, nil
 	}
 	return "", fmt.Errorf("unknown gnmi encoding %q", s)
+}
+
+// UnmarshalText resolves the name on decode; empty text stays unset so a
+// sync can inherit the target encoding.
+func (e *GNMIEncoding) UnmarshalText(b []byte) error {
+	if len(b) == 0 {
+		*e = ""
+		return nil
+	}
+	v, err := ParseGNMIEncoding(string(b))
+	if err != nil {
+		return err
+	}
+	*e = v
+	return nil
 }
 
 // GNMIOptions are the gNMI-specific protocol options.

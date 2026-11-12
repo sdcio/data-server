@@ -22,6 +22,7 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc"
 
+	"github.com/sdcio/data-server/pkg/api"
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/datastore/target/gnmi"
@@ -31,15 +32,9 @@ import (
 	"github.com/sdcio/data-server/pkg/pool"
 )
 
-const (
-	targetTypeNOOP    = "noop"
-	targetTypeNETCONF = "netconf"
-	targetTypeGNMI    = "gnmi"
-)
-
 type Target interface {
 	Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error)
-	Set(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error)
+	Set(ctx context.Context, source types.TargetSource) (*types.SetResult, error)
 	AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) error
 	Status() *types.TargetStatus
 	Close(ctx context.Context) error
@@ -50,17 +45,17 @@ func New(ctx context.Context, name string, cfg *config.SBI, schemaClient schemaC
 	var err error
 
 	switch cfg.Type {
-	case targetTypeGNMI:
+	case api.TargetTypeGNMI:
 		t, err = gnmi.NewTarget(ctx, name, cfg, runningStore, schemaClient, taskpoolFactory, opts...)
 		if err != nil {
 			return nil, err
 		}
-	case targetTypeNETCONF:
+	case api.TargetTypeNetconf:
 		t, err = netconf.NewNCTarget(ctx, name, cfg, runningStore, schemaClient)
 		if err != nil {
 			return nil, err
 		}
-	case targetTypeNOOP:
+	case api.TargetTypeNoop:
 		t, err = noop.NewNoopTarget(ctx, name)
 		if err != nil {
 			return nil, err

@@ -22,6 +22,7 @@ import (
 
 	cconfig "github.com/sdcio/cache/pkg/config"
 	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/config"
 	logf "github.com/sdcio/logger"
 )
 
@@ -35,7 +36,7 @@ START:
 	default:
 		log.Error(fmt.Errorf("unknown cache type: %s", s.config.Cache.Type), "invalid cache type")
 		os.Exit(1)
-	case "local":
+	case config.CacheTypeLocal:
 		err = s.createLocalCacheClient(ctx)
 		if err != nil {
 			log.Error(err, "failed to initialize a local cache client")

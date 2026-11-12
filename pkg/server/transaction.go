@@ -68,7 +68,7 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 		case intent.Priority > consts.UserSettableMax:
 			return nil, fmt.Errorf("user settable priority not allowed above %d", consts.UserSettableMax)
 		default:
-			ti, err = ds.SdcpbTransactionIntentToInternalTI(ctx, intent)
+			ti, err = ds.IntentToInternalTI(ctx, intentFromSdcpb(intent))
 			if err != nil {
 				return nil, err
 			}
@@ -84,7 +84,7 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 		req.ReplaceIntent.Priority = consts.ReplaceValuesPrio
 		req.ReplaceIntent.Intent = consts.ReplaceIntentName
 
-		replaceIntent, err = ds.SdcpbTransactionIntentToInternalTI(ctx, req.GetReplaceIntent())
+		replaceIntent, err = ds.IntentToInternalTI(ctx, intentFromSdcpb(req.GetReplaceIntent()))
 		if err != nil {
 			return nil, err
 		}
@@ -92,7 +92,7 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 
 	// with the transformed intents call the TransactionSet() on the datastore.
 	rsp, err := ds.TransactionSet(ctx, req.GetTransactionId(), transactionIntents, replaceIntent, timeout, req.GetDryRun())
-	return rsp, translateInternalToGrpcError(err)
+	return transactionResponse(rsp), translateInternalToGrpcError(err)
 }
 
 func (s *Server) TransactionConfirm(ctx context.Context, req *sdcpb.TransactionConfirmRequest) (*sdcpb.TransactionConfirmResponse, error) {

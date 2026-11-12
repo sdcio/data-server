@@ -1,30 +1,29 @@
 package types
 
 import (
-	"errors"
 	"fmt"
 
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/data-server/pkg/api"
 )
 
 // ErrNotConnected indicates the southbound interface (device connection) of a
 // datastore is not established
-var ErrNotConnected = errors.New("not connected")
+var ErrNotConnected = api.ErrNotConnected
 
 // TargetStatus is the southbound connection state of a target. The zero value
-// is sdcpb.TargetStatus_UNKNOWN
+// is api.ConnectionUnknown
 type TargetStatus struct {
-	Status  sdcpb.TargetStatus
+	Status  api.ConnectionState
 	Details string
 }
 
-func NewTargetStatus(status sdcpb.TargetStatus) *TargetStatus {
+func NewTargetStatus(status api.ConnectionState) *TargetStatus {
 	return &TargetStatus{
 		Status: status,
 	}
 }
 func (ts *TargetStatus) IsConnected() bool {
-	return ts.Status == sdcpb.TargetStatus_CONNECTED
+	return ts.Status == api.ConnectionConnected
 }
 
 // Err reports the connection state as an error, so callers can propagate it and

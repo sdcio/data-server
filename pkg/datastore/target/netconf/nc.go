@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/beevik/etree"
+	"github.com/sdcio/data-server/pkg/api"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 
@@ -157,7 +158,7 @@ func (t *ncTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.G
 	return result, nil
 }
 
-func (t *ncTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
+func (t *ncTarget) Set(ctx context.Context, source types.TargetSource) (*types.SetResult, error) {
 	log := logf.FromContext(ctx).WithName("Set")
 	ctx = logf.IntoContext(ctx, log)
 	if err := t.Status().Err(); err != nil {
@@ -173,13 +174,13 @@ func (t *ncTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.S
 }
 
 func (t *ncTarget) Status() *types.TargetStatus {
-	result := types.NewTargetStatus(sdcpb.TargetStatus_NOT_CONNECTED)
+	result := types.NewTargetStatus(api.ConnectionNotConnected)
 	if t == nil || t.driver == nil {
 		result.Details = "connection not initialized"
 		return result
 	}
 	if t.driver.IsAlive() {
-		result.Status = sdcpb.TargetStatus_CONNECTED
+		result.Status = api.ConnectionConnected
 	}
 	return result
 }
@@ -244,7 +245,7 @@ func filterRPCErrors(xml *etree.Document, severity string) ([]string, error) {
 	return result, nil
 }
 
-func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
+func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore config.CommitDatastore, source types.TargetSource) (*types.SetResult, error) {
 	log := logf.FromContext(ctx).WithValues("commit-datastore", commitDatastore)
 	xtree, err := source.ToXML(ctx, true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
 	if err != nil {
@@ -258,15 +259,13 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 
 	// if there was no data in the xml document, continue
 	if len(xdoc) == 0 {
-		return &sdcpb.SetDataResponse{
-			Timestamp: time.Now().UnixNano(),
-		}, nil
+		return &types.SetResult{}, nil
 	}
 
 	log.V(logf.VTrace).Info("generated config XML", "xml", xdoc)
 
 	// edit the config
-	resp, err := t.driver.EditConfig(commitDatastore, xdoc)
+	resp, err := t.driver.EditConfig(string(commitDatastore), xdoc)
 	if err != nil {
 		log.Error(err, "failed during edit-config")
 		if isTransportError(err) {
@@ -300,8 +299,5 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 			return nil, err
 		}
 	}
-	return &sdcpb.SetDataResponse{
-		Warnings:  rpcWarnings,
-		Timestamp: time.Now().UnixNano(),
-	}, nil
+	return &types.SetResult{Warnings: rpcWarnings}, nil
 }

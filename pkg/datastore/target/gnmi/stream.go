@@ -75,9 +75,9 @@ func (s *StreamSync) syncConfig() (*gnmi.SubscribeRequest, error) {
 		subscriptionOpts = append(subscriptionOpts, gapi.Path(p))
 	}
 	switch s.config.Mode {
-	case "sample":
+	case config.SyncModeSample:
 		subscriptionOpts = append(subscriptionOpts, gapi.SubscriptionModeSAMPLE())
-	case "on-change":
+	case config.SyncModeOnChange:
 		subscriptionOpts = append(subscriptionOpts, gapi.SubscriptionModeON_CHANGE())
 	}
 

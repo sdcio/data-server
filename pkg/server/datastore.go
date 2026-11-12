@@ -18,11 +18,12 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
+	"github.com/sdcio/data-server/pkg/api"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore"
+	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -99,14 +100,19 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 	}
 
 	reqTarget := req.GetTarget()
+	targetType, err := api.ParseTargetType(reqTarget.GetType())
+	if err != nil {
+		log.Error(nil, "unknown targetconnection protocol type", "type", reqTarget.GetType())
+		return nil, status.Errorf(codes.InvalidArgument, "unknown targetconnection protocol type %q", reqTarget.GetType())
+	}
 	sbi := &config.SBI{
-		Type:    reqTarget.GetType(),
+		Type:    targetType,
 		Port:    reqTarget.GetPort(),
 		Address: reqTarget.GetAddress(),
 	}
 
-	switch strings.ToLower(reqTarget.GetType()) {
-	case "netconf":
+	switch targetType {
+	case api.TargetTypeNetconf:
 		netconfOpts := reqTarget.GetNetconfOpts()
 		commitDatastore := config.NcCommitDatastoreCandidate
 		switch netconfOpts.GetCommitCandidate() {
@@ -124,13 +130,13 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 			CommitDatastore:        commitDatastore,
 		}
 
-	case "gnmi":
+	case api.TargetTypeGNMI:
 		gnmiOpts := reqTarget.GetGnmiOpts()
 		sbi.GnmiOptions = &config.SBIGnmiOptions{
-			Encoding:   gnmiOpts.GetEncoding(),
+			Encoding:   api.GNMIEncoding(gnmiOpts.GetEncoding()),
 			TargetName: gnmiOpts.GetTargetName(),
 		}
-	case "noop":
+	case api.TargetTypeNoop:
 		// no protocol-specific options needed for the noop target
 	default:
 		log.Error(nil, "unknown targetconnection protocol type", "type", reqTarget.GetType())
@@ -169,34 +175,34 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 			Config: make([]*config.SyncProtocol, 0, len(req.GetSync().GetConfig())),
 		}
 		for _, pSync := range req.GetSync().GetConfig() {
+			syncType, err := api.ParseTargetType(pSync.GetTarget().GetType())
+			if err != nil || syncType == api.TargetTypeNoop {
+				log.Error(nil, "unknown targetsync protocol type", "protocol", pSync.GetTarget().GetType())
+				return nil, status.Errorf(codes.InvalidArgument, "unknown targetsync protocol: %q", pSync.GetTarget().GetType())
+			}
 			gnSyncConfig := &config.SyncProtocol{
-				Protocol: pSync.GetTarget().GetType(),
+				Protocol: syncType,
 				Name:     pSync.GetName(),
 				Paths:    pSync.GetPath(),
 				Interval: time.Duration(pSync.GetInterval()),
 			}
-			switch strings.ToLower(pSync.GetTarget().GetType()) {
-			case "gnmi":
-				gnSyncConfig.Mode = "on-change"
+			if syncType == api.TargetTypeGNMI {
+				gnSyncConfig.Mode = config.SyncModeOnChange
 				switch pSync.GetMode() {
 				case sdcpb.SyncMode_SM_ON_CHANGE:
 				case sdcpb.SyncMode_SM_SAMPLE:
-					gnSyncConfig.Mode = "sample"
+					gnSyncConfig.Mode = config.SyncModeSample
 				case sdcpb.SyncMode_SM_ONCE:
-					gnSyncConfig.Mode = "once"
+					gnSyncConfig.Mode = config.SyncModeOnce
 				case sdcpb.SyncMode_SM_GET:
-					gnSyncConfig.Mode = "get"
+					gnSyncConfig.Mode = config.SyncModeGet
 				}
-				gnSyncConfig.Encoding = pSync.GetTarget().GetGnmiOpts().GetEncoding()
-			case "netconf":
-			default:
-				log.Error(nil, "unknown targetsync protocol type", "protocol", pSync.GetTarget().GetType())
-				return nil, status.Errorf(codes.InvalidArgument, "unknown targetsync protocol: %q", pSync.GetTarget().GetType())
+				gnSyncConfig.Encoding = api.GNMIEncoding(pSync.GetTarget().GetGnmiOpts().GetEncoding())
 			}
 			dsConfig.Sync.Config = append(dsConfig.Sync.Config, gnSyncConfig)
 		}
 	}
-	err := dsConfig.ValidateSetDefaults()
+	err = dsConfig.ValidateSetDefaults()
 	if err != nil {
 		log.Error(err, "invalid datastore config")
 		return nil, status.Errorf(codes.InvalidArgument, "invalid datastore config: %v", err)
@@ -284,14 +290,11 @@ func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.
 	log = log.WithValues("datastore-name", req.GetName()[0])
 	logf.IntoContext(ctx, log)
 
-	err = ds.WatchDeviations(req, stream)
-	if err != nil {
-		log.Error(err, "failed to watch deviations")
-		return err
-	}
+	sink := &deviationStream{stream: stream}
+	ds.AddDeviationClient(peerName, sink)
 	<-stream.Context().Done()
 	log.Error(stream.Context().Err(), "stream context done", "severity", "WARN")
-	ds.StopDeviationsWatch(stream)
+	ds.StopDeviationsWatch(sink)
 	return nil
 }
 
@@ -301,7 +304,7 @@ func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*
 		DatastoreName: ds.Config().Name,
 	}
 	rsp.Target = &sdcpb.Target{
-		Type:    ds.Config().SBI.Type,
+		Type:    string(ds.Config().SBI.Type),
 		Address: ds.Config().SBI.Address,
 	}
 	rsp.Intents, err = ds.IntentsList(ctx)
@@ -309,7 +312,7 @@ func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*
 		return nil, err
 	}
 	connState := ds.ConnectionState()
-	rsp.Target.Status = connState.Status
+	rsp.Target.Status = targetStatus(connState.Status)
 	rsp.Target.StatusDetails = connState.Details
 
 	rsp.Schema = ds.Config().Schema.GetSchema()
@@ -337,7 +340,7 @@ func (s *Server) BlameConfig(ctx context.Context, req *sdcpb.BlameConfigRequest)
 	}
 
 	return &sdcpb.BlameConfigResponse{
-		ConfigTree: tree,
+		ConfigTree: processors.BlameNodeToSdcpb(tree),
 	}, nil
 
 }

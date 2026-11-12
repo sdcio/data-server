@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/data-server/pkg/api"
 )
 
 func TestTargetStatusErr(t *testing.T) {
@@ -15,22 +15,22 @@ func TestTargetStatusErr(t *testing.T) {
 		wantDetails string
 	}{
 		"connected": {
-			status:  NewTargetStatus(sdcpb.TargetStatus_CONNECTED),
+			status:  NewTargetStatus(api.ConnectionConnected),
 			wantNil: true,
 		},
 		"connected with details": {
-			status:  &TargetStatus{Status: sdcpb.TargetStatus_CONNECTED, Details: "READY"},
+			status:  &TargetStatus{Status: api.ConnectionConnected, Details: "READY"},
 			wantNil: true,
 		},
 		"not connected": {
-			status: NewTargetStatus(sdcpb.TargetStatus_NOT_CONNECTED),
+			status: NewTargetStatus(api.ConnectionNotConnected),
 		},
 		"not connected with details": {
-			status:      &TargetStatus{Status: sdcpb.TargetStatus_NOT_CONNECTED, Details: "connection not initialized"},
+			status:      &TargetStatus{Status: api.ConnectionNotConnected, Details: "connection not initialized"},
 			wantDetails: "connection not initialized",
 		},
 		"unknown": {
-			status: NewTargetStatus(sdcpb.TargetStatus_UNKNOWN),
+			status: NewTargetStatus(api.ConnectionUnknown),
 		},
 		"zero value defaults to unknown": {
 			status: &TargetStatus{},
@@ -63,7 +63,7 @@ func TestTargetStatusErr(t *testing.T) {
 func TestTargetStatusZeroValueIsNotConnected(t *testing.T) {
 	var ts TargetStatus
 
-	if ts.Status != sdcpb.TargetStatus_UNKNOWN {
+	if ts.Status != api.ConnectionUnknown {
 		t.Fatalf("expected zero value to be UNKNOWN, got %v", ts.Status)
 	}
 	if ts.IsConnected() {

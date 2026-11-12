@@ -19,8 +19,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sdcio/data-server/pkg/api"
 	"github.com/sdcio/data-server/pkg/datastore/target/types"
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 // Get and Set reject requests via Status().Err() before touching any other
@@ -29,7 +29,7 @@ func Test_ncTarget_Status_NilReceiver(t *testing.T) {
 	var target *ncTarget
 
 	st := target.Status()
-	if st.Status != sdcpb.TargetStatus_NOT_CONNECTED {
+	if st.Status != api.ConnectionNotConnected {
 		t.Errorf("expected NOT_CONNECTED, got %v", st.Status)
 	}
 	if st.IsConnected() {

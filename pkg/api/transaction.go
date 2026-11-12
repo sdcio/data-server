@@ -24,6 +24,9 @@ type SetOptions struct {
 	// Timeout auto-cancels an unconfirmed transaction; zero means the default.
 	Timeout time.Duration
 	Origin  Origin
+	// Replace, when set, replaces the whole device configuration with its
+	// content. Its name and priority are ignored.
+	Replace *Intent
 }
 
 // IntentSpec is the body of an Intent: exactly one of Update and Delete is set.
@@ -44,6 +47,10 @@ type Update struct {
 	// Updates are the intent body. A JSON value expands below its path into
 	// typed leaf values; other value types are taken as given.
 	Updates []*sdcpb.Update
+	// Deletes are paths removed explicitly on behalf of the intent.
+	Deletes []*sdcpb.Path
+	// RevertPaths limits reverting to these paths for a non-revertive intent.
+	RevertPaths []*sdcpb.Path
 	// NonRevertive leaves device-side changes in place instead of reverting them.
 	NonRevertive bool
 	// PreviouslyApplied marks a non-revertive intent that was applied before.
@@ -75,4 +82,46 @@ type IntentRequest struct {
 	Intent    string
 	Format    Format
 	Origin    Origin
+}
+
+// IntentResult is an intent read back from the intended store. For
+// FormatProto the intent body is in Updates and Content is empty; for every
+// other format Content holds the body encoded as requested: JSON, JSON IETF,
+// XML or protojson encoded xpath/value pairs.
+type IntentResult struct {
+	Name         string
+	Priority     int32
+	Orphan       bool
+	NonRevertive bool
+	Deletes      []*sdcpb.Path
+	Format       Format
+	Content      []byte
+	Updates      []*sdcpb.Update
+}
+
+// IntentValidation holds the findings of one intent in a transaction.
+type IntentValidation struct {
+	Warnings []string
+	Errors   []string
+}
+
+// TransactionResult is the outcome of a transaction set. Validation failures
+// are reported in Intents, not as an error.
+type TransactionResult struct {
+	Updates  []*sdcpb.Update
+	Deletes  []*sdcpb.Path
+	Intents  map[string]IntentValidation
+	Warnings []string
+}
+
+// BlameNode is one level of the blame tree: which intent owns the value below
+// a path. Values keep their original type.
+type BlameNode struct {
+	Name           string
+	Owner          string
+	Value          *sdcpb.TypedValue
+	DeviationValue *sdcpb.TypedValue
+	// KeyName is set when the level is the key level of a list.
+	KeyName  string
+	Children []*BlameNode
 }

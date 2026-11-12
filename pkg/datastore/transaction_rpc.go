@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	pubapi "github.com/sdcio/data-server/pkg/api"
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/api"
@@ -25,54 +26,84 @@ import (
 )
 
 var (
-	ErrDatastoreLocked   = errors.New("datastore is locked, other action is ongoing")
+	ErrDatastoreLocked   = pubapi.ErrDatastoreLocked
 	ErrContextDone       = errors.New("context is closed (done)")
 	ErrValidation        = errors.New("validation error")
 	ErrNoIntentsProvided = errors.New("no intents provided")
 )
 
-// SdcpbTransactionIntentToInternalTI converts sdcpb.TransactionIntent to types.TransactionIntent
-func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req *sdcpb.TransactionIntent) (*types.TransactionIntent, error) {
-	log := logger.FromContext(ctx)
-	// create a new TransactionIntent with the given name and priority
-	ti := types.NewTransactionIntent(req.GetIntent(), req.GetPriority())
+// intentParams is the transport-neutral description of one transaction intent.
+type intentParams struct {
+	name                string
+	priority            int32
+	delete              bool
+	orphan              bool
+	deleteIgnoreNoExist bool
+	previouslyApplied   bool
+	nonRevertive        bool
+	revertPaths         []*sdcpb.Path
+	deletes             []*sdcpb.Path
+	updates             []*sdcpb.Update
+}
 
-	// setting the provided flags in the TransactionIntent
-	if req.GetDelete() {
+// IntentToInternalTI converts a pubapi.Intent to types.TransactionIntent. It
+// fails with pubapi.ErrInvalidArgument when the intent sets both update and
+// delete.
+func (d *Datastore) IntentToInternalTI(ctx context.Context, in *pubapi.Intent) (*types.TransactionIntent, error) {
+	p := intentParams{name: in.Name}
+	switch {
+	case in.Spec.Update != nil && in.Spec.Delete != nil:
+		return nil, fmt.Errorf("%w: intent %q sets both update and delete", pubapi.ErrInvalidArgument, in.Name)
+	case in.Spec.Delete != nil:
+		p.delete = true
+		p.deleteIgnoreNoExist = in.Spec.Delete.IgnoreNoExist
+		p.orphan = in.Spec.Delete.Orphan
+	case in.Spec.Update != nil:
+		u := in.Spec.Update
+		p.priority = u.Priority
+		p.nonRevertive = u.NonRevertive
+		p.previouslyApplied = u.PreviouslyApplied
+		p.deletes = u.Deletes
+		p.revertPaths = u.RevertPaths
+		p.updates = u.Updates
+	}
+	return d.buildTransactionIntent(ctx, p)
+}
+
+// buildTransactionIntent expands the updates against the schema and applies the flags.
+func (d *Datastore) buildTransactionIntent(ctx context.Context, p intentParams) (*types.TransactionIntent, error) {
+	log := logger.FromContext(ctx)
+	ti := types.NewTransactionIntent(p.name, p.priority)
+
+	if p.delete {
 		ti.SetDeleteFlag()
 	}
-	if req.GetOrphan() {
+	if p.orphan {
 		ti.SetDeleteOnlyIntendedFlag()
 	}
-
-	if req.GetDeleteIgnoreNoExist() {
+	if p.deleteIgnoreNoExist {
 		ti.SetDeleteIgnoreNonExisting()
 	}
-	if req.GetPreviouslyApplied() {
+	if p.previouslyApplied {
 		ti.SetPreviouslyApplied()
 	}
-
-	if req.GetNonRevertive() {
+	if p.nonRevertive {
 		ti.SetNonRevertive()
 	}
-	if len(req.GetRevertPaths()) > 0 {
-		if !req.GetNonRevertive() {
-			log.Error(fmt.Errorf("revert paths provided without non-revertive flag set for intent %s", req.GetIntent()), "severity", "WARN")
+	if len(p.revertPaths) > 0 {
+		if !p.nonRevertive {
+			log.Error(fmt.Errorf("revert paths provided without non-revertive flag set for intent %s", p.name), "severity", "WARN")
 		} else {
-			ti.AddRevertPaths(req.GetRevertPaths()...)
+			ti.AddRevertPaths(p.revertPaths...)
 		}
 	}
-	// convert the sdcpb.updates to tree.UpdateSlice
-	Updates, err := treetypes.ExpandAndConvertIntent(ctx, d.schemaClient, req.GetIntent(), req.GetPriority(), req.GetUpdate(), time.Now().Unix())
+
+	updates, err := treetypes.ExpandAndConvertIntent(ctx, d.schemaClient, p.name, p.priority, p.updates, time.Now().Unix())
 	if err != nil {
 		return nil, err
 	}
-
-	// add the intent to the TransactionIntent
-	ti.AddUpdates(Updates)
-
-	// add the deletes
-	ti.AddExplicitDeletes(req.Deletes)
+	ti.AddUpdates(updates)
+	ti.AddExplicitDeletes(p.deletes)
 
 	return ti, nil
 }
@@ -141,7 +172,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 		return nil, err
 	}
 	// collect warnings
-	warnings = append(warnings, dataResp.GetWarnings()...)
+	warnings = append(warnings, dataResp.Warnings...)
 
 	log.Info("transaction applied")
 
@@ -202,7 +233,7 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 }
 
 // lowlevelTransactionSet
-func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *types.Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
+func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *types.Transaction, dryRun bool) (*pubapi.TransactionResult, error) {
 	log := logger.FromContext(ctx)
 	// create a new TreeRoot
 	d.syncTreeMutex.RLock()
@@ -295,16 +326,16 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	log.V(logger.VDebug).Info("transaction validation stats", "transaction-id", transaction.GetTransactionId(), "stats", validationStats.String())
 
 	// prepare the response struct
-	result := &sdcpb.TransactionSetResponse{
-		Intents:  map[string]*sdcpb.TransactionSetResponseIntent{},
-		Update:   []*sdcpb.Update{},
-		Delete:   []*sdcpb.Path{},
+	result := &pubapi.TransactionResult{
+		Intents:  make(map[string]pubapi.IntentValidation, len(validationResult)),
+		Updates:  []*sdcpb.Update{},
+		Deletes:  []*sdcpb.Path{},
 		Warnings: []string{},
 	}
 
 	// process the validation results, adding them to the response
 	for intentName, intentValidationResult := range validationResult {
-		result.Intents[intentName] = &sdcpb.TransactionSetResponseIntent{
+		result.Intents[intentName] = pubapi.IntentValidation{
 			Warnings: intentValidationResult.WarningsString(),
 			Errors:   intentValidationResult.ErrorsString(),
 		}
@@ -319,14 +350,14 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 	// convert updates from cache.Update to sdcpb.Update
 	// adding them to the response
-	result.Update, err = updateToSdcpbUpdate(updates)
+	result.Updates, err = updateToSdcpbUpdate(updates)
 	if err != nil {
 		return nil, err
 	}
 
 	// add all the deletes to the setDataReq
 	for _, u := range deletes {
-		result.Delete = append(result.Delete, u.SdcpbPath())
+		result.Deletes = append(result.Deletes, u.SdcpbPath())
 	}
 
 	// Error out if validation failed.
@@ -347,7 +378,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	if err != nil {
 		return nil, err
 	}
-	result.Warnings = append(result.Warnings, dataResp.GetWarnings()...)
+	result.Warnings = append(result.Warnings, dataResp.Warnings...)
 
 	log.Info("transaction applied")
 
@@ -459,7 +490,7 @@ func (d *Datastore) writeBackSyncTree(ctx context.Context, updates api.LeafVaria
 	return nil
 }
 
-func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, transactionIntents []*types.TransactionIntent, replaceIntent *types.TransactionIntent, transactionTimeout time.Duration, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
+func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, transactionIntents []*types.TransactionIntent, replaceIntent *types.TransactionIntent, transactionTimeout time.Duration, dryRun bool) (*pubapi.TransactionResult, error) {
 	log := logger.FromContext(ctx)
 	var err error
 	var transaction *types.Transaction
@@ -527,7 +558,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	if transaction.IsNoOp() {
 		// we expect a transaction confirm from the client
 		transactionGuard.Success()
-		return &sdcpb.TransactionSetResponse{
+		return &pubapi.TransactionResult{
 			Warnings: []string{"no intents provided"},
 		}, nil
 	}
@@ -536,7 +567,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 	// if it is a validation error, we need to send the response while not successing the transaction guard
 	// since validation errors are transported in the response itself, not in the seperate error
 	if errors.Is(err, ErrValidation) {
-		log.Error(fmt.Errorf("%s", strings.Join(response.GetErrors(), ", ")), "transaction validation failed")
+		log.Error(fmt.Errorf("%s", strings.Join(validationErrors(response), ", ")), "transaction validation failed")
 		return response, nil
 	}
 	// if it is any other error, return a regular error
@@ -553,6 +584,15 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 		log.Info("transaction success")
 	}
 	return response, err
+}
+
+// validationErrors lists the validation errors of all intents in res.
+func validationErrors(res *pubapi.TransactionResult) []string {
+	var errs []string
+	for _, iv := range res.Intents {
+		errs = append(errs, iv.Errors...)
+	}
+	return errs
 }
 
 func updateToSdcpbUpdate(lvs api.LeafVariantSlice) ([]*sdcpb.Update, error) {

@@ -25,7 +25,7 @@ const (
 	defaultRemoteSchemaServerCacheCapacity = 1000
 
 	defaultNCPort             = 830
-	defaultCacheType          = "local"
+	defaultCacheType          = CacheTypeLocal
 	defaultRemoteCacheAddress = "localhost:50100"
 	defaultStoreType          = "badgerdb"
 	defaultCacheDir           = "./cached/caches"

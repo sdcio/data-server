@@ -20,20 +20,10 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/sdcio/data-server/pkg/api"
 	"github.com/sdcio/data-server/pkg/utils"
-)
-
-const (
-	sbiNOOP    = "noop"
-	sbiNETCONF = "netconf"
-	sbiGNMI    = "gnmi"
-
-	NcCommitDatastoreRunning   = "running"
-	NcCommitDatastoreCandidate = "candidate"
 )
 
 type DatastoreConfig struct {
@@ -77,7 +67,7 @@ func (d *DeviationConfig) DeepCopy() *DeviationConfig {
 
 type SBI struct {
 	// Southbound interface type, one of: gnmi, netconf
-	Type string `yaml:"type,omitempty" json:"type,omitempty"`
+	Type api.TargetType `yaml:"type,omitempty" json:"type,omitempty"`
 	// gNMI or netconf address
 	Address string `yaml:"address,omitempty" json:"address,omitempty"`
 	Port    uint32 `yaml:"port,omitempty" json:"port,omitempty"`
@@ -94,21 +84,21 @@ type SBI struct {
 }
 
 type SBIGnmiOptions struct {
-	Encoding   string `yaml:"encoding,omitempty" json:"encoding,omitempty"`
-	TargetName string `yaml:"target,omitempty" json:"target,omitempty"`
+	Encoding   api.GNMIEncoding `yaml:"encoding,omitempty" json:"encoding,omitempty"`
+	TargetName string           `yaml:"target,omitempty" json:"target,omitempty"`
 }
 
 type SBINetconfOptions struct {
 	// if true, the namespace is included as an `xmlns` attribute in the netconf payloads
 	IncludeNS bool `yaml:"include-ns,omitempty" json:"include-ns,omitempty"`
 	// sets the preferred NC version: 1.0 or 1.1
-	PreferredNCVersion string `yaml:"preferred-nc-version,omitempty" json:"preferred-nc-version,omitempty"`
+	PreferredNCVersion NCVersion `yaml:"preferred-nc-version,omitempty" json:"preferred-nc-version,omitempty"`
 	// add a namespace when specifying a netconf operation such as 'delete' or 'remove'
 	OperationWithNamespace bool `yaml:"operation-with-namespace,omitempty" json:"operation-with-namespace,omitempty"`
 	// use 'remove' operation instead of 'delete'
 	UseOperationRemove bool `yaml:"use-operation-remove,omitempty" json:"use-operation-remove,omitempty"`
 	// for netconf targets: defines whether to commit to running or use a candidate.
-	CommitDatastore string `yaml:"commit-datastore,omitempty" json:"commit-datastore,omitempty"`
+	CommitDatastore CommitDatastore `yaml:"commit-datastore,omitempty" json:"commit-datastore,omitempty"`
 }
 
 type Creds struct {
@@ -135,17 +125,17 @@ type Sync struct {
 }
 
 type SyncProtocol struct {
-	Name     string        `yaml:"name,omitempty" json:"name,omitempty"`
-	Protocol string        `yaml:"protocol,omitempty" json:"protocol,omitempty"`
-	Paths    []string      `yaml:"paths,omitempty" json:"paths,omitempty"`
-	Interval time.Duration `yaml:"interval,omitempty" json:"interval,omitempty"`
-	Mode     string        `yaml:"mode,omitempty" json:"mode,omitempty"`
-	Encoding string        `yaml:"encoding,omitempty" json:"encoding,omitempty"`
+	Name     string           `yaml:"name,omitempty" json:"name,omitempty"`
+	Protocol api.TargetType   `yaml:"protocol,omitempty" json:"protocol,omitempty"`
+	Paths    []string         `yaml:"paths,omitempty" json:"paths,omitempty"`
+	Interval time.Duration    `yaml:"interval,omitempty" json:"interval,omitempty"`
+	Mode     SyncMode         `yaml:"mode,omitempty" json:"mode,omitempty"`
+	Encoding api.GNMIEncoding `yaml:"encoding,omitempty" json:"encoding,omitempty"`
 }
 
 type CacheConfig struct {
 	// cache type: "local" or "remote"
-	Type string `yaml:"type,omitempty" json:"type,omitempty"`
+	Type CacheType `yaml:"type,omitempty" json:"type,omitempty"`
 	// Local cache attr
 	StoreType string `yaml:"store-type,omitempty" json:"store-type,omitempty"`
 	Dir       string `yaml:"dir,omitempty" json:"dir,omitempty"`
@@ -162,7 +152,7 @@ func (ds *DatastoreConfig) ValidateSetDefaults() error {
 		if err = ds.Sync.validateSetDefaults(); err != nil {
 			return err
 		}
-		if err = ds.Sync.resolveGnmiEncodings(ds.SBI); err != nil {
+		if err = ds.Sync.resolveSyncs(ds.SBI); err != nil {
 			return err
 		}
 	}
@@ -182,31 +172,33 @@ func (ds *DatastoreConfig) ValidateSetDefaults() error {
 	return nil
 }
 
+// validateSetDefaults resolves the target type and its protocol options to
+// their canonical typed values and applies defaults.
 func (s *SBI) validateSetDefaults() error {
+	t, err := api.ParseTargetType(string(s.Type))
+	if err != nil {
+		return fmt.Errorf("unknown sbi type: %q", s.Type)
+	}
+	s.Type = t
 	switch s.Type {
-	case sbiNOOP:
+	case api.TargetTypeNoop:
 		return nil
-	case sbiNETCONF:
-		switch s.NetconfOptions.CommitDatastore {
-		case "":
-			s.NetconfOptions.CommitDatastore = NcCommitDatastoreCandidate
-		case NcCommitDatastoreRunning:
-		case NcCommitDatastoreCandidate:
-		default:
-			return fmt.Errorf("unknown commit-datastore: %s. Must be one of %s, %s",
-				s.NetconfOptions.CommitDatastore, NcCommitDatastoreCandidate, NcCommitDatastoreRunning)
+	case api.TargetTypeNetconf:
+		if s.NetconfOptions == nil {
+			s.NetconfOptions = &SBINetconfOptions{}
 		}
-	case sbiGNMI:
-		if s.GnmiOptions.Encoding == "" {
+		if err := s.NetconfOptions.validateSetDefaults(); err != nil {
+			return err
+		}
+	case api.TargetTypeGNMI:
+		if s.GnmiOptions == nil || s.GnmiOptions.Encoding == "" {
 			return errors.New("no encoding defined")
 		}
-		enc, err := api.ParseGNMIEncoding(s.GnmiOptions.Encoding)
+		enc, err := api.ParseGNMIEncoding(string(s.GnmiOptions.Encoding))
 		if err != nil {
 			return err
 		}
-		s.GnmiOptions.Encoding = string(enc)
-	default:
-		return fmt.Errorf("unknown sbi type: %q", s.Type)
+		s.GnmiOptions.Encoding = enc
 	}
 
 	if s.Address == "" {
@@ -245,16 +237,34 @@ func (s *Sync) validateSetDefaults() error {
 	return nil
 }
 
-// resolveGnmiEncodings validates the encoding of every gNMI sync. A sync
-// without its own encoding inherits the datastore's gNMI target encoding.
-// Noop targets ignore syncs, so their encodings are left as given.
-func (s *Sync) resolveGnmiEncodings(sbi *SBI) error {
-	if sbi != nil && sbi.Type == sbiNOOP {
+// resolveSyncs resolves protocol, mode and encoding of every sync to typed
+// values. A gNMI sync without its own encoding inherits the datastore's gNMI
+// target encoding, and without a mode defaults to on-change. Noop targets
+// ignore syncs, so their syncs are left as given.
+func (s *Sync) resolveSyncs(sbi *SBI) error {
+	if sbi != nil && sbi.Type == api.TargetTypeNoop {
 		return nil
 	}
 	for _, sp := range s.Config {
-		if !strings.EqualFold(sp.Protocol, sbiGNMI) {
+		if sp.Protocol != "" {
+			p, err := api.ParseTargetType(string(sp.Protocol))
+			if err != nil || p == api.TargetTypeNoop {
+				return fmt.Errorf("sync %q: unknown protocol %q", sp.Name, sp.Protocol)
+			}
+			sp.Protocol = p
+		}
+		if sp.Mode != "" {
+			m, err := ParseSyncMode(string(sp.Mode))
+			if err != nil {
+				return fmt.Errorf("sync %q: %w", sp.Name, err)
+			}
+			sp.Mode = m
+		}
+		if sp.Protocol != api.TargetTypeGNMI {
 			continue
+		}
+		if sp.Mode == "" {
+			sp.Mode = SyncModeOnChange
 		}
 		if sp.Encoding == "" && sbi != nil && sbi.GnmiOptions != nil {
 			sp.Encoding = sbi.GnmiOptions.Encoding
@@ -262,11 +272,11 @@ func (s *Sync) resolveGnmiEncodings(sbi *SBI) error {
 		if sp.Encoding == "" {
 			return fmt.Errorf("sync %q: no encoding defined", sp.Name)
 		}
-		enc, err := api.ParseGNMIEncoding(sp.Encoding)
+		enc, err := api.ParseGNMIEncoding(string(sp.Encoding))
 		if err != nil {
 			return fmt.Errorf("sync %q: %w", sp.Name, err)
 		}
-		sp.Encoding = string(enc)
+		sp.Encoding = enc
 	}
 	return nil
 }
@@ -279,25 +289,49 @@ func (s *SyncProtocol) validateSetDefaults() error {
 }
 
 func (c *CacheConfig) validateSetDefaults() error {
+	if c.Type == "" {
+		c.Type = defaultCacheType
+	}
+	t, err := ParseCacheType(string(c.Type))
+	if err != nil {
+		return err
+	}
+	c.Type = t
 	switch c.Type {
-	case "remote":
+	case CacheTypeRemote:
 		if c.Address == "" {
 			c.Address = defaultRemoteCacheAddress
 		}
-		_, _, err := net.SplitHostPort(c.Address)
-		if err != nil {
+		if _, _, err := net.SplitHostPort(c.Address); err != nil {
 			return err
 		}
 	default:
-		if c.Type != defaultCacheType {
-			c.Type = defaultCacheType
-		}
 		if c.StoreType == "" {
 			c.StoreType = defaultStoreType
 		}
 		if c.Dir == "" {
 			c.Dir = defaultCacheDir
 		}
+	}
+	return nil
+}
+
+func (o *SBINetconfOptions) validateSetDefaults() error {
+	if o.CommitDatastore == "" {
+		o.CommitDatastore = NcCommitDatastoreCandidate
+	} else {
+		d, err := ParseCommitDatastore(string(o.CommitDatastore))
+		if err != nil {
+			return err
+		}
+		o.CommitDatastore = d
+	}
+	if o.PreferredNCVersion != "" {
+		v, err := ParseNCVersion(string(o.PreferredNCVersion))
+		if err != nil {
+			return err
+		}
+		o.PreferredNCVersion = v
 	}
 	return nil
 }

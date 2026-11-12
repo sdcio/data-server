@@ -18,13 +18,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/AlekSi/pointer"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	gtarget "github.com/openconfig/gnmic/pkg/api/target"
 	"github.com/openconfig/gnmic/pkg/api/types"
+	"github.com/sdcio/data-server/pkg/api"
 	"github.com/sdcio/data-server/pkg/config"
 	gnmiutils "github.com/sdcio/data-server/pkg/datastore/target/gnmi/utils"
 	targetTypes "github.com/sdcio/data-server/pkg/datastore/target/types"
@@ -152,7 +152,7 @@ func (t *gnmiTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 	return schemaRsp, nil
 }
 
-func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (*sdcpb.SetDataResponse, error) {
+func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (*targetTypes.SetResult, error) {
 	log := logf.FromContext(ctx).WithName("Set")
 	ctx = logf.IntoContext(ctx, log)
 
@@ -170,8 +170,8 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 		return nil, err
 	}
 
-	switch strings.ToLower(t.cfg.GnmiOptions.Encoding) {
-	case "json":
+	switch enc := t.cfg.GnmiOptions.Encoding; enc {
+	case api.GNMIEncodingJSON:
 		jsonData, err := source.ToJson(ctx, true)
 		if err != nil {
 			return nil, err
@@ -186,7 +186,7 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 			}
 		}
 
-	case "json_ietf":
+	case api.GNMIEncodingJSONIETF:
 		jsonData, err := source.ToJsonIETF(ctx, true)
 		if err != nil {
 			return nil, err
@@ -201,15 +201,17 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 			}
 		}
 
-	case "proto":
+	case api.GNMIEncodingProto:
 		upds, err = source.ToProtoUpdates(ctx, true)
 		if err != nil {
 			return nil, err
 		}
+	default:
+		return nil, fmt.Errorf("encoding %q not supported for set", enc)
 	}
 
 	if len(deletes) == 0 && len(upds) == 0 {
-		return &sdcpb.SetDataResponse{}, nil
+		return &targetTypes.SetResult{}, nil
 	}
 
 	setReq := &gnmi.SetRequest{
@@ -237,21 +239,12 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 	if err != nil {
 		return nil, err
 	}
-	schemaSetRsp := &sdcpb.SetDataResponse{
-		Response:  make([]*sdcpb.UpdateResult, 0, len(rsp.GetResponse())),
-		Timestamp: rsp.GetTimestamp(),
-	}
-	for _, updr := range rsp.GetResponse() {
-		schemaSetRsp.Response = append(schemaSetRsp.Response, &sdcpb.UpdateResult{
-			Path: utils.FromGNMIPath(rsp.GetPrefix(), updr.GetPath()),
-			Op:   sdcpb.UpdateResult_Operation(updr.GetOp()),
-		})
-	}
-	return schemaSetRsp, nil
+	log.V(logf.VDebug).Info("gnmi response", "raw-response", utils.ProtoJSON(rsp))
+	return &targetTypes.SetResult{}, nil
 }
 
 func (t *gnmiTarget) Status() *targetTypes.TargetStatus {
-	result := targetTypes.NewTargetStatus(sdcpb.TargetStatus_NOT_CONNECTED)
+	result := targetTypes.NewTargetStatus(api.ConnectionNotConnected)
 
 	if t == nil || t.target == nil {
 		result.Details = "connection not initialized"
@@ -261,9 +254,9 @@ func (t *gnmiTarget) Status() *targetTypes.TargetStatus {
 	result.Details = state.String()
 	switch state {
 	case connectivity.Ready, connectivity.Idle:
-		result.Status = sdcpb.TargetStatus_CONNECTED
+		result.Status = api.ConnectionConnected
 	default:
-		result.Status = sdcpb.TargetStatus_NOT_CONNECTED
+		result.Status = api.ConnectionNotConnected
 	}
 
 	return result
@@ -274,9 +267,9 @@ func (t *gnmiTarget) AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) 
 	var err error
 	for _, sp := range sps {
 		switch sp.Mode {
-		case "once":
+		case config.SyncModeOnce:
 			g = NewOnceSync(ctx, t, sp, t.runningStore, t.taskpoolFactory)
-		case "get":
+		case config.SyncModeGet:
 			g, err = NewGetSync(ctx, t, sp, t.runningStore, t.schemaClient)
 			if err != nil {
 				return err

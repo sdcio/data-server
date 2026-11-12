@@ -92,10 +92,10 @@ func (mr *MockTargetMockRecorder) Get(ctx, req any) *gomock.Call {
 }
 
 // Set mocks base method.
-func (m *MockTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
+func (m *MockTarget) Set(ctx context.Context, source types.TargetSource) (*types.SetResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Set", ctx, source)
-	ret0, _ := ret[0].(*sdcpb.SetDataResponse)
+	ret0, _ := ret[0].(*types.SetResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
