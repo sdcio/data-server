@@ -3,7 +3,6 @@ package grpcserver
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/sdcio/data-server/pkg/api"
@@ -38,9 +37,13 @@ func datastoreSpec(req *sdcpb.CreateDataStoreRequest) (api.DatastoreSpec, error)
 }
 
 func target(t *sdcpb.Target) (api.Target, error) {
-	out := api.Target{Type: api.TargetType(t.GetType()), Address: t.GetAddress(), Port: t.GetPort()}
-	switch strings.ToLower(t.GetType()) {
-	case "netconf":
+	typ, err := api.ParseTargetType(t.GetType())
+	if err != nil {
+		return api.Target{}, status.Errorf(codes.InvalidArgument, "unknown targetconnection protocol type %q", t.GetType())
+	}
+	out := api.Target{Type: typ, Address: t.GetAddress(), Port: t.GetPort()}
+	switch typ {
+	case api.TargetTypeNetconf:
 		nc := t.GetNetconfOpts()
 		var commit api.CommitCandidate
 		switch nc.GetCommitCandidate() {
@@ -57,12 +60,10 @@ func target(t *sdcpb.Target) (api.Target, error) {
 			UseOperationRemove: nc.GetUseOperationRemove(),
 			CommitCandidate:    commit,
 		}
-	case "gnmi":
+	case api.TargetTypeGNMI:
 		g := t.GetGnmiOpts()
 		out.ProtocolOptions.GNMI = &api.GNMIOptions{Encoding: api.GNMIEncoding(g.GetEncoding()), TargetName: g.GetTargetName()}
-	case "noop":
-	default:
-		return api.Target{}, status.Errorf(codes.InvalidArgument, "unknown targetconnection protocol type %q", t.GetType())
+	case api.TargetTypeNoop:
 	}
 	if tls := t.GetTls(); tls != nil {
 		out.TLS = &api.TLS{CA: tls.GetCa(), Cert: tls.GetCert(), Key: tls.GetKey(), SkipVerify: tls.GetSkipVerify()}
@@ -76,14 +77,14 @@ func target(t *sdcpb.Target) (api.Target, error) {
 func syncConfig(s *sdcpb.Sync) (api.Sync, error) {
 	out := api.Sync{}
 	for _, ps := range s.GetConfig() {
-		typ := ps.GetTarget().GetType()
-		tgt := api.Target{Type: api.TargetType(typ)}
-		switch strings.ToLower(typ) {
-		case "gnmi":
+		typ, err := api.ParseTargetType(ps.GetTarget().GetType())
+		if err != nil || typ == api.TargetTypeNoop {
+			return api.Sync{}, status.Errorf(codes.InvalidArgument, "unknown targetsync protocol: %q", ps.GetTarget().GetType())
+		}
+		tgt := api.Target{Type: typ}
+		switch typ {
+		case api.TargetTypeGNMI:
 			tgt.ProtocolOptions.GNMI = &api.GNMIOptions{Encoding: api.GNMIEncoding(ps.GetTarget().GetGnmiOpts().GetEncoding())}
-		case "netconf":
-		default:
-			return api.Sync{}, status.Errorf(codes.InvalidArgument, "unknown targetsync protocol: %q", typ)
 		}
 		out.Configs = append(out.Configs, api.SyncConfig{
 			Name:     ps.GetName(),
