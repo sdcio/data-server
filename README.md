@@ -8,6 +8,36 @@ The paradigm of schema-driven API approaches is gaining increasing popularity as
 
 The data-server component serves as a versatile intermediary, connecting the config-server, schema-server, cache, and xNF/Device in a stateless design for scalability. It features a North-bound API for both imperative and declarative interactions and supports various South-bound protocols. With dedicated DataStores per target, flexible synchronization options, candidate-based interactions, and the ability to connect multiple data servers per device, it provides a resilient and adaptable foundation for managing and synchronizing data in dynamic system environments.
 
+## Modes
+
+The data-server runs in two modes from the same code.
+
+- **Standalone:** the `data-server` binary and the `ghcr.io/sdcio/data-server` image. `main.go` wires the core to a gRPC listener (`pkg/grpcserver`) and serves `DataServer` and `SchemaServer` on the configured address. Used for development, the CLI and tests.
+- **Library:** a host process, such as the [config-server](https://github.com/sdcio/config-server) controller, embeds the core and calls it in-process. It may also expose the gRPC API on the same process.
+
+### Library surface
+
+| Package | Role |
+|---|---|
+| `pkg/api` | Domain types, error sentinels and `IsRetryable`. Types only; imports no gRPC. |
+| `pkg/core` | The in-process engine: `New`, `Start`, `WaitReady`, `Stop`. Needs no listener. |
+| `pkg/grpcserver` | The sdcpb adapter over the core, with wire-parity errors and readiness gating. |
+
+These three packages are the supported library surface. Other `pkg/*` packages are best-effort and may change without notice.
+
+```go
+c, srv, err := grpcserver.New(ctx, cfg) // core plus gRPC adapter
+if err != nil { /* ... */ }
+
+go func() { _ = c.Start(ctx) }() // initialises schemas, cache, datastores
+err = srv.Run(ctx)               // serves until ctx is cancelled
+
+srv.Stop()
+_ = c.Stop(stopCtx)
+```
+
+A host that needs no gRPC listener uses `core.New(ctx, cfg)` directly and calls `Start`, `WaitReady` and `Stop` itself.
+
 ## build
 
 ```shell
