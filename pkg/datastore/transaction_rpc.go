@@ -26,7 +26,6 @@ import (
 
 var (
 	ErrDatastoreLocked   = errors.New("datastore is locked, other action is ongoing")
-	ErrContextDone       = errors.New("context is closed (done)")
 	ErrValidation        = errors.New("validation error")
 	ErrNoIntentsProvided = errors.New("no intents provided")
 )
@@ -78,8 +77,9 @@ func (d *Datastore) SdcpbTransactionIntentToInternalTI(ctx context.Context, req 
 }
 
 // replaceIntent takes a Transaction and treats it as a replaceIntent, replacing the whole device configuration with the content of the given intent.
+// With dryRun set, the intent is only validated; the device and the syncTree stay untouched.
 // returns the warnings as a []string and potential errors that happend during validation / from SBI Set()
-func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transaction) ([]string, error) {
+func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transaction, dryRun bool) ([]string, error) {
 	log := logger.FromContext(ctx).WithValues("transaction-type", "replace")
 	ctx = logger.IntoContext(ctx, log)
 
@@ -130,6 +130,10 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 
 	warnings := validationResult.WarningsStr()
 	log.Info("transaction validation passed", "transaction-id", transaction.GetTransactionId(), "stats", validationStats.String())
+
+	if dryRun {
+		return warnings, nil
+	}
 
 	// we use the TargetSourceReplace, that adjustes the tree results in a way
 	// that the whole config tree is getting replaced.
@@ -398,14 +402,6 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	}
 
 	log.Info("transaction completed")
-	// start the rollback ticker only if it was not already a rollback transaction.
-	if !transaction.IsRollback() {
-		// start the RollbackTimer
-		err = transaction.StartRollbackTimer(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	return result, nil
 }
@@ -480,27 +476,13 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 		}
 		defer d.dmutex.Unlock()
 
-		// Try to register the Transaction in the TransactionManager only a single transaction can be register (implicitly being active)
-	outerloop:
-		for {
-			select {
-			case <-ctx.Done():
-				// Context was canceled or timed out
-				log.Error(ctx.Err(), "transaction context canceled or timed out", ctx.Err())
-				return nil, ErrContextDone
-			default:
-				// Start a transaction and prepare to cancel it if any error occurs
-				transactionGuard, err = d.transactionManager.RegisterTransaction(ctx, transaction)
-				if err != nil {
-					return nil, err
-				}
-				if transactionGuard != nil {
-					defer transactionGuard.Done()
-					break outerloop
-				}
-				return nil, ErrDatastoreLocked
-			}
+		// Register the Transaction in the TransactionManager, only a single transaction can be registered (implicitly being active).
+		// If anything fails before the transaction is committed, the guard unregisters it again.
+		transactionGuard, err = d.transactionManager.RegisterTransaction(ctx, transaction)
+		if err != nil {
+			return nil, err
 		}
+		defer transactionGuard.Done()
 	}
 
 	// add the replaceIntent to the transaction
@@ -508,7 +490,7 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 
 	// if replace intent is provided, kickoff the replace intent processing first
 	if transaction.GetReplace() != nil {
-		replaceWarn, err := d.replaceIntent(ctx, transaction)
+		replaceWarn, err := d.replaceIntent(ctx, transaction, dryRun)
 		if err != nil {
 			log.Error(err, "error setting replace intent")
 			return nil, err
@@ -525,8 +507,12 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 
 	// no-op transaction
 	if transaction.IsNoOp() {
-		// we expect a transaction confirm from the client
-		transactionGuard.Success()
+		if !dryRun {
+			// we expect a transaction confirm from the client
+			if err := commitTransaction(ctx, transaction, transactionGuard); err != nil {
+				return nil, err
+			}
+		}
 		return &sdcpb.TransactionSetResponse{
 			Warnings: []string{"no intents provided"},
 		}, nil
@@ -547,12 +533,23 @@ func (d *Datastore) TransactionSet(ctx context.Context, transactionId string, tr
 
 	// Mark the transaction as successfully committed
 	if !dryRun {
-		// Mark the transaction as successfully committed
-		transactionGuard.Success()
+		if err := commitTransaction(ctx, transaction, transactionGuard); err != nil {
+			return nil, err
+		}
 
 		log.Info("transaction success")
 	}
 	return response, err
+}
+
+// commitTransaction starts the auto rollback timer of the transaction and keeps it registered,
+// awaiting the client's Confirm. On error the guard still unregisters the transaction.
+func commitTransaction(ctx context.Context, transaction *types.Transaction, guard *types.TransactionGuard) error {
+	if err := transaction.StartRollbackTimer(ctx); err != nil {
+		return err
+	}
+	guard.Success()
+	return nil
 }
 
 func updateToSdcpbUpdate(lvs api.LeafVariantSlice) ([]*sdcpb.Update, error) {
@@ -573,11 +570,8 @@ func (d *Datastore) TransactionConfirm(ctx context.Context, transactionId string
 	log := logger.FromContext(ctx)
 	log.Info("transaction confirm")
 
-	if !d.dmutex.TryLock() {
-		return ErrDatastoreLocked
-	}
-	defer d.dmutex.Unlock()
-	// everything remains as is
+	// Confirm never touches the device, so it does not take dmutex and cannot be
+	// refused while Sync Revert or another set-path holder owns it.
 	return d.transactionManager.Confirm(transactionId)
 }
 

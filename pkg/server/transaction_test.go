@@ -7,6 +7,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/datastore"
 	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
+	"github.com/sdcio/data-server/pkg/datastore/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -24,6 +25,10 @@ func TestTranslateInternalToGrpcError(t *testing.T) {
 		},
 		"datastore locked -> Aborted": {
 			err:      datastore.ErrDatastoreLocked,
+			wantCode: codes.Aborted,
+		},
+		"transaction ongoing -> Aborted": {
+			err:      types.ErrTransactionOngoing,
 			wantCode: codes.Aborted,
 		},
 		"not connected -> Unavailable": {
