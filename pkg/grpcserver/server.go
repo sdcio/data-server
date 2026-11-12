@@ -55,10 +55,30 @@ type Server struct {
 	listen func() (net.Listener, error)
 }
 
+// Option customises New.
+type Option func(*options)
+
+type options struct {
+	registerer prometheus.Registerer
+}
+
+// WithMetricsRegisterer registers the gRPC server and client collectors on r
+// and enables their interceptors even when cfg.Prometheus is unset. The caller
+// owns exposing r; Run starts no metrics listener unless cfg.Prometheus is set.
+func WithMetricsRegisterer(r prometheus.Registerer) Option {
+	return func(o *options) { o.registerer = r }
+}
+
 // New builds the core and the gRPC server around it. When Prometheus is
-// configured the core's gNMI client connections carry client metrics. The
-// core's lifetime follows ctx; the server's own resources follow Stop.
-func New(ctx context.Context, cfg *config.Config) (*core.Core, *Server, error) {
+// configured or WithMetricsRegisterer is given, the core's gNMI client
+// connections carry client metrics. The core's lifetime follows ctx; the
+// server's own resources follow Stop.
+func New(ctx context.Context, cfg *config.Config, opts ...Option) (*core.Core, *Server, error) {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	srvCtx, cancel := context.WithCancel(ctx)
 	s := &Server{
 		cfg:    cfg,
@@ -73,21 +93,25 @@ func New(ctx context.Context, cfg *config.Config) (*core.Core, *Server, error) {
 	unary := []grpc.UnaryServerInterceptor{s.readyInterceptor, s.timeoutInterceptor, loggingUnaryInterceptor(srvCtx)}
 	stream := []grpc.StreamServerInterceptor{loggingStreamInterceptor(srvCtx)}
 
-	if cfg.Prometheus != nil {
+	metricsReg := o.registerer
+	if metricsReg == nil && cfg.Prometheus != nil {
+		metricsReg = s.reg
+	}
+	if metricsReg != nil {
 		clientMetrics := grpc_prometheus.NewClientMetrics()
 		dialOpts = append(dialOpts,
 			grpc.WithUnaryInterceptor(clientMetrics.UnaryClientInterceptor()),
 			grpc.WithStreamInterceptor(clientMetrics.StreamClientInterceptor()),
 		)
-		s.reg.MustRegister(clientMetrics)
+		metricsReg.MustRegister(clientMetrics)
 
 		serverMetrics := grpc_prometheus.NewServerMetrics()
 		unary = append(unary, serverMetrics.UnaryServerInterceptor())
 		stream = append(stream, serverMetrics.StreamServerInterceptor())
-		s.reg.MustRegister(serverMetrics)
+		metricsReg.MustRegister(serverMetrics)
 	}
 
-	opts := []grpc.ServerOption{
+	srvOpts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(cfg.GRPCServer.MaxRecvMsgSize),
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unary...)),
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(stream...)),
@@ -98,10 +122,10 @@ func New(ctx context.Context, cfg *config.Config) (*core.Core, *Server, error) {
 			cancel()
 			return nil, nil, err
 		}
-		opts = append(opts, grpc.Creds(credentials.NewTLS(tlsCfg)))
+		srvOpts = append(srvOpts, grpc.Creds(credentials.NewTLS(tlsCfg)))
 	}
 
-	s.srv = grpc.NewServer(opts...)
+	s.srv = grpc.NewServer(srvOpts...)
 	sdcpb.RegisterDataServerServer(s.srv, s)
 	if cfg.GRPCServer.SchemaServer != nil && cfg.GRPCServer.SchemaServer.Enabled {
 		sdcpb.RegisterSchemaServerServer(s.srv, s)

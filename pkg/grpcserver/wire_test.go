@@ -60,10 +60,10 @@ type wire struct {
 
 // startWire serves a Server over an in-memory listener. With start false the
 // core is never started, so the server stays not ready.
-func startWire(t *testing.T, cfg *config.Config, start bool) *wire {
+func startWire(t *testing.T, cfg *config.Config, start bool, opts ...Option) *wire {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	c, srv, err := New(ctx, cfg)
+	c, srv, err := New(ctx, cfg, opts...)
 	if err != nil {
 		t.Fatal(err)
 	}
