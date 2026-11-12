@@ -48,5 +48,5 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 	if err != nil {
 		return nil, notFound(err)
 	}
-	return intentResponse(req, res)
+	return intentResponse(req, res), nil
 }
