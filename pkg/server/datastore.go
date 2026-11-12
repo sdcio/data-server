@@ -18,9 +18,9 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
+	"github.com/sdcio/data-server/pkg/api"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore"
 	"github.com/sdcio/data-server/pkg/tree/processors"
@@ -100,14 +100,19 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 	}
 
 	reqTarget := req.GetTarget()
+	targetType, err := api.ParseTargetType(reqTarget.GetType())
+	if err != nil {
+		log.Error(nil, "unknown targetconnection protocol type", "type", reqTarget.GetType())
+		return nil, status.Errorf(codes.InvalidArgument, "unknown targetconnection protocol type %q", reqTarget.GetType())
+	}
 	sbi := &config.SBI{
-		Type:    reqTarget.GetType(),
+		Type:    targetType,
 		Port:    reqTarget.GetPort(),
 		Address: reqTarget.GetAddress(),
 	}
 
-	switch strings.ToLower(reqTarget.GetType()) {
-	case "netconf":
+	switch targetType {
+	case api.TargetTypeNetconf:
 		netconfOpts := reqTarget.GetNetconfOpts()
 		commitDatastore := config.NcCommitDatastoreCandidate
 		switch netconfOpts.GetCommitCandidate() {
@@ -125,13 +130,13 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 			CommitDatastore:        commitDatastore,
 		}
 
-	case "gnmi":
+	case api.TargetTypeGNMI:
 		gnmiOpts := reqTarget.GetGnmiOpts()
 		sbi.GnmiOptions = &config.SBIGnmiOptions{
-			Encoding:   gnmiOpts.GetEncoding(),
+			Encoding:   api.GNMIEncoding(gnmiOpts.GetEncoding()),
 			TargetName: gnmiOpts.GetTargetName(),
 		}
-	case "noop":
+	case api.TargetTypeNoop:
 		// no protocol-specific options needed for the noop target
 	default:
 		log.Error(nil, "unknown targetconnection protocol type", "type", reqTarget.GetType())
@@ -170,34 +175,34 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 			Config: make([]*config.SyncProtocol, 0, len(req.GetSync().GetConfig())),
 		}
 		for _, pSync := range req.GetSync().GetConfig() {
+			syncType, err := api.ParseTargetType(pSync.GetTarget().GetType())
+			if err != nil || syncType == api.TargetTypeNoop {
+				log.Error(nil, "unknown targetsync protocol type", "protocol", pSync.GetTarget().GetType())
+				return nil, status.Errorf(codes.InvalidArgument, "unknown targetsync protocol: %q", pSync.GetTarget().GetType())
+			}
 			gnSyncConfig := &config.SyncProtocol{
-				Protocol: pSync.GetTarget().GetType(),
+				Protocol: syncType,
 				Name:     pSync.GetName(),
 				Paths:    pSync.GetPath(),
 				Interval: time.Duration(pSync.GetInterval()),
 			}
-			switch strings.ToLower(pSync.GetTarget().GetType()) {
-			case "gnmi":
-				gnSyncConfig.Mode = "on-change"
+			if syncType == api.TargetTypeGNMI {
+				gnSyncConfig.Mode = config.SyncModeOnChange
 				switch pSync.GetMode() {
 				case sdcpb.SyncMode_SM_ON_CHANGE:
 				case sdcpb.SyncMode_SM_SAMPLE:
-					gnSyncConfig.Mode = "sample"
+					gnSyncConfig.Mode = config.SyncModeSample
 				case sdcpb.SyncMode_SM_ONCE:
-					gnSyncConfig.Mode = "once"
+					gnSyncConfig.Mode = config.SyncModeOnce
 				case sdcpb.SyncMode_SM_GET:
-					gnSyncConfig.Mode = "get"
+					gnSyncConfig.Mode = config.SyncModeGet
 				}
-				gnSyncConfig.Encoding = pSync.GetTarget().GetGnmiOpts().GetEncoding()
-			case "netconf":
-			default:
-				log.Error(nil, "unknown targetsync protocol type", "protocol", pSync.GetTarget().GetType())
-				return nil, status.Errorf(codes.InvalidArgument, "unknown targetsync protocol: %q", pSync.GetTarget().GetType())
+				gnSyncConfig.Encoding = api.GNMIEncoding(pSync.GetTarget().GetGnmiOpts().GetEncoding())
 			}
 			dsConfig.Sync.Config = append(dsConfig.Sync.Config, gnSyncConfig)
 		}
 	}
-	err := dsConfig.ValidateSetDefaults()
+	err = dsConfig.ValidateSetDefaults()
 	if err != nil {
 		log.Error(err, "invalid datastore config")
 		return nil, status.Errorf(codes.InvalidArgument, "invalid datastore config: %v", err)
@@ -299,7 +304,7 @@ func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*
 		DatastoreName: ds.Config().Name,
 	}
 	rsp.Target = &sdcpb.Target{
-		Type:    ds.Config().SBI.Type,
+		Type:    string(ds.Config().SBI.Type),
 		Address: ds.Config().SBI.Address,
 	}
 	rsp.Intents, err = ds.IntentsList(ctx)

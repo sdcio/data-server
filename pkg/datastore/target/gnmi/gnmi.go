@@ -170,7 +170,7 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 		return nil, err
 	}
 
-	switch enc := api.GNMIEncoding(t.cfg.GnmiOptions.Encoding); enc {
+	switch enc := t.cfg.GnmiOptions.Encoding; enc {
 	case api.GNMIEncodingJSON:
 		jsonData, err := source.ToJson(ctx, true)
 		if err != nil {
@@ -267,9 +267,9 @@ func (t *gnmiTarget) AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) 
 	var err error
 	for _, sp := range sps {
 		switch sp.Mode {
-		case "once":
+		case config.SyncModeOnce:
 			g = NewOnceSync(ctx, t, sp, t.runningStore, t.taskpoolFactory)
-		case "get":
+		case config.SyncModeGet:
 			g, err = NewGetSync(ctx, t, sp, t.runningStore, t.schemaClient)
 			if err != nil {
 				return err

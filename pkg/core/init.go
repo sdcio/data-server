@@ -8,6 +8,7 @@ import (
 
 	cconfig "github.com/sdcio/cache/pkg/config"
 	"github.com/sdcio/data-server/pkg/cache"
+	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/schema"
 	logf "github.com/sdcio/logger"
 	schemaConfig "github.com/sdcio/schema-server/pkg/config"
@@ -22,7 +23,7 @@ import (
 
 func (c *Core) createCacheClient(ctx context.Context) error {
 	log := logf.FromContext(ctx).WithValues("cache-type", c.cfg.Cache.Type)
-	if c.cfg.Cache.Type != "local" {
+	if c.cfg.Cache.Type != config.CacheTypeLocal {
 		return fmt.Errorf("unknown cache type: %s", c.cfg.Cache.Type)
 	}
 	log.Info("initializing local cache client", "store-type", c.cfg.Cache.StoreType, "directory", c.cfg.Cache.Dir)

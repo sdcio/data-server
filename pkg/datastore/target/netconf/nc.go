@@ -245,7 +245,7 @@ func filterRPCErrors(xml *etree.Document, severity string) ([]string, error) {
 	return result, nil
 }
 
-func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, source types.TargetSource) (*types.SetResult, error) {
+func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore config.CommitDatastore, source types.TargetSource) (*types.SetResult, error) {
 	log := logf.FromContext(ctx).WithValues("commit-datastore", commitDatastore)
 	xtree, err := source.ToXML(ctx, true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
 	if err != nil {
@@ -265,7 +265,7 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 	log.V(logf.VTrace).Info("generated config XML", "xml", xdoc)
 
 	// edit the config
-	resp, err := t.driver.EditConfig(commitDatastore, xdoc)
+	resp, err := t.driver.EditConfig(string(commitDatastore), xdoc)
 	if err != nil {
 		log.Error(err, "failed during edit-config")
 		if isTransportError(err) {

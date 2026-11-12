@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"strings"
 
 	"github.com/sdcio/data-server/pkg/api"
 	"github.com/sdcio/data-server/pkg/config"
@@ -49,7 +48,7 @@ func specFromConfig(dc *config.DatastoreConfig) api.DatastoreSpec {
 		for _, sp := range dc.Sync.Config {
 			spec.Sync.Configs = append(spec.Sync.Configs, api.SyncConfig{
 				Name:     sp.Name,
-				Target:   &api.Target{Type: api.TargetType(strings.ToLower(sp.Protocol)), ProtocolOptions: api.ProtocolOptions{GNMI: gnmiSyncOptions(sp)}},
+				Target:   &api.Target{Type: sp.Protocol, ProtocolOptions: api.ProtocolOptions{GNMI: gnmiSyncOptions(sp)}},
 				Paths:    sp.Paths,
 				Mode:     syncMode(sp.Mode),
 				Interval: uint64(sp.Interval),
@@ -60,19 +59,19 @@ func specFromConfig(dc *config.DatastoreConfig) api.DatastoreSpec {
 }
 
 func gnmiSyncOptions(sp *config.SyncProtocol) *api.GNMIOptions {
-	if !strings.EqualFold(sp.Protocol, "gnmi") {
+	if sp.Protocol != api.TargetTypeGNMI {
 		return nil
 	}
-	return &api.GNMIOptions{Encoding: api.GNMIEncoding(sp.Encoding)}
+	return &api.GNMIOptions{Encoding: sp.Encoding}
 }
 
-func syncMode(m string) api.SyncMode {
+func syncMode(m config.SyncMode) api.SyncMode {
 	switch m {
-	case "sample":
+	case config.SyncModeSample:
 		return api.SyncModeSample
-	case "once":
+	case config.SyncModeOnce:
 		return api.SyncModeOnce
-	case "get":
+	case config.SyncModeGet:
 		return api.SyncModeGet
 	default:
 		return api.SyncModeOnChange
@@ -81,7 +80,7 @@ func syncMode(m string) api.SyncMode {
 
 func targetFromSBI(s *config.SBI) api.Target {
 	t := api.Target{
-		Type:    api.TargetType(strings.ToLower(s.Type)),
+		Type:    s.Type,
 		Address: s.Address,
 		Port:    s.Port,
 	}
@@ -92,7 +91,7 @@ func targetFromSBI(s *config.SBI) api.Target {
 		t.TLS = &api.TLS{CA: s.TLS.CA, Cert: s.TLS.Cert, Key: s.TLS.Key, SkipVerify: s.TLS.SkipVerify}
 	}
 	if s.GnmiOptions != nil {
-		t.ProtocolOptions.GNMI = &api.GNMIOptions{Encoding: api.GNMIEncoding(s.GnmiOptions.Encoding), TargetName: s.GnmiOptions.TargetName}
+		t.ProtocolOptions.GNMI = &api.GNMIOptions{Encoding: s.GnmiOptions.Encoding, TargetName: s.GnmiOptions.TargetName}
 	}
 	if o := s.NetconfOptions; o != nil {
 		commit := api.CommitCandidateCandidate

@@ -7,6 +7,8 @@ import (
 
 	"github.com/openconfig/gnmi/proto/gnmi"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+
+	"github.com/sdcio/data-server/pkg/api"
 )
 
 // sdcpbDataTypeToGNMIType helper to convert the sdcpb data type to the gnmi data type
@@ -40,7 +42,8 @@ func SdcpbEncodingToGNMIENcoding(x sdcpb.Encoding) (gnmi.Encoding, error) {
 // configEncoding is the vendor-specific gNMI encoding value behind the CONFIG name.
 const configEncoding = 45
 
-func ParseGnmiEncoding(e string) int {
+func ParseGnmiEncoding(name api.GNMIEncoding) int {
+	e := string(name)
 	if strings.EqualFold(e, "CONFIG") {
 		return configEncoding
 	}
@@ -55,7 +58,8 @@ func ParseGnmiEncoding(e string) int {
 	return en
 }
 
-func ParseSdcpbEncoding(e string) int {
+func ParseSdcpbEncoding(name api.GNMIEncoding) int {
+	e := string(name)
 	if strings.EqualFold(e, "CONFIG") {
 		return configEncoding
 	}

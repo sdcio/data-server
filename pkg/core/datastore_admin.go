@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/sdcio/data-server/pkg/api"
@@ -105,18 +104,22 @@ func (c *Core) datastoreConfig(spec api.DatastoreSpec) (*config.DatastoreConfig,
 }
 
 func sbiFromTarget(t *api.Target) (*config.SBI, error) {
-	sbi := &config.SBI{Type: string(t.Type), Address: t.Address, Port: t.Port}
-	switch strings.ToLower(string(t.Type)) {
-	case "netconf":
+	typ, err := api.ParseTargetType(string(t.Type))
+	if err != nil {
+		return nil, fmt.Errorf("%w: unknown target connection protocol type %q", api.ErrInvalidArgument, t.Type)
+	}
+	sbi := &config.SBI{Type: typ, Address: t.Address, Port: t.Port}
+	switch typ {
+	case api.TargetTypeNetconf:
 		o := t.ProtocolOptions.Netconf
 		if o == nil {
 			o = &api.NetconfOptions{}
 		}
-		commit := "candidate"
+		commit := config.NcCommitDatastoreCandidate
 		switch o.CommitCandidate {
 		case api.CommitCandidateCandidate:
 		case api.CommitCandidateRunning:
-			commit = "running"
+			commit = config.NcCommitDatastoreRunning
 		default:
 			return nil, fmt.Errorf("%w: unknown commit datastore %v", api.ErrInvalidArgument, o.CommitCandidate)
 		}
@@ -126,13 +129,13 @@ func sbiFromTarget(t *api.Target) (*config.SBI, error) {
 			UseOperationRemove:     o.UseOperationRemove,
 			CommitDatastore:        commit,
 		}
-	case "gnmi":
+	case api.TargetTypeGNMI:
 		g := t.ProtocolOptions.GNMI
 		if g == nil {
 			g = &api.GNMIOptions{}
 		}
-		sbi.GnmiOptions = &config.SBIGnmiOptions{Encoding: string(g.Encoding), TargetName: g.TargetName}
-	case "noop":
+		sbi.GnmiOptions = &config.SBIGnmiOptions{Encoding: g.Encoding, TargetName: g.TargetName}
+	case api.TargetTypeNoop:
 	default:
 		return nil, fmt.Errorf("%w: unknown target connection protocol type %q", api.ErrInvalidArgument, t.Type)
 	}
@@ -146,11 +149,15 @@ func sbiFromTarget(t *api.Target) (*config.SBI, error) {
 }
 
 func syncProtocol(sc *api.SyncConfig) (*config.SyncProtocol, error) {
-	var typ string
+	var raw api.TargetType
 	var gnmi *api.GNMIOptions
 	if sc.Target != nil {
-		typ = string(sc.Target.Type)
+		raw = sc.Target.Type
 		gnmi = sc.Target.ProtocolOptions.GNMI
+	}
+	typ, err := api.ParseTargetType(string(raw))
+	if err != nil || typ == api.TargetTypeNoop {
+		return nil, fmt.Errorf("%w: unknown target sync protocol %q", api.ErrInvalidArgument, raw)
 	}
 	sp := &config.SyncProtocol{
 		Protocol: typ,
@@ -158,28 +165,24 @@ func syncProtocol(sc *api.SyncConfig) (*config.SyncProtocol, error) {
 		Paths:    sc.Paths,
 		Interval: time.Duration(sc.Interval),
 	}
-	switch strings.ToLower(typ) {
-	case "gnmi":
+	if typ == api.TargetTypeGNMI {
 		sp.Mode = syncModeName(sc.Mode)
 		if gnmi != nil {
-			sp.Encoding = string(gnmi.Encoding)
+			sp.Encoding = gnmi.Encoding
 		}
-	case "netconf":
-	default:
-		return nil, fmt.Errorf("%w: unknown target sync protocol %q", api.ErrInvalidArgument, typ)
 	}
 	return sp, nil
 }
 
-func syncModeName(m api.SyncMode) string {
+func syncModeName(m api.SyncMode) config.SyncMode {
 	switch m {
 	case api.SyncModeSample:
-		return "sample"
+		return config.SyncModeSample
 	case api.SyncModeOnce:
-		return "once"
+		return config.SyncModeOnce
 	case api.SyncModeGet:
-		return "get"
+		return config.SyncModeGet
 	default:
-		return "on-change"
+		return config.SyncModeOnChange
 	}
 }

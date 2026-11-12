@@ -71,7 +71,7 @@ func NewScrapligoNetconfTarget(cfg *config.SBI) (*ScrapligoNetconfTarget, error)
 	}
 	if cfg.NetconfOptions.PreferredNCVersion != "" {
 		opts = append(opts,
-			options.WithNetconfPreferredVersion(cfg.NetconfOptions.PreferredNCVersion),
+			options.WithNetconfPreferredVersion(string(cfg.NetconfOptions.PreferredNCVersion)),
 		)
 	}
 	// init the netconf driver
