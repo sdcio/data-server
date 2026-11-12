@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/AlekSi/pointer"
@@ -171,8 +170,8 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 		return nil, err
 	}
 
-	switch strings.ToLower(t.cfg.GnmiOptions.Encoding) {
-	case "json":
+	switch enc := api.GNMIEncoding(t.cfg.GnmiOptions.Encoding); enc {
+	case api.GNMIEncodingJSON:
 		jsonData, err := source.ToJson(ctx, true)
 		if err != nil {
 			return nil, err
@@ -187,7 +186,7 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 			}
 		}
 
-	case "json_ietf":
+	case api.GNMIEncodingJSONIETF:
 		jsonData, err := source.ToJsonIETF(ctx, true)
 		if err != nil {
 			return nil, err
@@ -202,11 +201,13 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 			}
 		}
 
-	case "proto":
+	case api.GNMIEncodingProto:
 		upds, err = source.ToProtoUpdates(ctx, true)
 		if err != nil {
 			return nil, err
 		}
+	default:
+		return nil, fmt.Errorf("encoding %q not supported for set", enc)
 	}
 
 	if len(deletes) == 0 && len(upds) == 0 {
