@@ -11,7 +11,6 @@ import (
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
 func schemaRef(s *sdcpb.Schema) api.SchemaRef {
@@ -180,10 +179,8 @@ func transactionResponse(res *api.TransactionResult) *sdcpb.TransactionSetRespon
 		Warnings: res.Warnings,
 		Intents:  make(map[string]*sdcpb.TransactionSetResponseIntent, len(res.Intents)),
 	}
-	for _, u := range res.Updates {
-		out.Update = append(out.Update, &sdcpb.Update{Path: u.Path, Value: u.Value})
-	}
-	out.Delete = append(out.Delete, res.Deletes...)
+	out.Update = res.Updates
+	out.Delete = res.Deletes
 	for name, iv := range res.Intents {
 		out.Intents[name] = &sdcpb.TransactionSetResponseIntent{Warnings: iv.Warnings, Errors: iv.Errors}
 	}
@@ -207,7 +204,7 @@ func intentFormat(f sdcpb.Format) (api.Format, error) {
 	}
 }
 
-func intentResponse(req *sdcpb.GetIntentRequest, res *api.IntentResult) (*sdcpb.GetIntentResponse, error) {
+func intentResponse(req *sdcpb.GetIntentRequest, res *api.IntentResult) *sdcpb.GetIntentResponse {
 	out := &sdcpb.GetIntentResponse{
 		DatastoreName: req.GetDatastoreName(),
 		Format:        req.GetFormat(),
@@ -218,28 +215,11 @@ func intentResponse(req *sdcpb.GetIntentRequest, res *api.IntentResult) (*sdcpb.
 	}
 	out.Deletes = append(out.Deletes, res.Deletes...)
 	if res.Format == api.FormatProto {
-		var in sdcpb.Intent
-		if err := proto.Unmarshal(res.Content, &in); err != nil {
-			return nil, err
-		}
-		out.Intent = &sdcpb.GetIntentResponse_Proto{Proto: &in}
-		return out, nil
+		out.Intent = &sdcpb.GetIntentResponse_Proto{Proto: &sdcpb.Intent{Intent: res.Name, Priority: res.Priority, Update: res.Updates}}
+		return out
 	}
 	out.Intent = &sdcpb.GetIntentResponse_Blob{Blob: res.Content}
-	return out, nil
-}
-
-func blameTree(n *api.BlameNode) *sdcpb.BlameTreeElement {
-	if n == nil {
-		return nil
-	}
-	e := &sdcpb.BlameTreeElement{Name: n.Name, Owner: n.Owner, KeyName: n.KeyName}
-	e.Value = n.Value
-	e.DeviationValue = n.DeviationValue
-	for _, ch := range n.Children {
-		e.Childs = append(e.Childs, blameTree(ch))
-	}
-	return e
+	return out
 }
 
 func schemaDetails(info *api.SchemaInfo) *sdcpb.GetSchemaDetailsResponse {

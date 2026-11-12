@@ -1,16 +1,20 @@
 package grpcserver
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/sdcio/data-server/pkg/api"
+	"github.com/go-logr/logr"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/core"
+	"github.com/sdcio/data-server/pkg/utils"
+	logf "github.com/sdcio/logger"
 	schemaConfig "github.com/sdcio/schema-server/pkg/config"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc"
@@ -213,6 +217,13 @@ func TestTransactionWire(t *testing.T) {
 	if got.GetPriority() != 10 || !strings.Contains(string(got.GetBlob()), "one") {
 		t.Fatalf("intent = %v", got)
 	}
+	got, err = w.data.GetIntent(ctx, &sdcpb.GetIntentRequest{DatastoreName: "ds1", Intent: "i1", Format: sdcpb.Format_Intent_Format_PROTO})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pi := got.GetProto(); pi.GetIntent() != "i1" || pi.GetPriority() != 10 || len(pi.GetUpdate()) == 0 {
+		t.Fatalf("proto intent = %v", got)
+	}
 
 	if _, err = w.data.TransactionSet(ctx, &sdcpb.TransactionSetRequest{
 		DatastoreName: "ds1", TransactionId: "t2", Intents: []*sdcpb.TransactionIntent{jsonIntent("i1", "two")},
@@ -390,15 +401,45 @@ func TestRunRetriesListenFailures(t *testing.T) {
 	t.Fatalf("listener never served after %d attempts", attempts)
 }
 
-func TestBlameTreeOmitsEmptyValues(t *testing.T) {
-	e := blameTree(&api.BlameNode{Name: "n", Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "v"}}, Children: []*api.BlameNode{{Name: "c"}}})
-	if e.GetValue().GetStringVal() != "v" || e.GetDeviationValue() != nil {
-		t.Fatalf("root = %v", e)
+// Runs CreateDataStore against a logger set up like the one in main.go, at trace level.
+func TestCreateDataStoreDoesNotLogCredentials(t *testing.T) {
+	w := readyWire(t)
+
+	buf := &bytes.Buffer{}
+	slogOpts := &slog.HandlerOptions{
+		Level: slog.Level(-logf.VTrace),
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			return utils.RedactAttr(groups, logf.ReplaceTimeAttr(groups, a))
+		},
 	}
-	if len(e.GetChilds()) != 1 || e.GetChilds()[0].GetValue() != nil {
-		t.Fatalf("child = %v", e.GetChilds())
+	ctx := logf.IntoContext(context.Background(), logr.FromSlogHandler(slog.NewJSONHandler(buf, slogOpts)))
+
+	req := &sdcpb.CreateDataStoreRequest{
+		DatastoreName: "ds-creds",
+		Target: &sdcpb.Target{
+			Type:        "noop",
+			Credentials: &sdcpb.Credentials{Username: "admin", Password: "s3cr3t", Token: "t0k3n"},
+		},
+		Sync:   &sdcpb.Sync{},
+		Schema: &sdcpb.Schema{Vendor: "v", Version: "1"},
 	}
-	if blameTree(nil) != nil {
-		t.Fatal("nil node must stay nil")
+	if _, err := w.srv.CreateDataStore(ctx, req); err != nil {
+		t.Fatalf("CreateDataStore: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "creating datastore") {
+		t.Fatalf("the datastore creation was not logged at all: %s", out)
+	}
+	for _, secret := range []string{"s3cr3t", "t0k3n"} {
+		if strings.Contains(out, secret) {
+			t.Errorf("%q leaked into the log: %s", secret, out)
+		}
+	}
+	if !strings.Contains(out, "admin") {
+		t.Errorf("the username should still be logged: %s", out)
+	}
+	if !strings.Contains(out, utils.Redacted) {
+		t.Errorf("expected the redacted placeholder in %s", out)
 	}
 }

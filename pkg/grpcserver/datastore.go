@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/utils"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc/codes"
@@ -97,5 +98,5 @@ func (s *Server) BlameConfig(ctx context.Context, req *sdcpb.BlameConfigRequest)
 	if err != nil {
 		return nil, err
 	}
-	return &sdcpb.BlameConfigResponse{ConfigTree: blameTree(tree)}, nil
+	return &sdcpb.BlameConfigResponse{ConfigTree: processors.BlameNodeToSdcpb(tree)}, nil
 }
