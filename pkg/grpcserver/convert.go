@@ -149,12 +149,8 @@ func intent(pb *sdcpb.TransactionIntent) (api.Intent, error) {
 		NonRevertive:      pb.GetNonRevertive(),
 		PreviouslyApplied: pb.GetPreviouslyApplied(),
 	}
-	for _, d := range pb.GetDeletes() {
-		u.Deletes = append(u.Deletes, d)
-	}
-	for _, p := range pb.GetRevertPaths() {
-		u.RevertPaths = append(u.RevertPaths, p)
-	}
+	u.Deletes = append(u.Deletes, pb.GetDeletes()...)
+	u.RevertPaths = append(u.RevertPaths, pb.GetRevertPaths()...)
 	u.Updates = pb.GetUpdate()
 	in.Spec.Update = u
 	return in, nil
