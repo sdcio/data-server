@@ -30,7 +30,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/sdcio/data-server/pkg/config"
-	"github.com/sdcio/data-server/pkg/server"
+	"github.com/sdcio/data-server/pkg/grpcserver"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	"github.com/spf13/pflag"
@@ -39,7 +39,6 @@ import (
 var configFile string
 var debug bool
 var trace bool
-var stop bool
 
 var versionFlag bool
 var version = "dev"
@@ -86,19 +85,13 @@ func main() {
 
 	go func() {
 		log.Info("pprof server started", "address", "localhost:6060")
-		err := http.ListenAndServe("localhost:6060", nil)
-		if err != nil {
+		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
 			log.Error(err, "pprof server failed")
 		}
 	}()
 
 	log.Info("data-server bootstrap", "version", version, "commit", commit, "log-level", slogOpts.Level.Level().String())
 
-	var s *server.Server
-START:
-	if s != nil {
-		s.Stop()
-	}
 	cfg, err := config.New(configFile)
 	if err != nil {
 		log.Error(err, "failed to read config")
@@ -111,24 +104,34 @@ START:
 	}
 	log.Info("read config", "config", string(b))
 
-	// add logger to context
 	ctx, cancel := context.WithCancel(ctx)
 	setupCloseHandler(log, cancel)
-	s, err = server.New(ctx, cfg)
+
+	core, srv, err := grpcserver.New(ctx, cfg)
 	if err != nil {
 		log.Error(err, "failed to create server")
 		os.Exit(1)
 	}
 
-	err = s.Serve(ctx)
-	if err != nil {
-		if stop {
-			return
+	go func() {
+		// WaitReady inside Run reports the same error
+		if err := core.Start(ctx); err != nil {
+			log.Error(err, "core failed to start")
 		}
-		log.Error(err, "failed to run server")
-		time.Sleep(time.Second)
-		goto START
+	}()
+
+	runErr := srv.Run(ctx)
+
+	// the signal context is already cancelled, so stop on a fresh one
+	stopCtx, stopCancel := context.WithTimeout(logf.IntoContext(context.Background(), log), 30*time.Second)
+	srv.Stop()
+	_ = core.Stop(stopCtx)
+	stopCancel()
+	if runErr != nil {
+		log.Error(runErr, "data-server failed")
+		os.Exit(1)
 	}
+	log.Info("data-server stopped")
 }
 
 func setupCloseHandler(log logr.Logger, cancelFn context.CancelFunc) {
@@ -137,9 +140,6 @@ func setupCloseHandler(log logr.Logger, cancelFn context.CancelFunc) {
 	go func() {
 		sig := <-c
 		log.Info("received signal, terminating", "signal", sig.String())
-		stop = true
 		cancelFn()
-		time.Sleep(500 * time.Millisecond)
-		os.Exit(0)
 	}()
 }
