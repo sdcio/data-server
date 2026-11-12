@@ -13,11 +13,11 @@ import (
 )
 
 func schemaRef(s *sdcpb.Schema) api.SchemaRef {
-	return api.SchemaRef{Name: s.GetName(), Vendor: s.GetVendor(), Version: s.GetVersion()}
+	return api.SchemaRef{Vendor: s.GetVendor(), Version: s.GetVersion()}
 }
 
 func sdcpbSchema(r api.SchemaRef) *sdcpb.Schema {
-	return &sdcpb.Schema{Name: r.Name, Vendor: r.Vendor, Version: r.Version}
+	return &sdcpb.Schema{Vendor: r.Vendor, Version: r.Version}
 }
 
 // datastoreSpec converts the target, schema and sync of a create request. The
