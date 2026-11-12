@@ -10,7 +10,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/sdcio/data-server/pkg/api"
 	logf "github.com/sdcio/logger"
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 const (
@@ -55,8 +54,7 @@ func (c *Core) WatchDeviations(ctx context.Context, name string) (<-chan api.Dev
 	return w.ch, nil
 }
 
-// deviationWatcher adapts the datastore's sdcpb deviation stream to a channel
-// of domain events.
+// deviationWatcher adapts the datastore's deviation sink to a bounded channel.
 type deviationWatcher struct {
 	datastore string
 	ctx       context.Context
@@ -73,13 +71,12 @@ type deviationWatcher struct {
 
 func (w *deviationWatcher) Context() context.Context { return w.ctx }
 
-func (w *deviationWatcher) Send(rsp *sdcpb.WatchDeviationResponse) error {
+func (w *deviationWatcher) Send(ev api.DeviationEvent) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.closed {
 		return context.Canceled
 	}
-	ev := toDeviationEvent(rsp)
 	switch ev.Kind {
 	case api.DeviationStart:
 		if w.inRun {
@@ -124,41 +121,4 @@ func (w *deviationWatcher) close() {
 		w.closed = true
 		close(w.ch)
 	}
-}
-
-func deviationReason(r sdcpb.DeviationReason) api.DeviationReason {
-	switch r {
-	case sdcpb.DeviationReason_UNHANDLED:
-		return api.DeviationReasonUnhandled
-	case sdcpb.DeviationReason_NOT_APPLIED:
-		return api.DeviationReasonNotApplied
-	case sdcpb.DeviationReason_OVERRULED:
-		return api.DeviationReasonOverruled
-	case sdcpb.DeviationReason_INTENT_EXISTS:
-		return api.DeviationReasonIntentExists
-	default:
-		return api.DeviationReasonUnknown
-	}
-}
-
-func toDeviationEvent(rsp *sdcpb.WatchDeviationResponse) api.DeviationEvent {
-	ev := api.DeviationEvent{
-		Datastore: rsp.GetName(),
-		Intent:    rsp.GetIntent(),
-		Reason:    deviationReason(rsp.GetReason()),
-	}
-	switch rsp.GetEvent() {
-	case sdcpb.DeviationEvent_START:
-		ev.Kind = api.DeviationStart
-	case sdcpb.DeviationEvent_END:
-		ev.Kind = api.DeviationEnd
-	case sdcpb.DeviationEvent_CLEAR:
-		ev.Kind = api.DeviationClear
-	default:
-		ev.Kind = api.DeviationUpdate
-		ev.Path = rsp.GetPath()
-		ev.Expected = rsp.GetExpectedValue()
-		ev.Current = rsp.GetCurrentValue()
-	}
-	return ev
 }

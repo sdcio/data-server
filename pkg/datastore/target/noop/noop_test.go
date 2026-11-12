@@ -184,35 +184,24 @@ func TestGet_ReturnsOneNotificationPerPath(t *testing.T) {
 	}
 }
 
-// TestSet_ReturnsCorrectUpdateResultOps verifies that Set returns one
-// UpdateResult per update (Op=UPDATE) and one per delete (Op=DELETE), in that
-// order.
-func TestSet_ReturnsCorrectUpdateResultOps(t *testing.T) {
+// TestSet_SucceedsWithoutWarnings verifies that Set accepts updates and
+// deletes and reports no warnings.
+func TestSet_SucceedsWithoutWarnings(t *testing.T) {
 	tgt, err := noop.NewNoopTarget(context.Background(), "ds-noop")
 	if err != nil {
 		t.Fatalf("NewNoopTarget: %v", err)
 	}
 
-	updPath := &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "interface"}}}
-	delPath := &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "network-instance"}}}
-
 	src := &stubSource{
-		updates: []*sdcpb.Update{{Path: updPath, Value: &sdcpb.TypedValue{}}},
-		deletes: []*sdcpb.Path{delPath},
+		updates: []*sdcpb.Update{{Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "interface"}}}, Value: &sdcpb.TypedValue{}}},
+		deletes: []*sdcpb.Path{{Elem: []*sdcpb.PathElem{{Name: "network-instance"}}}},
 	}
 
 	resp, err := tgt.Set(context.Background(), src)
 	if err != nil {
 		t.Fatalf("Set: %v", err)
 	}
-
-	if got, want := len(resp.Response), 2; got != want {
-		t.Fatalf("len(Response) = %d, want %d", got, want)
-	}
-	if resp.Response[0].Op != sdcpb.UpdateResult_UPDATE {
-		t.Errorf("Response[0].Op = %v, want UPDATE", resp.Response[0].Op)
-	}
-	if resp.Response[1].Op != sdcpb.UpdateResult_DELETE {
-		t.Errorf("Response[1].Op = %v, want DELETE", resp.Response[1].Op)
+	if len(resp.Warnings) != 0 {
+		t.Errorf("Warnings = %v, want none", resp.Warnings)
 	}
 }

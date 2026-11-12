@@ -15,6 +15,7 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/datastore/target"
+	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/consts"
@@ -587,7 +588,7 @@ func TestPerformRevert_AppliesWhenDatastoreUnlocked(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	f := newPerformRevertFixture(t, ctrl)
 
-	f.sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).Times(1)
+	f.sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&targettypes.SetResult{}, nil).Times(1)
 
 	if err := f.ds.performRevert(context.Background(), f.revertTree); err != nil {
 		t.Fatalf("performRevert() error = %v, want nil", err)

@@ -164,21 +164,22 @@ func Test_sharedEntryAttributes_BlameConfig(t *testing.T) {
 				return
 			}
 
-			t.Log(got.ToString())
-			t.Log(got.StringXPath())
+			gotPb := processors.BlameNodeToSdcpb(got)
+			t.Log(gotPb.ToString())
+			t.Log(gotPb.StringXPath())
 
 			want := &sdcpb.BlameTreeElement{}
 			err = protojson.Unmarshal([]byte(tt.want), want)
 			if err != nil {
 				t.Fatalf("failed to unmarshal JSON to proto: %v", err)
 			}
-			gotB, err := protojson.Marshal(got)
+			gotB, err := protojson.Marshal(gotPb)
 			if err != nil {
 				t.Fatalf("failed to marshal proto to JSON: %v", err)
 			}
 			fmt.Println(string(gotB))
 
-			if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+			if diff := cmp.Diff(want, gotPb, protocmp.Transform()); diff != "" {
 				t.Errorf("BlameConfig() mismatch (-want +got)\n%s", diff)
 				return
 			}

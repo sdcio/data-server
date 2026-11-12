@@ -7,9 +7,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/api"
 	logf "github.com/sdcio/logger"
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 // GetIntent reads an intent back in the requested format. It fails with
@@ -78,11 +76,7 @@ func (c *Core) GetIntent(ctx context.Context, req api.IntentRequest) (*api.Inten
 		res.Content, err = doc.WriteToBytes()
 		return res, err
 	case api.FormatProto:
-		upds, err := rsp.ToProtoUpdates(ctx)
-		if err != nil {
-			return nil, err
-		}
-		res.Content, err = proto.Marshal(&sdcpb.Intent{Intent: rsp.GetIntentName(), Priority: rsp.GetPriority(), Update: upds})
+		res.Updates, err = rsp.ToProtoUpdates(ctx)
 		return res, err
 	}
 	return nil, fmt.Errorf("%w: unknown format %d", api.ErrInvalidArgument, req.Format)
@@ -97,26 +91,5 @@ func (c *Core) BlameConfig(ctx context.Context, datastoreName string, includeDef
 	if err != nil {
 		return nil, err
 	}
-	tree, err := ds.BlameConfig(ctx, includeDefaults)
-	if err != nil {
-		return nil, err
-	}
-	return toBlameNode(tree), nil
-}
-
-func toBlameNode(e *sdcpb.BlameTreeElement) *api.BlameNode {
-	if e == nil {
-		return nil
-	}
-	n := &api.BlameNode{
-		Name:           e.GetName(),
-		Owner:          e.GetOwner(),
-		Value:          e.GetValue(),
-		DeviationValue: e.GetDeviationValue(),
-		KeyName:        e.GetKeyName(),
-	}
-	for _, ch := range e.GetChilds() {
-		n.Children = append(n.Children, toBlameNode(ch))
-	}
-	return n
+	return ds.BlameConfig(ctx, includeDefaults)
 }

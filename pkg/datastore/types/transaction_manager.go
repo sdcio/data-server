@@ -82,7 +82,7 @@ func (t *TransactionManager) Cancel(ctx context.Context, id string) error {
 	}
 	rollbacktransAction := t.transaction.GetRollbackTransaction()
 
-	_, err := t.rollbacker.TransactionRollback(ctx, rollbacktransAction, false)
+	err := t.rollbacker.TransactionRollback(ctx, rollbacktransAction, false)
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func (t *TransactionManager) GetTransaction(id string) (*Transaction, error) {
 func (t *TransactionManager) Rollback(ctx context.Context, trans *Transaction) error {
 	t.tmMutex.Lock()
 	defer t.tmMutex.Unlock()
-	_, err := t.rollbacker.TransactionRollback(ctx, trans, false)
+	err := t.rollbacker.TransactionRollback(ctx, trans, false)
 
 	t.transaction = nil
 

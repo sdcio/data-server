@@ -13,6 +13,7 @@ import (
 	"github.com/sdcio/data-server/mocks/mocktarget"
 	"github.com/sdcio/data-server/pkg/config"
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
+	targettypes "github.com/sdcio/data-server/pkg/datastore/target/types"
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
@@ -141,7 +142,7 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 			sbi := mocktarget.NewMockTarget(ctrl)
 			// Expect Set if updates are expected or if dryRun is false (we will use dryRun=false)
 			// Actually TransactionSet calls applyIntent which calls sbi.Set
-			sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).AnyTimes()
+			sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&targettypes.SetResult{}, nil).AnyTimes()
 
 			// Setup SyncTree with Running Config
 			tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
@@ -220,9 +221,9 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 			}
 
 			// Verify Updates
-			hasUpdates := len(resp.GetUpdate()) > 0
+			hasUpdates := len(resp.Updates) > 0
 			if hasUpdates != tt.expectUpdates {
-				t.Errorf("Expected updates: %v, got: %v (count: %d)\nUpdates: %v", tt.expectUpdates, hasUpdates, len(resp.GetUpdate()), resp.GetUpdate())
+				t.Errorf("Expected updates: %v, got: %v (count: %d)\nUpdates: %v", tt.expectUpdates, hasUpdates, len(resp.Updates), resp.Updates)
 			}
 		})
 	}

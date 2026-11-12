@@ -84,9 +84,10 @@ type IntentRequest struct {
 	Origin    Origin
 }
 
-// IntentResult is an intent read back from the intended store. Content holds
-// the intent encoded as requested: JSON, JSON IETF, XML or protojson encoded
-// xpath/value pairs; for FormatProto it is a proto encoded sdcpb.Intent.
+// IntentResult is an intent read back from the intended store. For
+// FormatProto the intent body is in Updates and Content is empty; for every
+// other format Content holds the body encoded as requested: JSON, JSON IETF,
+// XML or protojson encoded xpath/value pairs.
 type IntentResult struct {
 	Name         string
 	Priority     int32
@@ -95,6 +96,7 @@ type IntentResult struct {
 	Deletes      []*sdcpb.Path
 	Format       Format
 	Content      []byte
+	Updates      []*sdcpb.Update
 }
 
 // IntentValidation holds the findings of one intent in a transaction.

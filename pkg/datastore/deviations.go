@@ -2,23 +2,22 @@ package datastore
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	pubapi "github.com/sdcio/data-server/pkg/api"
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	"google.golang.org/grpc/codes"
-	status "google.golang.org/grpc/status"
 )
 
-// DeviationSink receives the deviation responses of one watcher. Send may
-// block; the deviation producer of the datastore waits for it. Context ends
-// the watch.
+// DeviationSink receives the deviation events of one watcher. Send may block;
+// the deviation producer of the datastore waits for it. Context ends the watch.
 type DeviationSink interface {
 	Context() context.Context
-	Send(*sdcpb.WatchDeviationResponse) error
+	Send(pubapi.DeviationEvent) error
 }
 
 // AddDeviationClient registers sink under the identifier client, which is used
@@ -87,9 +86,9 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 			}
 			log.V(logf.VDebug).Info("deviation clients", "clients", deviationClientNames)
 			for clientIdentifier, dc := range deviationClients {
-				err := dc.Send(&sdcpb.WatchDeviationResponse{
-					Name:  d.config.Name,
-					Event: sdcpb.DeviationEvent_START,
+				err := dc.Send(pubapi.DeviationEvent{
+					Datastore: d.config.Name,
+					Kind:      pubapi.DeviationStart,
 				})
 				if err != nil {
 					log.Error(err, "error sending deviation", "client-identifier", clientIdentifier)
@@ -108,9 +107,9 @@ func (d *Datastore) DeviationMgr(ctx context.Context, c *config.DeviationConfig)
 				if dc.Context().Err() != nil {
 					continue
 				}
-				err := dc.Send(&sdcpb.WatchDeviationResponse{
-					Name:  d.config.Name,
-					Event: sdcpb.DeviationEvent_END,
+				err := dc.Send(pubapi.DeviationEvent{
+					Datastore: d.config.Name,
+					Kind:      pubapi.DeviationEnd,
 				})
 				if err != nil {
 					log.Error(err, "error sending deviation", "client-identifier", clientIdentifier)
@@ -143,18 +142,18 @@ func (d DeviationsStats) LogValue() map[string]map[string]int {
 	return stats
 }
 
-func sdcpbDeviationReason(r treetypes.DeviationReason) sdcpb.DeviationReason {
+func deviationReason(r treetypes.DeviationReason) pubapi.DeviationReason {
 	switch r {
 	case treetypes.DeviationReasonUnhandled:
-		return sdcpb.DeviationReason_UNHANDLED
+		return pubapi.DeviationReasonUnhandled
 	case treetypes.DeviationReasonNotApplied:
-		return sdcpb.DeviationReason_NOT_APPLIED
+		return pubapi.DeviationReasonNotApplied
 	case treetypes.DeviationReasonOverruled:
-		return sdcpb.DeviationReason_OVERRULED
+		return pubapi.DeviationReasonOverruled
 	case treetypes.DeviationReasonIntentExists:
-		return sdcpb.DeviationReason_INTENT_EXISTS
+		return pubapi.DeviationReasonIntentExists
 	default:
-		return sdcpb.DeviationReason_DR_UNKNOWN
+		return pubapi.DeviationReasonUnknown
 	}
 }
 
@@ -168,18 +167,18 @@ func (d *Datastore) SendDeviations(ctx context.Context, ch <-chan *treetypes.Dev
 				continue
 			}
 
-			err := dc.Send(&sdcpb.WatchDeviationResponse{
-				Name:          d.config.Name,
-				Intent:        deviation.IntentName(),
-				Event:         sdcpb.DeviationEvent_UPDATE,
-				Reason:        sdcpbDeviationReason(deviation.Reason()),
-				Path:          deviation.Path(),
-				ExpectedValue: deviation.ExpectedValue(),
-				CurrentValue:  deviation.CurrentValue(),
+			err := dc.Send(pubapi.DeviationEvent{
+				Datastore: d.config.Name,
+				Kind:      pubapi.DeviationUpdate,
+				Intent:    deviation.IntentName(),
+				Reason:    deviationReason(deviation.Reason()),
+				Path:      deviation.Path(),
+				Expected:  deviation.ExpectedValue(),
+				Current:   deviation.CurrentValue(),
 			})
 			if err != nil {
 				// ignore client-side cancellation (context closed) as it's expected when a client disconnects
-				if dc.Context().Err() != nil || status.Code(err) == codes.Canceled {
+				if dc.Context().Err() != nil || errors.Is(err, context.Canceled) {
 					log.V(logf.VDebug).Info("client context closed, skipping send", "client-identifier", clientIdentifier, "err", err)
 					continue
 				}

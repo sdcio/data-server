@@ -27,22 +27,21 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer/proto"
 	"github.com/sdcio/data-server/pkg/tree/types"
-	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 var ErrIntentNotFound = errors.New("intent not found")
 
-func (d *Datastore) applyIntent(ctx context.Context, source targettypes.TargetSource) (*sdcpb.SetDataResponse, error) {
+func (d *Datastore) applyIntent(ctx context.Context, source targettypes.TargetSource) (*targettypes.SetResult, error) {
 	log := logf.FromContext(ctx)
 	var err error
 
-	var rsp *sdcpb.SetDataResponse
+	var rsp *targettypes.SetResult
 
 	// send set request only if there are updates and/or deletes
 	if containsChanges, _ := source.ContainsChanges(ctx); !containsChanges {
-		return &sdcpb.SetDataResponse{}, nil
+		return &targettypes.SetResult{}, nil
 	}
 
 	if d.sbi == nil {
@@ -53,7 +52,7 @@ func (d *Datastore) applyIntent(ctx context.Context, source targettypes.TargetSo
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", d.config.Name, err)
 	}
-	log.V(logf.VDebug).Info("got SetResponse from SBI", "raw-response", utils.ProtoJSON(rsp))
+	log.V(logf.VDebug).Info("got SetResponse from SBI", "warnings", rsp.Warnings)
 
 	return rsp, nil
 }

@@ -172,9 +172,9 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error 
 		defer d.dmutex.Unlock()
 
 		log.Info("reverting after sync")
-		resp, err := d.applyIntent(ctx, adapter.NewEntryOutputAdapter(t.Entry))
+		_, err := d.applyIntent(ctx, adapter.NewEntryOutputAdapter(t.Entry))
 		if err != nil {
-			log.Error(err, "failed applying deviations to running", "response", utils.ProtoJSON(resp))
+			log.Error(err, "failed applying deviations to running")
 		}
 	}
 

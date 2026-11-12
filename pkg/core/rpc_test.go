@@ -289,15 +289,15 @@ type syncBuf struct {
 func (b *syncBuf) add(s string) { b.mu.Lock(); b.lines = append(b.lines, s); b.mu.Unlock() }
 func (b *syncBuf) text() string { b.mu.Lock(); defer b.mu.Unlock(); return strings.Join(b.lines, "\n") }
 
-func sdcpbEvent(e sdcpb.DeviationEvent) *sdcpb.WatchDeviationResponse {
-	return &sdcpb.WatchDeviationResponse{Name: "ds1", Event: e}
+func event(k api.DeviationKind) api.DeviationEvent {
+	return api.DeviationEvent{Datastore: "ds1", Kind: k}
 }
 
 func TestDeviationWatcherIgnoresDuplicateStart(t *testing.T) {
 	logs := &syncBuf{}
 	w := newTestWatcher(context.Background(), time.Hour, logs)
-	for _, e := range []sdcpb.DeviationEvent{sdcpb.DeviationEvent_START, sdcpb.DeviationEvent_START, sdcpb.DeviationEvent_END, sdcpb.DeviationEvent_START} {
-		if err := w.Send(sdcpbEvent(e)); err != nil {
+	for _, k := range []api.DeviationKind{api.DeviationStart, api.DeviationStart, api.DeviationEnd, api.DeviationStart} {
+		if err := w.Send(event(k)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -323,13 +323,13 @@ func TestDeviationWatcherBlocksWhenFullAndWarns(t *testing.T) {
 	logs := &syncBuf{}
 	w := newTestWatcher(context.Background(), 50*time.Millisecond, logs)
 	for i := 0; i < deviationBuffer; i++ {
-		if err := w.Send(sdcpbEvent(sdcpb.DeviationEvent_UPDATE)); err != nil {
+		if err := w.Send(event(api.DeviationUpdate)); err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	sent := make(chan error, 1)
-	go func() { sent <- w.Send(sdcpbEvent(sdcpb.DeviationEvent_UPDATE)) }()
+	go func() { sent <- w.Send(event(api.DeviationUpdate)) }()
 
 	select {
 	case err := <-sent:
@@ -358,10 +358,10 @@ func TestDeviationWatcherSendUnblocksOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	w := newTestWatcher(ctx, time.Hour, &syncBuf{})
 	for i := 0; i < deviationBuffer; i++ {
-		_ = w.Send(sdcpbEvent(sdcpb.DeviationEvent_UPDATE))
+		_ = w.Send(event(api.DeviationUpdate))
 	}
 	sent := make(chan error, 1)
-	go func() { sent <- w.Send(sdcpbEvent(sdcpb.DeviationEvent_UPDATE)) }()
+	go func() { sent <- w.Send(event(api.DeviationUpdate)) }()
 	time.Sleep(50 * time.Millisecond)
 	cancel()
 	select {
@@ -374,7 +374,7 @@ func TestDeviationWatcherSendUnblocksOnCancel(t *testing.T) {
 	}
 	w.close()
 	w.close()
-	if err := w.Send(sdcpbEvent(sdcpb.DeviationEvent_UPDATE)); err == nil {
+	if err := w.Send(event(api.DeviationUpdate)); err == nil {
 		t.Fatal("send after close must fail")
 	}
 }

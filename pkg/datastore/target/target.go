@@ -39,7 +39,7 @@ const (
 
 type Target interface {
 	Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error)
-	Set(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error)
+	Set(ctx context.Context, source types.TargetSource) (*types.SetResult, error)
 	AddSyncs(ctx context.Context, sps ...*config.SyncProtocol) error
 	Status() *types.TargetStatus
 	Close(ctx context.Context) error

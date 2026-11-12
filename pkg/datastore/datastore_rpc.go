@@ -21,8 +21,8 @@ import (
 	"sync"
 	"time"
 
+	pubapi "github.com/sdcio/data-server/pkg/api"
 	logf "github.com/sdcio/logger"
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc"
 
 	"github.com/sdcio/data-server/pkg/cache"
@@ -208,7 +208,7 @@ func (d *Datastore) Delete(ctx context.Context) error {
 
 func (d *Datastore) ConnectionState() *targettypes.TargetStatus {
 	if d.sbi == nil {
-		return targettypes.NewTargetStatus(sdcpb.TargetStatus_NOT_CONNECTED)
+		return targettypes.NewTargetStatus(pubapi.ConnectionNotConnected)
 	}
 	return d.sbi.Status()
 }
@@ -228,7 +228,7 @@ func (d *Datastore) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdcpb.BlameTreeElement, error) {
+func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*pubapi.BlameNode, error) {
 	log := logf.FromContext(ctx).WithName("BlameConfig")
 	ctx = logf.IntoContext(ctx, log)
 
@@ -269,8 +269,9 @@ func NewDatastoreRollbackAdapter(d *Datastore) *DatastoreRollbackAdapter {
 }
 
 // TransactionRollback is adapted to the datastore.lowlevelTransactionSet() function
-func (dra *DatastoreRollbackAdapter) TransactionRollback(ctx context.Context, transaction *types.Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
-	return dra.d.lowlevelTransactionSet(ctx, transaction, dryRun)
+func (dra *DatastoreRollbackAdapter) TransactionRollback(ctx context.Context, transaction *types.Transaction, dryRun bool) error {
+	_, err := dra.d.lowlevelTransactionSet(ctx, transaction, dryRun)
+	return err
 }
 
 // Assure the types.RollbackInterface is implemented by the DatastoreRollbackAdapter

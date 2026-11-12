@@ -8,7 +8,6 @@ import (
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore"
 	"github.com/sdcio/data-server/pkg/utils"
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 // GetDataStore returns the observed state of the named datastore, with
@@ -31,22 +30,11 @@ func datastoreInfo(ctx context.Context, ds *datastore.Datastore) (*api.Datastore
 	state := ds.ConnectionState()
 	return &api.DatastoreInfo{
 		Name:            ds.Name(),
-		ConnectionState: connectionState(state.Status),
+		ConnectionState: state.Status,
 		StatusDetails:   state.Details,
 		Intents:         intents,
 		Spec:            specFromConfig(ds.Config()),
 	}, nil
-}
-
-func connectionState(s sdcpb.TargetStatus) api.ConnectionState {
-	switch s {
-	case sdcpb.TargetStatus_CONNECTED:
-		return api.ConnectionConnected
-	case sdcpb.TargetStatus_NOT_CONNECTED:
-		return api.ConnectionNotConnected
-	default:
-		return api.ConnectionUnknown
-	}
 }
 
 func specFromConfig(dc *config.DatastoreConfig) api.DatastoreSpec {

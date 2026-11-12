@@ -23,6 +23,7 @@ import (
 
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/datastore"
+	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/utils"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -284,10 +285,11 @@ func (s *Server) WatchDeviations(req *sdcpb.WatchDeviationRequest, stream sdcpb.
 	log = log.WithValues("datastore-name", req.GetName()[0])
 	logf.IntoContext(ctx, log)
 
-	ds.AddDeviationClient(peerName, stream)
+	sink := &deviationStream{stream: stream}
+	ds.AddDeviationClient(peerName, sink)
 	<-stream.Context().Done()
 	log.Error(stream.Context().Err(), "stream context done", "severity", "WARN")
-	ds.StopDeviationsWatch(stream)
+	ds.StopDeviationsWatch(sink)
 	return nil
 }
 
@@ -305,7 +307,7 @@ func (s *Server) datastoreToRsp(ctx context.Context, ds *datastore.Datastore) (*
 		return nil, err
 	}
 	connState := ds.ConnectionState()
-	rsp.Target.Status = connState.Status
+	rsp.Target.Status = targetStatus(connState.Status)
 	rsp.Target.StatusDetails = connState.Details
 
 	rsp.Schema = ds.Config().Schema.GetSchema()
@@ -333,7 +335,7 @@ func (s *Server) BlameConfig(ctx context.Context, req *sdcpb.BlameConfigRequest)
 	}
 
 	return &sdcpb.BlameConfigResponse{
-		ConfigTree: tree,
+		ConfigTree: processors.BlameNodeToSdcpb(tree),
 	}, nil
 
 }

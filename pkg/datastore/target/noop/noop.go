@@ -18,6 +18,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/sdcio/data-server/pkg/api"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 
@@ -59,7 +60,7 @@ func (t *noopTarget) Get(ctx context.Context, req *sdcpb.GetDataRequest) (*sdcpb
 	return result, nil
 }
 
-func (t *noopTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
+func (t *noopTarget) Set(ctx context.Context, source types.TargetSource) (*types.SetResult, error) {
 	log := logf.FromContext(ctx).WithName("Set")
 	ctx = logf.IntoContext(ctx, log)
 
@@ -73,30 +74,13 @@ func (t *noopTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb
 		return nil, err
 	}
 
-	result := &sdcpb.SetDataResponse{
-		Response: make([]*sdcpb.UpdateResult, 0,
-			len(upds)+len(deletes)),
-		Timestamp: time.Now().UnixNano(),
-	}
-
-	for _, upd := range upds {
-		result.Response = append(result.Response, &sdcpb.UpdateResult{
-			Path: upd.GetPath(),
-			Op:   sdcpb.UpdateResult_UPDATE,
-		})
-	}
-	for _, p := range deletes {
-		result.Response = append(result.Response, &sdcpb.UpdateResult{
-			Path: p,
-			Op:   sdcpb.UpdateResult_DELETE,
-		})
-	}
-	return result, nil
+	log.V(logf.VDebug).Info("noop set", "updates", len(upds), "deletes", len(deletes))
+	return &types.SetResult{}, nil
 }
 
 func (t *noopTarget) Status() *types.TargetStatus {
 	return &types.TargetStatus{
-		Status: sdcpb.TargetStatus_CONNECTED,
+		Status: api.ConnectionConnected,
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	pubapi "github.com/sdcio/data-server/pkg/api"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/consts"
@@ -30,8 +31,9 @@ type BlameConfigProcessorParams struct {
 // Run processes the entry tree starting from e, building a blame tree showing which owner
 // (intent) is responsible for each configuration value. The pool parameter should be
 // VirtualFailFast to stop on first error.
-// Returns the blame tree structure and any error encountered.
-func (p *BlameConfigProcessor) Run(ctx context.Context, e api.Entry, poolFactory pool.VirtualPoolFactory) (*sdcpb.BlameTreeElement, error) {
+// Returns the blame tree structure and any error encountered; BlameNodeToSdcpb
+// converts it to the sdcpb wire form.
+func (p *BlameConfigProcessor) Run(ctx context.Context, e api.Entry, poolFactory pool.VirtualPoolFactory) (*pubapi.BlameNode, error) {
 	pool := poolFactory.NewVirtualPool(pool.VirtualTolerant)
 	blameTask := NewBlameConfigTask(e, p.context)
 	if err := pool.Submit(blameTask); err != nil {
@@ -52,8 +54,8 @@ func (p *BlameConfigProcessor) Run(ctx context.Context, e api.Entry, poolFactory
 
 type BlameConfigTask struct {
 	context   *BlameConfigProcessorParams
-	parent    *sdcpb.BlameTreeElement
-	self      *sdcpb.BlameTreeElement
+	parent    *pubapi.BlameNode
+	self      *pubapi.BlameNode
 	selfEntry api.Entry
 }
 
@@ -61,7 +63,7 @@ func NewBlameConfigTask(e api.Entry, c *BlameConfigProcessorParams) *BlameConfig
 	return &BlameConfigTask{
 		context:   c,
 		parent:    nil,
-		self:      &sdcpb.BlameTreeElement{},
+		self:      &pubapi.BlameNode{},
 		selfEntry: e,
 	}
 }
@@ -89,7 +91,8 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 	highestLe := t.selfEntry.GetLeafVariants().GetHighestPrecedence(false, true, true)
 	if highestLe != nil {
 		if highestLe.Owner() != consts.DefaultsIntentName || t.context.IncludeDefaults {
-			t.self.SetValue(highestLe.Value()).SetOwner(highestLe.Owner())
+			t.self.Value = highestLe.Value()
+			t.self.Owner = highestLe.Owner()
 
 			// check if running equals the expected
 			runningLe := t.selfEntry.GetLeafVariants().GetRunning()
@@ -99,12 +102,12 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 				// if running value is different from the highest precedence value, then we have a deviation,
 				// so we set the deviation value to the running value
 				if !proto.Equal(runningLe.Value(), highestLe.Value()) {
-					t.self.SetDeviationValue(runningLe.Value())
+					t.self.DeviationValue = runningLe.Value()
 				}
 			case runningLe == nil && highestLe.Owner() != consts.DefaultsIntentName:
 				// if running is nil and highest is not from default, then the deviation is from a non-existing running value,
 				// so we set it to empty
-				t.self.SetDeviationValue(&sdcpb.TypedValue{})
+				t.self.DeviationValue = &sdcpb.TypedValue{}
 			}
 		}
 	}
@@ -119,8 +122,8 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 			}
 		}
 
-		child := &sdcpb.BlameTreeElement{Name: childEntry.PathName()}
-		t.self.AddChild(child)
+		child := &pubapi.BlameNode{Name: childEntry.PathName()}
+		t.self.Children = append(t.self.Children, child)
 
 		// Create a new task for each child
 		task := &BlameConfigTask{

@@ -9,7 +9,6 @@ import (
 	"github.com/sdcio/data-server/pkg/datastore/types"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	logf "github.com/sdcio/logger"
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 // TransactionSet applies intents to the datastore named by ref. An empty
@@ -65,11 +64,7 @@ func (c *Core) TransactionSet(ctx context.Context, ref api.TxRef, opts api.SetOp
 		}
 	}
 
-	rsp, err := ds.TransactionSet(ctx, ref.ID, tis, replace, timeout, opts.DryRun)
-	if err != nil {
-		return nil, err
-	}
-	return toTransactionResult(rsp), nil
+	return ds.TransactionSet(ctx, ref.ID, tis, replace, timeout, opts.DryRun)
 }
 
 // TransactionConfirm confirms a transaction so it is not rolled back. It fails
@@ -107,19 +102,4 @@ func (c *Core) txContext(ctx context.Context, op string, ref api.TxRef, origin a
 		"transaction-origin", string(origin),
 	)
 	return logf.IntoContext(ctx, log), ds, nil
-}
-
-func toTransactionResult(rsp *sdcpb.TransactionSetResponse) *api.TransactionResult {
-	res := &api.TransactionResult{
-		Warnings: rsp.GetWarnings(),
-		Intents:  make(map[string]api.IntentValidation, len(rsp.GetIntents())),
-	}
-	res.Updates = append(res.Updates, rsp.GetUpdate()...)
-	for _, d := range rsp.GetDelete() {
-		res.Deletes = append(res.Deletes, d)
-	}
-	for name, iv := range rsp.GetIntents() {
-		res.Intents[name] = api.IntentValidation{Warnings: iv.GetWarnings(), Errors: iv.GetErrors()}
-	}
-	return res
 }
