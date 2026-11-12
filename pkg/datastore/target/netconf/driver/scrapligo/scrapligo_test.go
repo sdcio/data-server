@@ -18,9 +18,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/scrapli/scrapligo/util"
+
+	"github.com/sdcio/data-server/pkg/config"
 )
 
 func Test_normalizeTransportError(t *testing.T) {
@@ -96,4 +100,69 @@ func Test_normalizeTransportError(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newTestTarget(t *testing.T, s *fakeNetconfServer, timeout time.Duration) *ScrapligoNetconfTarget {
+	t.Helper()
+	d, err := NewScrapligoNetconfTarget(&config.SBI{
+		Address:        "127.0.0.1",
+		Port:           uint32(s.addr().Port),
+		Timeout:        timeout,
+		NetconfOptions: &config.SBINetconfOptions{},
+	})
+	if err != nil {
+		t.Fatalf("connecting to fake server: %v", err)
+	}
+	return d
+}
+
+func closeWithin(t *testing.T, d *ScrapligoNetconfTarget, bound time.Duration) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() { _ = d.Close(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(bound):
+		t.Fatalf("Close did not return within %s", bound)
+	}
+}
+
+func Test_Close_HealthyConnection(t *testing.T) {
+	s := newFakeNetconfServer(t)
+	d := newTestTarget(t, s, 5*time.Second)
+	if _, err := d.GetConfig("running", ""); err != nil {
+		t.Fatalf("GetConfig: %v", err)
+	}
+	closeWithin(t, d, time.Second)
+}
+
+func Test_Close_ReturnsAfterPeerDies(t *testing.T) {
+	s := newFakeNetconfServer(t)
+	d := newTestTarget(t, s, 5*time.Second)
+	if _, err := d.GetConfig("running", ""); err != nil {
+		t.Fatalf("GetConfig: %v", err)
+	}
+	s.kill()
+	time.Sleep(200 * time.Millisecond)
+
+	_, err := d.GetConfig("running", "")
+	if err == nil {
+		t.Fatal("expected an error after the peer died")
+	}
+	if !errors.Is(err, io.EOF) {
+		t.Errorf("expected a transport error classifiable as io.EOF, got %v", err)
+	}
+	closeWithin(t, d, closeTimeout+2*time.Second)
+}
+
+func Test_BlackholedPeer_SurfacesAsDeadlineExceeded(t *testing.T) {
+	s := newFakeNetconfServer(t)
+	d := newTestTarget(t, s, 500*time.Millisecond)
+	s.setBlackhole(true)
+
+	_, err := d.GetConfig("running", "")
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Errorf("expected os.ErrDeadlineExceeded, got %v", err)
+	}
+	closeWithin(t, d, closeTimeout+2*time.Second)
 }
