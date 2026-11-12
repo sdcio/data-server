@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"sync"
 	"testing"
 	"time"
 
@@ -80,6 +79,9 @@ func testSBIConfig() *config.SBI {
 	}
 }
 
+// failingDriverFactory keeps background reconnects from dialing anything.
+func failingDriverFactory(*config.SBI) (Driver, error) { return nil, errors.New("no device") }
+
 func rpcReplyDoc(t *testing.T) *etree.Document {
 	t.Helper()
 	doc := etree.NewDocument()
@@ -91,16 +93,17 @@ func rpcReplyDoc(t *testing.T) *etree.Document {
 
 func Test_ncTarget_internalGet_TransportError(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
+	closed := make(chan struct{}, 1)
 	d := mocknetconf.NewMockDriver(mockCtrl)
 	d.EXPECT().IsAlive().AnyTimes().Return(true)
 	d.EXPECT().GetConfig(gomock.Any(), gomock.Any()).Return(nil, io.EOF)
-	d.EXPECT().Close().Return(nil)
+	d.EXPECT().Close().DoAndReturn(func() error { closed <- struct{}{}; return nil })
 
 	tr := &ncTarget{
 		name:      "dev1",
-		m:         new(sync.Mutex),
 		driver:    d,
 		sbiConfig: testSBIConfig(),
+		newDriver: failingDriverFactory,
 	}
 
 	_, err := tr.internalGet(context.Background(), &sdcpb.GetDataRequest{})
@@ -112,6 +115,11 @@ func Test_ncTarget_internalGet_TransportError(t *testing.T) {
 	}
 	if !errors.Is(err, io.EOF) {
 		t.Errorf("expected the original io.EOF to still be discoverable via errors.Is, got %v", err)
+	}
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Error("failed driver was not closed")
 	}
 }
 
@@ -126,9 +134,9 @@ func Test_ncTarget_internalGet_NonTransportError(t *testing.T) {
 
 	tr := &ncTarget{
 		name:      "dev1",
-		m:         new(sync.Mutex),
 		driver:    d,
 		sbiConfig: testSBIConfig(),
+		newDriver: failingDriverFactory,
 	}
 
 	_, err := tr.internalGet(context.Background(), &sdcpb.GetDataRequest{})
@@ -142,17 +150,18 @@ func Test_ncTarget_internalGet_NonTransportError(t *testing.T) {
 
 func Test_ncTarget_setToDevice_EditConfig_TransportError(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
+	closed := make(chan struct{}, 1)
 	d := mocknetconf.NewMockDriver(mockCtrl)
 	d.EXPECT().IsAlive().AnyTimes().Return(true)
 	d.EXPECT().EditConfig(gomock.Any(), gomock.Any()).Return(nil, io.EOF)
-	d.EXPECT().Close().Return(nil)
+	d.EXPECT().Close().DoAndReturn(func() error { closed <- struct{}{}; return nil })
 	// Discard must NOT be called for a transport error.
 
 	tr := &ncTarget{
 		name:      "dev1",
-		m:         new(sync.Mutex),
 		driver:    d,
 		sbiConfig: testSBIConfig(),
+		newDriver: failingDriverFactory,
 	}
 
 	_, err := tr.setToDevice(context.Background(), "candidate", newFakeTargetSource())
@@ -161,6 +170,11 @@ func Test_ncTarget_setToDevice_EditConfig_TransportError(t *testing.T) {
 	}
 	if !errors.Is(err, io.EOF) {
 		t.Errorf("expected the original io.EOF to still be discoverable via errors.Is, got %v", err)
+	}
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Error("failed driver was not closed")
 	}
 }
 
@@ -175,9 +189,9 @@ func Test_ncTarget_setToDevice_EditConfig_NonTransportError_DiscardsCandidate(t 
 
 	tr := &ncTarget{
 		name:      "dev1",
-		m:         new(sync.Mutex),
 		driver:    d,
 		sbiConfig: testSBIConfig(),
+		newDriver: failingDriverFactory,
 	}
 
 	_, err := tr.setToDevice(context.Background(), "candidate", newFakeTargetSource())
@@ -191,17 +205,18 @@ func Test_ncTarget_setToDevice_EditConfig_NonTransportError_DiscardsCandidate(t 
 
 func Test_ncTarget_setToDevice_Commit_TransportError(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
+	closed := make(chan struct{}, 1)
 	d := mocknetconf.NewMockDriver(mockCtrl)
 	d.EXPECT().IsAlive().AnyTimes().Return(true)
 	d.EXPECT().EditConfig(gomock.Any(), gomock.Any()).Return(&nctypes.NetconfResponse{Doc: rpcReplyDoc(t)}, nil)
 	d.EXPECT().Commit().Return(io.EOF)
-	d.EXPECT().Close().Return(nil)
+	d.EXPECT().Close().DoAndReturn(func() error { closed <- struct{}{}; return nil })
 
 	tr := &ncTarget{
 		name:      "dev1",
-		m:         new(sync.Mutex),
 		driver:    d,
 		sbiConfig: testSBIConfig(),
+		newDriver: failingDriverFactory,
 	}
 
 	_, err := tr.setToDevice(context.Background(), "candidate", newFakeTargetSource())
@@ -210,5 +225,80 @@ func Test_ncTarget_setToDevice_Commit_TransportError(t *testing.T) {
 	}
 	if !errors.Is(err, io.EOF) {
 		t.Errorf("expected the original io.EOF to still be discoverable via errors.Is, got %v", err)
+	}
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Error("failed driver was not closed")
+	}
+}
+
+func Test_ncTarget_ReconnectsAfterTransportError(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+
+	old := mocknetconf.NewMockDriver(mockCtrl)
+	old.EXPECT().IsAlive().AnyTimes().Return(true)
+	old.EXPECT().GetConfig(gomock.Any(), gomock.Any()).Return(nil, io.EOF)
+	closed := make(chan struct{})
+	old.EXPECT().Close().DoAndReturn(func() error { close(closed); return nil })
+
+	fresh := mocknetconf.NewMockDriver(mockCtrl)
+	fresh.EXPECT().IsAlive().AnyTimes().Return(true)
+	fresh.EXPECT().GetConfig(gomock.Any(), gomock.Any()).Return(&nctypes.NetconfResponse{Doc: rpcReplyDoc(t)}, nil)
+
+	attempts := 0
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	tr := &ncTarget{
+		name:      "dev1",
+		driver:    old,
+		sbiConfig: testSBIConfig(),
+		lifeCtx:   ctx,
+		lifeStop:  stop,
+		newDriver: func(*config.SBI) (Driver, error) {
+			attempts++
+			if attempts < 3 {
+				return nil, errors.New("device still down")
+			}
+			return fresh, nil
+		},
+	}
+
+	_, err := tr.internalGet(context.Background(), &sdcpb.GetDataRequest{})
+	if !errors.Is(err, types.ErrNotConnected) {
+		t.Fatalf("expected ErrNotConnected, got %v", err)
+	}
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("failed driver was not closed")
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for !tr.Status().IsConnected() {
+		if time.Now().After(deadline) {
+			t.Fatal("target did not reconnect")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if _, err := tr.internalGet(context.Background(), &sdcpb.GetDataRequest{}); err != nil {
+		t.Fatalf("Get after reconnect: %v", err)
+	}
+}
+
+func Test_ncTarget_StaleFailureDoesNotCloseNewDriver(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	stale := mocknetconf.NewMockDriver(mockCtrl)
+	current := mocknetconf.NewMockDriver(mockCtrl)
+	current.EXPECT().IsAlive().AnyTimes().Return(true)
+	closed := make(chan struct{})
+	stale.EXPECT().Close().DoAndReturn(func() error { close(closed); return nil })
+
+	tr := &ncTarget{name: "dev1", driver: current, sbiConfig: testSBIConfig(), newDriver: failingDriverFactory}
+	_ = tr.handleTransportError(context.Background(), stale, io.EOF)
+	<-closed
+
+	if !tr.Status().IsConnected() {
+		t.Error("a failure on a replaced driver must not disconnect the current one")
 	}
 }

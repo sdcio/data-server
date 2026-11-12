@@ -18,6 +18,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"time"
 
 	"github.com/beevik/etree"
 	scraplinetconf "github.com/scrapli/scrapligo/driver/netconf"
@@ -46,8 +48,15 @@ func normalizeTransportError(err error) error {
 	if errors.Is(err, util.ErrConnectionError) {
 		return fmt.Errorf("%w: %w", io.EOF, err)
 	}
+	// A peer that vanished without FIN/RST only surfaces as an RPC timeout.
+	if errors.Is(err, util.ErrTimeoutError) {
+		return fmt.Errorf("%w: %w", os.ErrDeadlineExceeded, err)
+	}
 	return err
 }
+
+// closeTimeout bounds how long Close waits for scrapligo's graceful shutdown.
+const closeTimeout = 3 * time.Second
 
 type ScrapligoNetconfTarget struct {
 	driver *scraplinetconf.Driver
@@ -90,6 +99,11 @@ func NewScrapligoNetconfTarget(cfg *config.SBI) (*ScrapligoNetconfTarget, error)
 	}, nil
 }
 
+// Close shuts the session down and always returns within closeTimeout.
+//
+// scrapligo's graceful Close blocks forever once the transport is dead, so
+// after the timeout the underlying transport is closed directly and the
+// abandoned graceful close is left to finish in the background.
 func (snt *ScrapligoNetconfTarget) Close() error {
 	if snt == nil {
 		return nil
@@ -97,7 +111,18 @@ func (snt *ScrapligoNetconfTarget) Close() error {
 	if snt.driver == nil {
 		return nil
 	}
-	return snt.driver.Close()
+	done := make(chan error, 1)
+	go func() { done <- snt.driver.Close() }()
+
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(closeTimeout):
+		if snt.driver.Transport != nil {
+			_ = snt.driver.Transport.Close(true)
+		}
+		return fmt.Errorf("closing netconf session: %w", os.ErrDeadlineExceeded)
+	}
 }
 
 func (snt *ScrapligoNetconfTarget) IsAlive() bool {
@@ -185,7 +210,7 @@ func (snt *ScrapligoNetconfTarget) Commit() error {
 func (snt *ScrapligoNetconfTarget) Discard() error {
 	resp, err := snt.driver.Discard()
 	if err != nil {
-		return err
+		return normalizeTransportError(err)
 	}
 	if resp.Failed != nil {
 		return resp.Failed
@@ -196,7 +221,7 @@ func (snt *ScrapligoNetconfTarget) Discard() error {
 func (snt *ScrapligoNetconfTarget) Get(filter string) (*types.NetconfResponse, error) {
 	resp, err := snt.driver.Get(filter)
 	if err != nil {
-		return nil, err
+		return nil, normalizeTransportError(err)
 	}
 	if resp.Failed != nil {
 		return nil, resp.Failed
@@ -221,7 +246,7 @@ func (snt *ScrapligoNetconfTarget) Get(filter string) (*types.NetconfResponse, e
 func (snt *ScrapligoNetconfTarget) Lock(target string) (*types.NetconfResponse, error) {
 	resp, err := snt.driver.Lock(target)
 	if err != nil {
-		return nil, err
+		return nil, normalizeTransportError(err)
 	}
 	if resp.Failed != nil {
 		return nil, resp.Failed
@@ -238,7 +263,7 @@ func (snt *ScrapligoNetconfTarget) Lock(target string) (*types.NetconfResponse, 
 func (snt *ScrapligoNetconfTarget) Unlock(target string) (*types.NetconfResponse, error) {
 	resp, err := snt.driver.Unlock(target)
 	if err != nil {
-		return nil, err
+		return nil, normalizeTransportError(err)
 	}
 	if resp.Failed != nil {
 		return nil, resp.Failed
@@ -255,7 +280,7 @@ func (snt *ScrapligoNetconfTarget) Unlock(target string) (*types.NetconfResponse
 func (snt *ScrapligoNetconfTarget) Validate(source string) (*types.NetconfResponse, error) {
 	resp, err := snt.driver.Validate(source)
 	if err != nil {
-		return nil, err
+		return nil, normalizeTransportError(err)
 	}
 	if resp.Failed != nil {
 		return nil, resp.Failed
@@ -272,7 +297,7 @@ func (snt *ScrapligoNetconfTarget) Validate(source string) (*types.NetconfRespon
 func (snt *ScrapligoNetconfTarget) CopyConfig(source, target string) (*types.NetconfResponse, error) {
 	resp, err := snt.driver.CopyConfig(source, target)
 	if err != nil {
-		return nil, err
+		return nil, normalizeTransportError(err)
 	}
 	if resp.Failed != nil {
 		return nil, resp.Failed
