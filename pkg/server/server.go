@@ -77,7 +77,7 @@ func NewDatastoreMap() *DatastoreMap {
 	}
 }
 func (d *DatastoreMap) StopAll(ctx context.Context) {
-	for _, ds := range d.datastores {
+	for _, ds := range d.GetDatastoreAll() {
 		_ = ds.Stop(ctx)
 	}
 }
@@ -100,7 +100,10 @@ func (d *DatastoreMap) DeleteDatastore(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	_ = ds.Delete(ctx)
+	// keep the entry on failure so a retried delete can clean up the cache instance
+	if err := ds.Delete(ctx); err != nil {
+		return err
+	}
 	delete(d.datastores, name)
 	return nil
 }
@@ -291,6 +294,7 @@ func (s *Server) createInitialDatastores(ctx context.Context) {
 			ds, err := datastore.New(ctx, dsCfg, s.schemaClient, s.cacheClient, s.gnmiOpts...)
 			if err != nil {
 				log.Error(err, "failed to create datastore")
+				return
 			}
 			err = s.datastores.AddDatastore(ds)
 			if err != nil {

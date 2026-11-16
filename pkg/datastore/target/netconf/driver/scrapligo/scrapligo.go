@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/beevik/etree"
 	scraplinetconf "github.com/scrapli/scrapligo/driver/netconf"
@@ -51,6 +52,9 @@ func normalizeTransportError(err error) error {
 
 type ScrapligoNetconfTarget struct {
 	driver *scraplinetconf.Driver
+	// scrapligo's Driver.Close blocks forever when called a second time
+	closeOnce sync.Once
+	closeErr  error
 }
 
 // NewScrapligoNetconfTarget inits a new ScrapligoNetconfTarget which is already connected to the target node
@@ -97,7 +101,10 @@ func (snt *ScrapligoNetconfTarget) Close() error {
 	if snt.driver == nil {
 		return nil
 	}
-	return snt.driver.Close()
+	snt.closeOnce.Do(func() {
+		snt.closeErr = snt.driver.Close()
+	})
+	return snt.closeErr
 }
 
 func (snt *ScrapligoNetconfTarget) IsAlive() bool {

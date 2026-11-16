@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	sdccache "github.com/sdcio/cache/pkg/cache"
 	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"google.golang.org/grpc"
@@ -120,7 +121,10 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 
 	// create cache instance if needed
 	// this is a blocking call
-	ds.initCache(ctx)
+	if err := ds.initCache(ctx); err != nil {
+		cancel()
+		return nil, err
+	}
 
 	go func() {
 		// init sbi, this is a blocking call
@@ -144,21 +148,26 @@ func (d *Datastore) IntentsList(ctx context.Context) ([]string, error) {
 	return d.cacheClient.IntentsList(ctx)
 }
 
-func (d *Datastore) initCache(ctx context.Context) {
+func (d *Datastore) initCache(ctx context.Context) error {
 	log := logf.FromContext(ctx)
 
 	exists := d.cacheClient.InstanceExists(ctx)
 	if exists {
 		log.V(logf.VDebug).Info("cache already exists")
-		return
+		return nil
 	}
 	log.Info("creating cache instance")
-CREATE:
-	err := d.cacheClient.InstanceCreate(ctx)
-	if err != nil {
+	for {
+		err := d.cacheClient.InstanceCreate(ctx)
+		if err == nil || errors.Is(err, sdccache.ErrorCacheInstanceAlreadyExists) {
+			return nil
+		}
 		log.Error(err, "failed to create cache")
-		time.Sleep(time.Second)
-		goto CREATE
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Second):
+		}
 	}
 }
 
@@ -203,7 +212,11 @@ func (d *Datastore) Config() *config.DatastoreConfig {
 }
 
 func (d *Datastore) Delete(ctx context.Context) error {
-	return d.cacheClient.InstanceDelete(ctx)
+	err := d.cacheClient.InstanceDelete(ctx)
+	if errors.Is(err, sdccache.ErrorCacheInstanceNotFound) {
+		return nil
+	}
+	return err
 }
 
 func (d *Datastore) ConnectionState() *targettypes.TargetStatus {

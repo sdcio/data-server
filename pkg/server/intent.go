@@ -26,7 +26,7 @@ func (s *Server) ListIntent(ctx context.Context, req *sdcpb.ListIntentRequest) (
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name")
 	}
 
-	ds, err := s.datastores.getDataStore(req.GetDatastoreName())
+	ds, err := s.datastores.GetDataStore(req.GetDatastoreName())
 	if err != nil {
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
@@ -62,7 +62,7 @@ func (s *Server) GetIntent(ctx context.Context, req *sdcpb.GetIntentRequest) (*s
 		return nil, status.Error(codes.InvalidArgument, "missing intent name")
 	}
 	// retrieve the referenced datastore
-	ds, err := s.datastores.getDataStore(req.GetDatastoreName())
+	ds, err := s.datastores.GetDataStore(req.GetDatastoreName())
 	if err != nil {
 		return nil, status.Error(codes.NotFound, err.Error())
 	}

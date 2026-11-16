@@ -160,6 +160,9 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 
 func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.RootEntry) ([]string, error) {
 	log := logger.FromContext(ctx)
+	// releases the cache producer if we return before consuming all intents
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	intentNames := []string{}
 	IntentChan := make(chan *tree_persist.Intent)

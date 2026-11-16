@@ -61,6 +61,10 @@ func (l *LocalCache) InstanceIntentGet(ctx context.Context, cacheName string, in
 }
 
 func (l *LocalCache) InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChanOrig chan<- *tree_persist.Intent, errChanOrig chan<- error) {
+	// cancelling on return releases the store stream if we stop consuming early
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	// create new channels
 	intentChan := make(chan *types.Intent, 5)
 	errChan := make(chan error, 1)
@@ -70,31 +74,24 @@ func (l *LocalCache) InstanceIntentGetAll(ctx context.Context, cacheName string,
 	defer close(intentChanOrig)
 	defer close(errChanOrig)
 
-	for {
-		select {
-		case <-ctx.Done(): // Or stop if context is canceled
-			return
-		case intent, ok := <-intentChan: // retieve intent
-			if !ok {
-				return
-			}
-			// unmarshall it into a tree_persit.Intent
-			tpIntent := &tree_persist.Intent{}
-			err := proto.Unmarshal(intent.Data(), tpIntent)
-			if err != nil {
-				errChanOrig <- err
-				return
-			}
-			// forward to caller
-			intentChanOrig <- tpIntent
-		case err, ok := <-errChan: // Handle errors after intents
-			if !ok {
-				errChan = nil // Mark errChan as nil so select ignores it
-				continue
-			}
+	for intent := range intentChan {
+		// unmarshall it into a tree_persit.Intent
+		tpIntent := &tree_persist.Intent{}
+		err := proto.Unmarshal(intent.Data(), tpIntent)
+		if err != nil {
 			errChanOrig <- err
 			return
 		}
+		// forward to caller
+		select {
+		case intentChanOrig <- tpIntent:
+		case <-ctx.Done():
+			return
+		}
+	}
+	// the store sends its error before closing either channel
+	if err, ok := <-errChan; ok {
+		errChanOrig <- err
 	}
 }
 
