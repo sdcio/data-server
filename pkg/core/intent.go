@@ -42,9 +42,7 @@ func (c *Core) GetIntent(ctx context.Context, req api.IntentRequest) (*api.Inten
 		NonRevertive: rsp.IsNonRevertive(),
 		Format:       req.Format,
 	}
-	for _, d := range rsp.GetExplicitDeletes() {
-		res.Deletes = append(res.Deletes, d)
-	}
+	res.Deletes = append(res.Deletes, rsp.GetExplicitDeletes()...)
 
 	switch req.Format {
 	case api.FormatXPath:
