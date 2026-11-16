@@ -86,6 +86,7 @@ func (l *LocalCache) InstanceIntentGetAll(ctx context.Context, cacheName string,
 		select {
 		case intentChanOrig <- tpIntent:
 		case <-ctx.Done():
+			errChanOrig <- ctx.Err()
 			return
 		}
 	}
