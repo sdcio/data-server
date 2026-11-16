@@ -74,7 +74,7 @@ func testSBIConfig() *config.SBI {
 		Address:      "127.0.0.1:0",
 		ConnectRetry: time.Millisecond,
 		NetconfOptions: &config.SBINetconfOptions{
-			CommitDatastore: "candidate",
+			CommitDatastore: config.NCCommitDatastoreCandidate,
 		},
 	}
 }
@@ -164,7 +164,7 @@ func Test_ncTarget_setToDevice_EditConfig_TransportError(t *testing.T) {
 		newDriver: failingDriverFactory,
 	}
 
-	_, err := tr.setToDevice(context.Background(), "candidate", newFakeTargetSource())
+	_, err := tr.setToDevice(context.Background(), config.NCCommitDatastoreCandidate, newFakeTargetSource())
 	if !errors.Is(err, types.ErrNotConnected) {
 		t.Errorf("expected errors.Is(err, types.ErrNotConnected), got %v", err)
 	}
@@ -194,7 +194,7 @@ func Test_ncTarget_setToDevice_EditConfig_NonTransportError_DiscardsCandidate(t 
 		newDriver: failingDriverFactory,
 	}
 
-	_, err := tr.setToDevice(context.Background(), "candidate", newFakeTargetSource())
+	_, err := tr.setToDevice(context.Background(), config.NCCommitDatastoreCandidate, newFakeTargetSource())
 	if !errors.Is(err, nonTransportErr) {
 		t.Errorf("expected the original error to be returned unwrapped, got %v", err)
 	}
@@ -219,7 +219,7 @@ func Test_ncTarget_setToDevice_Commit_TransportError(t *testing.T) {
 		newDriver: failingDriverFactory,
 	}
 
-	_, err := tr.setToDevice(context.Background(), "candidate", newFakeTargetSource())
+	_, err := tr.setToDevice(context.Background(), config.NCCommitDatastoreCandidate, newFakeTargetSource())
 	if !errors.Is(err, types.ErrNotConnected) {
 		t.Errorf("expected errors.Is(err, types.ErrNotConnected), got %v", err)
 	}
