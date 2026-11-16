@@ -55,8 +55,14 @@ type ncTarget struct {
 	runningStore     types.RunningStore
 }
 
-func NewNCTarget(_ context.Context, name string, cfg *config.SBI, runningStore types.RunningStore, schemaClient schemaClient.SchemaClientBound) (*ncTarget, error) {
-	lifeCtx, lifeStop := context.WithCancel(context.Background())
+// NewNCTarget creates a NETCONF target whose background reconnect loop is
+// bound to ctx and to Close, whichever ends first. A nil ctx means the loop
+// lives until Close.
+func NewNCTarget(ctx context.Context, name string, cfg *config.SBI, runningStore types.RunningStore, schemaClient schemaClient.SchemaClientBound) (*ncTarget, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	lifeCtx, lifeStop := context.WithCancel(ctx)
 	t := &ncTarget{
 		name:             name,
 		lifeCtx:          lifeCtx,
@@ -71,6 +77,7 @@ func NewNCTarget(_ context.Context, name string, cfg *config.SBI, runningStore t
 	// create a new NETCONF driver
 	d, err := t.newDriver(cfg)
 	if err != nil {
+		lifeStop()
 		return t, err
 	}
 	t.driver = d
@@ -200,7 +207,7 @@ func (t *ncTarget) Set(ctx context.Context, source types.TargetSource) (*sdcpb.S
 	}
 
 	switch t.sbiConfig.NetconfOptions.CommitDatastore {
-	case "running", "candidate":
+	case config.NCCommitDatastoreRunning, config.NCCommitDatastoreCandidate:
 		return t.setToDevice(ctx, t.sbiConfig.NetconfOptions.CommitDatastore, source)
 	}
 	// should not get here if the config validation happened.
@@ -288,15 +295,10 @@ func (t *ncTarget) reconnect(ctx context.Context) {
 	for {
 		d, err := newDriver(t.sbiConfig)
 		if err == nil {
-			t.dm.Lock()
-			t.reconnecting = false
-			if ctx.Err() != nil {
-				t.dm.Unlock()
+			if !t.finishReconnect(ctx, d) {
 				_ = d.Close()
 				return
 			}
-			t.driver = d
-			t.dm.Unlock()
 			log.Info("NETCONF reconnected")
 			return
 		}
@@ -306,13 +308,25 @@ func (t *ncTarget) reconnect(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			t.dm.Lock()
-			t.reconnecting = false
-			t.dm.Unlock()
+			t.finishReconnect(ctx, nil)
 			return
 		case <-timer.C:
 		}
 	}
+}
+
+// finishReconnect ends the reconnect cycle and installs d as the current
+// driver. It reports false without installing d when ctx is already done or
+// d is nil; the caller then owns closing d.
+func (t *ncTarget) finishReconnect(ctx context.Context, d Driver) bool {
+	t.dm.Lock()
+	defer t.dm.Unlock()
+	t.reconnecting = false
+	if d == nil || ctx.Err() != nil {
+		return false
+	}
+	t.driver = d
+	return true
 }
 
 // filterRPCErrors takes the given etree.Document, filters the document for rpc-errors with the given severity
@@ -366,7 +380,7 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 		}
 
 		// candidate should discard on error
-		if commitDatastore == "candidate" {
+		if commitDatastore == config.NCCommitDatastoreCandidate {
 			err2 := drv.Discard()
 			if err2 != nil {
 				// log failed discard
@@ -381,7 +395,7 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 	}
 
 	// candidate stores need to commit the changes to running
-	if commitDatastore == "candidate" {
+	if commitDatastore == config.NCCommitDatastoreCandidate {
 		log.Info("committing changes on target")
 		// commit the config
 		err = drv.Commit()
