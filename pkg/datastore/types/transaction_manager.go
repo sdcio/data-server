@@ -67,7 +67,7 @@ func (t *TransactionManager) RegisterTransaction(ctx context.Context, trans *Tra
 		t.tmMutex.Lock()
 		defer t.tmMutex.Unlock()
 		trans.stopTimer()
-		err := t.cleanupTransaction(trans.transactionId)
+		err := t.cleanupTransaction(trans)
 		if err != nil {
 			log.Error(err, "error cleaning up transaction")
 		}
@@ -79,13 +79,27 @@ func (t *TransactionManager) transactionOngoing() bool {
 	return t.transaction != nil
 }
 
-// cleanupTransaction unregisters the transaction with the given id.
+// cleanupTransaction unregisters trans. It fails if trans is not the registered
+// transaction, so a stale caller cannot unregister a newer transaction with the same id.
 // The caller holds tmMutex.
-func (t *TransactionManager) cleanupTransaction(id string) error {
-	if _, err := t.getTransaction(id); err != nil {
+func (t *TransactionManager) cleanupTransaction(trans *Transaction) error {
+	if err := t.checkRegistered(trans); err != nil {
 		return err
 	}
 	t.transaction = nil
+	return nil
+}
+
+// checkRegistered returns an error unless trans is the registered transaction, matched by
+// id and by identity. The caller holds tmMutex.
+func (t *TransactionManager) checkRegistered(trans *Transaction) error {
+	registered, err := t.getTransaction(trans.transactionId)
+	if err != nil {
+		return err
+	}
+	if registered != trans {
+		return fmt.Errorf("transaction %s is not the registered transaction", trans.transactionId)
+	}
 	return nil
 }
 
@@ -101,7 +115,8 @@ func (t *TransactionManager) Confirm(id string) error {
 	if err := trans.Confirm(); err != nil {
 		return err
 	}
-	return t.cleanupTransaction(id)
+	t.transaction = nil
+	return nil
 }
 
 // Cancel rolls the transaction back and unregisters it. The caller holds the lock that
@@ -119,7 +134,8 @@ func (t *TransactionManager) Cancel(ctx context.Context, id string) error {
 		return err
 	}
 	trans.stopTimer()
-	return t.cleanupTransaction(id)
+	t.transaction = nil
+	return nil
 }
 
 // getTransaction returns the registered transaction if its id matches. The caller holds tmMutex.
@@ -157,8 +173,8 @@ func (t *TransactionManager) autoRollback(ctx context.Context, trans *Transactio
 	t.tmMutex.Lock()
 	defer t.tmMutex.Unlock()
 
-	if t.transaction != trans {
-		log.V(logf.VDebug).Info("transaction no longer active, skipping auto rollback")
+	if err := t.checkRegistered(trans); err != nil {
+		log.V(logf.VDebug).Info("transaction no longer active, skipping auto rollback", "reason", err.Error())
 		return
 	}
 
