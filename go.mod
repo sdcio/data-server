@@ -21,7 +21,7 @@ require (
 	github.com/openconfig/ygot v0.36.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/scrapli/scrapligo v1.4.3
-	github.com/sdcio/cache v0.0.39-0.20261116125209-a39dae012695
+	github.com/sdcio/cache v0.0.39
 	github.com/sdcio/logger v0.0.3
 	github.com/sdcio/schema-server v0.0.34
 	github.com/sdcio/sdc-protos v0.0.56

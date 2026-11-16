@@ -183,8 +183,8 @@ github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/scrapli/scrapligo v1.4.3 h1:H1IkZrCqFHT+MaY/j4MgimjLPKFfPRymhxBGYeXUOWI=
 github.com/scrapli/scrapligo v1.4.3/go.mod h1:pOWxVyPsQRrWTrkoSSDg05tjOqtWfLffAZtAsCc0w3M=
-github.com/sdcio/cache v0.0.39-0.20261116125209-a39dae012695 h1:I0dYZw9PGvBF6iUvmhEsGE069LpdAMNMOx9YWAJiREE=
-github.com/sdcio/cache v0.0.39-0.20261116125209-a39dae012695/go.mod h1:sOhPItnWwrdr3b8QwPTrXxEk3PtcnHkhL1KQ+ey3wzs=
+github.com/sdcio/cache v0.0.39 h1:8Vk5pJueBrp4fK58aC+c9pkOtUcI2GNDp/9iuJA2Ko8=
+github.com/sdcio/cache v0.0.39/go.mod h1:sOhPItnWwrdr3b8QwPTrXxEk3PtcnHkhL1KQ+ey3wzs=
 github.com/sdcio/goyang v1.6.2-2 h1:qfeUKBmoKpiKAruuEc3+V8wgHKP/n1jRDEnTy23knV8=
 github.com/sdcio/goyang v1.6.2-2/go.mod h1:5WolITjek1NF8yrNERyVZ7jqjOClJTpO8p/+OwmETM4=
 github.com/sdcio/logger v0.0.3 h1:IFUbObObGry+S8lHGwOQKKRxJSuOphgRU/hxVhOdMOM=
