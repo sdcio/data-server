@@ -398,7 +398,8 @@ type SyncTarget interface {
 type notificationMarker int
 
 const (
-	markerNone notificationMarker = iota
+	// The zero value marks a plain notification.
+	_ notificationMarker = iota
 	// markerResubscribed: the subscription failed and restarts; the next
 	// initial sync is a full snapshot.
 	markerResubscribed
