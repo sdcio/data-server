@@ -164,45 +164,31 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 
 func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.RootEntry) ([]string, error) {
 	log := logger.FromContext(ctx)
+	// Releases the cache producer when returning before all intents are consumed.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	intentNames := []string{}
-	IntentChan := make(chan *tree_persist.Intent)
-	ErrChan := make(chan error, 1)
+	intentChan := make(chan *tree_persist.Intent)
+	errChan := make(chan error, 1)
 
-	go d.cacheClient.IntentGetAll(ctx, []string{consts.RunningIntentName}, IntentChan, ErrChan)
+	go d.cacheClient.IntentGetAll(ctx, []string{consts.RunningIntentName}, intentChan, errChan)
 
-	for {
-	selectLoop:
-		select {
-		case err, ok := <-ErrChan:
-			if !ok {
-				// ErrChan already closed which is fine, continue
-				ErrChan = nil
-				break selectLoop
-			}
+	for intent := range intentChan {
+		log.V(logger.VDebug).Info("adding intent to tree", "intent", intent.GetIntentName())
+		log.V(logger.VTrace).Info("adding intent to tree", "intent", intent.GetIntentName(), "content", utils.ProtoJSON(intent))
+
+		intentNames = append(intentNames, intent.GetIntentName())
+		protoLoader := treeproto.NewProtoTreeImporter(intent)
+		_, err := root.ImportConfig(ctx, nil, protoLoader, treetypes.NewUpdateInsertFlags(), d.taskPool)
+		if err != nil {
 			return nil, err
-		case <-ctx.Done():
-			return nil, fmt.Errorf("context closed while retrieving all intents")
-		case intent, ok := <-IntentChan:
-			if !ok {
-				// IntentChan closed due to finish
-				IntentChan = nil
-				break selectLoop
-			}
-			log.V(logger.VDebug).Info("adding intent to tree", "intent", intent.GetIntentName())
-			log.V(logger.VTrace).Info("adding intent to tree", "intent", intent.GetIntentName(), "content", utils.ProtoJSON(intent))
-
-			intentNames = append(intentNames, intent.GetIntentName())
-			protoLoader := treeproto.NewProtoTreeImporter(intent)
-			_, err := root.ImportConfig(ctx, nil, protoLoader, treetypes.NewUpdateInsertFlags(), d.taskPool)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if ErrChan == nil && IntentChan == nil {
-			return intentNames, nil
 		}
 	}
+	if err, ok := <-errChan; ok {
+		return nil, err
+	}
+	return intentNames, nil
 }
 
 // lowlevelTransactionSet

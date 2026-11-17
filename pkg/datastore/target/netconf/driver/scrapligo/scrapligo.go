@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/beevik/etree"
@@ -60,6 +61,9 @@ const closeTimeout = 3 * time.Second
 
 type ScrapligoNetconfTarget struct {
 	driver *scraplinetconf.Driver
+	// scrapligo's Driver.Close blocks forever when called a second time
+	closeOnce sync.Once
+	closeErr  error
 }
 
 // NewScrapligoNetconfTarget inits a new ScrapligoNetconfTarget which is already connected to the target node
@@ -111,18 +115,21 @@ func (snt *ScrapligoNetconfTarget) Close() error {
 	if snt.driver == nil {
 		return nil
 	}
-	done := make(chan error, 1)
-	go func() { done <- snt.driver.Close() }()
+	snt.closeOnce.Do(func() {
+		done := make(chan error, 1)
+		go func() { done <- snt.driver.Close() }()
 
-	select {
-	case err := <-done:
-		return err
-	case <-time.After(closeTimeout):
-		if snt.driver.Transport != nil {
-			_ = snt.driver.Transport.Close(true)
+		select {
+		case err := <-done:
+			snt.closeErr = err
+		case <-time.After(closeTimeout):
+			if snt.driver.Transport != nil {
+				_ = snt.driver.Transport.Close(true)
+			}
+			snt.closeErr = fmt.Errorf("closing netconf session: %w", os.ErrDeadlineExceeded)
 		}
-		return fmt.Errorf("closing netconf session: %w", os.ErrDeadlineExceeded)
-	}
+	})
+	return snt.closeErr
 }
 
 func (snt *ScrapligoNetconfTarget) IsAlive() bool {

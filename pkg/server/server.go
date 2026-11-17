@@ -16,6 +16,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -65,44 +66,138 @@ type Server struct {
 	gnmiOpts []grpc.DialOption
 }
 
+var errUnknownDatastore = errors.New("unknown datastore")
+
+// DatastoreMap indexes active datastores by name.
+// md guards short map lookups and mutations; pending serializes add and delete
+// lifecycle operations per name so slow Stop/Delete I/O runs without holding md.
 type DatastoreMap struct {
 	md         *sync.RWMutex
-	datastores map[string]*datastore.Datastore // datastore group with sbi
+	datastores map[string]*datastore.Datastore
+	pending    map[string]chan struct{}
 }
 
 func NewDatastoreMap() *DatastoreMap {
 	return &DatastoreMap{
 		md:         &sync.RWMutex{},
 		datastores: map[string]*datastore.Datastore{},
+		pending:    map[string]chan struct{}{},
 	}
 }
 func (d *DatastoreMap) StopAll(ctx context.Context) {
-	for _, ds := range d.datastores {
+	for _, ds := range d.GetDatastoreAll() {
 		_ = ds.Stop(ctx)
 	}
 }
 
-func (d *DatastoreMap) AddDatastore(ds *datastore.Datastore) error {
-	d.md.Lock()
-	defer d.md.Unlock()
-	if existingDs, _ := d.getDataStore(ds.Name()); existingDs != nil {
-		return fmt.Errorf("datastore %s already exists", ds.Name())
+// withPending runs fn with exclusive lifecycle ownership of name, waiting for
+// any in-flight add or delete on name to finish first (or ctx to expire).
+func (d *DatastoreMap) withPending(ctx context.Context, name string, fn func() error) error {
+	for {
+		done, ok := d.tryAcquire(name)
+		if ok {
+			defer d.release(name)
+			return fn()
+		}
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
-
-	d.datastores[ds.Name()] = ds
-	return nil
 }
 
+// tryAcquire marks name as in flight and returns (nil, true) when idle;
+// otherwise it returns the active completion channel and false so callers can wait without holding md.
+func (d *DatastoreMap) tryAcquire(name string) (<-chan struct{}, bool) {
+	d.md.Lock()
+	defer d.md.Unlock()
+	if done, busy := d.pending[name]; busy {
+		return done, false
+	}
+	d.pending[name] = make(chan struct{})
+	return nil, true
+}
+
+// release closes name's completion channel to wake waiting callers and removes its pending entry.
+func (d *DatastoreMap) release(name string) {
+	d.md.Lock()
+	defer d.md.Unlock()
+	close(d.pending[name])
+	delete(d.pending, name)
+}
+
+// pendingDone returns the completion channel for an in-flight operation on name, or nil when idle.
+func (d *DatastoreMap) pendingDone(name string) <-chan struct{} {
+	d.md.RLock()
+	defer d.md.RUnlock()
+	return d.pending[name]
+}
+
+// WaitPending waits until no add or delete is in flight for name, or ctx expires.
+func (d *DatastoreMap) WaitPending(ctx context.Context, name string) error {
+	for {
+		done := d.pendingDone(name)
+		if done == nil {
+			return nil
+		}
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+// AddDatastore registers ds under its name after waiting for any in-flight lifecycle operation on that name.
+func (d *DatastoreMap) AddDatastore(ctx context.Context, ds *datastore.Datastore) error {
+	return d.withPending(ctx, ds.Name(), func() error {
+		d.md.Lock()
+		defer d.md.Unlock()
+		if existingDs, _ := d.getDataStore(ds.Name()); existingDs != nil {
+			return fmt.Errorf("datastore %s already exists", ds.Name())
+		}
+		d.datastores[ds.Name()] = ds
+		return nil
+	})
+}
+
+// DeleteDatastore unmaps name and stops and deletes its datastore without holding the map lock.
+// If cache deletion fails, the entry is restored so a retry can finish cleanup.
 func (d *DatastoreMap) DeleteDatastore(ctx context.Context, name string) error {
+	return d.withPending(ctx, name, func() error {
+		ds, err := d.takeDataStore(name)
+		if err != nil {
+			return err
+		}
+		if err := ds.Stop(ctx); err != nil {
+			logf.FromContext(ctx).Error(err, "failed to stop datastore")
+		}
+		if err := ds.Delete(ctx); err != nil {
+			d.putDataStore(name, ds)
+			return err
+		}
+		return nil
+	})
+}
+
+// takeDataStore removes and returns name from the map so teardown can run outside md.
+func (d *DatastoreMap) takeDataStore(name string) (*datastore.Datastore, error) {
 	d.md.Lock()
 	defer d.md.Unlock()
 	ds, err := d.getDataStore(name)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	_ = ds.Delete(ctx)
 	delete(d.datastores, name)
-	return nil
+	return ds, nil
+}
+
+// putDataStore restores a datastore entry after a failed delete.
+func (d *DatastoreMap) putDataStore(name string, ds *datastore.Datastore) {
+	d.md.Lock()
+	defer d.md.Unlock()
+	d.datastores[name] = ds
 }
 
 func (d *DatastoreMap) GetDataStore(name string) (*datastore.Datastore, error) {
@@ -125,7 +220,7 @@ func (d *DatastoreMap) GetDatastoreAll() []*datastore.Datastore {
 func (d *DatastoreMap) getDataStore(name string) (*datastore.Datastore, error) {
 	ds, exists := d.datastores[name]
 	if !exists {
-		return nil, fmt.Errorf("unknown datastore %s", name)
+		return nil, fmt.Errorf("%w %s", errUnknownDatastore, name)
 	}
 	return ds, nil
 }
@@ -291,9 +386,11 @@ func (s *Server) createInitialDatastores(ctx context.Context) {
 			ds, err := datastore.New(ctx, dsCfg, s.schemaClient, s.cacheClient, s.gnmiOpts...)
 			if err != nil {
 				log.Error(err, "failed to create datastore")
+				return
 			}
-			err = s.datastores.AddDatastore(ds)
+			err = s.datastores.AddDatastore(ctx, ds)
 			if err != nil {
+				_ = ds.Stop(ctx)
 				log.Error(err, "failed to create datastore")
 			}
 		}(dsCfg)

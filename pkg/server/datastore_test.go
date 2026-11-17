@@ -17,9 +17,12 @@ package server
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/sdcio/data-server/mocks/mockcacheclient"
@@ -233,3 +236,119 @@ func TestCreateDataStore_NoopType_WithSyncConfig_Succeeds(t *testing.T) {
 		t.Fatalf("expected no error for noop type with sync config, got: %v", err)
 	}
 }
+
+func TestDeleteDataStore_DoesNotBlockOtherDatastoresAndSerializesSameName(t *testing.T) {
+	s := newTestServer(t)
+	mockCC := s.cacheClient.(*mockcacheclient.MockClient)
+	ctx := context.Background()
+
+	for _, name := range []string{"victim", "other"} {
+		if _, err := s.CreateDataStore(ctx, noopCreateReq(name, "noop")); err != nil {
+			t.Fatalf("CreateDataStore(%s): %v", name, err)
+		}
+	}
+
+	deleting := make(chan struct{})
+	release := make(chan struct{})
+	mockCC.EXPECT().
+		InstanceDelete(gomock.Any(), "victim").
+		DoAndReturn(func(context.Context, string) error {
+			close(deleting)
+			<-release
+			return nil
+		})
+	mockCC.EXPECT().InstanceDelete(gomock.Any(), "third").Return(nil)
+
+	delErr := make(chan error, 1)
+	go func() {
+		_, err := s.DeleteDataStore(ctx, &sdcpb.DeleteDataStoreRequest{Name: "victim"})
+		delErr <- err
+	}()
+	select {
+	case <-deleting:
+	case <-time.After(5 * time.Second):
+		t.Fatal("InstanceDelete was not called")
+	}
+
+	// Unrelated datastores remain accessible while victim's delete is stuck in cache I/O.
+	otherDone := make(chan error, 1)
+	go func() {
+		if _, err := s.datastores.GetDataStore("other"); err != nil {
+			otherDone <- err
+			return
+		}
+		if _, err := s.CreateDataStore(ctx, noopCreateReq("third", "noop")); err != nil {
+			otherDone <- err
+			return
+		}
+		_, err := s.DeleteDataStore(ctx, &sdcpb.DeleteDataStoreRequest{Name: "third"})
+		otherDone <- err
+	}()
+	select {
+	case err := <-otherDone:
+		if err != nil {
+			t.Fatalf("operations on unrelated datastores failed: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("unrelated datastore operations blocked on in-flight delete")
+	}
+
+	// Recreating the deleting datastore waits for the delete and respects ctx cancellation.
+	shortCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+	if _, err := s.CreateDataStore(shortCtx, noopCreateReq("victim", "noop")); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("CreateDataStore during delete got %v, want %v", err, context.DeadlineExceeded)
+	}
+
+	recreateErr := make(chan error, 1)
+	go func() {
+		_, err := s.CreateDataStore(ctx, noopCreateReq("victim", "noop"))
+		recreateErr <- err
+	}()
+	close(release)
+
+	for what, ch := range map[string]chan error{"DeleteDataStore": delErr, "CreateDataStore": recreateErr} {
+		select {
+		case err := <-ch:
+			if err != nil {
+				t.Fatalf("%s: %v", what, err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s did not finish after release", what)
+		}
+	}
+	if _, err := s.datastores.GetDataStore("victim"); err != nil {
+		t.Fatalf("victim not present after recreate: %v", err)
+	}
+}
+
+func TestDeleteDataStore_RestoresEntryOnFailureSoRetrySucceeds(t *testing.T) {
+	s := newTestServer(t)
+	mockCC := s.cacheClient.(*mockcacheclient.MockClient)
+	ctx := context.Background()
+
+	if _, err := s.CreateDataStore(ctx, noopCreateReq("ds-retry", "noop")); err != nil {
+		t.Fatalf("CreateDataStore: %v", err)
+	}
+
+	wantErr := fmt.Errorf("transient delete failure")
+	gomock.InOrder(
+		mockCC.EXPECT().InstanceDelete(gomock.Any(), "ds-retry").Return(wantErr),
+		mockCC.EXPECT().InstanceDelete(gomock.Any(), "ds-retry").Return(nil),
+	)
+
+	if _, err := s.DeleteDataStore(ctx, &sdcpb.DeleteDataStoreRequest{Name: "ds-retry"}); !errors.Is(err, wantErr) {
+		t.Fatalf("first DeleteDataStore got %v, want %v", err, wantErr)
+	}
+	if _, err := s.datastores.GetDataStore("ds-retry"); err != nil {
+		t.Fatalf("datastore should remain registered after failed delete: %v", err)
+	}
+
+	if _, err := s.DeleteDataStore(ctx, &sdcpb.DeleteDataStoreRequest{Name: "ds-retry"}); err != nil {
+		t.Fatalf("retry DeleteDataStore failed: %v", err)
+	}
+	if _, err := s.datastores.GetDataStore("ds-retry"); !errors.Is(err, errUnknownDatastore) {
+		t.Fatalf("GetDataStore after delete got %v, want %v", err, errUnknownDatastore)
+	}
+}
+

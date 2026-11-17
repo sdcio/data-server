@@ -52,7 +52,7 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 	}
 
 	// retrieve the referenced datastore
-	ds, err := s.datastores.getDataStore(req.DatastoreName)
+	ds, err := s.datastores.GetDataStore(req.DatastoreName)
 	if err != nil {
 		return nil, status.Error(codes.NotFound, err.Error())
 	}

@@ -31,5 +31,8 @@ type Client interface {
 	InstanceIntentModify(ctx context.Context, cacheName string, intent *tree_persist.Intent) error
 	InstanceIntentDelete(ctx context.Context, cacheName string, intentName string, IgnoreNonExisting bool) error
 	InstanceIntentExists(ctx context.Context, cacheName string, intentName string) (bool, error)
+	// InstanceIntentGetAll streams all intents not in excludeIntentNames to intentChan, sends at most
+	// one error on errChan, and closes errChan before intentChan. A buffered errChan always receives
+	// the error; an unbuffered errChan receives it unless ctx is cancelled with no reader waiting.
 	InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error)
 }
