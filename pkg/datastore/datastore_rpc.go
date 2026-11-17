@@ -58,8 +58,10 @@ type Datastore struct {
 	m                *sync.RWMutex
 	deviationClients map[sdcpb.DataServer_WatchDeviationsServer]string
 
-	// dmutex serializes Datastore set-path work (TransactionSet/Confirm/Cancel
-	// and Sync Revert's southbound apply). Fail-fast TryLock; never block.
+	// dmutex serializes Datastore set-path work (TransactionSet/Cancel, the
+	// timer-driven transaction rollback and Sync Revert's southbound apply).
+	// Request handlers use a fail-fast TryLock and never block; only the
+	// auto rollback waits, since it has no caller to report ErrDatastoreLocked to.
 	dmutex *sync.Mutex
 
 	// TransactionManager
@@ -116,7 +118,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 		syncTreeMutex:    &sync.RWMutex{},
 		taskPool:         pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)),
 	}
-	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
+	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds), types.WithAutoRollbackLock(ds.dmutex))
 
 	// create cache instance if needed
 	// this is a blocking call

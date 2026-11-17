@@ -3,16 +3,22 @@ package types
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	treetypes "github.com/sdcio/data-server/pkg/tree/types"
+	logf "github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 )
 
 type Transaction struct {
-	transactionId      string                        // ID that identifies the Transaction
-	timer              *TransactionCancelTimer       // timer that triggers auto rollback
+	transactionId      string // ID that identifies the Transaction
+	timerMutex         sync.Mutex
+	timeout            time.Duration                 // delay until auto rollback, set via SetTimeout
+	timerCtx           context.Context               // context the auto rollback runs with
+	armed              bool                          // set once the transaction is committed and awaits Confirm
+	timer              *time.Timer                   // auto rollback timer, nil until armed
 	transactionManager *TransactionManager           // referernce to the TransactionManager this transaction is registered with
 	newIntents         map[string]*TransactionIntent // new Intents with their content
 	oldIntents         map[string]*TransactionIntent // old intents content
@@ -53,29 +59,61 @@ func (t *Transaction) IsRollback() bool {
 	return t.isRollback
 }
 
+// Confirm disarms the auto rollback. It fails for a transaction that is not committed yet.
+// Callers hold the TransactionManager lock.
 func (t *Transaction) Confirm() error {
-	if t.timer == nil {
-		return fmt.Errorf("no ongoing transaction")
+	t.timerMutex.Lock()
+	defer t.timerMutex.Unlock()
+	if !t.armed {
+		return fmt.Errorf("transaction %s is not committed yet", t.transactionId)
 	}
-	t.timer.Stop()
+	t.stopTimerLocked()
 	return nil
 }
 
-func (t *Transaction) rollback(ctx context.Context) func() {
-	return func() {
-		_ = t.transactionManager.Rollback(ctx, t.GetRollbackTransaction())
-	}
+// stopTimer prevents a pending auto rollback from being triggered.
+func (t *Transaction) stopTimer() {
+	t.timerMutex.Lock()
+	defer t.timerMutex.Unlock()
+	t.stopTimerLocked()
 }
 
-func (t *Transaction) StartRollbackTimer(ctx context.Context) error {
+func (t *Transaction) stopTimerLocked() {
 	if t.timer != nil {
-		return t.timer.Start(ctx)
+		t.timer.Stop()
 	}
+}
+
+// StartRollbackTimer marks the transaction as committed and schedules the auto rollback
+// after the timeout configured via SetTimeout. It can only be called once.
+// The scheduled rollback re-validates under the TransactionManager lock that the
+// transaction is still the registered one, so a Confirm or Cancel that stopped the
+// timer too late still wins.
+func (t *Transaction) StartRollbackTimer(ctx context.Context) error {
+	t.timerMutex.Lock()
+	defer t.timerMutex.Unlock()
+	if t.armed {
+		return fmt.Errorf("rollback timer of transaction %s already started", t.transactionId)
+	}
+	t.armed = true
+	if t.timerCtx == nil {
+		return nil
+	}
+	logf.FromContext(ctx).Info("transaction rollback timer started", "delay", t.timeout.String())
+	t.timer = time.AfterFunc(t.timeout, func() {
+		t.transactionManager.autoRollback(t.timerCtx, t)
+	})
 	return nil
 }
 
+// SetTimeout configures the delay after which an unconfirmed transaction is rolled back.
+// Only the values of ctx (e.g. the logger) are kept. Its cancellation is dropped, because
+// the request that created the transaction ends long before the timer fires.
 func (t *Transaction) SetTimeout(ctx context.Context, d time.Duration) {
-	t.timer = NewTransactionCancelTimer(d, t.rollback(ctx))
+	t.timerMutex.Lock()
+	defer t.timerMutex.Unlock()
+	t.timeout = d
+	t.timerCtx = context.WithoutCancel(ctx)
 }
 
 func (t *Transaction) GetIntentNames() []string {
@@ -90,8 +128,8 @@ func (t *Transaction) IntentCount() int {
 	return len(t.newIntents)
 }
 
+// GetRollbackTransaction builds the transaction that reverts this one. It has no side effects on the timer.
 func (t *Transaction) GetRollbackTransaction() *Transaction {
-	t.timer.Stop()
 	tr := NewTransaction(t.GetTransactionId()+" - Rollback", t.transactionManager)
 	for _, v := range t.oldIntents {
 		_ = tr.AddTransactionIntent(v, TransactionIntentNew)
