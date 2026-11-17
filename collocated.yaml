@@ -55,7 +55,6 @@ grpc-server:
   #       username: admin
   #       password: admin
   #   sync:
-  #     validate: true
   #     config:
   #     - name: config
   #       protocol: netconf
@@ -81,7 +80,6 @@ grpc-server:
 #       tls:
 #         skip-verify: true
 #     sync:
-#       validate: true
 #       gnmi:
 #         - path:
 #           - /

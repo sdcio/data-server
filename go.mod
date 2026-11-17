@@ -115,3 +115,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.3 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
+
+replace github.com/sdcio/sdc-protos => github.com/sdcio/sdc-protos v0.0.57-0.20261109153201-334b5937c4ae
