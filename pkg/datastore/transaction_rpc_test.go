@@ -181,7 +181,7 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 				dmutex:        &sync.Mutex{},
 				schemaClient:  scb,
 			}
-			ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds))
+			ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds), types.WithAutoRollbackLock(ds.dmutex))
 
 			// Prepare Transaction Request
 			transactionId := "txn-1"

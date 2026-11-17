@@ -45,6 +45,9 @@ func (s *Server) TransactionSet(ctx context.Context, req *sdcpb.TransactionSetRe
 	if req.Timeout == nil {
 		timeout = s.config.DefaultTransactionTimeout
 	} else {
+		if *req.Timeout <= 0 {
+			return nil, status.Error(codes.InvalidArgument, "transaction timeout must be greater than 0 seconds")
+		}
 		timeout = time.Duration(*req.Timeout) * time.Second
 	}
 
@@ -155,7 +158,7 @@ func (s *Server) TransactionCancel(ctx context.Context, req *sdcpb.TransactionCa
 // translateInternalToGrpcError central function to map internal errors to grpc error codes
 func translateInternalToGrpcError(err error) error {
 	switch {
-	case errors.Is(err, datastore.ErrDatastoreLocked):
+	case errors.Is(err, datastore.ErrDatastoreLocked), errors.Is(err, types.ErrTransactionOngoing):
 		return status.Error(codes.Aborted, err.Error())
 	case errors.Is(err, targettypes.ErrNotConnected):
 		return status.Error(codes.Unavailable, err.Error())
