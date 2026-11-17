@@ -61,38 +61,51 @@ func (l *LocalCache) InstanceIntentGet(ctx context.Context, cacheName string, in
 }
 
 func (l *LocalCache) InstanceIntentGetAll(ctx context.Context, cacheName string, excludeIntentNames []string, intentChanOrig chan<- *tree_persist.Intent, errChanOrig chan<- error) {
-	// cancelling on return releases the store stream if we stop consuming early
-	ctx, cancel := context.WithCancel(ctx)
+	var streamErr error
+	defer func() {
+		finishIntentStream(ctx, streamErr, intentChanOrig, errChanOrig)
+	}()
+
+	// Cancel before finishIntentStream so the store stream releases before any errChanOrig wait.
+	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// create new channels
 	intentChan := make(chan *types.Intent, 5)
 	errChan := make(chan error, 1)
 
-	go l.Cache.InstanceIntentGetAll(ctx, cacheName, excludeIntentNames, intentChan, errChan)
-
-	defer close(intentChanOrig)
-	defer close(errChanOrig)
+	go l.Cache.InstanceIntentGetAll(streamCtx, cacheName, excludeIntentNames, intentChan, errChan)
 
 	for intent := range intentChan {
-		// unmarshall it into a tree_persit.Intent
 		tpIntent := &tree_persist.Intent{}
-		err := proto.Unmarshal(intent.Data(), tpIntent)
-		if err != nil {
-			errChanOrig <- err
+		if err := proto.Unmarshal(intent.Data(), tpIntent); err != nil {
+			streamErr = err
 			return
 		}
-		// forward to caller
 		select {
 		case intentChanOrig <- tpIntent:
 		case <-ctx.Done():
-			errChanOrig <- ctx.Err()
+			streamErr = ctx.Err()
 			return
 		}
 	}
-	// the store sends its error before closing either channel
-	if err, ok := <-errChan; ok {
-		errChanOrig <- err
+	streamErr = <-errChan
+}
+
+func finishIntentStream(ctx context.Context, err error, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+	defer close(intentChan)
+	defer close(errChan)
+	if err == nil {
+		return
+	}
+	// Buffered or waiting errChan receives err even when ctx is already done.
+	select {
+	case errChan <- err:
+		return
+	default:
+	}
+	select {
+	case errChan <- err:
+	case <-ctx.Done():
 	}
 }
 

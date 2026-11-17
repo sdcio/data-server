@@ -16,6 +16,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -93,6 +94,9 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		return nil, status.Error(codes.InvalidArgument, "datastore name attribute too long")
 	}
 
+	if err := s.datastores.WaitPending(ctx, name); err != nil {
+		return nil, err
+	}
 	if _, err := s.datastores.GetDataStore(name); err == nil {
 		log.Error(nil, "datastore already exists")
 		return nil, status.Errorf(codes.InvalidArgument, "datastore %s already exists", name)
@@ -214,8 +218,9 @@ func (s *Server) CreateDataStore(ctx context.Context, req *sdcpb.CreateDataStore
 		log.Error(err, "failed creating new datastore")
 		return nil, err
 	}
-	err = s.datastores.AddDatastore(ds)
+	err = s.datastores.AddDatastore(ctx, ds)
 	if err != nil {
+		_ = ds.Stop(ctx)
 		log.Error(err, "failed adding new datastore")
 		return nil, err
 	}
@@ -234,16 +239,10 @@ func (s *Server) DeleteDataStore(ctx context.Context, req *sdcpb.DeleteDataStore
 		return nil, status.Error(codes.InvalidArgument, "missing datastore name attribute")
 	}
 
-	ds, err := s.datastores.GetDataStore(name)
-	if err != nil {
+	err := s.datastores.DeleteDatastore(ctx, name)
+	if errors.Is(err, errUnknownDatastore) {
 		return nil, err
 	}
-
-	err = ds.Stop(s.ctx)
-	if err != nil {
-		log.Error(err, "failed to stop datastore")
-	}
-	err = s.datastores.DeleteDatastore(ctx, name)
 	if err != nil {
 		log.Error(err, "failed to delete datastore")
 		return nil, fmt.Errorf("failed to delete datastore: %w", err)

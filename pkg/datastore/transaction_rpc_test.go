@@ -3,6 +3,8 @@ package datastore
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"runtime"
 	"sync"
 	"testing"
@@ -227,3 +229,71 @@ func TestTransactionSet_PreviouslyApplied(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadAllButRunningIntents_PropagatesStreamErrorAndCancelsEarly(t *testing.T) {
+	ctx := context.Background()
+	sc, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatalf("InitSDCIOSchema: %v", err)
+	}
+	scb := schemaClient.NewSchemaClientBound(schema, sc)
+
+	t.Run("stream error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		wantErr := fmt.Errorf("cache read failure")
+		ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
+		ccb.EXPECT().
+			IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+				errChan <- wantErr
+				close(errChan)
+				close(intentChan)
+			})
+
+		vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+		root, err := tree.NewTreeRoot(ctx, tree.NewTreeContext(scb, vpf))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ds := &Datastore{cacheClient: ccb, taskPool: vpf}
+		if _, err := ds.LoadAllButRunningIntents(ctx, root); !errors.Is(err, wantErr) {
+			t.Fatalf("got err %v, want %v", err, wantErr)
+		}
+	})
+
+	t.Run("import error cancels producer ctx", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		producerCancelled := make(chan struct{})
+		ccb := mockcacheclient.NewMockCacheClientBound(ctrl)
+		ccb.EXPECT().
+			IntentGetAll(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(streamCtx context.Context, _ []string, intentChan chan<- *tree_persist.Intent, errChan chan<- error) {
+				defer close(intentChan)
+				defer close(errChan)
+				intentChan <- &tree_persist.Intent{
+					IntentName: "bad",
+					Root: &tree_persist.TreeElement{
+						Childs: []*tree_persist.TreeElement{{Name: "nonexistent-schema-element"}},
+					},
+				}
+				<-streamCtx.Done()
+				close(producerCancelled)
+			})
+
+		vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+		root, err := tree.NewTreeRoot(ctx, tree.NewTreeContext(scb, vpf))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ds := &Datastore{cacheClient: ccb, taskPool: vpf}
+		if _, err := ds.LoadAllButRunningIntents(ctx, root); err == nil {
+			t.Fatal("expected import error, got nil")
+		}
+		select {
+		case <-producerCancelled:
+		case <-time.After(5 * time.Second):
+			t.Fatal("producer ctx was not cancelled on early return")
+		}
+	})
+}
+

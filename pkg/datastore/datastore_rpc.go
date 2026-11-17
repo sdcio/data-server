@@ -45,7 +45,8 @@ type Datastore struct {
 	cacheClient cache.CacheClientBound
 
 	// SBI target of this datastore
-	sbi target.Target
+	sbiMutex sync.RWMutex
+	sbi      target.Target
 
 	// schema server client
 	// schemaClient sdcpb.SchemaServerClient
@@ -171,13 +172,38 @@ func (d *Datastore) initCache(ctx context.Context) error {
 	}
 }
 
+// installSBI publishes sbi onto the datastore unless ctx was cancelled while connecting,
+// in which case sbi is closed immediately so Stop cannot miss it.
+func (d *Datastore) installSBI(ctx context.Context, sbi target.Target) error {
+	if !d.setSBI(ctx, sbi) {
+		_ = sbi.Close(ctx)
+		return ctx.Err()
+	}
+	return nil
+}
+
+func (d *Datastore) setSBI(ctx context.Context, sbi target.Target) bool {
+	d.sbiMutex.Lock()
+	defer d.sbiMutex.Unlock()
+	if ctx.Err() != nil {
+		return false
+	}
+	d.sbi = sbi
+	return true
+}
+
+func (d *Datastore) getSBI() target.Target {
+	d.sbiMutex.RLock()
+	defer d.sbiMutex.RUnlock()
+	return d.sbi
+}
+
 func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) error {
 	log := logf.FromContext(ctx)
 
-	var err error
-	d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, d, d.config.Sync.Config, d.taskPool, opts...)
+	sbi, err := target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, d, d.config.Sync.Config, d.taskPool, opts...)
 	if err == nil {
-		return nil
+		return d.installSBI(ctx, sbi)
 	}
 
 	log.Error(err, "failed to create DS target")
@@ -189,12 +215,12 @@ func (d *Datastore) connectSBI(ctx context.Context, opts ...grpc.DialOption) err
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			d.sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, d, d.config.Sync.Config, d.taskPool, opts...)
+			sbi, err = target.New(ctx, d.config.Name, d.config.SBI, d.schemaClient, d, d.config.Sync.Config, d.taskPool, opts...)
 			if err != nil {
 				log.Error(err, "failed to create DS target")
 				continue
 			}
-			return nil
+			return d.installSBI(ctx, sbi)
 		}
 	}
 }
@@ -220,10 +246,11 @@ func (d *Datastore) Delete(ctx context.Context) error {
 }
 
 func (d *Datastore) ConnectionState() *targettypes.TargetStatus {
-	if d.sbi == nil {
+	sbi := d.getSBI()
+	if sbi == nil {
 		return targettypes.NewTargetStatus(sdcpb.TargetStatus_NOT_CONNECTED)
 	}
-	return d.sbi.Status()
+	return sbi.Status()
 }
 
 func (d *Datastore) Stop(ctx context.Context) error {
@@ -231,10 +258,11 @@ func (d *Datastore) Stop(ctx context.Context) error {
 		return nil
 	}
 	d.cfn()
-	if d.sbi == nil {
+	sbi := d.getSBI()
+	if sbi == nil {
 		return nil
 	}
-	err := d.sbi.Close(ctx)
+	err := sbi.Close(ctx)
 	if err != nil {
 		logf.DefaultLogger.Error(err, "datastore failed to close the target connection", "datastore-name", d.Name())
 	}
