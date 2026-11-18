@@ -16,6 +16,7 @@ package netconf
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -37,10 +38,14 @@ import (
 type ncTarget struct {
 	name string
 
-	// dm guards driver and reconnecting. driver is nil while disconnected.
-	dm           sync.RWMutex
-	driver       Driver
-	reconnecting bool
+	// dm guards driver, reconnecting, and nextCapsReconnect. driver is nil while disconnected.
+	dm                sync.RWMutex
+	driver            Driver
+	reconnecting      bool
+	nextCapsReconnect time.Time
+
+	// capsReconnectCooldown overrides defaultCapabilitiesReconnectCooldown when positive.
+	capsReconnectCooldown time.Duration
 
 	// lifeCtx outlives individual requests and is cancelled by Close; it
 	// bounds the background reconnect loop. A nil lifeCtx means no bound.
@@ -174,6 +179,9 @@ func (t *ncTarget) internalGet(ctx context.Context, req *sdcpb.GetDataRequest) (
 		if isTransportError(err) {
 			return nil, t.handleTransportError(ctx, drv, err)
 		}
+		if errors.Is(err, nctypes.ErrCapabilitiesChanged) {
+			return nil, t.handleCapabilitiesChanged(ctx, drv, err)
+		}
 		return nil, err
 	}
 	log.V(logf.VTrace).Info("received netconf response", "response", ncResponse.DocAsString(false))
@@ -244,16 +252,74 @@ func (t *ncTarget) Status() *types.TargetStatus {
 // dead peer.
 func (t *ncTarget) handleTransportError(ctx context.Context, failed Driver, err error) error {
 	t.dm.Lock()
-	if t.driver == failed {
+	if failed != nil && t.driver == failed {
 		t.driver = nil
 		if !t.reconnecting {
 			t.reconnecting = true
-			go t.reconnect(logf.IntoContext(t.reconnectCtx(), logf.FromContext(ctx)))
+			go t.reconnect(logf.IntoContext(t.reconnectCtx(), logf.FromContext(ctx)), 0)
 		}
 	}
 	t.dm.Unlock()
 
-	go func() { _ = failed.Close() }()
+	if failed != nil {
+		go func() { _ = failed.Close() }()
+	}
+	return fmt.Errorf("%s: %w: %w", t.name, types.ErrNotConnected, err)
+}
+
+// defaultCapabilitiesReconnectCooldown is the minimum interval between two
+// reconnect dials triggered by a capabilities-changed rpc-error.
+const defaultCapabilitiesReconnectCooldown = 30 * time.Second
+
+func (t *ncTarget) capabilitiesCooldown() time.Duration {
+	if t.capsReconnectCooldown > 0 {
+		return t.capsReconnectCooldown
+	}
+	return defaultCapabilitiesReconnectCooldown
+}
+
+// handleCapabilitiesChanged retires failed after a capabilities-changed
+// rpc-error and schedules a background reconnect so the new session performs a
+// fresh hello exchange.
+//
+// Dials triggered by capabilities-changed are spaced by at least the target's
+// capabilities cooldown; if another session hits capabilities-changed inside
+// that window, it is still retired immediately while dialing waits out the
+// remaining cooldown.
+func (t *ncTarget) handleCapabilitiesChanged(ctx context.Context, failed Driver, err error) error {
+	log := logf.FromContext(ctx)
+	cooldown := t.capabilitiesCooldown()
+
+	var (
+		retired bool
+		delay   time.Duration
+	)
+	t.dm.Lock()
+	if failed != nil && t.driver == failed {
+		retired = true
+		t.driver = nil
+		now := time.Now()
+		if now.Before(t.nextCapsReconnect) {
+			delay = t.nextCapsReconnect.Sub(now)
+		}
+		t.nextCapsReconnect = now.Add(delay).Add(cooldown)
+		if !t.reconnecting {
+			t.reconnecting = true
+			go t.reconnect(logf.IntoContext(t.reconnectCtx(), log), delay)
+		}
+	}
+	t.dm.Unlock()
+
+	if retired {
+		if delay > 0 {
+			log.Info("device reports capabilities-changed within cooldown, delaying reconnect", "delay", delay, "error", err.Error())
+		} else {
+			log.Info("device reports capabilities-changed, reconnecting", "error", err.Error())
+		}
+	}
+	if failed != nil {
+		go func() { _ = failed.Close() }()
+	}
 	return fmt.Errorf("%s: %w: %w", t.name, types.ErrNotConnected, err)
 }
 
@@ -282,13 +348,25 @@ func (t *ncTarget) Close(ctx context.Context) error {
 	return drv.Close()
 }
 
-// reconnect retries opening a driver every ConnectRetry until it succeeds or
-// ctx is cancelled. Only one reconnect runs at a time (see reconnecting).
-func (t *ncTarget) reconnect(ctx context.Context) {
+// reconnect opens a replacement driver, waiting initialDelay before the first
+// attempt and retrying every ConnectRetry until one succeeds or ctx ends. Only
+// one reconnect runs at a time (see reconnecting).
+func (t *ncTarget) reconnect(ctx context.Context, initialDelay time.Duration) {
 	log := logf.FromContext(ctx)
 	newDriver := t.newDriver
 	if newDriver == nil {
 		newDriver = newScrapligoDriver
+	}
+
+	if initialDelay > 0 {
+		timer := time.NewTimer(initialDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			t.finishReconnect(ctx, nil)
+			return
+		case <-timer.C:
+		}
 	}
 
 	log.Info("NETCONF reconnecting")
@@ -378,6 +456,9 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 		if isTransportError(err) {
 			return nil, t.handleTransportError(ctx, drv, err)
 		}
+		if errors.Is(err, nctypes.ErrCapabilitiesChanged) {
+			return nil, t.handleCapabilitiesChanged(ctx, drv, err)
+		}
 
 		// candidate should discard on error
 		if commitDatastore == config.NCCommitDatastoreCandidate {
@@ -402,6 +483,9 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 		if err != nil {
 			if isTransportError(err) {
 				return nil, t.handleTransportError(ctx, drv, err)
+			}
+			if errors.Is(err, nctypes.ErrCapabilitiesChanged) {
+				return nil, t.handleCapabilitiesChanged(ctx, drv, err)
 			}
 			return nil, err
 		}

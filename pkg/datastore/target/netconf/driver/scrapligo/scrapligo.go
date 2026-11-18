@@ -19,12 +19,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/beevik/etree"
 	scraplinetconf "github.com/scrapli/scrapligo/driver/netconf"
 	"github.com/scrapli/scrapligo/driver/options"
+	"github.com/scrapli/scrapligo/response"
 	"github.com/scrapli/scrapligo/util"
 
 	"github.com/sdcio/data-server/pkg/config"
@@ -54,6 +56,60 @@ func normalizeTransportError(err error) error {
 		return fmt.Errorf("%w: %w", os.ErrDeadlineExceeded, err)
 	}
 	return err
+}
+
+// rpcFailure returns resp.Failed, wrapping it with types.ErrCapabilitiesChanged
+// when the unchunked XML reply contains an error-severity rpc-error with
+// error-tag resource-denied and error-app-tag capabilities-changed.
+func rpcFailure(resp *response.NetconfResponse) error {
+	if resp.Failed == nil {
+		return nil
+	}
+	if hasCapabilitiesChangedError(resp.Result) {
+		return fmt.Errorf("%w: %w", types.ErrCapabilitiesChanged, resp.Failed)
+	}
+	return resp.Failed
+}
+
+// hasCapabilitiesChangedError parses xmlReply rather than inspecting
+// scrapligo's ErrorMessages, which runs before NETCONF 1.1 unchunking and skips
+// namespace-prefixed rpc-error elements.
+func hasCapabilitiesChangedError(xmlReply string) bool {
+	if xmlReply == "" {
+		return false
+	}
+	doc := etree.NewDocument()
+	if err := doc.ReadFromString(xmlReply); err != nil || doc.Root() == nil {
+		return false
+	}
+	return containsCapabilitiesChanged(doc.Root())
+}
+
+func containsCapabilitiesChanged(el *etree.Element) bool {
+	if el.Tag == "rpc-error" {
+		return isCapabilitiesChangedRPCError(el)
+	}
+	for _, child := range el.ChildElements() {
+		if containsCapabilitiesChanged(child) {
+			return true
+		}
+	}
+	return false
+}
+
+func isCapabilitiesChangedRPCError(rpcErr *etree.Element) bool {
+	var severity, tag, appTag string
+	for _, child := range rpcErr.ChildElements() {
+		switch child.Tag {
+		case "error-severity":
+			severity = strings.TrimSpace(child.Text())
+		case "error-tag":
+			tag = strings.TrimSpace(child.Text())
+		case "error-app-tag":
+			appTag = strings.TrimSpace(child.Text())
+		}
+	}
+	return severity == "error" && tag == "resource-denied" && appTag == "capabilities-changed"
 }
 
 // closeTimeout bounds how long Close waits for scrapligo's graceful shutdown.
@@ -152,8 +208,8 @@ func (snt *ScrapligoNetconfTarget) EditConfig(target string, config string) (*ty
 	if err != nil {
 		return nil, normalizeTransportError(err)
 	}
-	if len(resp.ErrorMessages) > 0 {
-		return nil, resp.Failed
+	if resp.Failed != nil && (len(resp.ErrorMessages) > 0 || hasCapabilitiesChangedError(resp.Result)) {
+		return nil, rpcFailure(resp)
 	}
 
 	// creating a new etree Document and parsing the netconf rpc result
@@ -177,7 +233,7 @@ func (snt *ScrapligoNetconfTarget) GetConfig(source string, filter string) (*typ
 		return nil, normalizeTransportError(err)
 	}
 	if resp.Failed != nil {
-		return nil, resp.Failed
+		return nil, rpcFailure(resp)
 	}
 
 	// creating a new etree Document and parsing the netconf rpc result
@@ -209,7 +265,7 @@ func (snt *ScrapligoNetconfTarget) Commit() error {
 		return normalizeTransportError(err)
 	}
 	if resp.Failed != nil {
-		return resp.Failed
+		return rpcFailure(resp)
 	}
 	return nil
 }
@@ -220,7 +276,7 @@ func (snt *ScrapligoNetconfTarget) Discard() error {
 		return normalizeTransportError(err)
 	}
 	if resp.Failed != nil {
-		return resp.Failed
+		return rpcFailure(resp)
 	}
 	return nil
 }
@@ -231,7 +287,7 @@ func (snt *ScrapligoNetconfTarget) Get(filter string) (*types.NetconfResponse, e
 		return nil, normalizeTransportError(err)
 	}
 	if resp.Failed != nil {
-		return nil, resp.Failed
+		return nil, rpcFailure(resp)
 	}
 	x := etree.NewDocument()
 	err = x.ReadFromString(resp.Result)
@@ -256,7 +312,7 @@ func (snt *ScrapligoNetconfTarget) Lock(target string) (*types.NetconfResponse, 
 		return nil, normalizeTransportError(err)
 	}
 	if resp.Failed != nil {
-		return nil, resp.Failed
+		return nil, rpcFailure(resp)
 	}
 	x := etree.NewDocument()
 	err = x.ReadFromString(resp.Result)
@@ -273,7 +329,7 @@ func (snt *ScrapligoNetconfTarget) Unlock(target string) (*types.NetconfResponse
 		return nil, normalizeTransportError(err)
 	}
 	if resp.Failed != nil {
-		return nil, resp.Failed
+		return nil, rpcFailure(resp)
 	}
 	x := etree.NewDocument()
 	err = x.ReadFromString(resp.Result)
@@ -290,7 +346,7 @@ func (snt *ScrapligoNetconfTarget) Validate(source string) (*types.NetconfRespon
 		return nil, normalizeTransportError(err)
 	}
 	if resp.Failed != nil {
-		return nil, resp.Failed
+		return nil, rpcFailure(resp)
 	}
 	x := etree.NewDocument()
 	err = x.ReadFromString(resp.Result)
@@ -307,7 +363,7 @@ func (snt *ScrapligoNetconfTarget) CopyConfig(source, target string) (*types.Net
 		return nil, normalizeTransportError(err)
 	}
 	if resp.Failed != nil {
-		return nil, resp.Failed
+		return nil, rpcFailure(resp)
 	}
 	x := etree.NewDocument()
 	err = x.ReadFromString(resp.Result)

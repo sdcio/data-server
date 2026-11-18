@@ -22,9 +22,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/scrapli/scrapligo/response"
 	"github.com/scrapli/scrapligo/util"
 
 	"github.com/sdcio/data-server/pkg/config"
+	nctypes "github.com/sdcio/data-server/pkg/datastore/target/netconf/types"
 )
 
 func Test_normalizeTransportError(t *testing.T) {
@@ -165,4 +167,98 @@ func Test_BlackholedPeer_SurfacesAsDeadlineExceeded(t *testing.T) {
 		t.Errorf("expected os.ErrDeadlineExceeded, got %v", err)
 	}
 	closeWithin(t, d, closeTimeout+2*time.Second)
+}
+
+func Test_rpcFailure(t *testing.T) {
+	const capsChanged = `<rpc-reply xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="1">` +
+		`<rpc-error>` +
+		`<error-type>application</error-type>` +
+		`<error-tag>resource-denied</error-tag>` +
+		`<error-severity>error</error-severity>` +
+		`<error-app-tag>capabilities-changed</error-app-tag>` +
+		`</rpc-error>` +
+		`</rpc-reply>`
+	const prefixed = `<nc:rpc-reply xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="1">` +
+		`<nc:rpc-error>` +
+		`<nc:error-type>application</nc:error-type>` +
+		`<nc:error-tag> resource-denied </nc:error-tag>` +
+		`<nc:error-severity>error</nc:error-severity>` +
+		`<nc:error-app-tag> capabilities-changed </nc:error-app-tag>` +
+		`</nc:rpc-error>` +
+		`</nc:rpc-reply>`
+	const warningThenCapsChanged = `<rpc-reply message-id="1">` +
+		`<rpc-error><error-tag>operation-failed</error-tag><error-severity>warning</error-severity></rpc-error>` +
+		`<rpc-error><error-type>application</error-type><error-tag>resource-denied</error-tag><error-severity>error</error-severity><error-app-tag>capabilities-changed</error-app-tag></rpc-error>` +
+		`</rpc-reply>`
+	const warningSeverity = `<rpc-reply message-id="1">` +
+		`<rpc-error><error-type>application</error-type><error-tag>resource-denied</error-tag><error-severity>warning</error-severity><error-app-tag>capabilities-changed</error-app-tag></rpc-error>` +
+		`</rpc-reply>`
+	const tagOnly = `<rpc-reply message-id="1"><rpc-error><error-tag>resource-denied</error-tag><error-severity>error</error-severity></rpc-error></rpc-reply>`
+	const appTagOnly = `<rpc-reply message-id="1"><rpc-error><error-tag>operation-failed</error-tag><error-severity>error</error-severity><error-app-tag>capabilities-changed</error-app-tag></rpc-error></rpc-reply>`
+	const splitAcrossErrors = `<rpc-reply message-id="1">` +
+		`<rpc-error><error-tag>resource-denied</error-tag><error-severity>error</error-severity></rpc-error>` +
+		`<rpc-error><error-tag>operation-failed</error-tag><error-severity>error</error-severity><error-app-tag>capabilities-changed</error-app-tag></rpc-error>` +
+		`</rpc-reply>`
+
+	tests := []struct {
+		name   string
+		result string
+		want   bool
+	}{
+		{"capabilities-changed", capsChanged, true},
+		{"namespace-prefixed with whitespace", prefixed, true},
+		{"warning followed by capabilities-changed", warningThenCapsChanged, true},
+		{"warning severity only", warningSeverity, false},
+		{"resource-denied alone", tagOnly, false},
+		{"app-tag alone", appTagOnly, false},
+		{"tags spread over different rpc-errors", splitAcrossErrors, false},
+		{"malformed xml", "<rpc-reply><rpc-error>", false},
+		{"empty result", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			failed := errors.New("rpc failed")
+			got := rpcFailure(&response.NetconfResponse{Result: tt.result, Failed: failed})
+			if !errors.Is(got, failed) {
+				t.Errorf("original failure must stay discoverable, got %v", got)
+			}
+			if gotCaps := errors.Is(got, nctypes.ErrCapabilitiesChanged); gotCaps != tt.want {
+				t.Errorf("ErrCapabilitiesChanged = %v, want %v", gotCaps, tt.want)
+			}
+		})
+	}
+}
+
+func Test_CapabilitiesChanged_OverSSH(t *testing.T) {
+	s := newFakeNetconfServer(t)
+	d := newTestTarget(t, s, 5*time.Second)
+	defer closeWithin(t, d, time.Second)
+
+	s.setReplyBody(`<rpc-error>` +
+		`<error-type>application</error-type>` +
+		`<error-tag>resource-denied</error-tag>` +
+		`<error-severity>error</error-severity>` +
+		`<error-app-tag>capabilities-changed</error-app-tag>` +
+		`</rpc-error>`)
+
+	if _, err := d.GetConfig("running", ""); !errors.Is(err, nctypes.ErrCapabilitiesChanged) {
+		t.Errorf("GetConfig error = %v, want ErrCapabilitiesChanged", err)
+	}
+	if _, err := d.EditConfig("running", "<interface/>"); !errors.Is(err, nctypes.ErrCapabilitiesChanged) {
+		t.Errorf("EditConfig error = %v, want ErrCapabilitiesChanged", err)
+	}
+
+	s.setReplyBody(`<rpc-error>` +
+		`<error-type>application</error-type>` +
+		`<error-tag>resource-denied</error-tag>` +
+		`<error-severity>error</error-severity>` +
+		`</rpc-error>`)
+
+	_, err := d.GetConfig("running", "")
+	if err == nil {
+		t.Fatal("expected GetConfig error for resource-denied")
+	}
+	if errors.Is(err, nctypes.ErrCapabilitiesChanged) {
+		t.Errorf("plain resource-denied must not match ErrCapabilitiesChanged, got %v", err)
+	}
 }
