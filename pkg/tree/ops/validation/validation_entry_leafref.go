@@ -85,7 +85,11 @@ func breadthSearch(ctx context.Context, e api.Entry, sdcpbPath *sdcpb.Path) ([]a
 				// add the entry to the childs list
 				childs = append(childs, entry)
 			}
-			resultEntries = append(resultEntries, childs...)
+			for _, c := range childs {
+				if c.RemainsToExist() {
+					resultEntries = append(resultEntries, c)
+				}
+			}
 		}
 		processEntries = resultEntries
 		count++

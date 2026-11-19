@@ -36,6 +36,9 @@ func toJsonInternal(ctx context.Context, e api.Entry, onlyNewOrUpdated bool, iet
 	case nil:
 		// we're operating on a key level, no schema attached, but the
 		// ancestor is a list with keys.
+		if !e.RemainsToExist() {
+			return nil, nil
+		}
 		result := map[string]any{}
 
 		for key, c := range e.GetChilds(types.DescendMethodActiveChilds) {

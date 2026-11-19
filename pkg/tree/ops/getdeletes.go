@@ -25,44 +25,21 @@ func getDeletesInternal(e api.Entry, deletes types.DeleteEntriesList, aggregateP
 	return getRegularDeletes(e, deletes, aggregatePaths)
 }
 
-// getAggregatedDeletes is called on levels that have no schema attached, meaning key schemas.
-// here we might delete the whole branch of the tree, if all key elements are being deleted
-// if not, we continue with regular deletes
+// getAggregatedDeletes emits a list-entry delete at the terminal key level when
+// the entry is marked for deletion, and otherwise descends into child entries.
 func getAggregatedDeletes(e api.Entry, deletes []types.DeleteEntry, aggregatePaths bool) ([]types.DeleteEntry, error) {
 	var err error
-	// we take a look into the level(s) up
-	// trying to get the schema
 	ancestor, level := GetFirstAncestorWithSchema(e)
-
-	// check if the first schema on the path upwards (parents)
-	// has keys defined (meaning is a contianer with keys)
 	keys := GetSchemaKeys(ancestor)
 
-	// if keys exist and we're on the last level of the keys, validate
-	// if aggregation can happen
-	if len(keys) > 0 && level == len(keys) {
-		doAggregateDelete := true
-		// check the keys for deletion
-		for _, n := range keys {
-			c, exists := e.GetChildMap().GetEntry(n)
-			// these keys should always exist, so for now we do not catch the non existing key case
-			if exists && !c.ShouldDelete() {
-				// if not all the keys are marked for deletion, we need to revert to regular deletion
-				doAggregateDelete = false
-				break
-			}
+	if len(keys) > 0 {
+		if level == len(keys) && e.ShouldDelete() {
+			return append(deletes, e), nil
 		}
-		// if aggregate delete is possible do it
-		if doAggregateDelete {
-			// by adding the key path to the deletes
-			deletes = append(deletes, e)
-		} else {
-			// otherwise continue with deletion on the childs.
-			for _, c := range e.GetChildMap().GetAll() {
-				deletes, err = getDeletesInternal(c, deletes, aggregatePaths)
-				if err != nil {
-					return nil, err
-				}
+		for _, c := range e.GetChildMap().GetAll() {
+			deletes, err = getDeletesInternal(c, deletes, aggregatePaths)
+			if err != nil {
+				return nil, err
 			}
 		}
 		return deletes, nil
@@ -74,7 +51,7 @@ func getAggregatedDeletes(e api.Entry, deletes []types.DeleteEntry, aggregatePat
 func getRegularDeletes(e api.Entry, deletes types.DeleteEntriesList, aggregate bool) (types.DeleteEntriesList, error) {
 	var err error
 
-	if e.ShouldDelete() && !e.IsRoot() && len(GetSchemaKeys(e)) == 0 {
+	if e.ShouldDelete() && !e.IsRoot() && e.GetSchema() != nil && len(GetSchemaKeys(e)) == 0 {
 		return append(deletes, e), nil
 	}
 
