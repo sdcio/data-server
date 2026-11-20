@@ -547,7 +547,8 @@ func Test_ncTarget_CapabilitiesChanged_CloseCancelsCooldownWait(t *testing.T) {
 	d := mocknetconf.NewMockDriver(mockCtrl)
 	d.EXPECT().IsAlive().AnyTimes().Return(true)
 	d.EXPECT().GetConfig(gomock.Any(), gomock.Any()).Return(nil, capsChangedErr())
-	d.EXPECT().Close().Return(nil)
+	closed := make(chan struct{})
+	d.EXPECT().Close().DoAndReturn(func() error { close(closed); return nil })
 
 	ctx, stop := context.WithCancel(context.Background())
 	tr := &ncTarget{
@@ -578,6 +579,13 @@ func Test_ncTarget_CapabilitiesChanged_CloseCancelsCooldownWait(t *testing.T) {
 			t.Fatal("Close did not cancel pending cooldown wait")
 		}
 		time.Sleep(time.Millisecond)
+	}
+
+	// the stale driver is closed in the background; wait so gomock sees the call
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("failed driver was not closed")
 	}
 }
 
