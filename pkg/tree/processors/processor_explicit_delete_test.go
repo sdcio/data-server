@@ -306,7 +306,7 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 			}
 
 			// get the resulting deletes
-			dels, err := root.GetDeletes(true)
+			dels, err := root.GetDeletes()
 			if err != nil {
 				t.Error(err)
 				return

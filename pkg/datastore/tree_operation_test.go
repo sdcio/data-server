@@ -1541,7 +1541,7 @@ func TestDatastore_populateTree(t *testing.T) {
 			}
 
 			// get the deletes that are meant to be send down towards the device
-			deletes, err := root.GetDeletes(true)
+			deletes, err := root.GetDeletes()
 			if err != nil {
 				t.Error(err)
 			}

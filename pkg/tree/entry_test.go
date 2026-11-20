@@ -1258,7 +1258,7 @@ func Test_Entry_Delete_Aggregation(t *testing.T) {
 	t.Log(root.String())
 
 	// retrieve the Deletes
-	deletesSlices, err := root.GetDeletes(true)
+	deletesSlices, err := root.GetDeletes()
 	if err != nil {
 		t.Error(err)
 	}
@@ -2252,7 +2252,7 @@ func Test_RevertNonRevertive(t *testing.T) {
 
 			t.Logf("Tree:\n%s", root.String())
 
-			deletes, err := root.GetDeletes(true)
+			deletes, err := root.GetDeletes()
 			if err != nil {
 				t.Fatalf("failed to get deletes: %v", err)
 			}

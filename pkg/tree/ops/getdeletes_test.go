@@ -112,7 +112,7 @@ func TestGetDeletes_MultiKeyListEntryDeletion(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			dels, err := ops.GetDeletes(root.Entry, true)
+			dels, err := ops.GetDeletes(root.Entry)
 			if err != nil {
 				t.Fatal(err)
 			}
