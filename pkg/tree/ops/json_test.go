@@ -12,7 +12,9 @@ import (
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/consts"
+	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/ops"
+	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
@@ -462,3 +464,99 @@ func TestToJsonTable(t *testing.T) {
 		})
 	}
 }
+
+func TestToJson_DeletedListEntryWithUnmanagedRunningLeafOmittedInFullView(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	p := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	tc := tree.NewTreeContext(scb, p)
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	intentJSON := map[string]any{
+		"interface": []any{
+			map[string]any{
+				"name":        "ethernet-1/1",
+				"description": "Foo",
+			},
+		},
+	}
+	runningJSON := map[string]any{
+		"interface": []any{
+			map[string]any{
+				"name":        "ethernet-1/1",
+				"description": "Foo",
+				"mtu":         float64(1500),
+			},
+			map[string]any{
+				"name":        "ethernet-1/2",
+				"description": "Keep",
+			},
+		},
+	}
+
+	if _, err := root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(intentJSON, "intent1", 10, false), testhelper.FlagsExisting, p); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(runningJSON, consts.RunningIntentName, consts.RunningValuesPrio, false), testhelper.FlagsExisting, p); err != nil {
+		t.Fatal(err)
+	}
+	if err := processors.NewOwnerDeleteMarker(&processors.OwnerDeleteMarkerProcessorParams{Owner: "intent1", OnlyIntended: false}).Run(root.Entry, p); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.FinishInsertionPhase(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := ops.ToJson(ctx, root.Entry, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotBytes, err := json.MarshalIndent(got, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := `{
+  "interface": [
+    {
+      "description": "Keep",
+      "name": "ethernet-1/2"
+    }
+  ]
+}`
+	if diff := cmp.Diff(want, string(gotBytes)); diff != "" {
+		t.Fatalf("ToJson() mismatch (-want +got):\n%s", diff)
+	}
+
+	gotIETF, err := ops.ToJsonIETF(ctx, root.Entry, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotIETFBytes, err := json.MarshalIndent(gotIETF, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantIETF := `{
+  "sdcio_model_if:interface": [
+    {
+      "description": "Keep",
+      "name": "ethernet-1/2"
+    }
+  ]
+}`
+	if diff := cmp.Diff(wantIETF, string(gotIETFBytes)); diff != "" {
+		t.Fatalf("ToJsonIETF() mismatch (-want +got):\n%s", diff)
+	}
+}
+

@@ -1050,6 +1050,62 @@ func Test_sharedEntryAttributes_validateMandatory(t *testing.T) {
 			},
 			want: []*types.ValidationResultEntry{},
 		},
+		{
+			name: "deleted list entry with unmanaged child skips mandatory check",
+			r: func(t *testing.T) *RootEntry {
+				mockCtrl := gomock.NewController(t)
+				defer mockCtrl.Finish()
+
+				scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				p := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+				tc := NewTreeContext(scb, p)
+				root, err := NewTreeRoot(ctx, tc)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				intentCfg := &sdcio_schema.Device{
+					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
+						{Key1: "k11.1", Key2: "k21.2"}: {
+							Key1:    ygot.String("k11.1"),
+							Key2:    ygot.String("k21.2"),
+							Mandato: ygot.String("val1"),
+						},
+					},
+				}
+				runningCfg := &sdcio_schema.Device{
+					Doublekey: map[sdcio_schema.SdcioModel_Doublekey_Key]*sdcio_schema.SdcioModel_Doublekey{
+						{Key1: "k11.1", Key2: "k21.2"}: {
+							Key1:    ygot.String("k11.1"),
+							Key2:    ygot.String("k21.2"),
+							Mandato: ygot.String("val1"),
+							Cont: &sdcio_schema.SdcioModel_Doublekey_Cont{
+								Value1: ygot.String("unmanaged"),
+							},
+						},
+					},
+				}
+				if _, err := testhelper.LoadYgotStructIntoTreeRoot(ctx, intentCfg, root.Entry, owner1, 5, false, testhelper.FlagsExisting); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := testhelper.LoadYgotStructIntoTreeRoot(ctx, runningCfg, root.Entry, consts.RunningIntentName, consts.RunningValuesPrio, false, testhelper.FlagsExisting); err != nil {
+					t.Fatal(err)
+				}
+				if err := processors.NewOwnerDeleteMarker(&processors.OwnerDeleteMarkerProcessorParams{Owner: owner1, OnlyIntended: false}).Run(root.Entry, p); err != nil {
+					t.Fatal(err)
+				}
+				if err := root.FinishInsertionPhase(ctx); err != nil {
+					t.Fatal(err)
+				}
+
+				return root
+			},
+			want: []*types.ValidationResultEntry{},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1216,7 +1272,7 @@ func Test_sharedEntryAttributes_ReApply(t *testing.T) {
 			}
 			fmt.Println(newRoot.String())
 
-			deleteList, err := newRoot.GetDeletes(true)
+			deleteList, err := newRoot.GetDeletes()
 			if err != nil {
 				t.Error(err)
 			}
