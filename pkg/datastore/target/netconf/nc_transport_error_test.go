@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -86,8 +87,13 @@ func failingDriverFactory(*config.SBI) (Driver, error) { return nil, errors.New(
 
 func rpcReplyDoc(t *testing.T) *etree.Document {
 	t.Helper()
+	return replyDoc(t, "<rpc-reply></rpc-reply>")
+}
+
+func replyDoc(t *testing.T, xml string) *etree.Document {
+	t.Helper()
 	doc := etree.NewDocument()
-	if err := doc.ReadFromString("<rpc-reply></rpc-reply>"); err != nil {
+	if err := doc.ReadFromString(xml); err != nil {
 		t.Fatalf("building rpc-reply doc: %v", err)
 	}
 	return doc
@@ -211,7 +217,7 @@ func Test_ncTarget_setToDevice_Commit_TransportError(t *testing.T) {
 	d := mocknetconf.NewMockDriver(mockCtrl)
 	d.EXPECT().IsAlive().AnyTimes().Return(true)
 	d.EXPECT().EditConfig(gomock.Any(), gomock.Any()).Return(&nctypes.NetconfResponse{Doc: rpcReplyDoc(t)}, nil)
-	d.EXPECT().Commit().Return(io.EOF)
+	d.EXPECT().Commit().Return(nil, io.EOF)
 	d.EXPECT().Close().DoAndReturn(func() error { closed <- struct{}{}; return nil })
 
 	tr := &ncTarget{
@@ -232,6 +238,57 @@ func Test_ncTarget_setToDevice_Commit_TransportError(t *testing.T) {
 	case <-closed:
 	case <-time.After(time.Second):
 		t.Error("failed driver was not closed")
+	}
+}
+
+func Test_ncTarget_setToDevice_Commit_NonTransportError_DiscardsCandidate(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	d := mocknetconf.NewMockDriver(mockCtrl)
+	d.EXPECT().IsAlive().AnyTimes().Return(true)
+	commitErr := errors.New("rpc-error: commit validation failed")
+	gomock.InOrder(
+		d.EXPECT().EditConfig(gomock.Any(), gomock.Any()).Return(&nctypes.NetconfResponse{Doc: rpcReplyDoc(t)}, nil),
+		d.EXPECT().Commit().Return(nil, commitErr),
+		d.EXPECT().Discard().Return(nil),
+	)
+	// Close must NOT be called for a non-transport error.
+
+	tr := &ncTarget{
+		name:      "dev1",
+		driver:    d,
+		sbiConfig: testSBIConfig(),
+		newDriver: failingDriverFactory,
+	}
+
+	_, err := tr.setToDevice(context.Background(), config.NCCommitDatastoreCandidate, newFakeTargetSource())
+	if !errors.Is(err, commitErr) {
+		t.Errorf("expected the commit error to be returned, got %v", err)
+	}
+	if errors.Is(err, types.ErrNotConnected) {
+		t.Errorf("did not expect errors.Is(err, types.ErrNotConnected), got %v", err)
+	}
+}
+
+func Test_ncTarget_setToDevice_ReturnsEditAndCommitWarnings(t *testing.T) {
+	const warning = `<rpc-error><error-severity>warning</error-severity><error-message>%s</error-message></rpc-error>`
+	mockCtrl := gomock.NewController(t)
+	d := mocknetconf.NewMockDriver(mockCtrl)
+	d.EXPECT().IsAlive().AnyTimes().Return(true)
+	d.EXPECT().EditConfig(gomock.Any(), gomock.Any()).Return(&nctypes.NetconfResponse{
+		Doc: replyDoc(t, "<rpc-reply>"+fmt.Sprintf(warning, "edit")+"</rpc-reply>"),
+	}, nil)
+	d.EXPECT().Commit().Return(&nctypes.NetconfResponse{
+		Doc: replyDoc(t, "<rpc-reply>"+fmt.Sprintf(warning, "commit")+"</rpc-reply>"),
+	}, nil)
+
+	tr := &ncTarget{name: "dev1", driver: d, sbiConfig: testSBIConfig(), newDriver: failingDriverFactory}
+
+	rsp, err := tr.setToDevice(context.Background(), config.NCCommitDatastoreCandidate, newFakeTargetSource())
+	if err != nil {
+		t.Fatalf("setToDevice: %v", err)
+	}
+	if len(rsp.Warnings) != 2 || !strings.Contains(rsp.Warnings[0], "edit") || !strings.Contains(rsp.Warnings[1], "commit") {
+		t.Errorf("expected edit and commit warnings, got %q", rsp.Warnings)
 	}
 }
 
@@ -384,7 +441,7 @@ func Test_ncTarget_setToDevice_Commit_CapabilitiesChanged_Reconnects(t *testing.
 	d := mocknetconf.NewMockDriver(mockCtrl)
 	d.EXPECT().IsAlive().AnyTimes().Return(true)
 	d.EXPECT().EditConfig(gomock.Any(), gomock.Any()).Return(&nctypes.NetconfResponse{Doc: rpcReplyDoc(t)}, nil)
-	d.EXPECT().Commit().Return(capsChangedErr())
+	d.EXPECT().Commit().Return(nil, capsChangedErr())
 	d.EXPECT().Close().DoAndReturn(func() error { closed <- struct{}{}; return nil })
 
 	ctx, stop := context.WithCancel(context.Background())

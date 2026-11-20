@@ -449,6 +449,13 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 		return nil, err
 	}
 
+	// leftover candidate changes would otherwise be pushed by the next commit
+	discard := func() {
+		if err := drv.Discard(); err != nil {
+			log.Error(err, "failed while discarding pending changes")
+		}
+	}
+
 	// edit the config
 	resp, err := drv.EditConfig(commitDatastore, xdoc)
 	if err != nil {
@@ -459,14 +466,8 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 		if errors.Is(err, nctypes.ErrCapabilitiesChanged) {
 			return nil, t.handleCapabilitiesChanged(ctx, drv, err)
 		}
-
-		// candidate should discard on error
 		if commitDatastore == config.NCCommitDatastoreCandidate {
-			err2 := drv.Discard()
-			if err2 != nil {
-				// log failed discard
-				log.Error(err2, "failed while discarding pending changes")
-			}
+			discard()
 		}
 		return nil, err
 	}
@@ -478,17 +479,23 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 	// candidate stores need to commit the changes to running
 	if commitDatastore == config.NCCommitDatastoreCandidate {
 		log.Info("committing changes on target")
-		// commit the config
-		err = drv.Commit()
+		commitResp, err := drv.Commit()
 		if err != nil {
+			log.Error(err, "failed during commit")
 			if isTransportError(err) {
 				return nil, t.handleTransportError(ctx, drv, err)
 			}
 			if errors.Is(err, nctypes.ErrCapabilitiesChanged) {
 				return nil, t.handleCapabilitiesChanged(ctx, drv, err)
 			}
+			discard()
 			return nil, err
 		}
+		commitWarnings, err := filterRPCErrors(commitResp.Doc, "warning")
+		if err != nil {
+			return nil, fmt.Errorf("filtering netconf rpc-errors with severity warnings: %w", err)
+		}
+		rpcWarnings = append(rpcWarnings, commitWarnings...)
 	}
 	return &sdcpb.SetDataResponse{
 		Warnings:  rpcWarnings,
