@@ -62,9 +62,9 @@ func normalizeTransportError(err error) error {
 // warning, the same way for every RPC.
 //
 // The decision is made on the parsed reply rather than on scrapligo's
-// classification: resp.Failed is also set for warning-only replies, and
-// resp.ErrorMessages misses namespace-prefixed elements and tags split by
-// NETCONF 1.1 chunk markers.
+// classification: resp.Failed is also set for warning-only replies and for an
+// rpc-error element inside <data>, and resp.ErrorMessages misses
+// namespace-prefixed elements and tags split by NETCONF 1.1 chunk markers.
 func parseReply(resp *response.NetconfResponse) (*etree.Document, error) {
 	doc := etree.NewDocument()
 	if err := doc.ReadFromString(resp.Result); err != nil {
@@ -73,9 +73,8 @@ func parseReply(resp *response.NetconfResponse) (*etree.Document, error) {
 		}
 		return nil, err
 	}
-	rpcErrs := doc.FindElements("//rpc-error")
 	var failing []*etree.Element
-	for _, e := range rpcErrs {
+	for _, e := range replyRPCErrors(doc) {
 		if childText(e, "error-severity") != "warning" {
 			failing = append(failing, e)
 		}
@@ -83,11 +82,33 @@ func parseReply(resp *response.NetconfResponse) (*etree.Document, error) {
 	if len(failing) > 0 {
 		return nil, replyError(resp, failing)
 	}
-	// scrapligo flagged a failure that is not an rpc-error, e.g. 1.1 framing
-	if len(rpcErrs) == 0 && resp.Failed != nil {
+	// scrapligo flagged a failure that no rpc-error in the reply explains, e.g. 1.1 framing
+	if resp.Failed != nil && len(doc.FindElements("//rpc-error")) == 0 {
 		return nil, resp.Failed
 	}
 	return doc, nil
+}
+
+// replyRPCErrors returns the reply's rpc-errors at any depth, since some
+// devices nest them (Junos <commit-results>), but not inside the reply's
+// <data>: that is device content returned by get, get-config, and get-data.
+func replyRPCErrors(doc *etree.Document) []*etree.Element {
+	root := doc.Root()
+	if root == nil {
+		return nil
+	}
+	var errs []*etree.Element
+	for _, c := range root.ChildElements() {
+		switch c.Tag {
+		case "data":
+			// device content, never an rpc-error of this reply
+		case "rpc-error":
+			errs = append(errs, c)
+		default:
+			errs = append(errs, c.FindElements(".//rpc-error")...)
+		}
+	}
+	return errs
 }
 
 // replyError returns resp.Failed (or an equivalent error when scrapligo missed
