@@ -159,7 +159,10 @@ func (r *RootEntry) FinishInsertionPhase(ctx context.Context) error {
 			// navigate to the stated path
 			entry, err := ops.NavigateSdcpbPath(ctx, r.Entry, path)
 			if err != nil {
+				// nothing to delete below a path the tree does not have; running the processor
+				// on the nil entry panicked (e.g. a sweeper on a node with factory config)
 				log.Error(nil, "Applying explicit delete - path not found, skipping", "severity", "WARN", "path", path.ToXPath(false))
+				continue
 			}
 			edp := processors.NewExplicitDeleteProcessor(&processors.ExplicitDeleteTaskParams{Owner: deletePathPrio.GetOwner(), Priority: deletePathPrio.GetPrio()})
 			err = edp.Run(ctx, entry, r.GetTreeContext().PoolFactory())
