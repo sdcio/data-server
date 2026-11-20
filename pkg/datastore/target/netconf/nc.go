@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -408,12 +409,16 @@ func (t *ncTarget) finishReconnect(ctx context.Context, d Driver) bool {
 }
 
 // filterRPCErrors takes the given etree.Document, filters the document for rpc-errors with the given severity
-// and returns them collectively as a []string
+// and returns them collectively as a []string. The severity is compared after trimming whitespace, matching
+// how the driver classifies rpc-errors, and the document is left unmodified.
 func filterRPCErrors(xml *etree.Document, severity string) ([]string, error) {
 	var result []string
-	rpcErrs := xml.FindElements(fmt.Sprintf("//rpc-error[error-severity='%s']", severity))
-	for _, rpcErr := range rpcErrs {
-		d := etree.NewDocumentWithRoot(rpcErr)
+	for _, rpcErr := range xml.FindElements("//rpc-error") {
+		sev := rpcErr.SelectElement("error-severity")
+		if sev == nil || strings.TrimSpace(sev.Text()) != severity {
+			continue
+		}
+		d := etree.NewDocumentWithRoot(rpcErr.Copy())
 		s, err := d.WriteToString()
 		if err != nil {
 			return nil, err

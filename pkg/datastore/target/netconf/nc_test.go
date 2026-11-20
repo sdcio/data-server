@@ -365,6 +365,17 @@ func Test_filterRPCErrors(t *testing.T) {
 		<error-severity>error</error-severity>
 		<error-message>warning2</error-message>
 	  </rpc-error>
+	  <rpc-error>
+		<error-severity> warning </error-severity>
+		<error-message>padded</error-message>
+	  </rpc-error>
+	  <nc:rpc-error xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+		<nc:error-severity>warning</nc:error-severity>
+		<nc:error-message>prefixed</nc:error-message>
+	  </nc:rpc-error>
+	  <rpc-error>
+		<error-message>no severity</error-message>
+	  </rpc-error>
 	</data>
 	`
 
@@ -384,16 +395,16 @@ func Test_filterRPCErrors(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "one",
+			name: "warning",
 			args: args{
 				xml:      doc,
 				severity: "warning",
 			},
-			wantlen: 2,
+			wantlen: 4,
 			wantErr: false,
 		},
 		{
-			name: "one",
+			name: "error",
 			args: args{
 				xml:      doc,
 				severity: "error",
@@ -413,5 +424,8 @@ func Test_filterRPCErrors(t *testing.T) {
 				t.Errorf("expected %d entries got %d", tt.wantlen, len(got))
 			}
 		})
+	}
+	if n := len(doc.FindElements("//rpc-error")); n != 6 {
+		t.Errorf("filterRPCErrors must not modify the document, %d of 6 rpc-errors left", n)
 	}
 }
