@@ -177,12 +177,9 @@ func (t *gnmiTarget) Set(ctx context.Context, source targetTypes.TargetSource) (
 			return nil, err
 		}
 		if jsonData != nil {
-			jsonBytes, err := json.Marshal(jsonData)
+			upds, err = jsonUpdatesPerTopLevelElement(jsonData)
 			if err != nil {
 				return nil, err
-			}
-			if len(jsonBytes) > 0 {
-				upds = []*sdcpb.Update{{Path: &sdcpb.Path{}, Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: jsonBytes}}}}
 			}
 		}
 
