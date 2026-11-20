@@ -33,6 +33,12 @@ func getListEntrySortFunc(parent api.Entry) func(a, b api.Entry) int {
 			aEntry := aLvSlice[0]
 			bEntry := bLvSlice[0]
 
+			// explicit deletes (sweepers) carry an empty value, which Cmp cannot order;
+			// treat them as equal on this key, like the missing-variant case above
+			if aEntry.Value().GetValue() == nil || bEntry.Value().GetValue() == nil {
+				return 0
+			}
+
 			cmpResult = aEntry.Value().Cmp(bEntry.Value())
 			if cmpResult != 0 {
 				return cmpResult
