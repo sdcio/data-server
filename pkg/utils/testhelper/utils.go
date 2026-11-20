@@ -156,3 +156,22 @@ func SplitStringSortDiff(a, b string, sep string) string {
 	}
 	return cmp.Diff(splits[0], splits[1])
 }
+
+// FindBlameElement walks a BlameTreeElement path by child element names.
+func FindBlameElement(elem *sdcpb.BlameTreeElement, names ...string) *sdcpb.BlameTreeElement {
+	cur := elem
+	for _, name := range names {
+		if cur == nil {
+			return nil
+		}
+		var next *sdcpb.BlameTreeElement
+		for _, c := range cur.GetChilds() {
+			if c.GetName() == name {
+				next = c
+				break
+			}
+		}
+		cur = next
+	}
+	return cur
+}

@@ -19,7 +19,7 @@ func validateRange(_ context.Context, e api.Entry, resultChan chan<- *types.Vali
 		return
 	}
 
-	lv := e.GetLeafVariants().GetHighestPrecedence(false, true, false)
+	lv := validatedLeafVariant(e)
 	if lv == nil {
 		return
 	}

@@ -121,7 +121,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 }
 
 func (d *Datastore) NewEmptyTree(ctx context.Context) (*tree.RootEntry, error) {
-	tc := tree.NewTreeContext(d.schemaClient, d.taskPool)
+	tc := d.newTreeContext()
 	newTree, err := tree.NewTreeRoot(ctx, tc)
 	if err != nil {
 		return nil, err

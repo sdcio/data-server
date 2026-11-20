@@ -26,8 +26,14 @@ func validateMustStatements(ctx context.Context, e api.Entry, resultChan chan<- 
 	case *sdcpb.SchemaElem_Container:
 		mustStatements = schem.Container.GetMustStatements()
 	case *sdcpb.SchemaElem_Leaflist:
+		if validatedLeafVariant(e) == nil {
+			return
+		}
 		mustStatements = schem.Leaflist.GetMustStatements()
 	case *sdcpb.SchemaElem_Field:
+		if validatedLeafVariant(e) == nil {
+			return
+		}
 		mustStatements = schem.Field.GetMustStatements()
 	}
 

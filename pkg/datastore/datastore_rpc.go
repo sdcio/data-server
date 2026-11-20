@@ -73,6 +73,8 @@ type Datastore struct {
 	syncTree      *tree.RootEntry
 	syncTreeMutex *sync.RWMutex
 
+	confirmedApplied *confirmedAppliedValues
+
 	taskPool *pool.SharedTaskPool
 }
 
@@ -98,7 +100,8 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 	)
 
 	scb := schemaClient.NewSchemaClientBound(c.Schema, sc)
-	tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	confirmed := newConfirmedAppliedValues()
+	tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)), tree.WithConfirmedAppliedValues(confirmed))
 	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
 	if err != nil {
 		cancel()
@@ -118,6 +121,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 		deviationClients: make(map[sdcpb.DataServer_WatchDeviationsServer]string),
 		syncTree:         syncTreeRoot,
 		syncTreeMutex:    &sync.RWMutex{},
+		confirmedApplied: confirmed,
 		taskPool:         pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)),
 	}
 	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds), types.WithAutoRollbackLock(ds.dmutex))
@@ -271,11 +275,14 @@ func (d *Datastore) Stop(ctx context.Context) error {
 	return nil
 }
 
+func (d *Datastore) newTreeContext() *tree.TreeContext {
+	return tree.NewTreeContext(d.schemaClient, d.taskPool, tree.WithConfirmedAppliedValues(d.confirmedApplied))
+}
+
 func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdcpb.BlameTreeElement, error) {
 	log := logf.FromContext(ctx).WithName("BlameConfig")
 	ctx = logf.IntoContext(ctx, log)
 
-	// create a new TreeRoot by copying the syncTree
 	d.syncTreeMutex.RLock()
 	root, err := d.syncTree.DeepCopy(ctx)
 	d.syncTreeMutex.RUnlock()

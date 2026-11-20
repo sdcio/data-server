@@ -41,7 +41,7 @@ func validatePattern(_ context.Context, e api.Entry, resultChan chan<- *types.Va
 			return
 		}
 
-		lv := e.GetLeafVariants().GetHighestPrecedence(false, true, false)
+		lv := validatedLeafVariant(e)
 		if lv == nil {
 			return
 		}

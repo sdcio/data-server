@@ -10,7 +10,6 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	"google.golang.org/protobuf/proto"
 )
 
 type BlameConfigProcessor struct {
@@ -85,25 +84,20 @@ func (t *BlameConfigTask) Run(ctx context.Context, submit func(pool.Task) error)
 		}
 	}
 
-	// process Value
-	highestLe := t.selfEntry.GetLeafVariants().GetHighestPrecedence(false, true, true)
+	lvs := t.selfEntry.GetLeafVariants()
+	highestLe := lvs.GetHighestPrecedence(false, true, true)
 	if highestLe != nil {
 		if highestLe.Owner() != consts.DefaultsIntentName || t.context.IncludeDefaults {
 			t.self.SetValue(highestLe.Value()).SetOwner(highestLe.Owner())
 
-			// check if running equals the expected
-			runningLe := t.selfEntry.GetLeafVariants().GetRunning()
+			runningLe := lvs.GetRunning()
 
 			switch {
 			case runningLe != nil:
-				// if running value is different from the highest precedence value, then we have a deviation,
-				// so we set the deviation value to the running value
-				if !proto.Equal(runningLe.Value(), highestLe.Value()) {
+				if !api.TypedValuesEqual(runningLe.Value(), lvs.DriftBaseline(highestLe)) {
 					t.self.SetDeviationValue(runningLe.Value())
 				}
 			case runningLe == nil && highestLe.Owner() != consts.DefaultsIntentName:
-				// if running is nil and highest is not from default, then the deviation is from a non-existing running value,
-				// so we set it to empty
 				t.self.SetDeviationValue(&sdcpb.TypedValue{})
 			}
 		}
