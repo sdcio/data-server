@@ -339,6 +339,67 @@ func expectEmptySet(t *testing.T, sbi *mocktarget.MockTarget) *gomock.Call {
 		}).Times(1)
 }
 
+func hashedPasswordPath() *sdcpb.Path {
+	return &sdcpb.Path{Elem: []*sdcpb.PathElem{
+		sdcpb.NewPathElem("system", nil),
+		sdcpb.NewPathElem("hashed-password", nil),
+	}}
+}
+
+func expectHashedPasswordSetAndReadback(
+	t *testing.T,
+	f *mowDatastoreFixture,
+	wantCleartext string,
+	readback string,
+	onReadback func(),
+) {
+	t.Helper()
+	setCall := f.sbi.EXPECT().
+		Set(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(setCtx context.Context, source targettypes.TargetSource) (*sdcpb.SetDataResponse, error) {
+			upds, err := source.ToProtoUpdates(setCtx, true)
+			if err != nil {
+				return nil, err
+			}
+			if got := updatesByXPath(upds)["/system/hashed-password"]; got != wantCleartext {
+				t.Fatalf("southbound value = %q, want %q", got, wantCleartext)
+			}
+			return &sdcpb.SetDataResponse{}, nil
+		})
+	f.sbi.EXPECT().Get(gomock.Any(), gomock.Any()).After(setCall).DoAndReturn(
+		func(_ context.Context, req *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+			if len(req.GetPath()) != 1 || req.GetPath()[0].ToXPath(false) != "/system/hashed-password" {
+				t.Fatalf("targeted Get paths = %v, want /system/hashed-password", req.GetPath())
+			}
+			if onReadback != nil {
+				onReadback()
+			}
+			return &sdcpb.GetDataResponse{
+				Notification: []*sdcpb.Notification{{
+					Update: []*sdcpb.Update{{
+						Path:  hashedPasswordPath(),
+						Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: readback}},
+					}},
+				}},
+			}, nil
+		})
+}
+
+func assertRunningHashedPassword(t *testing.T, ds *Datastore, want string) {
+	t.Helper()
+	runningResp, err := ds.GetIntent(context.Background(), consts.RunningIntentName)
+	if err != nil {
+		t.Fatalf("GetIntent(running): %v", err)
+	}
+	runningUpds, err := runningResp.ToProtoUpdates(context.Background())
+	if err != nil {
+		t.Fatalf("runningResp.ToProtoUpdates: %v", err)
+	}
+	if got := updatesByXPath(runningUpds)["/system/hashed-password"]; got != want {
+		t.Fatalf("Running hashed-password = %q, want %q", got, want)
+	}
+}
+
 func TestConfirmedAppliedValues_CanonicalMultiKeyPrefixSorting(t *testing.T) {
 	store := newConfirmedAppliedValues()
 	prefixed := &sdcpb.Path{
@@ -539,6 +600,355 @@ func TestDatastore_MutateOnWrite_SingleCommitConvergenceAndReads(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDatastore_MutateOnWrite_RevertiveDriftRecapturesConfirmedValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	f := newMOWDatastoreFixture(t, ctrl)
+	ctx := context.Background()
+
+	const (
+		cleartext = "MyS3cret!"
+		hashV1    = "$6$salt1$hash1"
+		driftHash = "$6$other$hash"
+		hashV2    = "$6$salt2$hash2"
+	)
+
+	expectHashedPasswordSetAndReadback(t, f, cleartext, hashV1, nil)
+
+	intent := buildJSONIntent(t, f.ds, "intent1", 10, false, map[string]any{
+		"system": map[string]any{"hashed-password": cleartext},
+	})
+	if _, err := f.ds.TransactionSet(ctx, "tx-1", []*types.TransactionIntent{intent}, nil, time.Minute, false); err != nil {
+		t.Fatalf("TransactionSet: %v", err)
+	}
+	if err := f.ds.TransactionConfirm(ctx, "tx-1"); err != nil {
+		t.Fatalf("TransactionConfirm: %v", err)
+	}
+
+	expectHashedPasswordSetAndReadback(t, f, cleartext, hashV2, func() {
+		_, lockErr := f.ds.TransactionSet(context.Background(), "concurrent-sync-readback", nil, nil, time.Minute, false)
+		if !errors.Is(lockErr, ErrDatastoreLocked) {
+			t.Errorf("concurrent TransactionSet during sync readback returned %v, want ErrDatastoreLocked", lockErr)
+		}
+	})
+
+	if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(map[string]any{
+		"system": map[string]any{"hashed-password": driftHash},
+	}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+		t.Fatalf("ApplyToRunning(drift): %v", err)
+	}
+
+	assertRunningHashedPassword(t, f.ds, hashV2)
+
+	if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(map[string]any{
+		"system": map[string]any{"hashed-password": hashV2},
+	}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+		t.Fatalf("ApplyToRunning(converged): %v", err)
+	}
+}
+
+func TestDatastore_MutateOnWrite_NonRevertiveValueDriftReportsNotApplied(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	f := newMOWDatastoreFixture(t, ctrl)
+	ctx := context.Background()
+
+	const (
+		cleartext = "MyS3cret!"
+		hashV1    = "$6$salt1$hash1"
+		driftHash = "$6$other$hash"
+	)
+	expectHashedPasswordSetAndReadback(t, f, cleartext, hashV1, nil)
+
+	intent := buildJSONIntent(t, f.ds, "intent1", 10, true, map[string]any{
+		"system": map[string]any{"hashed-password": cleartext},
+	})
+	if _, err := f.ds.TransactionSet(ctx, "tx-1", []*types.TransactionIntent{intent}, nil, time.Minute, false); err != nil {
+		t.Fatalf("TransactionSet: %v", err)
+	}
+	if err := f.ds.TransactionConfirm(ctx, "tx-1"); err != nil {
+		t.Fatalf("TransactionConfirm: %v", err)
+	}
+
+	if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
+		jsonImporter.NewJsonTreeImporter(map[string]any{
+			"system": map[string]any{"hashed-password": driftHash},
+		}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+		t.Fatalf("ApplyToRunning(drift): %v", err)
+	}
+
+	events := collectWatchDeviationsBatch(t, f.ds)
+	for _, ev := range events {
+		if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE &&
+			ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED &&
+			ev.GetIntent() == "intent1" &&
+			ev.GetPath().ToXPath(false) == "/system/hashed-password" {
+			if ev.GetExpectedValue().GetStringVal() != cleartext || ev.GetCurrentValue().GetStringVal() != driftHash {
+				t.Fatalf("NOT_APPLIED expected/current = (%v, %v), want (%q, %q)",
+					ev.GetExpectedValue(), ev.GetCurrentValue(), cleartext, driftHash)
+			}
+			return
+		}
+	}
+	t.Fatalf("expected NOT_APPLIED for mutate-on-write value drift, got %v", events)
+}
+
+func TestDatastore_MutateOnWrite_DeletedLeafDrift(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		nonRevertive bool
+	}{
+		{name: "revertive intent restores and recaptures", nonRevertive: false},
+		{name: "non-revertive intent reports not applied", nonRevertive: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			f := newMOWDatastoreFixture(t, ctrl)
+			ctx := context.Background()
+
+			const (
+				cleartext = "MyS3cret!"
+				hashV1    = "$6$salt1$hash1"
+				hashV2    = "$6$salt2$hash2"
+			)
+			expectHashedPasswordSetAndReadback(t, f, cleartext, hashV1, nil)
+
+			intent := buildJSONIntent(t, f.ds, "intent1", 10, tc.nonRevertive, map[string]any{
+				"system": map[string]any{"hashed-password": cleartext},
+			})
+			if _, err := f.ds.TransactionSet(ctx, "tx-1", []*types.TransactionIntent{intent}, nil, time.Minute, false); err != nil {
+				t.Fatalf("TransactionSet: %v", err)
+			}
+			if err := f.ds.TransactionConfirm(ctx, "tx-1"); err != nil {
+				t.Fatalf("TransactionConfirm: %v", err)
+			}
+
+			if !tc.nonRevertive {
+				expectHashedPasswordSetAndReadback(t, f, cleartext, hashV2, nil)
+			}
+
+			if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
+				jsonImporter.NewJsonTreeImporter(map[string]any{
+					"system": map[string]any{"hostname": "still-present"},
+				}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+				t.Fatalf("ApplyToRunning(delete): %v", err)
+			}
+
+			if tc.nonRevertive {
+				events := collectWatchDeviationsBatch(t, f.ds)
+				found := false
+				for _, ev := range events {
+					if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE &&
+						ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED &&
+						ev.GetIntent() == "intent1" &&
+						ev.GetPath().ToXPath(false) == "/system/hashed-password" {
+						found = true
+					}
+				}
+				if !found {
+					t.Fatalf("expected NOT_APPLIED for deleted mutate-on-write leaf, got %v", events)
+				}
+				return
+			}
+
+			assertRunningHashedPassword(t, f.ds, hashV2)
+			if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
+				jsonImporter.NewJsonTreeImporter(map[string]any{
+					"system": map[string]any{"hashed-password": hashV2},
+				}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+				t.Fatalf("ApplyToRunning(restored deletion converged): %v", err)
+			}
+		})
+	}
+}
+
+func TestDatastore_MutateOnWrite_PriorityTakeoverAndDeletionPromotion(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	f := newMOWDatastoreFixture(t, ctrl)
+	ctx := context.Background()
+
+	const (
+		lowCleartext  = "LowSecret!"
+		highCleartext = "HighSecret!"
+		hashV1        = "$6$low-epoch1$hash"
+		hashV2        = "$6$high-epoch$hash"
+		hashV3        = "$6$low-epoch2$hash"
+	)
+	expectHashedPasswordSetAndReadback(t, f, lowCleartext, hashV1, nil)
+	lowIntent := buildJSONIntent(t, f.ds, "low-owner", 20, false, map[string]any{
+		"system": map[string]any{"hashed-password": lowCleartext},
+	})
+	if _, err := f.ds.TransactionSet(ctx, "tx-low", []*types.TransactionIntent{lowIntent}, nil, time.Minute, false); err != nil {
+		t.Fatalf("TransactionSet(low): %v", err)
+	}
+	if err := f.ds.TransactionConfirm(ctx, "tx-low"); err != nil {
+		t.Fatalf("TransactionConfirm(low): %v", err)
+	}
+
+	expectHashedPasswordSetAndReadback(t, f, highCleartext, hashV2, nil)
+	highIntent := buildJSONIntent(t, f.ds, "high-owner", 5, false, map[string]any{
+		"system": map[string]any{"hashed-password": highCleartext},
+	})
+	if _, err := f.ds.TransactionSet(ctx, "tx-high", []*types.TransactionIntent{highIntent}, nil, time.Minute, false); err != nil {
+		t.Fatalf("TransactionSet(high): %v", err)
+	}
+	if err := f.ds.TransactionConfirm(ctx, "tx-high"); err != nil {
+		t.Fatalf("TransactionConfirm(high): %v", err)
+	}
+	if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
+		jsonImporter.NewJsonTreeImporter(map[string]any{
+			"system": map[string]any{"hashed-password": hashV2},
+		}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+		t.Fatalf("ApplyToRunning(high owner converged): %v", err)
+	}
+
+	deleteHigh, err := f.ds.SdcpbTransactionIntentToInternalTI(ctx, &sdcpb.TransactionIntent{
+		Intent:   "high-owner",
+		Priority: 5,
+		Delete:   true,
+	})
+	if err != nil {
+		t.Fatalf("build high-owner deletion: %v", err)
+	}
+	expectHashedPasswordSetAndReadback(t, f, lowCleartext, hashV3, nil)
+	if _, err := f.ds.TransactionSet(ctx, "tx-delete-high", []*types.TransactionIntent{deleteHigh}, nil, time.Minute, false); err != nil {
+		t.Fatalf("TransactionSet(delete high): %v", err)
+	}
+	if err := f.ds.TransactionConfirm(ctx, "tx-delete-high"); err != nil {
+		t.Fatalf("TransactionConfirm(delete high): %v", err)
+	}
+
+	if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
+		jsonImporter.NewJsonTreeImporter(map[string]any{
+			"system": map[string]any{"hashed-password": hashV3},
+		}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+		t.Fatalf("ApplyToRunning(promoted owner converged): %v", err)
+	}
+}
+
+func TestDatastore_MutateOnWrite_UnconfirmedTransactionRollbackRecapturesPriorOwner(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		undo func(t *testing.T, f *mowDatastoreFixture, rollbackDone <-chan struct{})
+	}{
+		{
+			name: "TransactionCancel",
+			undo: func(t *testing.T, f *mowDatastoreFixture, _ <-chan struct{}) {
+				t.Helper()
+				if err := f.ds.TransactionCancel(context.Background(), "tx-change"); err != nil {
+					t.Fatalf("TransactionCancel: %v", err)
+				}
+			},
+		},
+		{
+			name: "rollback timer expiry",
+			undo: func(t *testing.T, f *mowDatastoreFixture, rollbackDone <-chan struct{}) {
+				t.Helper()
+				select {
+				case <-rollbackDone:
+				case <-time.After(3 * time.Second):
+					t.Fatal("timed out waiting for automatic rollback")
+				}
+				if err := f.ds.TransactionConfirm(context.Background(), "tx-change"); err == nil ||
+					!strings.Contains(err.Error(), "no active transaction") {
+					t.Fatalf("TransactionConfirm after timer rollback = %v, want no active transaction", err)
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			f := newMOWDatastoreFixture(t, ctrl)
+			ctx := context.Background()
+
+			const (
+				oldCleartext = "OldSecret!"
+				newCleartext = "NewSecret!"
+				hashV1       = "$6$old-epoch1$hash"
+				hashV2       = "$6$new-epoch$hash"
+				hashV3       = "$6$old-epoch2$hash"
+			)
+			expectHashedPasswordSetAndReadback(t, f, oldCleartext, hashV1, nil)
+			oldIntent := buildJSONIntent(t, f.ds, "owner", 10, false, map[string]any{
+				"system": map[string]any{"hashed-password": oldCleartext},
+			})
+			if _, err := f.ds.TransactionSet(ctx, "tx-initial", []*types.TransactionIntent{oldIntent}, nil, time.Minute, false); err != nil {
+				t.Fatalf("TransactionSet(initial): %v", err)
+			}
+			if err := f.ds.TransactionConfirm(ctx, "tx-initial"); err != nil {
+				t.Fatalf("TransactionConfirm(initial): %v", err)
+			}
+
+			expectHashedPasswordSetAndReadback(t, f, newCleartext, hashV2, nil)
+			changedIntent := buildJSONIntent(t, f.ds, "owner", 10, false, map[string]any{
+				"system": map[string]any{"hashed-password": newCleartext},
+			})
+			timeout := time.Minute
+			if tc.name == "rollback timer expiry" {
+				timeout = 100 * time.Millisecond
+			}
+			if _, err := f.ds.TransactionSet(ctx, "tx-change", []*types.TransactionIntent{changedIntent}, nil, timeout, false); err != nil {
+				t.Fatalf("TransactionSet(change): %v", err)
+			}
+
+			rollbackDone := make(chan struct{})
+			expectHashedPasswordSetAndReadback(t, f, oldCleartext, hashV3, func() { close(rollbackDone) })
+			tc.undo(t, f, rollbackDone)
+
+			assertRunningHashedPassword(t, f.ds, hashV3)
+
+			if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
+				jsonImporter.NewJsonTreeImporter(map[string]any{
+					"system": map[string]any{"hashed-password": hashV3},
+				}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+				t.Fatalf("ApplyToRunning(rollback converged): %v", err)
+			}
+		})
+	}
+}
+
+func TestDatastore_MutateOnWrite_TransactionCancelRollsBackNewLeafToAbsence(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	f := newMOWDatastoreFixture(t, ctrl)
+	ctx := context.Background()
+
+	const (
+		cleartext = "NewSecret!"
+		hash      = "$6$new$hash"
+	)
+	expectHashedPasswordSetAndReadback(t, f, cleartext, hash, nil)
+	intent := buildJSONIntent(t, f.ds, "owner", 10, false, map[string]any{
+		"system": map[string]any{"hashed-password": cleartext},
+	})
+	if _, err := f.ds.TransactionSet(ctx, "tx-new", []*types.TransactionIntent{intent}, nil, time.Minute, false); err != nil {
+		t.Fatalf("TransactionSet(new leaf): %v", err)
+	}
+
+	f.sbi.EXPECT().
+		Set(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(setCtx context.Context, source targettypes.TargetSource) (*sdcpb.SetDataResponse, error) {
+			upds, err := source.ToProtoUpdates(setCtx, true)
+			if err != nil {
+				return nil, err
+			}
+			dels, err := source.ToProtoDeletes(setCtx)
+			if err != nil {
+				return nil, err
+			}
+			if len(upds) != 0 || len(dels) != 1 {
+				t.Fatalf("rollback diff = updates %v, deletes %v; want one deletion and no updates", upds, dels)
+			}
+			deletePath := dels[0].ToXPath(false)
+			if deletePath != "/system" && deletePath != "/system/hashed-password" {
+				t.Fatalf("rollback delete path = %q, want hashed-password or its now-empty parent", deletePath)
+			}
+			return &sdcpb.SetDataResponse{}, nil
+		})
+
+	if err := f.ds.TransactionCancel(ctx, "tx-new"); err != nil {
+		t.Fatalf("TransactionCancel: %v", err)
+	}
+	assertRunningHashedPassword(t, f.ds, "")
 }
 
 func TestDatastore_MutateOnWrite_NonRepushValidationAndLeafList(t *testing.T) {

@@ -146,18 +146,14 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error 
 	if err != nil {
 		return err
 	}
+	updates := t.GetHighestPrecedence(true)
 
 	// if we have deletes, we need to perform an apply
 	performApply := len(del) > 0
 
 	// if no deletes, check if we have updates
 	if !performApply {
-		updList, err := ops.ToProtoUpdates(ctx, t.Entry, true)
-		if err != nil {
-			return err
-		}
-		// if the update list is non-empty, we need to perform an apply
-		performApply = len(updList) > 0
+		performApply = len(updates) > 0
 	}
 
 	if performApply {
@@ -175,6 +171,14 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error 
 		resp, err := d.applyIntent(ctx, adapter.NewEntryOutputAdapter(t.Entry))
 		if err != nil {
 			log.Error(err, "failed applying deviations to running", "response", utils.ProtoJSON(resp))
+			return nil
+		}
+		mutateOnWritePaths := collectPushedMutateOnWritePaths(updates)
+		if len(mutateOnWritePaths) > 0 {
+			readbacks := d.fetchMutateOnWriteReadbacks(ctx, mutateOnWritePaths)
+			if err := d.applyReadbacksAndWriteBackRunning(ctx, updates, del, readbacks); err != nil {
+				return err
+			}
 		}
 	}
 
