@@ -17,7 +17,10 @@ package netconf
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -84,8 +87,13 @@ func failingDriverFactory(*config.SBI) (Driver, error) { return nil, errors.New(
 
 func rpcReplyDoc(t *testing.T) *etree.Document {
 	t.Helper()
+	return replyDoc(t, "<rpc-reply></rpc-reply>")
+}
+
+func replyDoc(t *testing.T, xml string) *etree.Document {
+	t.Helper()
 	doc := etree.NewDocument()
-	if err := doc.ReadFromString("<rpc-reply></rpc-reply>"); err != nil {
+	if err := doc.ReadFromString(xml); err != nil {
 		t.Fatalf("building rpc-reply doc: %v", err)
 	}
 	return doc
@@ -209,7 +217,7 @@ func Test_ncTarget_setToDevice_Commit_TransportError(t *testing.T) {
 	d := mocknetconf.NewMockDriver(mockCtrl)
 	d.EXPECT().IsAlive().AnyTimes().Return(true)
 	d.EXPECT().EditConfig(gomock.Any(), gomock.Any()).Return(&nctypes.NetconfResponse{Doc: rpcReplyDoc(t)}, nil)
-	d.EXPECT().Commit().Return(io.EOF)
+	d.EXPECT().Commit().Return(nil, io.EOF)
 	d.EXPECT().Close().DoAndReturn(func() error { closed <- struct{}{}; return nil })
 
 	tr := &ncTarget{
@@ -230,6 +238,57 @@ func Test_ncTarget_setToDevice_Commit_TransportError(t *testing.T) {
 	case <-closed:
 	case <-time.After(time.Second):
 		t.Error("failed driver was not closed")
+	}
+}
+
+func Test_ncTarget_setToDevice_Commit_NonTransportError_DiscardsCandidate(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	d := mocknetconf.NewMockDriver(mockCtrl)
+	d.EXPECT().IsAlive().AnyTimes().Return(true)
+	commitErr := errors.New("rpc-error: commit validation failed")
+	gomock.InOrder(
+		d.EXPECT().EditConfig(gomock.Any(), gomock.Any()).Return(&nctypes.NetconfResponse{Doc: rpcReplyDoc(t)}, nil),
+		d.EXPECT().Commit().Return(nil, commitErr),
+		d.EXPECT().Discard().Return(nil),
+	)
+	// Close must NOT be called for a non-transport error.
+
+	tr := &ncTarget{
+		name:      "dev1",
+		driver:    d,
+		sbiConfig: testSBIConfig(),
+		newDriver: failingDriverFactory,
+	}
+
+	_, err := tr.setToDevice(context.Background(), config.NCCommitDatastoreCandidate, newFakeTargetSource())
+	if !errors.Is(err, commitErr) {
+		t.Errorf("expected the commit error to be returned, got %v", err)
+	}
+	if errors.Is(err, types.ErrNotConnected) {
+		t.Errorf("did not expect errors.Is(err, types.ErrNotConnected), got %v", err)
+	}
+}
+
+func Test_ncTarget_setToDevice_ReturnsEditAndCommitWarnings(t *testing.T) {
+	const warning = `<rpc-error><error-severity>warning</error-severity><error-message>%s</error-message></rpc-error>`
+	mockCtrl := gomock.NewController(t)
+	d := mocknetconf.NewMockDriver(mockCtrl)
+	d.EXPECT().IsAlive().AnyTimes().Return(true)
+	d.EXPECT().EditConfig(gomock.Any(), gomock.Any()).Return(&nctypes.NetconfResponse{
+		Doc: replyDoc(t, "<rpc-reply>"+fmt.Sprintf(warning, "edit")+"</rpc-reply>"),
+	}, nil)
+	d.EXPECT().Commit().Return(&nctypes.NetconfResponse{
+		Doc: replyDoc(t, "<rpc-reply>"+fmt.Sprintf(warning, "commit")+"</rpc-reply>"),
+	}, nil)
+
+	tr := &ncTarget{name: "dev1", driver: d, sbiConfig: testSBIConfig(), newDriver: failingDriverFactory}
+
+	rsp, err := tr.setToDevice(context.Background(), config.NCCommitDatastoreCandidate, newFakeTargetSource())
+	if err != nil {
+		t.Fatalf("setToDevice: %v", err)
+	}
+	if len(rsp.Warnings) != 2 || !strings.Contains(rsp.Warnings[0], "edit") || !strings.Contains(rsp.Warnings[1], "commit") {
+		t.Errorf("expected edit and commit warnings, got %q", rsp.Warnings)
 	}
 }
 
@@ -300,5 +359,256 @@ func Test_ncTarget_StaleFailureDoesNotCloseNewDriver(t *testing.T) {
 
 	if !tr.Status().IsConnected() {
 		t.Error("a failure on a replaced driver must not disconnect the current one")
+	}
+}
+
+func capsChangedErr() error {
+	return fmt.Errorf("%w: rpc-error", nctypes.ErrCapabilitiesChanged)
+}
+
+func Test_ncTarget_internalGet_CapabilitiesChanged_Reconnects(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	closed := make(chan struct{}, 1)
+	d := mocknetconf.NewMockDriver(mockCtrl)
+	d.EXPECT().IsAlive().AnyTimes().Return(true)
+	d.EXPECT().GetConfig(gomock.Any(), gomock.Any()).Return(nil, capsChangedErr())
+	d.EXPECT().Close().DoAndReturn(func() error { closed <- struct{}{}; return nil })
+
+	fresh := mocknetconf.NewMockDriver(mockCtrl)
+	fresh.EXPECT().IsAlive().AnyTimes().Return(true)
+	fresh.EXPECT().GetConfig(gomock.Any(), gomock.Any()).Return(&nctypes.NetconfResponse{Doc: rpcReplyDoc(t)}, nil)
+
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	tr := &ncTarget{
+		name:      "dev1",
+		driver:    d,
+		sbiConfig: testSBIConfig(),
+		lifeCtx:   ctx,
+		lifeStop:  stop,
+		newDriver: func(*config.SBI) (Driver, error) { return fresh, nil },
+	}
+
+	_, err := tr.internalGet(context.Background(), &sdcpb.GetDataRequest{})
+	if !errors.Is(err, types.ErrNotConnected) || !errors.Is(err, nctypes.ErrCapabilitiesChanged) {
+		t.Fatalf("expected ErrNotConnected wrapping ErrCapabilitiesChanged, got %v", err)
+	}
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("failed driver was not closed")
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for !tr.Status().IsConnected() {
+		if time.Now().After(deadline) {
+			t.Fatal("target did not reconnect")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if _, err := tr.internalGet(context.Background(), &sdcpb.GetDataRequest{}); err != nil {
+		t.Fatalf("Get after capabilities-changed reconnect: %v", err)
+	}
+}
+
+func Test_ncTarget_setToDevice_EditConfig_CapabilitiesChanged_SkipsDiscard(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	closed := make(chan struct{}, 1)
+	d := mocknetconf.NewMockDriver(mockCtrl)
+	d.EXPECT().IsAlive().AnyTimes().Return(true)
+	d.EXPECT().EditConfig(gomock.Any(), gomock.Any()).Return(nil, capsChangedErr())
+	d.EXPECT().Close().DoAndReturn(func() error { closed <- struct{}{}; return nil })
+	// Discard must NOT be called when retiring a session due to capabilities-changed.
+
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	tr := &ncTarget{name: "dev1", driver: d, sbiConfig: testSBIConfig(), lifeCtx: ctx, lifeStop: stop, newDriver: failingDriverFactory}
+
+	_, err := tr.setToDevice(context.Background(), config.NCCommitDatastoreCandidate, newFakeTargetSource())
+	if !errors.Is(err, types.ErrNotConnected) || !errors.Is(err, nctypes.ErrCapabilitiesChanged) {
+		t.Fatalf("expected ErrNotConnected wrapping ErrCapabilitiesChanged, got %v", err)
+	}
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Error("failed driver was not closed")
+	}
+}
+
+func Test_ncTarget_setToDevice_Commit_CapabilitiesChanged_Reconnects(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	closed := make(chan struct{}, 1)
+	d := mocknetconf.NewMockDriver(mockCtrl)
+	d.EXPECT().IsAlive().AnyTimes().Return(true)
+	d.EXPECT().EditConfig(gomock.Any(), gomock.Any()).Return(&nctypes.NetconfResponse{Doc: rpcReplyDoc(t)}, nil)
+	d.EXPECT().Commit().Return(nil, capsChangedErr())
+	d.EXPECT().Close().DoAndReturn(func() error { closed <- struct{}{}; return nil })
+
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	tr := &ncTarget{name: "dev1", driver: d, sbiConfig: testSBIConfig(), lifeCtx: ctx, lifeStop: stop, newDriver: failingDriverFactory}
+
+	_, err := tr.setToDevice(context.Background(), config.NCCommitDatastoreCandidate, newFakeTargetSource())
+	if !errors.Is(err, types.ErrNotConnected) || !errors.Is(err, nctypes.ErrCapabilitiesChanged) {
+		t.Fatalf("expected ErrNotConnected wrapping ErrCapabilitiesChanged, got %v", err)
+	}
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Error("failed driver was not closed")
+	}
+}
+
+func Test_ncTarget_CapabilitiesChanged_CooldownDelaysSecondReconnect(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+
+	d1 := mocknetconf.NewMockDriver(mockCtrl)
+	d1.EXPECT().IsAlive().AnyTimes().Return(true)
+	d1.EXPECT().GetConfig(gomock.Any(), gomock.Any()).Return(nil, capsChangedErr())
+	d1Closed := make(chan struct{})
+	d1.EXPECT().Close().DoAndReturn(func() error { close(d1Closed); return nil })
+
+	d2 := mocknetconf.NewMockDriver(mockCtrl)
+	d2.EXPECT().IsAlive().AnyTimes().Return(true)
+	d2.EXPECT().GetConfig(gomock.Any(), gomock.Any()).Return(nil, capsChangedErr())
+	d2Closed := make(chan struct{})
+	d2.EXPECT().Close().DoAndReturn(func() error { close(d2Closed); return nil })
+
+	d3 := mocknetconf.NewMockDriver(mockCtrl)
+	d3.EXPECT().IsAlive().AnyTimes().Return(true)
+	d3.EXPECT().GetConfig(gomock.Any(), gomock.Any()).Return(&nctypes.NetconfResponse{Doc: rpcReplyDoc(t)}, nil)
+
+	const cooldown = 120 * time.Millisecond
+	var dials atomic.Int32
+
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	tr := &ncTarget{
+		name:                  "dev1",
+		driver:                d1,
+		sbiConfig:             testSBIConfig(),
+		lifeCtx:               ctx,
+		lifeStop:              stop,
+		capsReconnectCooldown: cooldown,
+		newDriver: func(*config.SBI) (Driver, error) {
+			if dials.Add(1) == 1 {
+				return d2, nil
+			}
+			return d3, nil
+		},
+	}
+
+	// First capabilities-changed reconnects without delay.
+	start := time.Now()
+	if _, err := tr.internalGet(context.Background(), &sdcpb.GetDataRequest{}); !errors.Is(err, types.ErrNotConnected) {
+		t.Fatalf("first Get: expected ErrNotConnected, got %v", err)
+	}
+	<-d1Closed
+	deadline := time.Now().Add(time.Second)
+	for !tr.Status().IsConnected() {
+		if time.Now().After(deadline) {
+			t.Fatal("target did not complete first reconnect")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	// Second capabilities-changed inside the cooldown immediately retires d2,
+	// reports ErrNotConnected, and waits out the remaining cooldown before dialing d3.
+	_, err := tr.internalGet(context.Background(), &sdcpb.GetDataRequest{})
+	if !errors.Is(err, types.ErrNotConnected) || !errors.Is(err, nctypes.ErrCapabilitiesChanged) {
+		t.Fatalf("second Get: expected ErrNotConnected wrapping ErrCapabilitiesChanged, got %v", err)
+	}
+	if tr.Status().IsConnected() {
+		t.Fatal("stale second session must be retired immediately")
+	}
+	<-d2Closed
+
+	if time.Since(start) < cooldown/2 && dials.Load() > 1 {
+		t.Fatalf("second reconnect dialed before cooldown elapsed (dials=%d, elapsed=%v)", dials.Load(), time.Since(start))
+	}
+
+	deadline = time.Now().Add(2 * time.Second)
+	for !tr.Status().IsConnected() {
+		if time.Now().After(deadline) {
+			t.Fatal("target did not complete delayed second reconnect")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if elapsed := time.Since(start); elapsed < cooldown {
+		t.Errorf("second reconnect finished after %v, want >= %v", elapsed, cooldown)
+	}
+	if _, err := tr.internalGet(context.Background(), &sdcpb.GetDataRequest{}); err != nil {
+		t.Fatalf("Get on third session: %v", err)
+	}
+}
+
+func Test_ncTarget_CapabilitiesChanged_CloseCancelsCooldownWait(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	d := mocknetconf.NewMockDriver(mockCtrl)
+	d.EXPECT().IsAlive().AnyTimes().Return(true)
+	d.EXPECT().GetConfig(gomock.Any(), gomock.Any()).Return(nil, capsChangedErr())
+	closed := make(chan struct{})
+	d.EXPECT().Close().DoAndReturn(func() error { close(closed); return nil })
+
+	ctx, stop := context.WithCancel(context.Background())
+	tr := &ncTarget{
+		name:                  "dev1",
+		driver:                d,
+		sbiConfig:             testSBIConfig(),
+		lifeCtx:               ctx,
+		lifeStop:              stop,
+		capsReconnectCooldown: 10 * time.Second,
+		nextCapsReconnect:     time.Now().Add(10 * time.Second),
+		newDriver:             failingDriverFactory,
+	}
+
+	_, _ = tr.internalGet(context.Background(), &sdcpb.GetDataRequest{})
+	if err := tr.Close(context.Background()); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for {
+		tr.dm.RLock()
+		busy := tr.reconnecting
+		tr.dm.RUnlock()
+		if !busy {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("Close did not cancel pending cooldown wait")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	// the stale driver is closed in the background; wait so gomock sees the call
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("failed driver was not closed")
+	}
+}
+
+func Test_ncTarget_CapabilitiesChanged_StaleDriverDoesNotDisconnectOrAdvanceCooldown(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	stale := mocknetconf.NewMockDriver(mockCtrl)
+	closed := make(chan struct{})
+	stale.EXPECT().Close().DoAndReturn(func() error { close(closed); return nil })
+
+	current := mocknetconf.NewMockDriver(mockCtrl)
+	current.EXPECT().IsAlive().AnyTimes().Return(true)
+
+	tr := &ncTarget{name: "dev1", driver: current, sbiConfig: testSBIConfig(), newDriver: failingDriverFactory}
+	err := tr.handleCapabilitiesChanged(context.Background(), stale, capsChangedErr())
+	<-closed
+
+	if !errors.Is(err, types.ErrNotConnected) {
+		t.Errorf("expected ErrNotConnected for a replaced driver, got %v", err)
+	}
+	if !tr.Status().IsConnected() {
+		t.Error("a failure on a replaced driver must not disconnect the current one")
+	}
+	if !tr.nextCapsReconnect.IsZero() {
+		t.Errorf("stale driver failure must not advance nextCapsReconnect, got %v", tr.nextCapsReconnect)
 	}
 }

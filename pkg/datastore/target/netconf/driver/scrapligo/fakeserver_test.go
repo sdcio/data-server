@@ -42,6 +42,7 @@ type fakeNetconfServer struct {
 	mu        sync.Mutex
 	conns     []net.Conn
 	blackhole bool
+	replyBody string
 }
 
 func newFakeNetconfServer(t *testing.T) *fakeNetconfServer {
@@ -91,6 +92,23 @@ func (s *fakeNetconfServer) isBlackhole() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.blackhole
+}
+
+// setReplyBody overrides the inner XML placed inside <rpc-reply>...</rpc-reply>
+// for subsequent RPCs. An empty body defaults to "<data/>".
+func (s *fakeNetconfServer) setReplyBody(body string) {
+	s.mu.Lock()
+	s.replyBody = body
+	s.mu.Unlock()
+}
+
+func (s *fakeNetconfServer) currentReplyBody() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.replyBody == "" {
+		return "<data/>"
+	}
+	return s.replyBody
 }
 
 func (s *fakeNetconfServer) acceptLoop() {
@@ -159,7 +177,7 @@ func (s *fakeNetconfServer) serveNetconf(ch ssh.Channel) {
 			if m == nil || s.isBlackhole() {
 				continue
 			}
-			reply := fmt.Sprintf(`<rpc-reply xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="%s"><data/></rpc-reply>%s`, m[1], ncDelimiter)
+			reply := fmt.Sprintf(`<rpc-reply xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="%s">%s</rpc-reply>%s`, m[1], s.currentReplyBody(), ncDelimiter)
 			if _, err := ch.Write([]byte(reply)); err != nil {
 				return
 			}

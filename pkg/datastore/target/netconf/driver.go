@@ -30,7 +30,7 @@ type Driver interface {
 	// validate a source datastore
 	Validate(source string) (*types.NetconfResponse, error)
 	// Commit applies the candidate changes to the running config
-	Commit() error
+	Commit() (*types.NetconfResponse, error)
 	// discard a candidate config
 	Discard() error
 	// Close the connection to the device

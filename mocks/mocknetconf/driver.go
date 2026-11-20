@@ -55,11 +55,12 @@ func (mr *MockDriverMockRecorder) Close() *gomock.Call {
 }
 
 // Commit mocks base method.
-func (m *MockDriver) Commit() error {
+func (m *MockDriver) Commit() (*types.NetconfResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Commit")
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(*types.NetconfResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Commit indicates an expected call of Commit.
