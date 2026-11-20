@@ -153,7 +153,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	// retrieve the data that is meant to be send southbound (towards the device)
 	updates := root.GetHighestPrecedence(true)
 	deletes := treetypes.DeleteEntriesList{root}
-	readbacks := d.fetchMutateOnWriteReadbacks(ctx, collectPushedMutateOnWritePaths(updates))
+	readbacks := d.fetchMutateOnWriteReadbacks(ctx, d.collectPushedMutateOnWritePaths(updates))
 
 	err = d.reconcileReplaceReadbacksAndWriteBackRunning(ctx, updates, deletes, readbacks, setDoneUnixNano)
 	if err != nil {
@@ -338,7 +338,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	}
 	setDoneUnixNano := time.Now().UnixNano()
 	result.Warnings = append(result.Warnings, dataResp.GetWarnings()...)
-	readbacks := d.fetchMutateOnWriteReadbacks(ctx, collectPushedMutateOnWritePaths(updates))
+	readbacks := d.fetchMutateOnWriteReadbacks(ctx, d.collectPushedMutateOnWritePaths(updates))
 
 	log.Info("transaction applied")
 

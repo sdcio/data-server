@@ -11,7 +11,7 @@ import (
 
 func validatedLeafVariant(e api.Entry) *api.LeafEntry {
 	lv := e.GetLeafVariants().GetHighestPrecedence(false, true, false)
-	if lv != nil && lv.Owner() == consts.RunningIntentName && e.GetSchema().IsMutateOnWrite() {
+	if lv != nil && lv.Owner() == consts.RunningIntentName && api.IsMutateOnWriteEntry(e) {
 		return nil
 	}
 	return lv

@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/sdcio/data-server/pkg/tree/api"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
@@ -28,13 +29,25 @@ import (
 // shared across tree lookups and southbound readbacks.
 type canonicalLeafPath string
 
+// keylessLeafPath is the module-prefix-stripped, key-pruned XPath identifier
+// for a leaf's schema path across all list instances.
+type keylessLeafPath string
+
+type captureMode uint8
+
+const (
+	captureConfirmed captureMode = iota
+	capturePendingMutateOnWrite
+	capturePendingCryptDiscovery
+)
+
 type confirmedAppliedEntry struct {
 	path             *sdcpb.Path
 	owner            string
 	intendedValue    *sdcpb.TypedValue
 	confirmedValue   *sdcpb.TypedValue
 	pendingCaptureAt int64
-	pendingCapture   bool
+	mode             captureMode
 }
 
 // causalCaptureEpoch is a snapshot of one mutate-on-write write epoch. Completed
@@ -45,20 +58,26 @@ type causalCaptureEpoch struct {
 	intendedValue    *sdcpb.TypedValue
 	confirmedValue   *sdcpb.TypedValue
 	captureAfterNano int64
-	pending          bool
+	mode             captureMode
 }
 
-// confirmedAppliedValues holds the datastore's in-memory drift baselines for
-// mutate-on-write leaves, keyed by canonicalLeafPath and bound to (owner, intendedValue).
+func (e causalCaptureEpoch) IsPending() bool {
+	return e.mode != captureConfirmed
+}
+
+// confirmedAppliedValues holds the datastore's in-memory drift baselines and
+// dynamically learned keyless schema paths for mutate-on-write leaves.
 // Entries live strictly in process memory and are never written to cache storage.
 type confirmedAppliedValues struct {
-	mu      sync.RWMutex
-	entries map[canonicalLeafPath]confirmedAppliedEntry
+	mu           sync.RWMutex
+	entries      map[canonicalLeafPath]confirmedAppliedEntry
+	learnedPaths map[keylessLeafPath]struct{}
 }
 
 func newConfirmedAppliedValues() *confirmedAppliedValues {
 	return &confirmedAppliedValues{
-		entries: make(map[canonicalLeafPath]confirmedAppliedEntry),
+		entries:      make(map[canonicalLeafPath]confirmedAppliedEntry),
+		learnedPaths: make(map[keylessLeafPath]struct{}),
 	}
 }
 
@@ -83,13 +102,15 @@ func (s *confirmedAppliedValues) Lookup(path *sdcpb.Path, winningOwner string, i
 }
 
 // Record stores confirmedValue as the baseline for (path, owner, intendedValue)
-// when confirmedValue is a non-empty leaf value.
+// when confirmedValue is non-empty. If intendedValue already matches the
+// crypt/cipher allowlist and confirmedValue differs, any baseline for path is evicted.
 func (s *confirmedAppliedValues) Record(path *sdcpb.Path, owner string, intendedValue, confirmedValue *sdcpb.TypedValue) {
 	s.record(path, owner, intendedValue, confirmedValue, 0)
 }
 
 // RecordAfter stores a baseline and the write completion barrier that older
-// in-flight sync snapshots must not cross.
+// in-flight sync snapshots must not cross, or evicts any baseline for path when
+// a pre-hashed intendedValue differs from confirmedValue.
 func (s *confirmedAppliedValues) RecordAfter(path *sdcpb.Path, owner string, intendedValue, confirmedValue *sdcpb.TypedValue, captureAfterNano int64) {
 	s.record(path, owner, intendedValue, confirmedValue, captureAfterNano)
 }
@@ -98,16 +119,21 @@ func (s *confirmedAppliedValues) record(path *sdcpb.Path, owner string, intended
 	if s == nil || path == nil || owner == "" || intendedValue == nil || !isNonEmptyTypedValue(confirmedValue) {
 		return
 	}
+	if rejectsPreHashedMismatch(intendedValue, confirmedValue) {
+		s.Delete(path)
+		return
+	}
 	key := newCanonicalLeafPath(path)
 
 	s.mu.Lock()
 	entry := confirmedAppliedEntry{
-		path:           proto.Clone(path).(*sdcpb.Path),
-		owner:          owner,
-		intendedValue:  proto.Clone(intendedValue).(*sdcpb.TypedValue),
-		confirmedValue: proto.Clone(confirmedValue).(*sdcpb.TypedValue),
+		path:             proto.Clone(path).(*sdcpb.Path),
+		owner:            owner,
+		intendedValue:    proto.Clone(intendedValue).(*sdcpb.TypedValue),
+		confirmedValue:   proto.Clone(confirmedValue).(*sdcpb.TypedValue),
+		pendingCaptureAt: captureAfterNano,
+		mode:             captureConfirmed,
 	}
-	entry.pendingCaptureAt = captureAfterNano
 	s.entries[key] = entry
 	s.mu.Unlock()
 }
@@ -115,6 +141,16 @@ func (s *confirmedAppliedValues) record(path *sdcpb.Path, owner string, intended
 // MarkPending retains the winning intent identity until a causally subsequent
 // sync can supply the confirmed target value.
 func (s *confirmedAppliedValues) MarkPending(path *sdcpb.Path, owner string, intendedValue *sdcpb.TypedValue, captureAfterNano int64) {
+	s.markPending(path, owner, intendedValue, captureAfterNano, capturePendingMutateOnWrite)
+}
+
+// MarkDiscoveryCandidate records an unconfirmed push marker for an unannotated
+// plain string leaf whose first causal sync may reveal a crypt or cipher value.
+func (s *confirmedAppliedValues) MarkDiscoveryCandidate(path *sdcpb.Path, owner string, intendedValue *sdcpb.TypedValue, captureAfterNano int64) {
+	s.markPending(path, owner, intendedValue, captureAfterNano, capturePendingCryptDiscovery)
+}
+
+func (s *confirmedAppliedValues) markPending(path *sdcpb.Path, owner string, intendedValue *sdcpb.TypedValue, captureAfterNano int64, mode captureMode) {
 	if s == nil || path == nil || owner == "" || intendedValue == nil || captureAfterNano <= 0 {
 		return
 	}
@@ -125,7 +161,7 @@ func (s *confirmedAppliedValues) MarkPending(path *sdcpb.Path, owner string, int
 		owner:            owner,
 		intendedValue:    proto.Clone(intendedValue).(*sdcpb.TypedValue),
 		pendingCaptureAt: captureAfterNano,
-		pendingCapture:   true,
+		mode:             mode,
 	}
 	s.mu.Unlock()
 }
@@ -148,7 +184,7 @@ func (s *confirmedAppliedValues) CausalCaptures() []causalCaptureEpoch {
 			owner:            entry.owner,
 			intendedValue:    proto.Clone(entry.intendedValue).(*sdcpb.TypedValue),
 			captureAfterNano: entry.pendingCaptureAt,
-			pending:          entry.pendingCapture,
+			mode:             entry.mode,
 		})
 		if entry.confirmedValue != nil {
 			result[len(result)-1].confirmedValue = proto.Clone(entry.confirmedValue).(*sdcpb.TypedValue)
@@ -157,27 +193,58 @@ func (s *confirmedAppliedValues) CausalCaptures() []causalCaptureEpoch {
 	return result
 }
 
-// CompletePending binds a non-empty observation to the same pending write
-// epoch, or removes that epoch when the causally subsequent sync omitted it.
+// CompletePending resolves pending against the first causally subsequent
+// observation: crypt-discovery epochs bind matching crypt/cipher observations
+// and permanently learn the leaf's keyless schema path, mutate-on-write epochs
+// bind non-empty observations unless a pre-hashed intendedValue differs, and
+// non-matching or missing observations evict the epoch.
 func (s *confirmedAppliedValues) CompletePending(pending causalCaptureEpoch, observed *sdcpb.TypedValue) {
-	if s == nil {
+	if s == nil || !pending.IsPending() {
 		return
 	}
 	key := newCanonicalLeafPath(pending.path)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	entry, ok := s.entries[key]
-	if !ok || !entry.pendingCapture || entry.pendingCaptureAt != pending.captureAfterNano ||
+	if !ok || entry.mode != pending.mode || entry.pendingCaptureAt != pending.captureAfterNano ||
 		entry.owner != pending.owner || !api.TypedValuesEqual(entry.intendedValue, pending.intendedValue) {
 		return
 	}
-	if !isNonEmptyTypedValue(observed) {
+	if pending.mode == capturePendingCryptDiscovery {
+		if !isCryptDiscoveryMatch(pending.intendedValue, observed) {
+			delete(s.entries, key)
+			return
+		}
+		entry.confirmedValue = proto.Clone(observed).(*sdcpb.TypedValue)
+		entry.mode = captureConfirmed
+		s.entries[key] = entry
+		if kp := newKeylessLeafPath(pending.path); kp != "" {
+			s.learnedPaths[kp] = struct{}{}
+		}
+		return
+	}
+	if !isNonEmptyTypedValue(observed) || rejectsPreHashedMismatch(pending.intendedValue, observed) {
 		delete(s.entries, key)
 		return
 	}
 	entry.confirmedValue = proto.Clone(observed).(*sdcpb.TypedValue)
-	entry.pendingCapture = false
+	entry.mode = captureConfirmed
 	s.entries[key] = entry
+}
+
+// DeleteSubtree removes stored baselines or pending markers at or below prefix.
+func (s *confirmedAppliedValues) DeleteSubtree(prefix *sdcpb.Path) {
+	if s == nil || prefix == nil {
+		return
+	}
+	prefixSlices := []*sdcpb.Path{prefix}
+	s.mu.Lock()
+	for key, entry := range s.entries {
+		if pathCoveredBySync(entry.path, prefixSlices) {
+			delete(s.entries, key)
+		}
+	}
+	s.mu.Unlock()
 }
 
 // Delete removes any stored baseline for path.
@@ -201,7 +268,33 @@ func (s *confirmedAppliedValues) ClearAll() {
 	s.mu.Unlock()
 }
 
-var _ api.ConfirmedAppliedValueResolver = (*confirmedAppliedValues)(nil)
+var (
+	_ api.ConfirmedAppliedValueResolver = (*confirmedAppliedValues)(nil)
+	_ api.LearnedMutateOnWritePathSet   = (*confirmedAppliedValues)(nil)
+)
+
+// IsLearnedMutateOnWritePath reports whether path's keyless schema path was
+// dynamically learned as a mutate-on-write leaf on this datastore.
+func (s *confirmedAppliedValues) IsLearnedMutateOnWritePath(path *sdcpb.Path) bool {
+	if s == nil {
+		return false
+	}
+	kp := newKeylessLeafPath(path)
+	if kp == "" {
+		return false
+	}
+	s.mu.RLock()
+	_, ok := s.learnedPaths[kp]
+	s.mu.RUnlock()
+	return ok
+}
+
+func newKeylessLeafPath(p *sdcpb.Path) keylessLeafPath {
+	if p == nil || len(p.GetElem()) == 0 {
+		return ""
+	}
+	return keylessLeafPath(canonicalPath(p).ToXPath(true))
+}
 
 func stripModulePrefix(name string) string {
 	if _, local, ok := strings.Cut(name, ":"); ok {
@@ -295,4 +388,78 @@ func isNonEmptyTypedValue(tv *sdcpb.TypedValue) bool {
 	default:
 		return true
 	}
+}
+
+var dollarCryptPrefixes = []string{
+	"$1$",
+	"$2a$",
+	"$2b$",
+	"$2x$",
+	"$2y$",
+	"$5$",
+	"$6$",
+	"$7$",
+	"$8$",
+	"$9$",
+	"$y$",
+	"$gy$",
+	"$ar2$",
+	"$argon2i$",
+	"$argon2id$",
+	"$scrypt$",
+	"$sha1$",
+}
+
+func containsWhitespace(s string) bool {
+	return strings.IndexFunc(s, unicode.IsSpace) >= 0
+}
+
+// isCryptOrCipherString reports whether s matches the strict crypt or
+// passphrase format allowlist used to identify target-hashed string secrets.
+func isCryptOrCipherString(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, suffix := range []string{" hash2", " hash"} {
+		if token, ok := strings.CutSuffix(s, suffix); ok {
+			return token != "" && !containsWhitespace(token)
+		}
+	}
+	if containsWhitespace(s) {
+		return false
+	}
+	if strings.HasPrefix(s, "000PASSPHRASE000") {
+		return true
+	}
+	for _, prefix := range dollarCryptPrefixes {
+		if strings.HasPrefix(s, prefix) {
+			return len(s) > len(prefix)
+		}
+	}
+	if rest, ok := strings.CutPrefix(s, "$pbkdf2"); ok {
+		if strings.HasPrefix(rest, "$") {
+			return len(rest) > 1
+		}
+		if strings.HasPrefix(rest, "-") {
+			alg, tail, hasDollar := strings.Cut(rest[1:], "$")
+			return hasDollar && alg != "" && tail != ""
+		}
+	}
+	return false
+}
+
+func matchesCryptOrCipherValue(tv *sdcpb.TypedValue) bool {
+	sv, ok := tv.GetValue().(*sdcpb.TypedValue_StringVal)
+	return ok && isCryptOrCipherString(sv.StringVal)
+}
+
+func rejectsPreHashedMismatch(intendedValue, observed *sdcpb.TypedValue) bool {
+	return matchesCryptOrCipherValue(intendedValue) && !api.TypedValuesEqual(observed, intendedValue)
+}
+
+func isCryptDiscoveryMatch(intendedValue, observed *sdcpb.TypedValue) bool {
+	if !isNonEmptyTypedValue(observed) || api.TypedValuesEqual(observed, intendedValue) {
+		return false
+	}
+	return !matchesCryptOrCipherValue(intendedValue) && matchesCryptOrCipherValue(observed)
 }

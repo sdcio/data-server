@@ -10,19 +10,26 @@ import (
 // TreeContextOption configures optional collaborators on a TreeContext.
 type TreeContextOption func(*TreeContext)
 
-// WithConfirmedAppliedValues wires a read-only baseline resolver for mutate-on-write leaves.
+// WithConfirmedAppliedValues wires a read-only baseline resolver for
+// mutate-on-write leaves. When resolver also implements
+// api.LearnedMutateOnWritePathSet, TreeContext queries it for dynamically
+// learned mutate-on-write schema paths.
 func WithConfirmedAppliedValues(resolver api.ConfirmedAppliedValueResolver) TreeContextOption {
 	return func(tc *TreeContext) {
 		tc.confirmedAppliedValues = resolver
+		if learned, ok := resolver.(api.LearnedMutateOnWritePathSet); ok {
+			tc.learnedMutateOnWritePaths = learned
+		}
 	}
 }
 
 type TreeContext struct {
-	schemaClient           schemaClient.SchemaClientBound
-	nonRevertiveInfo       api.NonRevertiveInfos
-	explicitDeletes        *api.DeletePathSet
-	poolFactory            pool.VirtualPoolFactory
-	confirmedAppliedValues api.ConfirmedAppliedValueResolver
+	schemaClient              schemaClient.SchemaClientBound
+	nonRevertiveInfo          api.NonRevertiveInfos
+	explicitDeletes           *api.DeletePathSet
+	poolFactory               pool.VirtualPoolFactory
+	confirmedAppliedValues    api.ConfirmedAppliedValueResolver
+	learnedMutateOnWritePaths api.LearnedMutateOnWritePathSet
 }
 
 func NewTreeContext(sc schemaClient.SchemaClientBound, poolFactory pool.VirtualPoolFactory, opts ...TreeContextOption) *TreeContext {
@@ -43,9 +50,10 @@ func NewTreeContext(sc schemaClient.SchemaClientBound, poolFactory pool.VirtualP
 // deepCopy root is required to be set manually
 func (t *TreeContext) DeepCopy() api.TreeContext {
 	tc := &TreeContext{
-		schemaClient:           t.schemaClient,
-		poolFactory:            t.poolFactory,
-		confirmedAppliedValues: t.confirmedAppliedValues,
+		schemaClient:              t.schemaClient,
+		poolFactory:               t.poolFactory,
+		confirmedAppliedValues:    t.confirmedAppliedValues,
+		learnedMutateOnWritePaths: t.learnedMutateOnWritePaths,
 	}
 
 	tc.nonRevertiveInfo = t.nonRevertiveInfo.DeepCopy()
@@ -74,4 +82,11 @@ func (t *TreeContext) ConfirmedAppliedValue(path *sdcpb.Path, owner string, inte
 		return nil
 	}
 	return t.confirmedAppliedValues.Lookup(path, owner, intendedValue)
+}
+
+func (t *TreeContext) IsLearnedMutateOnWritePath(path *sdcpb.Path) bool {
+	if t == nil || t.learnedMutateOnWritePaths == nil {
+		return false
+	}
+	return t.learnedMutateOnWritePaths.IsLearnedMutateOnWritePath(path)
 }

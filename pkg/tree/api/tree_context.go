@@ -13,6 +13,12 @@ type ConfirmedAppliedValueResolver interface {
 	Lookup(path *sdcpb.Path, owner string, intendedValue *sdcpb.TypedValue) *sdcpb.TypedValue
 }
 
+// LearnedMutateOnWritePathSet reports whether a leaf's keyless schema path has
+// been dynamically learned as mutate-on-write for the target.
+type LearnedMutateOnWritePathSet interface {
+	IsLearnedMutateOnWritePath(path *sdcpb.Path) bool
+}
+
 type TreeContext interface {
 	PoolFactory() pool.VirtualPoolFactory
 	SchemaClient() schemaClient.SchemaClientBound
@@ -21,4 +27,21 @@ type TreeContext interface {
 	NonRevertiveInfo() NonRevertiveInfos
 	// ConfirmedAppliedValue returns the confirmed applied value matching path, owner, and intendedValue, or nil when none matches.
 	ConfirmedAppliedValue(path *sdcpb.Path, owner string, intendedValue *sdcpb.TypedValue) *sdcpb.TypedValue
+	// IsLearnedMutateOnWritePath reports whether path's keyless schema path was dynamically learned as mutate-on-write.
+	IsLearnedMutateOnWritePath(path *sdcpb.Path) bool
+}
+
+// IsMutateOnWriteEntry reports whether e is classified as a mutate-on-write
+// leaf by its YANG schema or by its tree context's learned path set.
+func IsMutateOnWriteEntry(e Entry) bool {
+	if e == nil {
+		return false
+	}
+	if e.GetSchema().IsMutateOnWrite() {
+		return true
+	}
+	if tc := e.GetTreeContext(); tc != nil {
+		return tc.IsLearnedMutateOnWritePath(e.SdcpbPath())
+	}
+	return false
 }

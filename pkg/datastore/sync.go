@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sdcio/data-server/pkg/tree"
+	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/api/adapter"
 	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/importer"
@@ -16,7 +17,6 @@ import (
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
-	"google.golang.org/protobuf/proto"
 )
 
 // ApplyToRunning commits one sync observation. syncStartedAt is Unix
@@ -57,10 +57,13 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, syncStartedAt int64, del
 	}
 
 	// import new config if provided
+	var importedPaths map[canonicalLeafPath]bool
 	if importer != nil {
-		_, err := d.syncTree.ImportConfig(ctx, &sdcpb.Path{}, importer, treetypes.NewUpdateInsertFlags(), d.taskPool)
-		if err != nil {
-			return err
+		probes := d.beginPendingImportProbes(ctx, syncStartedAt, deletes)
+		_, importErr := d.syncTree.ImportConfig(ctx, &sdcpb.Path{}, importer, treetypes.NewUpdateInsertFlags(), d.taskPool)
+		importedPaths = d.finishPendingImportProbes(ctx, probes)
+		if importErr != nil {
+			return importErr
 		}
 	}
 
@@ -88,7 +91,7 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, syncStartedAt int64, del
 		}
 	}
 
-	if err := d.reconcilePendingCaptures(ctx, syncStartedAt, deletes); err != nil {
+	if err := d.reconcilePendingCaptures(ctx, syncStartedAt, deletes, importedPaths); err != nil {
 		return err
 	}
 
@@ -128,7 +131,69 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, syncStartedAt int64, del
 
 }
 
-func (d *Datastore) reconcilePendingCaptures(ctx context.Context, syncStartedAt int64, syncPaths []*sdcpb.Path) error {
+// pendingImportProbe tracks temporary Running state across a single ImportConfig
+// call so ApplyToRunning can tell whether an incremental importer touched a
+// causal pending path. Callers of beginPendingImportProbes must always invoke
+// finishPendingImportProbes before RemoveDeletedProcessor runs, even on import error.
+type pendingImportProbe struct {
+	key     canonicalLeafPath
+	path    *sdcpb.Path
+	running *api.LeafEntry
+}
+
+// beginPendingImportProbes prepares observation probes on d.syncTree for causal
+// pending paths not already covered by syncPaths; callers must hold syncTreeMutex.
+func (d *Datastore) beginPendingImportProbes(ctx context.Context, syncStartedAt int64, syncPaths []*sdcpb.Path) []pendingImportProbe {
+	var probes []pendingImportProbe
+	for _, pending := range d.confirmedApplied.CausalCaptures() {
+		if !pending.IsPending() || syncStartedAt < pending.captureAfterNano || pathCoveredBySync(pending.path, syncPaths) {
+			continue
+		}
+		var running *api.LeafEntry
+		entry, err := ops.NavigateSdcpbPath(ctx, d.syncTree.Entry, pending.path)
+		if err == nil && entry != nil {
+			if r := entry.GetLeafVariants().GetByOwner(consts.RunningIntentName); r != nil {
+				if r.GetDeleteFlag() {
+					continue
+				}
+				r.MarkDelete(false)
+				running = r
+			}
+		}
+		probes = append(probes, pendingImportProbe{
+			key:     newCanonicalLeafPath(pending.path),
+			path:    pending.path,
+			running: running,
+		})
+	}
+	return probes
+}
+
+// finishPendingImportProbes restores temporary probe markers on untouched Running
+// leaves and returns the canonical paths observed during ImportConfig.
+func (d *Datastore) finishPendingImportProbes(ctx context.Context, probes []pendingImportProbe) map[canonicalLeafPath]bool {
+	if len(probes) == 0 {
+		return nil
+	}
+	observed := make(map[canonicalLeafPath]bool, len(probes))
+	for _, probe := range probes {
+		if probe.running != nil {
+			if !probe.running.GetDeleteFlag() {
+				observed[probe.key] = true
+			} else {
+				probe.running.DropDeleteFlag()
+			}
+			continue
+		}
+		entry, err := ops.NavigateSdcpbPath(ctx, d.syncTree.Entry, probe.path)
+		if err == nil && entry != nil && entry.GetLeafVariants().GetByOwner(consts.RunningIntentName) != nil {
+			observed[probe.key] = true
+		}
+	}
+	return observed
+}
+
+func (d *Datastore) reconcilePendingCaptures(ctx context.Context, syncStartedAt int64, syncPaths []*sdcpb.Path, importedPaths map[canonicalLeafPath]bool) error {
 	for _, pending := range d.confirmedApplied.CausalCaptures() {
 		if syncStartedAt < pending.captureAfterNano {
 			restoreValue := pending.intendedValue
@@ -145,23 +210,22 @@ func (d *Datastore) reconcilePendingCaptures(ctx context.Context, syncStartedAt 
 			}
 			continue
 		}
-		if !pending.pending {
+		if !pending.IsPending() {
 			continue
 		}
 
+		wasObserved := pathCoveredBySync(pending.path, syncPaths) || importedPaths[newCanonicalLeafPath(pending.path)]
+		if !wasObserved {
+			continue
+		}
 		var observed *sdcpb.TypedValue
-		wasObserved := pathCoveredBySync(pending.path, syncPaths)
 		entry, err := ops.NavigateSdcpbPath(ctx, d.syncTree.Entry, pending.path)
 		if err == nil && entry != nil {
 			if running := entry.GetLeafVariants().GetByOwner(consts.RunningIntentName); running != nil {
 				observed = running.Value()
-				wasObserved = wasObserved || running.GetNewFlag() || running.GetUpdateFlag()
 			}
 		} else if err != nil && !errors.Is(err, ops.ErrNavigateSdcpbPathNotFound) {
 			return err
-		}
-		if !wasObserved {
-			continue
 		}
 		d.confirmedApplied.CompletePending(pending, observed)
 	}
@@ -171,18 +235,7 @@ func (d *Datastore) reconcilePendingCaptures(ctx context.Context, syncStartedAt 
 func pathCoveredBySync(path *sdcpb.Path, syncPaths []*sdcpb.Path) bool {
 	path = canonicalPath(path)
 	for _, syncPath := range syncPaths {
-		syncPath = canonicalPath(syncPath)
-		if len(syncPath.GetElem()) > len(path.GetElem()) {
-			continue
-		}
-		covered := true
-		for i, elem := range syncPath.GetElem() {
-			if !proto.Equal(elem, path.GetElem()[i]) {
-				covered = false
-				break
-			}
-		}
-		if covered {
+		if canonicalPath(syncPath).IsParentPathOf(path) {
 			return true
 		}
 	}
@@ -243,12 +296,14 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error 
 			return nil
 		}
 		setDoneUnixNano := time.Now().UnixNano()
-		mutateOnWritePaths := collectPushedMutateOnWritePaths(updates)
+		mutateOnWritePaths := d.collectPushedMutateOnWritePaths(updates)
 		if len(mutateOnWritePaths) > 0 {
 			readbacks := d.fetchMutateOnWriteReadbacks(ctx, mutateOnWritePaths)
 			if err := d.applyReadbacksAndWriteBackRunning(ctx, updates, del, readbacks, setDoneUnixNano); err != nil {
 				return err
 			}
+		} else {
+			d.reconcilePlainStringRevertPushes(updates, del, setDoneUnixNano)
 		}
 	}
 
