@@ -29,9 +29,23 @@ import (
 type canonicalLeafPath string
 
 type confirmedAppliedEntry struct {
-	owner          string
-	intendedValue  *sdcpb.TypedValue
-	confirmedValue *sdcpb.TypedValue
+	path             *sdcpb.Path
+	owner            string
+	intendedValue    *sdcpb.TypedValue
+	confirmedValue   *sdcpb.TypedValue
+	pendingCaptureAt int64
+	pendingCapture   bool
+}
+
+// causalCaptureEpoch is a snapshot of one mutate-on-write write epoch. Completed
+// epochs retain confirmedValue so older in-flight syncs can be ignored.
+type causalCaptureEpoch struct {
+	path             *sdcpb.Path
+	owner            string
+	intendedValue    *sdcpb.TypedValue
+	confirmedValue   *sdcpb.TypedValue
+	captureAfterNano int64
+	pending          bool
 }
 
 // confirmedAppliedValues holds the datastore's in-memory drift baselines for
@@ -59,7 +73,7 @@ func (s *confirmedAppliedValues) Lookup(path *sdcpb.Path, winningOwner string, i
 	s.mu.RLock()
 	entry, ok := s.entries[key]
 	s.mu.RUnlock()
-	if !ok {
+	if !ok || entry.confirmedValue == nil {
 		return nil
 	}
 	if entry.owner != winningOwner || !api.TypedValuesEqual(entry.intendedValue, intendedValue) {
@@ -71,18 +85,99 @@ func (s *confirmedAppliedValues) Lookup(path *sdcpb.Path, winningOwner string, i
 // Record stores confirmedValue as the baseline for (path, owner, intendedValue)
 // when confirmedValue is a non-empty leaf value.
 func (s *confirmedAppliedValues) Record(path *sdcpb.Path, owner string, intendedValue, confirmedValue *sdcpb.TypedValue) {
+	s.record(path, owner, intendedValue, confirmedValue, 0)
+}
+
+// RecordAfter stores a baseline and the write completion barrier that older
+// in-flight sync snapshots must not cross.
+func (s *confirmedAppliedValues) RecordAfter(path *sdcpb.Path, owner string, intendedValue, confirmedValue *sdcpb.TypedValue, captureAfterNano int64) {
+	s.record(path, owner, intendedValue, confirmedValue, captureAfterNano)
+}
+
+func (s *confirmedAppliedValues) record(path *sdcpb.Path, owner string, intendedValue, confirmedValue *sdcpb.TypedValue, captureAfterNano int64) {
 	if s == nil || path == nil || owner == "" || intendedValue == nil || !isNonEmptyTypedValue(confirmedValue) {
 		return
 	}
 	key := newCanonicalLeafPath(path)
 
 	s.mu.Lock()
-	s.entries[key] = confirmedAppliedEntry{
+	entry := confirmedAppliedEntry{
+		path:           proto.Clone(path).(*sdcpb.Path),
 		owner:          owner,
 		intendedValue:  proto.Clone(intendedValue).(*sdcpb.TypedValue),
 		confirmedValue: proto.Clone(confirmedValue).(*sdcpb.TypedValue),
 	}
+	entry.pendingCaptureAt = captureAfterNano
+	s.entries[key] = entry
 	s.mu.Unlock()
+}
+
+// MarkPending retains the winning intent identity until a causally subsequent
+// sync can supply the confirmed target value.
+func (s *confirmedAppliedValues) MarkPending(path *sdcpb.Path, owner string, intendedValue *sdcpb.TypedValue, captureAfterNano int64) {
+	if s == nil || path == nil || owner == "" || intendedValue == nil || captureAfterNano <= 0 {
+		return
+	}
+	key := newCanonicalLeafPath(path)
+	s.mu.Lock()
+	s.entries[key] = confirmedAppliedEntry{
+		path:             proto.Clone(path).(*sdcpb.Path),
+		owner:            owner,
+		intendedValue:    proto.Clone(intendedValue).(*sdcpb.TypedValue),
+		pendingCaptureAt: captureAfterNano,
+		pendingCapture:   true,
+	}
+	s.mu.Unlock()
+}
+
+// CausalCaptures returns write epochs that still guard against older syncs.
+// Pending entries also need the first causally subsequent observation.
+func (s *confirmedAppliedValues) CausalCaptures() []causalCaptureEpoch {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]causalCaptureEpoch, 0)
+	for _, entry := range s.entries {
+		if entry.pendingCaptureAt == 0 {
+			continue
+		}
+		result = append(result, causalCaptureEpoch{
+			path:             proto.Clone(entry.path).(*sdcpb.Path),
+			owner:            entry.owner,
+			intendedValue:    proto.Clone(entry.intendedValue).(*sdcpb.TypedValue),
+			captureAfterNano: entry.pendingCaptureAt,
+			pending:          entry.pendingCapture,
+		})
+		if entry.confirmedValue != nil {
+			result[len(result)-1].confirmedValue = proto.Clone(entry.confirmedValue).(*sdcpb.TypedValue)
+		}
+	}
+	return result
+}
+
+// CompletePending binds a non-empty observation to the same pending write
+// epoch, or removes that epoch when the causally subsequent sync omitted it.
+func (s *confirmedAppliedValues) CompletePending(pending causalCaptureEpoch, observed *sdcpb.TypedValue) {
+	if s == nil {
+		return
+	}
+	key := newCanonicalLeafPath(pending.path)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry, ok := s.entries[key]
+	if !ok || !entry.pendingCapture || entry.pendingCaptureAt != pending.captureAfterNano ||
+		entry.owner != pending.owner || !api.TypedValuesEqual(entry.intendedValue, pending.intendedValue) {
+		return
+	}
+	if !isNonEmptyTypedValue(observed) {
+		delete(s.entries, key)
+		return
+	}
+	entry.confirmedValue = proto.Clone(observed).(*sdcpb.TypedValue)
+	entry.pendingCapture = false
+	s.entries[key] = entry
 }
 
 // Delete removes any stored baseline for path.

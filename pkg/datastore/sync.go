@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/sdcio/data-server/pkg/tree"
 	"github.com/sdcio/data-server/pkg/tree/api/adapter"
@@ -15,9 +16,12 @@ import (
 	"github.com/sdcio/data-server/pkg/utils"
 	"github.com/sdcio/logger"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"google.golang.org/protobuf/proto"
 )
 
-func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, importer importer.ImportConfigAdapter) error {
+// ApplyToRunning commits one sync observation. syncStartedAt is Unix
+// nanoseconds captured before the producer starts reading the target snapshot.
+func (d *Datastore) ApplyToRunning(ctx context.Context, syncStartedAt int64, deletes []*sdcpb.Path, importer importer.ImportConfigAdapter) error {
 
 	log := logger.FromContext(ctx)
 
@@ -84,6 +88,10 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 		}
 	}
 
+	if err := d.reconcilePendingCaptures(ctx, syncStartedAt, deletes); err != nil {
+		return err
+	}
+
 	// conditional trace logging
 	if log := log.V(logger.VTrace); log.Enabled() {
 		treeExport, err := ops.TreeExport(d.syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio, false)
@@ -118,6 +126,67 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, i
 
 	return nil
 
+}
+
+func (d *Datastore) reconcilePendingCaptures(ctx context.Context, syncStartedAt int64, syncPaths []*sdcpb.Path) error {
+	for _, pending := range d.confirmedApplied.CausalCaptures() {
+		if syncStartedAt < pending.captureAfterNano {
+			restoreValue := pending.intendedValue
+			if pending.confirmedValue != nil {
+				restoreValue = pending.confirmedValue
+			}
+			if err := d.syncTree.AddUpdatesRecursive(ctx, []*treetypes.PathAndUpdate{
+				treetypes.NewPathAndUpdate(
+					pending.path,
+					treetypes.NewUpdate(nil, restoreValue, consts.RunningValuesPrio, consts.RunningIntentName, 0),
+				),
+			}, treetypes.NewUpdateInsertFlags()); err != nil {
+				return err
+			}
+			continue
+		}
+		if !pending.pending {
+			continue
+		}
+
+		var observed *sdcpb.TypedValue
+		wasObserved := pathCoveredBySync(pending.path, syncPaths)
+		entry, err := ops.NavigateSdcpbPath(ctx, d.syncTree.Entry, pending.path)
+		if err == nil && entry != nil {
+			if running := entry.GetLeafVariants().GetByOwner(consts.RunningIntentName); running != nil {
+				observed = running.Value()
+				wasObserved = wasObserved || running.GetNewFlag() || running.GetUpdateFlag()
+			}
+		} else if err != nil && !errors.Is(err, ops.ErrNavigateSdcpbPathNotFound) {
+			return err
+		}
+		if !wasObserved {
+			continue
+		}
+		d.confirmedApplied.CompletePending(pending, observed)
+	}
+	return nil
+}
+
+func pathCoveredBySync(path *sdcpb.Path, syncPaths []*sdcpb.Path) bool {
+	path = canonicalPath(path)
+	for _, syncPath := range syncPaths {
+		syncPath = canonicalPath(syncPath)
+		if len(syncPath.GetElem()) > len(path.GetElem()) {
+			continue
+		}
+		covered := true
+		for i, elem := range syncPath.GetElem() {
+			if !proto.Equal(elem, path.GetElem()[i]) {
+				covered = false
+				break
+			}
+		}
+		if covered {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *Datastore) NewEmptyTree(ctx context.Context) (*tree.RootEntry, error) {
@@ -173,10 +242,11 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error 
 			log.Error(err, "failed applying deviations to running", "response", utils.ProtoJSON(resp))
 			return nil
 		}
+		setDoneUnixNano := time.Now().UnixNano()
 		mutateOnWritePaths := collectPushedMutateOnWritePaths(updates)
 		if len(mutateOnWritePaths) > 0 {
 			readbacks := d.fetchMutateOnWriteReadbacks(ctx, mutateOnWritePaths)
-			if err := d.applyReadbacksAndWriteBackRunning(ctx, updates, del, readbacks); err != nil {
+			if err := d.applyReadbacksAndWriteBackRunning(ctx, updates, del, readbacks, setDoneUnixNano); err != nil {
 				return err
 			}
 		}

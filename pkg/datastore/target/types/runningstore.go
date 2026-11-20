@@ -9,6 +9,8 @@ import (
 )
 
 type RunningStore interface {
-	ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, importer importer.ImportConfigAdapter) error
+	// ApplyToRunning commits a sync observation whose Unix-nanosecond start
+	// timestamp was captured before the producer began reading the target.
+	ApplyToRunning(ctx context.Context, syncStartedAt int64, deletes []*sdcpb.Path, importer importer.ImportConfigAdapter) error
 	NewEmptyTree(ctx context.Context) (*tree.RootEntry, error)
 }

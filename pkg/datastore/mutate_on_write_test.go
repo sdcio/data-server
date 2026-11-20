@@ -572,7 +572,7 @@ func TestDatastore_MutateOnWrite_SingleCommitConvergenceAndReads(t *testing.T) {
 					"hostname":        hostname,
 				},
 			}
-			if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(syncPayload, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(syncPayload, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
 				t.Fatalf("ApplyToRunning: %v", err)
 			}
 
@@ -633,7 +633,7 @@ func TestDatastore_MutateOnWrite_RevertiveDriftRecapturesConfirmedValue(t *testi
 		}
 	})
 
-	if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(map[string]any{
+	if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(map[string]any{
 		"system": map[string]any{"hashed-password": driftHash},
 	}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
 		t.Fatalf("ApplyToRunning(drift): %v", err)
@@ -641,7 +641,7 @@ func TestDatastore_MutateOnWrite_RevertiveDriftRecapturesConfirmedValue(t *testi
 
 	assertRunningHashedPassword(t, f.ds, hashV2)
 
-	if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(map[string]any{
+	if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(map[string]any{
 		"system": map[string]any{"hashed-password": hashV2},
 	}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
 		t.Fatalf("ApplyToRunning(converged): %v", err)
@@ -670,7 +670,7 @@ func TestDatastore_MutateOnWrite_NonRevertiveValueDriftReportsNotApplied(t *test
 		t.Fatalf("TransactionConfirm: %v", err)
 	}
 
-	if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
+	if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
 		jsonImporter.NewJsonTreeImporter(map[string]any{
 			"system": map[string]any{"hashed-password": driftHash},
 		}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
@@ -727,7 +727,7 @@ func TestDatastore_MutateOnWrite_DeletedLeafDrift(t *testing.T) {
 				expectHashedPasswordSetAndReadback(t, f, cleartext, hashV2, nil)
 			}
 
-			if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
+			if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
 				jsonImporter.NewJsonTreeImporter(map[string]any{
 					"system": map[string]any{"hostname": "still-present"},
 				}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
@@ -752,7 +752,7 @@ func TestDatastore_MutateOnWrite_DeletedLeafDrift(t *testing.T) {
 			}
 
 			assertRunningHashedPassword(t, f.ds, hashV2)
-			if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
+			if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
 				jsonImporter.NewJsonTreeImporter(map[string]any{
 					"system": map[string]any{"hashed-password": hashV2},
 				}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
@@ -795,7 +795,7 @@ func TestDatastore_MutateOnWrite_PriorityTakeoverAndDeletionPromotion(t *testing
 	if err := f.ds.TransactionConfirm(ctx, "tx-high"); err != nil {
 		t.Fatalf("TransactionConfirm(high): %v", err)
 	}
-	if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
+	if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
 		jsonImporter.NewJsonTreeImporter(map[string]any{
 			"system": map[string]any{"hashed-password": hashV2},
 		}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
@@ -818,7 +818,7 @@ func TestDatastore_MutateOnWrite_PriorityTakeoverAndDeletionPromotion(t *testing
 		t.Fatalf("TransactionConfirm(delete high): %v", err)
 	}
 
-	if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
+	if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
 		jsonImporter.NewJsonTreeImporter(map[string]any{
 			"system": map[string]any{"hashed-password": hashV3},
 		}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
@@ -897,7 +897,7 @@ func TestDatastore_MutateOnWrite_UnconfirmedTransactionRollbackRecapturesPriorOw
 
 			assertRunningHashedPassword(t, f.ds, hashV3)
 
-			if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
+			if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{Elem: []*sdcpb.PathElem{}}},
 				jsonImporter.NewJsonTreeImporter(map[string]any{
 					"system": map[string]any{"hashed-password": hashV3},
 				}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
@@ -1655,7 +1655,7 @@ func TestDatastore_MutateOnWrite_DryRunAndNoopSkipTargetedGet(t *testing.T) {
 		}
 
 		// Empty readback is ignored, so an empty string in Running raises NOT_APPLIED.
-		if err := f.ds.ApplyToRunning(ctx, []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(map[string]any{
+		if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}}, jsonImporter.NewJsonTreeImporter(map[string]any{
 			"system": map[string]any{"hashed-password": ""},
 		}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
 			t.Fatalf("ApplyToRunning: %v", err)
@@ -1671,4 +1671,137 @@ func TestDatastore_MutateOnWrite_DryRunAndNoopSkipTargetedGet(t *testing.T) {
 			t.Fatalf("expected NOT_APPLIED when readback and Running were empty string, got %v", events)
 		}
 	})
+}
+
+func TestDatastore_MutateOnWrite_FailedReadbackUsesCausalPassiveSync(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		readback func() (*sdcpb.GetDataResponse, error)
+	}{
+		{
+			name: "targeted Get error",
+			readback: func() (*sdcpb.GetDataResponse, error) {
+				return nil, errors.New("targeted readback unavailable")
+			},
+		},
+		{
+			name: "targeted Get omits requested path",
+			readback: func() (*sdcpb.GetDataResponse, error) {
+				return &sdcpb.GetDataResponse{}, nil
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			f := newMOWDatastoreFixture(t, ctrl)
+			ctx := context.Background()
+
+			const (
+				cleartext = "PendingSecret!"
+				staleHash = "$6$before-set$hash"
+				freshHash = "$6$after-set$hash"
+			)
+
+			slowSyncStartedAt := time.Now().UnixNano()
+			setCall := f.sbi.EXPECT().
+				Set(gomock.Any(), gomock.Any()).
+				Return(&sdcpb.SetDataResponse{}, nil).
+				Times(1)
+			f.sbi.EXPECT().
+				Get(gomock.Any(), gomock.Any()).
+				After(setCall).
+				DoAndReturn(func(context.Context, *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+					return tc.readback()
+				}).
+				Times(1)
+
+			intent := buildJSONIntent(t, f.ds, "intent1", 10, false, map[string]any{
+				"system": map[string]any{"hashed-password": cleartext},
+			})
+			if _, err := f.ds.TransactionSet(ctx, "tx-pending", []*types.TransactionIntent{intent}, nil, time.Minute, false); err != nil {
+				t.Fatalf("TransactionSet: %v", err)
+			}
+			if err := f.ds.TransactionConfirm(ctx, "tx-pending"); err != nil {
+				t.Fatalf("TransactionConfirm: %v", err)
+			}
+
+			assertRunningHashedPassword(t, f.ds, cleartext)
+
+			if err := f.ds.ApplyToRunning(ctx, slowSyncStartedAt, []*sdcpb.Path{{}},
+				jsonImporter.NewJsonTreeImporter(map[string]any{
+					"system": map[string]any{"hashed-password": staleHash},
+				}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+				t.Fatalf("ApplyToRunning(pre-Set slow sync): %v", err)
+			}
+			assertRunningHashedPassword(t, f.ds, cleartext)
+
+			causalSyncStartedAt := time.Now().UnixNano()
+			if err := f.ds.ApplyToRunning(ctx, causalSyncStartedAt, []*sdcpb.Path{{}},
+				jsonImporter.NewJsonTreeImporter(map[string]any{
+					"system": map[string]any{"hashed-password": freshHash},
+				}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+				t.Fatalf("ApplyToRunning(post-Set sync): %v", err)
+			}
+			assertRunningHashedPassword(t, f.ds, freshHash)
+
+			if err := f.ds.ApplyToRunning(ctx, slowSyncStartedAt, []*sdcpb.Path{{}},
+				jsonImporter.NewJsonTreeImporter(map[string]any{
+					"system": map[string]any{"hashed-password": staleHash},
+				}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+				t.Fatalf("ApplyToRunning(late pre-Set slow sync): %v", err)
+			}
+			assertRunningHashedPassword(t, f.ds, freshHash)
+
+			for _, ev := range collectWatchDeviationsBatch(t, f.ds) {
+				if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE &&
+					ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED &&
+					ev.GetPath().ToXPath(false) == "/system/hashed-password" {
+					t.Fatalf("unexpected NOT_APPLIED after passive capture: %v", ev)
+				}
+			}
+		})
+	}
+}
+
+func TestDatastore_MutateOnWrite_PendingCaptureClearsWhenCausalSyncOmitsLeaf(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	f := newMOWDatastoreFixture(t, ctrl)
+	ctx := context.Background()
+
+	setCall := f.sbi.EXPECT().
+		Set(gomock.Any(), gomock.Any()).
+		Return(&sdcpb.SetDataResponse{}, nil).
+		Times(1)
+	f.sbi.EXPECT().
+		Get(gomock.Any(), gomock.Any()).
+		After(setCall).
+		Return(nil, errors.New("targeted readback unavailable")).
+		Times(1)
+
+	intent := buildJSONIntent(t, f.ds, "intent1", 10, true, map[string]any{
+		"system": map[string]any{"hashed-password": "MissingSecret!"},
+	})
+	if _, err := f.ds.TransactionSet(ctx, "tx-missing", []*types.TransactionIntent{intent}, nil, time.Minute, false); err != nil {
+		t.Fatalf("TransactionSet: %v", err)
+	}
+	if err := f.ds.TransactionConfirm(ctx, "tx-missing"); err != nil {
+		t.Fatalf("TransactionConfirm: %v", err)
+	}
+
+	if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+		jsonImporter.NewJsonTreeImporter(map[string]any{
+			"system": map[string]any{"hostname": "still-present"},
+		}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+		t.Fatalf("ApplyToRunning(causal missing leaf): %v", err)
+	}
+
+	for _, ev := range collectWatchDeviationsBatch(t, f.ds) {
+		if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE &&
+			ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED &&
+			ev.GetIntent() == "intent1" &&
+			ev.GetPath().ToXPath(false) == "/system/hashed-password" {
+			return
+		}
+	}
+	t.Fatal("expected NOT_APPLIED after a causal sync omitted the pending mutate-on-write leaf")
 }

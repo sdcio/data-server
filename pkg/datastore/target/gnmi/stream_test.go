@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/openconfig/gnmi/proto/gnmi"
-	schemaClientPkg "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/config"
+	schemaClientPkg "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
 	treeimporter "github.com/sdcio/data-server/pkg/tree/importer"
@@ -35,13 +35,16 @@ type fakeRunningStore struct {
 	mu          sync.Mutex
 	deletesSeen [][]*sdcpb.Path
 	importSeen  []bool
+	startedSeen []int64
 }
 
 // applied returns a snapshot of the deletes and importer-presence of every completed ApplyToRunning call.
-func (f *fakeRunningStore) applied() ([][]*sdcpb.Path, []bool) {
+func (f *fakeRunningStore) applied() ([][]*sdcpb.Path, []bool, []int64) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return append([][]*sdcpb.Path(nil), f.deletesSeen...), append([]bool(nil), f.importSeen...)
+	return append([][]*sdcpb.Path(nil), f.deletesSeen...),
+		append([]bool(nil), f.importSeen...),
+		append([]int64(nil), f.startedSeen...)
 }
 
 func newFakeRunningStore(sc *schemaClientPkg.SchemaClientBoundImpl, vp pool.VirtualPoolFactory) *fakeRunningStore {
@@ -53,7 +56,7 @@ func newFakeRunningStore(sc *schemaClientPkg.SchemaClientBoundImpl, vp pool.Virt
 	}
 }
 
-func (f *fakeRunningStore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.Path, imp treeimporter.ImportConfigAdapter) error {
+func (f *fakeRunningStore) ApplyToRunning(ctx context.Context, syncStartedAt int64, deletes []*sdcpb.Path, imp treeimporter.ImportConfigAdapter) error {
 	f.firstStartedOnce.Do(func() { close(f.firstStarted) })
 	select {
 	case <-f.firstUnblock:
@@ -63,6 +66,7 @@ func (f *fakeRunningStore) ApplyToRunning(ctx context.Context, deletes []*sdcpb.
 	f.mu.Lock()
 	f.deletesSeen = append(f.deletesSeen, deletes)
 	f.importSeen = append(f.importSeen, imp != nil)
+	f.startedSeen = append(f.startedSeen, syncStartedAt)
 	f.mu.Unlock()
 	f.calls.Add(1)
 	return nil
@@ -81,6 +85,14 @@ type fakeSyncTarget struct {
 
 func (f *fakeSyncTarget) Subscribe(_ context.Context, _ *gnmi.SubscribeRequest, _ string) (chan *gnmi.SubscribeResponse, chan error) {
 	return f.respChan, f.errChan
+}
+
+type fakeGetTarget struct {
+	response *sdcpb.GetDataResponse
+}
+
+func (f *fakeGetTarget) Get(context.Context, *sdcpb.GetDataRequest) (*sdcpb.GetDataResponse, error) {
+	return f.response, nil
 }
 
 // interfaceDescriptionNotif returns a gNMI SubscribeResponse_Update for
@@ -268,8 +280,8 @@ type failAfterFirstNewEmptyTree struct {
 	calls atomic.Int32
 }
 
-func (f *failAfterFirstNewEmptyTree) ApplyToRunning(ctx context.Context, d []*sdcpb.Path, i treeimporter.ImportConfigAdapter) error {
-	return f.inner.ApplyToRunning(ctx, d, i)
+func (f *failAfterFirstNewEmptyTree) ApplyToRunning(ctx context.Context, syncStartedAt int64, d []*sdcpb.Path, i treeimporter.ImportConfigAdapter) error {
+	return f.inner.ApplyToRunning(ctx, syncStartedAt, d, i)
 }
 
 func (f *failAfterFirstNewEmptyTree) NewEmptyTree(ctx context.Context) (*tree.RootEntry, error) {
@@ -315,6 +327,70 @@ func newStreamSyncForTest(t *testing.T, ctx context.Context, paths []string) (*S
 		}
 	})
 	return ss, target, store
+}
+
+func TestGetSync_PassesSnapshotStartToRunning(t *testing.T) {
+	ctx := context.Background()
+	sc, schemaConf, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatalf("init schema: %v", err)
+	}
+	scb := schemaClientPkg.NewSchemaClientBound(schemaConf, sc)
+	sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	store := newFakeRunningStore(scb, sharedPool)
+	close(store.firstUnblock)
+
+	target := &fakeGetTarget{response: &sdcpb.GetDataResponse{
+		Notification: []*sdcpb.Notification{{
+			Update: []*sdcpb.Update{{
+				Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+					sdcpb.NewPathElem("description", nil),
+				}},
+				Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "from-get"}},
+			}},
+		}},
+	}}
+	syncer, err := NewGetSync(ctx, target, &config.SyncProtocol{
+		Name:  "get-sync",
+		Paths: []string{"/interface"},
+	}, store, scb)
+	if err != nil {
+		t.Fatalf("NewGetSync: %v", err)
+	}
+
+	before := time.Now().UnixNano()
+	syncer.internalGetSync(&sdcpb.GetDataRequest{})
+	after := time.Now().UnixNano()
+
+	_, _, started := store.applied()
+	if len(started) != 1 || started[0] < before || started[0] > after {
+		t.Fatalf("syncStartedAt=%v, want one timestamp in [%d,%d]", started, before, after)
+	}
+}
+
+func TestNotificationProcessor_PreservesPreQueueStartTime(t *testing.T) {
+	ctx := context.Background()
+	sc, schemaConf, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatalf("init schema: %v", err)
+	}
+	scb := schemaClientPkg.NewSchemaClientBound(schemaConf, sc)
+	result := make(chan *NotificationData, 1)
+	const syncStartedAt = int64(123456789)
+	noti := interfaceDescriptionNotif("ethernet-1/1", "queued").GetUpdate()
+
+	task := newNotificationProcessorTask(
+		noti,
+		NewNotificationProcessorTaskParameters(result, scb, time.Second),
+		syncStartedAt,
+	)
+	if err := task.Run(ctx, nil); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := (<-result).syncStartedAt; got != syncStartedAt {
+		t.Fatalf("syncStartedAt=%d, want pre-queue timestamp %d", got, syncStartedAt)
+	}
 }
 
 func waitForApplyCalls(t *testing.T, store *fakeRunningStore, want int32) {
@@ -371,7 +447,7 @@ func TestStreamSync_ResubscribeReplacesSyncedPaths(t *testing.T) {
 	target.respChan <- syncRespMsg()
 	waitForApplyCalls(t, store, 3)
 
-	deletes, imported := store.applied()
+	deletes, imported, started := store.applied()
 	if len(deletes) != 3 {
 		t.Fatalf("got %d ApplyToRunning calls, want 3", len(deletes))
 	}
@@ -389,5 +465,13 @@ func TestStreamSync_ResubscribeReplacesSyncedPaths(t *testing.T) {
 	}
 	if !imported[2] {
 		t.Errorf("resync with device config must import it")
+	}
+	for i, syncStartedAt := range started {
+		if syncStartedAt <= 0 {
+			t.Errorf("sync %d: syncStartedAt=%d, want a timestamp captured before the snapshot", i, syncStartedAt)
+		}
+		if i > 0 && syncStartedAt <= started[i-1] {
+			t.Errorf("sync %d: syncStartedAt=%d, want later than previous snapshot %d", i, syncStartedAt, started[i-1])
+		}
 	}
 }

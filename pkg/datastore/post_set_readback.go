@@ -101,6 +101,11 @@ func (d *Datastore) fetchMutateOnWriteReadbacks(ctx context.Context, paths []*sd
 			}
 		}
 	}
+	for _, path := range paths {
+		if _, ok := readbacks[newCanonicalLeafPath(path)]; !ok {
+			log.Info("post-Set targeted Get omitted mutate-on-write leaf", "severity", "WARN", "path", path.ToXPath(false))
+		}
+	}
 	return readbacks
 }
 
@@ -115,15 +120,14 @@ func (d *Datastore) gnmiReadbackEncoding() (sdcpb.Encoding, bool) {
 	return enc, true
 }
 
-// applyReadbacksAndWriteBackRunning binds non-empty post-Set readbacks as
-// confirmed applied values for pushed mutate-on-write leaves, evicts stale
-// baselines when readbacks are empty or missing, and updates Running.
-func (d *Datastore) applyReadbacksAndWriteBackRunning(ctx context.Context, updates api.LeafVariantSlice, deletes treetypes.DeleteEntriesList, readbacks map[canonicalLeafPath]*sdcpb.TypedValue) error {
+// applyReadbacksAndWriteBackRunning binds non-empty post-Set readbacks and
+// leaves missing values pending for causal sync capture while updating Running.
+func (d *Datastore) applyReadbacksAndWriteBackRunning(ctx context.Context, updates api.LeafVariantSlice, deletes treetypes.DeleteEntriesList, readbacks map[canonicalLeafPath]*sdcpb.TypedValue, setDoneUnixNano int64) error {
 	return d.writeReadbacksToRunning(ctx, updates, deletes, readbacks, func(le *api.LeafEntry, rb *sdcpb.TypedValue, ok bool) {
 		if ok {
-			d.confirmedApplied.Record(le.SdcpbPath(), le.Owner(), le.Value(), rb)
+			d.confirmedApplied.RecordAfter(le.SdcpbPath(), le.Owner(), le.Value(), rb, setDoneUnixNano)
 		} else {
-			d.confirmedApplied.Delete(le.SdcpbPath())
+			d.confirmedApplied.MarkPending(le.SdcpbPath(), le.Owner(), le.Value(), setDoneUnixNano)
 		}
 	})
 }
@@ -131,11 +135,11 @@ func (d *Datastore) applyReadbacksAndWriteBackRunning(ctx context.Context, updat
 // reconcileReplaceReadbacksAndWriteBackRunning clears prior baselines after a
 // full-config replace, binds non-empty readbacks to matching winning persisted
 // owners when present, and writes confirmed applied values into Running.
-func (d *Datastore) reconcileReplaceReadbacksAndWriteBackRunning(ctx context.Context, updates api.LeafVariantSlice, deletes treetypes.DeleteEntriesList, readbacks map[canonicalLeafPath]*sdcpb.TypedValue) error {
+func (d *Datastore) reconcileReplaceReadbacksAndWriteBackRunning(ctx context.Context, updates api.LeafVariantSlice, deletes treetypes.DeleteEntriesList, readbacks map[canonicalLeafPath]*sdcpb.TypedValue, setDoneUnixNano int64) error {
 	d.confirmedApplied.ClearAll()
 
 	var persistedIntents *tree.RootEntry
-	if len(readbacks) > 0 {
+	if len(collectPushedMutateOnWritePaths(updates)) > 0 {
 		if root, err := d.NewEmptyTree(ctx); err == nil {
 			if _, loadErr := d.LoadAllButRunningIntents(ctx, root); loadErr == nil && root.FinishInsertionPhase(ctx) == nil {
 				persistedIntents = root
@@ -144,11 +148,14 @@ func (d *Datastore) reconcileReplaceReadbacksAndWriteBackRunning(ctx context.Con
 	}
 
 	return d.writeReadbacksToRunning(ctx, updates, deletes, readbacks, func(le *api.LeafEntry, rb *sdcpb.TypedValue, ok bool) {
-		if !ok {
+		owner, matched := winningPersistedOwnerWithValue(ctx, persistedIntents, le.SdcpbPath(), le.Value())
+		if !matched {
 			return
 		}
-		if owner, matched := winningPersistedOwnerWithValue(ctx, persistedIntents, le.SdcpbPath(), le.Value()); matched {
-			d.confirmedApplied.Record(le.SdcpbPath(), owner, le.Value(), rb)
+		if ok {
+			d.confirmedApplied.RecordAfter(le.SdcpbPath(), owner, le.Value(), rb, setDoneUnixNano)
+		} else {
+			d.confirmedApplied.MarkPending(le.SdcpbPath(), owner, le.Value(), setDoneUnixNano)
 		}
 	})
 }

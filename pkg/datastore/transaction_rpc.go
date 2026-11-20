@@ -144,6 +144,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	if err != nil {
 		return nil, err
 	}
+	setDoneUnixNano := time.Now().UnixNano()
 	// collect warnings
 	warnings = append(warnings, dataResp.GetWarnings()...)
 
@@ -154,7 +155,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	deletes := treetypes.DeleteEntriesList{root}
 	readbacks := d.fetchMutateOnWriteReadbacks(ctx, collectPushedMutateOnWritePaths(updates))
 
-	err = d.reconcileReplaceReadbacksAndWriteBackRunning(ctx, updates, deletes, readbacks)
+	err = d.reconcileReplaceReadbacksAndWriteBackRunning(ctx, updates, deletes, readbacks, setDoneUnixNano)
 	if err != nil {
 		return nil, err
 	}
@@ -335,6 +336,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	if err != nil {
 		return nil, err
 	}
+	setDoneUnixNano := time.Now().UnixNano()
 	result.Warnings = append(result.Warnings, dataResp.GetWarnings()...)
 	readbacks := d.fetchMutateOnWriteReadbacks(ctx, collectPushedMutateOnWritePaths(updates))
 
@@ -380,7 +382,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 	}
 
-	err = d.applyReadbacksAndWriteBackRunning(ctx, updates, deletes, readbacks)
+	err = d.applyReadbacksAndWriteBackRunning(ctx, updates, deletes, readbacks, setDoneUnixNano)
 	if err != nil {
 		return nil, err
 	}

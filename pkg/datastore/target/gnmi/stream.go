@@ -141,10 +141,11 @@ func (s *StreamSync) Start() error {
 		s.paths = append(s.paths, sp)
 	}
 
+	syncStartedAt := time.Now().UnixNano()
 	// start the gnmi subscribe request, that also used the pool for
 	go s.gnmiSubscribe(subReq, updChan)
 	//
-	go s.buildTreeSyncWithDatastore(updChan)
+	go s.buildTreeSyncWithDatastore(updChan, syncStartedAt)
 
 	return nil
 }
@@ -162,7 +163,7 @@ func (s *StreamSync) Start() error {
 // and being silently dropped while a slow performRevert holds the goroutine
 // (see GitHub issue #440). Commits still apply to Running in the order they
 // were started.
-func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData) {
+func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, initialSyncStartedAt int64) {
 	log := logger.FromContext(s.ctx)
 	syncTree, err := s.runningStore.NewEmptyTree(s.ctx)
 	if err != nil {
@@ -189,18 +190,24 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData) {
 	// awaitingFullSync is true from a resubscribe marker until the following
 	// SyncResponse.
 	awaitingFullSync := false
+	batchStartedAt := initialSyncStartedAt
 
 	// commit hands the accumulated syncTree to a background goroutine and
 	// continues with a fresh tree. It reports false when no fresh tree could
 	// be created.
 	commit := func(replacePaths []*sdcpb.Path) bool {
 		treeToCommit := syncTree
+		syncStartedAt := batchStartedAt
+		if syncStartedAt == 0 {
+			syncStartedAt = time.Now().UnixNano()
+		}
 		next, err := s.runningStore.NewEmptyTree(s.ctx)
 		if err != nil {
 			log.Error(err, "failure creating new sync tree")
 			return false
 		}
 		syncTree = next
+		batchStartedAt = 0
 
 		waitFor := prevDone
 		done := make(chan struct{})
@@ -210,7 +217,7 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData) {
 			defer close(done)
 			defer inflight.Add(-1)
 			<-waitFor
-			if err := s.syncToRunning(treeToCommit, replacePaths, true); err != nil {
+			if err := s.syncToRunning(treeToCommit, syncStartedAt, replacePaths, true); err != nil {
 				log.Error(err, "failed committing synctree to running")
 			}
 		}()
@@ -236,6 +243,10 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData) {
 					return
 				}
 				awaitingFullSync = true
+				batchStartedAt = noti.syncStartedAt
+				if batchStartedAt == 0 {
+					batchStartedAt = time.Now().UnixNano()
+				}
 				continue
 			case markerSyncResponse:
 				var replacePaths []*sdcpb.Path
@@ -252,6 +263,12 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData) {
 					tickerChan = t.C
 				}
 				continue
+			}
+			if batchStartedAt == 0 {
+				batchStartedAt = noti.syncStartedAt
+				if batchStartedAt == 0 {
+					batchStartedAt = time.Now().UnixNano()
+				}
 			}
 			err := syncTree.AddUpdatesRecursive(s.ctx, noti.updates, uif)
 			if err != nil {
@@ -289,11 +306,11 @@ func (s *StreamSync) gnmiSubscribe(subReq *gnmi.SubscribeRequest, updChan chan<-
 
 	// sendMarker waits for all submitted notification tasks to finish, then
 	// sends the marker. It reports false when the sync is stopping.
-	sendMarker := func(m notificationMarker) bool {
+	sendMarker := func(m notificationMarker, syncStartedAt int64) bool {
 		taskPool.CloseAndWait()
 		taskPool = s.vpoolFactory.NewVirtualPool(pool.VirtualTolerant)
 		select {
-		case updChan <- &NotificationData{marker: m}:
+		case updChan <- &NotificationData{marker: m, syncStartedAt: syncStartedAt}:
 			return true
 		case <-s.ctx.Done():
 			return false
@@ -302,6 +319,7 @@ func (s *StreamSync) gnmiSubscribe(subReq *gnmi.SubscribeRequest, updChan chan<-
 
 	syncStartTime := time.Now()
 	for {
+		syncStartedAt := time.Now().UnixNano()
 		select {
 		case <-s.ctx.Done():
 			return
@@ -312,7 +330,7 @@ func (s *StreamSync) gnmiSubscribe(subReq *gnmi.SubscribeRequest, updChan chan<-
 			if err != nil {
 				log.Error(err, "stream sync interrupted, waiting for resubscribe")
 				syncStartTime = time.Now()
-				if !sendMarker(markerResubscribed) {
+				if !sendMarker(markerResubscribed, syncStartTime.UnixNano()) {
 					return
 				}
 			}
@@ -322,14 +340,14 @@ func (s *StreamSync) gnmiSubscribe(subReq *gnmi.SubscribeRequest, updChan chan<-
 			}
 			switch r := resp.GetResponse().(type) {
 			case *gnmi.SubscribeResponse_Update:
-				err = taskPool.Submit(newNotificationProcessorTask(resp.GetUpdate(), taskParams))
+				err = taskPool.Submit(newNotificationProcessorTask(resp.GetUpdate(), taskParams, syncStartedAt))
 				if err != nil {
 					log.Error(err, "failure processing notifications")
 					continue
 				}
 			case *gnmi.SubscribeResponse_SyncResponse:
 				log.Info("SyncResponse flag received", "initial sync duration", time.Since(syncStartTime).String())
-				if !sendMarker(markerSyncResponse) {
+				if !sendMarker(markerSyncResponse, 0) {
 					return
 				}
 
@@ -351,7 +369,7 @@ func (s *StreamSync) gnmiSubscribe(subReq *gnmi.SubscribeRequest, updChan chan<-
 //
 // replacePaths are deleted from Running before the import, so Running under
 // those paths ends up equal to syncTree. An empty syncTree still applies them.
-func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, replacePaths []*sdcpb.Path, logCount bool) error {
+func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, syncStartedAt int64, replacePaths []*sdcpb.Path, logCount bool) error {
 	log := logger.FromContext(s.ctx)
 
 	startTime := time.Now()
@@ -364,7 +382,7 @@ func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, replacePaths []*sdc
 				return nil
 			}
 			log.Info("sync found no config under the synced paths, clearing them in running")
-			return s.runningStore.ApplyToRunning(s.ctx, replacePaths, nil)
+			return s.runningStore.ApplyToRunning(s.ctx, syncStartedAt, replacePaths, nil)
 		}
 		log.Error(err, "sync tree export error")
 		return err
@@ -380,7 +398,7 @@ func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, replacePaths []*sdc
 	log.V(logger.VTrace).Info("synctree export done", "duration", time.Since(startTime).String())
 	startTime = time.Now()
 
-	err = s.runningStore.ApplyToRunning(s.ctx, deletes, proto.NewProtoTreeImporter(result))
+	err = s.runningStore.ApplyToRunning(s.ctx, syncStartedAt, deletes, proto.NewProtoTreeImporter(result))
 	if err != nil {
 		log.Error(err, "failed importing sync to running")
 		return err
@@ -408,14 +426,16 @@ const (
 )
 
 type NotificationData struct {
-	updates []*treetypes.PathAndUpdate
-	deletes *sdcpb.PathSet
-	marker  notificationMarker
+	updates       []*treetypes.PathAndUpdate
+	deletes       *sdcpb.PathSet
+	marker        notificationMarker
+	syncStartedAt int64
 }
 
 type notificationProcessorTask struct {
-	item   *gnmi.Notification
-	params *NotificationProcessorTaskParameters
+	item          *gnmi.Notification
+	params        *NotificationProcessorTaskParameters
+	syncStartedAt int64
 }
 
 type NotificationProcessorTaskParameters struct {
@@ -432,10 +452,11 @@ func NewNotificationProcessorTaskParameters(notificationResult chan<- *Notificat
 	}
 }
 
-func newNotificationProcessorTask(item *gnmi.Notification, params *NotificationProcessorTaskParameters) *notificationProcessorTask {
+func newNotificationProcessorTask(item *gnmi.Notification, params *NotificationProcessorTaskParameters, syncStartedAt int64) *notificationProcessorTask {
 	return &notificationProcessorTask{
-		item:   item,
-		params: params,
+		item:          item,
+		params:        params,
+		syncStartedAt: syncStartedAt,
 	}
 }
 
@@ -474,7 +495,8 @@ func (t *notificationProcessorTask) Run(ctx context.Context, _ func(pool.Task) e
 	}
 
 	return t.sendNotificationData(ctx, &NotificationData{
-		updates: upds,
-		deletes: deletes,
+		updates:       upds,
+		deletes:       deletes,
+		syncStartedAt: t.syncStartedAt,
 	})
 }
