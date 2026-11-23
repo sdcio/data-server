@@ -376,6 +376,29 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 	return nil
 }
 
+// ActiveIntendedWinner returns the highest-precedence active intended variant,
+// or nil when no intended variant exists or an explicit delete wins.
+func (lv *LeafVariants) ActiveIntendedWinner() *LeafEntry {
+	if lv == nil {
+		return nil
+	}
+	lv.lesMutex.RLock()
+	defer lv.lesMutex.RUnlock()
+	var highest *LeafEntry
+	for _, le := range lv.les {
+		if le.Owner() == treeconsts.DefaultsIntentName || le.Owner() == treeconsts.RunningIntentName || FilterDeletedNotExplicitDelete(le) {
+			continue
+		}
+		if highest == nil || le.Priority() < highest.Priority() {
+			highest = le
+		}
+	}
+	if highest == nil || highest.GetExplicitDeleteFlag() {
+		return nil
+	}
+	return highest
+}
+
 // DriftBaseline returns the confirmed applied value for highest when registered
 // for this leaf's path, owner, and intended value, falling back to highest.Value().
 func (lv *LeafVariants) DriftBaseline(highest *LeafEntry) *sdcpb.TypedValue {

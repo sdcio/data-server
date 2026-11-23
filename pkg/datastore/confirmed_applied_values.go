@@ -15,6 +15,7 @@
 package datastore
 
 import (
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -33,36 +34,79 @@ type canonicalLeafPath string
 // for a leaf's schema path across all list instances.
 type keylessLeafPath string
 
-type captureMode uint8
+type baselineMode uint8
 
 const (
-	captureConfirmed captureMode = iota
-	capturePendingMutateOnWrite
-	capturePendingCryptDiscovery
+	modeConfirmed baselineMode = iota
+	modeMutateOnWrite
+	modeCryptDiscovery
 )
 
-type confirmedAppliedEntry struct {
-	path             *sdcpb.Path
-	owner            string
-	intendedValue    *sdcpb.TypedValue
-	confirmedValue   *sdcpb.TypedValue
-	pendingCaptureAt int64
-	mode             captureMode
+// baselineIdentity identifies the winning intent state to which a confirmed
+// applied value or pending capture epoch is bound.
+type baselineIdentity struct {
+	path          *sdcpb.Path
+	owner         string
+	intendedValue *sdcpb.TypedValue
 }
 
-// causalCaptureEpoch is a snapshot of one mutate-on-write write epoch. Completed
-// epochs retain confirmedValue so older in-flight syncs can be ignored.
+func cloneBaselineIdentity(id baselineIdentity) baselineIdentity {
+	return baselineIdentity{
+		path:          proto.Clone(id.path).(*sdcpb.Path),
+		owner:         id.owner,
+		intendedValue: proto.Clone(id.intendedValue).(*sdcpb.TypedValue),
+	}
+}
+
+func (id baselineIdentity) matches(owner string, intendedValue *sdcpb.TypedValue) bool {
+	return id.owner == owner && api.TypedValuesEqual(id.intendedValue, intendedValue)
+}
+
+type confirmedAppliedEntry struct {
+	baselineIdentity
+	confirmedValue          *sdcpb.TypedValue
+	captureAfterNano        int64
+	awaitingInitialSyncSeed bool
+	mode                    baselineMode
+}
+
+func cloneConfirmedAppliedEntry(e confirmedAppliedEntry) confirmedAppliedEntry {
+	out := confirmedAppliedEntry{
+		baselineIdentity:        cloneBaselineIdentity(e.baselineIdentity),
+		captureAfterNano:        e.captureAfterNano,
+		awaitingInitialSyncSeed: e.awaitingInitialSyncSeed,
+		mode:                    e.mode,
+	}
+	if e.confirmedValue != nil {
+		out.confirmedValue = proto.Clone(e.confirmedValue).(*sdcpb.TypedValue)
+	}
+	return out
+}
+
+// causalCaptureEpoch is an immutable snapshot of one mutate-on-write write or
+// recovery epoch. Completed write epochs retain confirmedValue so older
+// in-flight syncs can be ignored.
 type causalCaptureEpoch struct {
-	path             *sdcpb.Path
-	owner            string
-	intendedValue    *sdcpb.TypedValue
-	confirmedValue   *sdcpb.TypedValue
-	captureAfterNano int64
-	mode             captureMode
+	confirmedAppliedEntry
 }
 
 func (e causalCaptureEpoch) IsPending() bool {
-	return e.mode != captureConfirmed
+	return e.mode != modeConfirmed
+}
+
+func (e causalCaptureEpoch) IsAwaitingInitialSync() bool {
+	return e.IsPending() && e.awaitingInitialSyncSeed
+}
+
+// BlocksSync reports whether this write epoch postdates syncStartedAt and must
+// keep older in-flight sync snapshots from overwriting Running or capturing stale data.
+func (e causalCaptureEpoch) BlocksSync(syncStartedAt int64) bool {
+	return !e.awaitingInitialSyncSeed && syncStartedAt < e.captureAfterNano
+}
+
+type confirmedAppliedSnapshot struct {
+	entries      map[canonicalLeafPath]confirmedAppliedEntry
+	learnedPaths map[keylessLeafPath]struct{}
 }
 
 // confirmedAppliedValues holds the datastore's in-memory drift baselines and
@@ -92,10 +136,7 @@ func (s *confirmedAppliedValues) Lookup(path *sdcpb.Path, winningOwner string, i
 	s.mu.RLock()
 	entry, ok := s.entries[key]
 	s.mu.RUnlock()
-	if !ok || entry.confirmedValue == nil {
-		return nil
-	}
-	if entry.owner != winningOwner || !api.TypedValuesEqual(entry.intendedValue, intendedValue) {
+	if !ok || entry.confirmedValue == nil || !entry.matches(winningOwner, intendedValue) {
 		return nil
 	}
 	return proto.Clone(entry.confirmedValue).(*sdcpb.TypedValue)
@@ -105,69 +146,116 @@ func (s *confirmedAppliedValues) Lookup(path *sdcpb.Path, winningOwner string, i
 // when confirmedValue is non-empty. If intendedValue already matches the
 // crypt/cipher allowlist and confirmedValue differs, any baseline for path is evicted.
 func (s *confirmedAppliedValues) Record(path *sdcpb.Path, owner string, intendedValue, confirmedValue *sdcpb.TypedValue) {
-	s.record(path, owner, intendedValue, confirmedValue, 0)
+	s.record(baselineIdentity{path: path, owner: owner, intendedValue: intendedValue}, confirmedValue, 0)
 }
 
 // RecordAfter stores a baseline and the write completion barrier that older
 // in-flight sync snapshots must not cross, or evicts any baseline for path when
 // a pre-hashed intendedValue differs from confirmedValue.
 func (s *confirmedAppliedValues) RecordAfter(path *sdcpb.Path, owner string, intendedValue, confirmedValue *sdcpb.TypedValue, captureAfterNano int64) {
-	s.record(path, owner, intendedValue, confirmedValue, captureAfterNano)
+	s.record(baselineIdentity{path: path, owner: owner, intendedValue: intendedValue}, confirmedValue, captureAfterNano)
 }
 
-func (s *confirmedAppliedValues) record(path *sdcpb.Path, owner string, intendedValue, confirmedValue *sdcpb.TypedValue, captureAfterNano int64) {
-	if s == nil || path == nil || owner == "" || intendedValue == nil || !isNonEmptyTypedValue(confirmedValue) {
+// RecordDiscovered seeds a baseline for an unannotated plain string leaf only
+// when confirmedValue matches a recognized crypt/cipher format and intendedValue
+// does not, learning the leaf's keyless schema path on match and evicting any
+// prior baseline for path otherwise.
+func (s *confirmedAppliedValues) RecordDiscovered(id baselineIdentity, confirmedValue *sdcpb.TypedValue) {
+	if s == nil || id.path == nil || id.owner == "" || id.intendedValue == nil {
 		return
 	}
-	if rejectsPreHashedMismatch(intendedValue, confirmedValue) {
-		s.Delete(path)
+	key := newCanonicalLeafPath(id.path)
+	s.mu.Lock()
+	s.recordDiscoveredLocked(key, cloneBaselineIdentity(id), confirmedValue, 0)
+	s.mu.Unlock()
+}
+
+func (s *confirmedAppliedValues) recordDiscoveredLocked(key canonicalLeafPath, clonedID baselineIdentity, observed *sdcpb.TypedValue, captureAfterNano int64) {
+	if !isCryptDiscoveryMatch(clonedID.intendedValue, observed) {
+		delete(s.entries, key)
 		return
 	}
-	key := newCanonicalLeafPath(path)
+	s.entries[key] = confirmedAppliedEntry{
+		baselineIdentity: clonedID,
+		confirmedValue:   proto.Clone(observed).(*sdcpb.TypedValue),
+		captureAfterNano: captureAfterNano,
+		mode:             modeConfirmed,
+	}
+	if kp := newKeylessLeafPath(clonedID.path); kp != "" {
+		s.learnedPaths[kp] = struct{}{}
+	}
+}
+
+func (s *confirmedAppliedValues) record(id baselineIdentity, confirmedValue *sdcpb.TypedValue, captureAfterNano int64) {
+	if s == nil || id.path == nil || id.owner == "" || id.intendedValue == nil || !isNonEmptyTypedValue(confirmedValue) {
+		return
+	}
+	if rejectsPreHashedMismatch(id.intendedValue, confirmedValue) {
+		s.Delete(id.path)
+		return
+	}
+	key := newCanonicalLeafPath(id.path)
 
 	s.mu.Lock()
-	entry := confirmedAppliedEntry{
-		path:             proto.Clone(path).(*sdcpb.Path),
-		owner:            owner,
-		intendedValue:    proto.Clone(intendedValue).(*sdcpb.TypedValue),
+	s.entries[key] = confirmedAppliedEntry{
+		baselineIdentity: cloneBaselineIdentity(id),
 		confirmedValue:   proto.Clone(confirmedValue).(*sdcpb.TypedValue),
-		pendingCaptureAt: captureAfterNano,
-		mode:             captureConfirmed,
+		captureAfterNano: captureAfterNano,
+		mode:             modeConfirmed,
 	}
-	s.entries[key] = entry
 	s.mu.Unlock()
 }
 
 // MarkPending retains the winning intent identity until a causally subsequent
 // sync can supply the confirmed target value.
 func (s *confirmedAppliedValues) MarkPending(path *sdcpb.Path, owner string, intendedValue *sdcpb.TypedValue, captureAfterNano int64) {
-	s.markPending(path, owner, intendedValue, captureAfterNano, capturePendingMutateOnWrite)
+	s.markPending(baselineIdentity{path: path, owner: owner, intendedValue: intendedValue}, captureAfterNano, modeMutateOnWrite)
 }
 
 // MarkDiscoveryCandidate records an unconfirmed push marker for an unannotated
 // plain string leaf whose first causal sync may reveal a crypt or cipher value.
 func (s *confirmedAppliedValues) MarkDiscoveryCandidate(path *sdcpb.Path, owner string, intendedValue *sdcpb.TypedValue, captureAfterNano int64) {
-	s.markPending(path, owner, intendedValue, captureAfterNano, capturePendingCryptDiscovery)
+	s.markPending(baselineIdentity{path: path, owner: owner, intendedValue: intendedValue}, captureAfterNano, modeCryptDiscovery)
 }
 
-func (s *confirmedAppliedValues) markPending(path *sdcpb.Path, owner string, intendedValue *sdcpb.TypedValue, captureAfterNano int64, mode captureMode) {
-	if s == nil || path == nil || owner == "" || intendedValue == nil || captureAfterNano <= 0 {
+// MarkAwaitingInitialSync defers baseline seeding for id until the first sync
+// covering id.path completes. When preserveExisting is true, an existing
+// baseline or pending marker at id.path is left intact.
+func (s *confirmedAppliedValues) MarkAwaitingInitialSync(id baselineIdentity, mode baselineMode, preserveExisting bool) {
+	if s == nil || id.path == nil || id.owner == "" || id.intendedValue == nil || mode == modeConfirmed {
 		return
 	}
-	key := newCanonicalLeafPath(path)
+	key := newCanonicalLeafPath(id.path)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if preserveExisting {
+		if _, exists := s.entries[key]; exists {
+			return
+		}
+	}
+	s.entries[key] = confirmedAppliedEntry{
+		baselineIdentity:        cloneBaselineIdentity(id),
+		awaitingInitialSyncSeed: true,
+		mode:                    mode,
+	}
+}
+
+func (s *confirmedAppliedValues) markPending(id baselineIdentity, captureAfterNano int64, mode baselineMode) {
+	if s == nil || id.path == nil || id.owner == "" || id.intendedValue == nil || captureAfterNano <= 0 {
+		return
+	}
+	key := newCanonicalLeafPath(id.path)
 	s.mu.Lock()
 	s.entries[key] = confirmedAppliedEntry{
-		path:             proto.Clone(path).(*sdcpb.Path),
-		owner:            owner,
-		intendedValue:    proto.Clone(intendedValue).(*sdcpb.TypedValue),
-		pendingCaptureAt: captureAfterNano,
+		baselineIdentity: cloneBaselineIdentity(id),
+		captureAfterNano: captureAfterNano,
 		mode:             mode,
 	}
 	s.mu.Unlock()
 }
 
-// CausalCaptures returns write epochs that still guard against older syncs.
-// Pending entries also need the first causally subsequent observation.
+// CausalCaptures returns write epochs that guard against older syncs plus
+// pending post-Set or initial-sync seed epochs awaiting observation.
 func (s *confirmedAppliedValues) CausalCaptures() []causalCaptureEpoch {
 	if s == nil {
 		return nil
@@ -176,28 +264,19 @@ func (s *confirmedAppliedValues) CausalCaptures() []causalCaptureEpoch {
 	defer s.mu.RUnlock()
 	result := make([]causalCaptureEpoch, 0)
 	for _, entry := range s.entries {
-		if entry.pendingCaptureAt == 0 {
+		if entry.captureAfterNano == 0 && !entry.awaitingInitialSyncSeed {
 			continue
 		}
-		result = append(result, causalCaptureEpoch{
-			path:             proto.Clone(entry.path).(*sdcpb.Path),
-			owner:            entry.owner,
-			intendedValue:    proto.Clone(entry.intendedValue).(*sdcpb.TypedValue),
-			captureAfterNano: entry.pendingCaptureAt,
-			mode:             entry.mode,
-		})
-		if entry.confirmedValue != nil {
-			result[len(result)-1].confirmedValue = proto.Clone(entry.confirmedValue).(*sdcpb.TypedValue)
-		}
+		result = append(result, causalCaptureEpoch{confirmedAppliedEntry: cloneConfirmedAppliedEntry(entry)})
 	}
 	return result
 }
 
-// CompletePending resolves pending against the first causally subsequent
-// observation: crypt-discovery epochs bind matching crypt/cipher observations
-// and permanently learn the leaf's keyless schema path, mutate-on-write epochs
-// bind non-empty observations unless a pre-hashed intendedValue differs, and
-// non-matching or missing observations evict the epoch.
+// CompletePending resolves pending against the first covering observation:
+// crypt-discovery epochs bind matching crypt/cipher observations and permanently
+// learn the leaf's keyless schema path, mutate-on-write epochs bind non-empty
+// observations unless a pre-hashed intendedValue differs, and non-matching or
+// missing observations evict the epoch.
 func (s *confirmedAppliedValues) CompletePending(pending causalCaptureEpoch, observed *sdcpb.TypedValue) {
 	if s == nil || !pending.IsPending() {
 		return
@@ -206,21 +285,13 @@ func (s *confirmedAppliedValues) CompletePending(pending causalCaptureEpoch, obs
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	entry, ok := s.entries[key]
-	if !ok || entry.mode != pending.mode || entry.pendingCaptureAt != pending.captureAfterNano ||
-		entry.owner != pending.owner || !api.TypedValuesEqual(entry.intendedValue, pending.intendedValue) {
+	if !ok || entry.mode != pending.mode || entry.captureAfterNano != pending.captureAfterNano ||
+		entry.awaitingInitialSyncSeed != pending.awaitingInitialSyncSeed ||
+		!entry.matches(pending.owner, pending.intendedValue) {
 		return
 	}
-	if pending.mode == capturePendingCryptDiscovery {
-		if !isCryptDiscoveryMatch(pending.intendedValue, observed) {
-			delete(s.entries, key)
-			return
-		}
-		entry.confirmedValue = proto.Clone(observed).(*sdcpb.TypedValue)
-		entry.mode = captureConfirmed
-		s.entries[key] = entry
-		if kp := newKeylessLeafPath(pending.path); kp != "" {
-			s.learnedPaths[kp] = struct{}{}
-		}
+	if pending.mode == modeCryptDiscovery {
+		s.recordDiscoveredLocked(key, entry.baselineIdentity, observed, entry.captureAfterNano)
 		return
 	}
 	if !isNonEmptyTypedValue(observed) || rejectsPreHashedMismatch(pending.intendedValue, observed) {
@@ -228,8 +299,62 @@ func (s *confirmedAppliedValues) CompletePending(pending causalCaptureEpoch, obs
 		return
 	}
 	entry.confirmedValue = proto.Clone(observed).(*sdcpb.TypedValue)
-	entry.mode = captureConfirmed
+	entry.awaitingInitialSyncSeed = false
+	entry.mode = modeConfirmed
 	s.entries[key] = entry
+}
+
+// Snapshot captures a deep copy of all stored baselines and learned keyless
+// paths so an unconfirmed transaction can restore untouched state on rollback.
+func (s *confirmedAppliedValues) Snapshot() *confirmedAppliedSnapshot {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	entries := make(map[canonicalLeafPath]confirmedAppliedEntry, len(s.entries))
+	for k, v := range s.entries {
+		entries[k] = cloneConfirmedAppliedEntry(v)
+	}
+	return &confirmedAppliedSnapshot{
+		entries:      entries,
+		learnedPaths: maps.Clone(s.learnedPaths),
+	}
+}
+
+// RestoreOnRollback reverts learnedPaths to snap (preserving any paths confirmed
+// by live write epochs) and restores untouched pre-transaction entries whose
+// owner and intendedValue are once again active.
+func (s *confirmedAppliedValues) RestoreOnRollback(
+	snap *confirmedAppliedSnapshot,
+	isTouched func(path *sdcpb.Path) bool,
+	isActiveWinner func(id baselineIdentity) bool,
+) {
+	if s == nil || snap == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	restoredLearned := maps.Clone(snap.learnedPaths)
+	for _, entry := range s.entries {
+		if entry.mode == modeConfirmed && entry.captureAfterNano > 0 {
+			if kp := newKeylessLeafPath(entry.path); kp != "" {
+				restoredLearned[kp] = struct{}{}
+			}
+		}
+	}
+	s.learnedPaths = restoredLearned
+
+	for key, prev := range snap.entries {
+		if _, exists := s.entries[key]; exists {
+			continue
+		}
+		if isTouched(prev.path) || !isActiveWinner(prev.baselineIdentity) {
+			continue
+		}
+		s.entries[key] = cloneConfirmedAppliedEntry(prev)
+	}
 }
 
 // DeleteSubtree removes stored baselines or pending markers at or below prefix.
@@ -255,6 +380,38 @@ func (s *confirmedAppliedValues) Delete(path *sdcpb.Path) {
 	key := newCanonicalLeafPath(path)
 	s.mu.Lock()
 	delete(s.entries, key)
+	s.mu.Unlock()
+}
+
+// SnapshotIdentities returns cloned identities for all currently stored baselines
+// and pending capture markers.
+func (s *confirmedAppliedValues) SnapshotIdentities() []baselineIdentity {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if len(s.entries) == 0 {
+		return nil
+	}
+	out := make([]baselineIdentity, 0, len(s.entries))
+	for _, entry := range s.entries {
+		out = append(out, cloneBaselineIdentity(entry.baselineIdentity))
+	}
+	return out
+}
+
+// DeleteIdentity removes the entry at id.path only when its stored owner and
+// intendedValue still match id.
+func (s *confirmedAppliedValues) DeleteIdentity(id baselineIdentity) {
+	if s == nil || id.path == nil {
+		return
+	}
+	key := newCanonicalLeafPath(id.path)
+	s.mu.Lock()
+	if entry, ok := s.entries[key]; ok && entry.matches(id.owner, id.intendedValue) {
+		delete(s.entries, key)
+	}
 	s.mu.Unlock()
 }
 

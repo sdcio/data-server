@@ -22,8 +22,23 @@ import (
 // ApplyToRunning commits one sync observation. syncStartedAt is Unix
 // nanoseconds captured before the producer starts reading the target snapshot.
 func (d *Datastore) ApplyToRunning(ctx context.Context, syncStartedAt int64, deletes []*sdcpb.Path, importer importer.ImportConfigAdapter) error {
+	return d.applyToRunning(ctx, syncStartedAt, nil, deletes, importer)
+}
+
+// ApplyInitialSync commits an initial merge-only sync observation while
+// atomically recording syncPaths coverage before releasing syncTreeMutex or
+// running performRevert.
+func (d *Datastore) ApplyInitialSync(ctx context.Context, syncStartedAt int64, syncPaths []*sdcpb.Path, deletes []*sdcpb.Path, importer importer.ImportConfigAdapter) error {
+	return d.applyToRunning(ctx, syncStartedAt, syncPaths, deletes, importer)
+}
+
+func (d *Datastore) applyToRunning(ctx context.Context, syncStartedAt int64, initialSyncPaths []*sdcpb.Path, deletes []*sdcpb.Path, importer importer.ImportConfigAdapter) error {
 
 	log := logger.FromContext(ctx)
+
+	if err := d.ensureColdStartCandidatesLoaded(ctx); err != nil {
+		return err
+	}
 
 	d.syncTreeMutex.Lock()
 	syncTreeUnlock := sync.OnceFunc(d.syncTreeMutex.Unlock)
@@ -94,6 +109,11 @@ func (d *Datastore) ApplyToRunning(ctx context.Context, syncStartedAt int64, del
 	if err := d.reconcilePendingCaptures(ctx, syncStartedAt, deletes, importedPaths); err != nil {
 		return err
 	}
+	if len(initialSyncPaths) > 0 {
+		d.reconcileInitialSyncSeedsLocked(initialSyncPaths)
+		d.recordSyncedPathsLocked(initialSyncPaths)
+	}
+	d.recordSyncedPathsLocked(deletes)
 
 	// conditional trace logging
 	if log := log.V(logger.VTrace); log.Enabled() {
@@ -143,22 +163,19 @@ type pendingImportProbe struct {
 
 // beginPendingImportProbes prepares observation probes on d.syncTree for causal
 // pending paths not already covered by syncPaths; callers must hold syncTreeMutex.
-func (d *Datastore) beginPendingImportProbes(ctx context.Context, syncStartedAt int64, syncPaths []*sdcpb.Path) []pendingImportProbe {
+func (d *Datastore) beginPendingImportProbes(_ context.Context, syncStartedAt int64, syncPaths []*sdcpb.Path) []pendingImportProbe {
 	var probes []pendingImportProbe
 	for _, pending := range d.confirmedApplied.CausalCaptures() {
-		if !pending.IsPending() || syncStartedAt < pending.captureAfterNano || pathCoveredBySync(pending.path, syncPaths) {
+		if !pending.IsPending() || pending.BlocksSync(syncStartedAt) || pathCoveredBySync(pending.path, syncPaths) {
 			continue
 		}
 		var running *api.LeafEntry
-		entry, err := ops.NavigateSdcpbPath(ctx, d.syncTree.Entry, pending.path)
-		if err == nil && entry != nil {
-			if r := entry.GetLeafVariants().GetByOwner(consts.RunningIntentName); r != nil {
-				if r.GetDeleteFlag() {
-					continue
-				}
-				r.MarkDelete(false)
-				running = r
+		if r := d.runningLeafEntryLocked(pending.path); r != nil {
+			if r.GetDeleteFlag() {
+				continue
 			}
+			r.MarkDelete(false)
+			running = r
 		}
 		probes = append(probes, pendingImportProbe{
 			key:     newCanonicalLeafPath(pending.path),
@@ -171,7 +188,8 @@ func (d *Datastore) beginPendingImportProbes(ctx context.Context, syncStartedAt 
 
 // finishPendingImportProbes restores temporary probe markers on untouched Running
 // leaves and returns the canonical paths observed during ImportConfig.
-func (d *Datastore) finishPendingImportProbes(ctx context.Context, probes []pendingImportProbe) map[canonicalLeafPath]bool {
+// Callers must hold syncTreeMutex.
+func (d *Datastore) finishPendingImportProbes(_ context.Context, probes []pendingImportProbe) map[canonicalLeafPath]bool {
 	if len(probes) == 0 {
 		return nil
 	}
@@ -185,17 +203,38 @@ func (d *Datastore) finishPendingImportProbes(ctx context.Context, probes []pend
 			}
 			continue
 		}
-		entry, err := ops.NavigateSdcpbPath(ctx, d.syncTree.Entry, probe.path)
-		if err == nil && entry != nil && entry.GetLeafVariants().GetByOwner(consts.RunningIntentName) != nil {
+		if d.runningLeafEntryLocked(probe.path) != nil {
 			observed[probe.key] = true
 		}
 	}
 	return observed
 }
 
+func (d *Datastore) runningLeafEntryLocked(path *sdcpb.Path) *api.LeafEntry {
+	if d.syncTree == nil || d.syncTree.Entry == nil {
+		return nil
+	}
+	entry := ops.NavigateChildMap(d.syncTree.Entry, canonicalPath(path))
+	if entry == nil {
+		return nil
+	}
+	return entry.GetLeafVariants().GetByOwner(consts.RunningIntentName)
+}
+
+// reconcileInitialSyncSeedsLocked resolves deferred initial-sync baselines on
+// syncPaths against d.syncTree. Callers must hold syncTreeMutex.
+func (d *Datastore) reconcileInitialSyncSeedsLocked(syncPaths []*sdcpb.Path) {
+	for _, pending := range d.confirmedApplied.CausalCaptures() {
+		if !pending.IsAwaitingInitialSync() || !pathCoveredBySync(pending.path, syncPaths) {
+			continue
+		}
+		d.confirmedApplied.CompletePending(pending, d.runningValueLocked(pending.path))
+	}
+}
+
 func (d *Datastore) reconcilePendingCaptures(ctx context.Context, syncStartedAt int64, syncPaths []*sdcpb.Path, importedPaths map[canonicalLeafPath]bool) error {
 	for _, pending := range d.confirmedApplied.CausalCaptures() {
-		if syncStartedAt < pending.captureAfterNano {
+		if pending.BlocksSync(syncStartedAt) {
 			restoreValue := pending.intendedValue
 			if pending.confirmedValue != nil {
 				restoreValue = pending.confirmedValue
@@ -218,28 +257,48 @@ func (d *Datastore) reconcilePendingCaptures(ctx context.Context, syncStartedAt 
 		if !wasObserved {
 			continue
 		}
-		var observed *sdcpb.TypedValue
-		entry, err := ops.NavigateSdcpbPath(ctx, d.syncTree.Entry, pending.path)
-		if err == nil && entry != nil {
-			if running := entry.GetLeafVariants().GetByOwner(consts.RunningIntentName); running != nil {
-				observed = running.Value()
-			}
-		} else if err != nil && !errors.Is(err, ops.ErrNavigateSdcpbPathNotFound) {
-			return err
-		}
+		observed := d.runningValueLocked(pending.path)
 		d.confirmedApplied.CompletePending(pending, observed)
 	}
 	return nil
 }
 
+// recordSyncedPathsLocked appends canonical syncPaths not yet covered by
+// d.syncedPaths. Callers must hold syncTreeMutex for writing.
+func (d *Datastore) recordSyncedPathsLocked(syncPaths []*sdcpb.Path) {
+	for _, p := range syncPaths {
+		if !pathCoveredBySync(p, d.syncedPaths) {
+			d.syncedPaths = append(d.syncedPaths, canonicalPath(p))
+		}
+	}
+}
+
 func pathCoveredBySync(path *sdcpb.Path, syncPaths []*sdcpb.Path) bool {
-	path = canonicalPath(path)
+	targetElems := canonicalPath(path).GetElem()
 	for _, syncPath := range syncPaths {
-		if canonicalPath(syncPath).IsParentPathOf(path) {
+		if syncElemsCoverTarget(canonicalPath(syncPath).GetElem(), targetElems) {
 			return true
 		}
 	}
 	return false
+}
+
+func syncElemsCoverTarget(syncElems, targetElems []*sdcpb.PathElem) bool {
+	if len(syncElems) > len(targetElems) {
+		return false
+	}
+	for i, se := range syncElems {
+		te := targetElems[i]
+		if se.GetName() != te.GetName() {
+			return false
+		}
+		for k, sv := range se.GetKey() {
+			if tv, ok := te.GetKey()[k]; !ok || tv != sv {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (d *Datastore) NewEmptyTree(ctx context.Context) (*tree.RootEntry, error) {

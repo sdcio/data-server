@@ -32,10 +32,12 @@ type fakeRunningStore struct {
 
 	calls atomic.Int32
 
-	mu          sync.Mutex
-	deletesSeen [][]*sdcpb.Path
-	importSeen  []bool
-	startedSeen []int64
+	mu               sync.Mutex
+	deletesSeen      [][]*sdcpb.Path
+	importSeen       []bool
+	startedSeen      []int64
+	initialSyncPaths [][]*sdcpb.Path
+	initialSyncCalls atomic.Int32
 }
 
 // applied returns a snapshot of the deletes and importer-presence of every completed ApplyToRunning call.
@@ -75,6 +77,17 @@ func (f *fakeRunningStore) ApplyToRunning(ctx context.Context, syncStartedAt int
 func (f *fakeRunningStore) NewEmptyTree(ctx context.Context) (*tree.RootEntry, error) {
 	tc := tree.NewTreeContext(f.sc, f.vp)
 	return tree.NewTreeRoot(ctx, tc)
+}
+
+func (f *fakeRunningStore) ApplyInitialSync(ctx context.Context, syncStartedAt int64, syncPaths []*sdcpb.Path, deletes []*sdcpb.Path, imp treeimporter.ImportConfigAdapter) error {
+	f.mu.Lock()
+	f.initialSyncPaths = append(f.initialSyncPaths, syncPaths)
+	f.mu.Unlock()
+	f.initialSyncCalls.Add(1)
+	if imp == nil && len(deletes) == 0 {
+		return nil
+	}
+	return f.ApplyToRunning(ctx, syncStartedAt, deletes, imp)
 }
 
 // fakeSyncTarget implements SyncTarget with channels the test controls.
@@ -475,3 +488,53 @@ func TestStreamSync_ResubscribeReplacesSyncedPaths(t *testing.T) {
 		}
 	}
 }
+
+func TestStreamSyncAndGetSync_EmptyTargetMarksInitialSyncComplete(t *testing.T) {
+	t.Run("StreamSync initial SyncResponse on empty target notifies ApplyInitialSync", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, target, store := newStreamSyncForTest(t, ctx, []string{"/interface"})
+		target.respChan <- syncRespMsg()
+
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) && store.initialSyncCalls.Load() < 1 {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if got := store.initialSyncCalls.Load(); got != 1 {
+			t.Fatalf("ApplyInitialSync calls = %d, want 1", got)
+		}
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		if len(store.initialSyncPaths[0]) != 1 || store.initialSyncPaths[0][0].ToXPath(false) != "/interface" {
+			t.Fatalf("ApplyInitialSync paths = %v, want [/interface]", store.initialSyncPaths[0])
+		}
+	})
+
+	t.Run("GetSync on empty target applies paths with nil importer", func(t *testing.T) {
+		ctx := context.Background()
+		sc, schemaConf, err := testhelper.InitSDCIOSchema()
+		if err != nil {
+			t.Fatalf("init schema: %v", err)
+		}
+		scb := schemaClientPkg.NewSchemaClientBound(schemaConf, sc)
+		sharedPool := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+		store := newFakeRunningStore(scb, sharedPool)
+		close(store.firstUnblock)
+
+		syncer, err := NewGetSync(ctx, &fakeGetTarget{response: &sdcpb.GetDataResponse{}}, &config.SyncProtocol{
+			Name:  "get-empty",
+			Paths: []string{"/interface"},
+		}, store, scb)
+		if err != nil {
+			t.Fatalf("NewGetSync: %v", err)
+		}
+
+		syncer.internalGetSync(&sdcpb.GetDataRequest{})
+		deletes, imported, _ := store.applied()
+		if len(deletes) != 1 || len(deletes[0]) != 1 || deletes[0][0].ToXPath(false) != "/interface" || imported[0] {
+			t.Fatalf("empty GetSync applied deletes=%v imported=%v, want ([/interface], false)", deletes, imported)
+		}
+	})
+}
+

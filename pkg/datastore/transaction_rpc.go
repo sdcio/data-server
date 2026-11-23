@@ -83,6 +83,12 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	log := logger.FromContext(ctx).WithValues("transaction-type", "replace")
 	ctx = logger.IntoContext(ctx, log)
 
+	if !dryRun {
+		if err := d.ensureColdStartCandidatesLoaded(ctx); err != nil {
+			return nil, err
+		}
+	}
+
 	// create a new TreeContext
 	tc := d.newTreeContext()
 
@@ -195,6 +201,11 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 // lowlevelTransactionSet
 func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *types.Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
 	log := logger.FromContext(ctx)
+	if !dryRun {
+		if err := d.ensureColdStartCandidatesLoaded(ctx); err != nil {
+			return nil, err
+		}
+	}
 	d.syncTreeMutex.RLock()
 	root, err := d.syncTree.DeepCopy(ctx)
 	d.syncTreeMutex.RUnlock()
@@ -279,8 +290,11 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 	log.V(logger.VTrace).Info("populated tree", "tree", root.String())
 
+	restoreValidationOverlay := d.attachValidationCryptOverlay(root, transaction.GetNewIntents())
+
 	// perform validation
 	validationResult, validationStats := validation.Validate(ctx, root.Entry, d.config.Validation, d.taskPool)
+	restoreValidationOverlay()
 
 	log.V(logger.VDebug).Info("transaction validation stats", "transaction-id", transaction.GetTransactionId(), "stats", validationStats.String())
 
@@ -382,9 +396,18 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 	}
 
+	if !transaction.IsRollback() {
+		d.capturePreTransactionBaselines(updates, deletes)
+	}
 	err = d.applyReadbacksAndWriteBackRunning(ctx, updates, deletes, readbacks, setDoneUnixNano)
 	if err != nil {
 		return nil, err
+	}
+	d.evictStaleBaselines(ctx, root)
+	if transaction.IsRollback() {
+		d.restoreRolledBackBaselines(ctx, root, updates, deletes)
+	} else {
+		d.seedPreviouslyAppliedBaselines(root, transaction.GetNewIntents(), updates)
 	}
 
 	log.Info("transaction completed")

@@ -65,3 +65,30 @@ func NavigateSdcpbPath(ctx context.Context, e api.Entry, path *sdcpb.Path) (api.
 		return NavigateSdcpbPath(ctx, child, path.CopyAndRemoveFirstPathElem())
 	}
 }
+
+// NavigateChildMap resolves path directly through Entry child maps without
+// consulting YANG choice active-case filtering, returning nil if any segment is absent.
+func NavigateChildMap(e api.Entry, path *sdcpb.Path) api.Entry {
+	if e == nil || path == nil {
+		return nil
+	}
+	curr := e
+	if path.IsRootBased {
+		curr = GetRoot(e)
+	}
+	for _, pe := range path.GetElem() {
+		next, ok := curr.GetChildMap().GetEntry(pe.GetName())
+		if !ok {
+			return nil
+		}
+		curr = next
+		for keyVal := range pe.PathElemNamesKeysOnly() {
+			keyChild, ok := curr.GetChildMap().GetEntry(keyVal)
+			if !ok {
+				return nil
+			}
+			curr = keyChild
+		}
+	}
+	return curr
+}

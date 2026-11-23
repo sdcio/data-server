@@ -90,3 +90,9 @@ func (t *TreeContext) IsLearnedMutateOnWritePath(path *sdcpb.Path) bool {
 	}
 	return t.learnedMutateOnWritePaths.IsLearnedMutateOnWritePath(path)
 }
+
+func (t *TreeContext) SetLearnedMutateOnWritePaths(learned api.LearnedMutateOnWritePathSet) {
+	if t != nil {
+		t.learnedMutateOnWritePaths = learned
+	}
+}

@@ -195,7 +195,7 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, in
 	// commit hands the accumulated syncTree to a background goroutine and
 	// continues with a fresh tree. It reports false when no fresh tree could
 	// be created.
-	commit := func(replacePaths []*sdcpb.Path) bool {
+	commit := func(replacePaths []*sdcpb.Path, initialSyncPaths []*sdcpb.Path) bool {
 		treeToCommit := syncTree
 		syncStartedAt := batchStartedAt
 		if syncStartedAt == 0 {
@@ -217,7 +217,7 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, in
 			defer close(done)
 			defer inflight.Add(-1)
 			<-waitFor
-			if err := s.syncToRunning(treeToCommit, syncStartedAt, replacePaths, true); err != nil {
+			if err := s.syncToRunning(treeToCommit, syncStartedAt, replacePaths, initialSyncPaths, true); err != nil {
 				log.Error(err, "failed committing synctree to running")
 			}
 		}()
@@ -254,10 +254,15 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, in
 					replacePaths = s.paths
 					awaitingFullSync = false
 				}
-				if !commit(replacePaths) {
+				isInitialSync := tickerChan == nil
+				var initialSyncPaths []*sdcpb.Path
+				if isInitialSync {
+					initialSyncPaths = s.paths
+				}
+				if !commit(replacePaths, initialSyncPaths) {
 					return
 				}
-				if tickerChan == nil {
+				if isInitialSync {
 					t := time.NewTicker(5 * time.Second)
 					defer t.Stop()
 					tickerChan = t.C
@@ -280,7 +285,7 @@ func (s *StreamSync) buildTreeSyncWithDatastore(cUS <-chan *NotificationData, in
 				continue
 			}
 			log.Info("SyncRunning due to ticker")
-			if !commit(nil) {
+			if !commit(nil, nil) {
 				return
 			}
 		}
@@ -369,7 +374,7 @@ func (s *StreamSync) gnmiSubscribe(subReq *gnmi.SubscribeRequest, updChan chan<-
 //
 // replacePaths are deleted from Running before the import, so Running under
 // those paths ends up equal to syncTree. An empty syncTree still applies them.
-func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, syncStartedAt int64, replacePaths []*sdcpb.Path, logCount bool) error {
+func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, syncStartedAt int64, replacePaths []*sdcpb.Path, initialSyncPaths []*sdcpb.Path, logCount bool) error {
 	log := logger.FromContext(s.ctx)
 
 	startTime := time.Now()
@@ -377,6 +382,11 @@ func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, syncStartedAt int64
 	log.V(logger.VTrace).Info("exported tree", "tree", result.String())
 	if err != nil {
 		if errors.Is(err, ops.ErrorIntentNotPresent) {
+			if len(initialSyncPaths) > 0 {
+				if initialStore, ok := s.runningStore.(types.InitialSyncStore); ok {
+					return initialStore.ApplyInitialSync(s.ctx, syncStartedAt, initialSyncPaths, replacePaths, nil)
+				}
+			}
 			if len(replacePaths) == 0 {
 				log.Info("sync no config changes")
 				return nil
@@ -398,7 +408,16 @@ func (s *StreamSync) syncToRunning(syncTree *tree.RootEntry, syncStartedAt int64
 	log.V(logger.VTrace).Info("synctree export done", "duration", time.Since(startTime).String())
 	startTime = time.Now()
 
-	err = s.runningStore.ApplyToRunning(s.ctx, syncStartedAt, deletes, proto.NewProtoTreeImporter(result))
+	imp := proto.NewProtoTreeImporter(result)
+	if len(initialSyncPaths) > 0 {
+		if initialStore, ok := s.runningStore.(types.InitialSyncStore); ok {
+			err = initialStore.ApplyInitialSync(s.ctx, syncStartedAt, initialSyncPaths, deletes, imp)
+		} else {
+			err = s.runningStore.ApplyToRunning(s.ctx, syncStartedAt, deletes, imp)
+		}
+	} else {
+		err = s.runningStore.ApplyToRunning(s.ctx, syncStartedAt, deletes, imp)
+	}
 	if err != nil {
 		log.Error(err, "failed importing sync to running")
 		return err

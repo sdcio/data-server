@@ -42,6 +42,7 @@ import (
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	"github.com/sdcio/schema-server/pkg/store/memstore"
 	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
+	"github.com/sdcio/sdc-protos/tree_persist"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
@@ -112,6 +113,23 @@ func initMutateOnWriteSchema(t *testing.T) (schema.Client, *config.SchemaConfig)
           length "4..32";
         }
       }
+    }
+    choice auth-mode {
+      case primary {
+        leaf primary-auth {
+          type ianach:crypt-hash;
+        }
+      }
+      case fallback {
+        leaf fallback-auth {
+          type ianach:crypt-hash;
+        }
+      }
+    }
+  }
+  container extra {
+    leaf token {
+      type ianach:crypt-hash;
     }
   }
 }
@@ -228,14 +246,25 @@ func newMOWDatastoreFixture(t *testing.T, ctrl *gomock.Controller) *mowDatastore
 
 func buildJSONIntent(t *testing.T, ds *Datastore, name string, prio int32, nonRevertive bool, payload map[string]any) *types.TransactionIntent {
 	t.Helper()
+	return buildJSONIntentWithOpts(t, ds, name, prio, nonRevertive, false, payload)
+}
+
+func buildPreviouslyAppliedJSONIntent(t *testing.T, ds *Datastore, name string, prio int32, nonRevertive bool, payload map[string]any) *types.TransactionIntent {
+	t.Helper()
+	return buildJSONIntentWithOpts(t, ds, name, prio, nonRevertive, true, payload)
+}
+
+func buildJSONIntentWithOpts(t *testing.T, ds *Datastore, name string, prio int32, nonRevertive bool, previouslyApplied bool, payload map[string]any) *types.TransactionIntent {
+	t.Helper()
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
 	ti, err := ds.SdcpbTransactionIntentToInternalTI(context.Background(), &sdcpb.TransactionIntent{
-		Intent:       name,
-		Priority:     prio,
-		NonRevertive: nonRevertive,
+		Intent:            name,
+		Priority:          prio,
+		NonRevertive:      nonRevertive,
+		PreviouslyApplied: previouslyApplied,
 		Update: []*sdcpb.Update{{
 			Path: &sdcpb.Path{},
 			Value: &sdcpb.TypedValue{
@@ -1297,33 +1326,31 @@ func TestDatastore_MutateOnWrite_BaselineKeySpecificityAndOverruled(t *testing.T
 			},
 		},
 	})
-	if _, err := f.ds.TransactionSet(ctx, "tx-2", []*types.TransactionIntent{highIntentV2}, nil, time.Minute, false); err != nil {
+	midNonRevertiveIntent := buildJSONIntent(t, f.ds, "mid-nr-owner", 15, true, map[string]any{
+		"system": map[string]any{
+			"user": []any{
+				map[string]any{"username": "alice", "password": "HighSecretV2"},
+			},
+		},
+	})
+	if _, err := f.ds.TransactionSet(ctx, "tx-2", []*types.TransactionIntent{highIntentV2, midNonRevertiveIntent}, nil, time.Minute, false); err != nil {
 		t.Fatalf("TransactionSet(tx-2): %v", err)
 	}
 	if err := f.ds.TransactionConfirm(ctx, "tx-2"); err != nil {
 		t.Fatalf("TransactionConfirm(tx-2): %v", err)
 	}
 
-	// PreviouslyApplied super-owner changes winningOwner without pushing, proving baseline owner specificity.
-	superIntent, err := f.ds.SdcpbTransactionIntentToInternalTI(ctx, &sdcpb.TransactionIntent{
-		Intent:            "super-owner",
-		Priority:          5,
-		NonRevertive:      true,
-		PreviouslyApplied: true,
-		Update: []*sdcpb.Update{{
-			Path: &sdcpb.Path{},
-			Value: &sdcpb.TypedValue{
-				Value: &sdcpb.TypedValue_JsonIetfVal{
-					JsonIetfVal: []byte(`{"system":{"user":[{"username":"alice","password":"HighSecretV2"}]}}`),
-				},
+	// Demoting high-owner below mid-nr-owner promotes an already-persisted non-revertive
+	// owner with the identical intended value without pushing, proving baseline owner specificity.
+	demotedHighIntent := buildJSONIntent(t, f.ds, "high-owner", 25, false, map[string]any{
+		"system": map[string]any{
+			"user": []any{
+				map[string]any{"username": "alice", "password": "HighSecretV2"},
 			},
-		}},
+		},
 	})
-	if err != nil {
-		t.Fatalf("SdcpbTransactionIntentToInternalTI(super-owner): %v", err)
-	}
 	expectEmptySet(t, f.sbi)
-	if _, err := f.ds.TransactionSet(ctx, "tx-3", []*types.TransactionIntent{superIntent}, nil, time.Minute, false); err != nil {
+	if _, err := f.ds.TransactionSet(ctx, "tx-3", []*types.TransactionIntent{demotedHighIntent}, nil, time.Minute, false); err != nil {
 		t.Fatalf("TransactionSet(tx-3): %v", err)
 	}
 	if err := f.ds.TransactionConfirm(ctx, "tx-3"); err != nil {
@@ -1331,20 +1358,20 @@ func TestDatastore_MutateOnWrite_BaselineKeySpecificityAndOverruled(t *testing.T
 	}
 
 	eventsAfterOwnerChange := collectWatchDeviationsBatch(t, f.ds)
-	foundNotAppliedForSuper := false
+	foundNotAppliedForPromoted := false
 	for _, ev := range eventsAfterOwnerChange {
 		if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE &&
 			ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED &&
-			ev.GetIntent() == "super-owner" &&
+			ev.GetIntent() == "mid-nr-owner" &&
 			ev.GetPath().ToXPath(false) == "/system/user[username=alice]/password" {
-			foundNotAppliedForSuper = true
+			foundNotAppliedForPromoted = true
 			if ev.GetExpectedValue().GetStringVal() != "HighSecretV2" {
 				t.Fatalf("NOT_APPLIED ExpectedValue = %v, want HighSecretV2", ev.GetExpectedValue())
 			}
 		}
 	}
-	if !foundNotAppliedForSuper {
-		t.Fatalf("expected NOT_APPLIED for super-owner because baseline belonged to high-owner, got %v", eventsAfterOwnerChange)
+	if !foundNotAppliedForPromoted {
+		t.Fatalf("expected NOT_APPLIED for mid-nr-owner because baseline belonged to high-owner, got %v", eventsAfterOwnerChange)
 	}
 }
 
@@ -2661,3 +2688,1415 @@ func TestDatastore_MutateOnWrite_UnannotatedNonCryptDriftRevertsWithoutLearning(
 		}
 	})
 }
+
+func TestDatastore_MutateOnWrite_PreviouslyAppliedImmediateSeedWhenRunningPresent(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("seeds mutate-on-write and unannotated crypt leaves immediately when Running is present", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := newMOWDatastoreFixture(t, ctrl)
+
+		const (
+			cleartextPw      = "RecoveredPw1!"
+			hashedPw         = "$6$rec1$hashedpassword"
+			cleartextOverlay = "RecoveredOv1!"
+			hashedOverlay    = "$6$rec2$hashedoverlay"
+			cleartextAlice   = "RecoveredAlice1"
+			hashedAlice      = "$6$rec3$hashedalice"
+			preHashedBobA    = "$6$bobA$hashvalueA"
+			preHashedBobB    = "$6$bobB$hashvalueB"
+		)
+
+		f.sbi.EXPECT().Get(gomock.Any(), gomock.Any()).Times(0)
+
+		if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+			jsonImporter.NewJsonTreeImporter(map[string]any{
+				"system": map[string]any{
+					"hashed-password":  hashedPw,
+					"overlay-password": hashedOverlay,
+					"hostname":         "drifted-plain-host",
+					"user": []any{
+						map[string]any{"username": "alice", "secret": hashedAlice},
+						map[string]any{"username": "bob", "secret": preHashedBobB},
+					},
+				},
+			}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			t.Fatalf("ApplyToRunning(initial): %v", err)
+		}
+
+		expectEmptySet(t, f.sbi)
+		recovered := buildPreviouslyAppliedJSONIntent(t, f.ds, "nr-recovered", 10, true, map[string]any{
+			"system": map[string]any{
+				"hashed-password":  cleartextPw,
+				"overlay-password": cleartextOverlay,
+				"hostname":         "router-1",
+				"user": []any{
+					map[string]any{"username": "alice", "secret": cleartextAlice},
+					map[string]any{"username": "bob", "secret": preHashedBobA},
+				},
+			},
+		})
+		if _, err := f.ds.TransactionSet(ctx, "tx-recover", []*types.TransactionIntent{recovered}, nil, time.Minute, false); err != nil {
+			t.Fatalf("TransactionSet(tx-recover): %v", err)
+		}
+		if err := f.ds.TransactionConfirm(ctx, "tx-recover"); err != nil {
+			t.Fatalf("TransactionConfirm(tx-recover): %v", err)
+		}
+
+		persistedBlob, err := f.localCache.InstanceIntentGet(ctx, f.ds.Name(), "nr-recovered")
+		if err != nil {
+			t.Fatalf("InstanceIntentGet(nr-recovered): %v", err)
+		}
+		rawBlob := persistedBlob.String()
+		for _, h := range []string{hashedPw, hashedOverlay, hashedAlice} {
+			if strings.Contains(rawBlob, h) {
+				t.Fatalf("persisted intent blob leaked seeded hash %q: %s", h, rawBlob)
+			}
+		}
+
+		notAppliedPaths := map[string]bool{}
+		for _, ev := range collectWatchDeviationsBatch(t, f.ds) {
+			if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE && ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED {
+				notAppliedPaths[ev.GetPath().ToXPath(false)] = true
+			}
+		}
+		for _, cleanPath := range []string{
+			"/system/hashed-password",
+			"/system/overlay-password",
+			"/system/user[username=alice]/secret",
+		} {
+			if notAppliedPaths[cleanPath] {
+				t.Fatalf("unexpected NOT_APPLIED on seeded path %s (all NOT_APPLIED: %v)", cleanPath, notAppliedPaths)
+			}
+		}
+		if !notAppliedPaths["/system/hostname"] {
+			t.Fatalf("expected NOT_APPLIED on non-crypt drifted plain string /system/hostname, got %v", notAppliedPaths)
+		}
+		if !notAppliedPaths["/system/user[username=bob]/secret"] {
+			t.Fatalf("expected NOT_APPLIED on pre-hashed mismatch /system/user[username=bob]/secret, got %v", notAppliedPaths)
+		}
+
+		blame, err := f.ds.BlameConfig(ctx, false)
+		if err != nil {
+			t.Fatalf("BlameConfig: %v", err)
+		}
+		for _, leaf := range []string{"hashed-password", "overlay-password"} {
+			el := testhelper.FindBlameElement(blame, "system", leaf)
+			if el == nil || el.GetDeviationValue() != nil {
+				t.Fatalf("BlameConfig %s = %v, want non-nil with nil DeviationValue", leaf, el)
+			}
+		}
+	})
+
+	t.Run("overruled PreviouslyApplied intent does not clobber higher-priority owner baseline", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := newMOWDatastoreFixture(t, ctrl)
+
+		expectHashedPasswordSetAndReadback(t, f, "HighCleartext!", "$6$high$hash", nil)
+		high := buildJSONIntent(t, f.ds, "high-owner", 5, false, map[string]any{
+			"system": map[string]any{"hashed-password": "HighCleartext!"},
+		})
+		if _, err := f.ds.TransactionSet(ctx, "tx-high", []*types.TransactionIntent{high}, nil, time.Minute, false); err != nil {
+			t.Fatalf("TransactionSet(tx-high): %v", err)
+		}
+		if err := f.ds.TransactionConfirm(ctx, "tx-high"); err != nil {
+			t.Fatalf("TransactionConfirm(tx-high): %v", err)
+		}
+
+		expectEmptySet(t, f.sbi)
+		overruledNR := buildPreviouslyAppliedJSONIntent(t, f.ds, "low-nr", 20, true, map[string]any{
+			"system": map[string]any{"hashed-password": "LowCleartext!"},
+		})
+		if _, err := f.ds.TransactionSet(ctx, "tx-low-nr", []*types.TransactionIntent{overruledNR}, nil, time.Minute, false); err != nil {
+			t.Fatalf("TransactionSet(tx-low-nr): %v", err)
+		}
+		if err := f.ds.TransactionConfirm(ctx, "tx-low-nr"); err != nil {
+			t.Fatalf("TransactionConfirm(tx-low-nr): %v", err)
+		}
+
+		for _, ev := range collectWatchDeviationsBatch(t, f.ds) {
+			if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE && ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED {
+				t.Fatalf("overruled PreviouslyApplied intent clobbered winning baseline: %v", ev)
+			}
+		}
+	})
+}
+
+func TestDatastore_MutateOnWrite_PreviouslyAppliedBeforeInitialSync(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("replaying PreviouslyApplied before slow initial sync finishes seeds present leaves and preserves NOT_APPLIED on absent leaves", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := newMOWDatastoreFixture(t, ctrl)
+
+		const (
+			cleartextPw      = "SlowSyncPw1!"
+			hashedPw         = "$6$slow1$hashedpw"
+			cleartextAlice   = "SlowSyncAlice1"
+			hashedAlice      = "$6$slow2$hashedalice"
+			missingOverlayPw = "MissingOverlay1!"
+		)
+
+		f.sbi.EXPECT().Get(gomock.Any(), gomock.Any()).Times(0)
+
+		// Snapshot starts before control-plane recovery replays PreviouslyApplied.
+		slowSyncStartedAt := time.Now().UnixNano()
+		time.Sleep(time.Millisecond)
+
+		expectEmptySet(t, f.sbi)
+		recovered := buildPreviouslyAppliedJSONIntent(t, f.ds, "nr-before-sync", 10, true, map[string]any{
+			"system": map[string]any{
+				"hashed-password":  cleartextPw,
+				"overlay-password": missingOverlayPw,
+				"hostname":         "router-1",
+				"user": []any{
+					map[string]any{"username": "alice", "secret": cleartextAlice},
+				},
+			},
+		})
+		if _, err := f.ds.TransactionSet(ctx, "tx-before-sync", []*types.TransactionIntent{recovered}, nil, time.Minute, false); err != nil {
+			t.Fatalf("TransactionSet(tx-before-sync): %v", err)
+		}
+		if err := f.ds.TransactionConfirm(ctx, "tx-before-sync"); err != nil {
+			t.Fatalf("TransactionConfirm(tx-before-sync): %v", err)
+		}
+
+		// Unrelated incremental update before full sync finishes must not clear awaitingInitialSyncSeed.
+		if err := f.ds.ApplyToRunning(ctx, slowSyncStartedAt, nil,
+			jsonImporter.NewJsonTreeImporter(map[string]any{
+				"system": map[string]any{
+					"user": []any{
+						map[string]any{"username": "other"},
+					},
+				},
+			}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			t.Fatalf("ApplyToRunning(unrelated incremental): %v", err)
+		}
+
+		// Slow initial sync completes: hashed-password and alice/secret are present, overlay-password is absent.
+		if err := f.ds.ApplyToRunning(ctx, slowSyncStartedAt, []*sdcpb.Path{{}},
+			jsonImporter.NewJsonTreeImporter(map[string]any{
+				"system": map[string]any{
+					"hashed-password": hashedPw,
+					"hostname":        "drifted-plain",
+					"user": []any{
+						map[string]any{"username": "alice", "secret": hashedAlice},
+					},
+				},
+			}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			t.Fatalf("ApplyToRunning(slow initial sync): %v", err)
+		}
+
+		notApplied := map[string]*sdcpb.WatchDeviationResponse{}
+		for _, ev := range collectWatchDeviationsBatch(t, f.ds) {
+			if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE && ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED {
+				notApplied[ev.GetPath().ToXPath(false)] = ev
+			}
+		}
+		for _, seededPath := range []string{"/system/hashed-password", "/system/user[username=alice]/secret"} {
+			if ev, bad := notApplied[seededPath]; bad {
+				t.Fatalf("unexpected NOT_APPLIED on deferred-seeded path %s: %v", seededPath, ev)
+			}
+		}
+		ovEv, hasMissingOverlay := notApplied["/system/overlay-password"]
+		if !hasMissingOverlay {
+			t.Fatalf("expected NOT_APPLIED on genuinely absent /system/overlay-password, got %v", notApplied)
+		}
+		if ovEv.GetCurrentValue() != nil || ovEv.GetExpectedValue().GetStringVal() != missingOverlayPw {
+			t.Fatalf("absent /system/overlay-password event = %v, want nil CurrentValue and ExpectedValue %q", ovEv, missingOverlayPw)
+		}
+		if _, hasDriftedHost := notApplied["/system/hostname"]; !hasDriftedHost {
+			t.Fatalf("expected NOT_APPLIED on non-crypt /system/hostname, got %v", notApplied)
+		}
+
+		// awaitingInitialSyncSeed was cleared on /system/overlay-password when initial sync observed Running == nil,
+		// so a later out-of-band CLI password on that path must still raise NOT_APPLIED.
+		if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+			jsonImporter.NewJsonTreeImporter(map[string]any{
+				"system": map[string]any{
+					"hashed-password":  hashedPw,
+					"overlay-password": "$6$later-cli$unexpectedhash",
+					"hostname":         "router-1",
+					"user": []any{
+						map[string]any{"username": "alice", "secret": hashedAlice},
+					},
+				},
+			}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			t.Fatalf("ApplyToRunning(later CLI overlay-password): %v", err)
+		}
+
+		foundOverlayStillNotApplied := false
+		for _, ev := range collectWatchDeviationsBatch(t, f.ds) {
+			if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE &&
+				ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED &&
+				ev.GetPath().ToXPath(false) == "/system/overlay-password" {
+				foundOverlayStillNotApplied = true
+			}
+		}
+		if !foundOverlayStillNotApplied {
+			t.Fatal("expected /system/overlay-password to remain NOT_APPLIED after later CLI edit because awaitingInitialSyncSeed was cleared")
+		}
+	})
+
+	t.Run("PreviouslyApplied after initial sync already confirmed leaf absent does not arm awaitingInitialSyncSeed", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := newMOWDatastoreFixture(t, ctrl)
+
+		f.sbi.EXPECT().Get(gomock.Any(), gomock.Any()).Times(0)
+
+		// Initial sync completes first with hashed-password absent on target.
+		if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+			jsonImporter.NewJsonTreeImporter(map[string]any{
+				"system": map[string]any{"hostname": "router-1"},
+			}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			t.Fatalf("ApplyToRunning(initial empty): %v", err)
+		}
+
+		expectEmptySet(t, f.sbi)
+		recovered := buildPreviouslyAppliedJSONIntent(t, f.ds, "nr-after-empty-sync", 10, true, map[string]any{
+			"system": map[string]any{"hashed-password": "ShouldBeMissing1!"},
+		})
+		if _, err := f.ds.TransactionSet(ctx, "tx-after-empty-sync", []*types.TransactionIntent{recovered}, nil, time.Minute, false); err != nil {
+			t.Fatalf("TransactionSet: %v", err)
+		}
+		if err := f.ds.TransactionConfirm(ctx, "tx-after-empty-sync"); err != nil {
+			t.Fatalf("TransactionConfirm: %v", err)
+		}
+
+		// Subsequent out-of-band CLI edit must NOT be auto-seeded as initial sync.
+		if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+			jsonImporter.NewJsonTreeImporter(map[string]any{
+				"system": map[string]any{
+					"hostname":        "router-1",
+					"hashed-password": "$6$cli$unrelatedhash",
+				},
+			}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			t.Fatalf("ApplyToRunning(later CLI): %v", err)
+		}
+
+		foundNotApplied := false
+		for _, ev := range collectWatchDeviationsBatch(t, f.ds) {
+			if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE &&
+				ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED &&
+				ev.GetPath().ToXPath(false) == "/system/hashed-password" {
+				foundNotApplied = true
+			}
+		}
+		if !foundNotApplied {
+			t.Fatal("expected NOT_APPLIED when leaf was already absent on initial sync and later edited via CLI")
+		}
+	})
+}
+
+type writeCountingCacheClient struct {
+	cache.CacheClientBound
+	modifyCalls int
+	deleteCalls int
+}
+
+func (w *writeCountingCacheClient) IntentModify(ctx context.Context, intent *tree_persist.Intent) error {
+	w.modifyCalls++
+	return w.CacheClientBound.IntentModify(ctx, intent)
+}
+
+func (w *writeCountingCacheClient) IntentDelete(ctx context.Context, intentName string, ignoreNonExisting bool) error {
+	w.deleteCalls++
+	return w.CacheClientBound.IntentDelete(ctx, intentName, ignoreNonExisting)
+}
+
+func newColdRestartedDatastoreFromFixture(t *testing.T, ctrl *gomock.Controller, orig *mowDatastoreFixture) (*Datastore, *mocktarget.MockTarget, *writeCountingCacheClient) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	vpf := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	confirmed := newConfirmedAppliedValues()
+	tc := tree.NewTreeContext(orig.ds.schemaClient, vpf, tree.WithConfirmedAppliedValues(confirmed))
+	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatalf("NewTreeRoot(restarted): %v", err)
+	}
+	if err := syncTreeRoot.FinishInsertionPhase(ctx); err != nil {
+		t.Fatalf("FinishInsertionPhase(restarted): %v", err)
+	}
+
+	wrappedCache := &writeCountingCacheClient{
+		CacheClientBound: cache.NewCacheClientBound(orig.ds.Name(), orig.localCache),
+	}
+	sbi := mocktarget.NewMockTarget(ctrl)
+	restarted := &Datastore{
+		config:           orig.ds.config,
+		cacheClient:      wrappedCache,
+		sbi:              sbi,
+		schemaClient:     orig.ds.schemaClient,
+		ctx:              ctx,
+		cfn:              cancel,
+		m:                &sync.RWMutex{},
+		deviationClients: make(map[sdcpb.DataServer_WatchDeviationsServer]string),
+		dmutex:           &sync.Mutex{},
+		syncTree:         syncTreeRoot,
+		syncTreeMutex:    &sync.RWMutex{},
+		confirmedApplied: confirmed,
+		taskPool:         vpf,
+	}
+	restarted.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(restarted), types.WithAutoRollbackLock(restarted.dmutex))
+	return restarted, sbi, wrappedCache
+}
+
+func TestDatastore_MutateOnWrite_StandaloneColdStartFirstSyncSeedsFromCache(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("first sync on restarted Datastore seeds pre-existing Non-revertive intents without writing to cacheClient", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := newMOWDatastoreFixture(t, ctrl)
+
+		const (
+			cleartextPw      = "ColdStartPw1!"
+			hashedPw         = "$6$cold1$hashedpw"
+			cleartextOverlay = "ColdStartOv1!"
+			hashedOverlay    = "$6$cold2$hashedov"
+			cleartextAlice   = "ColdStartAlice"
+			hashedAlice      = "$6$cold3$hashedalice"
+			missingBobPw     = "MissingBobPw1!"
+		)
+
+		// Author and confirm a Non-revertive intent on ds1 so localCache holds the persisted intent.
+		set1 := f.sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).Times(1)
+		f.sbi.EXPECT().Get(gomock.Any(), gomock.Any()).After(set1).Return(&sdcpb.GetDataResponse{
+			Notification: []*sdcpb.Notification{{
+				Update: []*sdcpb.Update{
+					{
+						Path:  hashedPasswordPath(),
+						Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: hashedPw}},
+					},
+					{
+						Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
+							sdcpb.NewPathElem("system", nil),
+							sdcpb.NewPathElem("overlay-password", nil),
+						}},
+						Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: hashedOverlay}},
+					},
+					{
+						Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
+							sdcpb.NewPathElem("system", nil),
+							sdcpb.NewPathElem("user", map[string]string{"username": "bob"}),
+							sdcpb.NewPathElem("password", nil),
+						}},
+						Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "$6$bob$initial"}},
+					},
+				},
+			}},
+		}, nil).Times(1)
+
+		nrIntent := buildJSONIntent(t, f.ds, "nr-persisted", 10, true, map[string]any{
+			"system": map[string]any{
+				"hashed-password":  cleartextPw,
+				"overlay-password": cleartextOverlay,
+				"hostname":         "router-1",
+				"user": []any{
+					map[string]any{"username": "alice", "secret": cleartextAlice},
+					map[string]any{"username": "bob", "password": missingBobPw},
+				},
+			},
+		})
+		if _, err := f.ds.TransactionSet(ctx, "tx-init", []*types.TransactionIntent{nrIntent}, nil, time.Minute, false); err != nil {
+			t.Fatalf("TransactionSet(tx-init): %v", err)
+		}
+		if err := f.ds.TransactionConfirm(ctx, "tx-init"); err != nil {
+			t.Fatalf("TransactionConfirm(tx-init): %v", err)
+		}
+
+		beforeBlob, err := f.localCache.InstanceIntentGet(ctx, f.ds.Name(), "nr-persisted")
+		if err != nil {
+			t.Fatalf("InstanceIntentGet(before restart): %v", err)
+		}
+		beforeRaw := beforeBlob.String()
+
+		// Simulate standalone Datastore cold restart pointing at the same localCache.
+		ds2, sbi2, cacheSpy := newColdRestartedDatastoreFromFixture(t, ctrl, f)
+		sbi2.EXPECT().Set(gomock.Any(), gomock.Any()).Times(0)
+		sbi2.EXPECT().Get(gomock.Any(), gomock.Any()).Times(0)
+
+		// Very first sync on ds2: hashed-password, overlay-password, and alice/secret are present; bob/password is missing.
+		if err := ds2.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+			jsonImporter.NewJsonTreeImporter(map[string]any{
+				"system": map[string]any{
+					"hashed-password":  hashedPw,
+					"overlay-password": hashedOverlay,
+					"hostname":         "router-1",
+					"user": []any{
+						map[string]any{"username": "alice", "secret": hashedAlice},
+					},
+				},
+			}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			t.Fatalf("ds2.ApplyToRunning(cold first sync): %v", err)
+		}
+
+		if cacheSpy.modifyCalls != 0 || cacheSpy.deleteCalls != 0 {
+			t.Fatalf("cold-start sync wrote to cacheClient: modifyCalls=%d deleteCalls=%d, want 0/0",
+				cacheSpy.modifyCalls, cacheSpy.deleteCalls)
+		}
+		afterBlob, err := f.localCache.InstanceIntentGet(ctx, f.ds.Name(), "nr-persisted")
+		if err != nil {
+			t.Fatalf("InstanceIntentGet(after cold sync): %v", err)
+		}
+		if afterBlob.String() != beforeRaw {
+			t.Fatalf("persisted intent changed across cold-start sync:\nbefore: %s\nafter:  %s", beforeRaw, afterBlob.String())
+		}
+
+		notApplied := map[string]bool{}
+		for _, ev := range collectWatchDeviationsBatch(t, ds2) {
+			if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE && ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED {
+				notApplied[ev.GetPath().ToXPath(false)] = true
+			}
+		}
+		for _, cleanPath := range []string{
+			"/system/hashed-password",
+			"/system/overlay-password",
+			"/system/user[username=alice]/secret",
+		} {
+			if notApplied[cleanPath] {
+				t.Fatalf("unexpected NOT_APPLIED after cold-start seed on %s (all: %v)", cleanPath, notApplied)
+			}
+		}
+		if !notApplied["/system/user[username=bob]/password"] {
+			t.Fatalf("expected NOT_APPLIED on missing /system/user[username=bob]/password, got %v", notApplied)
+		}
+
+		// One-shot check: a second sync where bob/password suddenly appears via CLI must NOT seed bob/password.
+		if err := ds2.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+			jsonImporter.NewJsonTreeImporter(map[string]any{
+				"system": map[string]any{
+					"hashed-password":  hashedPw,
+					"overlay-password": hashedOverlay,
+					"hostname":         "router-1",
+					"user": []any{
+						map[string]any{"username": "alice", "secret": hashedAlice},
+						map[string]any{"username": "bob", "password": "$6$cli$bobunexpected"},
+					},
+				},
+			}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			t.Fatalf("ds2.ApplyToRunning(second sync): %v", err)
+		}
+
+		foundBobNotApplied := false
+		for _, ev := range collectWatchDeviationsBatch(t, ds2) {
+			if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE &&
+				ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED &&
+				ev.GetPath().ToXPath(false) == "/system/user[username=bob]/password" {
+				foundBobNotApplied = true
+			}
+		}
+		if !foundBobNotApplied {
+			t.Fatal("expected second sync NOT to cold-seed missing bob/password after CLI edit")
+		}
+	})
+
+	t.Run("cold-start seeding does not suppress revertive intents", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := newMOWDatastoreFixture(t, ctrl)
+
+		expectHashedPasswordSetAndReadback(t, f, "RevertivePw1!", "$6$rev$hash1", nil)
+		revIntent := buildJSONIntent(t, f.ds, "rev-persisted", 10, false, map[string]any{
+			"system": map[string]any{"hashed-password": "RevertivePw1!"},
+		})
+		if _, err := f.ds.TransactionSet(ctx, "tx-rev", []*types.TransactionIntent{revIntent}, nil, time.Minute, false); err != nil {
+			t.Fatalf("TransactionSet(tx-rev): %v", err)
+		}
+		if err := f.ds.TransactionConfirm(ctx, "tx-rev"); err != nil {
+			t.Fatalf("TransactionConfirm(tx-rev): %v", err)
+		}
+
+		ds2, sbi2, _ := newColdRestartedDatastoreFromFixture(t, ctrl, f)
+
+		// Pure cold start with a revertive intent in cacheClient must still run performRevert + targeted Get.
+		revSet := sbi2.EXPECT().
+			Set(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(setCtx context.Context, source targettypes.TargetSource) (*sdcpb.SetDataResponse, error) {
+				upds, err := source.ToProtoUpdates(setCtx, true)
+				if err != nil {
+					return nil, err
+				}
+				if got := updatesByXPath(upds)["/system/hashed-password"]; got != "RevertivePw1!" {
+					t.Fatalf("cold-start revert pushed hashed-password = %q, want RevertivePw1!", got)
+				}
+				return &sdcpb.SetDataResponse{}, nil
+			}).Times(1)
+		sbi2.EXPECT().Get(gomock.Any(), gomock.Any()).After(revSet).Return(&sdcpb.GetDataResponse{
+			Notification: []*sdcpb.Notification{{
+				Update: []*sdcpb.Update{{
+					Path:  hashedPasswordPath(),
+					Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "$6$rev$reapplied"}},
+				}},
+			}},
+		}, nil).Times(1)
+
+		if err := ds2.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+			jsonImporter.NewJsonTreeImporter(map[string]any{
+				"system": map[string]any{"hashed-password": "$6$rev$hash1"},
+			}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			t.Fatalf("ds2.ApplyToRunning: %v", err)
+		}
+	})
+
+	t.Run("cold-start first sync does not overwrite baseline already bound by live pre-sync TransactionSet", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := newMOWDatastoreFixture(t, ctrl)
+
+		liveSet := f.sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).Times(1)
+		f.sbi.EXPECT().Get(gomock.Any(), gomock.Any()).After(liveSet).Return(&sdcpb.GetDataResponse{
+			Notification: []*sdcpb.Notification{{
+				Update: []*sdcpb.Update{{
+					Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
+						sdcpb.NewPathElem("system", nil),
+						sdcpb.NewPathElem("overlay-password", nil),
+					}},
+					Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "$6$live$ovhash1"}},
+				}},
+			}},
+		}, nil).Times(1)
+
+		liveNR := buildJSONIntent(t, f.ds, "nr-live", 10, true, map[string]any{
+			"system": map[string]any{"overlay-password": "LiveOverlayPw!"},
+		})
+		if _, err := f.ds.TransactionSet(ctx, "tx-live", []*types.TransactionIntent{liveNR}, nil, time.Minute, false); err != nil {
+			t.Fatalf("TransactionSet(tx-live): %v", err)
+		}
+		if err := f.ds.TransactionConfirm(ctx, "tx-live"); err != nil {
+			t.Fatalf("TransactionConfirm(tx-live): %v", err)
+		}
+
+		// First sync on f.ds delivers a CLI-drifted hash after tx-live finished; preserveExisting keeps "$6$live$ovhash1".
+		if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+			jsonImporter.NewJsonTreeImporter(map[string]any{
+				"system": map[string]any{"overlay-password": "$6$cli$ovdrifted"},
+			}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			t.Fatalf("ApplyToRunning: %v", err)
+		}
+
+		foundLiveDrift := false
+		for _, ev := range collectWatchDeviationsBatch(t, f.ds) {
+			if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE &&
+				ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED &&
+				ev.GetPath().ToXPath(false) == "/system/overlay-password" {
+				foundLiveDrift = true
+			}
+		}
+		if !foundLiveDrift {
+			t.Fatal("expected cold-start first sync not to overwrite pre-existing in-memory baseline on /system/overlay-password")
+		}
+	})
+}
+
+func TestDatastore_MutateOnWrite_PostSeedOutOfBandDriftRaisesNotApplied(t *testing.T) {
+	ctx := context.Background()
+
+	const (
+		cleartextPw    = "SeededPw1!"
+		seededPwHash   = "$6$seed$pwhash"
+		driftedPwHash  = "$6$cli$driftedpw"
+		cleartextAlice = "SeededAlice1"
+		seededAlice    = "$6$seed$alicehash"
+		driftedAlice   = "$6$cli$driftedalice"
+	)
+
+	modes := []struct {
+		name  string
+		setup func(t *testing.T, ctrl *gomock.Controller) *Datastore
+	}{
+		{
+			name: "PreviouslyApplied after initial sync",
+			setup: func(t *testing.T, ctrl *gomock.Controller) *Datastore {
+				f := newMOWDatastoreFixture(t, ctrl)
+				f.sbi.EXPECT().Get(gomock.Any(), gomock.Any()).Times(0)
+				if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+					jsonImporter.NewJsonTreeImporter(map[string]any{
+						"system": map[string]any{
+							"hashed-password": seededPwHash,
+							"user": []any{
+								map[string]any{"username": "alice", "secret": seededAlice},
+							},
+						},
+					}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+					t.Fatalf("ApplyToRunning(initial): %v", err)
+				}
+				expectEmptySet(t, f.sbi)
+				pa := buildPreviouslyAppliedJSONIntent(t, f.ds, "nr-intent", 10, true, map[string]any{
+					"system": map[string]any{
+						"hashed-password": cleartextPw,
+						"user": []any{
+							map[string]any{"username": "alice", "secret": cleartextAlice},
+						},
+					},
+				})
+				if _, err := f.ds.TransactionSet(ctx, "tx-pa", []*types.TransactionIntent{pa}, nil, time.Minute, false); err != nil {
+					t.Fatalf("TransactionSet(tx-pa): %v", err)
+				}
+				if err := f.ds.TransactionConfirm(ctx, "tx-pa"); err != nil {
+					t.Fatalf("TransactionConfirm(tx-pa): %v", err)
+				}
+				return f.ds
+			},
+		},
+		{
+			name: "PreviouslyApplied before initial sync",
+			setup: func(t *testing.T, ctrl *gomock.Controller) *Datastore {
+				f := newMOWDatastoreFixture(t, ctrl)
+				f.sbi.EXPECT().Get(gomock.Any(), gomock.Any()).Times(0)
+				expectEmptySet(t, f.sbi)
+				pa := buildPreviouslyAppliedJSONIntent(t, f.ds, "nr-intent", 10, true, map[string]any{
+					"system": map[string]any{
+						"hashed-password": cleartextPw,
+						"user": []any{
+							map[string]any{"username": "alice", "secret": cleartextAlice},
+						},
+					},
+				})
+				if _, err := f.ds.TransactionSet(ctx, "tx-pa-pre", []*types.TransactionIntent{pa}, nil, time.Minute, false); err != nil {
+					t.Fatalf("TransactionSet(tx-pa-pre): %v", err)
+				}
+				if err := f.ds.TransactionConfirm(ctx, "tx-pa-pre"); err != nil {
+					t.Fatalf("TransactionConfirm(tx-pa-pre): %v", err)
+				}
+				if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+					jsonImporter.NewJsonTreeImporter(map[string]any{
+						"system": map[string]any{
+							"hashed-password": seededPwHash,
+							"user": []any{
+								map[string]any{"username": "alice", "secret": seededAlice},
+							},
+						},
+					}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+					t.Fatalf("ApplyToRunning(initial): %v", err)
+				}
+				return f.ds
+			},
+		},
+		{
+			name: "standalone cold-start first sync from cacheClient",
+			setup: func(t *testing.T, ctrl *gomock.Controller) *Datastore {
+				f := newMOWDatastoreFixture(t, ctrl)
+				set1 := f.sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).Times(1)
+				f.sbi.EXPECT().Get(gomock.Any(), gomock.Any()).After(set1).Return(&sdcpb.GetDataResponse{
+					Notification: []*sdcpb.Notification{{
+						Update: []*sdcpb.Update{{
+							Path:  hashedPasswordPath(),
+							Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: seededPwHash}},
+						}},
+					}},
+				}, nil).Times(1)
+				nr := buildJSONIntent(t, f.ds, "nr-intent", 10, true, map[string]any{
+					"system": map[string]any{
+						"hashed-password": cleartextPw,
+						"user": []any{
+							map[string]any{"username": "alice", "secret": cleartextAlice},
+						},
+					},
+				})
+				if _, err := f.ds.TransactionSet(ctx, "tx-init", []*types.TransactionIntent{nr}, nil, time.Minute, false); err != nil {
+					t.Fatalf("TransactionSet(tx-init): %v", err)
+				}
+				if err := f.ds.TransactionConfirm(ctx, "tx-init"); err != nil {
+					t.Fatalf("TransactionConfirm(tx-init): %v", err)
+				}
+				ds2, sbi2, _ := newColdRestartedDatastoreFromFixture(t, ctrl, f)
+				sbi2.EXPECT().Set(gomock.Any(), gomock.Any()).Times(0)
+				sbi2.EXPECT().Get(gomock.Any(), gomock.Any()).Times(0)
+				if err := ds2.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+					jsonImporter.NewJsonTreeImporter(map[string]any{
+						"system": map[string]any{
+							"hashed-password": seededPwHash,
+							"user": []any{
+								map[string]any{"username": "alice", "secret": seededAlice},
+							},
+						},
+					}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+					t.Fatalf("ds2.ApplyToRunning(first sync): %v", err)
+				}
+				return ds2
+			},
+		},
+	}
+
+	for _, mode := range modes {
+		t.Run(mode.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ds := mode.setup(t, ctrl)
+
+			// Baseline is converged immediately after seeding.
+			for _, ev := range collectWatchDeviationsBatch(t, ds) {
+				if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE && ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED {
+					t.Fatalf("unexpected NOT_APPLIED right after seeding: %v", ev)
+				}
+			}
+
+			// Out-of-band CLI edit changing Running away from seeded hashes must raise NOT_APPLIED.
+			if err := ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+				jsonImporter.NewJsonTreeImporter(map[string]any{
+					"system": map[string]any{
+						"hashed-password": driftedPwHash,
+						"user": []any{
+							map[string]any{"username": "alice", "secret": driftedAlice},
+						},
+					},
+				}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+				t.Fatalf("ApplyToRunning(CLI value drift): %v", err)
+			}
+
+			editedDevs := map[string]*sdcpb.WatchDeviationResponse{}
+			for _, ev := range collectWatchDeviationsBatch(t, ds) {
+				if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE && ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED {
+					editedDevs[ev.GetPath().ToXPath(false)] = ev
+				}
+			}
+			pwDev := editedDevs["/system/hashed-password"]
+			if pwDev == nil || pwDev.GetExpectedValue().GetStringVal() != cleartextPw || pwDev.GetCurrentValue().GetStringVal() != driftedPwHash {
+				t.Fatalf("CLI edit deviation on /system/hashed-password = %v, want expected=%q current=%q", pwDev, cleartextPw, driftedPwHash)
+			}
+			aliceDev := editedDevs["/system/user[username=alice]/secret"]
+			if aliceDev == nil || aliceDev.GetExpectedValue().GetStringVal() != cleartextAlice || aliceDev.GetCurrentValue().GetStringVal() != driftedAlice {
+				t.Fatalf("CLI edit deviation on /system/user[username=alice]/secret = %v, want expected=%q current=%q", aliceDev, cleartextAlice, driftedAlice)
+			}
+
+			// Out-of-band CLI deletion removing both leaves from Running must also raise NOT_APPLIED.
+			if err := ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+				jsonImporter.NewJsonTreeImporter(map[string]any{
+					"system": map[string]any{"hostname": "after-delete"},
+				}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+				t.Fatalf("ApplyToRunning(CLI delete): %v", err)
+			}
+
+			deletedDevs := map[string]*sdcpb.WatchDeviationResponse{}
+			for _, ev := range collectWatchDeviationsBatch(t, ds) {
+				if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE && ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED {
+					deletedDevs[ev.GetPath().ToXPath(false)] = ev
+				}
+			}
+			if d := deletedDevs["/system/hashed-password"]; d == nil || d.GetCurrentValue() != nil {
+				t.Fatalf("CLI delete deviation on /system/hashed-password = %v, want NOT_APPLIED with nil CurrentValue", d)
+			}
+			if d := deletedDevs["/system/user[username=alice]/secret"]; d == nil || d.GetCurrentValue() != nil {
+				t.Fatalf("CLI delete deviation on /system/user[username=alice]/secret = %v, want NOT_APPLIED with nil CurrentValue", d)
+			}
+		})
+	}
+
+	t.Run("cancelling unconfirmed PreviouslyApplied transaction before initial sync evicts awaitingInitialSyncSeed", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := newMOWDatastoreFixture(t, ctrl)
+
+		expectEmptySet(t, f.sbi)
+		pa := buildPreviouslyAppliedJSONIntent(t, f.ds, "nr-cancelled", 15, true, map[string]any{
+			"system": map[string]any{
+				"user": []any{
+					map[string]any{"username": "alice", "secret": "CancelledAlice1"},
+				},
+			},
+		})
+		if _, err := f.ds.TransactionSet(ctx, "tx-unconfirmed", []*types.TransactionIntent{pa}, nil, time.Minute, false); err != nil {
+			t.Fatalf("TransactionSet(tx-unconfirmed): %v", err)
+		}
+
+		// Rollback while Running == nil sends an empty southbound diff and must evict awaitingInitialSyncSeed.
+		expectEmptySet(t, f.sbi)
+		if err := f.ds.TransactionCancel(ctx, "tx-unconfirmed"); err != nil {
+			t.Fatalf("TransactionCancel(tx-unconfirmed): %v", err)
+		}
+
+		// Initial sync arrives with unmanaged alice secret on target; because tx-unconfirmed was cancelled,
+		// /system/user/secret must NOT be learned from the cancelled awaitingInitialSyncSeed entry.
+		if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+			jsonImporter.NewJsonTreeImporter(map[string]any{
+				"system": map[string]any{
+					"user": []any{
+						map[string]any{"username": "alice", "secret": "$6$unmanaged$alicehash"},
+					},
+				},
+			}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			t.Fatalf("ApplyToRunning(initial): %v", err)
+		}
+
+		// Subsequent TransactionSet on bob/secret must issue Set only and zero targeted Gets.
+		f.sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).Times(1)
+		f.sbi.EXPECT().Get(gomock.Any(), gomock.Any()).Times(0)
+
+		bob := buildJSONIntent(t, f.ds, "bob-intent", 10, false, map[string]any{
+			"system": map[string]any{
+				"user": []any{
+					map[string]any{"username": "bob", "secret": "BobPlain1"},
+				},
+			},
+		})
+		if _, err := f.ds.TransactionSet(ctx, "tx-bob", []*types.TransactionIntent{bob}, nil, time.Minute, false); err != nil {
+			t.Fatalf("TransactionSet(tx-bob): %v", err)
+		}
+		if err := f.ds.TransactionConfirm(ctx, "tx-bob"); err != nil {
+			t.Fatalf("TransactionConfirm(tx-bob): %v", err)
+		}
+	})
+}
+
+func TestDatastore_MutateOnWrite_PreviouslyAppliedLongCryptAndChoiceLeaf(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	f := newMOWDatastoreFixture(t, ctrl)
+	ctx := context.Background()
+
+	const (
+		longAliceHash     = "$6$rounds=5000$alicesalt$0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+		longUnmanagedHash = "$6$rounds=5000$othersalt$fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+		primaryHash       = "$6$choice$primaryhash"
+		fallbackHash      = "$6$choice$fallbackhash"
+	)
+
+	aliceSecretPath := &sdcpb.Path{Elem: []*sdcpb.PathElem{
+		sdcpb.NewPathElem("system", nil),
+		sdcpb.NewPathElem("user", map[string]string{"username": "alice"}),
+		sdcpb.NewPathElem("secret", nil),
+	}}
+
+	if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+		jsonImporter.NewJsonTreeImporter(map[string]any{
+			"system": map[string]any{"primary-auth": primaryHash},
+		}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+		t.Fatalf("ApplyToRunning(primary): %v", err)
+	}
+	if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+		jsonImporter.NewJsonTreeImporter(map[string]any{
+			"system": map[string]any{
+				"fallback-auth": fallbackHash,
+				"user": []any{
+					map[string]any{"username": "alice", "secret": longAliceHash},
+					map[string]any{"username": "bob", "secret": "DriftedPlainBob"},
+					map[string]any{"username": "unmanaged", "secret": longUnmanagedHash},
+				},
+			},
+		}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+		t.Fatalf("ApplyToRunning(fallback + long crypt): %v", err)
+	}
+
+	recoveredDryRun := buildPreviouslyAppliedJSONIntent(t, f.ds, "nr-choice-crypt", 10, true, map[string]any{
+		"system": map[string]any{
+			"fallback-auth": "ChoiceCleartext1!",
+			"user": []any{
+				map[string]any{"username": "alice", "secret": "AlicePlain123"},
+				map[string]any{"username": "bob", "secret": "BobPlain123"},
+			},
+		},
+	})
+	dryResp, err := f.ds.TransactionSet(ctx, "tx-dry", []*types.TransactionIntent{recoveredDryRun}, nil, time.Minute, true)
+	if err != nil {
+		t.Fatalf("TransactionSet(dryRun) err = %v", err)
+	}
+	if len(dryResp.GetErrors()) != 0 {
+		t.Fatalf("TransactionSet(dryRun) validation errors = %v, want none", dryResp.GetErrors())
+	}
+	if f.ds.confirmedApplied.IsLearnedMutateOnWritePath(aliceSecretPath) {
+		t.Fatal("dryRun must not mutate learned mutate-on-write paths")
+	}
+
+	expectEmptySet(t, f.sbi)
+	recovered := buildPreviouslyAppliedJSONIntent(t, f.ds, "nr-choice-crypt", 10, true, map[string]any{
+		"system": map[string]any{
+			"fallback-auth": "ChoiceCleartext1!",
+			"user": []any{
+				map[string]any{"username": "alice", "secret": "AlicePlain123"},
+				map[string]any{"username": "bob", "secret": "BobPlain123"},
+			},
+		},
+	})
+	resp, err := f.ds.TransactionSet(ctx, "tx-commit", []*types.TransactionIntent{recovered}, nil, time.Minute, false)
+	if err != nil {
+		t.Fatalf("TransactionSet(commit) err = %v", err)
+	}
+	if len(resp.GetErrors()) != 0 {
+		t.Fatalf("TransactionSet(commit) validation errors = %v, want none", resp.GetErrors())
+	}
+	if err := f.ds.TransactionConfirm(ctx, "tx-commit"); err != nil {
+		t.Fatalf("TransactionConfirm(tx-commit): %v", err)
+	}
+
+	if !f.ds.confirmedApplied.IsLearnedMutateOnWritePath(aliceSecretPath) {
+		t.Fatal("commit of PreviouslyApplied crypt leaf must permanently learn keyless schema path")
+	}
+
+	notApplied := map[string]bool{}
+	for _, ev := range collectWatchDeviationsBatch(t, f.ds) {
+		if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE && ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED {
+			notApplied[ev.GetPath().ToXPath(false)] = true
+		}
+	}
+	if notApplied["/system/fallback-auth"] || notApplied["/system/user[username=alice]/secret"] {
+		t.Fatalf("unexpected NOT_APPLIED on choice or crypt leaf: %v", notApplied)
+	}
+	if !notApplied["/system/user[username=bob]/secret"] {
+		t.Fatalf("expected NOT_APPLIED on sibling bob with drifted non-crypt plain string, got %v", notApplied)
+	}
+
+	// Subsequent live Set (without PreviouslyApplied) must pass validation against >32-char Running hashes
+	// and perform a post-Set readback on the learned user/secret path.
+	carolSecretPath := &sdcpb.Path{Elem: []*sdcpb.PathElem{
+		sdcpb.NewPathElem("system", nil),
+		sdcpb.NewPathElem("user", map[string]string{"username": "carol"}),
+		sdcpb.NewPathElem("secret", nil),
+	}}
+	setCarol := f.sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).Times(1)
+	f.sbi.EXPECT().Get(gomock.Any(), gomock.Any()).After(setCarol).Return(&sdcpb.GetDataResponse{
+		Notification: []*sdcpb.Notification{{
+			Update: []*sdcpb.Update{{
+				Path:  carolSecretPath,
+				Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "$6$carol$hash"}},
+			}},
+		}},
+	}, nil).Times(1)
+	liveCarol := buildJSONIntent(t, f.ds, "live-carol", 5, true, map[string]any{
+		"system": map[string]any{
+			"user": []any{
+				map[string]any{"username": "carol", "secret": "CarolPlain123"},
+			},
+		},
+	})
+	liveResp, err := f.ds.TransactionSet(ctx, "tx-live-carol", []*types.TransactionIntent{liveCarol}, nil, time.Minute, false)
+	if err != nil {
+		t.Fatalf("TransactionSet(tx-live-carol): %v", err)
+	}
+	if len(liveResp.GetErrors()) != 0 {
+		t.Fatalf("TransactionSet(tx-live-carol) validation errors = %v, want none", liveResp.GetErrors())
+	}
+	if err := f.ds.TransactionConfirm(ctx, "tx-live-carol"); err != nil {
+		t.Fatalf("TransactionConfirm(tx-live-carol): %v", err)
+	}
+}
+
+func TestDatastore_MutateOnWrite_MultiSubtreeColdStartAndPostStartupIsolation(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("multi-subtree cold start seeds each pre-existing Non-revertive subtree when its sync arrives", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := newMOWDatastoreFixture(t, ctrl)
+
+		set1 := f.sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).Times(1)
+		f.sbi.EXPECT().Get(gomock.Any(), gomock.Any()).After(set1).Return(&sdcpb.GetDataResponse{
+			Notification: []*sdcpb.Notification{{
+				Update: []*sdcpb.Update{
+					{
+						Path:  hashedPasswordPath(),
+						Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "$6$sys$hash"}},
+					},
+					{
+						Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
+							sdcpb.NewPathElem("extra", nil),
+							sdcpb.NewPathElem("token", nil),
+						}},
+						Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "$6$extra$hash"}},
+					},
+				},
+			}},
+		}, nil).Times(1)
+
+		nr := buildJSONIntent(t, f.ds, "nr-multisub", 10, true, map[string]any{
+			"system": map[string]any{"hashed-password": "SysSecret1!"},
+			"extra":  map[string]any{"token": "ExtraToken1!"},
+		})
+		if _, err := f.ds.TransactionSet(ctx, "tx-init", []*types.TransactionIntent{nr}, nil, time.Minute, false); err != nil {
+			t.Fatalf("TransactionSet(tx-init): %v", err)
+		}
+		if err := f.ds.TransactionConfirm(ctx, "tx-init"); err != nil {
+			t.Fatalf("TransactionConfirm(tx-init): %v", err)
+		}
+
+		ds2, sbi2, cacheSpy := newColdRestartedDatastoreFromFixture(t, ctrl, f)
+		sbi2.EXPECT().Set(gomock.Any(), gomock.Any()).Times(0)
+		sbi2.EXPECT().Get(gomock.Any(), gomock.Any()).Times(0)
+
+		// Subtree 1 (/extra) syncs first.
+		extraPath := []*sdcpb.Path{{IsRootBased: true, Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("extra", nil)}}}
+		if err := ds2.ApplyToRunning(ctx, time.Now().UnixNano(), extraPath,
+			jsonImporter.NewJsonTreeImporter(map[string]any{
+				"extra": map[string]any{"token": "$6$extra$hash"},
+			}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			t.Fatalf("ApplyToRunning(/extra): %v", err)
+		}
+
+		// Subtree 2 (/system) syncs second: must ALSO seed /system/hashed-password cleanly.
+		sysPath := []*sdcpb.Path{{IsRootBased: true, Elem: []*sdcpb.PathElem{sdcpb.NewPathElem("system", nil)}}}
+		if err := ds2.ApplyToRunning(ctx, time.Now().UnixNano(), sysPath,
+			jsonImporter.NewJsonTreeImporter(map[string]any{
+				"system": map[string]any{"hashed-password": "$6$sys$hash"},
+			}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			t.Fatalf("ApplyToRunning(/system): %v", err)
+		}
+
+		if cacheSpy.modifyCalls != 0 || cacheSpy.deleteCalls != 0 {
+			t.Fatalf("unexpected cache writes during multi-subtree cold start: modify=%d delete=%d",
+				cacheSpy.modifyCalls, cacheSpy.deleteCalls)
+		}
+
+		for _, ev := range collectWatchDeviationsBatch(t, ds2) {
+			if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE && ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED {
+				t.Fatalf("unexpected NOT_APPLIED after multi-subtree cold start: %v", ev)
+			}
+		}
+	})
+
+	t.Run("fresh empty-cache Datastore never cold-seeds post-startup promoted Non-revertive owners on first sync", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := newMOWDatastoreFixture(t, ctrl)
+
+		expectHashedPasswordSetAndReadback(t, f, "HighPw1!", "$6$high$hash", nil)
+		high := buildJSONIntent(t, f.ds, "high-owner", 5, false, map[string]any{
+			"system": map[string]any{"hashed-password": "HighPw1!"},
+		})
+		midNR := buildJSONIntent(t, f.ds, "mid-nr", 15, true, map[string]any{
+			"system": map[string]any{"hashed-password": "MidOtherPw!"},
+		})
+		if _, err := f.ds.TransactionSet(ctx, "tx-1", []*types.TransactionIntent{high, midNR}, nil, time.Minute, false); err != nil {
+			t.Fatalf("TransactionSet(tx-1): %v", err)
+		}
+		if err := f.ds.TransactionConfirm(ctx, "tx-1"); err != nil {
+			t.Fatalf("TransactionConfirm(tx-1): %v", err)
+		}
+
+		// Demote high-owner before first sync runs so mid-nr becomes active without baseline.
+		expectEmptySet(t, f.sbi)
+		demoted := buildJSONIntent(t, f.ds, "high-owner", 25, false, map[string]any{
+			"system": map[string]any{"hashed-password": "HighPw1!"},
+		})
+		if _, err := f.ds.TransactionSet(ctx, "tx-2", []*types.TransactionIntent{demoted}, nil, time.Minute, false); err != nil {
+			t.Fatalf("TransactionSet(tx-2): %v", err)
+		}
+		if err := f.ds.TransactionConfirm(ctx, "tx-2"); err != nil {
+			t.Fatalf("TransactionConfirm(tx-2): %v", err)
+		}
+
+		// First sync arrives on this fresh Datastore: mid-nr was NOT a cold-start intent and must report NOT_APPLIED.
+		if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+			jsonImporter.NewJsonTreeImporter(map[string]any{
+				"system": map[string]any{"hashed-password": "$6$high$hash"},
+			}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			t.Fatalf("ApplyToRunning(first sync): %v", err)
+		}
+
+		foundNotApplied := false
+		for _, ev := range collectWatchDeviationsBatch(t, f.ds) {
+			if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE &&
+				ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED &&
+				ev.GetIntent() == "mid-nr" &&
+				ev.GetPath().ToXPath(false) == "/system/hashed-password" {
+				foundNotApplied = true
+			}
+		}
+		if !foundNotApplied {
+			t.Fatal("expected post-startup promoted mid-nr not to be cold-seeded on first sync")
+		}
+	})
+}
+
+func TestDatastore_MutateOnWrite_InitialSyncCompletionClearsAbsentSeed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	f := newMOWDatastoreFixture(t, ctrl)
+	ctx := context.Background()
+
+	f.sbi.EXPECT().Get(gomock.Any(), gomock.Any()).Times(0)
+	expectEmptySet(t, f.sbi)
+
+	recovered := buildPreviouslyAppliedJSONIntent(t, f.ds, "nr-stream", 10, true, map[string]any{
+		"system": map[string]any{
+			"hashed-password":  "StreamPresent1!",
+			"overlay-password": "StreamAbsent1!",
+		},
+	})
+	if _, err := f.ds.TransactionSet(ctx, "tx-stream-pa", []*types.TransactionIntent{recovered}, nil, time.Minute, false); err != nil {
+		t.Fatalf("TransactionSet: %v", err)
+	}
+	if err := f.ds.TransactionConfirm(ctx, "tx-stream-pa"); err != nil {
+		t.Fatalf("TransactionConfirm: %v", err)
+	}
+
+	if err := f.ds.ApplyInitialSync(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}}, nil,
+		jsonImporter.NewJsonTreeImporter(map[string]any{
+			"system": map[string]any{"hashed-password": "$6$stream$present"},
+		}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+		t.Fatalf("ApplyInitialSync: %v", err)
+	}
+
+	if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), nil,
+		jsonImporter.NewJsonTreeImporter(map[string]any{
+			"system": map[string]any{"overlay-password": "$6$stream$latercli"},
+		}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+		t.Fatalf("ApplyToRunning(later stream CLI): %v", err)
+	}
+
+	notApplied := map[string]bool{}
+	for _, ev := range collectWatchDeviationsBatch(t, f.ds) {
+		if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE && ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED {
+			notApplied[ev.GetPath().ToXPath(false)] = true
+		}
+	}
+	if notApplied["/system/hashed-password"] {
+		t.Fatalf("unexpected NOT_APPLIED on /system/hashed-password: %v", notApplied)
+	}
+	if !notApplied["/system/overlay-password"] {
+		t.Fatalf("expected NOT_APPLIED on /system/overlay-password after initial stream sync confirmed it absent, got %v", notApplied)
+	}
+}
+
+func TestDatastore_MutateOnWrite_CompleteInitialSyncPreservesPostSetPendingCapture(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	f := newMOWDatastoreFixture(t, ctrl)
+	ctx := context.Background()
+
+	setCall := f.sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).Times(1)
+	f.sbi.EXPECT().Get(gomock.Any(), gomock.Any()).After(setCall).Return(nil, errors.New("readback timeout")).Times(1)
+	live := buildJSONIntent(t, f.ds, "nr-live", 10, true, map[string]any{
+		"system": map[string]any{"hashed-password": "LivePlainPw1!"},
+	})
+	if _, err := f.ds.TransactionSet(ctx, "tx-live", []*types.TransactionIntent{live}, nil, time.Minute, false); err != nil {
+		t.Fatalf("TransactionSet(tx-live): %v", err)
+	}
+	if err := f.ds.TransactionConfirm(ctx, "tx-live"); err != nil {
+		t.Fatalf("TransactionConfirm(tx-live): %v", err)
+	}
+
+	if err := f.ds.ApplyInitialSync(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}}, nil, nil); err != nil {
+		t.Fatalf("ApplyInitialSync: %v", err)
+	}
+	if got := f.ds.confirmedApplied.Lookup(
+		hashedPasswordPath(),
+		"nr-live",
+		&sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "LivePlainPw1!"}},
+	); got != nil {
+		t.Fatalf("ApplyInitialSync falsely locked optimistic cleartext into baseline: %v", got)
+	}
+
+	if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+		jsonImporter.NewJsonTreeImporter(map[string]any{
+			"system": map[string]any{"hashed-password": "$6$live$realhash"},
+		}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+		t.Fatalf("ApplyToRunning(real sync): %v", err)
+	}
+
+	for _, ev := range collectWatchDeviationsBatch(t, f.ds) {
+		if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE && ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED {
+			t.Fatalf("unexpected NOT_APPLIED after real sync captured hash: %v", ev)
+		}
+	}
+}
+
+func TestDatastore_MutateOnWrite_ExplicitDeleteOnUpdatedHighOwnerOverrulesPreviouslyApplied(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	f := newMOWDatastoreFixture(t, ctrl)
+	ctx := context.Background()
+
+	f.sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).Times(1)
+	f.sbi.EXPECT().Get(gomock.Any(), gomock.Any()).Return(nil, errors.New("offline")).Times(1)
+
+	highInit := buildJSONIntent(t, f.ds, "high-owner", 5, false, map[string]any{
+		"system": map[string]any{"hashed-password": "HighPw1!"},
+	})
+	if _, err := f.ds.TransactionSet(ctx, "tx-high-init", []*types.TransactionIntent{highInit}, nil, time.Minute, false); err != nil {
+		t.Fatalf("TransactionSet(tx-high-init): %v", err)
+	}
+	if err := f.ds.TransactionConfirm(ctx, "tx-high-init"); err != nil {
+		t.Fatalf("TransactionConfirm(tx-high-init): %v", err)
+	}
+
+	if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}}, nil); err != nil {
+		t.Fatalf("ApplyToRunning(clear): %v", err)
+	}
+	f.ds.syncTreeMutex.Lock()
+	f.ds.syncedPaths = nil
+	f.ds.syncTreeMutex.Unlock()
+
+	f.sbi.EXPECT().Set(gomock.Any(), gomock.Any()).Return(&sdcpb.SetDataResponse{}, nil).Times(1)
+	f.sbi.EXPECT().Get(gomock.Any(), gomock.Any()).Return(&sdcpb.GetDataResponse{
+		Notification: []*sdcpb.Notification{{
+			Update: []*sdcpb.Update{{
+				Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
+					sdcpb.NewPathElem("extra", nil),
+					sdcpb.NewPathElem("token", nil),
+				}},
+				Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_StringVal{StringVal: "$6$tok$hash"}},
+			}},
+		}},
+	}, nil).Times(1)
+
+	highUpdated := buildJSONIntent(t, f.ds, "high-owner", 5, false, map[string]any{
+		"extra": map[string]any{"token": "HighTok1!"},
+	})
+	highUpdated.AddExplicitDeletes([]*sdcpb.Path{hashedPasswordPath()})
+
+	lowPA := buildPreviouslyAppliedJSONIntent(t, f.ds, "low-pa", 50, true, map[string]any{
+		"system": map[string]any{"hashed-password": "LowOverruledPw1!"},
+	})
+
+	if _, err := f.ds.TransactionSet(ctx, "tx-explicit-del", []*types.TransactionIntent{highUpdated, lowPA}, nil, time.Minute, false); err != nil {
+		t.Fatalf("TransactionSet(tx-explicit-del): %v", err)
+	}
+	if err := f.ds.TransactionConfirm(ctx, "tx-explicit-del"); err != nil {
+		t.Fatalf("TransactionConfirm(tx-explicit-del): %v", err)
+	}
+
+	for _, epoch := range f.ds.confirmedApplied.CausalCaptures() {
+		if newCanonicalLeafPath(epoch.path) == newCanonicalLeafPath(hashedPasswordPath()) && epoch.owner == "low-pa" {
+			t.Fatalf("overruled low-pa must not arm initial-sync seed under explicit delete by high-owner: %+v", epoch)
+		}
+	}
+}
+
+func TestDatastore_MutateOnWrite_KeylessListSyncPathAndRollbackPreservation(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("keyless intermediate list sync path clears absent awaitingInitialSyncSeed and records syncedPaths", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := newMOWDatastoreFixture(t, ctrl)
+
+		f.sbi.EXPECT().Get(gomock.Any(), gomock.Any()).Times(0)
+		expectEmptySet(t, f.sbi)
+
+		pa := buildPreviouslyAppliedJSONIntent(t, f.ds, "nr-list-pa", 10, true, map[string]any{
+			"system": map[string]any{
+				"user": []any{
+					map[string]any{"username": "alice", "secret": "AlicePlain123"},
+				},
+			},
+		})
+		if _, err := f.ds.TransactionSet(ctx, "tx-pa-1", []*types.TransactionIntent{pa}, nil, time.Minute, false); err != nil {
+			t.Fatalf("TransactionSet(tx-pa-1): %v", err)
+		}
+		if err := f.ds.TransactionConfirm(ctx, "tx-pa-1"); err != nil {
+			t.Fatalf("TransactionConfirm(tx-pa-1): %v", err)
+		}
+
+		// Initial sync configured on keyless list leaf path /system/user/secret finds target empty.
+		keylessSecretSyncPath := &sdcpb.Path{Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("system", nil),
+			sdcpb.NewPathElem("user", nil),
+			sdcpb.NewPathElem("secret", nil),
+		}}
+		if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{keylessSecretSyncPath}, nil); err != nil {
+			t.Fatalf("ApplyToRunning(empty keyless list sync): %v", err)
+		}
+
+		// Replaying PreviouslyApplied after /system/user/secret synced must also see syncedPaths coverage
+		// and NOT re-arm awaitingInitialSyncSeed.
+		expectEmptySet(t, f.sbi)
+		paReplay := buildPreviouslyAppliedJSONIntent(t, f.ds, "nr-list-pa", 10, true, map[string]any{
+			"system": map[string]any{
+				"user": []any{
+					map[string]any{"username": "alice", "secret": "AlicePlain123"},
+				},
+			},
+		})
+		if _, err := f.ds.TransactionSet(ctx, "tx-pa-2", []*types.TransactionIntent{paReplay}, nil, time.Minute, false); err != nil {
+			t.Fatalf("TransactionSet(tx-pa-2): %v", err)
+		}
+		if err := f.ds.TransactionConfirm(ctx, "tx-pa-2"); err != nil {
+			t.Fatalf("TransactionConfirm(tx-pa-2): %v", err)
+		}
+
+		// Subsequent out-of-band CLI edit adding alice's secret on target must raise NOT_APPLIED.
+		if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{keylessSecretSyncPath},
+			jsonImporter.NewJsonTreeImporter(map[string]any{
+				"system": map[string]any{
+					"user": []any{
+						map[string]any{"username": "alice", "secret": "$6$cli$alicehash"},
+					},
+				},
+			}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			t.Fatalf("ApplyToRunning(later CLI edit): %v", err)
+		}
+
+		foundNotApplied := false
+		for _, ev := range collectWatchDeviationsBatch(t, f.ds) {
+			if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE &&
+				ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED &&
+				ev.GetPath().ToXPath(false) == "/system/user[username=alice]/secret" {
+				foundNotApplied = true
+			}
+		}
+		if !foundNotApplied {
+			t.Fatal("expected NOT_APPLIED on /system/user[username=alice]/secret after keyless list sync confirmed it absent")
+		}
+	})
+
+	t.Run("canceling unconfirmed PreviouslyApplied transaction restores prior Non-revertive baseline and learnedPaths", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := newMOWDatastoreFixture(t, ctrl)
+
+		if err := f.ds.ApplyToRunning(ctx, time.Now().UnixNano(), []*sdcpb.Path{{}},
+			jsonImporter.NewJsonTreeImporter(map[string]any{
+				"system": map[string]any{
+					"fallback-auth": "$6$fallback$seeded",
+					"user": []any{
+						map[string]any{"username": "alice", "secret": "$6$alice$unconfirmed"},
+					},
+				},
+			}, consts.RunningIntentName, consts.RunningValuesPrio, false)); err != nil {
+			t.Fatalf("ApplyToRunning: %v", err)
+		}
+
+		expectEmptySet(t, f.sbi)
+		lowNR := buildPreviouslyAppliedJSONIntent(t, f.ds, "low-nr", 20, true, map[string]any{
+			"system": map[string]any{"fallback-auth": "LowFallback1!"},
+		})
+		if _, err := f.ds.TransactionSet(ctx, "tx-low", []*types.TransactionIntent{lowNR}, nil, time.Minute, false); err != nil {
+			t.Fatalf("TransactionSet(tx-low): %v", err)
+		}
+		if err := f.ds.TransactionConfirm(ctx, "tx-low"); err != nil {
+			t.Fatalf("TransactionConfirm(tx-low): %v", err)
+		}
+
+		assertFallbackUntouched := func(setCtx context.Context, source targettypes.TargetSource) (*sdcpb.SetDataResponse, error) {
+			upds, err := source.ToProtoUpdates(setCtx, true)
+			if err != nil {
+				return nil, err
+			}
+			for _, u := range upds {
+				if u.GetPath().ToXPath(false) == "/system/fallback-auth" {
+					t.Fatalf("unexpected southbound update on /system/fallback-auth: %v", u)
+				}
+			}
+			return &sdcpb.SetDataResponse{}, nil
+		}
+		f.sbi.EXPECT().Set(gomock.Any(), gomock.Any()).DoAndReturn(assertFallbackUntouched).Times(2)
+
+		highPA := buildPreviouslyAppliedJSONIntent(t, f.ds, "high-pa", 5, true, map[string]any{
+			"system": map[string]any{
+				"primary-auth": "HighPrimaryPw!",
+				"user": []any{
+					map[string]any{"username": "alice", "secret": "AliceCancelPw!"},
+				},
+			},
+		})
+		if _, err := f.ds.TransactionSet(ctx, "tx-cancel-pa", []*types.TransactionIntent{highPA}, nil, time.Minute, false); err != nil {
+			t.Fatalf("TransactionSet(tx-cancel-pa): %v", err)
+		}
+		if err := f.ds.TransactionCancel(ctx, "tx-cancel-pa"); err != nil {
+			t.Fatalf("TransactionCancel(tx-cancel-pa): %v", err)
+		}
+
+		aliceSecretPath := &sdcpb.Path{Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("system", nil),
+			sdcpb.NewPathElem("user", map[string]string{"username": "alice"}),
+			sdcpb.NewPathElem("secret", nil),
+		}}
+		if f.ds.confirmedApplied.IsLearnedMutateOnWritePath(aliceSecretPath) {
+			t.Fatal("canceled PreviouslyApplied transaction must not leak learned mutate-on-write paths")
+		}
+
+		for _, ev := range collectWatchDeviationsBatch(t, f.ds) {
+			if ev.GetEvent() == sdcpb.DeviationEvent_UPDATE &&
+				ev.GetReason() == sdcpb.DeviationReason_NOT_APPLIED &&
+				ev.GetPath().ToXPath(false) == "/system/fallback-auth" {
+				t.Fatalf("canceled PreviouslyApplied transaction lost low-nr fallback-auth baseline: %v", ev)
+			}
+		}
+	})
+}
+
+
+
+
+
+
+

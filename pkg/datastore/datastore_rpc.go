@@ -69,11 +69,22 @@ type Datastore struct {
 	// TransactionManager
 	transactionManager *types.TransactionManager
 
-	// SyncTree
+	// SyncTree; syncTreeMutex guards both syncTree and syncedPaths.
 	syncTree      *tree.RootEntry
 	syncTreeMutex *sync.RWMutex
+	syncedPaths   []*sdcpb.Path
+
+	// coldStartMu guards one-shot registration of pre-existing Non-revertive
+	// intents from cacheClient before the first sync or write transaction.
+	coldStartMu     sync.Mutex
+	coldStartLoaded bool
 
 	confirmedApplied *confirmedAppliedValues
+	// preTxBaselineSnap and preTxTouchedPaths hold the pre-transaction baseline
+	// snapshot and southbound-touched paths for an unconfirmed TransactionSet
+	// so TransactionRollback can restore untouched Non-revertive baselines; guarded by dmutex.
+	preTxBaselineSnap *confirmedAppliedSnapshot
+	preTxTouchedPaths map[canonicalLeafPath]struct{}
 
 	taskPool *pool.SharedTaskPool
 }

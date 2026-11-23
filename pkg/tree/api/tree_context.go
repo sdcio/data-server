@@ -29,6 +29,8 @@ type TreeContext interface {
 	ConfirmedAppliedValue(path *sdcpb.Path, owner string, intendedValue *sdcpb.TypedValue) *sdcpb.TypedValue
 	// IsLearnedMutateOnWritePath reports whether path's keyless schema path was dynamically learned as mutate-on-write.
 	IsLearnedMutateOnWritePath(path *sdcpb.Path) bool
+	// SetLearnedMutateOnWritePaths replaces the dynamic mutate-on-write path lookup used for this tree context.
+	SetLearnedMutateOnWritePaths(learned LearnedMutateOnWritePathSet)
 }
 
 // IsMutateOnWriteEntry reports whether e is classified as a mutate-on-write

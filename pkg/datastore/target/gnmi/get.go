@@ -2,6 +2,7 @@ package gnmi
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -146,6 +147,12 @@ func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
 
 	result, err := ops.TreeExport(s.syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio, false)
 	if err != nil {
+		if errors.Is(err, ops.ErrorIntentNotPresent) {
+			if applyErr := s.runningStore.ApplyToRunning(s.ctx, syncStartedAt, s.paths, nil); applyErr != nil {
+				log.Error(applyErr, "failure clearing empty synctree paths in running")
+			}
+			return
+		}
 		log.Error(err, "failure exporting synctree")
 		return
 	}
