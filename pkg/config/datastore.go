@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/sdcio/data-server/pkg/api"
 	"github.com/sdcio/data-server/pkg/utils"
 )
 
@@ -129,10 +131,7 @@ func (c Creds) MarshalJSON() ([]byte, error) {
 }
 
 type Sync struct {
-	Validate     bool            `yaml:"validate,omitempty" json:"validate,omitempty"`
-	Buffer       int64           `yaml:"buffer,omitempty" json:"buffer,omitempty"`
-	WriteWorkers int64           `yaml:"write-workers,omitempty" json:"write-workers,omitempty"`
-	Config       []*SyncProtocol `yaml:"config,omitempty" json:"config,omitempty"`
+	Config []*SyncProtocol `yaml:"config,omitempty" json:"config,omitempty"`
 }
 
 type SyncProtocol struct {
@@ -161,6 +160,9 @@ func (ds *DatastoreConfig) ValidateSetDefaults() error {
 	}
 	if ds.Sync != nil {
 		if err = ds.Sync.validateSetDefaults(); err != nil {
+			return err
+		}
+		if err = ds.Sync.resolveGnmiEncodings(ds.SBI); err != nil {
 			return err
 		}
 	}
@@ -198,6 +200,11 @@ func (s *SBI) validateSetDefaults() error {
 		if s.GnmiOptions.Encoding == "" {
 			return errors.New("no encoding defined")
 		}
+		enc, err := api.ParseGNMIEncoding(s.GnmiOptions.Encoding)
+		if err != nil {
+			return err
+		}
+		s.GnmiOptions.Encoding = string(enc)
 	default:
 		return fmt.Errorf("unknown sbi type: %q", s.Type)
 	}
@@ -225,13 +232,6 @@ func (s *Sync) validateSetDefaults() error {
 	if s == nil || len(s.Config) == 0 {
 		return nil
 	}
-	if s.Buffer <= 0 {
-		s.Buffer = defaultBufferSize
-	}
-	if s.WriteWorkers <= 0 {
-		s.WriteWorkers = defaultWriteWorkers
-	}
-
 	var errs []error
 	for _, sp := range s.Config {
 		err := sp.validateSetDefaults()
@@ -242,6 +242,32 @@ func (s *Sync) validateSetDefaults() error {
 		return err
 	}
 
+	return nil
+}
+
+// resolveGnmiEncodings validates the encoding of every gNMI sync. A sync
+// without its own encoding inherits the datastore's gNMI target encoding.
+// Noop targets ignore syncs, so their encodings are left as given.
+func (s *Sync) resolveGnmiEncodings(sbi *SBI) error {
+	if sbi != nil && sbi.Type == sbiNOOP {
+		return nil
+	}
+	for _, sp := range s.Config {
+		if !strings.EqualFold(sp.Protocol, sbiGNMI) {
+			continue
+		}
+		if sp.Encoding == "" && sbi != nil && sbi.GnmiOptions != nil {
+			sp.Encoding = sbi.GnmiOptions.Encoding
+		}
+		if sp.Encoding == "" {
+			return fmt.Errorf("sync %q: no encoding defined", sp.Name)
+		}
+		enc, err := api.ParseGNMIEncoding(sp.Encoding)
+		if err != nil {
+			return fmt.Errorf("sync %q: %w", sp.Name, err)
+		}
+		sp.Encoding = string(enc)
+	}
 	return nil
 }
 

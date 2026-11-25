@@ -55,7 +55,6 @@ datastores: # this specifies MAIN datastores
 #       tls:
 #         skip-verify: true
 #     sync:
-#       validate: true
 #       gnmi:
 #         - path:
 #           - /
@@ -81,7 +80,6 @@ datastores: # this specifies MAIN datastores
 #       tls:
 #         skip-verify: true
 #     sync:
-#       validate: true
 #       gnmi:
 #         - path:
 #           - /
