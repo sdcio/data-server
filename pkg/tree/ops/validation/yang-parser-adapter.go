@@ -11,20 +11,44 @@ import (
 	"github.com/sdcio/yang-parser/xpath/xutils"
 )
 
+const maxTracedBreadthPaths = 64
+
 type yangParserEntryAdapter struct {
-	e   api.Entry
-	ctx context.Context
+	e      api.Entry
+	ctx    context.Context
+	tracer xpath.Tracer
 }
 
-func newYangParserEntryAdapter(ctx context.Context, e api.Entry) *yangParserEntryAdapter {
+func newYangParserEntryAdapterWithTracer(ctx context.Context, e api.Entry, tracer xpath.Tracer) *yangParserEntryAdapter {
 	return &yangParserEntryAdapter{
-		e:   e,
-		ctx: ctx,
+		e:      e,
+		ctx:    ctx,
+		tracer: tracer,
 	}
 }
 
+func (y *yangParserEntryAdapter) pathString() string {
+	if y.e == nil {
+		return ""
+	}
+	return formatEntryXPath(y.e.SdcpbPath(), false)
+}
+
+func formatNavTarget(p *sdcpb.Path) string {
+	if p == nil {
+		return ""
+	}
+	if len(p.GetElem()) == 0 {
+		if p.GetIsRootBased() {
+			return "/"
+		}
+		return "."
+	}
+	return p.ToXPath(false)
+}
+
 func (y *yangParserEntryAdapter) Copy() xpath.Entry {
-	return newYangParserEntryAdapter(y.ctx, y.e)
+	return newYangParserEntryAdapterWithTracer(y.ctx, y.e, y.tracer)
 }
 
 func (y *yangParserEntryAdapter) valueToDatum(tv *sdcpb.TypedValue) xpath.Datum {
@@ -51,46 +75,107 @@ func (y *yangParserEntryAdapter) valueToDatum(tv *sdcpb.TypedValue) xpath.Datum 
 
 func (y *yangParserEntryAdapter) GetValue() (xpath.Datum, error) {
 	if y.e.GetSchema() == nil {
-		return xpath.NewBoolDatum(true), nil
+		d := xpath.NewBoolDatum(true)
+		y.emitGetValue(d, nil, "no_schema", "")
+		return d, nil
 	}
 
-	// if y.e is a container
 	if cs := y.e.GetSchema().GetContainer(); cs != nil {
-		// its a container
 		if len(cs.Keys) == 0 {
-			// regular container
-			return xpath.NewBoolDatum(true), nil
+			d := xpath.NewBoolDatum(true)
+			y.emitGetValue(d, nil, "container", "")
+			return d, nil
 		}
-		// list
 		childs, err := ops.GetListChilds(y.e)
 		if err != nil {
+			y.emitGetValue(nil, err, "list", "")
 			return nil, err
 		}
 		datums := make([]xutils.XpathNode, 0, len(childs))
 		for x := 0; x < len(childs); x++ {
-			// this is a dirty fix, that will enable count() to evaluate the right value
+			// Placeholder nil nodes preserve list length for count().
 			datums = append(datums, nil)
 		}
-		return xpath.NewNodesetDatum(datums), nil
+		d := xpath.NewNodesetDatum(datums)
+		y.emitGetValue(d, nil, "list", "")
+		return d, nil
 	}
 
-	// if y.e is anything else then a container
 	lv := y.e.GetLeafVariants().GetHighestPrecedence(false, true, false)
 	if lv == nil {
-		return xpath.NewNodesetDatum([]xutils.XpathNode{}), nil
+		d := xpath.NewNodesetDatum([]xutils.XpathNode{})
+		y.emitGetValue(d, nil, "unset_leaf", "")
+		return d, nil
 	}
-	return y.valueToDatum(lv.Value()), nil
+	d := y.valueToDatum(lv.Value())
+	y.emitGetValue(d, nil, "leaf_or_leaflist", lv.Owner())
+	return d, nil
+}
+
+func (y *yangParserEntryAdapter) emitGetValue(d xpath.Datum, err error, entryKind, owner string) {
+	if y.tracer == nil {
+		return
+	}
+	details := map[string]any{
+		"entry_kind": entryKind,
+	}
+	if owner != "" {
+		details["owner"] = owner
+	}
+	ev := xpath.TraceEvent{
+		Kind:    TraceEventAdapterGetValue,
+		Node:    y.pathString(),
+		Details: details,
+	}
+	if d != nil {
+		ev.Result = xpath.FormatDatum(d)
+	}
+	if err != nil {
+		ev.Error = err.Error()
+	}
+	y.tracer.TraceEvent(ev)
 }
 
 func (y *yangParserEntryAdapter) BreadthSearch(ctx context.Context, path *sdcpb.Path) ([]xpath.Entry, error) {
 	entries, err := breadthSearch(ctx, y.e, path)
 	if err != nil {
+		if y.tracer != nil {
+			y.tracer.TraceEvent(xpath.TraceEvent{
+				Kind:  TraceEventAdapterBreadthSearch,
+				Node:  y.pathString(),
+				Error: err.Error(),
+				Details: map[string]any{
+					"target": formatNavTarget(path),
+				},
+			})
+		}
 		return nil, err
 	}
 
 	result := make([]xpath.Entry, 0, len(entries))
 	for _, x := range entries {
-		result = append(result, newYangParserEntryAdapter(ctx, x))
+		result = append(result, newYangParserEntryAdapterWithTracer(ctx, x, y.tracer))
+	}
+
+	if y.tracer != nil {
+		capLen := min(len(entries), maxTracedBreadthPaths)
+		matched := make([]string, 0, capLen)
+		for i := range capLen {
+			matched = append(matched, formatEntryXPath(entries[i].SdcpbPath(), false))
+		}
+		details := map[string]any{
+			"target":        formatNavTarget(path),
+			"match_count":   len(entries),
+			"matched_paths": matched,
+		}
+		if len(entries) > maxTracedBreadthPaths {
+			details["truncated"] = true
+		}
+		y.tracer.TraceEvent(xpath.TraceEvent{
+			Kind:    TraceEventAdapterBreadthSearch,
+			Node:    y.pathString(),
+			Details: details,
+		})
 	}
 
 	return result, nil
@@ -99,14 +184,40 @@ func (y *yangParserEntryAdapter) BreadthSearch(ctx context.Context, path *sdcpb.
 func (y *yangParserEntryAdapter) FollowLeafRef() (xpath.Entry, error) {
 	entries, err := navigateLeafRef(y.ctx, y.e)
 	if err != nil {
+		if y.tracer != nil {
+			y.tracer.TraceEvent(xpath.TraceEvent{
+				Kind:  TraceEventAdapterFollowLeafRef,
+				Node:  y.pathString(),
+				Error: err.Error(),
+			})
+		}
 		return nil, err
 	}
 
 	if len(entries) == 0 {
-		return nil, fmt.Errorf("error resolving leafref for %s", y.e.SdcpbPath().ToXPath(false))
+		notFoundErr := fmt.Errorf("error resolving leafref for %s", y.e.SdcpbPath().ToXPath(false))
+		if y.tracer != nil {
+			y.tracer.TraceEvent(xpath.TraceEvent{
+				Kind:  TraceEventAdapterFollowLeafRef,
+				Node:  y.pathString(),
+				Error: notFoundErr.Error(),
+			})
+		}
+		return nil, notFoundErr
 	}
 
-	return newYangParserEntryAdapter(y.ctx, entries[0]), nil
+	resolved := newYangParserEntryAdapterWithTracer(y.ctx, entries[0], y.tracer)
+	if y.tracer != nil {
+		y.tracer.TraceEvent(xpath.TraceEvent{
+			Kind: TraceEventAdapterFollowLeafRef,
+			Node: y.pathString(),
+			Details: map[string]any{
+				"resolved_path":   resolved.pathString(),
+				"candidate_count": len(entries),
+			},
+		})
+	}
+	return resolved, nil
 }
 
 func (y *yangParserEntryAdapter) GetSdcpbPath() *sdcpb.Path {
@@ -114,28 +225,60 @@ func (y *yangParserEntryAdapter) GetSdcpbPath() *sdcpb.Path {
 }
 
 func (y *yangParserEntryAdapter) Navigate(p *sdcpb.Path) (xpath.Entry, error) {
-	var err error
-
 	if len(p.GetElem()) == 0 {
+		if y.tracer != nil {
+			y.tracer.TraceEvent(xpath.TraceEvent{
+				Kind: TraceEventAdapterNavigate,
+				Node: y.pathString(),
+				Details: map[string]any{
+					"target":        formatNavTarget(p),
+					"resolved_path": y.pathString(),
+				},
+			})
+		}
 		return y, nil
 	}
 
 	entry, err := ops.NavigateSdcpbPath(y.ctx, y.e, p)
 	if err != nil {
-		return newYangParserValueEntry(xpath.NewNodesetDatum([]xutils.XpathNode{}), err), nil
+		if y.tracer != nil {
+			y.tracer.TraceEvent(xpath.TraceEvent{
+				Kind:  TraceEventAdapterNavigate,
+				Node:  y.pathString(),
+				Error: err.Error(),
+				Details: map[string]any{
+					"target":   formatNavTarget(p),
+					"fallback": "empty_nodeset",
+				},
+			})
+		}
+		return newYangParserValueEntry(xpath.NewNodesetDatum([]xutils.XpathNode{}), err, y.tracer), nil
 	}
-	return newYangParserEntryAdapter(y.ctx, entry), nil
+	resolved := newYangParserEntryAdapterWithTracer(y.ctx, entry, y.tracer)
+	if y.tracer != nil {
+		y.tracer.TraceEvent(xpath.TraceEvent{
+			Kind: TraceEventAdapterNavigate,
+			Node: y.pathString(),
+			Details: map[string]any{
+				"target":        formatNavTarget(p),
+				"resolved_path": resolved.pathString(),
+			},
+		})
+	}
+	return resolved, nil
 }
 
 type yangParserValueEntry struct {
-	d xpath.Datum
-	e error
+	d      xpath.Datum
+	e      error
+	tracer xpath.Tracer
 }
 
-func newYangParserValueEntry(d xpath.Datum, err error) *yangParserValueEntry {
+func newYangParserValueEntry(d xpath.Datum, err error, tracer xpath.Tracer) *yangParserValueEntry {
 	return &yangParserValueEntry{
-		d: d,
-		e: err,
+		d:      d,
+		e:      err,
+		tracer: tracer,
 	}
 }
 
@@ -144,14 +287,47 @@ func (y *yangParserValueEntry) Copy() xpath.Entry {
 }
 
 func (y *yangParserValueEntry) FollowLeafRef() (xpath.Entry, error) {
-	return nil, fmt.Errorf("yangParserValueEntry navigation impossible")
+	err := fmt.Errorf("yangParserValueEntry navigation impossible")
+	if y.tracer != nil {
+		y.tracer.TraceEvent(xpath.TraceEvent{
+			Kind:  TraceEventAdapterFollowLeafRef,
+			Node:  "<unresolved>",
+			Error: err.Error(),
+		})
+	}
+	return nil, err
 }
 
 func (y *yangParserValueEntry) Navigate(p *sdcpb.Path) (xpath.Entry, error) {
-	return nil, fmt.Errorf("yangParserValueEntry navigation impossible")
+	err := fmt.Errorf("yangParserValueEntry navigation impossible")
+	if y.tracer != nil {
+		y.tracer.TraceEvent(xpath.TraceEvent{
+			Kind:  TraceEventAdapterNavigate,
+			Node:  "<unresolved>",
+			Error: err.Error(),
+			Details: map[string]any{
+				"target": formatNavTarget(p),
+			},
+		})
+	}
+	return nil, err
 }
 
 func (y *yangParserValueEntry) GetValue() (xpath.Datum, error) {
+	if y.tracer != nil {
+		details := map[string]any{
+			"entry_kind": "unresolved_fallback",
+		}
+		if y.e != nil {
+			details["from_error"] = y.e.Error()
+		}
+		y.tracer.TraceEvent(xpath.TraceEvent{
+			Kind:    TraceEventAdapterGetValue,
+			Node:    "<unresolved>",
+			Result:  xpath.FormatDatum(y.d),
+			Details: details,
+		})
+	}
 	return y.d, nil
 }
 
@@ -160,5 +336,15 @@ func (y *yangParserValueEntry) GetSdcpbPath() *sdcpb.Path {
 }
 
 func (y *yangParserValueEntry) BreadthSearch(ctx context.Context, path *sdcpb.Path) ([]xpath.Entry, error) {
+	if y.tracer != nil {
+		y.tracer.TraceEvent(xpath.TraceEvent{
+			Kind: TraceEventAdapterBreadthSearch,
+			Node: "<unresolved>",
+			Details: map[string]any{
+				"target":      formatNavTarget(path),
+				"match_count": 0,
+			},
+		})
+	}
 	return nil, nil
 }

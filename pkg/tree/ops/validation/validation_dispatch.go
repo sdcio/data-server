@@ -11,7 +11,7 @@ import (
 // ValidationFunc is the common signature for all validation checks.
 type ValidationFunc func(ctx context.Context, e api.Entry, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats)
 
-func activeValidators(vCfg *config.Validation) []ValidationFunc {
+func activeValidators(vCfg *config.Validation, mt MustTracer) []ValidationFunc {
 	active := make([]ValidationFunc, 0, 8)
 	if !vCfg.DisabledValidators.Mandatory {
 		active = append(active, validateMandatory)
@@ -26,7 +26,17 @@ func activeValidators(vCfg *config.Validation) []ValidationFunc {
 		active = append(active, validatePattern)
 	}
 	if !vCfg.DisabledValidators.MustStatement {
-		active = append(active, validateMustStatements)
+		if mt == nil {
+			active = append(active, validateMustStatements)
+		} else {
+			active = append(active, func(ctx context.Context, e api.Entry, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats) {
+				validateMustStatementsWithTracer(ctx, e, resultChan, stats, mt)
+			})
+		}
+	} else if mt != nil {
+		active = append(active, func(_ context.Context, e api.Entry, _ chan<- *types.ValidationResultEntry, _ *types.ValidationStats) {
+			traceSkippedEntryMusts(e, mt, "must-statement validator disabled")
+		})
 	}
 	if !vCfg.DisabledValidators.Length {
 		active = append(active, validateLength)

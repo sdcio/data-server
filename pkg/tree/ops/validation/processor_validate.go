@@ -29,13 +29,16 @@ type ValidateProcessorParameters struct {
 	resultChan chan<- *types.ValidationResultEntry
 	stats      *types.ValidationStats
 	validators []ValidationFunc
+	mustTracer MustTracer
 }
 
-func NewValidateProcessorConfig(resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, vCfg *config.Validation) *ValidateProcessorParameters {
+func NewValidateProcessorConfig(resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, vCfg *config.Validation, opts ...ValidateOption) *ValidateProcessorParameters {
+	vOpts := resolveValidateOptions(opts)
 	return &ValidateProcessorParameters{
 		resultChan: resultChan,
 		stats:      stats,
-		validators: activeValidators(vCfg),
+		validators: activeValidators(vCfg, vOpts.mustTracer),
+		mustTracer: vOpts.mustTracer,
 	}
 }
 
@@ -59,9 +62,19 @@ func (t *validateTask) Run(ctx context.Context, submit func(pool.Task) error) er
 	if t.e.RemainsToExist() {
 		validateLevel(ctx, t.e, t.parameters.resultChan, t.parameters.stats, t.parameters.validators)
 
-		for _, c := range t.e.GetChilds(types.DescendMethodActiveChilds) {
+		activeChilds := t.e.GetChilds(types.DescendMethodActiveChilds)
+		for _, c := range activeChilds {
 			_ = submit(newValidateTask(c, t.parameters))
 		}
+		if t.parameters.mustTracer != nil {
+			for name, c := range t.e.GetChilds(types.DescendMethodAll) {
+				if _, ok := activeChilds[name]; !ok {
+					traceSkippedSubtreeMusts(c, t.parameters.mustTracer, "inactive choice case")
+				}
+			}
+		}
+	} else if t.parameters.mustTracer != nil {
+		traceSkippedSubtreeMusts(t.e, t.parameters.mustTracer, "entry does not remain to exist")
 	}
 	return nil
 }
