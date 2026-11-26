@@ -4,11 +4,6 @@ go 1.26.0
 
 replace github.com/openconfig/goyang v1.6.3 => github.com/sdcio/goyang v1.6.2-2
 
-replace (
-	github.com/sdcio/schema-server => ../schema-server
-	github.com/sdcio/sdc-protos => ../sdc-protos
-)
-
 require (
 	github.com/AlekSi/pointer v1.2.0
 	github.com/beevik/etree v1.8.1
@@ -28,8 +23,8 @@ require (
 	github.com/scrapli/scrapligo v1.4.4
 	github.com/sdcio/cache v0.0.39
 	github.com/sdcio/logger v0.0.3
-	github.com/sdcio/schema-server v0.0.34
-	github.com/sdcio/sdc-protos v0.0.56
+	github.com/sdcio/schema-server v0.0.35-0.20261126103548-1476e1424a8b
+	github.com/sdcio/sdc-protos v0.0.57-0.20261120130348-fe084f2516a8
 	github.com/sdcio/yang-parser v0.0.12
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.1.0
