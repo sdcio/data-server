@@ -66,12 +66,23 @@ func normalizeTransportError(err error) error {
 // resp.ErrorMessages misses namespace-prefixed elements and tags split by
 // NETCONF 1.1 chunk markers.
 func parseReply(resp *response.NetconfResponse) (*etree.Document, error) {
+	doc, failing, err := parseReplyElements(resp)
+	if err != nil {
+		return nil, err
+	}
+	if len(failing) > 0 {
+		return nil, replyError(resp, failing)
+	}
+	return doc, nil
+}
+
+func parseReplyElements(resp *response.NetconfResponse) (*etree.Document, []*etree.Element, error) {
 	doc := etree.NewDocument()
 	if err := doc.ReadFromString(resp.Result); err != nil {
 		if resp.Failed != nil {
-			return nil, resp.Failed
+			return nil, nil, resp.Failed
 		}
-		return nil, err
+		return nil, nil, err
 	}
 	rpcErrs := doc.FindElements("//rpc-error")
 	var failing []*etree.Element
@@ -80,14 +91,11 @@ func parseReply(resp *response.NetconfResponse) (*etree.Document, error) {
 			failing = append(failing, e)
 		}
 	}
-	if len(failing) > 0 {
-		return doc, replyError(resp, failing)
-	}
 	// scrapligo flagged a failure that is not an rpc-error, e.g. 1.1 framing
 	if len(rpcErrs) == 0 && resp.Failed != nil {
-		return nil, resp.Failed
+		return nil, nil, resp.Failed
 	}
-	return doc, nil
+	return doc, failing, nil
 }
 
 // replyError returns resp.Failed (or an equivalent error when scrapligo missed
@@ -299,9 +307,13 @@ func (snt *ScrapligoNetconfTarget) Lock(target string) (*types.NetconfResponse, 
 	if err != nil {
 		return nil, normalizeTransportError(err)
 	}
-	x, err := parseReply(resp)
+	x, failing, err := parseReplyElements(resp)
 	if err != nil {
-		if hasLockOwner(x) && !errors.Is(err, types.ErrCapabilitiesChanged) {
+		return nil, err
+	}
+	if len(failing) > 0 {
+		err := replyError(resp, failing)
+		if hasLockOwner(failing) && !errors.Is(err, types.ErrCapabilitiesChanged) {
 			return nil, fmt.Errorf("%w: %w", types.ErrLockHeld, err)
 		}
 		return nil, err
@@ -310,14 +322,8 @@ func (snt *ScrapligoNetconfTarget) Lock(target string) (*types.NetconfResponse, 
 	return types.NewNetconfResponse(x), nil
 }
 
-func hasLockOwner(doc *etree.Document) bool {
-	if doc == nil {
-		return false
-	}
-	for _, e := range doc.FindElements("//rpc-error") {
-		if childText(e, "error-severity") == "warning" {
-			continue
-		}
+func hasLockOwner(failing []*etree.Element) bool {
+	for _, e := range failing {
 		if info := e.SelectElement("error-info"); info != nil && childText(info, "session-id") != "" {
 			return true
 		}

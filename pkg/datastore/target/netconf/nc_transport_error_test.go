@@ -626,6 +626,14 @@ func Test_ncTarget_CapabilitiesChanged_StaleDriverDoesNotDisconnectOrAdvanceCool
 	}
 }
 
+type lockOwner int
+
+const (
+	lockNone         lockOwner = 0
+	lockThisSession  lockOwner = 1
+	lockOtherSession lockOwner = 42
+)
+
 // fakeCandidateDriver models an RFC 6241 device with shared <candidate> and
 // <running> datastores, session lock ownership, and auto-discard when a locked
 // session closes.
@@ -637,13 +645,14 @@ type fakeCandidateDriver struct {
 	running        string
 	candidate      string
 	candidateDirty bool
-	lockedBy       int // 0 = unlocked, 1 = this session, >1 = another session
+	lockedBy       lockOwner
 
-	editErr    error
-	commitErr  error
-	discardErr error
-	unlockErr  error
-	lockErr    error
+	editErr      error
+	commitErr    error
+	discardErr   error
+	unlockErr    error
+	lockErr      error
+	retryLockErr error
 }
 
 func newFakeCandidateDriver() *fakeCandidateDriver {
@@ -685,10 +694,10 @@ func (f *fakeCandidateDriver) Close() error {
 	f.alive = false
 	// Per RFC 6241 §8.3.4, uncommitted changes made under a session lock are
 	// discarded when the session holding the lock terminates.
-	if f.lockedBy == 1 {
+	if f.lockedBy == lockThisSession {
 		f.candidate = f.running
 		f.candidateDirty = false
-		f.lockedBy = 0
+		f.lockedBy = lockNone
 	}
 	f.mu.Unlock()
 	f.closeOnce.Do(func() { close(f.closedCh) })
@@ -706,13 +715,18 @@ func (f *fakeCandidateDriver) Lock(target string) (*nctypes.NetconfResponse, err
 	if target != config.NCCommitDatastoreCandidate {
 		return f.okReply(), nil
 	}
-	if f.lockedBy != 0 {
+	if f.lockedBy != lockNone {
 		return nil, fmt.Errorf("%w: locked by session %d", nctypes.ErrLockHeld, f.lockedBy)
 	}
 	if f.candidateDirty {
+		if f.retryLockErr != nil {
+			// arm retryLockErr for the retry attempt that follows Discard()
+			f.lockErr = f.retryLockErr
+			f.retryLockErr = nil
+		}
 		return nil, errors.New("rpc-error: in-use: candidate has uncommitted changes")
 	}
-	f.lockedBy = 1
+	f.lockedBy = lockThisSession
 	return f.okReply(), nil
 }
 
@@ -725,14 +739,14 @@ func (f *fakeCandidateDriver) Unlock(target string) (*nctypes.NetconfResponse, e
 		return nil, err
 	}
 	if target == config.NCCommitDatastoreCandidate {
-		if f.lockedBy != 1 {
+		if f.lockedBy != lockThisSession {
 			return nil, errors.New("rpc-error: operation-failed: lock not held")
 		}
 		if f.candidateDirty {
 			f.candidate = f.running
 			f.candidateDirty = false
 		}
-		f.lockedBy = 0
+		f.lockedBy = lockNone
 	}
 	return f.okReply(), nil
 }
@@ -775,7 +789,7 @@ func (f *fakeCandidateDriver) Discard() error {
 		f.discardErr = nil
 		return err
 	}
-	if f.lockedBy != 0 && f.lockedBy != 1 {
+	if f.lockedBy != lockNone && f.lockedBy != lockThisSession {
 		return errors.New("rpc-error: in-use: candidate locked by another session")
 	}
 	f.candidate = f.running
@@ -808,7 +822,7 @@ func Test_Set_CandidateLocksAndUnlocks(t *testing.T) {
 		if dev.candidateDirty {
 			t.Error("candidate remained dirty after mid-flight transport drop; expected Lock before EditConfig so session close discards candidate")
 		}
-		if dev.lockedBy != 0 {
+		if dev.lockedBy != lockNone {
 			t.Errorf("lockedBy = %d, want 0", dev.lockedBy)
 		}
 	})
@@ -825,7 +839,7 @@ func Test_Set_CandidateLocksAndUnlocks(t *testing.T) {
 		if _, err := tr.Set(context.Background(), newFakeTargetSource()); err != nil {
 			t.Fatalf("first Set: %v", err)
 		}
-		if dev.lockedBy != 0 {
+		if dev.lockedBy != lockNone {
 			t.Fatalf("candidate remained locked after first Set (lockedBy=%d)", dev.lockedBy)
 		}
 		if _, err := tr.Set(context.Background(), newFakeTargetSource()); err != nil {
@@ -835,7 +849,7 @@ func Test_Set_CandidateLocksAndUnlocks(t *testing.T) {
 
 	t.Run("running datastore mode does not lock candidate", func(t *testing.T) {
 		dev := newFakeCandidateDriver()
-		dev.lockedBy = 42 // another session holds candidate lock
+		dev.lockedBy = lockOtherSession
 		cfg := testSBIConfig()
 		cfg.NetconfOptions.CommitDatastore = config.NCCommitDatastoreRunning
 
@@ -849,8 +863,8 @@ func Test_Set_CandidateLocksAndUnlocks(t *testing.T) {
 		if _, err := tr.Set(context.Background(), newFakeTargetSource()); err != nil {
 			t.Fatalf("Set to running failed while candidate was locked: %v", err)
 		}
-		if dev.lockedBy != 42 {
-			t.Errorf("running mode touched candidate lock: lockedBy = %d, want 42", dev.lockedBy)
+		if dev.lockedBy != lockOtherSession {
+			t.Errorf("running mode touched candidate lock: lockedBy = %d, want %d", dev.lockedBy, lockOtherSession)
 		}
 	})
 }
@@ -874,7 +888,7 @@ func Test_Set_DirtyCandidateRecoveryAndLockHeld(t *testing.T) {
 		if dev.candidateDirty {
 			t.Error("candidate remained dirty after Set")
 		}
-		if dev.lockedBy != 0 {
+		if dev.lockedBy != lockNone {
 			t.Errorf("lockedBy = %d, want 0", dev.lockedBy)
 		}
 		if !strings.Contains(dev.running, "eth0") {
@@ -884,7 +898,7 @@ func Test_Set_DirtyCandidateRecoveryAndLockHeld(t *testing.T) {
 
 	t.Run("lock held by another session fails without wiping candidate", func(t *testing.T) {
 		dev := newFakeCandidateDriver()
-		dev.lockedBy = 42
+		dev.lockedBy = lockOtherSession
 		dev.candidate = "<operator-uncommitted/>"
 		dev.candidateDirty = true
 
@@ -904,6 +918,69 @@ func Test_Set_DirtyCandidateRecoveryAndLockHeld(t *testing.T) {
 		}
 		if !tr.Status().IsConnected() {
 			t.Error("session must stay connected after lock-denied")
+		}
+	})
+
+	t.Run("transport or capabilities-changed error on initial Lock skips Discard and retires session", func(t *testing.T) {
+		for _, tc := range []struct {
+			name    string
+			lockErr error
+		}{
+			{"transport error", io.EOF},
+			{"capabilities-changed", capsChangedErr()},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				dev := newFakeCandidateDriver()
+				dev.candidate = "<uncommitted/>"
+				dev.candidateDirty = true
+				dev.lockErr = tc.lockErr
+
+				ctx, stop := context.WithCancel(context.Background())
+				defer stop()
+				tr := &ncTarget{
+					name:      "dev1",
+					driver:    dev,
+					sbiConfig: testSBIConfig(),
+					lifeCtx:   ctx,
+					lifeStop:  stop,
+					newDriver: failingDriverFactory,
+				}
+
+				_, err := tr.Set(ctx, newFakeTargetSource())
+				if !errors.Is(err, types.ErrNotConnected) {
+					t.Fatalf("Set error = %v, want ErrNotConnected", err)
+				}
+				if tr.Status().IsConnected() {
+					t.Error("expected Status() to be disconnected after session error on Lock")
+				}
+				<-dev.closedCh
+				if dev.candidate != "<uncommitted/>" {
+					t.Errorf("candidate = %q, want untouched when Lock failed with session error", dev.candidate)
+				}
+			})
+		}
+	})
+
+	t.Run("retry Lock failure stops after single Discard", func(t *testing.T) {
+		dev := newFakeCandidateDriver()
+		dev.candidate = "<uncommitted/>"
+		dev.candidateDirty = true
+		retryErr := errors.New("rpc-error: lock-denied on retry")
+		dev.retryLockErr = retryErr
+
+		tr := &ncTarget{
+			name:      "dev1",
+			driver:    dev,
+			sbiConfig: testSBIConfig(),
+			newDriver: failingDriverFactory,
+		}
+
+		_, err := tr.Set(context.Background(), newFakeTargetSource())
+		if !errors.Is(err, retryErr) {
+			t.Fatalf("Set error = %v, want %v", err, retryErr)
+		}
+		if !tr.Status().IsConnected() {
+			t.Error("session must stay connected when retry Lock fails with non-transport error")
 		}
 	})
 
@@ -953,12 +1030,15 @@ func Test_Set_DirtyCandidateRecoveryAndLockHeld(t *testing.T) {
 		if !errors.Is(err, types.ErrNotConnected) {
 			t.Fatalf("Set error = %v, want ErrNotConnected", err)
 		}
+		if tr.Status().IsConnected() {
+			t.Error("expected Status() to be disconnected")
+		}
 		<-dev.closedCh
 	})
 }
 
 func Test_Set_RetiresPoisonedSessionOnFailedDiscardOrUnlock(t *testing.T) {
-	t.Run("failed post-commit Discard retires session and preserves commit error", func(t *testing.T) {
+	t.Run("failed post-commit Discard retires session, reconnects to fresh session, and preserves commit error", func(t *testing.T) {
 		poisoned := newFakeCandidateDriver()
 		commitErr := errors.New("rpc-error: must constraint violated")
 		poisoned.commitErr = commitErr
@@ -990,8 +1070,22 @@ func Test_Set_RetiresPoisonedSessionOnFailedDiscardOrUnlock(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatal("poisoned session was not closed after failed Discard")
 		}
-		if poisoned.candidateDirty || poisoned.lockedBy != 0 {
+		if poisoned.candidateDirty || poisoned.lockedBy != lockNone {
 			t.Errorf("closing poisoned session must release lock and dirty candidate (dirty=%v, lockedBy=%d)", poisoned.candidateDirty, poisoned.lockedBy)
+		}
+
+		deadline := time.Now().Add(2 * time.Second)
+		for !tr.Status().IsConnected() {
+			if time.Now().After(deadline) {
+				t.Fatal("target did not reconnect to fresh session")
+			}
+			time.Sleep(time.Millisecond)
+		}
+		if _, err := tr.Set(ctx, newFakeTargetSource()); err != nil {
+			t.Fatalf("Set on reconnected fresh session failed: %v", err)
+		}
+		if !strings.Contains(fresh.running, "eth0") {
+			t.Errorf("fresh.running = %q, want committed eth0", fresh.running)
 		}
 	})
 
@@ -1019,13 +1113,16 @@ func Test_Set_RetiresPoisonedSessionOnFailedDiscardOrUnlock(t *testing.T) {
 		if errors.Is(err, types.ErrNotConnected) {
 			t.Errorf("semantic edit error must not be wrapped in ErrNotConnected, got %v", err)
 		}
+		if tr.Status().IsConnected() {
+			t.Error("expected Status() to be disconnected after retiring poisoned session")
+		}
 
 		select {
 		case <-poisoned.closedCh:
 		case <-time.After(time.Second):
 			t.Fatal("session with stuck lock was not closed after failed Unlock")
 		}
-		if poisoned.lockedBy != 0 {
+		if poisoned.lockedBy != lockNone {
 			t.Errorf("lockedBy = %d, want 0", poisoned.lockedBy)
 		}
 	})
@@ -1055,14 +1152,65 @@ func Test_Set_RetiresPoisonedSessionOnFailedDiscardOrUnlock(t *testing.T) {
 		if !strings.Contains(poisoned.running, "eth0") {
 			t.Errorf("running = %q, want committed eth0", poisoned.running)
 		}
+		if tr.Status().IsConnected() {
+			t.Error("expected Status() to be disconnected after retiring session with failed Unlock")
+		}
 
 		select {
 		case <-poisoned.closedCh:
 		case <-time.After(time.Second):
 			t.Fatal("session with stuck lock was not closed after post-Commit Unlock failure")
 		}
-		if poisoned.lockedBy != 0 {
+		if poisoned.lockedBy != lockNone {
 			t.Errorf("lockedBy = %d, want 0", poisoned.lockedBy)
+		}
+	})
+
+	t.Run("capabilities-changed on post-edit Discard honors cooldown while preserving edit error", func(t *testing.T) {
+		poisoned := newFakeCandidateDriver()
+		editErr := errors.New("rpc-error: bad-element")
+		poisoned.editErr = editErr
+		poisoned.discardErr = capsChangedErr()
+
+		const cooldown = 100 * time.Millisecond
+		var dialed atomic.Bool
+		fresh := newFakeCandidateDriver()
+
+		ctx, stop := context.WithCancel(context.Background())
+		defer stop()
+		tr := &ncTarget{
+			name:                  "dev1",
+			driver:                poisoned,
+			sbiConfig:             testSBIConfig(),
+			lifeCtx:               ctx,
+			lifeStop:              stop,
+			capsReconnectCooldown: cooldown,
+			nextCapsReconnect:     time.Now().Add(cooldown),
+			newDriver: func(*config.SBI) (Driver, error) {
+				dialed.Store(true)
+				return fresh, nil
+			},
+		}
+
+		start := time.Now()
+		_, err := tr.Set(ctx, newFakeTargetSource())
+		if !errors.Is(err, editErr) || errors.Is(err, types.ErrNotConnected) {
+			t.Fatalf("Set error = %v, want unwrapped %v", err, editErr)
+		}
+		if tr.Status().IsConnected() {
+			t.Error("expected Status() to be disconnected immediately")
+		}
+		if time.Since(start) < cooldown/2 && dialed.Load() {
+			t.Error("reconnect dialed before capabilities-changed cooldown elapsed")
+		}
+		<-poisoned.closedCh
+
+		deadline := time.Now().Add(2 * time.Second)
+		for !tr.Status().IsConnected() {
+			if time.Now().After(deadline) {
+				t.Fatal("target did not reconnect after cooldown")
+			}
+			time.Sleep(time.Millisecond)
 		}
 	})
 }

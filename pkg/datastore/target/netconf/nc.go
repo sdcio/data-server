@@ -262,7 +262,7 @@ func (t *ncTarget) retireDriver(ctx context.Context, failed Driver) {
 // the primary RPC result untouched while respecting capabilities-changed cooldown.
 func (t *ncTarget) retirePoisoned(ctx context.Context, failed Driver, err error) {
 	if errors.Is(err, nctypes.ErrCapabilitiesChanged) {
-		_ = t.handleCapabilitiesChanged(ctx, failed, err)
+		t.retireCapabilitiesChanged(ctx, failed, err)
 		return
 	}
 	t.retireDriver(ctx, failed)
@@ -301,15 +301,7 @@ func (t *ncTarget) capabilitiesCooldown() time.Duration {
 	return defaultCapabilitiesReconnectCooldown
 }
 
-// handleCapabilitiesChanged retires failed after a capabilities-changed
-// rpc-error and schedules a background reconnect so the new session performs a
-// fresh hello exchange.
-//
-// Dials triggered by capabilities-changed are spaced by at least the target's
-// capabilities cooldown; if another session hits capabilities-changed inside
-// that window, it is still retired immediately while dialing waits out the
-// remaining cooldown.
-func (t *ncTarget) handleCapabilitiesChanged(ctx context.Context, failed Driver, err error) error {
+func (t *ncTarget) retireCapabilitiesChanged(ctx context.Context, failed Driver, err error) {
 	log := logf.FromContext(ctx)
 	cooldown := t.capabilitiesCooldown()
 
@@ -343,6 +335,18 @@ func (t *ncTarget) handleCapabilitiesChanged(ctx context.Context, failed Driver,
 	if failed != nil {
 		go func() { _ = failed.Close() }()
 	}
+}
+
+// handleCapabilitiesChanged retires failed after a capabilities-changed
+// rpc-error and schedules a background reconnect so the new session performs a
+// fresh hello exchange.
+//
+// Dials triggered by capabilities-changed are spaced by at least the target's
+// capabilities cooldown; if another session hits capabilities-changed inside
+// that window, it is still retired immediately while dialing waits out the
+// remaining cooldown.
+func (t *ncTarget) handleCapabilitiesChanged(ctx context.Context, failed Driver, err error) error {
+	t.retireCapabilitiesChanged(ctx, failed, err)
 	return fmt.Errorf("%s: %w: %w", t.name, types.ErrNotConnected, err)
 }
 
@@ -452,6 +456,7 @@ func filterRPCErrors(xml *etree.Document, severity string) ([]string, error) {
 
 func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
 	log := logf.FromContext(ctx).WithValues("commit-datastore", commitDatastore)
+	ctx = logf.IntoContext(ctx, log)
 	xtree, err := source.ToXML(ctx, true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
 	if err != nil {
 		return nil, err
@@ -477,15 +482,37 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 	}
 
 	if commitDatastore == config.NCCommitDatastoreCandidate {
-		if err := t.lockCandidate(ctx, drv); err != nil {
-			return nil, err
+		return t.setCandidate(ctx, drv, xdoc)
+	}
+	return t.setRunning(ctx, drv, xdoc)
+}
+
+func (t *ncTarget) setRunning(ctx context.Context, drv Driver, xdoc string) (*sdcpb.SetDataResponse, error) {
+	resp, err := drv.EditConfig(config.NCCommitDatastoreRunning, xdoc)
+	if err != nil {
+		logf.FromContext(ctx).Error(err, "failed during edit-config")
+		if sessErr, ok := t.handleSessionError(ctx, drv, err); ok {
+			return nil, sessErr
 		}
+		return nil, err
+	}
+	rpcWarnings, err := filterRPCErrors(resp.Doc, "warning")
+	if err != nil {
+		return nil, fmt.Errorf("filtering netconf rpc-errors with severity warnings: %w", err)
+	}
+	return &sdcpb.SetDataResponse{
+		Warnings:  rpcWarnings,
+		Timestamp: time.Now().UnixNano(),
+	}, nil
+}
+
+func (t *ncTarget) setCandidate(ctx context.Context, drv Driver, xdoc string) (*sdcpb.SetDataResponse, error) {
+	log := logf.FromContext(ctx)
+	if err := t.lockCandidate(ctx, drv); err != nil {
+		return nil, err
 	}
 
 	unlockCandidate := func() {
-		if commitDatastore != config.NCCommitDatastoreCandidate {
-			return
-		}
 		if _, err := drv.Unlock(config.NCCommitDatastoreCandidate); err != nil {
 			log.Error(err, "failed unlocking candidate datastore, retiring session")
 			t.retirePoisoned(ctx, drv, err)
@@ -493,9 +520,6 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 	}
 
 	cleanupFailedCandidate := func() {
-		if commitDatastore != config.NCCommitDatastoreCandidate {
-			return
-		}
 		if err := drv.Discard(); err != nil {
 			log.Error(err, "failed while discarding pending changes, retiring session")
 			t.retirePoisoned(ctx, drv, err)
@@ -504,8 +528,7 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 		unlockCandidate()
 	}
 
-	// edit the config
-	resp, err := drv.EditConfig(commitDatastore, xdoc)
+	resp, err := drv.EditConfig(config.NCCommitDatastoreCandidate, xdoc)
 	if err != nil {
 		log.Error(err, "failed during edit-config")
 		if sessErr, ok := t.handleSessionError(ctx, drv, err); ok {
@@ -520,26 +543,23 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 		return nil, fmt.Errorf("filtering netconf rpc-errors with severity warnings: %w", err)
 	}
 
-	// candidate stores need to commit the changes to running
-	if commitDatastore == config.NCCommitDatastoreCandidate {
-		log.Info("committing changes on target")
-		commitResp, err := drv.Commit()
-		if err != nil {
-			log.Error(err, "failed during commit")
-			if sessErr, ok := t.handleSessionError(ctx, drv, err); ok {
-				return nil, sessErr
-			}
-			cleanupFailedCandidate()
-			return nil, err
+	log.Info("committing changes on target")
+	commitResp, err := drv.Commit()
+	if err != nil {
+		log.Error(err, "failed during commit")
+		if sessErr, ok := t.handleSessionError(ctx, drv, err); ok {
+			return nil, sessErr
 		}
-		commitWarnings, err := filterRPCErrors(commitResp.Doc, "warning")
-		if err != nil {
-			unlockCandidate()
-			return nil, fmt.Errorf("filtering netconf rpc-errors with severity warnings: %w", err)
-		}
-		rpcWarnings = append(rpcWarnings, commitWarnings...)
-		unlockCandidate()
+		cleanupFailedCandidate()
+		return nil, err
 	}
+	commitWarnings, err := filterRPCErrors(commitResp.Doc, "warning")
+	if err != nil {
+		unlockCandidate()
+		return nil, fmt.Errorf("filtering netconf rpc-errors with severity warnings: %w", err)
+	}
+	rpcWarnings = append(rpcWarnings, commitWarnings...)
+	unlockCandidate()
 	return &sdcpb.SetDataResponse{
 		Warnings:  rpcWarnings,
 		Timestamp: time.Now().UnixNano(),
