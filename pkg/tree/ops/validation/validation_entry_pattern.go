@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
@@ -35,6 +36,32 @@ func yangPatternToGo(p string) string {
 	return "^(?:" + p + ")$"
 }
 
+// compiledPattern is the outcome of translating and compiling a YANG pattern.
+// A failed compile is kept too, so a bad pattern is compiled only once.
+type compiledPattern struct {
+	re        *regexp.Regexp
+	goPattern string
+	err       error
+}
+
+// patternCache maps the raw YANG pattern text to its *compiledPattern.
+// Compilation is a pure function of the pattern text, so entries never go
+// stale. It is intentionally unbounded: distinct patterns are limited by the
+// loaded schemas, and the tree is walked cyclically, so an LRU would thrash.
+var patternCache sync.Map
+
+// compilePattern returns the cached compile outcome for the YANG pattern p,
+// translating and compiling it on first use.
+func compilePattern(p string) *compiledPattern {
+	if v, ok := patternCache.Load(p); ok {
+		return v.(*compiledPattern)
+	}
+	goPattern := yangPatternToGo(p)
+	re, err := regexp.Compile(goPattern)
+	v, _ := patternCache.LoadOrStore(p, &compiledPattern{re: re, goPattern: goPattern, err: err})
+	return v.(*compiledPattern)
+}
+
 func validatePattern(_ context.Context, e api.Entry, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats) {
 	if schema := e.GetSchema().GetField(); schema != nil {
 		if len(schema.GetType().GetPatterns()) == 0 {
@@ -48,12 +75,13 @@ func validatePattern(_ context.Context, e api.Entry, resultChan chan<- *types.Va
 		value := lv.Value().GetStringVal()
 		for _, pattern := range schema.GetType().GetPatterns() {
 			if p := pattern.GetPattern(); p != "" {
-				goPattern := yangPatternToGo(p)
-				matched, err := regexp.MatchString(goPattern, value)
-				if err != nil {
+				cp := compilePattern(p)
+				goPattern := cp.goPattern
+				if cp.err != nil {
 					resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("failed compiling regex (schema: %s, goPattern: %s) defined for %s", p, goPattern, e.SdcpbPath().ToXPath(false)), types.ValidationResultEntryTypeError)
 					continue
 				}
+				matched := cp.re.MatchString(value)
 				if (!matched && !pattern.Inverted) || (pattern.GetInverted() && matched) {
 					resultChan <- types.NewValidationResultEntry(lv.Owner(), fmt.Errorf("value %s of %s does not match regex (schema: %s, goPattern: %s, inverted: %t)", value, e.SdcpbPath().ToXPath(false), p, goPattern, pattern.GetInverted()), types.ValidationResultEntryTypeError)
 				}
