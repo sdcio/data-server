@@ -207,6 +207,14 @@ func Test_parseReply(t *testing.T) {
 		`<rpc-error><error-severity>error</error-severity><error-message>commit failed</error-message></rpc-error>` +
 		`</commit-results></rpc-reply>`
 	const noSeverity = `<rpc-reply message-id="1"><rpc-error><error-tag>invalid-value</error-tag></rpc-error></rpc-reply>`
+	const errorInData = `<rpc-reply message-id="1"><data><audit xmlns="urn:example">` +
+		`<rpc-error><error-severity>error</error-severity><error-message>stored</error-message></rpc-error>` +
+		`</audit></data></rpc-reply>`
+	const errorInPrefixedData = `<nc:rpc-reply xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="1"><nc:data>` +
+		`<nc:rpc-error><nc:error-severity>error</nc:error-severity></nc:rpc-error>` +
+		`</nc:data></nc:rpc-reply>`
+	const errorBesideData = `<rpc-reply message-id="1"><data><interface/></data>` +
+		`<rpc-error><error-severity>error</error-severity></rpc-error></rpc-reply>`
 
 	tests := []struct {
 		name     string
@@ -227,6 +235,9 @@ func Test_parseReply(t *testing.T) {
 		{"rpc-error nested in a result element", nested, true, true, false},
 		{"rpc-error without severity", noSeverity, true, true, false},
 		{"rpc-error scrapligo did not flag", tagOnly, false, true, false},
+		{"rpc-error element inside data", errorInData, true, false, false},
+		{"rpc-error element inside prefixed data", errorInPrefixedData, true, false, false},
+		{"rpc-error next to data", errorBesideData, true, true, false},
 		{"malformed xml", "<rpc-reply><rpc-error>", true, true, false},
 		{"empty result after framing error", "", true, true, false},
 	}
@@ -284,6 +295,14 @@ func Test_RPCErrors_SameForAllMethods_OverSSH(t *testing.T) {
 	for name, call := range calls {
 		if err := call(); err == nil {
 			t.Errorf("%s: prefixed error-severity rpc-error must fail", name)
+		}
+	}
+
+	// scrapligo flags this reply as failed, but <data> is device content
+	s.setReplyBody(`<data><rpc-error><error-severity>error</error-severity></rpc-error></data>`)
+	for name, call := range calls {
+		if err := call(); err != nil {
+			t.Errorf("%s: rpc-error element inside <data> must not fail, got %v", name, err)
 		}
 	}
 }
