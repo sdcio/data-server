@@ -20,3 +20,7 @@ import "errors"
 // resource-denied, and error-app-tag capabilities-changed: the device rejects
 // RPCs on the current session because its capability set changed after hello.
 var ErrCapabilitiesChanged = errors.New("device capabilities changed")
+
+// ErrLockHeld marks a lock rpc-error carrying error-info/session-id: another
+// NETCONF session or non-NETCONF management entity holds the target lock.
+var ErrLockHeld = errors.New("datastore lock held by another entity")

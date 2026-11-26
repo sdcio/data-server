@@ -23,7 +23,8 @@ type Driver interface {
 	GetConfig(source string, filter string) (*types.NetconfResponse, error)
 	// EditConfig applies to the provided configuration target (candidate|running) the xml config provided in the config parameter
 	EditConfig(target string, config string) (*types.NetconfResponse, error)
-	// lock a target datastore
+	// Lock acquires a datastore lock on target. When rejected because another
+	// session or entity already holds the lock, the returned error wraps types.ErrLockHeld.
 	Lock(target string) (*types.NetconfResponse, error)
 	// unlock a target datastore
 	Unlock(target string) (*types.NetconfResponse, error)

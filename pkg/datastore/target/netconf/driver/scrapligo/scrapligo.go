@@ -81,7 +81,7 @@ func parseReply(resp *response.NetconfResponse) (*etree.Document, error) {
 		}
 	}
 	if len(failing) > 0 {
-		return nil, replyError(resp, failing)
+		return doc, replyError(resp, failing)
 	}
 	// scrapligo flagged a failure that is not an rpc-error, e.g. 1.1 framing
 	if len(rpcErrs) == 0 && resp.Failed != nil {
@@ -301,10 +301,28 @@ func (snt *ScrapligoNetconfTarget) Lock(target string) (*types.NetconfResponse, 
 	}
 	x, err := parseReply(resp)
 	if err != nil {
+		if hasLockOwner(x) && !errors.Is(err, types.ErrCapabilitiesChanged) {
+			return nil, fmt.Errorf("%w: %w", types.ErrLockHeld, err)
+		}
 		return nil, err
 	}
 
 	return types.NewNetconfResponse(x), nil
+}
+
+func hasLockOwner(doc *etree.Document) bool {
+	if doc == nil {
+		return false
+	}
+	for _, e := range doc.FindElements("//rpc-error") {
+		if childText(e, "error-severity") == "warning" {
+			continue
+		}
+		if info := e.SelectElement("error-info"); info != nil && childText(info, "session-id") != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (snt *ScrapligoNetconfTarget) Unlock(target string) (*types.NetconfResponse, error) {

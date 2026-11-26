@@ -321,3 +321,43 @@ func Test_CapabilitiesChanged_OverSSH(t *testing.T) {
 		t.Errorf("plain resource-denied must not match ErrCapabilitiesChanged, got %v", err)
 	}
 }
+
+func Test_Lock_ClassifiesLockHeldBySessionID_OverSSH(t *testing.T) {
+	s := newFakeNetconfServer(t)
+	d := newTestTarget(t, s, 5*time.Second)
+	defer closeWithin(t, d, time.Second)
+
+	s.setReplyBody(`<rpc-error>` +
+		`<error-type>protocol</error-type>` +
+		`<error-tag>lock-denied</error-tag>` +
+		`<error-severity>error</error-severity>` +
+		`<error-info><session-id>42</session-id></error-info>` +
+		`</rpc-error>`)
+	if _, err := d.Lock("candidate"); !errors.Is(err, nctypes.ErrLockHeld) {
+		t.Errorf("Lock held by session 42: error = %v, want ErrLockHeld", err)
+	}
+
+	s.setReplyBody(`<nc:rpc-error xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">` +
+		`<nc:error-type>protocol</nc:error-type>` +
+		`<nc:error-tag>lock-denied</nc:error-tag>` +
+		`<nc:error-severity>error</nc:error-severity>` +
+		`<nc:error-info><nc:session-id> 0 </nc:session-id></nc:error-info>` +
+		`</nc:rpc-error>`)
+	if _, err := d.Lock("candidate"); !errors.Is(err, nctypes.ErrLockHeld) {
+		t.Errorf("Lock held by non-NETCONF entity (session 0): error = %v, want ErrLockHeld", err)
+	}
+
+	s.setReplyBody(`<rpc-error>` +
+		`<error-type>protocol</error-type>` +
+		`<error-tag>in-use</error-tag>` +
+		`<error-severity>error</error-severity>` +
+		`<error-message>Candidate configuration has uncommitted changes</error-message>` +
+		`</rpc-error>`)
+	_, err := d.Lock("candidate")
+	if err == nil {
+		t.Fatal("expected Lock error when candidate has uncommitted changes")
+	}
+	if errors.Is(err, nctypes.ErrLockHeld) {
+		t.Errorf("dirty candidate without session-id must not match ErrLockHeld, got %v", err)
+	}
+}
