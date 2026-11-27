@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/sdcio/logger"
@@ -96,23 +95,15 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 			}
 			return nil, nil
 		}
-		var v any
-		var err error
-		var jsonDecoder *json.Decoder
-		switch upd.GetValue().Value.(type) {
-		case *sdcpb.TypedValue_JsonIetfVal:
-			jsonDecoder = json.NewDecoder(bytes.NewReader(upd.GetValue().GetJsonIetfVal()))
-		case *sdcpb.TypedValue_JsonVal:
-			jsonDecoder = json.NewDecoder(bytes.NewReader(upd.GetValue().GetJsonVal()))
-		default:
-			return []*sdcpb.Update{upd}, nil
-		}
-		// don't decode into float64 but keep as a string
-		// this solves issues created by reading long integers
-		jsonDecoder.UseNumber()
-		err = jsonDecoder.Decode(&v)
+		v, isJSON, err := decodeJSONValue(upd.GetValue())
 		if err != nil {
 			return nil, err
+		}
+		if !isJSON {
+			return []*sdcpb.Update{upd}, nil
+		}
+		if v == nil {
+			return nil, nil
 		}
 		// log.Debugf("update has jsonVal: %T, %v\n", v, v)
 		rs, err := c.ExpandContainerValue(ctx, upd.GetPath(), v, rsp)
@@ -123,29 +114,17 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 		return upds, nil
 
 	case *sdcpb.SchemaElem_Field:
-		var v interface{}
-		var err error
-
-		var jsonValue []byte
 		if upd.GetValue() == nil {
 			log.Error(nil, "value is nil", "path", upd.Path.ToXPath(false))
 			return nil, nil
 		}
-		switch upd.GetValue().Value.(type) {
-		case *sdcpb.TypedValue_JsonVal:
-			jsonValue = upd.GetValue().GetJsonVal()
-		case *sdcpb.TypedValue_JsonIetfVal:
-			jsonValue = upd.GetValue().GetJsonIetfVal()
+		v, isJSON, err := decodeJSONValue(upd.GetValue())
+		if err != nil {
+			return nil, err
 		}
-
-		// process value
-		if jsonValue != nil {
-			decoder := json.NewDecoder(bytes.NewReader(jsonValue))
-			// Keep numbers as json.Number to avoid precision loss for large integers.
-			decoder.UseNumber()
-			err = decoder.Decode(&v)
-			if err != nil {
-				return nil, err
+		if isJSON {
+			if v == nil {
+				return nil, nil
 			}
 			upd.Value, err = sdcpb.ConvertJsonValueToTv(v, rsp.Field.GetType())
 			if err != nil {
@@ -169,6 +148,13 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 		upds = append(upds, upd)
 		return upds, nil
 	case *sdcpb.SchemaElem_Leaflist:
+		v, isJSON, err := decodeJSONValue(upd.GetValue())
+		if err != nil {
+			return nil, err
+		}
+		if isJSON && v == nil {
+			return nil, nil
+		}
 		upds = append(upds, upd)
 		return upds, nil
 	}
@@ -222,6 +208,8 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 	log := logger.FromContext(ctx)
 	// log.Debugf("expanding jsonVal %T | %v | %v", jv, jv, p)
 	switch jv := jv.(type) {
+	case nil:
+		return nil, nil
 	case string:
 		v := strings.Trim(jv, "\"")
 		return []*sdcpb.Update{
@@ -240,53 +228,16 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		if numElems := len(p.GetElem()); numElems > 0 {
 			keysInPath = p.GetElem()[numElems-1].GetKey()
 		}
-		// make sure all keys exist either in the JSON value or
-		// in the path but NOT in both and build keySet
 		keySet := map[string]string{}
 		for _, k := range cs.Container.GetKeys() {
-			if v, ok := jv[k.Name]; ok {
-				if _, ok := keysInPath[k.Name]; ok {
-					return nil, fmt.Errorf("key %q is present in both the path and JSON value", k.Name)
-				}
-				// in case of json_ietf we need to cut the module prefix
-				if k.Type.Type == "identityref" {
-					found := false
-					var val string
-					_, val, found = strings.Cut(fmt.Sprintf("%v", v), ":")
-					if found {
-						v = val
-					}
-				}
-				keySet[k.Name] = fmt.Sprintf("%v", v)
-				continue
+			val, err := resolveListKey(k, jv, keysInPath, cs.Container.GetName())
+			if err != nil {
+				return nil, err
 			}
-			if v, ok := keysInPath[k.Name]; ok {
-				// identityref key values arriving via the gNMI path (rather
-				// than nested in the JSON-IETF value) can also carry a
-				// module prefix (e.g. "srl_nokia-common:ipv4-unicast").
-				// Strip it the same way the JSON-value branch above does,
-				// so a list entry keyed by an identityref resolves to the
-				// same tree node regardless of whether the key arrived via
-				// the path or the JSON body — otherwise sync-derived and
-				// intent-derived entries for the same key silently diverge
-				// into two sibling nodes.
-				if k.Type.Type == "identityref" {
-					if _, val, found := strings.Cut(v, ":"); found {
-						v = val
-					}
-				}
-				keySet[k.Name] = v
-				continue
-			}
-			return nil, fmt.Errorf("missing key %s in element %s", k.Name, cs.Container.GetName())
+			keySet[k.Name] = val
 		}
-		// Write the (possibly module-prefix-stripped) keySet back onto the
-		// path's last element unconditionally — regardless of whether any
-		// individual key came from the JSON value or was already present in
-		// the path — so identityref stripping above always takes effect and
-		// every key ends up normalized in one place. All "present in both"/
-		// "missing" validation already happened while building keySet above.
-		if len(cs.Container.GetKeys()) > 0 {
+		// Normalized keys overwrite the last path element so stripped prefixes apply uniformly.
+		if len(cs.Container.GetKeys()) > 0 && len(p.GetElem()) > 0 {
 			p.GetElem()[len(p.GetElem())-1].Key = keySet
 		}
 		for k, v := range jv {
@@ -297,6 +248,9 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 			item, ok := getItem(ctx, k, cs, c.schemaClientBound)
 			if !ok {
 				return nil, fmt.Errorf("unknown object %q under container %q", k, cs.Container.Name)
+			}
+			if v == nil {
+				continue
 			}
 			switch item := item.(type) {
 			case *sdcpb.LeafSchema: // field
@@ -353,6 +307,9 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				switch x := v.(type) {
 				case []any:
 					for _, e := range x {
+						if e == nil {
+							continue
+						}
 						tvYangType, err := sdcpb.SchemaElemToTV(se, fmt.Sprintf("%v", e), 0)
 						if err != nil {
 							return nil, err
@@ -360,7 +317,7 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 						list = append(list, tvYangType)
 					}
 				default:
-					return nil, fmt.Errorf("leaflist %s expects array as input, but %v of type %v was given", np.String(), x, reflect.TypeOf(x).Name())
+					return nil, fmt.Errorf("leaflist %s expects array as input, but %v of type %T was given", np.String(), x, x)
 				}
 
 				upd := &sdcpb.Update{
@@ -386,24 +343,20 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				}
 				switch rsp := rsp.GetSchema().Schema.(type) {
 				case *sdcpb.SchemaElem_Container:
-					var rs []*sdcpb.Update
-					// code for presence containers
-					m, ok := v.(map[string]any)
-					if ok && len(m) == 0 && rsp.Container.IsPresence {
-						rs = []*sdcpb.Update{
-							{
+					rs, err := c.ExpandContainerValue(ctx, np, v, rsp)
+					if err != nil {
+						return nil, err
+					}
+					if len(rs) == 0 && rsp.Container.IsPresence {
+						if _, ok := v.(map[string]any); ok {
+							rs = []*sdcpb.Update{{
 								Path: np,
 								Value: &sdcpb.TypedValue{
 									Value: &sdcpb.TypedValue_EmptyVal{},
 								},
 							}}
-					} else {
-						rs, err = c.ExpandContainerValue(ctx, np, v, rsp)
-						if err != nil {
-							return nil, err
 						}
 					}
-
 					upds = append(upds, rs...)
 				default:
 					// should not happen
@@ -426,9 +379,116 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 		}
 		return upds, nil
 	default:
-		log.Error(nil, "unexpected json type cast", "type", reflect.TypeOf(jv).String())
+		log.Error(nil, "unexpected json type cast", "type", fmt.Sprintf("%T", jv))
 		return nil, nil
 	}
+}
+
+// decodeJSONValue decodes JSON or JSON_IETF TypedValues with UseNumber enabled.
+// It reports isJSON=false for non-JSON variants, and returns (nil, true, nil)
+// when the JSON payload is empty, whitespace-only, or literal null.
+func decodeJSONValue(tv *sdcpb.TypedValue) (any, bool, error) {
+	var raw []byte
+	switch tv.GetValue().(type) {
+	case *sdcpb.TypedValue_JsonVal:
+		raw = tv.GetJsonVal()
+	case *sdcpb.TypedValue_JsonIetfVal:
+		raw = tv.GetJsonIetfVal()
+	default:
+		return nil, false, nil
+	}
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return nil, true, nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return nil, true, err
+	}
+	return v, true, nil
+}
+
+// resolveListKey resolves the canonical value of list key k across jv (bare and
+// module-qualified names, ignoring JSON null) and keysInPath. It strips module
+// prefixes on identityref keys and errors when k is missing or values disagree.
+func resolveListKey(k *sdcpb.LeafSchema, jv map[string]any, keysInPath map[string]string, containerName string) (string, error) {
+	idRefType := resolveIdentityRefType(k.GetType())
+	var resolved string
+	var explicitMod string
+	haveValue := false
+
+	merge := func(raw string) error {
+		norm := raw
+		if idRefType != nil {
+			if mod, local, hasMod := strings.Cut(raw, ":"); hasMod {
+				if !validIdentityQualifier(idRefType, mod, local) {
+					return fmt.Errorf("invalid qualifier %q for identityref key %q", mod, k.Name)
+				}
+				if explicitMod != "" && explicitMod != mod && !sameIdentityDifferentForm(idRefType, explicitMod, mod, local) {
+					return fmt.Errorf("conflicting qualifiers for key %q (%q vs %q)", k.Name, explicitMod, mod)
+				}
+				explicitMod = mod
+				norm = local
+			}
+		}
+		if haveValue && norm != resolved {
+			return fmt.Errorf("conflicting values for key %q (%q vs %q)", k.Name, resolved, norm)
+		}
+		resolved = norm
+		haveValue = true
+		return nil
+	}
+
+	if v, ok := jv[k.Name]; ok && v != nil {
+		if err := merge(fmt.Sprintf("%v", v)); err != nil {
+			return "", err
+		}
+	}
+	if k.ModuleName != "" {
+		if v, ok := jv[k.ModuleName+":"+k.Name]; ok && v != nil {
+			if err := merge(fmt.Sprintf("%v", v)); err != nil {
+				return "", err
+			}
+		}
+	}
+	if v, ok := keysInPath[k.Name]; ok {
+		if err := merge(v); err != nil {
+			return "", err
+		}
+	}
+	if !haveValue {
+		return "", fmt.Errorf("missing key %s in element %s", k.Name, containerName)
+	}
+	return resolved, nil
+}
+
+func resolveIdentityRefType(slt *sdcpb.SchemaLeafType) *sdcpb.SchemaLeafType {
+	for slt != nil {
+		if slt.GetType() == "identityref" {
+			return slt
+		}
+		slt = slt.GetLeafrefTargetType()
+	}
+	return nil
+}
+
+// validIdentityQualifier reports whether qualifier names the module or prefix
+// defining identity local. Identities absent from both prefix maps accept any
+// qualifier, since the schema cannot contradict it.
+func validIdentityQualifier(slt *sdcpb.SchemaLeafType, qualifier, local string) bool {
+	mod := slt.GetModulePrefixMap()[local]
+	pfx := slt.GetIdentityPrefixesMap()[local]
+	if mod == "" && pfx == "" {
+		return true
+	}
+	return qualifier == mod || qualifier == pfx
+}
+
+func sameIdentityDifferentForm(slt *sdcpb.SchemaLeafType, q1, q2, local string) bool {
+	mod := slt.GetModulePrefixMap()[local]
+	pfx := slt.GetIdentityPrefixesMap()[local]
+	return mod != "" && pfx != "" && ((q1 == mod && q2 == pfx) || (q1 == pfx && q2 == mod))
 }
 
 func getItem(ctx context.Context, s string, cs *sdcpb.SchemaElem_Container, scb SchemaClientBound) (any, bool) {
