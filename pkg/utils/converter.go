@@ -148,6 +148,13 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 		upds = append(upds, upd)
 		return upds, nil
 	case *sdcpb.SchemaElem_Leaflist:
+		v, isJSON, err := decodeJSONValue(upd.GetValue())
+		if err != nil {
+			return nil, err
+		}
+		if isJSON && v == nil {
+			return nil, nil
+		}
 		upds = append(upds, upd)
 		return upds, nil
 	}
@@ -300,6 +307,9 @@ func (c *Converter) ExpandContainerValue(ctx context.Context, p *sdcpb.Path, jv 
 				switch x := v.(type) {
 				case []any:
 					for _, e := range x {
+						if e == nil {
+							continue
+						}
 						tvYangType, err := sdcpb.SchemaElemToTV(se, fmt.Sprintf("%v", e), 0)
 						if err != nil {
 							return nil, err
@@ -463,11 +473,16 @@ func resolveIdentityRefType(slt *sdcpb.SchemaLeafType) *sdcpb.SchemaLeafType {
 	return nil
 }
 
+// validIdentityQualifier reports whether qualifier names the module or prefix
+// defining identity local. Identities absent from both prefix maps accept any
+// qualifier, since the schema cannot contradict it.
 func validIdentityQualifier(slt *sdcpb.SchemaLeafType, qualifier, local string) bool {
-	if len(slt.GetModulePrefixMap()) == 0 && len(slt.GetIdentityPrefixesMap()) == 0 {
+	mod := slt.GetModulePrefixMap()[local]
+	pfx := slt.GetIdentityPrefixesMap()[local]
+	if mod == "" && pfx == "" {
 		return true
 	}
-	return slt.GetModulePrefixMap()[local] == qualifier || slt.GetIdentityPrefixesMap()[local] == qualifier
+	return qualifier == mod || qualifier == pfx
 }
 
 func sameIdentityDifferentForm(slt *sdcpb.SchemaLeafType, q1, q2, local string) bool {

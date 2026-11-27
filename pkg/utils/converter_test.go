@@ -409,7 +409,7 @@ func TestExpandUpdateFieldAndNestedMembersJSONNullSkipped(t *testing.T) {
 		}
 	})
 
-	t.Run("field_empty_rfc7951_array_null_preserved", func(t *testing.T) {
+	t.Run("field_empty_array_null_preserved", func(t *testing.T) {
 		converter := NewConverter(&testSchemaClientBound{
 			getSchemaPathFn: func(context.Context, *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
 				return &sdcpb.GetSchemaResponse{
@@ -555,6 +555,85 @@ func TestExpandUpdateFieldAndNestedMembersJSONNullSkipped(t *testing.T) {
 			t.Fatalf("expected EmptyVal for presence container with null child leaf, got %v", gotByLeaf["present-sub"])
 		}
 	})
+
+	t.Run("null_leaflist_elements_skipped", func(t *testing.T) {
+		tagsSchema := &sdcpb.LeafListSchema{Name: "tags", Type: &sdcpb.SchemaLeafType{Type: "string", TypeName: "string"}}
+		converter := newMapSchemaConverter(map[string]*sdcpb.GetSchemaResponse{
+			"iface": {
+				Schema: &sdcpb.SchemaElem{
+					Schema: &sdcpb.SchemaElem_Container{
+						Container: &sdcpb.ContainerSchema{Name: "iface", Leaflists: []*sdcpb.LeafListSchema{tagsSchema}},
+					},
+				},
+			},
+			"iface/tags": {
+				Schema: &sdcpb.SchemaElem{Schema: &sdcpb.SchemaElem_Leaflist{Leaflist: tagsSchema}},
+			},
+		})
+
+		updates, err := converter.ExpandUpdate(context.Background(), &sdcpb.Update{
+			Path:  &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "iface"}}},
+			Value: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: []byte(`{"tags":["a",null,"b"]}`)}},
+		})
+		if err != nil {
+			t.Fatalf("ExpandUpdate returned error: %v", err)
+		}
+		if len(updates) != 1 {
+			t.Fatalf("expected 1 leaf-list update, got %d: %v", len(updates), updates)
+		}
+		var got []string
+		for _, e := range updates[0].GetValue().GetLeaflistVal().GetElement() {
+			got = append(got, e.GetStringVal())
+		}
+		if len(got) != 2 || got[0] != "a" || got[1] != "b" {
+			t.Fatalf("expected leaf-list [a b], got %v", got)
+		}
+	})
+}
+
+func TestExpandUpdateLeaflistNullOrEmptyJSONReturnsEmpty(t *testing.T) {
+	converter := NewConverter(&testSchemaClientBound{
+		getSchemaPathFn: func(context.Context, *sdcpb.Path) (*sdcpb.GetSchemaResponse, error) {
+			return &sdcpb.GetSchemaResponse{
+				Schema: &sdcpb.SchemaElem{
+					Schema: &sdcpb.SchemaElem_Leaflist{
+						Leaflist: &sdcpb.LeafListSchema{Name: "tags", Type: &sdcpb.SchemaLeafType{Type: "string", TypeName: "string"}},
+					},
+				},
+			}, nil
+		},
+	})
+
+	for _, pl := range []struct {
+		name string
+		raw  []byte
+	}{
+		{name: "nil_bytes", raw: nil},
+		{name: "empty_bytes", raw: []byte{}},
+		{name: "whitespace_only", raw: []byte(" \t\r\n ")},
+		{name: "null", raw: []byte("null")},
+	} {
+		for _, enc := range []struct {
+			name string
+			tv   *sdcpb.TypedValue
+		}{
+			{name: "json_val", tv: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonVal{JsonVal: pl.raw}}},
+			{name: "json_ietf_val", tv: &sdcpb.TypedValue{Value: &sdcpb.TypedValue_JsonIetfVal{JsonIetfVal: pl.raw}}},
+		} {
+			t.Run(pl.name+"/"+enc.name, func(t *testing.T) {
+				updates, err := converter.ExpandUpdate(context.Background(), &sdcpb.Update{
+					Path:  &sdcpb.Path{Elem: []*sdcpb.PathElem{{Name: "iface"}, {Name: "tags"}}},
+					Value: enc.tv,
+				})
+				if err != nil {
+					t.Fatalf("ExpandUpdate returned error: %v", err)
+				}
+				if len(updates) != 0 {
+					t.Fatalf("expected 0 updates, got %d: %v", len(updates), updates)
+				}
+			})
+		}
+	}
 }
 
 func TestExpandUpdateEmptyOrWhitespaceJSONReturnsEmpty(t *testing.T) {
@@ -839,6 +918,23 @@ func TestExpandContainerValueDuplicateKeyInPathAndJSON(t *testing.T) {
 		})
 		if err == nil {
 			t.Fatal("expected error for conflicting explicit module prefixes on identityref key, got nil")
+		}
+
+		updates, err = afiConverter.ExpandUpdate(context.Background(), &sdcpb.Update{
+			Path: &sdcpb.Path{Elem: []*sdcpb.PathElem{
+				{Name: "afi-safi", Key: map[string]string{"afi-safi-name": "other-mod:l2vpn-evpn"}},
+			}},
+			Value: &sdcpb.TypedValue{
+				Value: &sdcpb.TypedValue_JsonIetfVal{JsonIetfVal: []byte(`{"admin-state":"enable"}`)},
+			},
+		})
+		if err != nil {
+			t.Fatalf("expected qualifier of identity absent from prefix maps to be stripped, got error: %v", err)
+		}
+		for _, u := range updates {
+			if gotKey := u.GetPath().GetElem()[0].GetKey()["afi-safi-name"]; gotKey != "l2vpn-evpn" {
+				t.Fatalf("expected normalized key l2vpn-evpn, got %q", gotKey)
+			}
 		}
 	})
 }
