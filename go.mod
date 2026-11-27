@@ -25,7 +25,7 @@ require (
 	github.com/sdcio/logger v0.0.3
 	github.com/sdcio/schema-server v0.0.34
 	github.com/sdcio/sdc-protos v0.0.56
-	github.com/sdcio/yang-parser v0.0.12
+	github.com/sdcio/yang-parser v0.0.13-0.20261125102718-a0faee863f27
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.1.0
 	github.com/stretchr/testify v1.12.1
@@ -86,7 +86,7 @@ require (
 	github.com/prometheus/common v0.72.0 // indirect
 	github.com/prometheus/procfs v0.22.0 // indirect
 	github.com/sirikothe/gotextfsm v1.0.1-0.20200816110946-6aa2cfd355e4 // indirect
-	github.com/sirupsen/logrus v1.9.4 // indirect
+	github.com/sirupsen/logrus v1.10.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.45.0 // indirect

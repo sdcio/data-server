@@ -8,76 +8,115 @@ import (
 	"github.com/sdcio/data-server/pkg/tree/api"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	logf "github.com/sdcio/logger"
-	sdcpb "github.com/sdcio/sdc-protos/sdcpb"
 	"github.com/sdcio/yang-parser/xpath"
 	"github.com/sdcio/yang-parser/xpath/grammars/expr"
 )
 
 func validateMustStatements(ctx context.Context, e api.Entry, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats) {
+	validateMustStatementsWithTracer(ctx, e, resultChan, stats, nil)
+}
+
+func validateMustStatementsWithTracer(ctx context.Context, e api.Entry, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats, mt MustTracer) {
 	log := logf.FromContext(ctx)
 
-	// if no schema, then there is nothing to be done, return
 	if e.GetSchema() == nil {
 		return
 	}
 
-	var mustStatements []*sdcpb.MustStatement
-	switch schem := e.GetSchema().GetSchema().(type) {
-	case *sdcpb.SchemaElem_Container:
-		mustStatements = schem.Container.GetMustStatements()
-	case *sdcpb.SchemaElem_Leaflist:
-		mustStatements = schem.Leaflist.GetMustStatements()
-	case *sdcpb.SchemaElem_Field:
-		mustStatements = schem.Field.GetMustStatements()
+	mustStatements, schemaKind := extractEntryMusts(e)
+	if len(mustStatements) == 0 {
+		return
 	}
 
-	for _, must := range mustStatements {
-		// extract actual must statement
+	for i, must := range mustStatements {
 		exprStr := must.Statement
-		// init a ProgramBuilder
 		prgbuilder := xpath.NewProgBuilder(exprStr)
-		// init an ExpressionLexer
 		lexer := expr.NewExprLex(exprStr, prgbuilder, nil)
-		// parse the provided Must-Expression
 		lexer.Parse()
 		prog, err := lexer.CreateProgram(exprStr)
 		if err != nil {
-			owner := "unknown"
-			highest := e.GetLeafVariants().GetHighestPrecedence(false, false, false)
-			if highest != nil {
-				owner = highest.Owner()
+			if mt != nil {
+				if et := mt.BeginMustTrace(buildMustTraceMeta(e, schemaKind, must)); et != nil {
+					et.End(MustTraceOutcome{
+						Status: MustTraceStatusCompileError,
+						Error:  err.Error(),
+					})
+				}
+				for _, skipped := range mustStatements[i+1:] {
+					if et := mt.BeginMustTrace(buildMustTraceMeta(e, schemaKind, skipped)); et != nil {
+						et.End(MustTraceOutcome{
+							Status:     MustTraceStatusSkipped,
+							SkipReason: "preceding must statement failed to compile",
+						})
+					}
+				}
 			}
-			resultChan <- types.NewValidationResultEntry(owner, err, types.ValidationResultEntryTypeError)
+			resultChan <- types.NewValidationResultEntry(entryOwner(e), err, types.ValidationResultEntryTypeError)
 			return
 		}
 		machine := xpath.NewMachine(exprStr, prog, exprStr)
 
-		// run the must statement evaluation virtual machine
-		yctx := xpath.NewCtxFromCurrent(ctx, machine, newYangParserEntryAdapter(ctx, e))
+		var evalTracer MustEvalTracer
+		if mt != nil {
+			evalTracer = mt.BeginMustTrace(buildMustTraceMeta(e, schemaKind, must))
+			if evalTracer != nil {
+				evalTracer.TraceEvent(xpath.TraceEvent{
+					Kind: TraceEventMustProgram,
+					Expr: exprStr,
+					Details: map[string]any{
+						"program": machine.PrintMachine(),
+					},
+				})
+			}
+		}
+
+		yctx := xpath.NewCtxFromCurrent(ctx, machine, newYangParserEntryAdapterWithTracer(ctx, e, evalTracer))
 		yctx.SetDebug(false)
+		yctx.SetTracer(evalTracer)
 
 		res1 := yctx.Run()
-		// retrieve the boolean result of the execution
 		result, err := res1.GetBoolResult()
 		if !result || err != nil {
+			rawErr := err
 			if err == nil {
 				err = fmt.Errorf("error path: %s, must-statement [%s] %s", e.SdcpbPath().ToXPath(false), must.Statement, must.Error)
 			}
 			if strings.Contains(err.Error(), "Stack underflow") {
+				if evalTracer != nil {
+					evalTracer.End(MustTraceOutcome{
+						Status: MustTraceStatusStackUnderflow,
+						Error:  err.Error(),
+					})
+				}
 				log.Error(err, "stack underflow", "path", e.SdcpbPath().ToXPath(false), "must-expression", exprStr)
 				continue
 			}
-			owner := "unknown"
-
-			// must statement might be assigned on a container, hence we might not have any LeafVariants
-			leafVariants := e.GetLeafVariants()
-			if leafVariants.Length() > 0 {
-				highest := leafVariants.GetHighestPrecedence(false, false, false)
-				if highest != nil {
-					owner = highest.Owner()
+			if evalTracer != nil {
+				if rawErr != nil {
+					evalTracer.End(MustTraceOutcome{
+						Status: MustTraceStatusRuntimeError,
+						Error:  err.Error(),
+					})
+				} else {
+					b := false
+					evalTracer.End(MustTraceOutcome{
+						Status: MustTraceStatusFailed,
+						Result: &b,
+						Error:  err.Error(),
+					})
 				}
 			}
-			resultChan <- types.NewValidationResultEntry(owner, err, types.ValidationResultEntryTypeError)
+
+			resultChan <- types.NewValidationResultEntry(entryOwner(e), err, types.ValidationResultEntryTypeError)
+			continue
+		}
+
+		if evalTracer != nil {
+			b := true
+			evalTracer.End(MustTraceOutcome{
+				Status: MustTraceStatusPassed,
+				Result: &b,
+			})
 		}
 	}
 	stats.Add(types.StatTypeMustStatement, uint32(len(mustStatements)))

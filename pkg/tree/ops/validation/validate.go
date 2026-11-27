@@ -15,7 +15,7 @@ var (
 	ErrValidation = errors.New("validation error")
 )
 
-func Validate(ctx context.Context, e api.Entry, vCfg *config.Validation, taskpoolFactory pool.VirtualPoolFactory) (types.ValidationResults, *types.ValidationStats) {
+func Validate(ctx context.Context, e api.Entry, vCfg *config.Validation, taskpoolFactory pool.VirtualPoolFactory, opts ...ValidateOption) (types.ValidationResults, *types.ValidationStats) {
 	// perform validation
 	// we use a channel and cumulate all the errors
 	validationResultEntryChan := make(chan *types.ValidationResultEntry, 10)
@@ -34,7 +34,7 @@ func Validate(ctx context.Context, e api.Entry, vCfg *config.Validation, taskpoo
 		}
 	}()
 
-	validationProcessor := NewValidateProcessor(NewValidateProcessorConfig(validationResultEntryChan, validationStats, vCfg))
+	validationProcessor := NewValidateProcessor(NewValidateProcessorConfig(validationResultEntryChan, validationStats, vCfg, opts...))
 	validationProcessor.Run(taskpoolFactory, e)
 	close(validationResultEntryChan)
 
