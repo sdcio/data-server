@@ -67,6 +67,40 @@ func TestExplicitDeleteVisitor_Visit(t *testing.T) {
 			},
 		},
 		{
+			// A sweeper path the tree does not have (e.g. a node that just booted its factory
+			// config) used to reach the processor as a nil entry and panic in HoldsLeafVariants.
+			name:     "Delete path not in the tree",
+			owner:    owner2,
+			priority: 50,
+			root: func() *tree.RootEntry {
+				sc, schema, err := testhelper.InitSDCIOSchema()
+				if err != nil {
+					t.Fatal(err)
+				}
+				scb := schemaClient.NewSchemaClientBound(schema, sc)
+				tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+
+				root, err := tree.NewTreeRoot(ctx, tc)
+				if err != nil {
+					t.Error(err)
+				}
+
+				_, err = testhelper.LoadYgotStructIntoTreeRoot(ctx, testhelper.Config1(), root.Entry, owner1, owner1Prio, false, flagsExisting)
+				if err != nil {
+					t.Error(err)
+				}
+				return root
+			},
+			explicitDeletes: sdcpb.NewPathSet().
+				AddPath(
+					&sdcpb.Path{
+						Elem: []*sdcpb.PathElem{
+							sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-9/99"}),
+						},
+					},
+				),
+		},
+		{
 			name:     "Delete Field",
 			owner:    owner2,
 			priority: 50,

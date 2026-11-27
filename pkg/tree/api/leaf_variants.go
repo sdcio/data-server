@@ -493,12 +493,16 @@ func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.Devi
 		// if precedence of actual (le) is higher then highest
 		// replace highest with it
 		if le.Priority() < highest.Priority() {
-			de := types.NewDeviationEntry(highest.Owner(), types.DeviationReasonOverruled, sdcpbPath).SetExpectedValue(highest.Value())
-			overruled = append(overruled, de)
+			// an explicit delete (sweeper) losing to an intent is expected, not a deviation;
+			// it also carries no value to report or compare
+			if !highest.GetExplicitDeleteFlag() {
+				de := types.NewDeviationEntry(highest.Owner(), types.DeviationReasonOverruled, sdcpbPath).SetExpectedValue(highest.Value())
+				overruled = append(overruled, de)
+			}
 			highest = le
 		}
 		// if precedence of actual (le) is lower then le needs to be added to overruled
-		if le.Priority() >= highest.Priority() {
+		if le.Priority() >= highest.Priority() && !le.GetExplicitDeleteFlag() {
 			de := types.NewDeviationEntry(le.Owner(), types.DeviationReasonOverruled, sdcpbPath).SetExpectedValue(le.Value())
 			overruled = append(overruled, de)
 		}
@@ -506,6 +510,11 @@ func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.Devi
 
 	// send all the overruleds
 	for _, de := range overruled {
+		// overruled by an explicit delete: the leaf must not exist, there is no value to compare
+		if highest.GetExplicitDeleteFlag() {
+			ch <- de
+			continue
+		}
 		if de.ExpectedValue().Equal(highest.Value()) {
 			// skip if higher prio equals the overruled
 			continue
@@ -521,6 +530,14 @@ func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.Devi
 	// unhandled -> running but no intent data
 	if running != nil && highest == nil {
 		ch <- types.NewDeviationEntry(running.Owner(), types.DeviationReasonUnhandled, sdcpbPath).SetCurrentValue(running.Value())
+		return
+	}
+
+	// highest is an explicit delete (sweeper): the leaf must not exist on the device
+	if highest.GetExplicitDeleteFlag() {
+		if running != nil {
+			ch <- types.NewDeviationEntry(highest.Owner(), types.DeviationReasonNotApplied, sdcpbPath).SetCurrentValue(running.Value())
+		}
 		return
 	}
 
