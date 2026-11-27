@@ -66,12 +66,23 @@ func normalizeTransportError(err error) error {
 // rpc-error element inside <data>, and resp.ErrorMessages misses
 // namespace-prefixed elements and tags split by NETCONF 1.1 chunk markers.
 func parseReply(resp *response.NetconfResponse) (*etree.Document, error) {
+	doc, failing, err := parseReplyElements(resp)
+	if err != nil {
+		return nil, err
+	}
+	if len(failing) > 0 {
+		return nil, replyError(resp, failing)
+	}
+	return doc, nil
+}
+
+func parseReplyElements(resp *response.NetconfResponse) (*etree.Document, []*etree.Element, error) {
 	doc := etree.NewDocument()
 	if err := doc.ReadFromString(resp.Result); err != nil {
 		if resp.Failed != nil {
-			return nil, resp.Failed
+			return nil, nil, resp.Failed
 		}
-		return nil, err
+		return nil, nil, err
 	}
 	var failing []*etree.Element
 	for _, e := range replyRPCErrors(doc) {
@@ -79,14 +90,11 @@ func parseReply(resp *response.NetconfResponse) (*etree.Document, error) {
 			failing = append(failing, e)
 		}
 	}
-	if len(failing) > 0 {
-		return nil, replyError(resp, failing)
-	}
 	// scrapligo flagged a failure that no rpc-error in the reply explains, e.g. 1.1 framing
 	if resp.Failed != nil && len(doc.FindElements("//rpc-error")) == 0 {
-		return nil, resp.Failed
+		return nil, nil, resp.Failed
 	}
-	return doc, nil
+	return doc, failing, nil
 }
 
 // replyRPCErrors returns the reply's rpc-errors at any depth, since some
@@ -320,12 +328,28 @@ func (snt *ScrapligoNetconfTarget) Lock(target string) (*types.NetconfResponse, 
 	if err != nil {
 		return nil, normalizeTransportError(err)
 	}
-	x, err := parseReply(resp)
+	x, failing, err := parseReplyElements(resp)
 	if err != nil {
+		return nil, err
+	}
+	if len(failing) > 0 {
+		err := replyError(resp, failing)
+		if hasLockOwner(failing) && !errors.Is(err, types.ErrCapabilitiesChanged) {
+			return nil, fmt.Errorf("%w: %w", types.ErrLockHeld, err)
+		}
 		return nil, err
 	}
 
 	return types.NewNetconfResponse(x), nil
+}
+
+func hasLockOwner(failing []*etree.Element) bool {
+	for _, e := range failing {
+		if info := e.SelectElement("error-info"); info != nil && childText(info, "session-id") != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (snt *ScrapligoNetconfTarget) Unlock(target string) (*types.NetconfResponse, error) {

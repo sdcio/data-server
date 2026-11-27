@@ -177,11 +177,8 @@ func (t *ncTarget) internalGet(ctx context.Context, req *sdcpb.GetDataRequest) (
 	// execute the GetConfig rpc
 	ncResponse, err := drv.GetConfig(source, filterDoc)
 	if err != nil {
-		if isTransportError(err) {
-			return nil, t.handleTransportError(ctx, drv, err)
-		}
-		if errors.Is(err, nctypes.ErrCapabilitiesChanged) {
-			return nil, t.handleCapabilitiesChanged(ctx, drv, err)
+		if sessErr, ok := t.handleSessionError(ctx, drv, err); ok {
+			return nil, sessErr
 		}
 		return nil, err
 	}
@@ -242,16 +239,10 @@ func (t *ncTarget) Status() *types.TargetStatus {
 	return result
 }
 
-// handleTransportError retires the driver that failed, starts a background
-// reconnect, and wraps err in types.ErrNotConnected so the caller's caller
-// (ultimately the TransactionSet gRPC handler, via translateInternalToGrpcError)
-// can classify it as recoverable.
-//
-// failed is the driver the failing RPC ran on. If it was already replaced by
-// a concurrent failure or a reconnect, the current driver is left untouched.
-// The old driver is closed in the background so the caller never waits on a
-// dead peer.
-func (t *ncTarget) handleTransportError(ctx context.Context, failed Driver, err error) error {
+// retireDriver detaches failed from the target if it is still the active
+// driver, starts a background reconnect, and closes failed asynchronously so
+// the caller never blocks on a dead or wedged peer.
+func (t *ncTarget) retireDriver(ctx context.Context, failed Driver) {
 	t.dm.Lock()
 	if failed != nil && t.driver == failed {
 		t.driver = nil
@@ -265,7 +256,38 @@ func (t *ncTarget) handleTransportError(ctx context.Context, failed Driver, err 
 	if failed != nil {
 		go func() { _ = failed.Close() }()
 	}
+}
+
+// retirePoisoned retires failed when candidate cleanup or unlock fails, leaving
+// the primary RPC result untouched while respecting capabilities-changed cooldown.
+func (t *ncTarget) retirePoisoned(ctx context.Context, failed Driver, err error) {
+	if errors.Is(err, nctypes.ErrCapabilitiesChanged) {
+		t.retireCapabilitiesChanged(ctx, failed, err)
+		return
+	}
+	t.retireDriver(ctx, failed)
+}
+
+// handleTransportError retires the driver that failed, starts a background
+// reconnect, and wraps err in types.ErrNotConnected so the caller's caller
+// (ultimately the TransactionSet gRPC handler, via translateInternalToGrpcError)
+// can classify it as recoverable.
+func (t *ncTarget) handleTransportError(ctx context.Context, failed Driver, err error) error {
+	t.retireDriver(ctx, failed)
 	return fmt.Errorf("%s: %w: %w", t.name, types.ErrNotConnected, err)
+}
+
+// handleSessionError retires drv and wraps err in ErrNotConnected when err
+// indicates a dead or stale session (transport drop or capabilities-changed).
+// It reports false without side effects for semantic RPC errors.
+func (t *ncTarget) handleSessionError(ctx context.Context, drv Driver, err error) (error, bool) {
+	if isTransportError(err) {
+		return t.handleTransportError(ctx, drv, err), true
+	}
+	if errors.Is(err, nctypes.ErrCapabilitiesChanged) {
+		return t.handleCapabilitiesChanged(ctx, drv, err), true
+	}
+	return err, false
 }
 
 // defaultCapabilitiesReconnectCooldown is the minimum interval between two
@@ -279,15 +301,7 @@ func (t *ncTarget) capabilitiesCooldown() time.Duration {
 	return defaultCapabilitiesReconnectCooldown
 }
 
-// handleCapabilitiesChanged retires failed after a capabilities-changed
-// rpc-error and schedules a background reconnect so the new session performs a
-// fresh hello exchange.
-//
-// Dials triggered by capabilities-changed are spaced by at least the target's
-// capabilities cooldown; if another session hits capabilities-changed inside
-// that window, it is still retired immediately while dialing waits out the
-// remaining cooldown.
-func (t *ncTarget) handleCapabilitiesChanged(ctx context.Context, failed Driver, err error) error {
+func (t *ncTarget) retireCapabilitiesChanged(ctx context.Context, failed Driver, err error) {
 	log := logf.FromContext(ctx)
 	cooldown := t.capabilitiesCooldown()
 
@@ -321,6 +335,18 @@ func (t *ncTarget) handleCapabilitiesChanged(ctx context.Context, failed Driver,
 	if failed != nil {
 		go func() { _ = failed.Close() }()
 	}
+}
+
+// handleCapabilitiesChanged retires failed after a capabilities-changed
+// rpc-error and schedules a background reconnect so the new session performs a
+// fresh hello exchange.
+//
+// Dials triggered by capabilities-changed are spaced by at least the target's
+// capabilities cooldown; if another session hits capabilities-changed inside
+// that window, it is still retired immediately while dialing waits out the
+// remaining cooldown.
+func (t *ncTarget) handleCapabilitiesChanged(ctx context.Context, failed Driver, err error) error {
+	t.retireCapabilitiesChanged(ctx, failed, err)
 	return fmt.Errorf("%s: %w: %w", t.name, types.ErrNotConnected, err)
 }
 
@@ -430,6 +456,7 @@ func filterRPCErrors(xml *etree.Document, severity string) ([]string, error) {
 
 func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, source types.TargetSource) (*sdcpb.SetDataResponse, error) {
 	log := logf.FromContext(ctx).WithValues("commit-datastore", commitDatastore)
+	ctx = logf.IntoContext(ctx, log)
 	xtree, err := source.ToXML(ctx, true, t.sbiConfig.NetconfOptions.IncludeNS, t.sbiConfig.NetconfOptions.OperationWithNamespace, t.sbiConfig.NetconfOptions.UseOperationRemove)
 	if err != nil {
 		return nil, err
@@ -454,25 +481,18 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 		return nil, err
 	}
 
-	// leftover candidate changes would otherwise be pushed by the next commit
-	discard := func() {
-		if err := drv.Discard(); err != nil {
-			log.Error(err, "failed while discarding pending changes")
-		}
+	if commitDatastore == config.NCCommitDatastoreCandidate {
+		return t.setCandidate(ctx, drv, xdoc)
 	}
+	return t.setRunning(ctx, drv, xdoc)
+}
 
-	// edit the config
-	resp, err := drv.EditConfig(commitDatastore, xdoc)
+func (t *ncTarget) setRunning(ctx context.Context, drv Driver, xdoc string) (*sdcpb.SetDataResponse, error) {
+	resp, err := drv.EditConfig(config.NCCommitDatastoreRunning, xdoc)
 	if err != nil {
-		log.Error(err, "failed during edit-config")
-		if isTransportError(err) {
-			return nil, t.handleTransportError(ctx, drv, err)
-		}
-		if errors.Is(err, nctypes.ErrCapabilitiesChanged) {
-			return nil, t.handleCapabilitiesChanged(ctx, drv, err)
-		}
-		if commitDatastore == config.NCCommitDatastoreCandidate {
-			discard()
+		logf.FromContext(ctx).Error(err, "failed during edit-config")
+		if sessErr, ok := t.handleSessionError(ctx, drv, err); ok {
+			return nil, sessErr
 		}
 		return nil, err
 	}
@@ -480,30 +500,103 @@ func (t *ncTarget) setToDevice(ctx context.Context, commitDatastore string, sour
 	if err != nil {
 		return nil, fmt.Errorf("filtering netconf rpc-errors with severity warnings: %w", err)
 	}
-
-	// candidate stores need to commit the changes to running
-	if commitDatastore == config.NCCommitDatastoreCandidate {
-		log.Info("committing changes on target")
-		commitResp, err := drv.Commit()
-		if err != nil {
-			log.Error(err, "failed during commit")
-			if isTransportError(err) {
-				return nil, t.handleTransportError(ctx, drv, err)
-			}
-			if errors.Is(err, nctypes.ErrCapabilitiesChanged) {
-				return nil, t.handleCapabilitiesChanged(ctx, drv, err)
-			}
-			discard()
-			return nil, err
-		}
-		commitWarnings, err := filterRPCErrors(commitResp.Doc, "warning")
-		if err != nil {
-			return nil, fmt.Errorf("filtering netconf rpc-errors with severity warnings: %w", err)
-		}
-		rpcWarnings = append(rpcWarnings, commitWarnings...)
-	}
 	return &sdcpb.SetDataResponse{
 		Warnings:  rpcWarnings,
 		Timestamp: time.Now().UnixNano(),
 	}, nil
+}
+
+func (t *ncTarget) setCandidate(ctx context.Context, drv Driver, xdoc string) (*sdcpb.SetDataResponse, error) {
+	log := logf.FromContext(ctx)
+	if err := t.lockCandidate(ctx, drv); err != nil {
+		return nil, err
+	}
+
+	unlockCandidate := func() {
+		if _, err := drv.Unlock(config.NCCommitDatastoreCandidate); err != nil {
+			log.Error(err, "failed unlocking candidate datastore, retiring session")
+			t.retirePoisoned(ctx, drv, err)
+		}
+	}
+
+	cleanupFailedCandidate := func() {
+		if err := drv.Discard(); err != nil {
+			log.Error(err, "failed while discarding pending changes, retiring session")
+			t.retirePoisoned(ctx, drv, err)
+			return
+		}
+		unlockCandidate()
+	}
+
+	resp, err := drv.EditConfig(config.NCCommitDatastoreCandidate, xdoc)
+	if err != nil {
+		log.Error(err, "failed during edit-config")
+		if sessErr, ok := t.handleSessionError(ctx, drv, err); ok {
+			return nil, sessErr
+		}
+		cleanupFailedCandidate()
+		return nil, err
+	}
+	rpcWarnings, err := filterRPCErrors(resp.Doc, "warning")
+	if err != nil {
+		cleanupFailedCandidate()
+		return nil, fmt.Errorf("filtering netconf rpc-errors with severity warnings: %w", err)
+	}
+
+	log.Info("committing changes on target")
+	commitResp, err := drv.Commit()
+	if err != nil {
+		log.Error(err, "failed during commit")
+		if sessErr, ok := t.handleSessionError(ctx, drv, err); ok {
+			return nil, sessErr
+		}
+		cleanupFailedCandidate()
+		return nil, err
+	}
+	commitWarnings, err := filterRPCErrors(commitResp.Doc, "warning")
+	if err != nil {
+		unlockCandidate()
+		return nil, fmt.Errorf("filtering netconf rpc-errors with severity warnings: %w", err)
+	}
+	rpcWarnings = append(rpcWarnings, commitWarnings...)
+	unlockCandidate()
+	return &sdcpb.SetDataResponse{
+		Warnings:  rpcWarnings,
+		Timestamp: time.Now().UnixNano(),
+	}, nil
+}
+
+// lockCandidate acquires the candidate datastore lock, discarding uncommitted
+// candidate changes and retrying once when lock failure reports no active lock holder.
+func (t *ncTarget) lockCandidate(ctx context.Context, drv Driver) error {
+	log := logf.FromContext(ctx)
+	_, err := drv.Lock(config.NCCommitDatastoreCandidate)
+	if err == nil {
+		return nil
+	}
+	if sessErr, ok := t.handleSessionError(ctx, drv, err); ok {
+		return sessErr
+	}
+	if errors.Is(err, nctypes.ErrLockHeld) {
+		log.Error(err, "failed locking candidate datastore")
+		return err
+	}
+
+	log.Info("candidate lock failed without active lock holder, discarding pending changes and retrying lock", "error", err.Error())
+	if discardErr := drv.Discard(); discardErr != nil {
+		if sessErr, ok := t.handleSessionError(ctx, drv, discardErr); ok {
+			return sessErr
+		}
+		log.Error(discardErr, "failed discarding dirty candidate before lock retry")
+		return err
+	}
+
+	if _, retryErr := drv.Lock(config.NCCommitDatastoreCandidate); retryErr != nil {
+		log.Error(retryErr, "failed locking candidate datastore after discard")
+		if sessErr, ok := t.handleSessionError(ctx, drv, retryErr); ok {
+			return sessErr
+		}
+		return retryErr
+	}
+	return nil
 }
