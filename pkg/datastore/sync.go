@@ -142,7 +142,7 @@ func (d *Datastore) performRevert(ctx context.Context, t *tree.RootEntry) error 
 	}
 
 	// TODO: optimize by checking only paths that where covered by the syncconfig
-	del, err := t.GetDeletes(true)
+	del, err := t.GetDeletes()
 	if err != nil {
 		return err
 	}

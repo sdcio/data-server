@@ -125,9 +125,9 @@ func (r *RootEntry) GetHighestPrecedence(onlyNewOrUpdated bool) api.LeafVariantS
 	return ops.GetHighestPrecedence(r.Entry, onlyNewOrUpdated, false, false)
 }
 
-// GetDeletes returns the paths that due to the Tree content are to be deleted from the southbound device.
-func (r *RootEntry) GetDeletes(aggregatePaths bool) (types.DeleteEntriesList, error) {
-	return ops.GetDeletes(r.Entry, aggregatePaths)
+// GetDeletes returns the paths to delete from the southbound device.
+func (r *RootEntry) GetDeletes() (types.DeleteEntriesList, error) {
+	return ops.GetDeletes(r.Entry)
 }
 
 func (r *RootEntry) GetAncestorSchema() (*sdcpb.SchemaElem, int) {

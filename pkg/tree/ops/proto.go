@@ -13,7 +13,7 @@ func ToProtoUpdates(ctx context.Context, e api.Entry, onlyNewOrUpdated bool) ([]
 }
 
 func ToProtoDeletes(ctx context.Context, e api.Entry) ([]*sdcpb.Path, error) {
-	deletes, err := GetDeletes(e, true)
+	deletes, err := GetDeletes(e)
 	if err != nil {
 		return nil, err
 	}

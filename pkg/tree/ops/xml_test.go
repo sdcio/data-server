@@ -1218,3 +1218,90 @@ func TestToXML_DoubleKeyTwoSimultaneousListEntryDeletes(t *testing.T) {
 		t.Fatalf("ToXML() mismatch (-want +got)\n%s", diff)
 	}
 }
+
+func TestToXML_ListEntryDeleteOmitsChildDeletesWhenRunningHasExtraLeaves(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	scb, err := testhelper.GetSchemaClientBound(t, mockCtrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	p := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	tc := tree.NewTreeContext(scb, p)
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	intentJSON := map[string]any{
+		"interface": []any{
+			map[string]any{
+				"name":        "ethernet-1/1",
+				"description": "Foo",
+				"subinterface": []any{
+					map[string]any{
+						"index":       0,
+						"description": "sub0",
+					},
+				},
+			},
+		},
+	}
+	runningJSON := map[string]any{
+		"interface": []any{
+			map[string]any{
+				"name":        "ethernet-1/1",
+				"description": "Foo",
+				"admin-state": "enable",
+				"mtu":         1500,
+				"subinterface": []any{
+					map[string]any{
+						"index":       0,
+						"description": "sub0",
+					},
+				},
+			},
+			map[string]any{
+				"name":        "ethernet-1/2",
+				"description": "Keep",
+			},
+		},
+	}
+
+	if _, err := root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(intentJSON, "intent1", 10, false), testhelper.FlagsExisting, p); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(runningJSON, consts.RunningIntentName, consts.RunningValuesPrio, false), testhelper.FlagsExisting, p); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := processors.NewOwnerDeleteMarker(&processors.OwnerDeleteMarkerProcessorParams{Owner: "intent1", OnlyIntended: false}).Run(root.Entry, p); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := root.FinishInsertionPhase(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	xmlDoc, err := ops.ToXML(ctx, root.Entry, true, false, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	xmlDoc.Indent(2)
+	xmlDocStr, err := xmlDoc.WriteToString()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := `<interface operation="delete">
+  <name>ethernet-1/1</name>
+</interface>
+`
+	if diff := cmp.Diff(want, xmlDocStr); diff != "" {
+		t.Fatalf("ToXML() mismatch (-want +got)\n%s", diff)
+	}
+}
+
