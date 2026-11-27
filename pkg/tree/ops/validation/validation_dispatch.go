@@ -5,8 +5,17 @@ import (
 
 	"github.com/sdcio/data-server/pkg/config"
 	"github.com/sdcio/data-server/pkg/tree/api"
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	"github.com/sdcio/data-server/pkg/tree/types"
 )
+
+func validatedLeafVariant(e api.Entry) *api.LeafEntry {
+	lv := e.GetLeafVariants().GetHighestPrecedence(false, true, false)
+	if lv != nil && lv.Owner() == consts.RunningIntentName && api.IsMutateOnWriteEntry(e) {
+		return nil
+	}
+	return lv
+}
 
 // ValidationFunc is the common signature for all validation checks.
 type ValidationFunc func(ctx context.Context, e api.Entry, resultChan chan<- *types.ValidationResultEntry, stats *types.ValidationStats)

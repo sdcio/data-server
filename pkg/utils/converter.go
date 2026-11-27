@@ -96,25 +96,13 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 			}
 			return nil, nil
 		}
-		var v any
-		var err error
-		var jsonDecoder *json.Decoder
-		switch upd.GetValue().Value.(type) {
-		case *sdcpb.TypedValue_JsonIetfVal:
-			jsonDecoder = json.NewDecoder(bytes.NewReader(upd.GetValue().GetJsonIetfVal()))
-		case *sdcpb.TypedValue_JsonVal:
-			jsonDecoder = json.NewDecoder(bytes.NewReader(upd.GetValue().GetJsonVal()))
-		default:
-			return []*sdcpb.Update{upd}, nil
-		}
-		// don't decode into float64 but keep as a string
-		// this solves issues created by reading long integers
-		jsonDecoder.UseNumber()
-		err = jsonDecoder.Decode(&v)
+		v, hasJSON, err := decodeTypedValueJSON(upd.GetValue())
 		if err != nil {
 			return nil, err
 		}
-		// log.Debugf("update has jsonVal: %T, %v\n", v, v)
+		if !hasJSON {
+			return []*sdcpb.Update{upd}, nil
+		}
 		rs, err := c.ExpandContainerValue(ctx, upd.GetPath(), v, rsp)
 		if err != nil {
 			return nil, err
@@ -123,30 +111,15 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 		return upds, nil
 
 	case *sdcpb.SchemaElem_Field:
-		var v interface{}
-		var err error
-
-		var jsonValue []byte
 		if upd.GetValue() == nil {
 			log.Error(nil, "value is nil", "path", upd.Path.ToXPath(false))
 			return nil, nil
 		}
-		switch upd.GetValue().Value.(type) {
-		case *sdcpb.TypedValue_JsonVal:
-			jsonValue = upd.GetValue().GetJsonVal()
-		case *sdcpb.TypedValue_JsonIetfVal:
-			jsonValue = upd.GetValue().GetJsonIetfVal()
+		v, hasJSON, err := decodeTypedValueJSON(upd.GetValue())
+		if err != nil {
+			return nil, err
 		}
-
-		// process value
-		if jsonValue != nil {
-			decoder := json.NewDecoder(bytes.NewReader(jsonValue))
-			// Keep numbers as json.Number to avoid precision loss for large integers.
-			decoder.UseNumber()
-			err = decoder.Decode(&v)
-			if err != nil {
-				return nil, err
-			}
+		if hasJSON {
 			upd.Value, err = sdcpb.ConvertJsonValueToTv(v, rsp.Field.GetType())
 			if err != nil {
 				return nil, err
@@ -169,10 +142,52 @@ func (c *Converter) ExpandUpdate(ctx context.Context, upd *sdcpb.Update) ([]*sdc
 		upds = append(upds, upd)
 		return upds, nil
 	case *sdcpb.SchemaElem_Leaflist:
+		decoded, hasJSON, err := decodeTypedValueJSON(upd.GetValue())
+		if err != nil {
+			return nil, err
+		}
+		if hasJSON {
+			arr, ok := decoded.([]any)
+			if !ok {
+				return nil, fmt.Errorf("leaflist %s expects JSON array, got %T", upd.GetPath().ToXPath(false), decoded)
+			}
+			elems := make([]*sdcpb.TypedValue, 0, len(arr))
+			for _, item := range arr {
+				elemTV, err := sdcpb.ConvertJsonValueToTv(item, rsp.Leaflist.GetType())
+				if err != nil {
+					return nil, err
+				}
+				elems = append(elems, elemTV)
+			}
+			upd.Value = &sdcpb.TypedValue{
+				Value: &sdcpb.TypedValue_LeaflistVal{
+					LeaflistVal: &sdcpb.ScalarArray{Element: elems},
+				},
+			}
+		}
 		upds = append(upds, upd)
 		return upds, nil
 	}
 	return nil, nil
+}
+
+func decodeTypedValueJSON(tv *sdcpb.TypedValue) (any, bool, error) {
+	var raw []byte
+	switch v := tv.GetValue().(type) {
+	case *sdcpb.TypedValue_JsonVal:
+		raw = v.JsonVal
+	case *sdcpb.TypedValue_JsonIetfVal:
+		raw = v.JsonIetfVal
+	default:
+		return nil, false, nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var out any
+	if err := dec.Decode(&out); err != nil {
+		return nil, true, err
+	}
+	return out, true, nil
 }
 
 func (c *Converter) ExpandUpdateKeysAsLeaf(ctx context.Context, upd *sdcpb.Update) ([]*sdcpb.Update, error) {

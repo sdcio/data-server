@@ -2,6 +2,7 @@ package gnmi
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -123,6 +124,7 @@ func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
 	s.syncTreeMutex.Lock()
 	defer s.syncTreeMutex.Unlock()
 
+	syncStartedAt := time.Now().UnixNano()
 	// execute gnmi get
 	resp, err := s.target.Get(s.ctx, req)
 	if err != nil {
@@ -145,6 +147,12 @@ func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
 
 	result, err := ops.TreeExport(s.syncTree.Entry, consts.RunningIntentName, consts.RunningValuesPrio, false)
 	if err != nil {
+		if errors.Is(err, ops.ErrorIntentNotPresent) {
+			if applyErr := s.runningStore.ApplyToRunning(s.ctx, syncStartedAt, s.paths, nil); applyErr != nil {
+				log.Error(applyErr, "failure clearing empty synctree paths in running")
+			}
+			return
+		}
 		log.Error(err, "failure exporting synctree")
 		return
 	}
@@ -153,7 +161,7 @@ func (s *GetSync) internalGetSync(req *sdcpb.GetDataRequest) {
 		log.Info("sync content", "data", dsutils.ProtoJSON(result))
 	}
 
-	err = s.runningStore.ApplyToRunning(s.ctx, s.paths, proto.NewProtoTreeImporter(result))
+	err = s.runningStore.ApplyToRunning(s.ctx, syncStartedAt, s.paths, proto.NewProtoTreeImporter(result))
 	if err != nil {
 		log.Error(err, "failure importing synctree export into running")
 		return

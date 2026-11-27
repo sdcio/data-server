@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/ygot/ygot"
@@ -400,7 +401,7 @@ func TestApplyToRunning(t *testing.T) {
 				sbi:           tt.sbiFunc(ctrl),
 			}
 
-			err := datastore.ApplyToRunning(ctx, tt.deletes, tt.importerFunc())
+			err := datastore.ApplyToRunning(ctx, time.Now().UnixNano(), tt.deletes, tt.importerFunc())
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ApplyToRunning() error = %v, wantErr %v", err, tt.wantErr)
 			}

@@ -108,13 +108,14 @@ func (s *NetconfSyncImpl) syncConfig() (*sdcpb.GetDataRequest, error) {
 }
 
 func (s *NetconfSyncImpl) internalSync(req *sdcpb.GetDataRequest) error {
+	syncStartedAt := time.Now().UnixNano()
 	// execute netconf get
 	importer, err := s.target.GetImportAdapter(s.ctx, req)
 	if err != nil {
 		return err
 	}
 
-	return s.runningStore.ApplyToRunning(s.ctx, s.paths, importer)
+	return s.runningStore.ApplyToRunning(s.ctx, syncStartedAt, s.paths, importer)
 }
 
 func (s *NetconfSyncImpl) Stop() error {

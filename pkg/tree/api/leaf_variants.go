@@ -376,6 +376,55 @@ func (lv *LeafVariants) GetHighestPrecedence(onlyNewOrUpdated bool, includeDefau
 	return nil
 }
 
+// ActiveIntendedWinner returns the highest-precedence active intended variant,
+// or nil when no intended variant exists or an explicit delete wins.
+func (lv *LeafVariants) ActiveIntendedWinner() *LeafEntry {
+	if lv == nil {
+		return nil
+	}
+	lv.lesMutex.RLock()
+	defer lv.lesMutex.RUnlock()
+	var highest *LeafEntry
+	for _, le := range lv.les {
+		if le.Owner() == treeconsts.DefaultsIntentName || le.Owner() == treeconsts.RunningIntentName || FilterDeletedNotExplicitDelete(le) {
+			continue
+		}
+		if highest == nil || le.Priority() < highest.Priority() {
+			highest = le
+		}
+	}
+	if highest == nil || highest.GetExplicitDeleteFlag() {
+		return nil
+	}
+	return highest
+}
+
+// DriftBaseline returns the confirmed applied value for highest when registered
+// for this leaf's path, owner, and intended value, falling back to highest.Value().
+func (lv *LeafVariants) DriftBaseline(highest *LeafEntry) *sdcpb.TypedValue {
+	if highest == nil {
+		return nil
+	}
+	if lv == nil || lv.tc == nil || lv.parentEntry == nil {
+		return highest.Value()
+	}
+	if highest.Owner() == treeconsts.RunningIntentName || highest.Owner() == treeconsts.DefaultsIntentName {
+		return highest.Value()
+	}
+	if confirmed := lv.tc.ConfirmedAppliedValue(lv.parentEntry.SdcpbPath(), highest.Owner(), highest.Value()); confirmed != nil {
+		return confirmed
+	}
+	return highest.Value()
+}
+
+// TypedValuesEqual compares two TypedValues by value, handling unset Value oneofs safely.
+func TypedValuesEqual(a, b *sdcpb.TypedValue) bool {
+	if a.GetValue() == nil || b.GetValue() == nil {
+		return a.GetValue() == nil && b.GetValue() == nil
+	}
+	return a.Equal(b)
+}
+
 // highestIsUnequalRunning checks if the highest precedence LeafEntry is unequal to the running LeafEntry
 // Expects the caller to hold the read lock on lesMutex.
 func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
@@ -394,10 +443,7 @@ func (lv *LeafVariants) highestIsUnequalRunning(highest *LeafEntry) bool {
 		return true
 	}
 
-	// ignore errors, they should not happen :-P I know... should...
-	rval := runVal.Value()
-	hval := highest.Value()
-	return !rval.Equal(hval)
+	return !TypedValuesEqual(runVal.Value(), lv.DriftBaseline(highest))
 }
 
 // GetByOwner returns the entry that is owned by the given owner,
@@ -524,8 +570,7 @@ func (lv *LeafVariants) GetDeviations(ctx context.Context, ch chan<- *types.Devi
 		return
 	}
 
-	// if highest exists but not running  OR   running != highest
-	if (running == nil && highest != nil) || !running.Value().Equal(highest.Value()) {
+	if running == nil || !TypedValuesEqual(running.Value(), lv.DriftBaseline(highest)) {
 		de := types.NewDeviationEntry(highest.Owner(), types.DeviationReasonNotApplied, sdcpbPath).SetExpectedValue(highest.Value())
 		if running != nil {
 			de.SetCurrentValue(running.Value())

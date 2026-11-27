@@ -69,9 +69,22 @@ type Datastore struct {
 	// TransactionManager
 	transactionManager *types.TransactionManager
 
-	// SyncTree
+	// SyncTree; syncTreeMutex guards both syncTree and syncedPaths.
 	syncTree      *tree.RootEntry
 	syncTreeMutex *sync.RWMutex
+	syncedPaths   []*sdcpb.Path
+
+	// coldStartMu guards one-shot registration of pre-existing Non-revertive
+	// intents from cacheClient before the first sync or write transaction.
+	coldStartMu     sync.Mutex
+	coldStartLoaded bool
+
+	confirmedApplied *confirmedAppliedValues
+	// preTxBaselineSnap and preTxTouchedPaths hold the pre-transaction baseline
+	// snapshot and southbound-touched paths for an unconfirmed TransactionSet
+	// so TransactionRollback can restore untouched Non-revertive baselines; guarded by dmutex.
+	preTxBaselineSnap *confirmedAppliedSnapshot
+	preTxTouchedPaths map[canonicalLeafPath]struct{}
 
 	taskPool *pool.SharedTaskPool
 }
@@ -98,7 +111,8 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 	)
 
 	scb := schemaClient.NewSchemaClientBound(c.Schema, sc)
-	tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)))
+	confirmed := newConfirmedAppliedValues()
+	tc := tree.NewTreeContext(scb, pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)), tree.WithConfirmedAppliedValues(confirmed))
 	syncTreeRoot, err := tree.NewTreeRoot(ctx, tc)
 	if err != nil {
 		cancel()
@@ -118,6 +132,7 @@ func New(ctx context.Context, c *config.DatastoreConfig, sc schema.Client, cc ca
 		deviationClients: make(map[sdcpb.DataServer_WatchDeviationsServer]string),
 		syncTree:         syncTreeRoot,
 		syncTreeMutex:    &sync.RWMutex{},
+		confirmedApplied: confirmed,
 		taskPool:         pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0)),
 	}
 	ds.transactionManager = types.NewTransactionManager(NewDatastoreRollbackAdapter(ds), types.WithAutoRollbackLock(ds.dmutex))
@@ -271,11 +286,14 @@ func (d *Datastore) Stop(ctx context.Context) error {
 	return nil
 }
 
+func (d *Datastore) newTreeContext() *tree.TreeContext {
+	return tree.NewTreeContext(d.schemaClient, d.taskPool, tree.WithConfirmedAppliedValues(d.confirmedApplied))
+}
+
 func (d *Datastore) BlameConfig(ctx context.Context, includeDefaults bool) (*sdcpb.BlameTreeElement, error) {
 	log := logf.FromContext(ctx).WithName("BlameConfig")
 	ctx = logf.IntoContext(ctx, log)
 
-	// create a new TreeRoot by copying the syncTree
 	d.syncTreeMutex.RLock()
 	root, err := d.syncTree.DeepCopy(ctx)
 	d.syncTreeMutex.RUnlock()

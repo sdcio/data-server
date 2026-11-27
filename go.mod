@@ -23,8 +23,8 @@ require (
 	github.com/scrapli/scrapligo v1.4.4
 	github.com/sdcio/cache v0.0.39
 	github.com/sdcio/logger v0.0.3
-	github.com/sdcio/schema-server v0.0.34
-	github.com/sdcio/sdc-protos v0.0.56
+	github.com/sdcio/schema-server v0.0.35-0.20261126103548-1476e1424a8b
+	github.com/sdcio/sdc-protos v0.0.57-0.20261120130348-fe084f2516a8
 	github.com/sdcio/yang-parser v0.0.12
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.1.0
@@ -46,7 +46,7 @@ require (
 	github.com/clipperhouse/uax29/v2 v2.6.0 // indirect
 	github.com/creack/pty v1.1.24 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/dgraph-io/badger/v4 v4.9.2 // indirect
+	github.com/dgraph-io/badger/v4 v4.9.6 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.4.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
@@ -86,7 +86,7 @@ require (
 	github.com/prometheus/common v0.72.0 // indirect
 	github.com/prometheus/procfs v0.22.0 // indirect
 	github.com/sirikothe/gotextfsm v1.0.1-0.20200816110946-6aa2cfd355e4 // indirect
-	github.com/sirupsen/logrus v1.9.4 // indirect
+	github.com/sirupsen/logrus v1.10.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.45.0 // indirect

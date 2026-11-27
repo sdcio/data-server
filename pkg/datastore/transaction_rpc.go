@@ -83,8 +83,14 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	log := logger.FromContext(ctx).WithValues("transaction-type", "replace")
 	ctx = logger.IntoContext(ctx, log)
 
+	if !dryRun {
+		if err := d.ensureColdStartCandidatesLoaded(ctx); err != nil {
+			return nil, err
+		}
+	}
+
 	// create a new TreeContext
-	tc := tree.NewTreeContext(d.schemaClient, d.taskPool)
+	tc := d.newTreeContext()
 
 	// create a new TreeRoot to collect validate and hand to SBI.Set()
 	root, err := tree.NewTreeRoot(ctx, tc)
@@ -144,6 +150,7 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	if err != nil {
 		return nil, err
 	}
+	setDoneUnixNano := time.Now().UnixNano()
 	// collect warnings
 	warnings = append(warnings, dataResp.GetWarnings()...)
 
@@ -152,9 +159,9 @@ func (d *Datastore) replaceIntent(ctx context.Context, transaction *types.Transa
 	// retrieve the data that is meant to be send southbound (towards the device)
 	updates := root.GetHighestPrecedence(true)
 	deletes := treetypes.DeleteEntriesList{root}
+	readbacks := d.fetchMutateOnWriteReadbacks(ctx, d.collectPushedMutateOnWritePaths(updates))
 
-	// OPTIMISTIC WRITEBACK TO RUNNING / syncTree
-	err = d.writeBackSyncTree(ctx, updates, deletes)
+	err = d.reconcileReplaceReadbacksAndWriteBackRunning(ctx, updates, deletes, readbacks, setDoneUnixNano)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +201,11 @@ func (d *Datastore) LoadAllButRunningIntents(ctx context.Context, root *tree.Roo
 // lowlevelTransactionSet
 func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *types.Transaction, dryRun bool) (*sdcpb.TransactionSetResponse, error) {
 	log := logger.FromContext(ctx)
-	// create a new TreeRoot
+	if !dryRun {
+		if err := d.ensureColdStartCandidatesLoaded(ctx); err != nil {
+			return nil, err
+		}
+	}
 	d.syncTreeMutex.RLock()
 	root, err := d.syncTree.DeepCopy(ctx)
 	d.syncTreeMutex.RUnlock()
@@ -279,8 +290,11 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 	log.V(logger.VTrace).Info("populated tree", "tree", root.String())
 
+	restoreValidationOverlay := d.attachValidationCryptOverlay(root, transaction.GetNewIntents())
+
 	// perform validation
 	validationResult, validationStats := validation.Validate(ctx, root.Entry, d.config.Validation, d.taskPool)
+	restoreValidationOverlay()
 
 	log.V(logger.VDebug).Info("transaction validation stats", "transaction-id", transaction.GetTransactionId(), "stats", validationStats.String())
 
@@ -332,12 +346,13 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		return result, nil
 	}
 
-	// apply the resulting config to the device
 	dataResp, err := d.applyIntent(ctx, adapter.NewEntryOutputAdapter(root.Entry))
 	if err != nil {
 		return nil, err
 	}
+	setDoneUnixNano := time.Now().UnixNano()
 	result.Warnings = append(result.Warnings, dataResp.GetWarnings()...)
+	readbacks := d.fetchMutateOnWriteReadbacks(ctx, d.collectPushedMutateOnWritePaths(updates))
 
 	log.Info("transaction applied")
 
@@ -381,10 +396,18 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 		}
 	}
 
-	// OPTIMISTIC WRITEBACK TO RUNNING / syncTree
-	err = d.writeBackSyncTree(ctx, updates, deletes)
+	if !transaction.IsRollback() {
+		d.capturePreTransactionBaselines(updates, deletes)
+	}
+	err = d.applyReadbacksAndWriteBackRunning(ctx, updates, deletes, readbacks, setDoneUnixNano)
 	if err != nil {
 		return nil, err
+	}
+	d.evictStaleBaselines(ctx, root)
+	if transaction.IsRollback() {
+		d.restoreRolledBackBaselines(ctx, root, updates, deletes)
+	} else {
+		d.seedPreviouslyAppliedBaselines(root, transaction.GetNewIntents(), updates)
 	}
 
 	log.Info("transaction completed")
@@ -392,10 +415,9 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 	return result, nil
 }
 
-// writeBackSyncTree applies the provided changes to the syncTree and applies to the running cache intent
-func (d *Datastore) writeBackSyncTree(ctx context.Context, updates api.LeafVariantSlice, deletes treetypes.DeleteEntriesList) error {
+// writeBackRunningUpdates applies running updates and deletes to syncTree and persists Running.
+func (d *Datastore) writeBackRunningUpdates(ctx context.Context, runningUpdates []*treetypes.PathAndUpdate, deletes treetypes.DeleteEntriesList) error {
 	log := logger.FromContext(ctx)
-	runningUpdates := updates.ToUpdateSlice().CopyWithNewOwnerAndPrio(consts.RunningIntentName, consts.RunningValuesPrio)
 
 	// wrap the lock in an anonymous function to be able to utilize defer for the unlock
 	err := func() error {
