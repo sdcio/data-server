@@ -271,6 +271,29 @@ func (s *sharedEntryAttributes) GetLevel() int {
 	return level
 }
 
+// hasDeletedKey reports whether s is the terminal key level of a list entry
+// with at least one key leaf marked for deletion. A list entry cannot exist
+// without all of its keys, so deleting any key leaf deletes the entry.
+func (s *sharedEntryAttributes) hasDeletedKey() bool {
+	if s.schema != nil || s.IsRoot() {
+		return false
+	}
+	ancestor, levelsUp := ops.GetFirstAncestorWithSchema(s)
+	if ancestor == nil {
+		return false
+	}
+	keys := ops.GetSchemaKeys(ancestor)
+	if len(keys) == 0 || levelsUp != len(keys) {
+		return false
+	}
+	for _, k := range keys {
+		if c, exists := s.childs.GetEntry(k); exists && c.ShouldDelete() {
+			return true
+		}
+	}
+	return false
+}
+
 // canDelete checks if the entry can be Deleted.
 // This is e.g. to cover e.g. defaults and running. They can be deleted, but should not, they are basically implicitly existing.
 // In caomparison to
@@ -280,6 +303,11 @@ func (s *sharedEntryAttributes) CanDelete() bool {
 	s.cacheMutex.Lock()
 	defer s.cacheMutex.Unlock()
 	if s.cacheCanDelete != nil {
+		return *s.cacheCanDelete
+	}
+
+	if s.hasDeletedKey() {
+		s.cacheCanDelete = utils.BoolPtr(true)
 		return *s.cacheCanDelete
 	}
 
@@ -327,6 +355,10 @@ func (s *sharedEntryAttributes) ShouldDelete() bool {
 	s.cacheMutex.Lock()
 	defer s.cacheMutex.Unlock()
 	if s.cacheShouldDelete != nil {
+		return *s.cacheShouldDelete
+	}
+	if s.hasDeletedKey() {
+		s.cacheShouldDelete = utils.BoolPtr(true)
 		return *s.cacheShouldDelete
 	}
 	// check if the leafVariants result in a should delete
@@ -378,6 +410,10 @@ func (s *sharedEntryAttributes) RemainsToExist() bool {
 	s.cacheMutex.Lock()
 	defer s.cacheMutex.Unlock()
 	if s.cacheRemains != nil {
+		return *s.cacheRemains
+	}
+	if s.hasDeletedKey() {
+		s.cacheRemains = utils.BoolPtr(false)
 		return *s.cacheRemains
 	}
 	leafVariantResult := s.leafVariants.RemainsToExist()

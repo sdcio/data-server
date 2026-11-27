@@ -12,10 +12,11 @@ import (
 	schemaClient "github.com/sdcio/data-server/pkg/datastore/clients/schema"
 	"github.com/sdcio/data-server/pkg/pool"
 	"github.com/sdcio/data-server/pkg/tree"
-
+	"github.com/sdcio/data-server/pkg/tree/consts"
 	jsonImporter "github.com/sdcio/data-server/pkg/tree/importer/json"
 	"github.com/sdcio/data-server/pkg/tree/ops"
 	"github.com/sdcio/data-server/pkg/tree/ops/validation"
+	"github.com/sdcio/data-server/pkg/tree/processors"
 	"github.com/sdcio/data-server/pkg/tree/types"
 	"github.com/sdcio/data-server/pkg/utils/testhelper"
 	sdcio_schema "github.com/sdcio/data-server/tests/sdcioygot"
@@ -279,3 +280,103 @@ func Test_sharedEntryAttributes_validateLeafRefs(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateLeafRef_DeletedListEntryWithUnmanagedSubinterfaceFailsResolution(t *testing.T) {
+	ctx := context.Background()
+	sc, schema, err := testhelper.InitSDCIOSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	scb := schemaClient.NewSchemaClientBound(schema, sc)
+	p := pool.NewSharedTaskPool(ctx, runtime.GOMAXPROCS(0))
+	tc := tree.NewTreeContext(scb, p)
+	root, err := tree.NewTreeRoot(ctx, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	intent1JSON := map[string]any{
+		"interface": []any{
+			map[string]any{
+				"name":        "ethernet-1/1",
+				"description": "Test",
+			},
+		},
+	}
+	intent2JSON := map[string]any{
+		"interface": []any{
+			map[string]any{
+				"name": "ethernet-1/2",
+			},
+		},
+		"network-instance": []any{
+			map[string]any{
+				"name": "ni1",
+				"type": "default",
+				"interface": []any{
+					map[string]any{
+						"name": "ethernet-1/1",
+						"interface-ref": map[string]any{
+							"interface":    "ethernet-1/1",
+							"subinterface": float64(5),
+						},
+					},
+				},
+			},
+		},
+	}
+	runningJSON := map[string]any{
+		"interface": []any{
+			map[string]any{
+				"name":        "ethernet-1/1",
+				"description": "Test",
+				"subinterface": []any{
+					map[string]any{
+						"index":       float64(5),
+						"description": "Unmanaged unit 5",
+					},
+				},
+			},
+		},
+	}
+
+	if _, err := root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(intent1JSON, "intent1", 10, false), testhelper.FlagsExisting, p); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(intent2JSON, "intent2", 20, false), testhelper.FlagsNew, p); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := root.ImportConfig(ctx, &sdcpb.Path{}, jsonImporter.NewJsonTreeImporter(runningJSON, consts.RunningIntentName, consts.RunningValuesPrio, false), testhelper.FlagsExisting, p); err != nil {
+		t.Fatal(err)
+	}
+	if err := processors.NewOwnerDeleteMarker(&processors.OwnerDeleteMarkerProcessorParams{Owner: "intent1", OnlyIntended: false}).Run(root.Entry, p); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.FinishInsertionPhase(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	subifLrefPath := &sdcpb.Path{
+		Elem: []*sdcpb.PathElem{
+			sdcpb.NewPathElem("network-instance", map[string]string{"name": "ni1"}),
+			sdcpb.NewPathElem("interface", map[string]string{"name": "ethernet-1/1"}),
+			sdcpb.NewPathElem("interface-ref", nil),
+			sdcpb.NewPathElem("subinterface", nil),
+		},
+	}
+	e, err := ops.NavigateSdcpbPath(ctx, root.Entry, subifLrefPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	valConf := config.NewValidationConfig()
+	valConf.DisabledValidators.DisableAll()
+	valConf.DisabledValidators.Leafref = false
+	valConf.DisableConcurrency = true
+
+	result, _ := validation.Validate(ctx, e, valConf, p)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 leafref validation error for deleted parent interface, got %d", len(result))
+	}
+}
+

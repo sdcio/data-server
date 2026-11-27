@@ -302,7 +302,7 @@ func (d *Datastore) lowlevelTransactionSet(ctx context.Context, transaction *typ
 
 	// retrieve the data that is meant to be send southbound (towards the device)
 	updates := root.GetHighestPrecedence(true)
-	deletes, err := root.GetDeletes(true)
+	deletes, err := root.GetDeletes()
 	if err != nil {
 		return nil, err
 	}

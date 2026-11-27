@@ -212,15 +212,6 @@ func toXmlInternal(ctx context.Context, e api.Entry, parent *etree.Element, only
 	case *sdcpb.SchemaElem_Leaflist, *sdcpb.SchemaElem_Field:
 		// check if the element remains to exist
 		if e.ShouldDelete() {
-			if e.GetParent() != nil && e.GetParent().GetSchema() == nil {
-				ancestorWithSchema, _ := GetFirstAncestorWithSchema(e.GetParent())
-				if ancestorWithSchema != nil && slices.Contains(GetSchemaKeys(ancestorWithSchema), e.PathName()) {
-					// Key leaf deletions should delete the list entry identified by key value.
-					utils.AddXMLOperation(parent, utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
-					xmlAddKeyElements(e.GetParent(), parent)
-					return true, nil
-				}
-			}
 			// if not, add the remove / delete op
 			utils.AddXMLOperation(parent.CreateElement(e.PathName()), utils.XMLOperationDelete, operationWithNamespace, useOperationRemove)
 			// see case nil for an explanation of this, it is basically the same
